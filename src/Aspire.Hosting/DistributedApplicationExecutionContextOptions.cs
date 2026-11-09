@@ -19,6 +19,9 @@ public class DistributedApplicationExecutionContextOptions
     public DistributedApplicationExecutionContextOptions(DistributedApplicationOperation operation)
     {
         this.Operation = operation;
+#pragma warning disable ASPIREWATCH001 // Defaults are specific to the execution mode.
+        RunConfiguration = operation == DistributedApplicationOperation.Run ? RunConfiguration.RunDefault : RunConfiguration.Default;
+#pragma warning restore ASPIREWATCH001
     }
 
     /// <summary>
@@ -26,9 +29,8 @@ public class DistributedApplicationExecutionContextOptions
     /// </summary>
     /// <param name="operation">Indicates whether the AppHost is running in Publish mode or Run mode.</param>
     /// <param name="publisherName">The publisher name if in Publish mode.</param>
-    public DistributedApplicationExecutionContextOptions(DistributedApplicationOperation operation, string publisherName)
+    public DistributedApplicationExecutionContextOptions(DistributedApplicationOperation operation, string publisherName) : this(operation)
     {
-        this.Operation = operation;
         this.PublisherName = publisherName;
     }
 

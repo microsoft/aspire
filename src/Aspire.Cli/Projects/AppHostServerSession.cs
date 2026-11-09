@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.DotNet;
+using Aspire.Cli.DotnetWatch;
 using Aspire.Cli.Processes;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
@@ -181,6 +182,13 @@ internal sealed class AppHostServerSession : IAppHostServerSession
             var serverEnvironmentVariables = _callerEnvironmentVariables is null
                 ? new Dictionary<string, string>()
                 : new Dictionary<string, string>(_callerEnvironmentVariables);
+            if (!serverEnvironmentVariables.TryGetValue(Aspire.Shared.ResourceWatch.SuppressionVariable, out var suppression) ||
+                suppression is not "" and not Aspire.Shared.ResourceWatch.NoBuild and not Aspire.Shared.ResourceWatch.Native)
+            {
+                // A final run explicitly supplies its launcher constraint, including an empty
+                // value. Bootstrap sessions must not inherit watch activation from their parent.
+                DotnetWatchRunEnvironment.Disable(serverEnvironmentVariables);
+            }
             serverEnvironmentVariables[KnownConfigNames.RemoteAppHostToken] = _authenticationToken;
 
             _activity = _profilingTelemetry is null

@@ -55,8 +55,18 @@ namespace Aspire.Hosting.Resources {
             get {
                 return resourceCulture;
             }
+
             set {
                 resourceCulture = value;
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to AppHost:Run:WatchEnabled must be true or false. Resource watching is disabled by default for this run; explicit resource choices still apply..
+        /// </summary>
+        internal static string InvalidResourceWatchConfiguration {
+            get {
+                return ResourceManager.GetString("InvalidResourceWatchConfiguration", resourceCulture);
             }
         }
 

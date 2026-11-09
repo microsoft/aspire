@@ -9,6 +9,7 @@ using System.Text.RegularExpressions;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Utils;
+using Aspire.Shared.DotnetWatch;
 using Aspire.Shared.ConsoleLogs;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -74,10 +75,11 @@ internal static partial class DotnetProjectBuildCoordinator
             return;
         }
 
-        state.AddResource(resourceBuilder.Resource);
-        resourceBuilder.WithAnnotation(new DotnetProgramBuildCompletionAnnotation(
+        var buildCompletion = new DotnetProgramBuildCompletionAnnotation(
             (services, cancellationToken) =>
-                state.WaitForBuildCompletionAsync(resourceBuilder.Resource, services, cancellationToken)));
+                state.WaitForBuildCompletionAsync(resourceBuilder.Resource, services, cancellationToken));
+        state.AddResource(resourceBuilder.Resource, buildCompletion);
+        resourceBuilder.WithAnnotation(buildCompletion);
 
         // Preserve the eagerly visible dependency used by model tests and tooling. BeforeStart replaces
         // the build plan after all resource environment callbacks and SDK roots are known, then adds the
@@ -388,6 +390,10 @@ internal static partial class DotnetProjectBuildCoordinator
 
     private static bool ShouldCoordinateBuild(IDistributedApplicationBuilder builder)
     {
+        if (DotnetWatchOwnership.IsCliOwned(builder.Configuration[DotnetWatchOwnership.OwnerEnvironmentVariable]))
+        {
+            return true;
+        }
         if (string.IsNullOrEmpty(builder.Configuration[DebugSessionPortConfigurationKey]))
         {
             return true;
@@ -460,10 +466,42 @@ internal static partial class DotnetProjectBuildCoordinator
             PrimaryBuildResource ??= CreateBuildResource(configuration);
         }
 
-        public void AddResource(DotnetProjectResource resource)
+        public void AddResource(DotnetProjectResource resource, DotnetProgramBuildCompletionAnnotation buildCompletion)
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
-            _registrations.Add(new ResourceRegistration(resource));
+            _registrations.Add(new ResourceRegistration(resource, buildCompletion));
+        }
+
+        /// <summary>
+        /// Hands a registered project's build to something else (the hot reload watcher, in <c>aspire run --watch</c>):
+        /// the project leaves the coordinated build, its launch builds nothing, and its build-completion barrier is
+        /// removed so the new owner can supply its own. Only valid before the build plan is materialized.
+        /// </summary>
+        public void RemoveResource(DotnetProjectResource resource)
+        {
+            lock (_materializationLock)
+            {
+                ObjectDisposedException.ThrowIf(_disposed, this);
+                if (_materialized || _materializationInProgress)
+                {
+                    throw new InvalidOperationException(
+                        $"'{resource.Name}' can't leave the coordinated .NET build after its build plan was created.");
+                }
+            }
+
+            var registration = _registrations.SingleOrDefault(r => ReferenceEquals(r.Resource, resource));
+            if (registration is null)
+            {
+                return;
+            }
+
+            _registrations.Remove(registration);
+            RemoveEagerBuildDependencies([resource]);
+            resource.Annotations.Remove(registration.BuildCompletion);
+            if (resource.Annotations.OfType<DotnetProjectMetadata>().SingleOrDefault() is { } metadata)
+            {
+                metadata.SuppressBuild = false;
+            }
         }
 
         public async Task WaitForBuildCompletionAsync(
@@ -1068,14 +1106,28 @@ internal static partial class DotnetProjectBuildCoordinator
             return () => target.Annotations.Remove(annotation);
         }
 
-        private static IResource? FindRebuilder(
+        internal static IResource? FindRebuilder(
             DistributedApplicationModel model,
-            DotnetProjectResource resource) =>
+            IResource resource) =>
             model.Resources
                 .SingleOrDefault(candidate =>
                     candidate.Name == $"{resource.Name}-rebuilder" &&
                     candidate is IResourceWithParent<IResource> parent &&
                     ReferenceEquals(parent.Parent, resource));
+
+        internal async Task EnsureBuildEnvironmentEvaluatedAsync(
+            DotnetProjectResource resource, IResource buildResource, IServiceProvider services, CancellationToken cancellationToken)
+        {
+            if (_sharedBuildEnvironments.SingleOrDefault(environment => ReferenceEquals(environment.Resource, resource)) is { } environment)
+            {
+                await environment.EnsureEvaluatedAsync(new EnvironmentCallbackContext(
+                    services.GetRequiredService<DistributedApplicationExecutionContext>(), buildResource,
+                    new Dictionary<string, object>(), cancellationToken)
+                {
+                    Logger = services.GetRequiredService<ResourceLoggerService>().GetLogger(buildResource)
+                }).ConfigureAwait(false);
+            }
+        }
 
         private static string? FindNearestGlobalJson(string workingDirectory)
         {
@@ -1573,9 +1625,11 @@ internal static partial class DotnetProjectBuildCoordinator
             ProjectEntry Entry,
             DotnetProjectBuildEnvironmentCallbackAnnotation[] Callbacks);
 
-        private sealed class ResourceRegistration(DotnetProjectResource resource)
+        private sealed class ResourceRegistration(DotnetProjectResource resource, DotnetProgramBuildCompletionAnnotation buildCompletion)
         {
             public DotnetProjectResource Resource { get; } = resource;
+
+            public DotnetProgramBuildCompletionAnnotation BuildCompletion { get; } = buildCompletion;
 
             public DotnetProjectBuildResource? FinalBuildResource { get; set; }
         }

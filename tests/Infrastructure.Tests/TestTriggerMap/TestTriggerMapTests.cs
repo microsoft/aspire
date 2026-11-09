@@ -65,6 +65,18 @@ public sealed class TestTriggerMapTests
         Assert.Contains("job:homebrew-installer", result.Jobs);
     }
 
+    [Fact]
+    public void DotnetWatchPrelaunchTargetsSelectTheirDirectSourceConsumer()
+    {
+        var result = SelectWithRealMap("src/Aspire.Hosting.Dotnet/build/Aspire.Hosting.Dotnet.targets");
+
+        Assert.False(result.SelectsAll);
+        Assert.Empty(result.UnmatchedFiles);
+        Assert.Contains("Aspire.Hosting.Sdk.Tests", result.TestProjects);
+        Assert.Contains("Aspire.Cli.EndToEnd.Tests", result.TestProjects);
+        Assert.Contains("job:cli-starter-validation", result.Jobs);
+    }
+
     [Theory]
     [InlineData("tools/AnalyzeCiFailure/Program.cs")]
     [InlineData("tools/AnalyzeCiFailure/Directory.Build.props")]

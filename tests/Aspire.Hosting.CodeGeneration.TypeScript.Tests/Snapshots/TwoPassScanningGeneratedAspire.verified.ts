@@ -936,6 +936,8 @@ export interface CreateBuilderOptions {
     allowUnsecuredTransport?: boolean;
     /** Enables resource logging. */
     enableResourceLogging?: boolean;
+    /** Whether compatible resources are watched by default. An explicit value overrides AppHost configuration; individual resources can override the default. AppHost edits and IDE ownership are configured separately. */
+    defaultResourceWatchEnabled?: boolean | null;
     /** When false, pre-flush rejected promises are not re-thrown by build(). Default: true. */
     throwOnPendingRejections?: boolean;
 }
@@ -1339,10 +1341,12 @@ export interface ResourceUrlAnnotation {
  */
 export interface RunConfiguration {
     /**
-     * Indicates that resources should start in watch mode if able.
+     * Indicates that resources should start in watch mode by default if able.
      *
      * Integrations that support watch can launch their resources so that source changes are hot-reloaded.
-     * This is a hint: integrations that cannot watch their resources should start them in normal fashion.
+     * This is a default, not a prohibition: an integration can allow explicit resource choices to override it.
+     * Integrations that cannot watch their resources should start them in normal fashion unless watch is required.
+     * AppHost edit watching is configured separately by the launcher.
      */
     watchEnabled?: boolean;
 }

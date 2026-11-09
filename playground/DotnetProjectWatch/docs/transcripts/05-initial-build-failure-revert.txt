@@ -1,0 +1,35 @@
+🔐 Trusting certificates...
+🚨 Developer certificates may not be fully trusted (trust exit code was:
+   PartiallyFailedToTrustTheCertificate).
+Connecting to AppHost...
+Starting dashboard...
+
+     AppHost:  DotnetProjectWatch.AppHost.csproj
+
+   Dashboard:  http://localhost:15850/login?t=<redacted>
+
+        Logs:  /root/.aspire/logs/cli_20261105T221934_b1577e57.log
+
+       Watch:  🔥 Hot reload is on for C# services (preview). Save a file to
+               apply changes.
+
+               Press CTRL+C to stop the AppHost and exit.
+22:19:42 ❌ Initial build failed: Program.cs(19,37): CS0117: 'Greeter' does not
+contain a definition for 'Mesage'. Fix it and save; api, worker start once the
+build succeeds.
+22:21:13 ✅ Build succeeded. 👀 Watching api, worker for changes. Edits are hot
+reloaded; changes that need a restart restart only the affected service.
+22:21:24 ❌ Build error in api: Program.cs(19,32): CS1525: Invalid expression
+term ')'. The app keeps running the last good code; fix it and save.
+22:21:32 ✅ Fixed. api already runs this code; nothing to apply.
+22:21:48 🔥 Hot reload applied to api in 3926 ms (Program.cs).
+22:21:51 🔥 Hot reload applied to api in 219 ms (Program.cs).
+22:21:53 🔥 Hot reload applied to api in 88 ms (Program.cs).
+22:21:59 🔥 Hot reload applied to api in 49 ms (Program.cs).
+
+🛑 Stopping Aspire.
+
+A new version of Aspire is available: 17.0.0-preview.1.26555.3
+To update, run: aspire update
+For more information, see: https://aka.ms/aspire/update
+

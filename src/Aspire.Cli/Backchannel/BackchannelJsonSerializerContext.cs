@@ -11,6 +11,7 @@ using Aspire.Cli.Commands.Sdk;
 using Aspire.Cli.Projects;
 using Aspire.Shared;
 using Aspire.TypeSystem;
+using Microsoft.Extensions.Logging;
 using Spectre.Console;
 using StreamJsonRpc;
 using StreamJsonRpc.Protocol;
@@ -27,8 +28,11 @@ namespace Aspire.Cli.Backchannel;
 [JsonSerializable(typeof(JsonElement))]
 [JsonSerializable(typeof(IAsyncEnumerable<RpcResourceState>))]
 [JsonSerializable(typeof(MessageFormatterEnumerableTracker.EnumeratorResults<RpcResourceState>))]
+[JsonSerializable(typeof(IAsyncEnumerable<ResourceWatchStatus>))]
+[JsonSerializable(typeof(MessageFormatterEnumerableTracker.EnumeratorResults<ResourceWatchStatus>))]
 [JsonSerializable(typeof(IAsyncEnumerable<BackchannelLogEntry>))]
 [JsonSerializable(typeof(MessageFormatterEnumerableTracker.EnumeratorResults<BackchannelLogEntry>))]
+[JsonSerializable(typeof(BackchannelJsonSerializerContext.EventIdPayload), TypeInfoPropertyName = "EventIdPayloadTypeInfo")]
 [JsonSerializable(typeof(IAsyncEnumerable<PublishingActivity>))]
 [JsonSerializable(typeof(MessageFormatterEnumerableTracker.EnumeratorResults<PublishingActivity>))]
 [JsonSerializable(typeof(IEnumerable<DisplayLineState>))]
@@ -126,11 +130,33 @@ internal partial class BackchannelJsonSerializerContext : JsonSerializerContext
     internal static JsonSerializerOptions CreateJsonSerializerOptions()
     {
         var options = new JsonSerializerOptions(ModelContextProtocol.McpJsonUtilities.DefaultOptions);
+        options.Converters.Add(new EventIdConverter());
         options.TypeInfoResolver = JsonTypeInfoResolver.Combine(
             Default,
             new RequestIdTypeInfoResolver(),
             ModelContextProtocol.McpJsonUtilities.DefaultOptions.TypeInfoResolver
         );
         return options;
+    }
+
+    internal readonly record struct EventIdPayload([property: JsonRequired] int Id, string? Name);
+
+    private sealed class EventIdConverter : JsonConverter<EventId>
+    {
+        // EventId's implicit struct constructor leaves its readonly members at zero/null.
+        // Preserve the existing {"id":7105,"name":"WatchNotice.BuildFailed"} wire shape
+        // through a constructor-bound payload so notice identity survives RPC transport.
+        public override EventId Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        {
+            var payload = JsonSerializer.Deserialize(
+                ref reader, (JsonTypeInfo<EventIdPayload>)options.GetTypeInfo(typeof(EventIdPayload)));
+            return new EventId(payload.Id, payload.Name);
+        }
+
+        public override void Write(Utf8JsonWriter writer, EventId value, JsonSerializerOptions options)
+        {
+            JsonSerializer.Serialize(writer, new EventIdPayload(value.Id, value.Name),
+                (JsonTypeInfo<EventIdPayload>)options.GetTypeInfo(typeof(EventIdPayload)));
+        }
     }
 }

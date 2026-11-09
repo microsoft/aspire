@@ -10,6 +10,7 @@ internal sealed class RecordingGracefulSignaler : IProcessTreeGracefulShutdownSi
     private readonly object _lock = new();
     private readonly Func<int, CancellationToken, Task<bool>>? _onSignal;
     private readonly List<int> _pids = new();
+    private readonly List<(int ProcessId, DateTimeOffset? StartedAt, bool IncludeStartTime)> _requests = [];
 
     public RecordingGracefulSignaler(Func<int, Task<bool>>? onSignal = null)
     {
@@ -32,6 +33,17 @@ internal sealed class RecordingGracefulSignaler : IProcessTreeGracefulShutdownSi
         }
     }
 
+    public IReadOnlyList<(int ProcessId, DateTimeOffset? StartedAt, bool IncludeStartTime)> Requests
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _requests.ToArray();
+            }
+        }
+    }
+
     public Task<bool> RequestProcessTreeGracefulShutdownAsync(
         int pid,
         DateTimeOffset? startTime,
@@ -41,6 +53,7 @@ internal sealed class RecordingGracefulSignaler : IProcessTreeGracefulShutdownSi
         lock (_lock)
         {
             _pids.Add(pid);
+            _requests.Add((pid, startTime, includeStartTimeForDcp));
         }
 
         return _onSignal?.Invoke(pid, cancellationToken) ?? Task.FromResult(true);

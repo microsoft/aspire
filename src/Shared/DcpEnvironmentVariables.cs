@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting;
+using Aspire.Shared.DotnetWatch;
 
 namespace Aspire.Shared;
 
@@ -18,5 +19,6 @@ internal static class DcpEnvironmentVariables
     ];
 
     public static bool IsExcluded(string name) =>
-        s_excluded.Contains(name, StringComparers.EnvironmentVariableName);
+        s_excluded.Contains(name, StringComparers.EnvironmentVariableName) ||
+        DotnetWatchOwnership.IsPrivateEnvironmentVariable(name);
 }

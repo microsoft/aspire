@@ -1,0 +1,41 @@
+# TypeScript AppHost (playground/DotnetProjectWatch/TypeScriptAppHost) referencing WatchDemo.Api via addDotnetProject.
+# Dashboard N/A: Aspire.Dashboard was not built in this checkout (unrelated to watch).
+$ aspire run --watch
+🔐 Trusting certificates...
+🚨 Developer certificates may not be fully trusted (trust exit code was: PartiallyFailedToTrustTheCertificate).
+⚙️ Preparing Aspire server...
+Connecting to AppHost...
+Starting dashboard...
+🚨 Aspire Dashboard failed to start or is disabled.
+
+     AppHost:  apphost.mts
+
+   Dashboard:  N/A
+
+        Logs:  /root/.aspire/logs/cli_20261106T005657_c552256a.log
+
+       Watch:  🔥 Hot reload is on for C# services (preview). Save a file to apply changes.
+
+               Press CTRL+C to stop the AppHost and exit.
+00:57:12 👀 Watching api for changes. Edits are hot reloaded; changes that need a restart restart only the affected service.
+00:59:01 🔥 Hot reload applied to api in 3726 ms (Program.cs).
+00:59:06 🔥 Hot reload applied to api in 248 ms (Program.cs).
+
+# other terminal
+$ curl :5380/            -> api v1 | Hello from Shared v1   (api PID 6359)
+# edit services/WatchDemo.Api/Program.cs MapGet("/") string to "api v2 from TS AppHost | ..."
+$ curl :5380/  (after 4s) -> api v2 from TS AppHost | Hello from Shared v1   (api PID 6359, unchanged)
+# revert the edit (second "Hot reload applied" line)
+
+$ aspire run --watch --no-build
+❌ --no-build can't be used with --watch: hot reload builds C# services whenever they change. Remove --no-build, or remove --watch.
+
+# defaultWatchEnabled feature on, no --watch
+$ features__defaultWatchEnabled=true aspire run --no-build
+❌ --no-build can't be used while watch is on by default (the defaultWatchEnabled feature): hot reload builds C# services whenever they change. Remove --no-build, or pass --watch false to run without watch.
+$ features__defaultWatchEnabled=true aspire run
+       Watch:  🔥 Hot reload is on for C# services (preview). Save a file to apply changes.
+01:01:37 👀 Watching api for changes. Edits are hot reloaded; changes that need a restart restart only the affected service.
+01:02:19 🔥 Hot reload applied to api in 3523 ms (Program.cs).
+01:02:19 🔥 Hot reload applied to api in 251 ms (Program.cs).
+$ curl :5380/  (after edit, 4s) -> api v3 default-watch | Hello from Shared v1

@@ -1,0 +1,46 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The watch host: the process DCP runs for each watched C# service replica ('proxy') and for the hidden watch
+       server resource ('server'). It ships inside the Aspire.Hosting.Dotnet package under tools/dotnet-watch-host/
+       and is started with 'dotnet exec', so the package stays RID-neutral (no apphost, no executable bit). -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <UseAppHost>false</UseAppHost>
+    <!-- Runs on whichever muxer runs the watcher (a .NET 10 or later SDK), including one with only a newer runtime. -->
+    <RollForward>Major</RollForward>
+    <IsPackable>false</IsPackable>
+    <SkipAspireIntegrationAnalyzersReference>true</SkipAspireIntegrationAnalyzersReference>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <PackageReference Include="System.IO.Hashing" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Aspire.Hosting.Dotnet.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="$(SharedDir)DotnetWatch\DotnetWatchHostProtocol.cs" Link="Shared\DotnetWatchHostProtocol.cs" />
+    <Compile Include="$(SharedDir)DotnetWatch\DotnetWatchOwnership.cs" Link="Shared\DotnetWatchOwnership.cs" />
+    <Compile Include="$(SharedDir)DotnetWatch\DotnetWatchAppHostProtocol.cs" Link="Shared\DotnetWatchAppHostProtocol.cs" />
+    <!-- The guardian that kills the watcher's process tree when the server host dies (Windows job object, Unix
+         process group + owner liveness), without .NET 11 process APIs. -->
+    <Compile Include="$(SharedDir)KnownConfigNames.cs" Link="Shared\KnownConfigNames.cs" />
+    <Compile Include="$(SharedDir)ProcessStartTimeHelper.cs" Link="Shared\ProcessStartTimeHelper.cs" />
+    <Compile Include="$(SharedDir)ProcessSignaler.cs" Link="Shared\ProcessSignaler.cs" />
+    <Compile Include="$(SharedDir)IChildProcess.cs" Link="Shared\IChildProcess.cs" />
+    <Compile Include="$(SharedDir)ChildProcess.cs" Link="Shared\ChildProcess.cs" />
+    <Compile Include="$(SharedDir)ChildProcessOptions.cs" Link="Shared\ChildProcessOptions.cs" />
+    <Compile Include="$(SharedDir)ParentProcessLivenessMonitor.cs" Link="Shared\ParentProcessLivenessMonitor.cs" />
+    <Compile Include="$(SharedDir)ProcessSupervisor.cs" Link="Shared\ProcessSupervisor.cs" />
+    <Compile Include="$(SharedDir)ProcessSupervisorLogger.cs" Link="Shared\ProcessSupervisorLogger.cs" />
+    <Compile Include="$(SharedDir)ProcessSupervisor.Windows.cs" Link="Shared\ProcessSupervisor.Windows.cs" />
+  </ItemGroup>
+
+</Project>

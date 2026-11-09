@@ -62,7 +62,7 @@ internal static class KnownFeatures
 
         [DefaultWatchEnabled] = new(
             DefaultWatchEnabled,
-            "Enable or disable watch mode by default when running Aspire applications for automatic restarts on file changes",
+            "Watch compatible C# or language-native polyglot AppHost edits by default for 'aspire run' (the same as --watch); explicit --watch or --watch false wins. Resource watching is configured independently in the AppHost, and real IDE-owned runs retain IDE watch policy",
             DefaultValue: false),
 
         [ShowAllTemplates] = new(

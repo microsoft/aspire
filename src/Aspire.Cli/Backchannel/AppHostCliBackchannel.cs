@@ -7,6 +7,7 @@ using System.Runtime.CompilerServices;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Hosting;
+using Aspire.Shared;
 using Microsoft.Extensions.Logging;
 using StreamJsonRpc;
 
@@ -19,6 +20,7 @@ internal interface IAppHostCliBackchannel
     Task<DashboardUrlsState> GetDashboardUrlsAsync(CancellationToken cancellationToken);
     IAsyncEnumerable<BackchannelLogEntry> GetAppHostLogEntriesAsync(CancellationToken cancellationToken);
     IAsyncEnumerable<RpcResourceState> GetResourceStatesAsync(CancellationToken cancellationToken);
+    IAsyncEnumerable<ResourceWatchStatus?> WatchResourceWatchStatusAsync(CancellationToken cancellationToken);
     Task WaitForDisconnectAsync(CancellationToken cancellationToken);
     Task ConnectAsync(string socketPath, int retryCount, CancellationToken cancellationToken);
     Task ConnectAsync(string socketPath, bool autoReconnect, int retryCount, CancellationToken cancellationToken);
@@ -155,6 +157,25 @@ internal sealed class AppHostCliBackchannel(
             "resource states",
             cancellationToken);
     }
+
+    public IAsyncEnumerable<ResourceWatchStatus?> WatchResourceWatchStatusAsync(CancellationToken cancellationToken) =>
+        InvokeStreamingRpcAsync<ResourceWatchStatus?>(
+            async (rpc, ct) =>
+            {
+                // Re-negotiate on every connection, including AppHost-generation replacement.
+                var capabilities = await rpc.InvokeWithProfilingAsync<string[]>(
+                    profilingTelemetry, "apphost", "GetCapabilitiesAsync", [], ct).ConfigureAwait(false);
+                if (!capabilities.Contains(ResourceWatch.Capability, StringComparer.Ordinal))
+                {
+                    logger.LogDebug("The AppHost does not expose resource-watch coverage.");
+                    return new ResourceWatchStatus?[] { null }.ToAsyncEnumerable();
+                }
+
+                return await rpc.InvokeStreamingWithProfilingAsync<ResourceWatchStatus?>(
+                    profilingTelemetry, "apphost", "WatchResourceWatchStatusAsync", [], ct).ConfigureAwait(false);
+            },
+            "resource-watch coverage",
+            cancellationToken);
 
     /// <summary>
     /// Invokes a streaming RPC method, handling reconnection when auto-reconnect is enabled.

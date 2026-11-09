@@ -147,9 +147,19 @@
         <target state="translated">Před spuštěním nevytvářejte ani neobnovujte projekt.</target>
         <note />
       </trans-unit>
+      <trans-unit id="NoBuildNotSupportedWithDefaultWatch">
+        <source>--no-build suppresses implicit AppHost and resource watching. Explicit watch requirements cannot be combined with --no-build.</source>
+        <target state="new">--no-build suppresses implicit AppHost and resource watching. Explicit watch requirements cannot be combined with --no-build.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="NoBuildNotSupportedWithWatchMode">
-        <source>The --no-build option cannot be used when watch mode is enabled.</source>
-        <target state="translated">Možnost --no-build nelze použít, pokud je povolen režim sldování.</target>
+        <source>The --no-build option cannot be used for a VS Code run session: VS Code builds and watches the services it launches.</source>
+        <target state="needs-review-translation">Možnost --no-build nelze použít, pokud je povolen režim sldování.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NoBuildNotSupportedWithWatchOption">
+        <source>--no-build cannot be used with explicit AppHost watching. Remove --no-build, or pass --watch false. Required resource watching (WithWatch(true)) also conflicts with --no-build.</source>
+        <target state="new">--no-build cannot be used with explicit AppHost watching. Remove --no-build, or pass --watch false. Required resource watching (WithWatch(true)) also conflicts with --no-build.</target>
         <note />
       </trans-unit>
       <trans-unit id="PressCtrlCToStopAppHost">
@@ -181,6 +191,26 @@
         <source>Resource</source>
         <target state="translated">Prostředek</target>
         <note>A column header (noun)</note>
+      </trans-unit>
+      <trans-unit id="ResourceWatchDefaultOff">
+        <source>off</source>
+        <target state="new">off</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceWatchDefaultOn">
+        <source>on</source>
+        <target state="new">on</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceWatchSummary">
+        <source>Resource watching (default {0}): {1} watching, {2} pending, {3} build failed, {4} excluded, {5} infrastructure failed, {6} unknown.</source>
+        <target state="new">Resource watching (default {0}): {1} watching, {2} pending, {3} build failed, {4} excluded, {5} infrastructure failed, {6} unknown.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceWatchUnknownSummary">
+        <source>Resource-watch coverage is unavailable from this AppHost.</source>
+        <target state="new">Resource-watch coverage is unavailable from this AppHost.</target>
+        <note />
       </trans-unit>
       <trans-unit id="RunningInstanceStopped">
         <source>Running instance stopped successfully.</source>
@@ -237,10 +267,110 @@
         <target state="translated">Čeká se na spuštění AppHostu...</target>
         <note />
       </trans-unit>
-      <trans-unit id="WatchArgumentDescription">
-        <source>Start project resources in watch mode</source>
-        <target state="translated">Umožňuje spustit prostředky projektu v režimu kukátka.</target>
+      <trans-unit id="Watch">
+        <source>AppHost edits</source>
+        <target state="new">AppHost edits</target>
         <note />
+      </trans-unit>
+      <trans-unit id="WatchAppHostChannelFailed">
+        <source>The private AppHost watch channel failed: {0} The watch run will stop rather than overlap AppHost generations.</source>
+        <target state="new">The private AppHost watch channel failed: {0} The watch run will stop rather than overlap AppHost generations.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WatchAppHostDefaultBuildRequired">
+        <source>This preview requires a single-targeted Debug AppHost build because the watcher host has no build-configuration or target-framework options.</source>
+        <target state="new">This preview requires a single-targeted Debug AppHost build because the watcher host has no build-configuration or target-framework options.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WatchAppHostExitedDuringStartup">
+        <source>The watched AppHost process exited during startup before its backchannel connected. See CLI logs at {0}.</source>
+        <target state="new">The watched AppHost process exited during startup before its backchannel connected. See CLI logs at {0}.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WatchAppHostFallback">
+        <source>C# AppHost watching is unavailable: {0} The AppHost will run normally; independently compatible C# service groups can still be watched.</source>
+        <target state="new">C# AppHost watching is unavailable: {0} The AppHost will run normally; independently compatible C# service groups can still be watched.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WatchAppHostGenerationRequired">
+        <source>A CLI-owned AppHost generation is required. Start the application with aspire run --watch.</source>
+        <target state="new">A CLI-owned AppHost generation is required. Start the application with aspire run --watch.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WatchAppHostIdentityRequired">
+        <source>The watched AppHost must announce its initial process instance before startup can be established. The run will stop if that announcement is missing or the backchannel disconnects first.</source>
+        <target state="new">The watched AppHost must announce its initial process instance before startup can be established. The run will stop if that announcement is missing or the backchannel disconnects first.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WatchAppHostProfileUnsupported">
+        <source>The selected AppHost launch profile is missing, malformed, or does not use the Project launch command. Its ordinary SDK launch behavior will be preserved.</source>
+        <target state="new">The selected AppHost launch profile is missing, malformed, or does not use the Project launch command. Its ordinary SDK launch behavior will be preserved.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WatchAppHostProjectRequired">
+        <source>This preview supports C# AppHost watching for .csproj entry points only; file-based and other .NET AppHosts run normally.</source>
+        <target state="new">This preview supports C# AppHost watching for .csproj entry points only; file-based and other .NET AppHosts run normally.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WatchAppHostRequirementsInvalid">
+        <source>The resolved watcher payload or the AppHost's selected SDK {0} cannot be used: {1} Use a complete, compatible watcher payload and SDK without forcing major-version roll-forward.</source>
+        <target state="new">The resolved watcher payload or the AppHost's selected SDK {0} cannot be used: {1} Use a complete, compatible watcher payload and SDK without forcing major-version roll-forward.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WatchAppHostRestarting">
+        <source>The C# AppHost model changed. Replacing the complete watch generation...</source>
+        <target state="new">The C# AppHost model changed. Replacing the complete watch generation...</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WatchAppHostRuntimeMissing">
+        <source>The watcher requires {0} in the selected dotnet installation '{1}'. Install the required runtimes without forcing major-version roll-forward.</source>
+        <target state="new">The watcher requires {0} in the selected dotnet installation '{1}'. Install the required runtimes without forcing major-version roll-forward.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WatchArgumentDescription">
+        <source>Enable experimental AppHost edit watching; resource watching is configured independently</source>
+        <target state="needs-review-translation">Umožňuje spustit prostředky projektu v režimu kukátka.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WatchBootstrapInvalid">
+        <source>The package-owned watch resolve target returned invalid payload or selected SDK metadata.</source>
+        <target state="new">The package-owned watch resolve target returned invalid payload or selected SDK metadata.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WatchBootstrapUnavailable">
+        <source>The restored AppHost must reference an Aspire.Hosting.Dotnet package with the ResolveAspireDotnetWatch target, and that target must successfully resolve the bundled watcher and selected SDK.</source>
+        <target state="new">The restored AppHost must reference an Aspire.Hosting.Dotnet package with the ResolveAspireDotnetWatch target, and that target must successfully resolve the bundled watcher and selected SDK.</target>
+        <note>Aspire.Hosting.Dotnet and ResolveAspireDotnetWatch must not be localized.</note>
+      </trans-unit>
+      <trans-unit id="WatchDisabledSummary">
+        <source>Not watched; resource watching is configured independently.</source>
+        <target state="new">Not watched; resource watching is configured independently.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WatchEnabledSummary">
+        <source>Watching (preview); model changes replace the AppHost generation.</source>
+        <target state="new">Watching (preview); model changes replace the AppHost generation.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WatchNativeServerUnsupported">
+        <source>AppHost watching is unavailable for the selected native AppHost server. Running without watching; stop and rerun Aspire to apply AppHost edits. Managed C# service watching is also unavailable.</source>
+        <target state="new">AppHost watching is unavailable for the selected native AppHost server. Running without watching; stop and rerun Aspire to apply AppHost edits. Managed C# service watching is also unavailable.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WatchNotSupportedWithDebugger">
+        <source>--watch cannot be used with an IDE-owned or debugger-owned AppHost run. Stop the debug session and run aspire run --watch from a terminal.</source>
+        <target state="new">--watch cannot be used with an IDE-owned or debugger-owned AppHost run. Stop the debug session and run aspire run --watch from a terminal.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WatchOptionDescription">
+        <source>(Preview) Watch AppHost edits: reconstruct compatible C# AppHosts and enable language-native watching for compatible polyglot AppHosts. Defaults to the defaultWatchEnabled feature. --watch false disables AppHost watching only; the AppHost controls resource watching. Real IDE-owned runs retain IDE watch policy.</source>
+        <target state="new">(Preview) Watch AppHost edits: reconstruct compatible C# AppHosts and enable language-native watching for compatible polyglot AppHosts. Defaults to the defaultWatchEnabled feature. --watch false disables AppHost watching only; the AppHost controls resource watching. Real IDE-owned runs retain IDE watch policy.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WatchToolOverrideInvalid">
+        <source>ASPIRE_DOTNET_WATCH_TOOL_PATH is invalid or differs from the package target's resolved tool. Relative overrides are resolved against the AppHost directory; an invalid override does not select a default tool.</source>
+        <target state="new">ASPIRE_DOTNET_WATCH_TOOL_PATH is invalid or differs from the package target's resolved tool. Relative overrides are resolved against the AppHost directory; an invalid override does not select a default tool.</target>
+        <note>ASPIRE_DOTNET_WATCH_TOOL_PATH must not be localized.</note>
       </trans-unit>
     </body>
   </file>

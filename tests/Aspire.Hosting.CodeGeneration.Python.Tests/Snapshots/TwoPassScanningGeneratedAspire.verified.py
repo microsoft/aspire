@@ -1907,6 +1907,7 @@ class CreateBuilderOptions(typing.TypedDict, total=False):
     dashboardApplicationName: str | None
     allowUnsecuredTransport: bool
     enableResourceLogging: bool
+    defaultResourceWatchEnabled: bool | None
 
 class CreateInteractionInputOptions(typing.TypedDict, total=False):
     label: str | None

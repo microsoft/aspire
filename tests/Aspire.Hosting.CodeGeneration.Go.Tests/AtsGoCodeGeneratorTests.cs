@@ -28,6 +28,22 @@ public class AtsGoCodeGeneratorTests
     }
 
     [Fact]
+    public async Task Generate_CreateBuilderOptions_PreservesNullableResourceWatchDefault()
+    {
+        var context = CreateContextFromBothAssemblies();
+        var options = Assert.Single(context.DtoTypes, dto => dto.Name == "CreateBuilderOptions");
+        var files = _generator.GenerateDistributedApplication(new AtsContext
+        {
+            Capabilities = [],
+            HandleTypes = [],
+            EnumTypes = [],
+            DtoTypes = [options]
+        });
+
+        await Verify(files["aspire.go"], "go").UseFileName("CreateBuilderOptions");
+    }
+
+    [Fact]
     public async Task GenerateDistributedApplication_WithTestTypes_GeneratesCorrectOutput()
     {
         // Arrange

@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <!-- Build-only marker for the WithBuildEnvironment scenario (see /diag). -->
+  <ItemGroup Condition="'$(WATCHDEMO_BUILD_MARKER)' != ''">
+    <AssemblyMetadata Include="BuildMarker" Value="$(WATCHDEMO_BUILD_MARKER)" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\WatchDemo.Shared\WatchDemo.Shared.csproj" />
+  </ItemGroup>
+</Project>

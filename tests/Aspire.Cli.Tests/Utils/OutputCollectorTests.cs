@@ -9,6 +9,27 @@ namespace Aspire.Cli.Tests.Utils;
 public class OutputCollectorTests
 {
     [Fact]
+    public async Task WatcherProvenanceIsVisibleAcrossTasksAndRetainsBothStreams()
+    {
+        var collector = new OutputCollector();
+        Assert.False(collector.ContainsWatcherOutput);
+        collector.AppendOutput("ordinary preparation");
+
+        await Task.Run(() =>
+        {
+            collector.MarkWatcherOutput();
+            collector.AppendOutput("raw watcher stdout");
+            collector.AppendError("raw watcher stderr");
+        }).DefaultTimeout();
+
+        Assert.True(collector.ContainsWatcherOutput);
+        Assert.Collection(collector.GetLines(),
+            line => Assert.Equal((OutputLineStream.StdOut, "ordinary preparation"), line),
+            line => Assert.Equal((OutputLineStream.StdOut, "raw watcher stdout"), line),
+            line => Assert.Equal((OutputLineStream.StdErr, "raw watcher stderr"), line));
+    }
+
+    [Fact]
     public async Task OutputCollector_ThreadSafety_MultipleThreadsAddingLines()
     {
         // Arrange

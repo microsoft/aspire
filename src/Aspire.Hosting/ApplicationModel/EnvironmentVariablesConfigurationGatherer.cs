@@ -16,10 +16,6 @@ internal class EnvironmentVariablesExecutionConfigurationGatherer : IExecutionCo
         if (resource.TryGetEnvironmentVariables(out var envVarAnnotations))
         {
             var envVars = new Dictionary<string, object>(context.EnvironmentVariables);
-            var callbackContext = new EnvironmentCallbackContext(executionContext, resource, envVars, cancellationToken: cancellationToken)
-            {
-                Logger = resourceLogger,
-            };
 
             // The OTLP exporter callback puts service.instance.id in OTEL_RESOURCE_ATTRIBUTES, and the dashboard needs it
             // to match telemetry to the resource and to tell replicas apart. AddProject registers that callback before any
@@ -32,7 +28,13 @@ internal class EnvironmentVariablesExecutionConfigurationGatherer : IExecutionCo
 
             foreach (var ann in envVarAnnotations)
             {
-                // Each annotation operates on a shared context.
+                // Cached callbacks return an earlier snapshot. Later callbacks must
+                // receive a copy of that dictionary so they cannot mutate the cached result.
+                var callbackEnvironment = new Dictionary<string, object>(envVars, StringComparers.EnvironmentVariableName);
+                var callbackContext = new EnvironmentCallbackContext(executionContext, resource, callbackEnvironment, cancellationToken: cancellationToken)
+                {
+                    Logger = resourceLogger,
+                };
                 envVars = await ann.AsCallbackAnnotation().EvaluateOnceAsync(callbackContext).ConfigureAwait(false);
 
                 if (keepServiceInstanceId)

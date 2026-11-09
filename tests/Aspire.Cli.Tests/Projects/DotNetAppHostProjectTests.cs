@@ -2,18 +2,23 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Commands;
+using Aspire.Cli.DotnetWatch;
 using Aspire.Cli.Layout;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
+using Aspire.Cli.Watch;
 using Aspire.Hosting;
 using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Utils;
 using Aspire.Shared;
+using Aspire.Shared.DotnetWatch;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging.Abstractions;
+using System.Diagnostics;
 using System.Text.Json;
 
 namespace Aspire.Cli.Tests.Projects;
@@ -1730,17 +1735,363 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         Assert.Equal(77, exitCode);
     }
 
-    [Fact]
-    public async Task RunAsync_ProjectAppHostUsesSdkPathWhenWatchIsEnabled()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task RunAsync_ProjectAppHostWithoutAGenerationKeepsServiceWatchAndOrdinaryLaunch(bool watch)
     {
+        var appHostFile = CreateProjectAppHost();
         var appHostCommand = CreateBuiltAppHostCommand("AppHost");
+        IDictionary<string, string>? launchEnvironment = null;
 
-        var exitCode = await AssertProjectAppHostFallsBackToDotNetRunAsync(
-            () => CreateAppHostInfoJson(runCommand: appHostCommand.FullName),
-            expectedWatch: true,
-            configureServices: options => options.EnabledFeatures = [KnownFeatures.DefaultWatchEnabled]);
+        var runner = new TestDotNetCliRunner
+        {
+            BuildAsyncCallback = (_, _, _, _) => 0,
+            GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) => (0, CreateAppHostInfoJson(runCommand: appHostCommand.FullName)),
+            RunAsyncCallback = (_, _, _, _, _, _, _, _, _) => throw new InvalidOperationException("The AppHost must not run under dotnet run/watch; only its services are watched.")
+        };
+        // The defaultWatchEnabled feature is resolved by RunCommand into context.Watch; the project must not reinterpret it.
+        var project = CreateDotNetAppHostProject(runner, configureServices: options => options.EnabledFeatures = [KnownFeatures.DefaultWatchEnabled]);
 
-        Assert.Equal(77, exitCode);
+        runner.RunAppHostCommandAsyncCallback = (_, command, _, _, env, _, _, _) =>
+        {
+            Assert.Equal(appHostCommand.FullName, command);
+            launchEnvironment = env;
+            return Task.FromResult(124);
+        };
+
+        var exitCode = await project.RunAsync(new AppHostProjectContext
+        {
+            AppHostFile = appHostFile,
+            NoBuild = false,
+            NoRestore = false,
+            Watch = watch,
+            WorkingDirectory = _workspace.WorkspaceRoot,
+            EnvironmentVariables = new Dictionary<string, string>()
+        }, CancellationToken.None);
+
+        Assert.Equal(124, exitCode);
+        Assert.NotNull(launchEnvironment);
+        Assert.False(launchEnvironment.ContainsKey(DotnetWatchRunEnvironment.WatchEnabledVariable));
+        Assert.Equal("", launchEnvironment[DotnetWatchOwnership.ResourceWatchSuppressionEnvironmentVariable]);
+        if (watch)
+        {
+            Assert.Equal(DotnetWatchOwnership.CliOwner, launchEnvironment[DotnetWatchOwnership.OwnerEnvironmentVariable]);
+        }
+        else
+        {
+            Assert.False(launchEnvironment.ContainsKey(DotnetWatchRunEnvironment.WatchEnabledVariable));
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RunAsync_ProjectAppHostWatchUsesTheBundledHostAndSelectedMuxerWithoutExtensionDelegation(bool extensionTerminal)
+    {
+        using var directory = new DotnetWatchTestDirectory();
+        using var shutdown = new TestGracefulShutdownWindow();
+        await using var generation = new DotnetWatchAppHostGeneration(shutdown, TimeSpan.FromSeconds(5), directory.RelativePath, NullLogger.Instance)
+        {
+            RequiresLauncherMonitoring = false
+        };
+        var appHost = CreateProjectAppHost();
+        var command = CreateBuiltAppHostCommand("AppHost");
+        var payload = TestDotnetWatchAppHostPayload.Create(directory.Directory, "10.0.403", "10.0.14");
+        var builds = 0;
+        IDictionary<string, string>? launchEnvironment = null;
+        var runner = new TestDotNetCliRunner
+        {
+            BuildAsyncCallback = (_, _, _, _) =>
+            {
+                Interlocked.Increment(ref builds);
+                return 0;
+            },
+            GetProjectItemsAndPropertiesAsyncCallbackWithTargets = (_, _, _, targets, _, _) =>
+                (0, targets.Contains(DotnetWatchAppHostLaunch.ResolveTarget)
+                    ? payload.CreateQueryDocument()
+                    : CreateAppHostInfoJson(runCommand: command.FullName)),
+            RunAsyncCallback = (_, _, _, _, _, _, _, _, _) => throw new InvalidOperationException("The wrapper must not use ordinary dotnet run or legacy dotnet watch.")
+        };
+        runner.RunAppHostCommandAsyncCallback = async (_, executable, workingDirectory, args, env, backchannel, options, token) =>
+        {
+            Assert.Equal(payload.DotnetPath, executable);
+            Assert.Equal(appHost.Directory!.FullName, workingDirectory.FullName);
+            Assert.Equal(payload.DotnetPath, options.DotNetExecutablePath);
+            Assert.True(options.DisableExtensionLaunch);
+            Assert.Same(generation, options.ShutdownService);
+            Assert.Same(generation.HostStarted, options.BackchannelConnectionReady);
+            Assert.NotNull(options.GracefulShutdownTarget);
+            Assert.Null(options.GracefulShutdownTarget());
+            Assert.Equal(args.Length - 4, options.AppHostArgumentStartIndex);
+            Assert.Equal(["--environment", "two words", "", "--project"], args[^4..]);
+            Assert.Equal(["--", "--"], args[(args.Length - 6)..(args.Length - 4)]);
+            Assert.NotNull(env);
+            Assert.Equal("true", env[KnownConfigNames.SuppressCliRunHook]);
+            Assert.Equal("true", env["DOTNET_WATCH_SUPPRESS_LAUNCH_BROWSER"]);
+            Assert.Equal(generation.Endpoint, env[DotnetWatchOwnership.AppHostControlEnvironmentVariable]);
+            Assert.Equal(generation.Session, env[DotnetWatchOwnership.AppHostSessionEnvironmentVariable]);
+            launchEnvironment = env;
+            await DotnetWatchAppHostTestChannel.SendAsync(generation.Endpoint, new()
+            {
+                Version = DotnetWatchAppHostProtocol.Version,
+                Session = generation.Session,
+                Kind = DotnetWatchAppHostProtocol.HostStarted,
+                Instance = "123:456"
+            }, token);
+            backchannel!.TrySetResult(new TestAppHostBackchannel());
+            return 124;
+        };
+        var project = CreateDotNetAppHostProject(runner, configureServices: options =>
+        {
+            if (extensionTerminal)
+            {
+                options.ExtensionBackchannelFactory = _ => new TestExtensionBackchannel
+                {
+                    HasCapabilityAsyncCallback = (_, _) => Task.FromResult(true)
+                };
+                options.InteractionServiceFactory = sp => new TestExtensionInteractionService(sp);
+            }
+        });
+
+        var exitCode = await project.RunAsync(new AppHostProjectContext
+        {
+            AppHostFile = appHost,
+            WorkingDirectory = _workspace.WorkspaceRoot,
+            Watch = true,
+            WatchGeneration = generation,
+            EnvironmentVariables = new Dictionary<string, string> { ["ApplicationVariable"] = "preserved" },
+            UnmatchedTokens = ["--environment", "two words", "", "--project"]
+        }, TestContext.Current.CancellationToken);
+
+        Assert.Equal(124, exitCode);
+        Assert.Equal(1, builds);
+        Assert.NotNull(launchEnvironment);
+        Assert.False(launchEnvironment.ContainsKey(DotnetWatchRunEnvironment.WatchEnabledVariable));
+        Assert.Equal(DotnetWatchOwnership.CliOwner, launchEnvironment[DotnetWatchOwnership.OwnerEnvironmentVariable]);
+        Assert.Equal("preserved", launchEnvironment["ApplicationVariable"]);
+    }
+
+    [Fact]
+    public async Task RunAsync_UnsupportedAppHostSdkRunsOrdinarilyWithoutDisablingServiceWatch()
+    {
+        using var directory = new DotnetWatchTestDirectory();
+        using var shutdown = new TestGracefulShutdownWindow();
+        await using var generation = new DotnetWatchAppHostGeneration(shutdown, TimeSpan.FromSeconds(5), directory.RelativePath, NullLogger.Instance);
+        var appHost = CreateProjectAppHost();
+        var command = CreateBuiltAppHostCommand("AppHost");
+        var payload = TestDotnetWatchAppHostPayload.Create(directory.Directory, "11.0.100-rc.2.26504.105", "10.0.14");
+        var runner = new TestDotNetCliRunner
+        {
+            BuildAsyncCallback = (_, _, _, _) => 0,
+            GetProjectItemsAndPropertiesAsyncCallbackWithTargets = (_, _, _, targets, _, _) =>
+                (0, targets.Contains(DotnetWatchAppHostLaunch.ResolveTarget)
+                    ? payload.CreateQueryDocument()
+                    : CreateAppHostInfoJson(runCommand: command.FullName)),
+            RunAppHostCommandAsyncCallback = (_, executable, _, _, environment, _, _, _) =>
+            {
+                Assert.Equal(command.FullName, executable);
+                Assert.NotNull(environment);
+                Assert.False(environment.ContainsKey(DotnetWatchRunEnvironment.WatchEnabledVariable));
+                Assert.Equal(DotnetWatchOwnership.CliOwner, environment[DotnetWatchOwnership.OwnerEnvironmentVariable]);
+                Assert.Equal("", environment[DotnetWatchOwnership.AppHostControlEnvironmentVariable]);
+                Assert.Equal("", environment[DotnetWatchOwnership.AppHostSessionEnvironmentVariable]);
+                return Task.FromResult(124);
+            }
+        };
+        var project = CreateDotNetAppHostProject(runner);
+
+        var exitCode = await project.RunAsync(new AppHostProjectContext
+        {
+            AppHostFile = appHost,
+            WorkingDirectory = _workspace.WorkspaceRoot,
+            Watch = true,
+            WatchGeneration = generation
+        }, TestContext.Current.CancellationToken);
+
+        Assert.Equal(124, exitCode);
+        Assert.False(generation.IsEnabled);
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(255)]
+    public async Task RunAsync_AppHostWrapperFailureNeverExecutesTheModelAgainOrdinarily(int wrapperExitCode)
+    {
+        using var directory = new DotnetWatchTestDirectory();
+        using var shutdown = new TestGracefulShutdownWindow();
+        await using var generation = new DotnetWatchAppHostGeneration(shutdown, TimeSpan.FromSeconds(5), directory.RelativePath, NullLogger.Instance);
+        var appHost = CreateProjectAppHost();
+        var command = CreateBuiltAppHostCommand("AppHost");
+        var payload = TestDotnetWatchAppHostPayload.Create(directory.Directory, "10.0.403", "10.0.14");
+        var launches = 0;
+        var runner = new TestDotNetCliRunner
+        {
+            BuildAsyncCallback = (_, _, _, _) => 0,
+            GetProjectItemsAndPropertiesAsyncCallbackWithTargets = (_, _, _, targets, _, _) =>
+                (0, targets.Contains(DotnetWatchAppHostLaunch.ResolveTarget)
+                    ? payload.CreateQueryDocument()
+                    : CreateAppHostInfoJson(runCommand: command.FullName)),
+            RunAppHostCommandAsyncCallback = (_, executable, _, _, _, _, _, _) =>
+            {
+                Interlocked.Increment(ref launches);
+                Assert.Equal(payload.DotnetPath, executable);
+                return Task.FromResult(wrapperExitCode);
+            },
+            RunAsyncCallback = (_, _, _, _, _, _, _, _, _) => throw new InvalidOperationException("No ordinary retry is allowed after wrapper launch.")
+        };
+        var project = CreateDotNetAppHostProject(runner);
+
+        var exitCode = await project.RunAsync(new AppHostProjectContext
+        {
+            AppHostFile = appHost,
+            WorkingDirectory = _workspace.WorkspaceRoot,
+            Watch = true,
+            WatchGeneration = generation
+        }, TestContext.Current.CancellationToken);
+
+        Assert.Equal(wrapperExitCode, exitCode);
+        Assert.Equal(1, launches);
+    }
+
+    [Fact]
+    public async Task RunAsync_WatchedAppHostChildExitFailsStartupWithSafeLogGuidance()
+    {
+        using var directory = new DotnetWatchTestDirectory();
+        using var shutdown = new TestGracefulShutdownWindow();
+        await using var generation = new DotnetWatchAppHostGeneration(
+            shutdown, TimeSpan.FromSeconds(5), directory.RelativePath, NullLogger.Instance);
+        var appHost = CreateProjectAppHost();
+        var command = CreateBuiltAppHostCommand("AppHost");
+        var payload = TestDotnetWatchAppHostPayload.Create(directory.Directory, "10.0.403", "10.0.14");
+        var outerBackchannel = new TaskCompletionSource<Aspire.Cli.Backchannel.IAppHostCliBackchannel>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var runner = new TestDotNetCliRunner
+        {
+            BuildAsyncCallback = (_, _, _, _) => 0,
+            GetProjectItemsAndPropertiesAsyncCallbackWithTargets = (_, _, _, targets, _, _) =>
+                (0, targets.Contains(DotnetWatchAppHostLaunch.ResolveTarget)
+                    ? payload.CreateQueryDocument()
+                    : CreateAppHostInfoJson(runCommand: command.FullName)),
+            RunAppHostCommandAsyncCallback = async (_, _, _, _, _, _, options, token) =>
+            {
+                var startInfo = OperatingSystem.IsWindows()
+                    ? new ProcessStartInfo("cmd.exe") { ArgumentList = { "/c", "ping -n 2 127.0.0.1 >nul & exit /b 17" } }
+                    : new ProcessStartInfo("/bin/sh") { ArgumentList = { "-c", "sleep 0.5; exit 17" } };
+                startInfo.UseShellExecute = false;
+                using var child = Process.Start(startInfo)!;
+                var started = ProcessStartTimeHelper.TryGetProcessStartTimeUnixMilliseconds(child.Id);
+                Assert.NotNull(started);
+                options.StandardErrorCallback?.Invoke("WATCH_STARTUP_FAILURE_DETAILS");
+                await DotnetWatchAppHostTestChannel.SendAsync(generation.Endpoint, new()
+                {
+                    Version = DotnetWatchAppHostProtocol.Version,
+                    Session = generation.Session,
+                    Kind = DotnetWatchAppHostProtocol.HostStarted,
+                    Instance = $"{child.Id}:{started.Value}"
+                }, token);
+                await child.WaitForExitAsync(CancellationToken.None);
+                try
+                {
+                    await Task.Delay(Timeout.InfiniteTimeSpan, token);
+                }
+                catch (OperationCanceledException) when (token.IsCancellationRequested)
+                {
+                }
+                return child.ExitCode;
+            }
+        };
+        var project = CreateDotNetAppHostProject(runner);
+
+        var context = new AppHostProjectContext
+        {
+            AppHostFile = appHost,
+            WorkingDirectory = _workspace.WorkspaceRoot,
+            Watch = true,
+            WatchGeneration = generation,
+            BackchannelCompletionSource = outerBackchannel
+        };
+        var exitCode = await project.RunAsync(context, TestContext.Current.CancellationToken).DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, exitCode);
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => outerBackchannel.Task);
+        Assert.StartsWith("The watched AppHost process exited during startup before its backchannel connected. See CLI logs at ",
+            exception.Message, StringComparison.Ordinal);
+        Assert.NotNull(context.OutputCollector);
+        Assert.True(context.OutputCollector.ContainsWatcherOutput);
+        Assert.Equal("WATCH_STARTUP_FAILURE_DETAILS",
+            Assert.Single(context.OutputCollector.GetLines(), line => line.Stream == OutputLineStream.StdErr).Line);
+    }
+
+    [Fact]
+    public async Task RunAsync_MissingInitialAnnouncementCannotAuthenticateAnOldBackchannelWithAReplacementInstance()
+    {
+        using var directory = new DotnetWatchTestDirectory();
+        using var shutdown = new TestGracefulShutdownWindow();
+        using var cancellation = new CancellationTokenSource();
+        var established = 0;
+        await using var generation = new DotnetWatchAppHostGeneration(shutdown, TimeSpan.FromSeconds(5), directory.RelativePath, NullLogger.Instance)
+        {
+            OnBackchannelEstablished = () => Interlocked.Increment(ref established)
+        };
+        var appHost = CreateProjectAppHost();
+        var command = CreateBuiltAppHostCommand("AppHost");
+        var payload = TestDotnetWatchAppHostPayload.Create(directory.Directory, "10.0.403", "10.0.14");
+        var oldBackchannel = new TestAppHostBackchannel();
+        var candidateConnected = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var outerBackchannel = new TaskCompletionSource<Aspire.Cli.Backchannel.IAppHostCliBackchannel>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var runner = new TestDotNetCliRunner
+        {
+            BuildAsyncCallback = (_, _, _, _) => 0,
+            GetProjectItemsAndPropertiesAsyncCallbackWithTargets = (_, _, _, targets, _, _) =>
+                (0, targets.Contains(DotnetWatchAppHostLaunch.ResolveTarget)
+                    ? payload.CreateQueryDocument()
+                    : CreateAppHostInfoJson(runCommand: command.FullName)),
+            RunAppHostCommandAsyncCallback = async (_, _, _, _, _, backchannel, _, token) =>
+            {
+                backchannel!.TrySetResult(oldBackchannel);
+                candidateConnected.TrySetResult();
+                await Task.Delay(Timeout.InfiniteTimeSpan, token);
+                return 0;
+            }
+        };
+        var project = CreateDotNetAppHostProject(runner);
+        var run = project.RunAsync(new AppHostProjectContext
+        {
+            AppHostFile = appHost,
+            WorkingDirectory = _workspace.WorkspaceRoot,
+            Watch = true,
+            WatchGeneration = generation,
+            BackchannelCompletionSource = outerBackchannel
+        }, cancellation.Token);
+
+        try
+        {
+            await candidateConnected.Task.DefaultTimeout();
+            Assert.False(outerBackchannel.Task.IsCompleted);
+            Assert.False(generation.HostStarted.IsCompleted);
+            Assert.Throws<InvalidOperationException>(generation.MarkBackchannelEstablished);
+            oldBackchannel.DisconnectCompletionSource.TrySetResult();
+            await DotnetWatchAppHostTestChannel.SendAsync(generation.Endpoint, new()
+            {
+                Version = DotnetWatchAppHostProtocol.Version,
+                Session = generation.Session,
+                Kind = DotnetWatchAppHostProtocol.HostStarted,
+                Instance = "999:123456"
+            }, TestContext.Current.CancellationToken).DefaultTimeout();
+            var exitCode = await run.DefaultTimeout();
+
+            Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, exitCode);
+            Assert.Equal(0, established);
+            Assert.True(outerBackchannel.Task.IsFaulted);
+            Assert.False(generation.Invalidated.IsCompleted);
+            await Assert.ThrowsAsync<InvalidOperationException>(() => outerBackchannel.Task);
+        }
+        finally
+        {
+            await cancellation.CancelAsync();
+            await run.DefaultTimeout();
+        }
     }
 
     [Fact]
@@ -3038,7 +3389,6 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
 
     private async Task<int> AssertProjectAppHostFallsBackToDotNetRunAsync(
         Func<JsonDocument> createAppHostInfo,
-        bool expectedWatch = false,
         Action<CliServiceCollectionTestOptions>? configureServices = null)
     {
         var appHostFile = CreateProjectAppHost();
@@ -3054,8 +3404,8 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         runner.RunAsyncCallback = (projectFile, watch, noBuild, noRestore, args, env, _, _, _) =>
         {
             Assert.Equal(appHostFile.FullName, projectFile.FullName);
-            Assert.Equal(expectedWatch, watch);
-            Assert.Equal(!expectedWatch, noBuild);
+            Assert.False(watch);
+            Assert.True(noBuild);
             Assert.False(noRestore);
             Assert.Empty(args);
             Assert.NotNull(env);

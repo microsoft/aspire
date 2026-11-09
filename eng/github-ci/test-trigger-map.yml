@@ -510,6 +510,10 @@ path_rules:
     targets: [test:Aspire.Cli.EndToEnd.Tests, test:Aspire.Templates.Tests, job:cli-starter-validation]
     reason: runtime-only Dotnet dependency in generated C# AppHosts, including when project-graph analysis is unavailable
   - paths:
+      - src/Aspire.Hosting.Dotnet/build/Aspire.Hosting.Dotnet.targets
+    targets: [test:Aspire.Hosting.Sdk.Tests]
+    reason: source and simulated packed prelaunch queries execute this targets file directly
+  - paths:
       - playground/**
     targets: [test:Aspire.Playground.Tests]
     reason: Aspire.Playground.Tests builds/runs apps under playground/

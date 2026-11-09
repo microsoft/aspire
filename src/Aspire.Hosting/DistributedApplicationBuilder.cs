@@ -135,6 +135,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
     // DistributedApplicationExecutionContext. This is a class that is used to expose contextual
     // values in various callbacks and is a central location to access useful services like IServiceProvider.
     private readonly DistributedApplicationExecutionContextOptions _executionContextOptions;
+    private bool _invalidResourceWatchConfiguration;
 
     private DistributedApplicationExecutionContextOptions BuildExecutionContextOptions()
     {
@@ -158,13 +159,20 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
 
     private RunConfiguration BuildRunConfiguration()
     {
-        // Only "true" and "false" (case-insensitively) are accepted. bool.TryParse rejects everything else,
-        // including values some configuration sources emit for booleans such as "1" or "yes". An unusable
-        // value must never fail an otherwise valid run, so anything unrecognized falls back to the default.
-        return new RunConfiguration
+        if (_options.DefaultResourceWatchEnabled is { } configuredDefault)
         {
-            WatchEnabled = bool.TryParse(_innerBuilder.Configuration["AppHost:Run:WatchEnabled"], out var watchEnabled) && watchEnabled
-        };
+            return new RunConfiguration { WatchEnabled = configuredDefault };
+        }
+
+        if (_innerBuilder.Configuration[Aspire.Shared.ResourceWatch.ConfigurationKey] is not { } value)
+        {
+            return RunConfiguration.RunDefault;
+        }
+
+        // Configuration values such as "false" and "TRUE" are valid; "1", "yes", and misspellings are not.
+        // Preserve the non-fatal, disabled fallback rather than accidentally enabling watch on an invalid opt-out.
+        _invalidResourceWatchConfiguration = !bool.TryParse(value, out var watchEnabled);
+        return new RunConfiguration { WatchEnabled = watchEnabled };
     }
 
     /// <summary>
@@ -684,6 +692,17 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         }
 
         Eventing.Subscribe<BeforeStartEvent>(BuiltInDistributedApplicationEventSubscriptionHandlers.ExcludeDashboardFromManifestAsync);
+
+        if (_invalidResourceWatchConfiguration)
+        {
+            Eventing.Subscribe<BeforeStartEvent>((e, _) =>
+            {
+                e.Services.GetRequiredService<ILoggerFactory>().CreateLogger(Aspire.Shared.ResourceWatch.NoticeCategory)
+                    .LogWarning(new EventId(Aspire.Shared.ResourceWatch.InvalidConfigurationEventId),
+                        "{Message}", Aspire.Hosting.Resources.MessageStrings.InvalidResourceWatchConfiguration);
+                return Task.CompletedTask;
+            });
+        }
 
         // Overwrite registry if override specified in options
         if (!string.IsNullOrEmpty(options.ContainerRegistryOverride))

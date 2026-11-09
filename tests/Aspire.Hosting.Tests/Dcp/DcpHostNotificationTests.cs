@@ -12,6 +12,7 @@ using Aspire.Hosting.Dcp;
 using Aspire.Hosting.Diagnostics;
 using Aspire.Hosting.Resources;
 using Aspire.Hosting.Tests.Utils;
+using Aspire.Shared.DotnetWatch;
 using Aspire.Tests;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.DotNet.RemoteExecutor;
@@ -644,6 +645,9 @@ public sealed class DcpHostNotificationTests
             [KnownAspNetCoreConfigNames.Environment] = "Development",
             [KnownAspNetCoreConfigNames.DotNetEnvironment] = "Development",
             ["aspire_loglevel"] = "Debug",
+            [DotnetWatchOwnership.OwnerEnvironmentVariable] = DotnetWatchOwnership.CliOwner,
+            [DotnetWatchOwnership.AppHostControlEnvironmentVariable] = "private-control",
+            [DotnetWatchOwnership.AppHostSessionEnvironmentVariable] = "private-session",
         };
 
         var options = new RemoteInvokeOptions();
@@ -655,6 +659,8 @@ public sealed class DcpHostNotificationTests
         options.StartInfo.Environment["MY_CUSTOM_SETTING"] = "keep-me";
         options.StartInfo.Environment["ASPNETCORE_URLS_FOO"] = "keep-me-too";
         options.StartInfo.Environment["ASPIRE_LOGLEVEL_EXTRA"] = "keep-me-three";
+        options.StartInfo.Environment["ASPIRE_DOTNET_WATCH_OWNER_APPLICATION"] = "keep-me-four";
+        options.StartInfo.Environment["DEBUG_SESSION_PORT"] = "localhost:12345";
 
         RemoteExecutor.Invoke(static () =>
         {
@@ -674,6 +680,7 @@ public sealed class DcpHostNotificationTests
                 KnownAspNetCoreConfigNames.Environment,
                 KnownAspNetCoreConfigNames.DotNetEnvironment,
                 "aspire_loglevel",
+                .. DotnetWatchOwnership.PrivateEnvironmentVariables,
             ];
 
             foreach (var key in expectedExcluded)
@@ -687,6 +694,8 @@ public sealed class DcpHostNotificationTests
             Assert.Equal("keep-me", processSpec.EnvironmentVariables["MY_CUSTOM_SETTING"]);
             Assert.Equal("keep-me-too", processSpec.EnvironmentVariables["ASPNETCORE_URLS_FOO"]);
             Assert.Equal("keep-me-three", processSpec.EnvironmentVariables["ASPIRE_LOGLEVEL_EXTRA"]);
+            Assert.Equal("keep-me-four", processSpec.EnvironmentVariables["ASPIRE_DOTNET_WATCH_OWNER_APPLICATION"]);
+            Assert.Equal("localhost:12345", processSpec.EnvironmentVariables["DEBUG_SESSION_PORT"]);
         }, options).Dispose();
     }
 

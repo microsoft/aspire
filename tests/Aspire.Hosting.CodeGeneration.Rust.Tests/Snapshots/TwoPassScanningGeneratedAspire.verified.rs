@@ -817,6 +817,8 @@ pub struct CreateBuilderOptions {
     pub allow_unsecured_transport: bool,
     #[serde(rename = "enableResourceLogging", alias = "EnableResourceLogging")]
     pub enable_resource_logging: bool,
+    #[serde(rename = "defaultResourceWatchEnabled", alias = "DefaultResourceWatchEnabled", skip_serializing_if = "Option::is_none")]
+    pub default_resource_watch_enabled: Option<bool>,
 }
 
 impl CreateBuilderOptions {
@@ -830,6 +832,9 @@ impl CreateBuilderOptions {
         map.insert("dashboardApplicationName".to_string(), serde_json::to_value(&self.dashboard_application_name).unwrap_or(Value::Null));
         map.insert("allowUnsecuredTransport".to_string(), serde_json::to_value(&self.allow_unsecured_transport).unwrap_or(Value::Null));
         map.insert("enableResourceLogging".to_string(), serde_json::to_value(&self.enable_resource_logging).unwrap_or(Value::Null));
+        if let Some(ref v) = self.default_resource_watch_enabled {
+            map.insert("defaultResourceWatchEnabled".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
         map
     }
 }

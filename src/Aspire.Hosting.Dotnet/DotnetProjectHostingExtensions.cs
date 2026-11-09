@@ -14,7 +14,7 @@ namespace Aspire.Hosting;
 /// Provides extension methods for adding SDK-style .NET projects and file-based C# apps (by path) to an
 /// <see cref="IDistributedApplicationBuilder"/>.
 /// </summary>
-public static class DotnetProjectHostingExtensions
+public static partial class DotnetProjectHostingExtensions
 {
     /// <summary>
     /// Adds an environment variable to the build process for a .NET project.
@@ -161,6 +161,9 @@ public static class DotnetProjectHostingExtensions
         }
 
         builder.WithAnnotation(new DotnetProjectBuildEnvironmentCallbackAnnotation(callback));
+
+        // Build-only environment values belong to this project's watcher, not unrelated roots.
+        Dotnet.Watch.DotnetWatchCoordinator.OnBuildEnvironmentAdded(builder);
         return builder.WithDotnetProgramBuildEnvironment(callback);
     }
 
@@ -355,6 +358,10 @@ public static class DotnetProjectHostingExtensions
         // so process and IDE launchers resolve the output produced by the coordinated build.
         var configuration = builder.Configuration["AppHost:BuildConfiguration"];
         var projectMetadata = new DotnetProjectMetadata(path, configuration, name);
+        // A watched project's initial build is the watcher's, but whether the project ends up
+        // watched is only known once the model is final (WithWatch(false), WaitForCompletion, ...). So every project
+        // joins the coordinated build here, and the watch coordinator takes the watched ones out before the build plan
+        // is created; excluded projects keep the normal coordinated build, build environment included.
         var buildCoordinator = DotnetProjectBuildCoordinator.Prepare(builder, projectMetadata);
 
         // ExecutableResource requires a working directory. Use the project/app directory so the process
@@ -501,6 +508,9 @@ public static class DotnetProjectHostingExtensions
             // The minimum-SDK check for file-based apps is applied by WithProjectDefaults.
             return Task.CompletedTask;
         });
+
+        // Watch eligibility is settled on the final model before transferring build ownership.
+        Dotnet.Watch.DotnetWatchCoordinator.Register(builder, resource, projectMetadata, buildCoordinator);
 
         return resource;
     }

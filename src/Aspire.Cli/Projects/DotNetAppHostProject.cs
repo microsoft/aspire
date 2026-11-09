@@ -11,6 +11,7 @@ using Aspire.Cli.Bundles;
 using Aspire.Cli.Certificates;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Diagnostics;
+using Aspire.Cli.DotnetWatch;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Exceptions;
 using Aspire.Cli.Interaction;
@@ -1452,6 +1453,13 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
 
         var effectiveAppHostFile = context.AppHostFile;
         var isExtensionHost = ExtensionHelper.IsExtensionHost(_interactionService, out _, out var extensionBackchannel);
+        if (context.Watch)
+        {
+            // An Aspire terminal without an active IDE-owned run can use CLI watch. Its
+            // extension must not launch the wrapper or recursively create a debug session.
+            isExtensionHost = false;
+            extensionBackchannel = null;
+        }
 
         var buildOutputCollector = new OutputCollector(_fileLoggerProvider, CliLogFormat.Categories.Build);
 
@@ -1497,7 +1505,9 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         // the Hosting version so a temporary compatibility path cannot become an override.
         ConfigureCliBundleBuildEnvironment(env, cliBundleLease);
 
-        var watch = !isSingleFileAppHost && _features.IsFeatureEnabled(KnownFeatures.DefaultWatchEnabled, defaultValue: false);
+        // Resource policy belongs to Hosting. Only launcher constraints and private AppHost
+        // generation ownership are projected; --watch false must not override the user's default.
+        DotnetWatchRunEnvironment.PrepareRun(env, context.NoBuild, context.Watch);
         var (preparationExitCode, builtByCli, deferBuildCompletion) = await PrepareAppHostAsync(
             context,
             effectiveAppHostFile,
@@ -1525,6 +1535,10 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         var injectDcpAndDashboard = appHostInfo.IsUsingCliBundle;
         ConfigureCliBundleEnvironment(env, cliBundleLease, injectDcpAndDashboard, appHostInfo.AspireHostingVersion);
 
+        var packageWatch = context.Watch
+            ? await PreparePackageWatchAsync(context, env, cancellationToken)
+            : null;
+
         // RunCommand may display captured AppHost output as soon as BuildCompletionSource is signaled.
         // Store the collector first so failures that occur immediately after preparation are not lost
         // to a race between the AppHost process and RunCommand's UX path.
@@ -1548,6 +1562,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
             StandardErrorCallback = runOutputCollector.AppendError,
             StartDebugSession = context.StartDebugSession,
             Debug = context.Debug,
+            DisableExtensionLaunch = context.Watch,
             KillEntireProcessTreeOnCancel = ShouldKillEntireProcessTreeOnCancel(_environment.IsWindows()),
             // Run path opts into the shared shutdown ladder so pure .NET AppHosts get the
             // same graceful-then-escalate semantics as TypeScript AppHosts (which already
@@ -1561,7 +1576,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
             KillOnParentExit = false,
             Lifetime = ChildProcessLifetime.AppHost,
             GracefulShutdownSignaler = _gracefulShutdownSignaler,
-            ShutdownService = _shutdownService,
+            ShutdownService = context.WatchGeneration is { } generation ? generation : _shutdownService,
             // The bundled AppHost run hook delegates dotnet run to aspire run. The SDK passes
             // its selected profile through DOTNET_LAUNCH_PROFILE rather than a CLI argument.
             // Preserve that selection for both direct launch and the dotnet run fallback,
@@ -1587,24 +1602,16 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
 
         env[KnownConfigNames.DcpWorkloadId] = AppHostWorkloadId.Create(effectiveAppHostFile);
 
-        var directRun = !isSingleFileAppHost && !watch && !isExtensionHost
+        var directRun = !isSingleFileAppHost && !isExtensionHost
             ? await TryCreateDirectRunSpecAsync(effectiveAppHostFile, env, context.UnmatchedTokens, runOptions.NoLaunchProfile, runOptions.LaunchProfile, cancellationToken)
             : null;
 
         // Start the apphost - the runner will signal the backchannel when ready
         try
         {
-            // The AppHost may already have been built above, but watch mode intentionally still
-            // runs with builds enabled. Passing --no-build through to dotnet watch breaks hot reload
-            // because watch owns the incremental build loop and its environment setup.
-            //
-            // This means watch mode can do a second no-op build after the CLI pre-build succeeds.
-            // That tradeoff is intentional: the pre-build makes initial compiler errors terminate
-            // aspire run instead of leaving dotnet watch idle waiting for edits before a backchannel
-            // ever becomes available.
-            //
+            // The AppHost was built above, so dotnet run doesn't build it again.
             // noRestore is only relevant when noBuild is false because --no-build implies --no-restore.
-            var noBuild = !watch || context.NoBuild;
+            var noBuild = true;
             var noRestore = context.NoRestore;
             if (isSingleFileAppHost && !builtByCli)
             {
@@ -1615,8 +1622,19 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
                 noRestore = false;
             }
 
-            using var runDotnetActivity = _profilingTelemetry.StartAppHostRunDotnetLifetime(watch, noBuild, noRestore);
+            using var runDotnetActivity = _profilingTelemetry.StartAppHostRunDotnetLifetime(context.Watch, noBuild, noRestore);
             var appHostDirectory = effectiveAppHostFile.Directory ?? _executionContext.WorkingDirectory;
+            if (packageWatch is { HostIncompatibility: null } && context.WatchGeneration is { } watchGeneration)
+            {
+                await _appHostConfigurationProjector.ApplyEnvironmentVariablesAsync(env, appHostDirectory, cancellationToken);
+                var watchExitCode = await RunPackageWatchAsync(
+                    context, packageWatch, watchGeneration, env, backchannelCompletionSource, runOptions, cancellationToken);
+                if (watchExitCode is { } completedWatchExitCode)
+                {
+                    return completedWatchExitCode;
+                }
+            }
+
             if (directRun is not null)
             {
                 await _appHostConfigurationProjector.ApplyEnvironmentVariablesAsync(directRun.Environment, appHostDirectory, cancellationToken);
@@ -1643,7 +1661,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
 
             return await _runner.RunAsync(
                 effectiveAppHostFile,
-                watch,
+                watch: false,
                 noBuild,
                 noRestore,
                 context.UnmatchedTokens,
@@ -2405,6 +2423,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         var effectiveAppHostFile = context.AppHostFile;
         var isSingleFileAppHost = !IsProjectFile(effectiveAppHostFile) && IsValidSingleFileAppHost(effectiveAppHostFile);
         var env = new Dictionary<string, string>(context.EnvironmentVariables);
+        DotnetWatchRunEnvironment.Disable(env);
 
         // Check compatibility for project-based apphosts
         if (!isSingleFileAppHost)

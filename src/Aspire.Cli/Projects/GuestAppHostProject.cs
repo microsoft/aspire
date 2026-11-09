@@ -12,6 +12,7 @@ using Aspire.Cli.Certificates;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Diagnostics;
+using Aspire.Cli.DotnetWatch;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Npm;
@@ -430,11 +431,15 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             // Restart only after those dependencies exist so the hosts can import the
             // transport and contribute their external capabilities.
             _logger.LogDebug("Regenerating SDK after bootstrapping npm integration host dependencies.");
+            var generationEnvironment = new Dictionary<string, string>();
+            DotnetWatchRunEnvironment.Disable(generationEnvironment);
+            if (appHostServerProject is NativeAppHostServerProject)
+            {
+                generationEnvironment[KnownConfigNames.IntegrationHostBootstrap] = "true";
+            }
             await using var serverSession = _serverSessionFactory.Create(
                 appHostServerProject,
-                environmentVariables: appHostServerProject is NativeAppHostServerProject
-                    ? new() { [KnownConfigNames.IntegrationHostBootstrap] = "true" }
-                    : null,
+                environmentVariables: generationEnvironment,
                 debug: false,
                 gracefulShutdownSignaler: null,
                 shutdownService: null,
@@ -471,11 +476,13 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         // Integration hosts import the SDK being generated here. Skip them explicitly in this
         // core-only pass instead of treating failed host startup as successful discovery.
         // Keep the caller's environment unchanged for the final server.
-        var bootstrapEnvironment = serverEnvironmentVariables;
+        var bootstrapEnvironment = serverEnvironmentVariables is null
+            ? new Dictionary<string, string>()
+            : new(serverEnvironmentVariables);
+        DotnetWatchRunEnvironment.Disable(bootstrapEnvironment);
         if (appHostServerProject is NativeAppHostServerProject ||
             integrations.Any(integration => integration.Source == IntegrationSource.Npm))
         {
-            bootstrapEnvironment = serverEnvironmentVariables is null ? [] : new(serverEnvironmentVariables);
             bootstrapEnvironment[KnownConfigNames.IntegrationHostBootstrap] = "true";
         }
         await using var serverSession = _serverSessionFactory.Create(
@@ -624,6 +631,9 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 defaultEnvironment: AppHostEnvironmentDefaults.DevelopmentEnvironmentName,
                 args: context.UnmatchedTokens);
             await _appHostConfigurationProjector.ApplyEnvironmentVariablesAsync(launchSettingsEnvVars, directory, cancellationToken);
+            // Only the final managed Hosting server gets service-watch ownership. Short-lived
+            // discovery/bootstrap sessions must explicitly fence inherited watch state.
+            DotnetWatchRunEnvironment.Disable(launchSettingsEnvVars);
             launchSettingsEnvVars[KnownConfigNames.DcpWorkloadId] = AppHostWorkloadId.Create(appHostFile);
             if (appHostServerProject is NativeAppHostServerProject)
             {
@@ -651,8 +661,9 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 launchSettingsEnvVars[KnownConfigNames.AspireSecretsFile] = aspireSecretsFile;
             }
 
-            // Check if hot reload (watch mode) is enabled
-            var enableHotReload = _features.IsFeatureEnabled(KnownFeatures.DefaultWatchEnabled, defaultValue: false);
+            // A toolchain can synthesize WatchExecute, but that does not supply
+            // the native backend's unsupported AppHost replacement lifecycle.
+            var enableHotReload = context.Watch && appHostServerProject is not NativeAppHostServerProject;
 
             var environmentVariables = CreateGuestEnvironmentVariables(
                 context.EnvironmentVariables,
@@ -660,6 +671,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 certEnvVars,
                 defaultEnvironment: AppHostEnvironmentDefaults.DevelopmentEnvironmentName,
                 args: context.UnmatchedTokens);
+            DotnetWatchRunEnvironment.Disable(environmentVariables);
             var hasNpmIntegrationHosts = integrations.Any(integration => integration.Source == IntegrationSource.Npm);
             if (hasNpmIntegrationHosts)
             {
@@ -687,6 +699,19 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 _interactionService.DisplayError("Failed to restore one or more integration host packages.");
                 context.BuildCompletionSource?.TrySetResult(false);
                 return CliExitCodes.FailedToBuildArtifacts;
+            }
+
+            if (appHostServerProject is NativeAppHostServerProject)
+            {
+                DotnetWatchRunEnvironment.Disable(launchSettingsEnvVars, Aspire.Shared.ResourceWatch.Native);
+                if (context.Watch)
+                {
+                    _interactionService.DisplayMessage(KnownEmojis.PoliceCarLight, RunCommandStrings.WatchNativeServerUnsupported);
+                }
+            }
+            else
+            {
+                DotnetWatchRunEnvironment.PrepareRun(launchSettingsEnvVars, context.NoBuild, context.Watch);
             }
 
             // Step 4: Start the AppHost server process. The linked stop CTS is the only termination
@@ -881,6 +906,11 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                     // backchannel completion source and cancels appHostSystemCts) stops the polling loop
                     // promptly.
                     guestAppHostLaunched = true;
+                    if (enableHotReload && _guestRuntime.SupportsWatching && launcher is not ExtensionGuestLauncher)
+                    {
+                        context.OutputCollector ??= new OutputCollector();
+                        context.OutputCollector.MarkWatcherOutput();
+                    }
                     context.BuildCompletionSource?.TrySetResult(true);
                     _ = StartBackchannelConnectionAsync(serverSession, backchannelSocketPath, backchannelCompletionSource, enableHotReload, startProjectContext, appHostSystemToken);
                     return Task.CompletedTask;
@@ -897,6 +927,11 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                     ShutdownService: _shutdownService);
                 (guestExitCode, guestOutput) = await ExecuteGuestAppHostAsync(
                     appHostFile, directory, environmentVariables, enableHotReload, context.NoBuild, rpcClient, launcher, StartBackchannelConnectionAfterGuestAppHostLaunchesAsync, guestLaunchOptions, appHostSystemToken);
+            }
+
+            if (guestAppHostLaunched && enableHotReload && _guestRuntime?.SupportsWatching == true && launcher is not ExtensionGuestLauncher)
+            {
+                guestOutput?.MarkWatcherOutput();
             }
 
             // If the user cancelled (Ctrl+C), surface that as cancellation instead of a "guest failed"
@@ -932,7 +967,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 // so the user can see why the apphost failed. In the extension flow,
                 // ExtensionInteractionService.DisplayLines routes these lines through the
                 // backchannel without also writing them to the CLI's captured stdout/stderr.
-                if (guestOutput is not null)
+                if (guestOutput is { ContainsWatcherOutput: false })
                 {
                     _interactionService.DisplayLines(guestOutput.GetLines());
                 }
@@ -1438,6 +1473,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 includeLaunchProfileEnvironmentVariables: false,
                 args: context.Arguments);
             launchSettingsEnvVars[KnownConfigNames.AspireHome] = _executionContext.AspireHomeDirectory.FullName;
+            DotnetWatchRunEnvironment.Disable(launchSettingsEnvVars);
             if (KnownFeatures.IsAppHostServerV2Enabled(config))
             {
                 // The native server has no guest command line. Project the operation into its
@@ -1464,6 +1500,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 defaultEnvironment: AppHostEnvironmentDefaults.ProductionEnvironmentName,
                 includeLaunchProfileEnvironmentVariables: false,
                 args: context.Arguments);
+            DotnetWatchRunEnvironment.Disable(environmentVariables);
             var hasNpmIntegrationHosts = integrations.Any(integration => integration.Source == IntegrationSource.Npm);
             if (hasNpmIntegrationHosts)
             {

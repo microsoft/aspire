@@ -194,6 +194,63 @@ public class ExecutionConfigurationGathererTests
         Assert.Equal("value2", context.EnvironmentVariables["KEY2"]);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task EnvironmentVariablesExecutionConfigurationGatherer_CachedPrefixFeedsLaterCallbacks(bool anotherResource)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var calls = 0;
+        var prefix = new EnvironmentCallbackAnnotation(context =>
+        {
+            calls++;
+            context.EnvironmentVariables["KEY1"] = "value1";
+            context.EnvironmentVariables["KEY2"] = "value2";
+        });
+        var source = builder.AddExecutable("source", "test.exe", ".").WithAnnotation(prefix);
+        var target = anotherResource
+            ? builder.AddExecutable("target", "test.exe", ".").WithAnnotation(prefix)
+            : source;
+        await builder.BuildAsync();
+
+        var gatherer = new EnvironmentVariablesExecutionConfigurationGatherer();
+        await gatherer.GatherAsync(new ExecutionConfigurationGathererContext(), source.Resource,
+            NullLogger.Instance, builder.ExecutionContext, TestContext.Current.CancellationToken);
+
+        target.WithEnvironment(context =>
+        {
+            Assert.Same(target.Resource, context.Resource);
+            Assert.Same(builder.ExecutionContext, context.ExecutionContext);
+            Assert.Same(NullLogger.Instance, context.Logger);
+            Assert.Equal(TestContext.Current.CancellationToken, context.CancellationToken);
+            context.EnvironmentVariables["COPIED"] = context.EnvironmentVariables["KEY1"];
+            context.EnvironmentVariables.Remove("KEY2");
+        });
+        var result = new ExecutionConfigurationGathererContext();
+        await gatherer.GatherAsync(result, target.Resource, NullLogger.Instance,
+            builder.ExecutionContext, TestContext.Current.CancellationToken);
+
+        Assert.Equal(1, calls);
+        Assert.Equal(new Dictionary<string, object>
+        {
+            ["KEY1"] = "value1",
+            ["COPIED"] = "value1"
+        }, result.EnvironmentVariables);
+
+        if (anotherResource)
+        {
+            var sourceResult = new ExecutionConfigurationGathererContext();
+            await gatherer.GatherAsync(sourceResult, source.Resource, NullLogger.Instance,
+                builder.ExecutionContext, TestContext.Current.CancellationToken);
+
+            Assert.Equal(new Dictionary<string, object>
+            {
+                ["KEY1"] = "value1",
+                ["KEY2"] = "value2"
+            }, sourceResult.EnvironmentVariables);
+        }
+    }
+
     [Fact]
     public async Task EnvironmentVariablesExecutionConfigurationGatherer_NoEnvironmentAnnotations_DoesNothing()
     {

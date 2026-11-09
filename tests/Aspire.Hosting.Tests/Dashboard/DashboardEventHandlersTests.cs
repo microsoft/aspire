@@ -337,6 +337,42 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
         Assert.Equal("true", envVars.Single(e => e.Key == "ASPIRE_DASHBOARD_PURPLE_MONKEY_DISHWASHER").Value);
     }
 
+    [Fact]
+    public async Task ConfigureEnvironmentVariables_CliOwnerDoesNotProjectUpstreamDebugSettingsOrPrivateGenerationState()
+    {
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            [Aspire.Shared.DotnetWatch.DotnetWatchOwnership.OwnerEnvironmentVariable] = "cli",
+            ["DEBUG_SESSION_PORT"] = "upstream-execution-service",
+            ["DEBUG_SESSION_TOKEN"] = "upstream-token",
+            ["DEBUG_SESSION_SERVER_CERTIFICATE"] = "upstream-certificate",
+            [KnownConfigNames.DcpInstanceIdPrefix] = "watch-scope"
+        }).Build();
+        var options = Options.Create(new DashboardOptions
+        {
+            DashboardPath = typeof(DashboardEventHandlersTests).Assembly.Location,
+            DashboardUrl = "http://localhost:8080",
+            OtlpGrpcEndpointUrl = "http://localhost:4317"
+        });
+        var hook = CreateHook(new ResourceLoggerService(), ResourceNotificationServiceTestHelpers.Create(),
+            configuration, dashboardOptions: options);
+        var resource = new ExecutableResource(KnownResourceNames.AspireDashboard, "dashboard", ".");
+        var model = new DistributedApplicationModel([resource]);
+        var context = new DistributedApplicationExecutionContext(new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run)
+        {
+            Services = new TestServiceProvider().AddService(model)
+        });
+        var environment = new Dictionary<string, object>();
+
+        await hook.ConfigureEnvironmentVariables(new EnvironmentCallbackContext(context, environmentVariables: environment, resource: resource));
+
+        Assert.Null(environment.GetValueOrDefault(DashboardConfigNames.Legacy.DebugSessionPortName.EnvVarName));
+        Assert.Null(environment.GetValueOrDefault(DashboardConfigNames.Legacy.DebugSessionTokenName.EnvVarName));
+        Assert.Null(environment.GetValueOrDefault(DashboardConfigNames.Legacy.DebugSessionServerCertificateName.EnvVarName));
+        Assert.Equal("watch-scope-dashboard", environment[DashboardConfigNames.Legacy.DebugSessionDcpInstanceIdName.EnvVarName]);
+        Assert.All(Aspire.Shared.DotnetWatch.DotnetWatchOwnership.PrivateEnvironmentVariables, name => Assert.Equal("", environment[name]));
+    }
+
     [Theory]
     [InlineData(null, null, "Run", false)]
     [InlineData("", null, "Run", false)]

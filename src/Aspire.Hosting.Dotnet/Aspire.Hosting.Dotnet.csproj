@@ -12,11 +12,112 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Aspire.Hosting\Aspire.Hosting.csproj" />
+    <ProjectReference Include="build\WatchEvaluation\Aspire.DotnetWatch.Evaluation.csproj"
+                      ReferenceOutputAssembly="false" Private="false" />
+    <Compile Remove="build\WatchEvaluation\DotnetWatchProjectEvaluator.cs" />
+  </ItemGroup>
+
+  <!-- Hot reload watch server (Microsoft.DotNet.HotReload.Watch.Aspire), shipped like DCP: the DotnetTool package
+       can't be a PackageReference (NU1212), so PackageDownload fetches it at restore and its payload is repacked into
+       this package under tools/dotnet-watch/. buildTransitive/Aspire.Hosting.Dotnet.targets stamps that directory on
+       the AppHost as 'aspiredotnetwatchtoolsdir' assembly metadata. Nothing is downloaded at run time. -->
+  <ItemGroup>
+    <PackageDownload Include="Microsoft.DotNet.HotReload.Watch.Aspire" Version="[$(MicrosoftDotNetHotReloadWatchAspireVersion)]" />
+  </ItemGroup>
+
+  <!-- The watch host (proxy for each watched replica, host of the watch server process) ships the same way under
+       tools/dotnet-watch-host/ and is stamped on the AppHost as 'aspiredotnetwatchhostdir'. Hosting runs it with
+       'dotnet exec' on the watcher's muxer, so this package stays RID-neutral. -->
+  <ItemGroup>
+    <ProjectReference Include="..\Aspire.Hosting.Dotnet.WatchHost\Aspire.Hosting.Dotnet.WatchHost.csproj"
+                      ReferenceOutputAssembly="false"
+                      Private="false" />
   </ItemGroup>
 
   <ItemGroup>
+    <None Include="build\Aspire.Hosting.Dotnet.targets" Pack="true" PackagePath="buildTransitive\Aspire.Hosting.Dotnet.targets" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetsForTfmSpecificContentInPackage>$(TargetsForTfmSpecificContentInPackage);_AddDotnetWatchToolsToPackage;_AddDotnetWatchHostToPackage</TargetsForTfmSpecificContentInPackage>
+    <!-- The repacked tool payload is a runnable app, not a library: its assemblies belong under tools/. -->
+    <NoWarn>$(NoWarn);NU5100</NoWarn>
+  </PropertyGroup>
+
+  <Target Name="_CollectDotnetWatchToolFiles">
+    <PropertyGroup>
+      <_AspireDotnetWatchToolSource>$(NuGetPackageRoot)microsoft.dotnet.hotreload.watch.aspire/$(MicrosoftDotNetHotReloadWatchAspireVersion)/tools/net10.0/any/</_AspireDotnetWatchToolSource>
+    </PropertyGroup>
+    <Error Condition="!Exists('$(_AspireDotnetWatchToolSource)Microsoft.DotNet.HotReload.Watch.Aspire.dll')"
+           Text="Microsoft.DotNet.HotReload.Watch.Aspire $(MicrosoftDotNetHotReloadWatchAspireVersion) is missing from '$(_AspireDotnetWatchToolSource)'. Restore this project." />
+    <ItemGroup>
+      <_AspireDotnetWatchToolFile Remove="@(_AspireDotnetWatchToolFile)" />
+      <_AspireDotnetWatchToolFile Include="$(_AspireDotnetWatchToolSource)**/*" />
+    </ItemGroup>
+  </Target>
+
+  <!-- Lays out the payload for in-repo AppHosts, which reference this project rather than the package. -->
+  <Target Name="_LayoutDotnetWatchTools" AfterTargets="Build" DependsOnTargets="_CollectDotnetWatchToolFiles" Condition="'$(AspireDotnetWatchToolsDir)' != ''">
+    <Copy SourceFiles="@(_AspireDotnetWatchToolFile)"
+          DestinationFiles="@(_AspireDotnetWatchToolFile->'$(AspireDotnetWatchToolsDir)%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="_AddDotnetWatchToolsToPackage" DependsOnTargets="_CollectDotnetWatchToolFiles" Returns="@(TfmSpecificPackageFile)">
+    <ItemGroup>
+      <!-- Full file path: NuGet appends RecursiveDir to directory PackagePaths, which would nest culture folders (cs/cs/). -->
+      <TfmSpecificPackageFile Include="@(_AspireDotnetWatchToolFile)" PackagePath="tools/dotnet-watch/%(RecursiveDir)%(Filename)%(Extension)" />
+    </ItemGroup>
+  </Target>
+
+  <Target Name="_CollectDotnetWatchHostFiles">
+    <MSBuild Projects="..\Aspire.Hosting.Dotnet.WatchHost\Aspire.Hosting.Dotnet.WatchHost.csproj"
+             Targets="GetTargetPath"
+             RemoveProperties="TargetFramework;RuntimeIdentifier">
+      <Output TaskParameter="TargetOutputs" PropertyName="_AspireDotnetWatchHostPath" />
+    </MSBuild>
+    <MSBuild Projects="build\WatchEvaluation\Aspire.DotnetWatch.Evaluation.csproj"
+             Targets="GetTargetPath"
+             RemoveProperties="TargetFramework;RuntimeIdentifier">
+      <Output TaskParameter="TargetOutputs" PropertyName="_AspireDotnetWatchEvaluationPath" />
+    </MSBuild>
+    <PropertyGroup>
+      <_AspireDotnetWatchHostOutput>$([System.IO.Path]::GetDirectoryName('$(_AspireDotnetWatchHostPath)'))/</_AspireDotnetWatchHostOutput>
+    </PropertyGroup>
+    <Error Condition="!Exists('$(_AspireDotnetWatchHostPath)')"
+           Text="The watch host '$(_AspireDotnetWatchHostPath)' is missing. Build src/Aspire.Hosting.Dotnet.WatchHost." />
+    <Error Condition="!Exists('$(_AspireDotnetWatchEvaluationPath)')"
+           Text="The SDK-bound watch evaluation adapter '$(_AspireDotnetWatchEvaluationPath)' is missing. Build Aspire.Hosting.Dotnet." />
+    <ItemGroup>
+      <_AspireDotnetWatchHostFile Remove="@(_AspireDotnetWatchHostFile)" />
+      <_AspireDotnetWatchHostFile Include="$(_AspireDotnetWatchHostOutput)*.dll;$(_AspireDotnetWatchHostOutput)*.deps.json;$(_AspireDotnetWatchHostOutput)*.runtimeconfig.json" />
+      <_AspireDotnetWatchHostFile Include="$(_AspireDotnetWatchEvaluationPath)" />
+      <_AspireDotnetWatchHostFile Include="build\WatchEvaluation\Aspire.DotnetWatch.Evaluation.proj" />
+    </ItemGroup>
+  </Target>
+
+  <!-- Lays out the watch host for in-repo AppHosts, like the watch tool. -->
+  <Target Name="_LayoutDotnetWatchHost" AfterTargets="Build" DependsOnTargets="_CollectDotnetWatchHostFiles" Condition="'$(AspireDotnetWatchHostDir)' != ''">
+    <Copy SourceFiles="@(_AspireDotnetWatchHostFile)"
+          DestinationFolder="$(AspireDotnetWatchHostDir)"
+          SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="_AddDotnetWatchHostToPackage" DependsOnTargets="_CollectDotnetWatchHostFiles" Returns="@(TfmSpecificPackageFile)">
+    <ItemGroup>
+      <TfmSpecificPackageFile Include="@(_AspireDotnetWatchHostFile)" PackagePath="tools/dotnet-watch-host/%(Filename)%(Extension)" />
+    </ItemGroup>
+  </Target>
+
+  <ItemGroup>
     <!-- Source-shared helpers keep this package buildable from the public Aspire.Hosting surface only. -->
+    <Compile Include="..\Aspire.Hosting\Dcp\Process\ProcessCaptureResult.cs" LinkBase="Process" />
+    <Compile Include="..\Aspire.Hosting\Dcp\Process\ProcessUtil.Capture.cs" LinkBase="Process" />
     <Compile Include="$(SharedDir)CommandLineArgsParser.cs" Link="Utils\CommandLineArgsParser.cs" />
+    <Compile Include="$(SharedDir)DotnetWatch\DotnetWatchHostProtocol.cs" Link="Watch\DotnetWatchHostProtocol.cs" />
+    <Compile Include="$(SharedDir)DotnetWatch\DotnetWatchPayload.cs" Link="Watch\DotnetWatchPayload.cs" />
+    <Compile Include="$(SharedDir)DotnetWatch\DotnetWatchOwnership.cs" Link="Watch\DotnetWatchOwnership.cs" />
+    <Compile Include="$(SharedDir)ResourceWatch.cs" Link="Watch\ResourceWatch.cs" />
     <Compile Include="$(SharedDir)FileLock.cs" Link="Utils\FileLock.cs" />
     <Compile Include="$(SharedDir)HeldFileLease.cs" Link="Utils\HeldFileLease.cs" />
     <Compile Include="$(SharedDir)MsBuildResponseFile.cs" Link="Utils\MsBuildResponseFile.cs" />

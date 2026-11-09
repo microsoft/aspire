@@ -69,6 +69,7 @@
     <Compile Include="$(TestsSharedDir)Telemetry\TestTelemetryMetadataProviders.cs" LinkBase="shared/Telemetry" />
     <Compile Include="$(TestsSharedDir)TestModuleInitializer.cs" Link="shared/TestModuleInitializer.cs" />
     <Compile Include="$(TestsSharedDir)AsyncTestHelpers.cs" Link="shared/AsyncTestHelpers.cs" />
+    <Compile Include="$(TestsSharedDir)DotnetWatchAppHostTestChannel.cs" Link="TestServices/DotnetWatchAppHostTestChannel.cs" />
     <Compile Include="$(TestsSharedDir)TemporaryWorkspace.cs" Link="shared\TemporaryWorkspace.cs" />
     <Compile Include="$(TestsSharedDir)TemporaryWorkspaceGitExtensions.cs" Link="shared\TemporaryWorkspaceGitExtensions.cs" />
     <Compile Include="$(TestsSharedDir)WindowsTrayTestPayload.cs" Link="shared/WindowsTrayTestPayload.cs" />

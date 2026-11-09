@@ -4,6 +4,7 @@
 using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.Dcp;
 using Aspire.Hosting.Utils;
+using Aspire.Shared.DotnetWatch;
 using Microsoft.Extensions.Configuration;
 
 namespace Aspire.Hosting.ApplicationModel;
@@ -51,6 +52,9 @@ public static class DebugSupportExtensions
 
         if (!resource.TryGetLastAnnotation(out supportsDebuggingAnnotation)
             || string.IsNullOrEmpty(configuration[DcpExecutor.DebugSessionPortVar])
+            // Upstream host injects an execution-service endpoint even without a real IDE.
+            // CLI ownership keeps builds and executable launches on Aspire's process path.
+            || DotnetWatchOwnership.IsCliOwned(configuration[DotnetWatchOwnership.OwnerEnvironmentVariable])
             || resource.HasAnnotationOfType<ForceProcessExecutionAnnotation>()
             || resource.HasPersistentLifetime()
             || (supportsDebuggingAnnotation.RequiresDebugMode &&

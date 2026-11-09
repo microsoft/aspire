@@ -5,6 +5,7 @@ using System.Diagnostics;
 using Aspire.Cli.Bundles;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
+using Aspire.Cli.DotnetWatch;
 using Aspire.Cli.Layout;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Processes;
@@ -16,6 +17,7 @@ using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
 using Aspire.Shared;
+using Aspire.Shared.DotnetWatch;
 using Aspire.Tests;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
@@ -48,6 +50,48 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
         Assert.NotNull(project.ReceivedEnvironmentVariables);
         Assert.Equal("present", project.ReceivedEnvironmentVariables["EXISTING_VALUE"]);
         Assert.Equal(session.AuthenticationToken, project.ReceivedEnvironmentVariables[KnownConfigNames.RemoteAppHostToken]);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("false")]
+    [InlineData("malformed")]
+    public async Task Start_DiscoverySessionsExplicitlyFenceInheritedWatchState(string? watch)
+    {
+        var project = new RecordingAppHostServerProject();
+        var environment = DotnetWatchOwnership.PrivateEnvironmentVariables.ToDictionary(name => name, _ => "inherited");
+        if (watch is not null)
+        {
+            environment[DotnetWatchRunEnvironment.WatchEnabledVariable] = watch;
+        }
+        await using var session = CreateSession(project, TestContext.Current.CancellationToken, environmentVariables: environment);
+
+        await session.StartAsync();
+
+        Assert.NotNull(project.ReceivedEnvironmentVariables);
+        Assert.Equal(watch, project.ReceivedEnvironmentVariables.GetValueOrDefault(DotnetWatchRunEnvironment.WatchEnabledVariable));
+        Assert.Equal("discovery", project.ReceivedEnvironmentVariables[DotnetWatchOwnership.ResourceWatchSuppressionEnvironmentVariable]);
+        Assert.All(DotnetWatchOwnership.PrivateEnvironmentVariables.Where(name =>
+            name != DotnetWatchOwnership.ResourceWatchSuppressionEnvironmentVariable),
+            name => Assert.Equal("", project.ReceivedEnvironmentVariables[name]));
+        Assert.All(DotnetWatchOwnership.PrivateEnvironmentVariables, name => Assert.Equal("inherited", environment[name]));
+    }
+
+    [Fact]
+    public async Task Start_FinalManagedServerRetainsItsExplicitWatchProjection()
+    {
+        var project = new RecordingAppHostServerProject();
+        var environment = new Dictionary<string, string>();
+        DotnetWatchRunEnvironment.Apply(environment);
+        await using var session = CreateSession(project, TestContext.Current.CancellationToken, environmentVariables: environment);
+
+        await session.StartAsync();
+
+        Assert.NotNull(project.ReceivedEnvironmentVariables);
+        Assert.False(project.ReceivedEnvironmentVariables.ContainsKey(DotnetWatchRunEnvironment.WatchEnabledVariable));
+        Assert.Equal("", project.ReceivedEnvironmentVariables[DotnetWatchOwnership.ResourceWatchSuppressionEnvironmentVariable]);
+        Assert.Equal("cli", project.ReceivedEnvironmentVariables[DotnetWatchOwnership.OwnerEnvironmentVariable]);
+        Assert.Equal("", project.ReceivedEnvironmentVariables[DotnetWatchOwnership.AppHostSessionEnvironmentVariable]);
     }
 
     [Fact]

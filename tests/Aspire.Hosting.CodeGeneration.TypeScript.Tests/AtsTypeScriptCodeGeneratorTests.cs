@@ -2352,6 +2352,22 @@ public class AtsTypeScriptCodeGeneratorTests
     }
 
     [Fact]
+    public async Task Generate_CreateBuilderOptions_PreservesNullableResourceWatchDefault()
+    {
+        var context = CreateContextFromHostingAssembly();
+        var options = Assert.Single(context.DtoTypes, dto => dto.Name == "CreateBuilderOptions");
+        var files = _generator.GenerateDistributedApplication(new AtsContext
+        {
+            Capabilities = [],
+            HandleTypes = [],
+            EnumTypes = [],
+            DtoTypes = [options]
+        });
+
+        await Verify(files["aspire.mts"], "ts").UseFileName("CreateBuilderOptions");
+    }
+
+    [Fact]
     public void Scanner_ObjectParameter_MapsToAny()
     {
         // This test verifies that 'object' parameters are correctly mapped to 'any' type.

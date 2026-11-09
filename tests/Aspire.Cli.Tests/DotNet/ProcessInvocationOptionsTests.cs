@@ -27,6 +27,10 @@ public sealed class ProcessInvocationOptionsTests
             LaunchProfile = "E2E",
             StartDebugSession = true,
             Debug = true,
+            DisableExtensionLaunch = true,
+            DotNetExecutablePath = "/test/dotnet",
+            QueryTargetResults = true,
+            BackchannelConnectionReady = Task.CompletedTask,
             SuppressLogging = true,
             // Non-default: this property initializes to true, so false is the "changed" value.
             KillEntireProcessTreeOnCancel = false,
@@ -44,6 +48,7 @@ public sealed class ProcessInvocationOptionsTests
                 ["ASPIRE_TEST_VALUE"] = "configured",
             },
             GracefulShutdownSignaler = new RecordingGracefulSignaler(),
+            GracefulShutdownTarget = () => (1234, DateTimeOffset.UnixEpoch),
             ShutdownService = new TestGracefulShutdownWindow(),
             ExtensionAppHostLaunchCompletedAsync = () => Task.CompletedTask,
         };
