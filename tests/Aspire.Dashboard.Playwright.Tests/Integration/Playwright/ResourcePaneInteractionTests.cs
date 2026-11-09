@@ -190,6 +190,8 @@ public sealed class ResourcePaneInteractionTests : PlaywrightTestsBase<Resources
             if (minimumPaneWidth)
             {
                 var resizer = page.GetByRole(AriaRole.Separator, new() { Name = Resources.Layout.ResourcePaneResize });
+                // The handle takes keyboard focus only once its handlers are attached, so a key pressed earlier is lost.
+                await Assertions.Expect(resizer).ToHaveAttributeAsync("tabindex", "0");
                 await resizer.FocusAsync();
                 await page.Keyboard.PressAsync("Home");
                 await Assertions.Expect(resizer).ToHaveAttributeAsync("aria-valuenow", "300");

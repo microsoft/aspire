@@ -455,6 +455,8 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                     await page.SetViewportSizeAsync(width <= 560 ? 2000 : width, 1000);
                     if (width <= 560)
                     {
+                        // The handle takes keyboard focus only once its handlers are attached, so a key pressed earlier is lost.
+                        await Assertions.Expect(page.Locator(".resource-pane-resizer")).ToHaveAttributeAsync("tabindex", "0");
                         await page.Locator(".resource-pane-resizer").PressAsync(width == 300 ? "Home" : "End");
                         await Assertions.Expect(page.Locator(".resource-pane-resizer"))
                             .ToHaveAttributeAsync("aria-valuenow", width.ToString(CultureInfo.InvariantCulture));
@@ -1039,6 +1041,8 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                     if (width <= 560)
                     {
                         var separator = page.Locator(".resource-pane-resizer");
+                        // The handle takes keyboard focus only once its handlers are attached, so a key pressed earlier is lost.
+                        await Assertions.Expect(separator).ToHaveAttributeAsync("tabindex", "0");
                         await separator.FocusAsync();
                         await separator.PressAsync(width == 300 ? "Home" : "End");
                         await Assertions.Expect(separator).ToHaveAttributeAsync("aria-valuenow", width.ToString(CultureInfo.InvariantCulture));
@@ -1715,6 +1719,10 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                 else
                 {
                     var separator = page.GetByRole(AriaRole.Separator, new() { Name = Resources.Layout.ResourcePaneResize });
+                    // The closing dialog's overlay would take the drag, and the handle only responds once its handlers
+                    // are attached.
+                    await Assertions.Expect(page.GetByRole(AriaRole.Dialog)).ToHaveCountAsync(0);
+                    await Assertions.Expect(separator).ToHaveAttributeAsync("tabindex", "0");
                     var handle = await separator.BoundingBoxAsync();
                     var initial = await pane.BoundingBoxAsync();
                     Assert.NotNull(handle);
