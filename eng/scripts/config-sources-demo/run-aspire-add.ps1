@@ -1,23 +1,28 @@
 <#
 .SYNOPSIS
-Runs aspire add from this checkout in the caller's current directory.
+Runs aspire add in the caller's current directory with the configuration-source demo settings.
 .DESCRIPTION
-Builds and runs the CLI from source using the configuration-source demo settings
-and published packages. Additional arguments are forwarded to aspire add.
+Uses the installed CLI by default. Use -Cli source to build and run the CLI from
+this checkout with published packages. Additional arguments are forwarded to aspire add.
 .EXAMPLE
 & 'C:\Development\Source\aspire\eng\scripts\config-sources-demo\run-aspire-add.ps1'
 .EXAMPLE
 & 'C:\Development\Source\aspire\eng\scripts\config-sources-demo\run-aspire-add.ps1' redis
 .EXAMPLE
 & 'C:\Development\Source\aspire\eng\scripts\config-sources-demo\run-aspire-add.ps1' Contoso.Hosting.LocalSource --version 1.0.0 --non-interactive
+.EXAMPLE
+& 'C:\Development\Source\aspire\eng\scripts\config-sources-demo\run-aspire-add.ps1' -Cli source redis
 #>
 [CmdletBinding(PositionalBinding = $false)]
 param(
     [string] $WorkingDirectory = (Get-Location).Path,
+
+    [ValidateSet('source', 'installed')]
+    [string] $Cli = 'installed',
 
     [Parameter(Position = 0, ValueFromRemainingArguments = $true)]
     [string[]] $Arguments = @()
 )
 
 & (Join-Path $PSScriptRoot 'run-aspire-new.ps1') `
-    -WorkingDirectory $WorkingDirectory -Command add -CommandArguments $Arguments
+    -WorkingDirectory $WorkingDirectory -Cli $Cli -Command add -CommandArguments $Arguments

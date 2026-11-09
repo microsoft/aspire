@@ -92,6 +92,11 @@
         <target state="translated">整合搜尋查詢。</target>
         <note />
       </trans-unit>
+      <trans-unit id="IntegrationSourceExplanation">
+        <source>One or more integration sources are configured. An integration source lets an organization share integrations to customize your development experience.</source>
+        <target state="new">One or more integration sources are configured. An integration source lets an organization share integrations to customize your development experience.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="NoIntegrationPackagesFound">
         <source>No integration packages were found. Please check your internet connection or NuGet source configuration.</source>
         <target state="translated">找不到整合套件。請檢查您的網際網路連線或 NuGet 來源設定。</target>
