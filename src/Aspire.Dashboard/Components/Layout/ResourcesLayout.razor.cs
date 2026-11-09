@@ -2636,11 +2636,9 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
                     // Closing a scoped detail can retain this selection and its filtered parent URL.
                     SetResourceListVisible(false);
                 }
-                else
-                {
-                    // Selecting the only selected row again deselects it, like toggling.
-                    await ClearSelectionAsync();
-                }
+
+                // Selecting the only selected row again keeps it selected. Clearing the selection here would silently
+                // widen the view to every resource on an accidental second click; "All resources" does that explicitly.
                 return;
             }
 
@@ -2691,7 +2689,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         {
             if (IsResourceGroupSelected(groupResourceNames))
             {
-                await ClearSelectionAsync();
+                // Like a row, selecting the selected group again keeps the selection.
                 return;
             }
 
@@ -2746,16 +2744,6 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         }
 
         return names;
-    }
-
-    /// <summary>
-    /// Deselects everything without leaving the current tab, e.g. clearing a selection on Metrics stays on Metrics.
-    /// </summary>
-    private async Task ClearSelectionAsync()
-    {
-        _selectionAnchor = null;
-        await SetStoredSelectionAsync([]);
-        NavigateToSelection([]);
     }
 
     private void NavigateToSelection(IReadOnlyList<string> resourceNames)
