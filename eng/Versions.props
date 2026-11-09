@@ -28,13 +28,13 @@
   </PropertyGroup>
   <PropertyGroup>
     <!-- DCP -->
-    <MicrosoftDeveloperControlPlanedarwinamd64Version>0.27.3</MicrosoftDeveloperControlPlanedarwinamd64Version>
-    <MicrosoftDeveloperControlPlanedarwinarm64Version>0.27.3</MicrosoftDeveloperControlPlanedarwinarm64Version>
-    <MicrosoftDeveloperControlPlanelinuxamd64Version>0.27.3</MicrosoftDeveloperControlPlanelinuxamd64Version>
-    <MicrosoftDeveloperControlPlanelinuxarm64Version>0.27.3</MicrosoftDeveloperControlPlanelinuxarm64Version>
-    <MicrosoftDeveloperControlPlanelinuxmuslamd64Version>0.27.3</MicrosoftDeveloperControlPlanelinuxmuslamd64Version>
-    <MicrosoftDeveloperControlPlanewindowsamd64Version>0.27.3</MicrosoftDeveloperControlPlanewindowsamd64Version>
-    <MicrosoftDeveloperControlPlanewindowsarm64Version>0.27.3</MicrosoftDeveloperControlPlanewindowsarm64Version>
+    <MicrosoftDeveloperControlPlanedarwinamd64Version>0.27.4</MicrosoftDeveloperControlPlanedarwinamd64Version>
+    <MicrosoftDeveloperControlPlanedarwinarm64Version>0.27.4</MicrosoftDeveloperControlPlanedarwinarm64Version>
+    <MicrosoftDeveloperControlPlanelinuxamd64Version>0.27.4</MicrosoftDeveloperControlPlanelinuxamd64Version>
+    <MicrosoftDeveloperControlPlanelinuxarm64Version>0.27.4</MicrosoftDeveloperControlPlanelinuxarm64Version>
+    <MicrosoftDeveloperControlPlanelinuxmuslamd64Version>0.27.4</MicrosoftDeveloperControlPlanelinuxmuslamd64Version>
+    <MicrosoftDeveloperControlPlanewindowsamd64Version>0.27.4</MicrosoftDeveloperControlPlanewindowsamd64Version>
+    <MicrosoftDeveloperControlPlanewindowsarm64Version>0.27.4</MicrosoftDeveloperControlPlanewindowsarm64Version>
     <!-- Other -->
     <MicrosoftDotNetRemoteExecutorVersion>10.0.0-beta.26528.9</MicrosoftDotNetRemoteExecutorVersion>
     <MicrosoftDotNetXUnitV3ExtensionsVersion>10.0.0-beta.26528.9</MicrosoftDotNetXUnitV3ExtensionsVersion>
