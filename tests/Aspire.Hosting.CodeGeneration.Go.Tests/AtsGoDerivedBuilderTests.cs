@@ -17,6 +17,7 @@ namespace Aspire.Hosting.CodeGeneration.Go.Tests;
 /// generator emits for parameters typed with such a base handle type, which lets a builder of any derived
 /// type be passed wherever the AppHost API takes the base type.
 /// </summary>
+[RequiresTools(["gofmt"])]
 public class AtsGoDerivedBuilderTests
 {
     private readonly AtsGoCodeGenerator _generator = new();

@@ -234,6 +234,7 @@ public sealed class AtsEnumValueInfo
     /// <summary>
     /// Gets whether this enum value is obsolete.
     /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool IsObsolete { get; init; }
 }
 
@@ -505,6 +506,7 @@ public sealed class AtsTypeInfo
     /// <summary>
     /// Gets whether this handle type is obsolete.
     /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool IsObsolete { get; init; }
 }
 
@@ -547,6 +549,7 @@ public sealed class AtsDtoTypeInfo
     /// <summary>
     /// Gets whether this DTO type is obsolete.
     /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool IsObsolete { get; init; }
 }
 
@@ -601,6 +604,7 @@ public sealed class AtsDtoPropertyInfo
     /// <summary>
     /// Gets whether this DTO property is obsolete.
     /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool IsObsolete { get; init; }
 }
 
@@ -643,5 +647,6 @@ public sealed class AtsEnumTypeInfo
     /// <summary>
     /// Gets whether this enum type is obsolete.
     /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool IsObsolete { get; init; }
 }

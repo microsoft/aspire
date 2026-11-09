@@ -13,6 +13,7 @@ using Aspire.TypeSystem;
 
 namespace Aspire.Hosting.CodeGeneration.Go.Tests;
 
+[RequiresTools(["gofmt"])]
 public class GoDocCommentTests
 {
     private const string ResourceTypeId = "Tests/Tests.DocumentedResource";

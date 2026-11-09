@@ -707,6 +707,8 @@ func serializeValue(value any) any {
 	}
 
 	switch v := value.(type) {
+	case json.Number:
+		return v
 	case *handle:
 		return v.ToJSON()
 	case *ReferenceExpression:

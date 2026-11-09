@@ -1756,7 +1756,6 @@ public static class AtsCapabilityScanner
                 var propertyDocumentation = GetXmlDocumentation(property, memberExportAttr?.Description);
                 var propertyDescription = memberExportAttr?.Description ?? propertyDocumentation?.Summary ?? $"Gets the {property.Name} property";
                 var isExperimental = AttributeDataReader.HasExperimentalData(property);
-                var obsoleteData = AttributeDataReader.GetObsoleteData(property);
 
                 // Generate getter capability if property is readable
                 // Naming: {TypeName}.{propertyName} (camelCase, no "get" prefix)
@@ -1775,8 +1774,6 @@ public static class AtsCapabilityScanner
                         Description = propertyDescription,
                         Documentation = propertyDocumentation,
                         IsExperimental = isExperimental,
-                        IsObsolete = obsoleteData is not null,
-                        ObsoleteMessage = obsoleteData?.Message,
                         Parameters = [
                             new AtsParameterInfo
                             {
@@ -1820,8 +1817,6 @@ public static class AtsCapabilityScanner
                         Description = $"Sets the {property.Name} property",
                         Documentation = propertyDocumentation,
                         IsExperimental = isExperimental,
-                        IsObsolete = obsoleteData is not null,
-                        ObsoleteMessage = obsoleteData?.Message,
                         Parameters = [
                             new AtsParameterInfo
                             {

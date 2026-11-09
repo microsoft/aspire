@@ -15,6 +15,7 @@ using Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes;
 
 namespace Aspire.Hosting.CodeGeneration.Go.Tests;
 
+[RequiresTools(["gofmt"])]
 public class AtsGoCodeGeneratorTests
 {
     private readonly AtsGoCodeGenerator _generator = new();
@@ -310,6 +311,7 @@ public class AtsGoCodeGeneratorTests
                     "bufio"
                     "bytes"
                     "context"
+                    "encoding/json"
                     "errors"
                     "fmt"
                     "math"
@@ -429,6 +431,26 @@ public class AtsGoCodeGeneratorTests
                                 t.Fatal(err)
                             }
                         })
+                    }
+                }
+
+                func TestUntypedNumbersRoundTripAsNumbers(t *testing.T) {
+                    const payload = `{"jsonrpc":"2.0","id":1,"result":{"nested":[9007199254740993,1.5]}}`
+                    var wire bytes.Buffer
+                    if err := writeMessageBody(&wire, []byte(payload)); err != nil {
+                        t.Fatal(err)
+                    }
+                    message, err := readMessage(bufio.NewReader(&wire))
+                    if err != nil {
+                        t.Fatal(err)
+                    }
+
+                    encoded, err := json.Marshal(serializeValue(message["result"]))
+                    if err != nil {
+                        t.Fatal(err)
+                    }
+                    if got, want := string(encoded), `{"nested":[9007199254740993,1.5]}`; got != want {
+                        t.Fatalf("got %s, want %s", got, want)
                     }
                 }
 

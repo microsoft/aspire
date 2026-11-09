@@ -7,6 +7,7 @@ using Aspire.TypeSystem;
 
 namespace Aspire.Hosting.CodeGeneration.Go.Tests;
 
+[RequiresTools(["gofmt"])]
 public class GoGeneratorEscapingTests
 {
     private const string ResourceTypeId = "Tests/Tests.EscapedResource";

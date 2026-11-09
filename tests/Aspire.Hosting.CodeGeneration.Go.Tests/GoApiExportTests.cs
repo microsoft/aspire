@@ -5,10 +5,12 @@ using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes;
 using Aspire.Hosting.RemoteHost;
+using Aspire.TestUtilities;
 using Aspire.TypeSystem;
 
 namespace Aspire.Hosting.CodeGeneration.Go.Tests;
 
+[RequiresTools(["gofmt"])]
 public class GoApiExportTests
 {
     // The test types are compiled into this assembly via Compile Include.

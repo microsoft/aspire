@@ -9,6 +9,7 @@ using Aspire.TypeSystem;
 
 namespace Aspire.Hosting.CodeGeneration.Go.Tests;
 
+[RequiresTools(["gofmt"])]
 public class GoScaffoldTests(ITestOutputHelper outputHelper)
 {
     private readonly GoLanguageSupport _languageSupport = new();

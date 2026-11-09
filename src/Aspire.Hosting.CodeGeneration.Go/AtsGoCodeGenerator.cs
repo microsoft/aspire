@@ -126,8 +126,8 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
 
     private static AtsContext FilterObsoleteSymbols(AtsContext context)
     {
-            var capabilities = context.Capabilities.Where(capability => !capability.IsObsolete).ToList();
-            var exportedValues = context.ExportedValues.Where(value => !value.IsObsolete).ToList();
+            var capabilities = context.Capabilities.Where(capability => !IsObsoleteCapability(context, capability)).ToList();
+            var exportedValues = context.ExportedValues.Where(value => !AtsTypeSystemCompatibility.IsObsolete(value)).ToList();
             var requiredTypeIds = new HashSet<string>(StringComparer.Ordinal);
 
             foreach (var capability in capabilities)
@@ -154,9 +154,9 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
                 CollectRequiredType(value.Type, requiredTypeIds);
             }
 
-            foreach (var dto in context.DtoTypes.Where(dto => !dto.IsObsolete))
+            foreach (var dto in context.DtoTypes.Where(dto => !AtsTypeSystemCompatibility.IsObsolete(dto)))
             {
-                foreach (var property in dto.Properties.Where(property => !property.IsObsolete))
+                foreach (var property in dto.Properties.Where(property => !AtsTypeSystemCompatibility.IsObsolete(dto, property)))
                 {
                     CollectRequiredType(property.Type, requiredTypeIds);
                     CollectRequiredType(property.CallbackReturnType, requiredTypeIds);
@@ -175,7 +175,10 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
                 foreach (var dto in context.DtoTypes.Where(dto => requiredDtoIds.Contains(dto.TypeId)))
                 {
                     var before = requiredTypeIds.Count;
-                    foreach (var property in dto.Properties)
+                    var properties = AtsTypeSystemCompatibility.IsObsolete(dto)
+                        ? dto.Properties
+                        : dto.Properties.Where(property => !AtsTypeSystemCompatibility.IsObsolete(dto, property));
+                    foreach (var property in properties)
                     {
                         CollectRequiredType(property.Type, requiredTypeIds);
                         CollectRequiredType(property.CallbackReturnType, requiredTypeIds);
@@ -193,8 +196,8 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
             }
 
             var dtoTypes = context.DtoTypes
-                .Where(dto => !dto.IsObsolete || requiredTypeIds.Contains(dto.TypeId))
-                .Select(dto => dto.IsObsolete
+                .Where(dto => !AtsTypeSystemCompatibility.IsObsolete(dto) || requiredTypeIds.Contains(dto.TypeId))
+                .Select(dto => AtsTypeSystemCompatibility.IsObsolete(dto)
                     ? dto
                     : new AtsDtoTypeInfo
                     {
@@ -203,22 +206,21 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
                         Description = dto.Description,
                         Documentation = dto.Documentation,
                         ClrType = dto.ClrType,
-                        Properties = dto.Properties.Where(property => !property.IsObsolete).ToList(),
-                        IsObsolete = false
+                        Properties = dto.Properties.Where(property => !AtsTypeSystemCompatibility.IsObsolete(dto, property)).ToList()
                     })
                 .ToList();
 
             var enumTypes = context.EnumTypes
-                .Where(enumType => !enumType.IsObsolete || requiredTypeIds.Contains(enumType.TypeId))
+                .Where(enumType => !AtsTypeSystemCompatibility.IsObsolete(enumType) || requiredTypeIds.Contains(enumType.TypeId))
                 .Select(enumType =>
                 {
-                    if (enumType.IsObsolete)
+                    if (AtsTypeSystemCompatibility.IsObsolete(enumType))
                     {
                         return enumType;
                     }
 
                     var obsoleteValues = enumType.ValueInfos
-                        .Where(value => value.IsObsolete)
+                        .Where(value => AtsTypeSystemCompatibility.IsObsolete(enumType, value))
                         .Select(value => value.Name)
                         .ToHashSet(StringComparer.Ordinal);
                     return new AtsEnumTypeInfo
@@ -227,9 +229,8 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
                         Name = enumType.Name,
                         ClrType = enumType.ClrType,
                         Values = enumType.Values.Where(value => !obsoleteValues.Contains(value)).ToList(),
-                        ValueInfos = enumType.ValueInfos.Where(value => !value.IsObsolete).ToList(),
-                        Documentation = enumType.Documentation,
-                        IsObsolete = false
+                        ValueInfos = enumType.ValueInfos.Where(value => !AtsTypeSystemCompatibility.IsObsolete(enumType, value)).ToList(),
+                        Documentation = enumType.Documentation
                     };
                 })
                 .ToList();
@@ -237,7 +238,7 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
         var filtered = new AtsContext
         {
             Capabilities = capabilities,
-            HandleTypes = context.HandleTypes.Where(type => !type.IsObsolete || requiredTypeIds.Contains(type.AtsTypeId)).ToList(),
+            HandleTypes = context.HandleTypes.Where(type => !AtsTypeSystemCompatibility.IsObsolete(type) || requiredTypeIds.Contains(type.AtsTypeId)).ToList(),
             DtoTypes = dtoTypes,
             EnumTypes = enumTypes,
             ExportedValues = exportedValues,
@@ -282,6 +283,13 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
         {
             CollectRequiredType(implementedInterface, requiredTypeIds);
         }
+    }
+
+    private static bool IsObsoleteCapability(AtsContext context, AtsCapabilityInfo capability)
+    {
+        return capability.IsObsolete
+            || context.Properties.TryGetValue(capability.CapabilityId, out var property)
+                && AttributeDataReader.GetObsoleteData(property) is not null;
     }
 
     private static string FormatGoSource(string fileName, string source)
