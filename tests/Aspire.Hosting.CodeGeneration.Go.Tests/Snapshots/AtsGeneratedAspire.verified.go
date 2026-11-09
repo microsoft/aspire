@@ -4946,22 +4946,14 @@ func (c *client) recordErr(err error) {
 	c.errs = append(c.errs, err)
 }
 
-// combinedError returns every error passed to recordErr. Preserve the original
-// error when there is only one so callers can continue to compare it directly.
+// combinedError returns every error passed to recordErr.
 func (c *client) combinedError() error {
 	if c == nil {
 		return nil
 	}
 	c.errMu.Lock()
 	defer c.errMu.Unlock()
-	switch len(c.errs) {
-	case 0:
-		return nil
-	case 1:
-		return c.errs[0]
-	default:
-		return errors.Join(c.errs...)
-	}
+	return errors.Join(c.errs...)
 }
 
 // registerHandleWrapper registers a factory for wrapping handles of a specific

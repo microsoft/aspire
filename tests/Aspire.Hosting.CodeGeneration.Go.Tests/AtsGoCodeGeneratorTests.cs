@@ -1483,12 +1483,12 @@ public class AtsGoCodeGeneratorTests
                     if cache.Err() == nil {
                         t.Fatal("the failed AddTestRedis left no error on the child")
                     }
-                    if builder.Err() != cache.Err() {
+                    if !errors.Is(builder.Err(), cache.Err()) {
                         t.Errorf("builder.Err() = %v, want the child's error %v", builder.Err(), cache.Err())
                     }
 
                     app, err := builder.Build()
-                    if app != nil || err != cache.Err() {
+                    if app != nil || !errors.Is(err, cache.Err()) {
                         t.Errorf("Build() = %v, %v; want nil and the child's error %v", app, err, cache.Err())
                     }
                     if got, want := received(), []string{"addTestRedis"}; !slices.Equal(got, want) {
@@ -1579,7 +1579,7 @@ public class AtsGoCodeGeneratorTests
                     newPropagatedErroredResourceBuilder(failure, c)
                     newPropagatedErroredResourceBuilder(failure, c)
 
-                    if got := builder.Err(); got != failure {
+                    if got := builder.Err(); !errors.Is(got, failure) || got.Error() != failure.Error() {
                         t.Errorf("builder.Err() = %v, want the original error %v", got, failure)
                     }
                 }
@@ -1594,7 +1594,7 @@ public class AtsGoCodeGeneratorTests
                     }
 
                     cache.WithConnectionStringDirect("connection")
-                    if cache.Err() == nil || builder.Err() != cache.Err() {
+                    if cache.Err() == nil || !errors.Is(builder.Err(), cache.Err()) {
                         t.Errorf("builder.Err() = %v, want the child's error %v", builder.Err(), cache.Err())
                     }
                 }
