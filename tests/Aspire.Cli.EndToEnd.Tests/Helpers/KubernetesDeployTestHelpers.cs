@@ -568,8 +568,8 @@ internal static class KubernetesDeployTestHelpers
         return
             $"command -v {binaryName} >/dev/null 2>&1 || {{ " +
             $"for i in $(seq 1 {ToolDownloadAttempts}); do " +
-            $"http_code=$(curl -sSL --connect-timeout 15 --max-time 60 -o {downloadPath} -w '%{{http_code}}' \"{url}\"); " +
-            $"if [ \"$http_code\" = 200 ] && {installCommand} && {verifyCommand} >/dev/null 2>&1; then break; fi; " +
+            $"if http_code=$(curl -sSL --connect-timeout 15 --max-time 60 -o {downloadPath} -w '%{{http_code}}' \"{url}\") && " +
+            $"[ \"$http_code\" = 200 ] && {installCommand} && {verifyCommand} >/dev/null 2>&1; then break; fi; " +
             $"echo \"Retry $i/{ToolDownloadAttempts}: {toolName} download failed (HTTP ${{http_code:-none}})\"; " +
             $"rm -f {downloadPath}; " +
             $"if [ $i -lt {ToolDownloadAttempts} ]; then sleep $((i * 10)); fi; " +
