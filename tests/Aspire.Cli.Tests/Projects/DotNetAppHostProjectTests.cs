@@ -1772,9 +1772,10 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
 
         Assert.Equal(124, exitCode);
         Assert.NotNull(launchEnvironment);
+        Assert.False(launchEnvironment.ContainsKey(DotnetWatchRunEnvironment.WatchEnabledVariable));
+        Assert.Equal("", launchEnvironment[DotnetWatchOwnership.ResourceWatchSuppressionEnvironmentVariable]);
         if (watch)
         {
-            Assert.Equal("true", launchEnvironment[DotnetWatchRunEnvironment.WatchEnabledVariable]);
             Assert.Equal(DotnetWatchOwnership.CliOwner, launchEnvironment[DotnetWatchOwnership.OwnerEnvironmentVariable]);
         }
         else
@@ -1820,6 +1821,8 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             Assert.True(options.DisableExtensionLaunch);
             Assert.Same(generation, options.ShutdownService);
             Assert.Same(generation.HostStarted, options.BackchannelConnectionReady);
+            Assert.NotNull(options.GracefulShutdownTarget);
+            Assert.Null(options.GracefulShutdownTarget());
             Assert.Equal(args.Length - 4, options.AppHostArgumentStartIndex);
             Assert.Equal(["--environment", "two words", "", "--project"], args[^4..]);
             Assert.Equal(["--", "--"], args[(args.Length - 6)..(args.Length - 4)]);
@@ -1864,7 +1867,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         Assert.Equal(124, exitCode);
         Assert.Equal(1, builds);
         Assert.NotNull(launchEnvironment);
-        Assert.Equal("true", launchEnvironment[DotnetWatchRunEnvironment.WatchEnabledVariable]);
+        Assert.False(launchEnvironment.ContainsKey(DotnetWatchRunEnvironment.WatchEnabledVariable));
         Assert.Equal(DotnetWatchOwnership.CliOwner, launchEnvironment[DotnetWatchOwnership.OwnerEnvironmentVariable]);
         Assert.Equal("preserved", launchEnvironment["ApplicationVariable"]);
     }
@@ -1889,7 +1892,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             {
                 Assert.Equal(command.FullName, executable);
                 Assert.NotNull(environment);
-                Assert.Equal("true", environment[DotnetWatchRunEnvironment.WatchEnabledVariable]);
+                Assert.False(environment.ContainsKey(DotnetWatchRunEnvironment.WatchEnabledVariable));
                 Assert.Equal(DotnetWatchOwnership.CliOwner, environment[DotnetWatchOwnership.OwnerEnvironmentVariable]);
                 Assert.Equal("", environment[DotnetWatchOwnership.AppHostControlEnvironmentVariable]);
                 Assert.Equal("", environment[DotnetWatchOwnership.AppHostSessionEnvironmentVariable]);
@@ -1952,7 +1955,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
     }
 
     [Fact]
-    public async Task RunAsync_WatchedAppHostChildExitFailsStartupPromptlyWithRecentOutput()
+    public async Task RunAsync_WatchedAppHostChildExitFailsStartupWithSafeLogGuidance()
     {
         using var directory = new DotnetWatchTestDirectory();
         using var shutdown = new TestGracefulShutdownWindow();
@@ -2000,18 +2003,24 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         };
         var project = CreateDotNetAppHostProject(runner);
 
-        var exitCode = await project.RunAsync(new AppHostProjectContext
+        var context = new AppHostProjectContext
         {
             AppHostFile = appHost,
             WorkingDirectory = _workspace.WorkspaceRoot,
             Watch = true,
             WatchGeneration = generation,
             BackchannelCompletionSource = outerBackchannel
-        }, TestContext.Current.CancellationToken).DefaultTimeout();
+        };
+        var exitCode = await project.RunAsync(context, TestContext.Current.CancellationToken).DefaultTimeout();
 
         Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, exitCode);
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => outerBackchannel.Task);
-        Assert.Contains("WATCH_STARTUP_FAILURE_DETAILS", exception.Message, StringComparison.Ordinal);
+        Assert.StartsWith("The watched AppHost process exited during startup before its backchannel connected. See CLI logs at ",
+            exception.Message, StringComparison.Ordinal);
+        Assert.NotNull(context.OutputCollector);
+        Assert.True(context.OutputCollector.ContainsWatcherOutput);
+        Assert.Equal("WATCH_STARTUP_FAILURE_DETAILS",
+            Assert.Single(context.OutputCollector.GetLines(), line => line.Stream == OutputLineStream.StdErr).Line);
     }
 
     [Fact]

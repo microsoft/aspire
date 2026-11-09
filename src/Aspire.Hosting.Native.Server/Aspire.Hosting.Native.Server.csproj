@@ -37,6 +37,7 @@
     <Compile Include="../Shared/DcpKubeconfigData.cs" Link="Dcp/DcpKubeconfigData.cs" />
     <Compile Include="../Shared/DcpConnectionMaterial.cs" Link="Dcp/DcpConnectionMaterial.cs" />
     <Compile Include="../Shared/DcpEnvironmentVariables.cs" Link="Dcp/DcpEnvironmentVariables.cs" />
+    <Compile Include="../Shared/DotnetWatch/DotnetWatchOwnership.cs" Link="Dcp/DotnetWatchOwnership.cs" />
     <Compile Include="../Shared/KnownAspNetCoreConfigNames.cs" Link="Dcp/KnownAspNetCoreConfigNames.cs" />
     <Compile Include="../Shared/KnownConfigNames.cs" Link="Dcp/KnownConfigNames.cs" />
     <Protobuf Include="../Aspire.Hosting/Dashboard/proto/dashboard_service.proto" GrpcServices="Both" Access="Internal" />

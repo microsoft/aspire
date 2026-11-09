@@ -51,6 +51,7 @@ internal static class DotnetWatchProjectGraph
         ArgumentException.ThrowIfNullOrEmpty(workingDirectory);
         ArgumentNullException.ThrowIfNull(environment);
         cancellationToken.ThrowIfCancellationRequested();
+        using var evaluationActivity = DotnetWatchProfiling.StartEvaluation(projectPath, globalProperties);
         var directory = Normalize(workingDirectory);
         var path = NormalizeRelative(projectPath, directory);
         var sdkScopeDirectory = Path.GetDirectoryName(path)!;
@@ -577,5 +578,43 @@ internal static class DotnetWatchProjectGraph
         {
             // Preserve the original cancellation/failure if the isolated evaluator exited concurrently.
         }
+    }
+}
+
+internal static class DotnetWatchProfiling
+{
+    // Use Hosting's profiling-only source without a production dependency on its internal telemetry type.
+    // No listener or reported-telemetry activity is created for ordinary, non-profiled runs.
+    private static readonly ActivitySource s_source = new("Aspire.Hosting.Profiling");
+
+    internal static Activity? StartEvaluation(string projectPath, bool globalProperties)
+    {
+        var activity = StartActivity("aspire/hosting/dotnet-watch/evaluate");
+        activity?.SetTag("aspire.dotnet_watch.project", projectPath);
+        activity?.SetTag("aspire.dotnet_watch.global_properties", globalProperties);
+
+        return activity;
+    }
+
+    internal static Activity? StartInputObservation(IReadOnlyCollection<string> files, TimeSpan pollInterval)
+    {
+        var activity = StartActivity("aspire/hosting/dotnet-watch/observe-build-inputs");
+        if (activity is not null)
+        {
+            activity.SetTag("aspire.dotnet_watch.input_count", files.Count);
+            activity.SetTag("aspire.dotnet_watch.input_files", files.Order(StringComparer.Ordinal).ToArray());
+            activity.SetTag("aspire.dotnet_watch.poll_interval_ms", pollInterval.TotalMilliseconds);
+        }
+
+        return activity;
+    }
+
+    private static Activity? StartActivity(string name)
+    {
+        var enabled = Environment.GetEnvironmentVariable("ASPIRE_PROFILING_ENABLED");
+
+        return enabled == "1" || string.Equals(enabled, "true", StringComparison.OrdinalIgnoreCase)
+            ? s_source.StartActivity(name)
+            : null;
     }
 }

@@ -19,8 +19,8 @@ internal sealed class AppHostProjectContext
     public required FileInfo AppHostFile { get; init; }
 
     /// <summary>
-    /// Gets the resolved combined CLI watch selection: compatible C# AppHosts and services,
-    /// and language-native polyglot AppHost watching. Real IDE-owned runs retain IDE policy.
+    /// Gets the resolved AppHost-edit watch selection. Resource defaults are resolved by Hosting,
+    /// independently of this flag. Real IDE-owned runs retain IDE policy.
     /// </summary>
     public bool Watch { get; init; }
 

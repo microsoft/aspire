@@ -133,7 +133,7 @@
     <value>Output format for detached AppHost results</value>
   </data>
   <data name="WatchArgumentDescription" xml:space="preserve">
-    <value>Enable experimental combined AppHost and compatible C# service watching</value>
+    <value>Enable experimental AppHost edit watching; resource watching is configured independently</value>
   </data>
   <data name="StartDebugSessionArgumentDescription" xml:space="preserve">
     <value>Whether to start a debug session, if running in an Aspire Terminal</value>
@@ -268,25 +268,40 @@
     <value>The --no-build option cannot be used for a VS Code run session: VS Code builds and watches the services it launches.</value>
   </data>
   <data name="WatchOptionDescription" xml:space="preserve">
-    <value>(Preview) Watch compatible C# AppHosts and reconstruct their model after changes, enable language-native watching for compatible polyglot AppHosts, and hot reload compatible C# services added with AddDotnetProject. Defaults to the defaultWatchEnabled feature; use --watch false to turn all CLI-controlled watch paths off. Real IDE-owned runs retain IDE watch policy.</value>
+    <value>(Preview) Watch AppHost edits: reconstruct compatible C# AppHosts and enable language-native watching for compatible polyglot AppHosts. Defaults to the defaultWatchEnabled feature. --watch false disables AppHost watching only; the AppHost controls resource watching. Real IDE-owned runs retain IDE watch policy.</value>
   </data>
   <data name="Watch" xml:space="preserve">
-    <value>Watch</value>
+    <value>AppHost edits</value>
   </data>
   <data name="WatchEnabledSummary" xml:space="preserve">
-    <value>Combined watching requested (preview). Supported AppHosts and C# services will be watched; coverage diagnostics describe unavailable paths.</value>
+    <value>Watching (preview); model changes replace the AppHost generation.</value>
+  </data>
+  <data name="WatchDisabledSummary" xml:space="preserve">
+    <value>Not watched; resource watching is configured independently.</value>
+  </data>
+  <data name="ResourceWatchSummary" xml:space="preserve">
+    <value>Resource watching (default {0}): {1} watching, {2} pending, {3} build failed, {4} excluded, {5} infrastructure failed, {6} unknown.</value>
+  </data>
+  <data name="ResourceWatchUnknownSummary" xml:space="preserve">
+    <value>Resource-watch coverage is unavailable from this AppHost.</value>
+  </data>
+  <data name="ResourceWatchDefaultOn" xml:space="preserve">
+    <value>on</value>
+  </data>
+  <data name="ResourceWatchDefaultOff" xml:space="preserve">
+    <value>off</value>
   </data>
   <data name="NoBuildNotSupportedWithWatchOption" xml:space="preserve">
-    <value>--no-build can't be used with --watch: watching builds compatible AppHosts and C# services whenever they change. Remove --no-build, or pass --watch false.</value>
+    <value>--no-build cannot be used with explicit AppHost watching. Remove --no-build, or pass --watch false. Required resource watching (WithWatch(true)) also conflicts with --no-build.</value>
   </data>
   <data name="NoBuildNotSupportedWithDefaultWatch" xml:space="preserve">
-    <value>--no-build can't be used while combined watch is on by default (the defaultWatchEnabled feature). Remove --no-build, or pass --watch false to run without CLI-controlled watch.</value>
+    <value>--no-build suppresses implicit AppHost and resource watching. Explicit watch requirements cannot be combined with --no-build.</value>
   </data>
   <data name="WatchNotSupportedWithDebugger" xml:space="preserve">
     <value>--watch cannot be used with an IDE-owned or debugger-owned AppHost run. Stop the debug session and run aspire run --watch from a terminal.</value>
   </data>
   <data name="WatchAppHostExitedDuringStartup" xml:space="preserve">
-    <value>The watched AppHost process exited during startup before its backchannel connected.{0}</value>
+    <value>The watched AppHost process exited during startup before its backchannel connected. See CLI logs at {0}.</value>
   </data>
   <data name="WatchBootstrapUnavailable" xml:space="preserve">
     <value>The restored AppHost must reference an Aspire.Hosting.Dotnet package with the ResolveAspireDotnetWatch target, and that target must successfully resolve the bundled watcher and selected SDK.</value>

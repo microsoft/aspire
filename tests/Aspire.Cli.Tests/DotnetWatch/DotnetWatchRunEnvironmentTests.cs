@@ -18,14 +18,15 @@ public class DotnetWatchRunEnvironmentTests
 
         DotnetWatchRunEnvironment.Apply(environment);
 
-        Assert.Equal("true", Assert.Single(environment, e => e.Key == DotnetWatchRunEnvironment.WatchEnabledVariable).Value);
+        Assert.False(environment.ContainsKey(DotnetWatchRunEnvironment.WatchEnabledVariable));
         Assert.Equal(DotnetWatchOwnership.CliOwner, environment[DotnetWatchOwnership.OwnerEnvironmentVariable]);
         Assert.Equal("", environment[DotnetWatchOwnership.AppHostControlEnvironmentVariable]);
         Assert.Equal("", environment[DotnetWatchOwnership.AppHostSessionEnvironmentVariable]);
+        Assert.Equal("", environment[DotnetWatchOwnership.ResourceWatchSuppressionEnvironmentVariable]);
     }
 
     [Fact]
-    public void DisableOverridesInheritedWatchAndPrivateGenerationState()
+    public void DiscoveryFencesPrivateStateWithoutOverwritingTheResourceDefault()
     {
         var environment = DotnetWatchOwnership.PrivateEnvironmentVariables.ToDictionary(name => name, _ => "inherited");
         environment[DotnetWatchRunEnvironment.WatchEnabledVariable] = "true";
@@ -33,9 +34,30 @@ public class DotnetWatchRunEnvironmentTests
 
         DotnetWatchRunEnvironment.Disable(environment);
 
-        Assert.Equal("false", environment[DotnetWatchRunEnvironment.WatchEnabledVariable]);
-        Assert.All(DotnetWatchOwnership.PrivateEnvironmentVariables, name => Assert.Equal("", environment[name]));
+        Assert.Equal("true", environment[DotnetWatchRunEnvironment.WatchEnabledVariable]);
+        Assert.Equal("discovery", environment[DotnetWatchOwnership.ResourceWatchSuppressionEnvironmentVariable]);
+        Assert.All(DotnetWatchOwnership.PrivateEnvironmentVariables.Where(name =>
+            name != DotnetWatchOwnership.ResourceWatchSuppressionEnvironmentVariable), name => Assert.Equal("", environment[name]));
         Assert.Equal("preserved", environment["ApplicationVariable"]);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void FinalRunSeparatesNoBuildAppHostOwnershipAndResourceDefaults(bool noBuild, bool appHostWatching)
+    {
+        var environment = DotnetWatchOwnership.PrivateEnvironmentVariables.ToDictionary(name => name, _ => "inherited");
+        environment[DotnetWatchRunEnvironment.WatchEnabledVariable] = "false";
+
+        DotnetWatchRunEnvironment.PrepareRun(environment, noBuild, appHostWatching);
+
+        Assert.Equal("false", environment[DotnetWatchRunEnvironment.WatchEnabledVariable]);
+        Assert.Equal(noBuild ? "no-build" : "", environment[DotnetWatchOwnership.ResourceWatchSuppressionEnvironmentVariable]);
+        Assert.Equal(appHostWatching ? "cli" : "", environment[DotnetWatchOwnership.OwnerEnvironmentVariable]);
+        Assert.Equal("", environment[DotnetWatchOwnership.AppHostControlEnvironmentVariable]);
+        Assert.Equal("", environment[DotnetWatchOwnership.AppHostSessionEnvironmentVariable]);
     }
 
     [Theory]
@@ -54,10 +76,23 @@ public class DotnetWatchRunEnvironmentTests
     [Theory]
     [InlineData("Aspire.Hosting.Dotnet.Watch", LogLevel.Debug)]
     [InlineData("Aspire.Hosting.Dotnet.WatchServer", LogLevel.Information)]
+    [InlineData("Aspire.Hosting.Dotnet.Watch.Diagnostics", LogLevel.Error)]
     [InlineData("Aspire.Hosting.Dcp", LogLevel.Error)]
     public void OtherAppHostLogsAreNotShownAsWatchNotices(string category, LogLevel level)
     {
         Assert.Null(RunCommand.FormatWatchNotice(CreateEntry(category, level, "message")));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(7102)]
+    [InlineData(7109)]
+    [InlineData(7199)]
+    public void DiagnosticAndRetiredIdsCannotEnterTheTerminalNoticeChannel(int eventId)
+    {
+        var entry = CreateEntry(RunCommand.WatchNoticeCategory, LogLevel.Error, "RAW\nWATCHER DIAGNOSTIC");
+        entry.EventId = new(eventId);
+        Assert.Null(RunCommand.FormatWatchNotice(entry));
     }
 
     private static BackchannelLogEntry CreateEntry(string category, LogLevel level, string message) => new()
@@ -65,7 +100,7 @@ public class DotnetWatchRunEnvironmentTests
         Timestamp = DateTimeOffset.UtcNow,
         LogLevel = level,
         Message = message,
-        EventId = new EventId(),
+        EventId = new EventId(7105),
         CategoryName = category,
     };
 }

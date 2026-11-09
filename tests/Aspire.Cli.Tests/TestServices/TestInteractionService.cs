@@ -55,6 +55,7 @@ internal sealed class TestInteractionService : IInteractionService
     public List<(KnownEmoji Emoji, string Message, ConsoleOutput? ConsoleOverride)> DisplayedMessages { get; } = [];
     public List<(OutputLineStream Stream, string Line)> DisplayedLines { get; } = [];
     public List<string> DisplayedPlainText { get; } = [];
+    public List<string> DisplayedMarkup { get; } = [];
     public List<(string Text, ConsoleOutput? ConsoleOverride)> DisplayedRawText { get; } = [];
     public List<IRenderable> DisplayedRenderables { get; } = [];
     public List<IRenderable> DisplayedLiveRenderables { get; } = [];
@@ -376,6 +377,10 @@ internal sealed class TestInteractionService : IInteractionService
 
     public void DisplayMarkupLine(string markup)
     {
+        lock (_displayLock)
+        {
+            DisplayedMarkup.Add(markup);
+        }
     }
 
     public void WriteConsoleLog(string message, int? lineNumber = null, string? type = null, bool isErrorMessage = false)

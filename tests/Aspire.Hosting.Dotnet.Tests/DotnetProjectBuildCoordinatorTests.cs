@@ -3,7 +3,7 @@
 
 extern alias HostingDotnet;
 
-#pragma warning disable ASPIREEXTENSION001, ASPIREPROJECTS001
+#pragma warning disable ASPIREEXTENSION001, ASPIREPROJECTS001, ASPIREWATCH001
 
 using System.IO.Compression;
 using System.Reflection;
@@ -2044,6 +2044,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             $"System.Console.WriteLine({errorMarker});");
         using var builder = TestDistributedApplicationBuilder.Create(options =>
         {
+            options.DefaultResourceWatchEnabled = false;
             options.ProjectDirectory = workspace.Path;
             options.DisableDashboard = true;
             options.EnableResourceLogging = false;
@@ -2173,7 +2174,11 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(
-            options => options.ProjectDirectory = workspace.Path,
+            options =>
+            {
+                options.ProjectDirectory = workspace.Path;
+                options.DefaultResourceWatchEnabled = false;
+            },
             outputHelper);
         var projectPath = CreateProject(workspace.Path, "Worker", "Worker.csproj");
         var callbackCount = 0;
@@ -2213,7 +2218,11 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(
-            options => options.ProjectDirectory = workspace.Path,
+            options =>
+            {
+                options.DefaultResourceWatchEnabled = false;
+                options.ProjectDirectory = workspace.Path;
+            },
             outputHelper);
         var projectPath = CreateProject(workspace.Path, "Worker", "Worker.csproj");
         var buildFlavor = "initial";
@@ -2359,7 +2368,11 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(
-            options => options.ProjectDirectory = workspace.Path,
+            options =>
+            {
+                options.DefaultResourceWatchEnabled = false;
+                options.ProjectDirectory = workspace.Path;
+            },
             outputHelper);
         var appPath = Path.Combine(workspace.Path, "app.cs");
         File.WriteAllText(appPath, "System.Console.WriteLine(\"Hello\");");
@@ -2379,7 +2392,11 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(
-            options => options.ProjectDirectory = workspace.Path,
+            options =>
+            {
+                options.DefaultResourceWatchEnabled = false;
+                options.ProjectDirectory = workspace.Path;
+            },
             outputHelper);
         var projectPath = CreateProject(workspace.Path, "Worker", "Worker.csproj");
         var callbackCount = 0;
@@ -2420,7 +2437,11 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(
-            options => options.ProjectDirectory = workspace.Path,
+            options =>
+            {
+                options.ProjectDirectory = workspace.Path;
+                options.DefaultResourceWatchEnabled = false;
+            },
             outputHelper);
         var projectPath = CreateProject(workspace.Path, "Worker", "Worker.csproj");
         var buildFlavor = "build;flavor%";
@@ -2550,7 +2571,11 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(
-            options => options.ProjectDirectory = workspace.Path,
+            options =>
+            {
+                options.ProjectDirectory = workspace.Path;
+                options.DefaultResourceWatchEnabled = false;
+            },
             outputHelper);
         var projectPath = CreateProject(workspace.Path, "Worker", "Worker.csproj");
         var buildFlavor = "FIRST_BUILD_FLAVOR";
@@ -2631,7 +2656,11 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(
-            options => options.ProjectDirectory = workspace.Path,
+            options =>
+            {
+                options.ProjectDirectory = workspace.Path;
+                options.DefaultResourceWatchEnabled = false;
+            },
             outputHelper);
         var projectPath = CreateProject(workspace.Path, "Worker", "Worker.csproj");
         var callbackStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -2682,7 +2711,11 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(
-            options => options.ProjectDirectory = workspace.Path,
+            options =>
+            {
+                options.ProjectDirectory = workspace.Path;
+                options.DefaultResourceWatchEnabled = false;
+            },
             outputHelper);
         var projectPath = CreateProject(workspace.Path, "Worker", "Worker.csproj");
         var firstCallbackStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -2752,7 +2785,11 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(
-            options => options.ProjectDirectory = workspace.Path,
+            options =>
+            {
+                options.ProjectDirectory = workspace.Path;
+                options.DefaultResourceWatchEnabled = false;
+            },
             outputHelper);
         var projectPath = CreateProject(workspace.Path, "Worker", "Worker.csproj");
         var callbackStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -3764,7 +3801,11 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         var secondSentinel = Path.Combine(workspace.Path, "second-ran.txt");
 
         using var builder = TestDistributedApplicationBuilder.Create(
-            options => options.ProjectDirectory = workspace.Path,
+            options =>
+            {
+                options.DefaultResourceWatchEnabled = false;
+                options.ProjectDirectory = workspace.Path;
+            },
             outputHelper).WithResourceCleanUp(true);
         builder.AddDotnetProject("broken", brokenProject, options => options.ExcludeLaunchProfile = true);
         builder.AddDotnetProject("second", secondProject, options => options.ExcludeLaunchProfile = true)
@@ -4027,7 +4068,11 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         var projectPath = CreateProjectWithBuildProducedRunPropertiesSentinel(workspace.Path);
         var sentinelPath = Path.Combine(Path.GetDirectoryName(projectPath)!, "build-sentinel.txt");
         using var builder = TestDistributedApplicationBuilder.Create(
-            options => options.ProjectDirectory = workspace.Path,
+            options =>
+            {
+                options.DefaultResourceWatchEnabled = false;
+                options.ProjectDirectory = workspace.Path;
+            },
             outputHelper).WithResourceCleanUp(true);
 #pragma warning disable ASPIREPERSISTENCE001
         var project = builder.AddDotnetProject("persistent-project", projectPath, options => options.ExcludeLaunchProfile = true)
@@ -4535,7 +4580,11 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             """);
 
         using var builder = TestDistributedApplicationBuilder.Create(
-            options => options.ProjectDirectory = workspace.Path,
+            options =>
+            {
+                options.DefaultResourceWatchEnabled = false;
+                options.ProjectDirectory = workspace.Path;
+            },
             outputHelper).WithResourceCleanUp(true);
         builder.AddDotnetProject("broken", brokenProject, options => options.ExcludeLaunchProfile = true);
         var worker = builder.AddDotnetProject("worker", fileApp, options => options.ExcludeLaunchProfile = true)

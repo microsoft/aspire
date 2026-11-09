@@ -32,6 +32,11 @@
         <target state="translated">安装说明</target>
         <note />
       </trans-unit>
+      <trans-unit id="InvalidResourceWatchConfiguration">
+        <source>AppHost:Run:WatchEnabled must be true or false. Resource watching is disabled by default for this run; explicit resource choices still apply.</source>
+        <target state="new">AppHost:Run:WatchEnabled must be true or false. Resource watching is disabled by default for this run; explicit resource choices still apply.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="MissingCommandNotificationTitle">
         <source>Missing command</source>
         <target state="translated">缺少命令</target>

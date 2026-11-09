@@ -150,7 +150,7 @@ internal static class DotnetWatchToolResolver
                 throw new DistributedApplicationException($"{ToolPathConfigurationKey} points to '{overridePath}', but '{dll}' does not exist.");
             }
 
-            logger.LogInformation("Using watch tool from {ToolPathConfigurationKey}: {Path}", ToolPathConfigurationKey, dll);
+            logger.LogDebug("Using watch tool from {ToolPathConfigurationKey}: {Path}", ToolPathConfigurationKey, dll);
             return dll;
         }
 
@@ -177,7 +177,7 @@ internal static class DotnetWatchToolResolver
                 "package is in place, or run without --watch.");
         }
 
-        logger.LogInformation("Using watch tool: {Path}", toolDll);
+        logger.LogDebug("Using watch tool: {Path}", toolDll);
         return toolDll;
     }
 

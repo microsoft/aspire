@@ -139,7 +139,7 @@
               ]
             }
           ],
-          "description": "Enable combined watching of compatible C# AppHosts and services and compatible language-native polyglot AppHosts by default for 'aspire run' (the same as --watch); an explicit --watch or --watch false wins, and real IDE-owned runs retain IDE watch policy",
+          "description": "Watch compatible C# or language-native polyglot AppHost edits by default for 'aspire run' (the same as --watch); explicit --watch or --watch false wins. Resource watching is configured independently in the AppHost, and real IDE-owned runs retain IDE watch policy",
           "default": false
         },
         "experimentalHostingIntegrations": {

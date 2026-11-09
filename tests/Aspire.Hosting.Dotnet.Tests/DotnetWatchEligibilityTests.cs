@@ -14,11 +14,75 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Dotnet.Tests;
 
-// Which projects `aspire run --watch` watches, opts out or rejects (docs/plans/project-v2-csharpprogram-watch.md, section 5).
+// Final-model resource-watch eligibility and ordinary build ownership.
 public class DotnetWatchEligibilityTests(ITestOutputHelper outputHelper)
 {
     private static readonly string[] s_watchConfig =
         ["AppHost:Run:WatchEnabled=true"];
+
+    [Fact]
+    public async Task CompatibleProjectIsWatchedByDefaultWithoutConfiguration()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var service = AddProject(builder, workspace, "service");
+
+        Assert.Single(service.Resource.Annotations.OfType<LaunchToolArgsCallbackAnnotation>());
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, CancellationToken.None);
+
+        Assert.Single(Model(app).Resources.OfType<DotnetWatchServerResource>());
+        Assert.Contains(DotnetWatchHostProtocol.ProxyCommand, await ArgumentEvaluator.GetArgumentListAsync(service.Resource));
+        AssertWatchedOutsideCoordinatedBuild(service);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ExplicitResourceChoiceOverridesDisabledDefaultAndLastChoiceWins(bool enabled)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(["AppHost:Run:WatchEnabled=false"]);
+        var plain = AddProject(builder, workspace, "plain");
+        var selected = AddProject(builder, workspace, "selected").WithWatch(!enabled).WithWatch(enabled);
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, CancellationToken.None);
+
+        AssertCoordinatedBuildAndLaunch(plain);
+        if (enabled)
+        {
+            AssertWatchedOutsideCoordinatedBuild(selected);
+            Assert.Single(Model(app).Resources.OfType<DotnetWatchServerResource>());
+        }
+        else
+        {
+            AssertCoordinatedBuildAndLaunch(selected);
+            Assert.Empty(Model(app).Resources.OfType<DotnetWatchServerResource>());
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task NoBuildSuppressesImplicitWatchButRejectsARequiredResource(bool required)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(["ASPIRE_RESOURCE_WATCH_SUPPRESS=no-build"]);
+        var service = AddProject(builder, workspace, "service");
+        if (required)
+        {
+            service.WithWatch(true);
+            var error = await AssertBeforeStartFailsAsync(builder);
+            Assert.Contains("'service' cannot be watched with --no-build.", error.Message);
+            return;
+        }
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, CancellationToken.None);
+        AssertCoordinatedBuildAndLaunch(service);
+        Assert.Empty(Model(app).Resources.OfType<DotnetWatchServerResource>());
+    }
 
     [Fact]
     public void WithWatchReplacesEarlierChoice()
@@ -213,15 +277,31 @@ public class DotnetWatchEligibilityTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData(PersistenceMode.Persistent)]
     [InlineData(PersistenceMode.ParentProcess)]
-    public async Task PersistentProjectFails(PersistenceMode mode)
+    public async Task RequiredPersistentProjectFails(PersistenceMode mode)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(s_watchConfig);
 
-        AddProject(builder, workspace, "service").WithAnnotation(new PersistenceAnnotation { Mode = mode });
+        AddProject(builder, workspace, "service").WithAnnotation(new PersistenceAnnotation { Mode = mode }).WithWatch(true);
 
         var ex = await AssertBeforeStartFailsAsync(builder);
         Assert.Contains("'service' has a persistent lifetime", ex.Message);
+    }
+
+    [Theory]
+    [InlineData(PersistenceMode.Persistent)]
+    [InlineData(PersistenceMode.ParentProcess)]
+    public async Task ImplicitPersistentProjectKeepsOrdinaryBuildAndLaunch(PersistenceMode mode)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var service = AddProject(builder, workspace, "service").WithAnnotation(new PersistenceAnnotation { Mode = mode });
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, CancellationToken.None);
+
+        AssertCoordinatedBuildAndLaunch(service);
+        Assert.Empty(Model(app).Resources.OfType<DotnetWatchServerResource>());
     }
 
     [Fact]
@@ -236,7 +316,7 @@ public class DotnetWatchEligibilityTests(ITestOutputHelper outputHelper)
         var session = AddProject(builder, workspace, "session")
             .WithAnnotation(new PersistenceAnnotation { Mode = PersistenceMode.Session });
 
-        Assert.Equal(DotnetWatchCoordinator.WatchDecisionKind.Rejected,
+        Assert.Equal(DotnetWatchCoordinator.WatchDecisionKind.Excluded,
             DotnetWatchCoordinator.Evaluate(service.Resource, builder.Resources).Kind);
         Assert.Equal(DotnetWatchCoordinator.WatchDecisionKind.Watched,
             DotnetWatchCoordinator.Evaluate(session.Resource, builder.Resources).Kind);
@@ -249,8 +329,8 @@ public class DotnetWatchEligibilityTests(ITestOutputHelper outputHelper)
 
         using (var builder = TestDistributedApplicationBuilder.Create(s_watchConfig))
         {
-            AddProject(builder, workspace, "gateway").WithLaunchToolArgs(ctx => ctx.Args.Add("gateway"));
-            AddProject(builder, workspace, "maui").WithAnnotation(new ProjectLaunchArgsOverrideAnnotation(["build", "-t:Run"]));
+            AddProject(builder, workspace, "gateway").WithLaunchToolArgs(ctx => ctx.Args.Add("gateway")).WithWatch(true);
+            AddProject(builder, workspace, "maui").WithAnnotation(new ProjectLaunchArgsOverrideAnnotation(["build", "-t:Run"])).WithWatch(true);
 
             var ex = await AssertBeforeStartFailsAsync(builder);
             Assert.Contains("'gateway' uses a custom launch", ex.Message);
@@ -268,6 +348,35 @@ public class DotnetWatchEligibilityTests(ITestOutputHelper outputHelper)
             Assert.DoesNotContain(DotnetWatchHostProtocol.ProxyCommand, await ArgumentEvaluator.GetArgumentListAsync(gateway.Resource));
             Assert.DoesNotContain(Model(app).Resources, r => r is DotnetWatchServerResource);
         }
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task CustomLaunchIsNotOverwrittenWhenWatchIsRequiredAfterConfiguration(bool defaultEnabled)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create([$"AppHost:Run:WatchEnabled={defaultEnabled}"]);
+        var custom = AddProject(builder, workspace, "custom").WithLaunchToolArgs(context => context.Args.Add("custom-tool")).WithWatch(true);
+        Assert.True(DotnetWatchCoordinator.HasCustomLaunch(custom.Resource));
+
+        var error = await AssertBeforeStartFailsAsync(builder);
+        Assert.Contains("'custom' uses a custom launch", error.Message);
+    }
+
+    [Fact]
+    public async Task ImplicitCustomLaunchKeepsOrdinaryOwnership()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var custom = AddProject(builder, workspace, "custom").WithLaunchToolArgs(context => context.Args.Add("custom-tool"));
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, CancellationToken.None);
+
+        Assert.Equal(["custom-tool"], await ArgumentEvaluator.GetArgumentListAsync(custom.Resource));
+        AssertCoordinatedBuildOwnership(custom);
+        Assert.Empty(Model(app).Resources.OfType<DotnetWatchServerResource>());
     }
 
     [Fact]
@@ -296,9 +405,14 @@ public class DotnetWatchEligibilityTests(ITestOutputHelper outputHelper)
     /// <summary>Aspire builds the project (`dotnet run --no-build` after the coordinated build), and no watch annotation is left.</summary>
     private static void AssertCoordinatedBuildAndLaunch(IResourceBuilder<DotnetProjectResource> project)
     {
+        Assert.Single(project.Resource.Annotations.OfType<LaunchToolArgsCallbackAnnotation>());
+        AssertCoordinatedBuildOwnership(project);
+    }
+
+    private static void AssertCoordinatedBuildOwnership(IResourceBuilder<DotnetProjectResource> project)
+    {
         var annotations = project.Resource.Annotations;
         Assert.True(Metadata(project).SuppressBuild);
-        Assert.Single(annotations.OfType<LaunchToolArgsCallbackAnnotation>());
         Assert.DoesNotContain(annotations.OfType<WaitAnnotation>(), w => w.Resource is DotnetWatchServerResource);
         Assert.Contains(annotations.OfType<WaitAnnotation>(), w => w.Resource is DotnetProjectBuildResource);
         Assert.Single(annotations.OfType<DotnetProgramBuildCompletionAnnotation>());

@@ -1,12 +1,14 @@
 # Selective AppHost and .NET service watch
 
-Run this playground with `aspire run --watch` to exercise compatible C# service watching.
+Run this playground with plain `aspire run` to exercise default compatible C# resource watching.
 The repository currently selects a .NET 11 preview SDK for the AppHost, while the shipped watcher
 10.0.403 targets .NET 10, so the in-repo AppHost prints a diagnosed fallback and runs normally.
-Combined compatible C# AppHost and service watching is exercised by the package-hive
+Optional compatible C# AppHost watching is exercised by the package-hive
 [`DotnetWatchCSharpTests`](../../tests/Aspire.Cli.EndToEnd.Tests/DotnetWatchTests.cs), whose fixture
-selects a .NET 10 SDK. `features.defaultWatchEnabled` selects the same mode; explicit `--watch false`
-disables CLI-controlled watching. See the
+selects a .NET 10 SDK. `--watch` / `features.defaultWatchEnabled` select AppHost edits only;
+`--watch false` leaves service watching enabled. Use the AppHost creation option
+`DefaultResourceWatchEnabled` (polyglot `defaultResourceWatchEnabled`) or `AppHost:Run:WatchEnabled`
+for the global resource default; the last `.WithWatch(true/false)` overrides that default. See the
 [integration README](../../src/Aspire.Hosting.Dotnet/README.md#watch-apphost-and-service-changes)
 for the current prerequisites, evaluated isolation rules, and coverage limits.
 
@@ -37,7 +39,7 @@ this documented full-run workaround.
 ## Historical service-watch spike record
 
 The following measurements and transcripts describe the original service-only spike, not the current
-combined-watch contract or fresh cross-platform validation. In particular, its ordinary post-Stop
+independent AppHost/resource-watch contract or fresh cross-platform validation. In particular, its ordinary post-Stop
 Start, crash Restart, watched Rebuild, and "AppHost never watched" statements are superseded above.
 
 ## How it works

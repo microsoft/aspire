@@ -40,8 +40,14 @@ internal sealed class ProcessExecution : ChildProcess, IProcessExecution
                 }
                 : null,
             RequestGracefulShutdownAsync = options.GracefulShutdownSignaler is { } signaler
-                ? (pid, token) => signaler.RequestProcessTreeGracefulShutdownAsync(
-                    pid, startTime: null, includeStartTimeForDcp: false, token)
+                ? (pid, token) =>
+                {
+                    // A wrapper can announce its actual AppHost after launch. Signal that
+                    // verified instance before stopping the wrapper so hosted cleanup can finish.
+                    var target = options.GracefulShutdownTarget?.Invoke();
+                    return signaler.RequestProcessTreeGracefulShutdownAsync(
+                        target?.ProcessId ?? pid, target?.StartedAt, includeStartTimeForDcp: false, token);
+                }
                 : null
         }, hostEnvironment.IsWindows())
     {

@@ -5,6 +5,7 @@
 
 using System.Collections.Concurrent;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Shared;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Dotnet.Watch;
@@ -298,6 +299,20 @@ internal sealed class DotnetWatchMember(
     internal CustomResourceSnapshot ProjectSnapshot(string id, CustomResourceSnapshot snapshot) =>
         ProjectSnapshot(id, snapshot, CaptureTransport(id, snapshot, out var modelPublication), modelPublication);
 
+    internal static CustomResourceSnapshot WithWatchStatus(
+        CustomResourceSnapshot snapshot, string state, string? reason, string? logResource) =>
+        snapshot with
+        {
+            Properties =
+            [
+                .. snapshot.Properties.Where(property => property.Name is not ResourceWatch.StateProperty and
+                    not ResourceWatch.ReasonProperty and not ResourceWatch.LogResourceProperty),
+                new(ResourceWatch.StateProperty, state),
+                new(ResourceWatch.ReasonProperty, reason),
+                new(ResourceWatch.LogResourceProperty, logResource)
+            ]
+        };
+
     private Instance CaptureTransport(string id, CustomResourceSnapshot snapshot, out bool modelPublication)
     {
         var internalUpdate = snapshot.Properties.Any(property => property.Name == InternalUpdateProperty);
@@ -382,7 +397,7 @@ internal sealed class DotnetWatchMember(
             state = observed.State;
         }
 
-        return snapshot with
+        var projected = snapshot with
         {
             State = modelState ?? (state is null ? null : new ResourceStateSnapshot(state,
                 failed is not null || state == DotnetWatchCoordinator.CrashedState || state == KnownResourceStates.FailedToStart
@@ -411,6 +426,15 @@ internal sealed class DotnetWatchMember(
                 new("dotnet-watch.last-event", observed.LastEvent)
             ]
         };
+
+        // Coverage describes watch participation, not per-instance application health or successful hot reload.
+        return WithWatchStatus(projected,
+            failed is not null ? ResourceWatch.Failed :
+                observed.Build == "failed" ? ResourceWatch.BuildFailed :
+                ready() ? ResourceWatch.Watching : ResourceWatch.Pending,
+            failed is not null ? "Watch infrastructure failed. Fix the cause and restart the complete Aspire run." :
+                observed.Build == "failed" ? "The build failed. Fix the code and save." : null,
+            resource.Annotations.OfType<WaitAnnotation>().LastOrDefault(wait => wait.Resource is DotnetWatchServerResource)?.Resource.Name);
     }
 
     private sealed record Instance(

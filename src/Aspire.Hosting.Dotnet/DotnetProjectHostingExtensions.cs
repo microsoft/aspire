@@ -358,11 +358,10 @@ public static partial class DotnetProjectHostingExtensions
         // so process and IDE launchers resolve the output produced by the coordinated build.
         var configuration = builder.Configuration["AppHost:BuildConfiguration"];
         var projectMetadata = new DotnetProjectMetadata(path, configuration, name);
-        // In `aspire run --watch` a watched project's initial build is the watcher's, but whether the project ends up
+        // A watched project's initial build is the watcher's, but whether the project ends up
         // watched is only known once the model is final (WithWatch(false), WaitForCompletion, ...). So every project
         // joins the coordinated build here, and the watch coordinator takes the watched ones out before the build plan
         // is created; excluded projects keep the normal coordinated build, build environment included.
-        var watch = Dotnet.Watch.DotnetWatchCoordinator.ShouldWatch(builder, name);
         var buildCoordinator = DotnetProjectBuildCoordinator.Prepare(builder, projectMetadata);
 
         // ExecutableResource requires a working directory. Use the project/app directory so the process
@@ -511,10 +510,7 @@ public static partial class DotnetProjectHostingExtensions
         });
 
         // Watch eligibility is settled on the final model before transferring build ownership.
-        if (watch)
-        {
-            Dotnet.Watch.DotnetWatchCoordinator.Configure(builder, resource, projectMetadata, buildCoordinator);
-        }
+        Dotnet.Watch.DotnetWatchCoordinator.Register(builder, resource, projectMetadata, buildCoordinator);
 
         return resource;
     }

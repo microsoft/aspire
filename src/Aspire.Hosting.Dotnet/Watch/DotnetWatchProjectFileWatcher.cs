@@ -88,6 +88,7 @@ internal sealed class DotnetWatchProjectFileWatcher : IDisposable
                 throw new InvalidOperationException("Project-file observation has already started.");
             }
 
+            using var observationActivity = DotnetWatchProfiling.StartInputObservation(_candidates, _pollInterval);
             foreach (var path in _candidates)
             {
                 if (TryReadState(path, previous: null, out var state))

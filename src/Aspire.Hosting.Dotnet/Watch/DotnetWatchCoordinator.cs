@@ -6,17 +6,19 @@
 #pragma warning disable ASPIREPROJECTS001 // ProjectLaunchArgsOverrideAnnotation is experimental.
 
 using System.Globalization;
+using System.IO.Hashing;
 using System.IO.Pipes;
 using System.Runtime.CompilerServices;
 using System.Text;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
+using Aspire.Shared;
 using Aspire.Shared.DotnetWatch;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using System.IO.Hashing;
 
 namespace Aspire.Hosting.Dotnet.Watch;
 
@@ -32,8 +34,8 @@ internal sealed class DotnetWatchServerResource(string name, string workingDirec
 /// </summary>
 /// <remarks>
 /// <para>
-/// When <c>ExecutionContext.RunConfiguration.WatchEnabled</c> is set in run mode, every <c>AddDotnetProject</c>
-/// resource is considered for a <see cref="DotnetWatchServerResource"/>. Preflight evaluates SDKs, build contexts,
+/// The AppHost's resource default and final per-resource overrides select compatible <c>AddDotnetProject</c>
+/// resources for a <see cref="DotnetWatchServerResource"/>. Preflight evaluates SDKs, build contexts,
 /// references, and output domains before handing build ownership to compatible watcher groups. Shared outputs belong
 /// to one compatible watcher or retain ordinary build ownership; custom contexts and file apps can require dedicated
 /// groups. The bundled watch host supervises the pinned watcher, whose initial build is the only service build.
@@ -53,8 +55,7 @@ internal static class DotnetWatchCoordinator
     internal const string CrashedState = "Crashed";
 
     /// <summary>
-    /// Logger category for concise, user-facing watch notices. <c>aspire run --watch</c> prints AppHost log entries in
-    /// this category (and its sub-categories) to the terminal.
+    /// Exact logger category for intentional, EventId-tagged resource-watch notices.
     /// </summary>
     internal const string NoticeLoggerCategory = "Aspire.Hosting.Dotnet.Watch";
 
@@ -71,6 +72,7 @@ internal static class DotnetWatchCoordinator
 
     // Keyed by resource: IResourceBuilder.ApplicationBuilder can be a different wrapper than the builder Configure saw.
     private static readonly ConditionalWeakTable<DotnetProjectResource, WatchState> s_projectStates = new();
+    private static readonly ConditionalWeakTable<DotnetProjectResource, WatchRegistration> s_registrations = new();
 
     /// <summary>Temp-directory variables of the platform (what <see cref="Path.GetTempPath"/> reads).</summary>
     internal static string[] GetTempVariables(bool windows) => windows ? ["TMP", "TEMP"] : ["TMPDIR"];
@@ -89,18 +91,24 @@ internal static class DotnetWatchCoordinator
     /// </remarks>
     internal static bool ShouldWatch(IDistributedApplicationBuilder builder)
     {
-        if (!IsWatchRun(builder))
+        return IsWatchRun(builder) && CanWatch(builder);
+    }
+
+    private static bool CanWatch(IDistributedApplicationBuilder builder)
+    {
+        if (!builder.ExecutionContext.IsRunMode ||
+            builder.Configuration[ResourceWatch.SuppressionVariable] is ResourceWatch.Discovery or ResourceWatch.Native)
         {
             return false;
         }
 
-        if (!DotnetWatchOwnership.IsCliOwned(builder.Configuration[DotnetWatchOwnership.OwnerEnvironmentVariable]) &&
-            !string.IsNullOrEmpty(builder.Configuration["DEBUG_SESSION_PORT"]))
+        if (IsIdeOwned(builder))
         {
             OnceForBuilder(builder, () => builder.Eventing.Subscribe<BeforeStartEvent>((e, _) =>
             {
                 e.Services.GetRequiredService<ILoggerFactory>().CreateLogger(NoticeLoggerCategory).LogWarning(
-                    "Hot reload of .NET services is handled by the IDE: the AppHost is running under an IDE debug session, so 'aspire run --watch' doesn't watch them.");
+                    NoticeEventId(WatchNoticeKind.Excluded),
+                    "Resource watching is handled by the IDE; this run does not start service watchers.");
                 return Task.CompletedTask;
             }));
             return false;
@@ -108,6 +116,13 @@ internal static class DotnetWatchCoordinator
 
         return true;
     }
+
+    private static bool IsIdeOwned(IDistributedApplicationBuilder builder) =>
+        !string.IsNullOrEmpty(builder.Configuration["ASPIRE_EXTENSION_DEBUG_SESSION_ID"]) ||
+        (!DotnetWatchOwnership.IsCliOwned(builder.Configuration[DotnetWatchOwnership.OwnerEnvironmentVariable]) &&
+            (!string.IsNullOrEmpty(builder.Configuration["DEBUG_SESSION_PORT"]) ||
+                !string.IsNullOrEmpty(builder.Configuration["DEBUG_SESSION_INFO"]) ||
+                !string.IsNullOrEmpty(builder.Configuration["DEBUG_SESSION_RUN_MODE"])));
 
     /// <summary>Per-resource variant of <see cref="ShouldWatch(IDistributedApplicationBuilder)"/>.</summary>
     /// <remarks>
@@ -117,9 +132,9 @@ internal static class DotnetWatchCoordinator
     internal static bool ShouldWatch(IDistributedApplicationBuilder builder, string resourceName)
     {
         var watch = ShouldWatch(builder);
-        if (!watch && IsWatchRun(builder) && !string.IsNullOrEmpty(builder.Configuration["DEBUG_SESSION_PORT"]))
+        if (!watch && IsWatchRun(builder) && IsIdeOwned(builder))
         {
-            builder.Eventing.Subscribe<BeforeStartEvent>((e, _) =>
+            builder.Eventing.Subscribe<BeforeStartEvent>((e, cancellationToken) =>
             {
                 if (e.Model.Resources.FirstOrDefault(r => r.Name == resourceName) is { } resource)
                 {
@@ -145,15 +160,60 @@ internal static class DotnetWatchCoordinator
         action();
     }
 
-    internal static void Configure(
+    internal static void Register(
         IDistributedApplicationBuilder builder,
         IResourceBuilder<DotnetProjectResource> resource,
         DotnetProjectMetadata metadata,
         DotnetProjectBuildCoordinator.CoordinatorState? buildCoordinator)
     {
-        var state = s_states.GetValue(builder, static b => new WatchState(b));
+        s_registrations.AddOrUpdate(resource.Resource, new(builder, resource, metadata, buildCoordinator));
+        if (builder.ExecutionContext.IsRunMode)
+        {
+            builder.Eventing.Subscribe<BeforeStartEvent>((e, cancellationToken) =>
+            {
+                if (e.Model.Resources.Contains(resource.Resource) && !s_projectStates.TryGetValue(resource.Resource, out _))
+                {
+                    var reason = builder.Configuration[ResourceWatch.SuppressionVariable] switch
+                    {
+                        ResourceWatch.NoBuild => "Resource watching is disabled by --no-build.",
+                        ResourceWatch.Discovery => "Resource watching is unavailable during discovery.",
+                        ResourceWatch.Native => "Resource watching is unavailable with the native server.",
+                        _ when IsIdeOwned(builder) =>
+                            "Resource watching is handled by the IDE.",
+                        _ when resource.Resource.Annotations.OfType<DotnetProjectWatchAnnotation>().LastOrDefault()?.Enabled == false =>
+                            "Resource watching is disabled by WithWatch(false).",
+                        _ => "The AppHost resource-watch default is disabled."
+                    };
+                    ProjectExcludedStatus(resource.Resource, reason);
+                    e.Services.GetRequiredService<ResourceLoggerService>().GetLogger(resource.Resource)
+                        .LogInformation("[watch] {Reason}", reason);
+                }
+
+                return Task.CompletedTask;
+            });
+        }
+        if (ShouldWatch(builder, resource.Resource.Name))
+        {
+            Enable(resource);
+        }
+    }
+
+    internal static void Enable(IResourceBuilder<DotnetProjectResource> resource)
+    {
+        if (!CanWatch(resource.ApplicationBuilder) || s_projectStates.TryGetValue(resource.Resource, out _))
+        {
+            return;
+        }
+
+        if (!s_registrations.TryGetValue(resource.Resource, out var registration))
+        {
+            throw new DistributedApplicationException(
+                $"Resource '{resource.Resource.Name}' must be registered with AddDotnetProject before watch can be required.");
+        }
+
+        var state = s_states.GetValue(registration.Builder, static b => new WatchState(b));
         s_projectStates.AddOrUpdate(resource.Resource, state);
-        state.Configure(resource, metadata, buildCoordinator);
+        state.Configure(registration.Resource, registration.Metadata, registration.BuildCoordinator);
     }
 
     /// <summary>
@@ -260,13 +320,13 @@ internal static class DotnetWatchCoordinator
 
         if (HasPersistentLifetime(resource, []))
         {
-            return new(WatchDecisionKind.Rejected,
+            return new(requested == true ? WatchDecisionKind.Rejected : WatchDecisionKind.Excluded,
                 $"'{resource.Name}' has a persistent lifetime, but a watched service belongs to this run's watch server and can't outlive it.");
         }
 
         if (HasCustomLaunch(resource))
         {
-            return new(WatchDecisionKind.Rejected,
+            return new(requested == true ? WatchDecisionKind.Rejected : WatchDecisionKind.Excluded,
                 $"'{resource.Name}' uses a custom launch (WithLaunchToolArgs or ProjectLaunchArgsOverrideAnnotation), which the watcher can't run.");
         }
 
@@ -305,13 +365,22 @@ internal static class DotnetWatchCoordinator
     /// <see cref="BeforeStartEvent"/>). The watch servers start only after the coordinated build of the excluded projects
     /// has finished (see <see cref="WatchServer"/>), so the two builds don't race over shared project outputs.
     /// </remarks>
-    private static List<WatchedProject> ApplyEligibility(List<WatchedProject> projects, DistributedApplicationModel model, IServiceProvider services)
+    private static List<WatchedProject> ApplyEligibility(
+        List<WatchedProject> projects, DistributedApplicationModel model, IServiceProvider services,
+        IDistributedApplicationBuilder builder)
     {
         var errors = new List<string>();
         var excluded = new List<(WatchedProject Project, string Reason)>();
         foreach (var project in projects)
         {
-            var decision = Evaluate(project.Resource, model.Resources);
+            var requested = project.Resource.Annotations.OfType<DotnetProjectWatchAnnotation>().LastOrDefault()?.Enabled;
+            var decision = builder.Configuration[ResourceWatch.SuppressionVariable] == ResourceWatch.NoBuild
+                ? new WatchDecision(requested == true ? WatchDecisionKind.Rejected : WatchDecisionKind.Excluded,
+                    $"'{project.Resource.Name}' cannot be watched with --no-build.")
+                : requested is null && !builder.ExecutionContext.RunConfiguration.WatchEnabled
+                    ? new WatchDecision(WatchDecisionKind.Excluded,
+                        $"'{project.Resource.Name}' runs without hot reload because the AppHost resource-watch default is disabled.")
+                    : Evaluate(project.Resource, model.Resources);
             if (decision.Kind == WatchDecisionKind.Rejected)
             {
                 errors.Add(decision.Reason!);
@@ -325,7 +394,7 @@ internal static class DotnetWatchCoordinator
         if (errors.Count > 0)
         {
             throw new DistributedApplicationException(
-                "'aspire run --watch' can't hot reload these .NET projects:" + Environment.NewLine +
+                "Required resource watching cannot be satisfied for these .NET projects:" + Environment.NewLine +
                 string.Concat(errors.Select(e => $"  - {e}{Environment.NewLine}")) +
                 "Call WithWatch(false) on a project to run it without hot reload.");
         }
@@ -341,8 +410,9 @@ internal static class DotnetWatchCoordinator
                 project.Resource.Annotations.Remove(annotation);
             }
 
-            noticeLogger.LogInformation("{Notice}", reason);
+            noticeLogger.LogInformation(NoticeEventId(WatchNoticeKind.Excluded), "{Notice}", reason);
             loggers.GetLogger(project.Resource).LogInformation("[watch] {Notice}", reason);
+            ProjectExcludedStatus(project.Resource, reason);
         }
 
         return excluded.Select(x => x.Project).ToList();
@@ -377,9 +447,23 @@ internal static class DotnetWatchCoordinator
 
     private static readonly TimeSpan s_projectFileDebounce = TimeSpan.FromSeconds(1);
 
+    private static void ProjectExcludedStatus(DotnetProjectResource resource, string reason)
+    {
+        var previous = resource.Annotations.OfType<ResourceSnapshotProjectionAnnotation>().LastOrDefault();
+        resource.Annotations.Add(new ResourceSnapshotProjectionAnnotation((id, snapshot) =>
+            DotnetWatchMember.WithWatchStatus(previous is null ? snapshot : previous.Projection(id, snapshot),
+                ResourceWatch.Excluded, reason, resource.Name)));
+    }
+
     internal static bool PathsEqual(string a, string b) =>
         DotnetWatchProjectGraph.PathComparer.Equals(
             DotnetWatchProjectGraph.Normalize(a), DotnetWatchProjectGraph.Normalize(b));
+
+    private sealed record WatchRegistration(
+        IDistributedApplicationBuilder Builder,
+        IResourceBuilder<DotnetProjectResource> Resource,
+        DotnetProjectMetadata Metadata,
+        DotnetProjectBuildCoordinator.CoordinatorState? BuildCoordinator);
 
     private sealed class WatchedProject(
         DotnetProjectResource resource,
@@ -405,7 +489,7 @@ internal static class DotnetWatchCoordinator
         public DotnetWatchResolvedPayload? Payload { get; set; }
     }
 
-    private sealed class WatchState : IDisposable, IAsyncDisposable
+    private sealed class WatchState : IDisposable, IAsyncDisposable, IHostedLifecycleService
     {
         private readonly List<WatchServer> _servers = [];
 
@@ -418,6 +502,9 @@ internal static class DotnetWatchCoordinator
             // Holds the Unix sockets and redirected temp directories. Deleted when the AppHost stops. Kept short:
             // Unix socket paths are limited to ~104 (macOS) / 108 (Linux) characters.
             builder.Services.AddSingleton(_ => this);
+            // Run()/RunAsync() stop the host without disposing its services. Stop owned
+            // watchers before DCP's StopAsync tears down their commands and notifications.
+            builder.Services.AddHostedService(services => services.GetRequiredService<WatchState>());
             builder.Pipeline.WithFinalAction(WellKnownPipelineSteps.BeforeStart, step =>
             {
                 if (Projects.Count == 0)
@@ -473,18 +560,19 @@ internal static class DotnetWatchCoordinator
             builder.Eventing.Subscribe<BeforeStartEvent>(async (e, ct) =>
             {
                 _ = e.Services.GetRequiredService<WatchState>();
-                _logger = e.Services.GetRequiredService<ILoggerFactory>().CreateLogger(NoticeLoggerCategory);
+                _logger = e.Services.GetRequiredService<ILoggerFactory>().CreateLogger(typeof(DotnetWatchCoordinator).FullName!);
                 // Resources removed or replaced after registration must not be built or watched.
                 Projects.RemoveAll(p => !e.Model.Resources.Contains(p.Resource));
 
                 // Opt-outs, run-to-completion and unsupported projects can only be decided on the final model.
-                ExcludedProjects = ApplyEligibility(Projects, e.Model, e.Services);
+                ExcludedProjects = ApplyEligibility(Projects, e.Model, e.Services, Builder);
                 await PreflightAsync(e.Model, e.Services, ct).ConfigureAwait(false);
 
                 // Preflight is the last ordinary-fallback boundary. Once removed, the watcher
                 // owns the sole initial build and no infrastructure failure may downgrade it.
                 foreach (var project in Projects)
                 {
+                    ConfigureLaunch(project);
                     project.BuildCoordinator?.RemoveResource(project.Resource);
                     project.Server.ConfigureLifecycle(project);
                 }
@@ -571,7 +659,7 @@ internal static class DotnetWatchCoordinator
             _runDirectory ??= DotnetWatchServerInfrastructure.CreatePrivateDirectory();
 
             var evaluator = services.GetRequiredService<IDotnetWatchPreflight>();
-            var logger = services.GetRequiredService<ILoggerFactory>().CreateLogger(NoticeLoggerCategory);
+            var logger = services.GetRequiredService<ILoggerFactory>().CreateLogger(typeof(DotnetWatchCoordinator).FullName!);
             var reasons = new Dictionary<WatchedProject, string>();
             var unknown = new List<string>();
 
@@ -614,6 +702,10 @@ internal static class DotnetWatchCoordinator
                     _evaluatedRoots[resource] = ordinary;
                     if (project is null)
                     {
+                        if (ExcludedProjects.FirstOrDefault(candidate => ReferenceEquals(candidate.Resource, resource)) is { } excluded)
+                        {
+                            excluded.OrdinaryGraph = ordinary;
+                        }
                         continue;
                     }
                     project.OrdinaryGraph = ordinary;
@@ -770,21 +862,35 @@ internal static class DotnetWatchCoordinator
 
             var required = reasons.Where(pair =>
                 pair.Key.Resource.Annotations.OfType<DotnetProjectWatchAnnotation>().LastOrDefault()?.Enabled == true).ToArray();
+            foreach (var (project, reason) in reasons)
+            {
+                logger.LogWarning("Resource '{Resource}' cannot be watched: {Reason}", project.Resource.Name, reason);
+                services.GetRequiredService<ResourceLoggerService>().GetLogger(project.Resource)
+                    .LogWarning("[watch] {Reason}", reason);
+            }
             if (required.Length > 0)
             {
                 throw new DistributedApplicationException("Explicit WithWatch(true) could not be satisfied during preflight:" +
-                    Environment.NewLine + string.Join(Environment.NewLine, required.Select(pair => $"  {pair.Key.Resource.Name}: {pair.Value}")));
+                    Environment.NewLine + FormatResourceNames(required.Select(pair => pair.Key.Resource)) +
+                    ". See the affected resource logs for SDK, runtime, or build-ownership details.");
             }
-            foreach (var (project, reason) in reasons)
+            foreach (var project in reasons.Keys)
             {
                 Projects.Remove(project);
                 foreach (var annotation in project.Annotations)
                 {
                     project.Resource.Annotations.Remove(annotation);
                 }
-                logger.LogWarning("Resource '{Resource}' is not watched: {Reason} Ordinary build ownership is retained.", project.Resource.Name, reason);
-                services.GetRequiredService<ResourceLoggerService>().GetLogger(project.Resource)
-                    .LogWarning("[watch] {Reason} Running ordinarily.", reason);
+                ProjectExcludedStatus(project.Resource,
+                    "The SDK, runtime, or build context is incompatible with watching. See this resource's logs.");
+            }
+            if (reasons.Count > 0)
+            {
+                services.GetRequiredService<ILoggerFactory>().CreateLogger(NoticeLoggerCategory).LogWarning(
+                    NoticeEventId(WatchNoticeKind.Excluded),
+                    "Resources {Resources} run without watching because their SDK, runtime, or build context is incompatible. " +
+                    "Ordinary build ownership is retained; see their resource logs for details.",
+                    FormatResourceNames(reasons.Keys.Select(project => project.Resource)));
             }
             ExcludedProjects = [.. ExcludedProjects, .. reasons.Keys];
             if (Projects.Count > 0)
@@ -1171,6 +1277,11 @@ internal static class DotnetWatchCoordinator
                 return;
             }
             var previous = project.Server;
+            if (project.Annotations.Count == 0)
+            {
+                project.Server = server;
+                return;
+            }
             foreach (var annotation in project.Resource.Annotations
                 .Where(annotation => annotation is WaitAnnotation wait && wait.Resource == previous.Resource ||
                     annotation is ResourceRelationshipAnnotation relationship && relationship.Resource == previous.Resource).ToArray())
@@ -1189,12 +1300,28 @@ internal static class DotnetWatchCoordinator
             DotnetProjectMetadata metadata,
             DotnetProjectBuildCoordinator.CoordinatorState? buildCoordinator)
         {
-            var existing = resource.Resource.Annotations.ToHashSet();
             var projectPath = ((IProjectMetadata)metadata).ProjectPath;
             var scope = FindSdkScope(Path.GetDirectoryName(projectPath)!);
-            var server = _servers.FirstOrDefault(s => s.DedicatedTo is null && string.Equals(s.SdkScope, scope, PathComparison))
+            var server = _servers.FirstOrDefault(s => s.DedicatedTo is null && string.Equals(s.SdkScope, scope, PathComparison) &&
+                Projects.Where(project => project.Server == s).All(project =>
+                    string.Equals(project.Metadata.BuildConfiguration ?? "Debug", metadata.BuildConfiguration ?? "Debug", StringComparison.OrdinalIgnoreCase)))
                 ?? AddServer(scope, dedicatedTo: null, firstProjectName: resource.Resource.Name);
             var project = new WatchedProject(resource.Resource, metadata, buildCoordinator, server);
+            Projects.Add(project);
+
+            if (resource.Resource.Annotations.OfType<DotnetProjectBuildEnvironmentCallbackAnnotation>().Any() ||
+                ((IProjectMetadata)metadata).IsFileBasedApp)
+            {
+                UseDedicatedServer(resource);
+            }
+        }
+
+        private void ConfigureLaunch(WatchedProject project)
+        {
+            var resource = Builder.CreateResourceBuilder(project.Resource);
+            var projectPath = project.ProjectPath;
+            var server = project.Server;
+            var existing = resource.Resource.Annotations.ToHashSet();
 
             // Replace the SDK-selected launch tool (dotnet run) with the watch host's proxy, run by the same `dotnet`
             // command that would have run `dotnet run`. Program arguments contributed through WithArgs (launch-profile
@@ -1237,15 +1364,6 @@ internal static class DotnetWatchCoordinator
                 (_, cancellationToken) => project.Server.WaitForSuccessfulBuildAsync(cancellationToken)));
 
             project.Annotations.AddRange(resource.Resource.Annotations.Where(a => !existing.Contains(a)));
-            Projects.Add(project);
-
-            // A file-based app gets its own watcher: on any project file change the watcher (rc.2) restores every root
-            // through its virtual project path (app.cs.csproj), which fails, and then crashes on the next file event.
-            if (resource.Resource.Annotations.OfType<DotnetProjectBuildEnvironmentCallbackAnnotation>().Any() ||
-                ((IProjectMetadata)metadata).IsFileBasedApp)
-            {
-                UseDedicatedServer(resource);
-            }
         }
 
         public void UseDedicatedServer(IResourceBuilder<DotnetProjectResource> resource)
@@ -1257,6 +1375,13 @@ internal static class DotnetWatchCoordinator
 
             var previous = project.Server;
             var server = AddServer(previous.SdkScope, dedicatedTo: project.Resource, firstProjectName: project.Resource.Name);
+
+            // Before final eligibility, reserving a dedicated server must not change the ordinary launch or waits.
+            if (project.Annotations.Count == 0)
+            {
+                project.Server = server;
+                return;
+            }
 
             // Move the build barrier (WaitFor and its relationship) from the shared server to the dedicated one.
             foreach (var annotation in resource.Resource.Annotations
@@ -1307,17 +1432,27 @@ internal static class DotnetWatchCoordinator
 
         public void Dispose() => DisposeAsync().AsTask().GetAwaiter().GetResult();
 
-        public ValueTask DisposeAsync()
+        public ValueTask DisposeAsync() => new(GetShutdownTask(stopOwnedResources: false, CancellationToken.None));
+
+        Task IHostedService.StartAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+        Task IHostedService.StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+        Task IHostedLifecycleService.StartingAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+        Task IHostedLifecycleService.StartedAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+        Task IHostedLifecycleService.StoppedAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+        Task IHostedLifecycleService.StoppingAsync(CancellationToken cancellationToken) =>
+            GetShutdownTask(stopOwnedResources: true, cancellationToken);
+
+        private Task GetShutdownTask(bool stopOwnedResources, CancellationToken cancellationToken)
         {
             lock (_disposeGate)
             {
-                return new(_disposeTask ??= DisposeCoreAsync());
+                return _disposeTask ??= DisposeCoreAsync(stopOwnedResources, cancellationToken);
             }
         }
 
-        private async Task DisposeCoreAsync()
+        private async Task DisposeCoreAsync(bool stopOwnedResources, CancellationToken cancellationToken)
         {
-            await Task.WhenAll(_servers.Select(server => server.ShutdownAsync())).ConfigureAwait(false);
+            await Task.WhenAll(_servers.Select(server => server.ShutdownAsync(stopOwnedResources, cancellationToken))).ConfigureAwait(false);
             if (_servers.All(server => server.CleanupAcknowledged))
             {
                 if (_runDirectory is not null)
@@ -1349,6 +1484,7 @@ internal static class DotnetWatchCoordinator
         private CancellationTokenSource? _monitorCts;
         private Task? _monitorTask;
         private Task? _resourceMonitorTask;
+        private ILogger? _lifecycleLogger;
         private Task? _maintenanceTask;
         private CancellationToken _stopping;
         private volatile bool _fenced;
@@ -1483,6 +1619,7 @@ internal static class DotnetWatchCoordinator
             _services = services;
             _notifications = services.GetRequiredService<ResourceNotificationService>();
             _noticeLogger = services.GetRequiredService<ILoggerFactory>().CreateLogger(NoticeLoggerCategory);
+            _lifecycleLogger = services.GetRequiredService<ILoggerFactory>().CreateLogger(typeof(DotnetWatchCoordinator));
             _serverLogger = services.GetRequiredService<ResourceLoggerService>().GetLogger(Resource);
             var notifications = _notifications;
             _shutdown = CancellationTokenSource.CreateLinkedTokenSource(stopping);
@@ -1886,6 +2023,10 @@ internal static class DotnetWatchCoordinator
                     }
 
                     diagnostics.LogDebug("dotnet-watch status: {Type}", status.Type);
+                    if (!string.IsNullOrWhiteSpace(status.Error))
+                    {
+                        serverLogger.LogError("Watcher {Status} diagnostic: {Error}", status.Type, status.Error);
+                    }
                     var projects = ToEntryPointPaths(status.Projects ?? []);
                     if (status.Type is DotnetWatchStatusTypes.ProcessStarted or DotnetWatchStatusTypes.ProcessExited &&
                         projects.Any(path => !Projects.Any(project => PathsEqual(project.ProjectPath, path))))
@@ -1900,7 +2041,7 @@ internal static class DotnetWatchCoordinator
                             continue;
                         }
 
-                        await OnBuildCompleteAsync(status.Success == true, DotnetWatchEventInterpreter.FailureDetail(status.Error, Resource.Name),
+                        await OnBuildCompleteAsync(status.Success == true, DotnetWatchEventInterpreter.FailureDetail(Resource.Name),
                             successfulBuild, services, cts.Token).ConfigureAwait(false);
                     }
 
@@ -2296,6 +2437,20 @@ internal static class DotnetWatchCoordinator
         private async Task StopServerAndConfirmCleanupAsync(IServiceProvider services, CancellationToken cancellationToken)
         {
             var prepared = _prepared;
+            await StopServerAsync(services, waitForStoppedEvent: true, cancellationToken).ConfigureAwait(false);
+            if (prepared is not null &&
+                !await WaitForContainedCleanupAsync(prepared, cancellationToken).ConfigureAwait(false))
+            {
+                throw new DistributedApplicationException("Contained watcher cleanup was not acknowledged; replacement is fenced. Restart the watch run.");
+            }
+            if (Interlocked.Exchange(ref _control, null) is { } control)
+            {
+                await control.DisposeAsync().ConfigureAwait(false);
+            }
+        }
+
+        private async Task StopServerAsync(IServiceProvider services, bool waitForStoppedEvent, CancellationToken cancellationToken)
+        {
             var notifications = services.GetRequiredService<ResourceNotificationService>();
             var instances = notifications.GetCurrentStates(Resource);
             if (instances.Count > 1)
@@ -2319,7 +2474,10 @@ internal static class DotnetWatchCoordinator
                 try
                 {
                     RequireSuccess(await DotnetWatchServerInfrastructure.StopOwnedAsync(Resource, services, cancellationToken).ConfigureAwait(false));
-                    await stopped.Task.WaitAsync(TimeSpan.FromSeconds(30), cancellationToken).ConfigureAwait(false);
+                    if (waitForStoppedEvent)
+                    {
+                        await stopped.Task.WaitAsync(TimeSpan.FromSeconds(30), cancellationToken).ConfigureAwait(false);
+                    }
                 }
                 finally
                 {
@@ -2333,15 +2491,6 @@ internal static class DotnetWatchCoordinator
             if (_monitorTask is { } monitor)
             {
                 await monitor.WaitAsync(TimeSpan.FromSeconds(10), cancellationToken).ConfigureAwait(false);
-            }
-            if (prepared is not null &&
-                !await WaitForContainedCleanupAsync(prepared, cancellationToken).ConfigureAwait(false))
-            {
-                throw new DistributedApplicationException("Contained watcher cleanup was not acknowledged; replacement is fenced. Restart the watch run.");
-            }
-            if (Interlocked.Exchange(ref _control, null) is { } control)
-            {
-                await control.DisposeAsync().ConfigureAwait(false);
             }
         }
 
@@ -2411,17 +2560,20 @@ internal static class DotnetWatchCoordinator
                 {
                     return;
                 }
-                _failure = reason;
+                var summary = $"Watch group '{Resource.Name}' failed. See the '{Resource.Name}' resource logs for details. " +
+                    "Fix the cause and restart the complete Aspire run.";
+                _failure = summary;
                 _fenced = true;
                 _ready = false;
-                _successfulBuild.TrySetException(new DistributedApplicationException(reason));
-                SettleRestartWaiters(new DistributedApplicationException(reason));
+                _successfulBuild.TrySetException(new DistributedApplicationException(summary));
+                SettleRestartWaiters(new DistributedApplicationException(summary));
                 _monitorCts?.Cancel();
                 if (_services is not { } services || _notifications is not { } notifications)
                 {
                     return;
                 }
-                _noticeLogger!.LogError("Watch group '{Group}' failed: {Reason}", Resource.Name, reason);
+                _serverLogger!.LogError("Watch group failed: {Reason}", reason);
+                _noticeLogger!.LogError(NoticeEventId(WatchNoticeKind.InfrastructureFailed), "{Notice}", summary);
                 _failureTask = Task.Run(async () =>
                 {
                     var entered = false;
@@ -2459,27 +2611,25 @@ internal static class DotnetWatchCoordinator
             }
         }
 
-        public Task ShutdownAsync()
+        public Task ShutdownAsync(bool stopOwnedResources, CancellationToken cancellationToken)
         {
             lock (_gate)
             {
                 _shuttingDown = true;
-                return _shutdownTask ??= ShutdownCoreAsync();
+                return _shutdownTask ??= ShutdownCoreAsync(stopOwnedResources, cancellationToken);
             }
         }
 
-        private async Task ShutdownCoreAsync()
+        private async Task ShutdownCoreAsync(bool stopOwnedResources, CancellationToken cancellationToken)
         {
+            var logger = _lifecycleLogger;
+            logger?.LogDebug("Stopping watch group {Resource}.", Resource.Name);
             _fenced = true;
             _shutdown?.Cancel();
             _monitorCts?.Cancel();
-            _successfulBuild.TrySetCanceled();
+            _successfulBuild.TrySetCanceled(_stopping);
             SettleRestartWaiters(new OperationCanceledException("The watch run is stopping."));
             _projectFileWatcher?.Dispose();
-            if (Interlocked.Exchange(ref _control, null) is { } control)
-            {
-                await control.DisposeAsync().ConfigureAwait(false);
-            }
             Task<PreparedServer>[] preparing;
             lock (_gate)
             {
@@ -2494,15 +2644,45 @@ internal static class DotnetWatchCoordinator
             catch (OperationCanceledException) when (_stopping.IsCancellationRequested)
             {
             }
-            foreach (var work in new[] { _monitorTask, _resourceMonitorTask, _maintenanceTask, _failureTask })
+            foreach (var (name, work) in new[]
+            {
+                ("status monitoring", _monitorTask),
+                ("resource monitoring", _resourceMonitorTask),
+                ("build-input refresh", _maintenanceTask),
+                ("failure cleanup", _failureTask)
+            })
             {
                 if (work is not null)
                 {
+                    logger?.LogDebug("Joining {Work} for stopping watch group {Resource}.", name, Resource.Name);
                     await work.ConfigureAwait(false);
                 }
             }
-            if (Volatile.Read(ref _launchAttempted) != 0 && _prepared is { } prepared &&
-                !await WaitForContainedCleanupAsync(prepared, CancellationToken.None).ConfigureAwait(false))
+            var prepared = _prepared;
+            if (stopOwnedResources && Volatile.Read(ref _launchAttempted) != 0 &&
+                _services is { } services && _notifications is { } notifications)
+            {
+                foreach (var project in Projects)
+                {
+                    var member = project.Member!;
+                    foreach (var id in member.GetTransportInstances(notifications, intendedOnly: false))
+                    {
+                        logger?.LogDebug("Stopping owned watch transport {ResourceId}.", id);
+                        RequireSuccess(await member.StopOwnedAsync(id, services, cancellationToken).ConfigureAwait(false));
+                    }
+                }
+                logger?.LogDebug("Stopping owned watcher server {Resource}.", Resource.Name);
+                // Replacement must observe DCP's stopped event before reusing the resource.
+                // Final shutdown does not reuse it, and can race that event's publisher;
+                // the post-containment acknowledgement below is its cleanup proof.
+                await StopServerAsync(services, waitForStoppedEvent: false, cancellationToken).ConfigureAwait(false);
+            }
+            if (Interlocked.Exchange(ref _control, null) is { } control)
+            {
+                await control.DisposeAsync().ConfigureAwait(false);
+            }
+            if (Volatile.Read(ref _launchAttempted) != 0 && prepared is not null &&
+                !await WaitForContainedCleanupAsync(prepared, cancellationToken).ConfigureAwait(false))
             {
                 _serverLogger?.LogWarning(
                     "Contained watcher cleanup was not acknowledged before shutdown; preserving the owned watch run directory {Directory}.",
@@ -2516,6 +2696,8 @@ internal static class DotnetWatchCoordinator
             _monitorCts = null;
             _shutdown?.Dispose();
             _shutdown = null;
+            logger?.LogDebug("Watch group {Resource} stopped; contained cleanup acknowledged: {Acknowledged}.",
+                Resource.Name, CleanupAcknowledged);
         }
 
         public bool CleanupAcknowledged => Volatile.Read(ref _cleanupAcknowledged) != 0;

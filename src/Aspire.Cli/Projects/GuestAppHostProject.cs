@@ -701,16 +701,17 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 return CliExitCodes.FailedToBuildArtifacts;
             }
 
-            if (context.Watch)
+            if (appHostServerProject is NativeAppHostServerProject)
             {
-                if (appHostServerProject is NativeAppHostServerProject)
+                DotnetWatchRunEnvironment.Disable(launchSettingsEnvVars, Aspire.Shared.ResourceWatch.Native);
+                if (context.Watch)
                 {
                     _interactionService.DisplayMessage(KnownEmojis.PoliceCarLight, RunCommandStrings.WatchNativeServerUnsupported);
                 }
-                else
-                {
-                    DotnetWatchRunEnvironment.Apply(launchSettingsEnvVars);
-                }
+            }
+            else
+            {
+                DotnetWatchRunEnvironment.PrepareRun(launchSettingsEnvVars, context.NoBuild, context.Watch);
             }
 
             // Step 4: Start the AppHost server process. The linked stop CTS is the only termination
@@ -905,6 +906,11 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                     // backchannel completion source and cancels appHostSystemCts) stops the polling loop
                     // promptly.
                     guestAppHostLaunched = true;
+                    if (enableHotReload && _guestRuntime.SupportsWatching && launcher is not ExtensionGuestLauncher)
+                    {
+                        context.OutputCollector ??= new OutputCollector();
+                        context.OutputCollector.MarkWatcherOutput();
+                    }
                     context.BuildCompletionSource?.TrySetResult(true);
                     _ = StartBackchannelConnectionAsync(serverSession, backchannelSocketPath, backchannelCompletionSource, enableHotReload, startProjectContext, appHostSystemToken);
                     return Task.CompletedTask;
@@ -921,6 +927,11 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                     ShutdownService: _shutdownService);
                 (guestExitCode, guestOutput) = await ExecuteGuestAppHostAsync(
                     appHostFile, directory, environmentVariables, enableHotReload, context.NoBuild, rpcClient, launcher, StartBackchannelConnectionAfterGuestAppHostLaunchesAsync, guestLaunchOptions, appHostSystemToken);
+            }
+
+            if (guestAppHostLaunched && enableHotReload && _guestRuntime?.SupportsWatching == true && launcher is not ExtensionGuestLauncher)
+            {
+                guestOutput?.MarkWatcherOutput();
             }
 
             // If the user cancelled (Ctrl+C), surface that as cancellation instead of a "guest failed"
@@ -956,7 +967,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 // so the user can see why the apphost failed. In the extension flow,
                 // ExtensionInteractionService.DisplayLines routes these lines through the
                 // backchannel without also writing them to the CLI's captured stdout/stderr.
-                if (guestOutput is not null)
+                if (guestOutput is { ContainsWatcherOutput: false })
                 {
                     _interactionService.DisplayLines(guestOutput.GetLines());
                 }

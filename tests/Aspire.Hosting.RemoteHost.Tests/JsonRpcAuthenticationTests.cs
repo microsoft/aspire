@@ -14,6 +14,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging.Testing;
 using StreamJsonRpc;
 using Xunit;
 
@@ -183,6 +184,317 @@ public sealed class JsonRpcAuthenticationTests(ITestOutputHelper outputHelper)
         await server.StopAsync(TestContext.Current.CancellationToken);
     }
 
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    public async Task StopAsync_AwaitsEveryAcceptedClientScopeCleanup(int clientCount)
+    {
+        using var workspace = CreateSocketWorkspace();
+        var cleanups = Enumerable.Range(0, clientCount).Select(_ => new BlockingAsyncDisposable()).ToArray();
+        var scopeIndex = -1;
+        await using var server = await RemoteHostTestServer.StartAsync(workspace, existingDirectory: true, services =>
+        {
+            services.AddScoped(_ =>
+            {
+                var handles = new HandleRegistry();
+                handles.Register(cleanups[Interlocked.Increment(ref scopeIndex)], "test/Cleanup");
+                return handles;
+            });
+        });
+        var clients = new List<JsonRpcClientHandle>();
+        Task? stopping = null;
+        try
+        {
+            for (var i = 0; i < clientCount; i++)
+            {
+                var client = await server.ConnectAsync();
+                clients.Add(client);
+                Assert.Equal("pong", await client.InvokeAsync<string>("ping"));
+            }
+
+            stopping = server.StopAsync(TestContext.Current.CancellationToken);
+            await Task.WhenAll(cleanups.Select(cleanup => cleanup.Disposing.Task)).DefaultTimeout();
+            Assert.False(stopping.IsCompleted);
+            Assert.All(cleanups, cleanup => Assert.False(cleanup.Disposed.Task.IsCompleted));
+        }
+        finally
+        {
+            foreach (var cleanup in cleanups)
+            {
+                cleanup.ReleaseDisposal.TrySetResult();
+            }
+            if (stopping is not null)
+            {
+                await stopping.DefaultTimeout();
+            }
+            foreach (var client in clients)
+            {
+                await client.DisposeAsync();
+            }
+        }
+
+        Assert.All(cleanups, cleanup => Assert.True(cleanup.Disposed.Task.IsCompletedSuccessfully));
+    }
+
+    [Fact]
+    public async Task StopAsync_StopsAcceptedClientsApplicationBeforeDisposingIt()
+    {
+        using var workspace = CreateSocketWorkspace();
+        var service = new BlockingHostedService();
+        await using var application = RemoteHostShutdownTestServices.CreateApplication(service);
+        await application.StartAsync(TestContext.Current.CancellationToken);
+        await using var server = await RemoteHostTestServer.StartAsync(workspace, existingDirectory: true, services =>
+        {
+            services.AddScoped(_ =>
+            {
+                var handles = new HandleRegistry();
+                handles.Register(application, "test/Application");
+                return handles;
+            });
+        });
+        await using var client = await server.ConnectAsync();
+        Assert.Equal("pong", await client.InvokeAsync<string>("ping"));
+
+        var stopping = server.StopAsync(TestContext.Current.CancellationToken);
+        try
+        {
+            await service.Stopping.Task.DefaultTimeout();
+            Assert.False(stopping.IsCompleted);
+            Assert.False(service.Disposed.Task.IsCompleted);
+        }
+        finally
+        {
+            service.ReleaseStopping.TrySetResult();
+            await stopping.DefaultTimeout();
+        }
+
+        Assert.Equal(["started", "stopping", "stopped", "disposed"], service.Events.ToArray());
+    }
+
+    [Fact]
+    public async Task StopAsync_AwaitsNormalApplicationShutdownForInFlightRunRpc()
+    {
+        using var workspace = CreateSocketWorkspace();
+        var service = new BlockingHostedService();
+        await using var application = RemoteHostShutdownTestServices.CreateApplication(service);
+        var applicationRun = new TaskCompletionSource<Task>(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using var server = await RemoteHostTestServer.StartAsync(workspace, existingDirectory: true, services =>
+        {
+            services.AddScoped(sp =>
+            {
+                var dispatcher = new CapabilityDispatcher(
+                    sp.GetRequiredService<HandleRegistry>(), sp.GetRequiredService<AtsMarshaller>(), []);
+                dispatcher.Register("test/runApplication", async (_, handles) =>
+                {
+                    handles.Register(application, "test/Application");
+                    // The application's run token is independent of JSON-RPC request cancellation,
+                    // as with a guest invoking run without supplying an explicit cancellation token.
+                    var running = application.RunAsync(CancellationToken.None);
+                    applicationRun.TrySetResult(running);
+                    await running;
+                    return null;
+                });
+                return dispatcher;
+            });
+        });
+        await using var client = await server.ConnectAsync();
+        Assert.True(await client.InvokeAsync<bool>("authenticate", ["expected-token"]));
+        var request = client.InvokeAsync<JsonElement?>("invokeCapability", ["test/runApplication", null]);
+        var runningApplication = await applicationRun.Task.DefaultTimeout();
+        await service.Started.Task.DefaultTimeout();
+
+        var stopping = server.StopAsync(TestContext.Current.CancellationToken);
+        try
+        {
+            await service.Stopping.Task.DefaultTimeout();
+            Assert.False(stopping.IsCompleted);
+            Assert.False(service.Disposed.Task.IsCompleted);
+        }
+        finally
+        {
+            service.ReleaseStopping.TrySetResult();
+            try
+            {
+                await stopping.DefaultTimeout();
+            }
+            catch (TimeoutException)
+            {
+                // Keep a failing regression from leaving the independently running application alive.
+                await application.StopAsync(TestContext.Current.CancellationToken);
+                await stopping.DefaultTimeout();
+                throw;
+            }
+        }
+
+        await runningApplication.DefaultTimeout();
+        await Assert.ThrowsAnyAsync<ConnectionLostException>(() => request.DefaultTimeout());
+        var events = service.Events.ToArray();
+        Assert.True(Array.IndexOf(events, "stopped") < Array.IndexOf(events, "disposed"));
+        Assert.True(service.Disposed.Task.IsCompletedSuccessfully);
+    }
+
+    [Fact]
+    public async Task ClientDisconnect_StopsOwnedApplicationBeforeDisposalAndAllowsReconnect()
+    {
+        using var workspace = CreateSocketWorkspace();
+        var firstService = new BlockingHostedService();
+        var nextService = new BlockingHostedService();
+        await using var firstApplication = RemoteHostShutdownTestServices.CreateApplication(firstService);
+        await using var nextApplication = RemoteHostShutdownTestServices.CreateApplication(nextService);
+        await firstApplication.StartAsync(TestContext.Current.CancellationToken);
+        var applications = new[] { firstApplication, nextApplication };
+        var scopeIndex = -1;
+        await using var server = await RemoteHostTestServer.StartAsync(workspace, existingDirectory: true, services =>
+        {
+            services.AddScoped(_ =>
+            {
+                var handles = new HandleRegistry();
+                handles.Register(applications[Interlocked.Increment(ref scopeIndex)], "test/Application");
+                return handles;
+            });
+        });
+        await using var firstClient = await server.ConnectAsync();
+        Assert.Equal("pong", await firstClient.InvokeAsync<string>("ping"));
+
+        try
+        {
+            await firstClient.DisposeAsync();
+            await firstService.Stopping.Task.DefaultTimeout();
+            Assert.False(firstService.Disposed.Task.IsCompleted);
+            Assert.False(server.ExecuteTask.IsCompleted);
+            firstService.ReleaseStopping.TrySetResult();
+            await firstService.Disposed.Task.DefaultTimeout();
+            Assert.Equal(["started", "stopping", "stopped", "disposed"], firstService.Events.ToArray());
+
+            await nextApplication.StartAsync(TestContext.Current.CancellationToken);
+            await using var nextClient = await server.ConnectAsync();
+            Assert.Equal("pong", await nextClient.InvokeAsync<string>("ping"));
+            Assert.False(nextService.Disposed.Task.IsCompleted);
+            Assert.False(server.ExecuteTask.IsCompleted);
+        }
+        finally
+        {
+            firstService.ReleaseStopping.TrySetResult();
+            nextService.ReleaseStopping.TrySetResult();
+        }
+
+        await nextService.Disposed.Task.DefaultTimeout();
+        Assert.Equal(["started", "stopping", "stopped", "disposed"], nextService.Events.ToArray());
+        Assert.False(server.ExecuteTask.IsCompleted);
+    }
+
+    [Fact]
+    public async Task StopAsync_CancellationAfterAcceptStillDisposesClientScopeAndStream()
+    {
+        using var workspace = CreateSocketWorkspace();
+        var cleanup = new BlockingAsyncDisposable();
+        cleanup.ReleaseDisposal.TrySetResult();
+        var sink = new TestSink();
+        using var loggerFactory = new TestLoggerFactory(sink, enabled: true);
+        await using var server = await RemoteHostTestServer.StartAsync(workspace, existingDirectory: true, services =>
+        {
+            services.AddSingleton<ILogger<JsonRpcServer>>(new TestLogger<JsonRpcServer>(loggerFactory));
+            services.AddScoped(_ =>
+            {
+                var handles = new HandleRegistry();
+                handles.Register(cleanup, "test/Cleanup");
+                return handles;
+            });
+        });
+        var stopping = new TaskCompletionSource<Task>(TaskCreationOptions.RunContinuationsAsynchronously);
+        // Cancel on the accept loop itself, after accept succeeds but before it queues the handler.
+        // Passing that canceled token to Task.Run would skip the scope and strand the accepted stream.
+        sink.MessageLogged += context =>
+        {
+            if (context.Message is "Client connected")
+            {
+                stopping.TrySetResult(server.StopAsync(TestContext.Current.CancellationToken));
+            }
+        };
+        await using var stream = await RemoteHostTestServer.ConnectToServerAsync(server.SocketPath, TestContext.Current.CancellationToken);
+
+        await cleanup.Disposed.Task.DefaultTimeout();
+        await (await stopping.Task.DefaultTimeout()).DefaultTimeout();
+        Assert.Equal(0, await stream.ReadAsync(new byte[1], TestContext.Current.CancellationToken).AsTask().DefaultTimeout());
+        Assert.All(sink.Writes, entry => Assert.InRange(entry.LogLevel, LogLevel.Trace, LogLevel.Information));
+    }
+
+    [Fact]
+    public async Task StopAsync_ShutdownDeadlineDoesNotAbandonTrackedClientCleanup()
+    {
+        using var workspace = CreateSocketWorkspace();
+        var cleanup = new BlockingAsyncDisposable();
+        var logger = new RecordingLogger<JsonRpcServer>();
+        await using var server = await RemoteHostTestServer.StartAsync(workspace, existingDirectory: true, services =>
+        {
+            services.AddSingleton<ILogger<JsonRpcServer>>(logger);
+            services.AddScoped(_ =>
+            {
+                var handles = new HandleRegistry();
+                handles.Register(cleanup, "test/Cleanup");
+                return handles;
+            });
+        });
+        await using var client = await server.ConnectAsync();
+        Assert.Equal("pong", await client.InvokeAsync<string>("ping"));
+        using var deadline = new CancellationTokenSource();
+
+        var stopping = server.StopAsync(deadline.Token);
+        try
+        {
+            await cleanup.Disposing.Task.DefaultTimeout();
+            deadline.Cancel();
+            try
+            {
+                await stopping.DefaultTimeout();
+            }
+            catch (OperationCanceledException) when (deadline.IsCancellationRequested)
+            {
+            }
+
+            Assert.False(server.ExecuteTask.IsCompleted);
+            Assert.False(cleanup.Disposed.Task.IsCompleted);
+            var entry = Assert.Single(logger.Entries, entry => entry.Level >= LogLevel.Warning);
+            Assert.Equal(LogLevel.Warning, entry.Level);
+        }
+        finally
+        {
+            cleanup.ReleaseDisposal.TrySetResult();
+            await server.ExecuteTask.DefaultTimeout();
+        }
+
+        Assert.True(cleanup.Disposed.Task.IsCompletedSuccessfully);
+    }
+
+    [Fact]
+    public async Task StopAsync_ReportsAcceptedClientScopeCleanupFailure()
+    {
+        using var workspace = CreateSocketWorkspace();
+        var exception = new InvalidOperationException("Client cleanup failed.");
+        var cleanup = new BlockingAsyncDisposable { DisposalException = exception };
+        cleanup.ReleaseDisposal.TrySetResult();
+        var logger = new RecordingLogger<JsonRpcServer>();
+        await using var server = await RemoteHostTestServer.StartAsync(workspace, existingDirectory: true, services =>
+        {
+            services.AddSingleton<ILogger<JsonRpcServer>>(logger);
+            services.AddScoped(_ =>
+            {
+                var handles = new HandleRegistry();
+                handles.Register(cleanup, "test/Cleanup");
+                return handles;
+            });
+        });
+        await using var client = await server.ConnectAsync();
+        Assert.Equal("pong", await client.InvokeAsync<string>("ping"));
+
+        await server.StopAsync(TestContext.Current.CancellationToken).DefaultTimeout();
+
+        var entry = Assert.Single(logger.Entries, entry => entry.Level >= LogLevel.Warning);
+        Assert.Equal(LogLevel.Error, entry.Level);
+        Assert.Same(exception, entry.Exception);
+        Assert.True(cleanup.Disposed.Task.IsCompletedSuccessfully);
+    }
+
     [Fact]
     public async Task Listening_CompletesBeforeFirstConnectionAttempt()
     {
@@ -264,6 +576,7 @@ public sealed class JsonRpcAuthenticationTests(ITestOutputHelper outputHelper)
         private readonly string _socketPath;
 
         public string SocketPath => _socketPath;
+        public Task ExecuteTask => _host.Services.GetServices<IHostedService>().OfType<JsonRpcServer>().Single().ExecuteTask!;
 
         private RemoteHostTestServer(IHost host, string socketPath)
         {
@@ -271,7 +584,11 @@ public sealed class JsonRpcAuthenticationTests(ITestOutputHelper outputHelper)
             _socketPath = socketPath;
         }
 
-        public static async Task<RemoteHostTestServer> StartAsync(TemporaryWorkspace workspace, bool existingDirectory)
+        public static Task<RemoteHostTestServer> StartAsync(TemporaryWorkspace workspace, bool existingDirectory)
+            => StartAsync(workspace, existingDirectory, static _ => { });
+
+        public static async Task<RemoteHostTestServer> StartAsync(
+            TemporaryWorkspace workspace, bool existingDirectory, Action<IServiceCollection> configureServices)
         {
             if (!OperatingSystem.IsWindows() && existingDirectory)
             {
@@ -293,6 +610,7 @@ public sealed class JsonRpcAuthenticationTests(ITestOutputHelper outputHelper)
             });
 
             ConfigureServices(builder.Services);
+            configureServices(builder.Services);
             builder.ConfigureContainer(new DefaultServiceProviderFactory(new ServiceProviderOptions
             {
                 ValidateOnBuild = true,
@@ -337,6 +655,8 @@ public sealed class JsonRpcAuthenticationTests(ITestOutputHelper outputHelper)
             await _host.StopAsync();
             _host.Dispose();
         }
+
+        public Task StopAsync(CancellationToken cancellationToken) => _host.StopAsync(cancellationToken);
 
         private static void ConfigureServices(IServiceCollection services)
         {

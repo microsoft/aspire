@@ -1094,6 +1094,8 @@ internal sealed class TestPromptBackchannel : IAppHostCliBackchannel
     // Default implementations for other interface methods
     public Task RequestStopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
     public Task NotifyAppHostReadyAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+    public IAsyncEnumerable<ResourceWatchStatus?> WatchResourceWatchStatusAsync(CancellationToken cancellationToken) =>
+        AsyncEnumerable.Empty<ResourceWatchStatus?>();
     public Task<DashboardUrlsState> GetDashboardUrlsAsync(CancellationToken cancellationToken) =>
         Task.FromResult(new DashboardUrlsState
         {

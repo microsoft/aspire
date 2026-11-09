@@ -28,6 +28,7 @@ internal sealed class DotnetWatchAppHostGeneration : IAsyncDisposable, IGraceful
     private int _gracefulWindowStarted;
     private string? _endpoint;
     private string? _hostInstance;
+    private string? _shutdownInstance;
     private volatile bool _isEnabled;
     private bool _disposed;
 
@@ -53,6 +54,21 @@ internal sealed class DotnetWatchAppHostGeneration : IAsyncDisposable, IGraceful
     internal Task<Exception> Failure => _failure.Task;
     internal bool RequiresLauncherMonitoring { get; init; } = true;
     internal Action? OnBackchannelEstablished { get; init; }
+
+    internal (int ProcessId, DateTimeOffset StartedAt)? GetGracefulShutdownTarget()
+    {
+        var instance = Volatile.Read(ref _shutdownInstance);
+        if (instance is null)
+        {
+            return null;
+        }
+        if (!DotnetWatchAppHostProtocol.TryParseInstance(instance, out var processId, out var started))
+        {
+            throw new InvalidDataException("The watched AppHost announced an invalid process identity.");
+        }
+
+        return (processId, DateTimeOffset.FromUnixTimeMilliseconds(started));
+    }
 
     bool IGracefulShutdownWindow.IsEnabled => _commandShutdown.IsEnabled;
     public CancellationToken GracefulShutdownToken => _graceful.Token;
@@ -174,6 +190,10 @@ internal sealed class DotnetWatchAppHostGeneration : IAsyncDisposable, IGraceful
 
             if (message.Kind == DotnetWatchAppHostProtocol.HostStarted)
             {
+                // A rude edit can replace the original child before CLI teardown begins.
+                // Keep backchannel authentication bound to the first announcement, but stop
+                // the newest announced child rather than an exited predecessor or its wrapper.
+                Volatile.Write(ref _shutdownInstance, message.Instance);
                 if (_hostInstance is null)
                 {
                     _hostInstance = message.Instance;

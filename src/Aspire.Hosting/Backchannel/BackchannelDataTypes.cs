@@ -16,6 +16,27 @@ using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Protocol;
 
+/// <summary>
+/// A generation-scoped snapshot of resource-watch policy and logical-resource coverage.
+/// </summary>
+internal sealed class ResourceWatchStatus
+{
+    public required Guid GenerationId { get; init; }
+    public required bool DefaultEnabled { get; init; }
+    public required ResourceWatchResourceStatus[] Resources { get; init; }
+}
+
+/// <summary>
+/// Watch participation, independent of application health, replica identity, and hot-reload outcome.
+/// </summary>
+internal sealed class ResourceWatchResourceStatus
+{
+    public required string Resource { get; init; }
+    public required string State { get; init; }
+    public string? Reason { get; init; }
+    public string? LogResource { get; init; }
+}
+
 // =============================================================================
 // Auxiliary Backchannel Contract Rules:
 //

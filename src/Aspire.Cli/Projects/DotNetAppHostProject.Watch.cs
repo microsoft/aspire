@@ -96,19 +96,7 @@ internal sealed partial class DotNetAppHostProject
         watchOptions.DotNetExecutablePath = launch.DotnetPath;
         watchOptions.DisableExtensionLaunch = true;
         watchOptions.BackchannelConnectionReady = generation.HostStarted;
-        var recentOutput = new Queue<string>();
-        var standardOutput = watchOptions.StandardOutputCallback;
-        var standardError = watchOptions.StandardErrorCallback;
-        watchOptions.StandardOutputCallback = line =>
-        {
-            CaptureRecentOutput(line);
-            standardOutput?.Invoke(line);
-        };
-        watchOptions.StandardErrorCallback = line =>
-        {
-            CaptureRecentOutput(line);
-            standardError?.Invoke(line);
-        };
+        watchOptions.GracefulShutdownTarget = generation.GetGracefulShutdownTarget;
         var arguments = launch.CreateArguments(context.AppHostFile, watchOptions, context.UnmatchedTokens);
         watchOptions.AppHostArgumentStartIndex = context.UnmatchedTokens.Length > 0
             ? arguments.Length - context.UnmatchedTokens.Length
@@ -120,6 +108,7 @@ internal sealed partial class DotNetAppHostProject
             ? WaitForAnnouncedHostExitAsync(generation.HostStarted, stopStartupWait.Token)
             : null;
         var watchBackchannel = new TaskCompletionSource<IAppHostCliBackchannel>(TaskCreationOptions.RunContinuationsAsynchronously);
+        context.OutputCollector?.MarkWatcherOutput();
         var run = _runner.RunAppHostCommandAsync(
             context.AppHostFile,
             launch.DotnetPath,
@@ -226,31 +215,12 @@ internal sealed partial class DotNetAppHostProject
             }
         }
 
-        void CaptureRecentOutput(string line)
-        {
-            lock (recentOutput)
-            {
-                if (recentOutput.Count == 20)
-                {
-                    recentOutput.Dequeue();
-                }
-                recentOutput.Enqueue(line);
-            }
-        }
-
         async Task<int> FailExitedChildStartupAsync()
         {
-            string details;
-            lock (recentOutput)
-            {
-                details = recentOutput.Count == 0
-                    ? ""
-                    : Environment.NewLine + string.Join(Environment.NewLine, recentOutput);
-            }
             var message = string.Format(
                 CultureInfo.CurrentCulture,
                 RunCommandStrings.WatchAppHostExitedDuringStartup,
-                details);
+                _fileLoggerProvider.LogFilePath);
             _logger.LogError("{Message}", message);
             backchannelCompletionSource.TrySetException(new InvalidOperationException(message));
             await stopAttempt.CancelAsync().ConfigureAwait(false);

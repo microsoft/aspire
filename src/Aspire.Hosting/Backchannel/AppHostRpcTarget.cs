@@ -7,6 +7,7 @@ using Aspire.Hosting.Diagnostics;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Resources;
 using Aspire.Hosting.Utils;
+using Aspire.Shared;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -28,6 +29,7 @@ internal class AppHostRpcTarget(
     IConfiguration configuration)
 {
     private readonly CancellationTokenSource _shutdownCts = new();
+    private readonly Guid _watchGenerationId = Guid.NewGuid();
 
     public async IAsyncEnumerable<BackchannelLogEntry> GetAppHostLogEntriesAsync([EnumeratorCancellation] CancellationToken cancellationToken)
     {
@@ -168,6 +170,83 @@ internal class AppHostRpcTarget(
         return Task.CompletedTask;
     }
 
+    public async IAsyncEnumerable<ResourceWatchStatus> WatchResourceWatchStatusAsync([EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        if (_shutdownCts.IsCancellationRequested)
+        {
+            yield break;
+        }
+
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _shutdownCts.Token);
+        var events = resourceNotificationService.WatchAsync(linkedCts.Token);
+        var observedResources = new HashSet<IResource>(ReferenceEqualityComparer.Instance);
+        yield return CreateResourceWatchStatus(observedResources);
+
+        await foreach (var resourceEvent in AsyncEnumerableUtils.ReadUntilCancelledAsync(events, linkedCts.Token).ConfigureAwait(false))
+        {
+            observedResources.Add(resourceEvent.Resource);
+            if (resourceEvent.Snapshot.Properties.Any(property => property.Name == ResourceWatch.StateProperty))
+            {
+                // Send an authoritative full snapshot, never a delta that could survive a departed generation.
+                yield return CreateResourceWatchStatus(observedResources);
+            }
+        }
+    }
+
+#pragma warning disable ASPIREWATCH001 // Aggregate generic snapshot metadata, without a dependency on watcher mechanics.
+    private ResourceWatchStatus CreateResourceWatchStatus(IEnumerable<IResource> observedResources)
+    {
+        var resources = new List<ResourceWatchResourceStatus>();
+        // Notification replay discovers resources without enumerating a model that BeforeStart may still mutate
+        // (for example, when the dashboard is disabled). Current-instance reads discard retired replica snapshots.
+        foreach (var resource in observedResources)
+        {
+            // Watch observations are project/group-level. Replicas therefore contribute one logical resource,
+            // with the most restrictive observed coverage until all of its current snapshots agree.
+            var snapshots = resourceNotificationService.GetCurrentStates(resource).Select(item => item.Snapshot).ToArray();
+            if (snapshots.Length == 0 && resource.Annotations.OfType<ResourceSnapshotAnnotation>().LastOrDefault() is { } initial)
+            {
+                snapshots = [initial.InitialSnapshot];
+            }
+            var coverage = snapshots
+                .Select(snapshot => new
+                {
+                    State = snapshot.Properties.FirstOrDefault(property => property.Name == ResourceWatch.StateProperty)?.Value as string,
+                    Reason = snapshot.Properties.FirstOrDefault(property => property.Name == ResourceWatch.ReasonProperty)?.Value as string,
+                    LogResource = snapshot.Properties.FirstOrDefault(property => property.Name == ResourceWatch.LogResourceProperty)?.Value as string
+                })
+                .Where(item => item.State is not null)
+                .OrderBy(item => item.State switch
+                {
+                    ResourceWatch.Failed => 1,
+                    ResourceWatch.BuildFailed => 2,
+                    ResourceWatch.Excluded => 3,
+                    ResourceWatch.Pending => 4,
+                    ResourceWatch.Watching => 5,
+                    _ => 0
+                })
+                .FirstOrDefault();
+            if (coverage is not null)
+            {
+                resources.Add(new()
+                {
+                    Resource = resource.Name,
+                    State = coverage.State!,
+                    Reason = coverage.Reason,
+                    LogResource = coverage.LogResource
+                });
+            }
+        }
+
+        return new()
+        {
+            GenerationId = _watchGenerationId,
+            DefaultEnabled = executionContext.RunConfiguration.WatchEnabled,
+            Resources = [.. resources.OrderBy(resource => resource.Resource, StringComparer.Ordinal)]
+        };
+    }
+#pragma warning restore ASPIREWATCH001
+
     /// <summary>
     /// Cancels inflight streaming RPC calls to allow graceful shutdown.
     /// This should be called before stopping the application to prevent JSON-RPC errors on clients.
@@ -239,7 +318,8 @@ internal class AppHostRpcTarget(
         return Task.FromResult(new string[] {
             "baseline.v2",
             "pipeline-steps.v1",
-            "pipeline-steps.v2"
+            "pipeline-steps.v2",
+            ResourceWatch.Capability
             });
     }
 #pragma warning restore CA1822

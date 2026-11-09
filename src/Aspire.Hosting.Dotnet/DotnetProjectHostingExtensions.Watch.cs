@@ -9,7 +9,7 @@ namespace Aspire.Hosting;
 public static partial class DotnetProjectHostingExtensions
 {
     /// <summary>
-    /// Configures whether the .NET project is hot reloaded when the AppHost is started with <c>aspire run --watch</c>.
+    /// Overrides the AppHost's resource-watch default for this .NET project during a non-IDE run.
     /// </summary>
     /// <param name="builder">The .NET project resource builder.</param>
     /// <param name="enabled">
@@ -19,19 +19,20 @@ public static partial class DotnetProjectHostingExtensions
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> is null.</exception>
     /// <remarks>
     /// <para>
-    /// This setting only applies to <c>aspire run --watch</c>; other runs never watch the project. By default every
-    /// .NET project is watched, except projects that run to completion (another resource waits for them with
-    /// <c>WaitForCompletion</c>), which run without hot reload so that they can complete.
+    /// Compatible C# resources added with <c>AddDotnetProject</c> are watched by default in Run mode, independently
+    /// of the CLI's <c>--watch</c> option (which controls AppHost edits only). An explicit resource choice wins over
+    /// <see cref="DistributedApplicationOptions.DefaultResourceWatchEnabled"/> and <c>AppHost:Run:WatchEnabled</c>.
+    /// Legacy <c>AddProject</c> resources are not affected.
     /// </para>
     /// <para>
-    /// File-based C# apps are watched like projects. A project that is watched by default but can't be (a persistent
-    /// lifetime or a custom launch tool) fails the watch run with an error that names it; call <c>WithWatch(false)</c> on
-    /// it to run it without hot reload. Passing <see langword="true"/> makes the requirement explicit: a project that runs
-    /// to completion then fails the run as well instead of being excluded.
+    /// File-based C# apps are watched like projects. Implicitly incompatible projects retain ordinary build and launch:
+    /// this includes completion-sensitive resources, persistent lifetimes, custom launch tools, and unsupported
+    /// SDK/runtime/build contexts. Passing <see langword="true"/> instead requires watch and fails the run if that
+    /// requirement cannot be satisfied, including when the launcher specifies <c>--no-build</c>.
     /// </para>
     /// <para>
     /// The last call wins. When the AppHost runs under an IDE debug session, the IDE owns change tracking and this
-    /// setting has no effect.
+    /// setting has no effect. Publish, inspect, discovery, and native-server contexts do not activate resource watching.
     /// </para>
     /// </remarks>
     /// <example>
@@ -51,6 +52,12 @@ public static partial class DotnetProjectHostingExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
 
-        return builder.WithAnnotation(new DotnetProjectWatchAnnotation(enabled), ResourceAnnotationMutationBehavior.Replace);
+        builder.WithAnnotation(new DotnetProjectWatchAnnotation(enabled), ResourceAnnotationMutationBehavior.Replace);
+        if (enabled)
+        {
+            Dotnet.Watch.DotnetWatchCoordinator.Enable(builder);
+        }
+
+        return builder;
     }
 }

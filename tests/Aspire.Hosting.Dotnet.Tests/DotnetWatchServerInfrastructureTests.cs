@@ -6,6 +6,7 @@
 using System.Runtime.Versioning;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dotnet.Watch;
+using Aspire.Hosting.Dotnet.Tests.Helpers;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -105,12 +106,16 @@ public class DotnetWatchServerInfrastructureTests(ITestOutputHelper outputHelper
     }
 
     [Fact]
-    public void ServerIsHiddenSystemResourceWithoutStopOrRestart()
+    public async Task ServerIsHiddenSystemResourceWithoutStopOrRestart()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(
             ["AppHost:Run:WatchEnabled=true"]);
         var service = builder.AddDotnetProject("service", Path.GetDirectoryName(CreateProject(workspace.Path))!);
+        DotnetWatchPreflightTestServices.Configure(builder);
+        using var app = builder.Build();
+        await builder.Eventing.PublishAsync(new BeforeStartEvent(app.Services,
+            app.Services.GetRequiredService<DistributedApplicationModel>()), TestContext.Current.CancellationToken);
 
         var server = Assert.Single(builder.Resources.OfType<DotnetWatchServerResource>());
         Assert.Equal(HiddenBehavior.Always, Assert.Single(server.Annotations.OfType<HiddenAnnotation>()).Behavior);

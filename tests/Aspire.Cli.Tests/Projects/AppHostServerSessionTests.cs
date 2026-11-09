@@ -69,8 +69,10 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
         await session.StartAsync();
 
         Assert.NotNull(project.ReceivedEnvironmentVariables);
-        Assert.Equal("false", project.ReceivedEnvironmentVariables[DotnetWatchRunEnvironment.WatchEnabledVariable]);
-        Assert.All(DotnetWatchOwnership.PrivateEnvironmentVariables,
+        Assert.Equal(watch, project.ReceivedEnvironmentVariables.GetValueOrDefault(DotnetWatchRunEnvironment.WatchEnabledVariable));
+        Assert.Equal("discovery", project.ReceivedEnvironmentVariables[DotnetWatchOwnership.ResourceWatchSuppressionEnvironmentVariable]);
+        Assert.All(DotnetWatchOwnership.PrivateEnvironmentVariables.Where(name =>
+            name != DotnetWatchOwnership.ResourceWatchSuppressionEnvironmentVariable),
             name => Assert.Equal("", project.ReceivedEnvironmentVariables[name]));
         Assert.All(DotnetWatchOwnership.PrivateEnvironmentVariables, name => Assert.Equal("inherited", environment[name]));
     }
@@ -86,7 +88,8 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
         await session.StartAsync();
 
         Assert.NotNull(project.ReceivedEnvironmentVariables);
-        Assert.Equal("true", project.ReceivedEnvironmentVariables[DotnetWatchRunEnvironment.WatchEnabledVariable]);
+        Assert.False(project.ReceivedEnvironmentVariables.ContainsKey(DotnetWatchRunEnvironment.WatchEnabledVariable));
+        Assert.Equal("", project.ReceivedEnvironmentVariables[DotnetWatchOwnership.ResourceWatchSuppressionEnvironmentVariable]);
         Assert.Equal("cli", project.ReceivedEnvironmentVariables[DotnetWatchOwnership.OwnerEnvironmentVariable]);
         Assert.Equal("", project.ReceivedEnvironmentVariables[DotnetWatchOwnership.AppHostSessionEnvironmentVariable]);
     }

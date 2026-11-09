@@ -170,6 +170,8 @@ internal sealed class ProcessInvocationOptions
     /// </summary>
     public IProcessTreeGracefulShutdownSignaler? GracefulShutdownSignaler { get; set; }
 
+    public Func<(int ProcessId, DateTimeOffset StartedAt)?>? GracefulShutdownTarget { get; set; }
+
     /// <summary>
     /// The central graceful-shutdown window whose
     /// <see cref="ConsoleCancellationManager.GracefulShutdownToken"/> bounds the shutdown ladder. When
@@ -215,6 +217,7 @@ internal sealed class ProcessInvocationOptions
         EnvironmentVariables = EnvironmentVariables,
         AppHostArgumentStartIndex = AppHostArgumentStartIndex,
         GracefulShutdownSignaler = GracefulShutdownSignaler,
+        GracefulShutdownTarget = GracefulShutdownTarget,
         ShutdownService = ShutdownService,
         ExtensionAppHostLaunchCompletedAsync = ExtensionAppHostLaunchCompletedAsync,
     };

@@ -273,9 +273,13 @@ public class DotnetWatchAppHostTests
         generation.ApplyEnvironment(new Dictionary<string, string>());
         await SendAsync(generation, DotnetWatchAppHostProtocol.HostStarted, "123:456", session: Guid.NewGuid().ToString("N"));
         Assert.False(generation.HostStarted.IsCompleted);
+        Assert.Null(generation.GetGracefulShutdownTarget());
         await SendAsync(generation, DotnetWatchAppHostProtocol.HostStarted, "123:456");
+        await generation.HostStarted.DefaultTimeout();
+        Assert.Equal((123, DateTimeOffset.FromUnixTimeMilliseconds(456)), generation.GetGracefulShutdownTarget());
         await SendAsync(generation, DotnetWatchAppHostProtocol.ModelInvalidated, "124:456");
         Assert.False(generation.Invalidated.IsCompleted);
+        Assert.Equal((123, DateTimeOffset.FromUnixTimeMilliseconds(456)), generation.GetGracefulShutdownTarget());
         await SendAsync(generation, DotnetWatchAppHostProtocol.ModelInvalidated, "123:456");
 
         await generation.Invalidated.DefaultTimeout();
@@ -295,6 +299,8 @@ public class DotnetWatchAppHostTests
         await SendAsync(generation, DotnetWatchAppHostProtocol.HostStarted, "123:789");
 
         await generation.Invalidated.DefaultTimeout();
+        Assert.Equal("123:456", await generation.HostStarted);
+        Assert.Equal((123, DateTimeOffset.FromUnixTimeMilliseconds(789)), generation.GetGracefulShutdownTarget());
     }
 
     [Theory]

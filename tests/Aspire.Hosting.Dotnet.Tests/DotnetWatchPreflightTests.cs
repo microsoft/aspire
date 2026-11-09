@@ -13,6 +13,8 @@ using Aspire.Hosting.Testing;
 using Aspire.Hosting.Utils;
 using Aspire.Shared.DotnetWatch;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Hosting.Dotnet.Tests;
@@ -244,6 +246,7 @@ public class DotnetWatchPreflightTests(ITestOutputHelper output)
             }
         };
         using var builder = CreateBuilder(evaluator);
+        builder.Services.AddLogging(logging => logging.AddFakeLogging());
         AddProject(builder, workspace, "watched").WithWatch();
         AddProject(builder, workspace, "ordinary").WithWatch(false);
         using var app = builder.Build();
@@ -252,8 +255,9 @@ public class DotnetWatchPreflightTests(ITestOutputHelper output)
             () => BeforeStartAsync(app, CancellationToken.None));
 
         Assert.Contains("'watched'", error.Message);
-        Assert.Contains("'ordinary'", error.Message);
-        Assert.Contains(sharedPath, error.Message);
+        Assert.Contains(app.Services.GetFakeLogCollector().GetSnapshot(), entry =>
+            entry.Message.Contains("'ordinary'", StringComparison.Ordinal) &&
+            entry.Message.Contains(sharedPath, StringComparison.Ordinal));
     }
 
     [Fact]
@@ -510,8 +514,8 @@ public class DotnetWatchPreflightTests(ITestOutputHelper output)
         Assert.Contains(
             changedSdk ? "SDK version changed" : "evaluated output domains changed",
             error.Message);
-        Assert.Contains("Initial watch build inventory validation failed", consumerError.Message);
-        Assert.Equal(1, consumerError.Message.Split("Restart the complete watch run.", StringSplitOptions.None).Length - 1);
+        Assert.Equal("Watch group 'dotnet-watch' failed. See the 'dotnet-watch' resource logs for details. " +
+            "Fix the cause and restart the complete Aspire run.", consumerError.Message);
         Assert.False(Metadata(watched).SuppressBuild);
     }
 
@@ -745,6 +749,74 @@ public class DotnetWatchPreflightTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public async Task NormalHostStoppingRemovesRunDirectoryWithoutDisposingServices()
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        using var builder = CreateBuilder(new());
+        AddProject(builder, workspace, "watched");
+        await using var app = builder.Build();
+        await BeforeStartAsync(app, CancellationToken.None);
+        var server = Assert.Single(Model(app).Resources.OfType<DotnetWatchServerResource>());
+        var environment = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            server, serviceProvider: app.Services);
+        var runDirectory = Path.GetDirectoryName(environment[DotnetWatchHostProtocol.CleanupMarkerVariable])!;
+        var notifications = app.Services.GetRequiredService<ResourceNotificationService>();
+
+        foreach (var service in app.Services.GetServices<IHostedService>().OfType<IHostedLifecycleService>())
+        {
+            await service.StoppingAsync(TestContext.Current.CancellationToken);
+        }
+
+        Assert.False(Directory.Exists(runDirectory));
+        Assert.Same(notifications, app.Services.GetRequiredService<ResourceNotificationService>());
+    }
+
+    [Fact]
+    public async Task NormalHostStoppingUsesCleanupAcknowledgementWithoutAStoppedNotification()
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        using var builder = CreateBuilder(new()).WithTestAndResourceLogging(output);
+        AddProject(builder, workspace, "watched");
+        await using var app = builder.Build();
+        await BeforeStartAsync(app, TestContext.Current.CancellationToken);
+        var server = Assert.Single(Model(app).Resources.OfType<DotnetWatchServerResource>());
+        var environment = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            server, serviceProvider: app.Services);
+        var cleanupMarker = environment[DotnetWatchHostProtocol.CleanupMarkerVariable];
+        var runDirectory = Path.GetDirectoryName(cleanupMarker)!;
+        var notifications = app.Services.GetRequiredService<ResourceNotificationService>();
+        await builder.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(server, app.Services),
+            TestContext.Current.CancellationToken);
+        server.Annotations.Add(new DcpInstancesAnnotation([new DcpInstance("watcher-instance", "instance", 0)]));
+        await notifications.PublishUpdateAsync(server, "watcher-instance", snapshot => snapshot with
+        {
+            State = KnownResourceStates.Running
+        });
+        Assert.Equal(KnownResourceStates.Running, Assert.Single(notifications.GetCurrentStates(server)).Snapshot.State?.Text);
+        var stoppedInstances = new List<string>();
+        var stop = new ResourceCommandAnnotation(KnownResourceCommands.StopCommand, "Stop", _ => ResourceCommandState.Enabled,
+            async context =>
+            {
+                stoppedInstances.Add(context.ResourceName);
+                await File.WriteAllTextAsync(cleanupMarker, "contained-cleanup-complete", context.CancellationToken);
+                return CommandResults.Success();
+            }, null, arguments: null, null, null, null, false);
+        Assert.Single(server.Annotations.OfType<ResourceLifecycleCommandOverrideAnnotation>(),
+            annotation => annotation.CommandName == KnownResourceCommands.StopCommand).Factory(stop);
+
+        foreach (var service in app.Services.GetServices<IHostedService>().OfType<IHostedLifecycleService>())
+        {
+            await service.StoppingAsync(TestContext.Current.CancellationToken)
+                .WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+        }
+
+        Assert.Equal(["watcher-instance"], stoppedInstances);
+        Assert.False(Directory.Exists(runDirectory));
+        Assert.Same(notifications, app.Services.GetRequiredService<ResourceNotificationService>());
+    }
+
+    [Fact]
     public async Task OrdinaryInitialBuildValidatesItsActualCallbackSnapshotBeforeWriting()
     {
         using var workspace = TemporaryWorkspace.Create(output);
@@ -797,8 +869,8 @@ public class DotnetWatchPreflightTests(ITestOutputHelper output)
         await File.WriteAllTextAsync(Metadata(ordinary).ProjectPath, "<Project><!-- output context changed --></Project>");
 
         var failure = await Assert.ThrowsAsync<DistributedApplicationException>(() => waiting.WaitAsync(TimeSpan.FromSeconds(30)));
-        Assert.Contains("overlap", failure.Message);
-        Assert.Equal(1, failure.Message.Split("Restart the complete watch run.", StringSplitOptions.None).Length - 1);
+        Assert.Equal("Watch group 'dotnet-watch' failed. See the 'dotnet-watch' resource logs for details. " +
+            "Fix the cause and restart the complete Aspire run.", failure.Message);
         Assert.False(Metadata(watched).SuppressBuild);
         Assert.True(Metadata(ordinary).SuppressBuild);
     }

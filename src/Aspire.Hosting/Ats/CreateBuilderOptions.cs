@@ -49,4 +49,10 @@ internal sealed class CreateBuilderOptions
     /// Enables resource logging.
     /// </summary>
     public bool EnableResourceLogging { get; set; }
+
+    /// <summary>
+    /// Whether compatible resources are watched by default. An explicit value overrides AppHost configuration;
+    /// individual resources can override the default. AppHost edits and IDE ownership are configured separately.
+    /// </summary>
+    public bool? DefaultResourceWatchEnabled { get; init; }
 }

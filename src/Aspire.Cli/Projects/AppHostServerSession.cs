@@ -182,11 +182,11 @@ internal sealed class AppHostServerSession : IAppHostServerSession
             var serverEnvironmentVariables = _callerEnvironmentVariables is null
                 ? new Dictionary<string, string>()
                 : new Dictionary<string, string>(_callerEnvironmentVariables);
-            if (!serverEnvironmentVariables.TryGetValue(DotnetWatchRunEnvironment.WatchEnabledVariable, out var watch) ||
-                !bool.TryParse(watch, out var watchEnabled) || !watchEnabled)
+            if (!serverEnvironmentVariables.TryGetValue(Aspire.Shared.ResourceWatch.SuppressionVariable, out var suppression) ||
+                suppression is not "" and not Aspire.Shared.ResourceWatch.NoBuild and not Aspire.Shared.ResourceWatch.Native)
             {
-                // Sessions without an explicit final-server watch projection include discovery
-                // and code generation. Never let an inherited parent generation activate them.
+                // A final run explicitly supplies its launcher constraint, including an empty
+                // value. Bootstrap sessions must not inherit watch activation from their parent.
                 DotnetWatchRunEnvironment.Disable(serverEnvironmentVariables);
             }
             serverEnvironmentVariables[KnownConfigNames.RemoteAppHostToken] = _authenticationToken;

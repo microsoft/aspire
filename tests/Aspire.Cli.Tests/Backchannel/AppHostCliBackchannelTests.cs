@@ -15,6 +15,54 @@ namespace Aspire.Cli.Tests.Backchannel;
 
 public class AppHostCliBackchannelTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ResourceWatchStatusNegotiatesCapabilityBeforeCallingTheAdditiveRpc(bool supported)
+    {
+        var directory = Directory.CreateTempSubdirectory("aspire-bch-");
+        try
+        {
+            var socketPath = Path.Combine(directory.FullName, "apphost.sock");
+            using var server = new ClosingOnStopAppHostServer(socketPath)
+            {
+                Coverage = supported ? new ResourceWatchStatus
+                {
+                    GenerationId = Guid.NewGuid(),
+                    DefaultEnabled = false,
+                    Resources = [new() { Resource = "explicit", State = "watching", LogResource = "dotnet-watch-explicit" }]
+                } : null
+            };
+            var telemetry = TestTelemetryHelper.CreateInitializedTelemetry();
+            using var profiling = new ProfilingTelemetry(new ConfigurationBuilder().Build());
+            var backchannel = new AppHostCliBackchannel(
+                NullLogger<AppHostCliBackchannel>.Instance, new TestEnvironment(), telemetry, profiling);
+            var accept = server.AcceptAsync(TestContext.Current.CancellationToken);
+            await backchannel.ConnectAsync(socketPath, retryCount: 0, TestContext.Current.CancellationToken);
+            await accept;
+            await using var stream = backchannel.WatchResourceWatchStatusAsync(TestContext.Current.CancellationToken).GetAsyncEnumerator();
+
+            Assert.True(await stream.MoveNextAsync());
+            if (supported)
+            {
+                Assert.NotNull(stream.Current);
+                Assert.Equal(server.Coverage!.GenerationId, stream.Current.GenerationId);
+                Assert.False(stream.Current.DefaultEnabled);
+                Assert.Equal("watching", Assert.Single(stream.Current.Resources).State);
+                Assert.Equal(1, server.CoverageRequests);
+            }
+            else
+            {
+                Assert.Null(stream.Current);
+                Assert.Equal(0, server.CoverageRequests);
+            }
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
     [Fact]
     public async Task UploadFileAsync_ExceedsConfiguredLimit_ThrowsWithConfigHint()
     {
@@ -172,6 +220,8 @@ public class AppHostCliBackchannelTests
         }
 
         public TaskCompletionSource StopRequested { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public ResourceWatchStatus? Coverage { get; init; }
+        public int CoverageRequests { get; private set; }
 
         public async Task AcceptAsync(CancellationToken cancellationToken)
         {
@@ -192,7 +242,17 @@ public class AppHostCliBackchannelTests
         {
             private readonly string[] _capabilities = ["baseline.v2"];
 
-            public Task<string[]> GetCapabilitiesAsync() => Task.FromResult(_capabilities);
+            public Task<string[]> GetCapabilitiesAsync() => Task.FromResult(
+                server.Coverage is null ? _capabilities : [.. _capabilities, "resource-watch-status.v1"]);
+
+            public IAsyncEnumerable<ResourceWatchStatus> WatchResourceWatchStatusAsync()
+            {
+                server.CoverageRequests++;
+                return new[]
+                {
+                    server.Coverage ?? throw new InvalidOperationException("An unsupported RPC was called.")
+                }.ToAsyncEnumerable();
+            }
 
             public Task RequestStopAsync(CancellationToken cancellationToken)
             {

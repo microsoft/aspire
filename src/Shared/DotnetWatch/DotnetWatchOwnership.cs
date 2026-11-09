@@ -12,12 +12,14 @@ internal static class DotnetWatchOwnership
     internal const string CliOwner = "cli";
     internal const string AppHostControlEnvironmentVariable = "ASPIRE_DOTNET_WATCH_HOST_CONTROL";
     internal const string AppHostSessionEnvironmentVariable = "ASPIRE_DOTNET_WATCH_HOST_SESSION";
+    internal const string ResourceWatchSuppressionEnvironmentVariable = "ASPIRE_RESOURCE_WATCH_SUPPRESS";
 
     internal static IReadOnlyList<string> PrivateEnvironmentVariables { get; } = Array.AsReadOnly(
     [
         OwnerEnvironmentVariable,
         AppHostControlEnvironmentVariable,
-        AppHostSessionEnvironmentVariable
+        AppHostSessionEnvironmentVariable,
+        ResourceWatchSuppressionEnvironmentVariable
     ]);
 
     internal static bool IsCliOwned(string? owner) => string.Equals(owner, CliOwner, StringComparison.Ordinal);

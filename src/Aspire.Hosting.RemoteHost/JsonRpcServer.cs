@@ -25,6 +25,7 @@ internal sealed class JsonRpcServer : BackgroundService
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<JsonRpcServer> _logger;
     private readonly RemoteHostProfilingTelemetry _profilingTelemetry;
+    private readonly HashSet<Task> _clientTasks = [];
     private Socket? _listenSocket;
     private bool _disposed;
     private int _activeClientCount;
@@ -82,6 +83,15 @@ internal sealed class JsonRpcServer : BackgroundService
         }
     }
 
+    public override async Task StopAsync(CancellationToken cancellationToken)
+    {
+        await base.StopAsync(cancellationToken).ConfigureAwait(false);
+        if (ExecuteTask is { IsCompleted: false } && cancellationToken.IsCancellationRequested)
+        {
+            _logger.LogWarning("Server shutdown was canceled before accepted client cleanup completed.");
+        }
+    }
+
     private void ObserveExecuteTask()
     {
         // ExecuteAsync may never run (for example, when already canceled), so observe ExecuteTask
@@ -114,16 +124,17 @@ internal sealed class JsonRpcServer : BackgroundService
             ? RemoteHostProfilingTelemetry.Values.NamedPipe
             : RemoteHostProfilingTelemetry.Values.UnixDomainSocket;
         using var activity = _profilingTelemetry.StartJsonRpcListen(transport);
+        using var clientCancellation = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
 
         try
         {
             if (OperatingSystem.IsWindows())
             {
-                await StartNamedPipeServerAsync(activity, stoppingToken).ConfigureAwait(false);
+                await StartNamedPipeServerAsync(activity, clientCancellation.Token).ConfigureAwait(false);
             }
             else
             {
-                await StartUnixSocketServerAsync(activity, stoppingToken).ConfigureAwait(false);
+                await StartUnixSocketServerAsync(activity, clientCancellation.Token).ConfigureAwait(false);
             }
         }
         catch (Exception ex)
@@ -131,8 +142,59 @@ internal sealed class JsonRpcServer : BackgroundService
             activity.SetError(ex);
             throw;
         }
+        finally
+        {
+            // Close accepted connections even if the accept loop faults. Snapshot only after
+            // accepting has ended, so no client scope can be added behind the shutdown join.
+            await clientCancellation.CancelAsync().ConfigureAwait(false);
+            Task[] clientTasks;
+            lock (_clientTasks)
+            {
+                clientTasks = _clientTasks.ToArray();
+            }
+            await Task.WhenAll(clientTasks).ConfigureAwait(false);
+        }
 
+        _logger.LogInformation("Server stopped");
         _logger.LogInformation("Goodbye!");
+    }
+
+    private void StartClientStreamHandler(Stream clientStream, CancellationToken cancellationToken)
+    {
+        Task clientTask;
+        try
+        {
+            // Accept transfers ownership even when shutdown races the queued work. Do not
+            // pass the stopping token to Task.Run: canceling scheduling would leak the stream.
+            clientTask = Task.Run(() => HandleClientStreamAsync(clientStream, ownsStream: true, cancellationToken), CancellationToken.None);
+        }
+        catch
+        {
+            clientStream.Dispose();
+            throw;
+        }
+
+        lock (_clientTasks)
+        {
+            _clientTasks.Add(clientTask);
+        }
+        _ = clientTask.ContinueWith(
+            static (task, state) =>
+            {
+                var server = (JsonRpcServer)state!;
+                if (task.Exception is { } exception)
+                {
+                    server._logger.LogError(exception, "Accepted client cleanup failed.");
+                }
+                lock (server._clientTasks)
+                {
+                    server._clientTasks.Remove(task);
+                }
+            },
+            this,
+            CancellationToken.None,
+            TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
     }
 
     [SupportedOSPlatform("windows")]
@@ -152,12 +214,13 @@ internal sealed class JsonRpcServer : BackgroundService
 
         while (!cancellationToken.IsCancellationRequested)
         {
+            NamedPipeServerStream? pipeServer = null;
             try
             {
                 _logger.LogDebug("Waiting for client connection...");
 
                 // Create a new named pipe server for each connection with security restrictions
-                var pipeServer = NamedPipeServerStreamAcl.Create(
+                pipeServer = NamedPipeServerStreamAcl.Create(
                     _socketPath,
                     PipeDirection.InOut,
                     NamedPipeServerStream.MaxAllowedServerInstances,
@@ -176,7 +239,8 @@ internal sealed class JsonRpcServer : BackgroundService
                 listenActivity.AddJsonRpcClientConnected(activeClientCount);
 
                 // Handle the connection in a separate task - pipe stream is owned by handler
-                _ = Task.Run(() => HandleClientStreamAsync(pipeServer, ownsStream: true, cancellationToken), cancellationToken);
+                StartClientStreamHandler(pipeServer, cancellationToken);
+                pipeServer = null;
             }
             catch (OperationCanceledException)
             {
@@ -188,9 +252,12 @@ internal sealed class JsonRpcServer : BackgroundService
                 _logger.LogError(ex, "Error in server loop, retrying in 1 second...");
                 await Task.Delay(1000, cancellationToken).ConfigureAwait(false);
             }
+            finally
+            {
+                // A canceled accept has not transferred ownership to a client handler.
+                pipeServer?.Dispose();
+            }
         }
-
-        _logger.LogInformation("Server stopped");
     }
 
     private async Task StartUnixSocketServerAsync(RemoteHostProfilingTelemetry.ActivityScope listenActivity, CancellationToken cancellationToken)
@@ -225,8 +292,17 @@ internal sealed class JsonRpcServer : BackgroundService
                 listenActivity.AddJsonRpcClientConnected(activeClientCount);
 
                 // Handle the connection in a separate task - NetworkStream owns the socket
-                var stream = new NetworkStream(clientSocket, ownsSocket: true);
-                _ = Task.Run(() => HandleClientStreamAsync(stream, ownsStream: true, cancellationToken), cancellationToken);
+                NetworkStream stream;
+                try
+                {
+                    stream = new NetworkStream(clientSocket, ownsSocket: true);
+                }
+                catch
+                {
+                    clientSocket.Dispose();
+                    throw;
+                }
+                StartClientStreamHandler(stream, cancellationToken);
             }
             catch (OperationCanceledException)
             {
@@ -239,8 +315,6 @@ internal sealed class JsonRpcServer : BackgroundService
                 await Task.Delay(1000, cancellationToken).ConfigureAwait(false);
             }
         }
-
-        _logger.LogInformation("Server stopped");
     }
 
     private async Task HandleClientStreamAsync(Stream clientStream, bool ownsStream, CancellationToken cancellationToken)
@@ -301,7 +375,10 @@ internal sealed class JsonRpcServer : BackgroundService
             {
                 disconnectReason = "server shutdown";
                 try { jsonRpc.Dispose(); }
-                catch { /* ignore disposal errors during cancellation */ }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to close JsonRpc for client {ClientId} during server shutdown.", clientId);
+                }
             });
 
             try
@@ -348,9 +425,9 @@ internal sealed class JsonRpcServer : BackgroundService
                 {
                     clientStream.Dispose();
                 }
-                catch
+                catch (Exception ex)
                 {
-                    // Ignore errors during close
+                    _logger.LogWarning(ex, "Failed to close stream for client {ClientId}.", clientId);
                 }
             }
 

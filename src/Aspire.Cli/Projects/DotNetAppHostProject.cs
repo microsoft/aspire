@@ -24,7 +24,6 @@ using Aspire.Hosting;
 using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Utils;
 using Aspire.Shared;
-using Aspire.Shared.DotnetWatch;
 using Aspire.Shared.UserSecrets;
 using Microsoft.Extensions.Logging;
 using Semver;
@@ -1506,21 +1505,9 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         // the Hosting version so a temporary compatibility path cannot become an override.
         ConfigureCliBundleBuildEnvironment(env, cliBundleLease);
 
-        if (context.Watch)
-        {
-            DotnetWatchRunEnvironment.Apply(env);
-        }
-        else if (context.WatchExplicitlySet ||
-            DotnetWatchOwnership.IsCliOwned(GetEffectiveEnvironmentValue(env, DotnetWatchOwnership.OwnerEnvironmentVariable)))
-        {
-            DotnetWatchRunEnvironment.Disable(env);
-        }
-        else
-        {
-            // Standalone package-owned service watch configuration remains usable. It cannot
-            // inherit a different CLI's private AppHost generation or claim wrapper ownership.
-            DotnetWatchRunEnvironment.ClearPrivate(env);
-        }
+        // Resource policy belongs to Hosting. Only launcher constraints and private AppHost
+        // generation ownership are projected; --watch false must not override the user's default.
+        DotnetWatchRunEnvironment.PrepareRun(env, context.NoBuild, context.Watch);
         var (preparationExitCode, builtByCli, deferBuildCompletion) = await PrepareAppHostAsync(
             context,
             effectiveAppHostFile,

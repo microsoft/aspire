@@ -6,9 +6,12 @@
 import argparse
 import concurrent.futures
 import dataclasses
+import errno
+import fcntl
 import json
 import os
 import pathlib
+import pty
 import re
 import shutil
 import signal
@@ -17,6 +20,8 @@ import ssl
 import subprocess
 import sys
 import tempfile
+import termios
+import threading
 import time
 import urllib.error
 import urllib.parse
@@ -29,11 +34,14 @@ import zipfile
 SDK_VERSION = "10.0.403"
 WATCH_TOOL = "Microsoft.DotNet.HotReload.Watch.Aspire.dll"
 WATCH_HOST = "Aspire.Hosting.Dotnet.WatchHost.dll"
+RESOURCE_SUPPRESSION = "ASPIRE_RESOURCE_WATCH_SUPPRESS"
+CLEANUP_MARKER = "ASPIRE_DOTNET_WATCH_CLEANUP_MARKER"
 PRIVATE_ENVIRONMENT = (
     "ASPIRE_DOTNET_WATCH_OWNER",
     "ASPIRE_DOTNET_WATCH_HOST_CONTROL",
     "ASPIRE_DOTNET_WATCH_HOST_SESSION",
-    "ASPIRE_DOTNET_WATCH_CLEANUP_MARKER",
+    RESOURCE_SUPPRESSION,
+    CLEANUP_MARKER,
     "DEBUG_SESSION_PORT",
     "DEBUG_SESSION_TOKEN",
     "DEBUG_SESSION_INFO",
@@ -455,6 +463,11 @@ class Fixture:
         self.foreground = None
         self.owner_pid = None
         self.log_handles = []
+        self.terminal_master = None
+        self.terminal_reader = None
+        self.terminal_error = None
+        self.run_directories = set()
+        self.expected_preservations = {}
         self.context.fixtures.append(self)
         if language == "csharp":
             self.apphost = self.root / "Watch.AppHost" / "Watch.AppHost.csproj"
@@ -676,7 +689,36 @@ public class ReplacementModelBase { }
         require(identity is not None, f"Evidence PID {pid} exited before its identity could be captured.")
         require(identity.environment().get(RUN_TAG) == self.tag, f"Evidence PID {pid} is not fixture-owned.")
         self.tracked.add(identity)
+        self.track_run_directories(identity)
         return identity
+
+    def track_run_directories(self, identity):
+        # Owned watch-process arguments contain resource/control sockets such as:
+        #   --server /tmp/aspw-<generation>/res0.sock
+        # Remember only paths observed on this fixture's tagged process, never a global /tmp scan.
+        observed = set()
+        for argument in identity.arguments:
+            for match in re.finditer(r"(/[^\s]*?/aspw-[a-zA-Z0-9]+)(?:/|$)", argument):
+                observed.add(pathlib.Path(match.group(1)))
+        self.run_directories |= observed
+        return observed
+
+    def kill_watch_host(self, owner):
+        require(any(pathlib.Path(argument).name == WATCH_HOST for argument in owner.arguments)
+                and "server" in owner.arguments, "Only an observed WatchHost server may use hard-kill preservation.")
+        environment = owner.environment()
+        require(environment.get(RUN_TAG) == self.tag, "The killed WatchHost is not fixture-owned.")
+        marker = pathlib.Path(environment[CLEANUP_MARKER])
+        observed = self.track_run_directories(owner)
+        require(marker.is_absolute() and marker.parent in observed,
+                "The cleanup marker is not beneath the killed owner's observed private run directory.")
+        require(not marker.exists(), "The observed WatchHost had already acknowledged cleanup before the hard kill.")
+        # SIGKILL prevents the host from emitting its post-containment ACK. Bind this
+        # permitted preservation to its exact identity and paths, not every failed group.
+        for directory in observed:
+            self.expected_preservations[directory] = {"owner": owner.evidence(), "cleanupMarker": str(marker)}
+        self.tracked.add(owner)
+        owner.signal(signal.SIGKILL, self.tag)
 
     def track_application(self, value):
         require(value.get("pid", 0) > 0, f"No real application PID in HTTP response: {value}")
@@ -762,6 +804,8 @@ public class ReplacementModelBase { }
     def capture_generation(self):
         processes = self.owned_processes()
         self.tracked |= processes
+        for process in processes:
+            self.track_run_directories(process)
         # The CLI owns the generation loop and survives complete AppHost replacement.
         # Its identity is checked on cancellation/final Stop, not generation teardown.
         return {process for process in processes if process.pid != self.owner_pid}
@@ -791,8 +835,17 @@ public class ReplacementModelBase { }
         require(records, f"No actual host instance matched the live backchannel: {host}")
         return records[-1]
 
-    def start(self, watch=True, detached=True, application_args=(), success=True):
-        arguments = ["aspire", "run", "--apphost", str(self.apphost), "--non-interactive"]
+    def start(self, watch=None, detached=True, application_args=(), success=True, interactive=False, no_build=False, profile_path=None):
+        require(not interactive or not detached, "A real foreground terminal cannot use --detach.")
+        arguments = ["aspire", "run", "--apphost", str(self.apphost)]
+        if not interactive:
+            arguments.append("--non-interactive")
+        if no_build:
+            arguments.append("--no-build")
+        if profile_path is not None:
+            require(not detached, "Startup profiling requires the foreground owner.")
+            arguments += ["--capture-profile", "--capture-profile-output", str(profile_path),
+                          "--capture-profile-delay", "60"]
         if watch is not None:
             arguments += ["--watch", str(watch).lower()]
         if detached:
@@ -803,12 +856,39 @@ public class ReplacementModelBase { }
             arguments += ["--", *application_args]
         if detached:
             return self.command(arguments, success=success)
-        handle = (self.root / "watch-run.log").open("w", encoding="utf-8")
-        self.log_handles.append(handle)
-        self.foreground = subprocess.Popen(
-            arguments, cwd=self.root, env=self.environment, stdin=subprocess.DEVNULL,
-            stdout=handle, stderr=subprocess.STDOUT, start_new_session=True,
-        )
+        if interactive:
+            master, slave = pty.openpty()
+            fcntl.ioctl(slave, termios.TIOCSWINSZ, bytes([40, 0, 160, 0, 0, 0, 0, 0]))
+            try:
+                # Popen's new session alone does not acquire a controlling terminal. Use a fresh
+                # single-threaded child, not preexec_fn in this multithreaded verifier, to acquire
+                # the PTY before exec. Ctrl+C bytes then reach the actual foreground CLI group.
+                bootstrap = (
+                    "import fcntl,os,sys,termios;"
+                    "fcntl.ioctl(0,termios.TIOCSCTTY,0);"
+                    "os.execvpe(sys.argv[1],sys.argv[1:],os.environ)"
+                )
+                self.foreground = subprocess.Popen(
+                    [sys.executable, "-c", bootstrap, *arguments],
+                    cwd=self.root, env=self.environment, stdin=slave, stdout=slave, stderr=slave,
+                    start_new_session=True,
+                )
+            except BaseException:
+                os.close(master)
+                raise
+            finally:
+                os.close(slave)
+            self.terminal_master = master
+            self.terminal_error = None
+            self.terminal_reader = threading.Thread(target=self.read_terminal, daemon=True)
+            self.terminal_reader.start()
+        else:
+            handle = (self.root / "watch-run.log").open("w", encoding="utf-8")
+            self.log_handles.append(handle)
+            self.foreground = subprocess.Popen(
+                arguments, cwd=self.root, env=self.environment, stdin=subprocess.DEVNULL,
+                stdout=handle, stderr=subprocess.STDOUT, start_new_session=True,
+            )
         self.owner_pid = self.foreground.pid
         def foreground_ready():
             require(self.foreground.poll() is None,
@@ -822,7 +902,73 @@ public class ReplacementModelBase { }
         # child execs. Require the still-live Popen child and its fixture tag
         # before accepting its identity, rather than weakening ownership checks.
         wait_for(foreground_ready, "capturing the foreground CLI's owned process identity", timeout=10)
+        if interactive:
+            wait_for(lambda: os.tcgetpgrp(master) == self.foreground.pid,
+                     "checking the actual CLI owns its controlling terminal", timeout=10)
+            require(all(os.readlink(f"/proc/{self.foreground.pid}/fd/{descriptor}").startswith("/dev/pts/")
+                        for descriptor in (0, 1, 2)),
+                    "The foreground CLI's standard streams were not attached to a real PTY.")
         return self.foreground
+
+    def read_terminal(self):
+        try:
+            with (self.root / "watch-run.log").open("wb") as output:
+                while True:
+                    try:
+                        chunk = os.read(self.terminal_master, 16384)
+                    except OSError as error:
+                        if error.errno == errno.EIO:
+                            break  # Linux reports PTY EOF as EIO after every slave closes.
+                        raise
+                    if not chunk:
+                        break
+                    output.write(chunk)
+                    output.flush()
+        except OSError as error:
+            self.terminal_error = error
+
+    def terminal_text(self):
+        require(self.terminal_error is None, f"Terminal capture failed: {self.terminal_error}")
+        # Strip terminal CSI/OSC controls only for assertions; the original byte transcript is retained.
+        # Examples: ESC[31m (color), ESC[2K (line clear), ESC]8;;<url>ESC\\ (hyperlink).
+        raw = (self.root / "watch-run.log").read_text(encoding="utf-8", errors="replace")
+        return re.sub(r"\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07]*?(?:\x07|\x1b\\))", "", raw).replace("\r", "\n")
+
+    def finish_terminal(self):
+        if self.terminal_reader is not None:
+            self.terminal_reader.join(timeout=10)
+            require(not self.terminal_reader.is_alive(), "The owned PTY reader did not observe process EOF.")
+            require(self.terminal_error is None, f"Terminal capture failed: {self.terminal_error}")
+            os.close(self.terminal_master)
+            self.terminal_master = None
+            self.terminal_reader = None
+
+    def ctrl_c(self):
+        require(self.foreground is not None and self.terminal_master is not None, "No foreground PTY run exists.")
+        self.capture_generation()
+        os.write(self.terminal_master, b"\x03")
+        result = self.foreground.wait(timeout=45)
+        self.foreground = None
+        self.finish_terminal()
+        require(result == 0, f"Foreground Ctrl+C returned {result}.")
+        self.wait_cleanup(self.tracked)
+        self.assert_run_directories_clean()
+
+    def assert_run_directories_clean(self):
+        leaked = [
+            str(directory) for directory in self.run_directories
+            if directory.exists() and directory not in self.expected_preservations
+        ]
+        require(not leaked, f"Owned watch run directories survived teardown: {leaked}")
+        preserved = []
+        for directory, evidence in self.expected_preservations.items():
+            if directory.exists():
+                require(not self.owned_processes(), "Intentional directory preservation cannot hide an owned live process.")
+                marker = pathlib.Path(evidence["cleanupMarker"])
+                require(not marker.exists() or marker.read_text() != "contained-cleanup-complete",
+                        "An acknowledged run directory survived cleanup.")
+                preserved.append({"directory": str(directory), "cleanupAcknowledged": False, **evidence})
+        return preserved
 
     def stop(self):
         self.capture_generation()
@@ -831,7 +977,9 @@ public class ReplacementModelBase { }
         if self.foreground is not None:
             self.foreground.wait(timeout=45)
             self.foreground = None
+        self.finish_terminal()
         self.wait_cleanup(self.tracked)
+        self.assert_run_directories_clean()
 
     def wait_cleanup(self, processes, timeout=45):
         wait_for(lambda: all(not process.alive() for process in processes),
@@ -849,11 +997,17 @@ public class ReplacementModelBase { }
                 write(directory / f"{label}.log", f"Exit: {result.returncode}\n{result.stdout}\n{result.stderr}")
             except (OSError, subprocess.TimeoutExpired) as error:
                 write(directory / f"{label}.log", str(error))
-        for name in ("watch-run.log", "watch-owner.log"):
-            if (self.root / name).is_file():
-                shutil.copyfile(self.root / name, directory / name)
+        self.preserve_artifacts()
         write(directory / "owned-processes.json", json.dumps(
             [process.evidence() for process in self.owned_processes()], indent=2))
+
+    def preserve_artifacts(self):
+        # Successful workspaces are deleted after TerminalRun copies this diagnostics tree.
+        directory = self.context.evidence.path.parent / self.root.name
+        directory.mkdir(parents=True, exist_ok=True)
+        for name in ("watch-run.log", "watch-owner.log", "startup-profile.zip"):
+            if (self.root / name).is_file():
+                shutil.copyfile(self.root / name, directory / name)
 
     def cleanup_after_failure(self):
         try:
@@ -874,6 +1028,7 @@ public class ReplacementModelBase { }
             self.foreground = None
 
     def close(self):
+        self.finish_terminal()
         for handle in self.log_handles:
             handle.close()
 
@@ -948,7 +1103,7 @@ def verify_csharp(context):
     worker_registration = fixture.registration("worker", "Worker/Worker.csproj")
     parked_registration = fixture.registration("parked", "Parked/Parked.csproj", ".WithExplicitStart()")
     fixture.csharp_model(api_registration + worker_registration + parked_registration)
-    fixture.start(detached=False)
+    fixture.start(watch=True, detached=False, interactive=True)
     first = fixture.response()
     worker = fixture.response("worker")
     fixture.application_snapshot()
@@ -966,6 +1121,7 @@ def verify_csharp(context):
     require(fixture.resource("parked")["state"] in ("NotStarted", "Waiting"),
             "A reconstructed model ignored fresh ExplicitStart.")
     context.evidence.check("csharp-method-body-model-and-fresh-backchannel", apphost=previous_host, response=second)
+    assert_terminal_boundary(fixture)
 
     fixture.service("Late", shared=True)
     late_registration = fixture.registration("late", "Late/Late.csproj")
@@ -976,6 +1132,7 @@ def verify_csharp(context):
     late = fixture.response("late")
     require(late["shared"] == "shared-before", f"The added physical root was not built: {late}")
     context.evidence.check("csharp-added-root-and-old-generation-cleanup", response=third, added=late)
+    assert_terminal_boundary(fixture)
 
     old = fixture.capture_generation()
     replace_once(apphost_source, late_registration, "")
@@ -986,6 +1143,7 @@ def verify_csharp(context):
     require(all(resource.get("displayName", resource["name"]) not in ("worker", "late") for resource in active),
             f"Removed roots survived complete model reconstruction: {active}")
     context.evidence.check("csharp-removed-roots-and-process-cleanup", response=fourth)
+    assert_terminal_boundary(fixture)
 
     old = fixture.capture_generation()
     replace_once(apphost_source, "public class WatchModel\n", "public class WatchModel : ReplacementModelBase\n")
@@ -993,6 +1151,7 @@ def verify_csharp(context):
     fifth, previous_host = verify_generation(fixture, old, previous_host, "five")
     verify_new_application(fourth, fifth, "AppHost rude-edit replacement")
     context.evidence.check("csharp-rude-edit-real-host-instance", apphost=previous_host, response=fifth)
+    assert_terminal_boundary(fixture)
 
     old = fixture.capture_generation()
     replace_once(apphost_source, 'Value() => "five";', "Value() => ;")
@@ -1006,20 +1165,20 @@ def verify_csharp(context):
     verify_same_application(fifth, invalid_response, "An invalid AppHost source edit")
     require(fixture.host_instance()["instance"] == previous_host["instance"],
             "A source build failure invalidated the last successful AppHost model.")
+    assert_terminal_boundary(fixture)
     replace_once(apphost_source, "Value() => ;", 'Value() => "recovered";')
     recovered, previous_host = verify_generation(fixture, old, previous_host, "recovered")
     context.evidence.check("csharp-invalid-edit-recovery", response=recovered)
+    assert_terminal_boundary(fixture)
 
     fixture.capture_generation()
     owner = fixture.track(fixture.foreground.pid)
     replace_once(apphost_source, 'Value() => "recovered"', 'Value() => "canceled-edit"')
-    owner.signal(signal.SIGINT, fixture.tag)
-    fixture.foreground.wait(timeout=45)
-    fixture.foreground = None
-    fixture.wait_cleanup(fixture.tracked)
+    fixture.ctrl_c()
     replace_once(apphost_source, 'Value() => "canceled-edit"', 'Value() => "must-not-revive"')
     stays_true(lambda: not fixture.owned_processes(), "checking cancellation cannot rearm a departed generation")
-    context.evidence.check("csharp-cancellation-without-revival", owner=owner.evidence())
+    context.evidence.check("csharp-cancellation-without-revival", owner=owner.evidence(),
+                          **assert_terminal_boundary(fixture))
 
     verify_csharp_startup_failure(context)
 
@@ -1035,7 +1194,7 @@ def verify_csharp_startup_failure(context):
     # deliberately failing model exhaust a short budget inside the separate
     # whole-process watchdog, rather than race two equal 240-second deadlines.
     failure.environment["ASPIRE_CLI_START_TIMEOUT"] = "15"
-    run = failure.start(detached=False)
+    run = failure.start(watch=True, detached=False)
     result = run.wait(timeout=120)
     require(result != 0, f"A failing initial AppHost model returned success: {result}")
     failure.foreground = None
@@ -1044,7 +1203,7 @@ def verify_csharp_startup_failure(context):
     failure.wait_cleanup(failure.capture_generation())
     replace_once(source, "ShouldFail() => true", "ShouldFail() => false")
     failure.environment["ASPIRE_CLI_START_TIMEOUT"] = startup_timeout
-    failure.start()
+    failure.start(watch=True)
     healthy = failure.response()
     failure.application_snapshot()
     failure.stop()
@@ -1085,6 +1244,7 @@ public static class StartupHook
             control = Environment.GetEnvironmentVariable("ASPIRE_DOTNET_WATCH_HOST_CONTROL"),
             session = Environment.GetEnvironmentVariable("ASPIRE_DOTNET_WATCH_HOST_SESSION"),
             enabled = Environment.GetEnvironmentVariable("AppHost__Run__WatchEnabled"),
+            suppression = Environment.GetEnvironmentVariable("ASPIRE_RESOURCE_WATCH_SUPPRESS"),
             backchannel = Environment.GetEnvironmentVariable("ASPIRE_BACKCHANNEL_PATH")
         }));
         File.Move(record + ".pending", record);
@@ -1206,7 +1366,7 @@ def initialize_managed_typescript(context):
     probes = managed_probe_records(fixture)
     require(probes, "No actual managed bootstrap/discovery process was observed.")
     require(all(not record.get("owner") and not record.get("control") and not record.get("session")
-                and record.get("enabled") == "false" for record in probes),
+                and record.get("suppression") == "discovery" for record in probes),
             f"Bootstrap/discovery inherited private watch state: {probes}")
     context.evidence.check("typescript-bootstrap-and-discovery-isolation", observations=probes)
     return fixture
@@ -1232,7 +1392,7 @@ def start_managed_typescript(context):
     fixture.application_snapshot("worker")
     servers = fixture.servers()
     require(len(servers) == 1, f"Shared physical references should have one service build owner: {servers}")
-    managed = [record for record in managed_probe_records(fixture) if record.get("enabled") == "true"]
+    managed = [record for record in managed_probe_records(fixture) if record.get("suppression") == ""]
     require(managed and all(record.get("owner") == "cli" and not record.get("control") and not record.get("session")
                             for record in managed),
             f"Watch was not projected only into the final managed server: {managed}")
@@ -1277,30 +1437,25 @@ def verify_typescript(context):
     fixture.start(watch=False)
     ordinary = fixture.response()
     ordinary_worker = fixture.response("worker")
-    require(not fixture.servers(), "Explicit false created a managed service watcher after detached forwarding.")
-    require(fixture.resource()["properties"].get("dotnet-watch.enabled") is not True,
-            "Explicit false was defeated by the default feature.")
+    require(len(fixture.servers()) == 1, "--watch false disabled resource watching.")
+    fixture.application_snapshot()
     replace_once(fixture.root / "Api" / "Program.cs", '=> "after"', '=> "ordinary-edit"')
     source = fixture.apphost.read_text()
     write(fixture.apphost, source.replace("'WATCH_MODEL_VALUE', 'two'", "'WATCH_MODEL_VALUE', 'disabled-edit'"))
-    stays_true(
-        lambda: request_json(fixture.endpoint())["value"] == ordinary["value"]
-        and request_json(fixture.endpoint())["configured"] == ordinary["configured"],
-        "checking explicit false disables native guest and managed service watch",
-    )
-    fixture.command_state("api", "rebuild", "Enabled")
-    fixture.cli("resource", "api", "rebuild", "--non-interactive")
+    fixture.command_state("api", "rebuild", "Disabled")
     rebuilt = fixture.response("api", lambda value: value["value"] == "ordinary-edit")
-    verify_new_application(ordinary, rebuilt, "Ordinary TypeScript service Rebuild")
-    verify_same_application(ordinary_worker, fixture.response("worker"), "Independent ordinary worker")
-    context.evidence.check("typescript-explicit-false-detached-forwarding-and-ordinary-rebuild", response=rebuilt)
+    verify_same_application(ordinary, rebuilt, "Resource hot reload with AppHost watching explicitly disabled")
+    stays_true(lambda: request_json(fixture.endpoint())["configured"] == ordinary["configured"],
+               "checking --watch false disables AppHost edits only")
+    verify_same_application(ordinary_worker, fixture.response("worker"), "Independent watched worker")
+    context.evidence.check("typescript-apphost-false-preserves-default-resource-watch", response=rebuilt)
     fixture.stop()
 
     fixture.config["features"]["defaultWatchEnabled"] = False
     fixture.save_config()
     fixture.start(watch=None)
     fixture.response()
-    require(not fixture.servers(), "An ordinary default-false TypeScript run enabled watch.")
+    require(len(fixture.servers()) == 1, "The AppHost-watch feature default disabled independent resource watching.")
     fixture.stop()
     fixture.start(watch=True)
     fixture.response()
@@ -1676,7 +1831,7 @@ def verify_builds(context):
         cwd=fixture.root, env=fixture.environment, stdout=handle, stderr=subprocess.STDOUT,
     )
     fixture.track(pending.pid)
-    owner.signal(signal.SIGKILL, fixture.tag)
+    fixture.kill_watch_host(owner)
     pending.wait(timeout=45)
     fixture.wait_cleanup({owner, active_application})
     failed = wait_for(
@@ -1702,7 +1857,10 @@ def structured_log_has(fixture, name, text):
         payload = json.loads(result.stdout)
     except json.JSONDecodeError as error:
         raise ConnectionError(f"No structured log snapshot: {result.stdout}") from error
-    return text.casefold() in json.dumps(payload).casefold()
+    found = text.casefold() in json.dumps(payload).casefold()
+    if found:
+        write(fixture.context.evidence.path.parent / fixture.root.name / f"{name}-logs.json", result.stdout)
+    return found
 
 
 def verify_compatibility(context):
@@ -1930,8 +2088,8 @@ def verify_isolation(context):
             "An unrepresentable lower-precedence build environment was silently watched.")
     require((context_project.parent / "bin" / "requested-flavor" / "net10.0" / "Context.dll").is_file(),
             "Preflight fallback did not preserve the ordinary global-property build context.")
-    require(structured_log_has(collision, "context", "ordinarily"),
-            "Unsupported watch context lost its ordinary-coverage diagnostic.")
+    require(structured_log_has(collision, "context", "ordinary and watcher build graphs differ"),
+            "Unsupported watch context lost its build-context incompatibility diagnostic.")
     require(collision.resource()["properties"].get("dotnet-watch.enabled") is not True,
             "A nonliteral evaluated shared-output collision was incorrectly handed to the watcher.")
     require(structured_log_has(collision, "api", "share physical project")
@@ -2463,7 +2621,7 @@ await builder.addExecutable('api', {json.dumps(fixture.dotnet)}, {json.dumps(str
                     "The native coverage warning did not explain normal-run behavior and manual restart.")
         return servers[0]
 
-    fixture.start(detached=False)
+    fixture.start(watch=True, detached=False)
     first = fixture.response()
     first_server = native_server(expect_warning=True)
     replace_once(fixture.apphost, "'WATCH_MODEL_VALUE', 'one'", "'WATCH_MODEL_VALUE', 'two'")
@@ -2499,6 +2657,342 @@ await builder.addExecutable('api', {json.dumps(fixture.dotnet)}, {json.dumps(str
                           response=ordinary, nativeServer=ordinary_server.evidence())
 
 
+def policy_model(fixture, default, choices, value):
+    if fixture.language == "csharp":
+        fixture.csharp_model(
+            fixture.registration("api", "Api/Api.csproj", choices)
+            + fixture.registration("plain", "Plain/Plain.csproj"), value=value)
+        if default is not None:
+            replace_once(fixture.apphost.parent / "AppHost.cs", "DistributedApplication.CreateBuilder(args)",
+                         "DistributedApplication.CreateBuilder(new DistributedApplicationOptions "
+                         f"{{ Args = args, DefaultResourceWatchEnabled = {str(default).lower()} }})")
+    else:
+        typescript_model(
+            fixture,
+            typescript_registration(fixture, "api", "Api/Api.csproj", choices)
+            + typescript_registration(fixture, "plain", "Plain/Plain.csproj"), value=value)
+        if default is not None:
+            replace_once(fixture.apphost, "createBuilder()",
+                         f"createBuilder({{ defaultResourceWatchEnabled: {str(default).lower()} }})")
+
+
+def verify_policy(context):
+    for language in ("csharp", "typescript"):
+        fixture = Fixture(context, f"resource-policy-{language}", language=language)
+        if language == "typescript":
+            initialize_typescript(fixture)
+        fixture.service("Api")
+        fixture.service("Plain")
+        policy_model(fixture, None, "", "default")
+        fixture.start()
+        first = fixture.response()
+        fixture.response("plain")
+        fixture.application_snapshot()
+        host = fixture.host_info()
+        changed = hot_reload(fixture, fixture.root / "Api" / "Program.cs",
+                             '=> "before"', '=> "plain-default-edit"', ["api"], expected="plain-default-edit")
+        require(fixture.host_info()["appHostPid"] == host["appHostPid"],
+                "A service edit reconstructed an AppHost with AppHost watching disabled.")
+        fixture.stop()
+        context.evidence.check(f"{language}-plain-run-default-watch-without-apphost-reconstruction", response=changed)
+
+        fixture.environment[WATCH_ENABLED] = "true"
+        choices = ".WithWatch(false).WithWatch(true)" if language == "csharp" else ".withWatch({ enabled: false }).withWatch({ enabled: true })"
+        policy_model(fixture, False, choices, "code-off")
+        fixture.start(watch=False)
+        fixture.response("api", lambda value: value["configured"] == "code-off")
+        fixture.response("plain")
+        fixture.application_snapshot()
+        require(fixture.resource("plain")["properties"].get("resource.watch.state") == "excluded",
+                "Configuration true overrode the explicit code default false.")
+        fixture.command_state("plain", "rebuild", "Enabled")
+        fixture.stop()
+        context.evidence.check(f"{language}-code-first-disabled-default-and-required-resource")
+
+        fixture.environment[WATCH_ENABLED] = "false"
+        choices = ".WithWatch(true).WithWatch(false)" if language == "csharp" else ".withWatch({ enabled: true }).withWatch({ enabled: false })"
+        policy_model(fixture, True, choices, "code-on")
+        fixture.start(watch=False)
+        fixture.response("api", lambda value: value["configured"] == "code-on")
+        fixture.response("plain")
+        require(fixture.resource("api")["properties"].get("resource.watch.state") == "excluded",
+                "The last explicit resource opt-out was ignored.")
+        fixture.application_snapshot("plain")
+        fixture.stop()
+        context.evidence.check(f"{language}-code-first-enabled-default-and-last-resource-opt-out")
+
+        fixture.environment[WATCH_ENABLED] = "bogus"
+        choices = ".WithWatch(true)" if language == "csharp" else ".withWatch({ enabled: true })"
+        policy_model(fixture, None, choices, "invalid")
+        fixture.start(watch=False, detached=False)
+        fixture.response("api", lambda value: value["configured"] == "invalid")
+        fixture.response("plain")
+        fixture.application_snapshot()
+        require(fixture.resource("plain")["properties"].get("resource.watch.state") == "excluded",
+                "Invalid configuration did not disable the resolved default.")
+        warning = "AppHost:Run:WatchEnabled must be true or false."
+        wait_for(lambda: warning in " ".join((fixture.root / "watch-run.log").read_text().split()),
+                 "waiting for the authored invalid-default warning")
+        require(" ".join((fixture.root / "watch-run.log").read_text().split()).count(warning) == 1,
+                "Invalid configuration did not produce exactly one terminal warning.")
+        fixture.stop()
+        context.evidence.check(f"{language}-invalid-default-warns-once-and-preserves-resource-opt-in")
+
+        # The preceding C# build contains an explicit resource requirement. --no-build must not
+        # silently downgrade it; TypeScript executes the same requirement directly from its source.
+        failed = fixture.start(watch=None, detached=False, no_build=True, success=False)
+        require(failed.wait(timeout=120) != 0, "Required resource watch silently survived --no-build.")
+        fixture.foreground = None
+        require("--no-build" in (fixture.root / "watch-owner.log").read_text(),
+                "Required resource-watch conflict was not diagnosed.")
+        fixture.wait_cleanup(fixture.tracked | fixture.capture_generation())
+
+        fixture.environment.pop(WATCH_ENABLED)
+        fixture.config["features"]["defaultWatchEnabled"] = True
+        fixture.save_config()
+        policy_model(fixture, None, "", "no-build")
+        if language == "csharp":
+            fixture.dotnet_command("build", fixture.apphost, "--nologo", "-v:quiet")
+        fixture.start(watch=None, no_build=True)
+        fixture.response("api", lambda value: value["configured"] == "no-build")
+        fixture.response("plain")
+        require(not fixture.servers(), "--no-build did not suppress implicit resource watching.")
+        require(fixture.resource("api")["properties"].get("resource.watch.state") == "excluded",
+                "--no-build coverage did not describe ordinary execution.")
+        fixture.stop()
+        conflict = fixture.cli("run", "--no-build", "--watch", success=False)
+        require(conflict.returncode != 0 and "explicit AppHost watching" in conflict.stdout + conflict.stderr,
+                "Explicit AppHost watching did not conflict clearly with --no-build.")
+        context.evidence.check(f"{language}-no-build-suppression-and-explicit-conflicts")
+
+
+def assert_terminal_boundary(fixture, canaries=()):
+    transcript = fixture.terminal_text()
+    # Watcher console records start with "dotnet watch ..."; compiler records include
+    # "<path>(line,column): error CSxxxx" or "error MSBxxxx". Explicit canaries also
+    # catch exception/collector/notice paths that might otherwise strip those prefixes.
+    raw = [
+        line for line in transcript.splitlines()
+        if re.search(r"^\s*dotnet watch\b|(?:error|warning)\s+(?:CS|MSB)\d{4}\b", line, re.IGNORECASE)
+        or any(canary in line for canary in canaries)
+    ]
+    require(len(raw) == 0, f"Expected zero raw watcher-origin terminal lines, observed {len(raw)}: {raw}")
+    return {"rawWatcherLines": len(raw), "terminal": str(fixture.root / "watch-run.log")}
+
+
+def verify_terminal(context):
+    fixture = Fixture(context, "foreground-resource-terminal")
+    fixture.service()
+    fixture.csharp_model(fixture.registration("api", "Api/Api.csproj"))
+    source = fixture.root / "Api" / "Program.cs"
+    original = source.read_text()
+    canaries = ("INITIAL_RESOURCE_BOUNDARY_CANARY", "EDIT_RESOURCE_BOUNDARY_CANARY")
+    write(source, "#error INITIAL_RESOURCE_BOUNDARY_CANARY\n" + original)
+    fixture.start(watch=False, detached=False, interactive=True)
+    wait_for(lambda: fixture.resource("api", retry=True)["properties"].get("resource.watch.state") == "build-failed",
+             "waiting for structured initial build-failed coverage")
+    owner_snapshot, _ = fixture.server_for("Api/Api.csproj")
+    log_name = owner_snapshot.get("displayName", owner_snapshot["name"])
+    wait_for(lambda: structured_log_has(fixture, log_name, canaries[0]),
+             "waiting for the preserved initial compiler diagnostic")
+    wait_for(lambda: "Initial build failed" in fixture.terminal_text(),
+             "waiting for positive authored build-failure UX")
+    assert_terminal_boundary(fixture, canaries)
+
+    write(source, original)
+    first = fixture.response()
+    fixture.application_snapshot()
+    require("Resource watching (default on)" in " ".join(fixture.terminal_text().split()),
+            "The real terminal did not report independent resource-watch policy/coverage.")
+    hot_reload(fixture, source, '=> "before"', '=> "terminal-after"', ["api"], expected="terminal-after")
+    working = fixture.response()
+    write(source, "#error EDIT_RESOURCE_BOUNDARY_CANARY\n" + source.read_text())
+    wait_for(lambda: structured_log_has(fixture, log_name, canaries[1]),
+             "waiting for preserved session compiler diagnostics")
+    verify_same_application(working, fixture.response(), "A compile error cannot launch stale or replacement output")
+    assert_terminal_boundary(fixture, canaries)
+    replace_once(source, "#error EDIT_RESOURCE_BOUNDARY_CANARY\n", "")
+    recovered = hot_reload(fixture, source, '=> "terminal-after"', '=> "terminal-recovered"',
+                           ["api"], expected="terminal-recovered")["api"]
+    verify_same_application(first, recovered, "Source recovery after a session compile error")
+
+    replace_once(source, "public class ValueSource\n", "public class ValueSource : ReplacementBase\n")
+    restarted = fixture.response("api", lambda value: value["instance"] != recovered["instance"])
+    verify_new_application(recovered, restarted, "A real rude edit restarts the affected application")
+    _, owner = fixture.server_for("Api/Api.csproj")
+    fixture.capture_generation()
+    fixture.kill_watch_host(owner)
+    wait_for(lambda: fixture.resource("api", retry=True)["properties"].get("resource.watch.state") == "failed",
+             "waiting for typed infrastructure-failed coverage")
+    wait_for(lambda: "Fix the cause and restart the complete Aspire run" in " ".join(fixture.terminal_text().split()),
+             "waiting for authored watch-group failure/recovery guidance")
+    assert_terminal_boundary(fixture, canaries)
+    fixture.ctrl_c()
+    context.evidence.check("real-foreground-terminal-source-failures-recovery-rude-edit-owner-failure-and-ctrl-c",
+                          **assert_terminal_boundary(fixture, canaries),
+                          orphanProcesses=len(fixture.owned_processes()),
+                          leakedRunDirectories=sum(
+                              directory.exists() and directory not in fixture.expected_preservations
+                              for directory in fixture.run_directories),
+                          intentionallyPreservedRunDirectories=fixture.assert_run_directories_clean())
+
+    for kind in ("early-exit", "backchannel-timeout"):
+        failed = Fixture(context, f"foreground-apphost-{kind}")
+        failed.service()
+        failed.csharp_model(failed.registration("api", "Api/Api.csproj"))
+        host_source = failed.apphost.parent / "AppHost.cs"
+        if kind == "early-exit":
+            replace_once(host_source, "ShouldFail() => false", "ShouldFail() => true")
+        else:
+            replace_once(host_source, "var builder = DistributedApplication.CreateBuilder(args);",
+                         'Environment.SetEnvironmentVariable("ASPIRE_BACKCHANNEL_PATH", null);\n'
+                         "var builder = DistributedApplication.CreateBuilder(args);")
+        failed.environment["ASPIRE_CLI_START_TIMEOUT"] = "15"
+        run = failed.start(watch=True, detached=False, interactive=True, success=False)
+        require(run.wait(timeout=150) != 0, f"{kind} returned a success-shaped exit.")
+        failed.foreground = None
+        failed.finish_terminal()
+        failed.wait_cleanup(failed.tracked | failed.capture_generation())
+        require("logs" in failed.terminal_text().lower(), f"{kind} omitted exact diagnostic-log guidance.")
+        if kind == "early-exit":
+            require("WATCH_TEST_MODEL_FAILURE" in (failed.root / "watch-owner.log").read_text(),
+                    "Full early-exit exception diagnostics were not retained.")
+        context.evidence.check(f"real-foreground-apphost-{kind}-safe-error-and-cleanup",
+                              **assert_terminal_boundary(failed, ("WATCH_TEST_MODEL_FAILURE",)),
+                              orphanProcesses=len(failed.owned_processes()))
+
+def process_usage(identity):
+    if not identity.alive():
+        return None
+    try:
+        # /proc/<pid>/stat fields 14/15 are user/system CPU ticks; VmRSS is in KiB.
+        stat = (pathlib.Path("/proc") / str(identity.pid) / "stat").read_text().rsplit(")", 1)[1].split()
+        status = (pathlib.Path("/proc") / str(identity.pid) / "status").read_text()
+        rss = re.search(r"^VmRSS:\s+(\d+)\s+kB$", status, re.MULTILINE)
+        return {
+            "cpuSeconds": (int(stat[11]) + int(stat[12])) / os.sysconf("SC_CLK_TCK"),
+            "residentBytes": int(rss.group(1)) * 1024 if rss else 0,
+        }
+    except (FileNotFoundError, ProcessLookupError):
+        return None
+
+
+def verify_startup(context):
+    observations = []
+    for workload in ("shared-references", "independent-sdk-scopes", "all-excluded"):
+        selections = [(False, False), (True, False)]
+        if workload == "shared-references":
+            selections.append((True, True))
+        for enabled, apphost_watching in selections:
+            selection = "apphost-on" if apphost_watching else "on" if enabled else "off"
+            fixture = Fixture(context, f"startup-{workload}-{selection}")
+            # Give each mode a fresh package cache so the first sample is genuinely cold for that mode.
+            fixture.environment["NUGET_PACKAGES"] = str(fixture.root / "nuget-cache")
+            fixture.environment[WATCH_ENABLED] = str(enabled).lower()
+            if workload == "shared-references":
+                fixture.shared()
+                projects = [fixture.service("Api", shared=True), fixture.service("Worker", shared=True)]
+                registrations = fixture.registration("api", "Api/Api.csproj") + fixture.registration("worker", "Worker/Worker.csproj")
+                build_projects = [*projects, fixture.root / "Shared" / "Shared.csproj"]
+            elif workload == "independent-sdk-scopes":
+                projects = [fixture.service("Api"), fixture.service("Independent/Worker")]
+                fixture.pin_sdk(fixture.root / "Independent")
+                registrations = fixture.registration("api", "Api/Api.csproj") + fixture.registration("worker", "Independent/Worker/Worker.csproj")
+                build_projects = projects
+            else:
+                projects = [fixture.service("Api"), fixture.service("Worker")]
+                registrations = (
+                    fixture.registration("api", "Api/Api.csproj", ".WithWatch(false)")
+                    + fixture.registration("worker", "Worker/Worker.csproj", ".WithWatch(false)")
+                )
+                build_projects = projects
+            for project in build_projects:
+                add_build_counter(fixture, project)
+            fixture.csharp_model(registrations)
+            for iteration in range(3):
+                before_builds = {str(project.relative_to(fixture.root)): build_attempts(project) for project in build_projects}
+                started = time.monotonic()
+                fixture.start(watch=apphost_watching, detached=False)
+                fixture.response("api")
+                fixture.response("worker")
+                health_seconds = time.monotonic() - started
+                processes = fixture.owned_processes()
+                usage = [value for identity in processes if (value := process_usage(identity)) is not None]
+                groups = len(fixture.servers())
+                expected_groups = 0 if not enabled or workload == "all-excluded" else (
+                    2 if workload == "independent-sdk-scopes" else 1)
+                require(groups == expected_groups, f"Startup sample selected {groups} watcher groups, expected {expected_groups}.")
+                observation = {
+                    "workload": workload,
+                    "resourceDefaultEnabled": enabled,
+                    "appHostWatching": apphost_watching,
+                    "iteration": iteration,
+                    "cache": "cold packages and outputs" if iteration == 0 else "warm packages and outputs",
+                    "startupToApplicationHealthSeconds": health_seconds,
+                    "watcherGroups": groups,
+                    "ownedProcessCount": len(processes),
+                    "cpuSecondsAtHealth": sum(value["cpuSeconds"] for value in usage),
+                    "residentBytesAtHealth": sum(value["residentBytes"] for value in usage),
+                    "compileAttemptsByProject": {
+                        str(project.relative_to(fixture.root)): build_attempts(project)
+                        - before_builds[str(project.relative_to(fixture.root))]
+                        for project in build_projects
+                    },
+                }
+                fixture.stop()
+                observations.append(observation)
+                context.evidence.check("startup-application-health-and-resource-usage", **observation)
+
+            # Capture a separate trace, not a wall-clock benchmark with collector overhead mixed in.
+            archive = fixture.root / "startup-profile.zip"
+            profile_run = fixture.start(watch=apphost_watching, detached=False, profile_path=archive)
+            fixture.response("api")
+            fixture.response("worker")
+            fixture.capture_generation()
+            # Self-profile stops the wrapped run after its capture delay and then exports.
+            # An external `aspire stop` kills the owning CLI before that export can finish.
+            require(profile_run.wait(timeout=180) == 0,
+                    f"The profiling owner failed; see {fixture.root / 'watch-run.log'}.")
+            fixture.stop()
+            require(archive.is_file(), "The profiling command did not export its trace archive.")
+            with zipfile.ZipFile(archive) as exported:
+                profile = json.loads(exported.read("traces/profile.json"))
+            spans = [
+                span for resource in profile.get("resourceSpans", [])
+                for scope in resource.get("scopeSpans", [])
+                for span in scope.get("spans", [])
+            ]
+            evaluations = [span for span in spans if span.get("name") == "aspire/hosting/dotnet-watch/evaluate"]
+            inventories = [span for span in spans if span.get("name") == "aspire/hosting/dotnet-watch/observe-build-inputs"]
+            require(not enabled or workload == "all-excluded" or evaluations,
+                    "The profiled watched startup omitted graph-evaluation spans.")
+            # A successful initial restore rearms observation with newly evaluated NuGet imports.
+            # These spans count initialization work, not concurrently active observers.
+            require(bool(inventories) == bool(expected_groups),
+                    "The profile omitted watched input initialization or recorded it for an unwatched workload.")
+            for inventory in inventories:
+                # Dashboard exports normalize attributes to strings, including JSON arrays:
+                # {"stringValue":"[\"/path/project.csproj\",\"/path/import.targets\"]"}.
+                # Counts are also exported as {"stringValue":"12"}, not OTLP intValue.
+                attributes = {attribute["key"]: attribute["value"] for attribute in inventory["attributes"]}
+                files = json.loads(attributes["aspire.dotnet_watch.input_files"]["stringValue"])
+                require(isinstance(files, list) and all(isinstance(path, str) for path in files),
+                        "The profiled input inventory was not an encoded string array.")
+                require(int(attributes["aspire.dotnet_watch.input_count"]["stringValue"]) == len(files) > 0,
+                        "The profiled input inventory count did not match its actual finite file set.")
+                require(len(set(files)) == len(files) and all(pathlib.Path(path).is_absolute() for path in files),
+                        "The profiled input inventory contained duplicate or non-physical paths.")
+            context.evidence.check("startup-profile-and-exact-graph-evaluation-count",
+                                  workload=workload, resourceDefaultEnabled=enabled,
+                                  appHostWatching=apphost_watching,
+                                  graphEvaluations=len(evaluations),
+                                  inputObservationInitializations=len(inventories),
+                                  inputObservationSpans=inventories,
+                                  profile=str(pathlib.Path(fixture.root.name) / archive.name))
+    context.evidence.values["startupSamples"] = observations
+    context.evidence.save()
+
+
 SCENARIOS = {
     "csharp": verify_csharp,
     "typescript": verify_typescript,
@@ -2509,6 +3003,9 @@ SCENARIOS = {
     "https": verify_https,
     "payload": verify_payload,
     "native": verify_native,
+    "policy": verify_policy,
+    "terminal": verify_terminal,
+    "startup": verify_startup,
 }
 
 
@@ -2543,8 +3040,10 @@ def main():
         SCENARIOS[arguments.scenario](context)
         for fixture in context.fixtures:
             require(not fixture.owned_processes(), f"Task-owned processes survived final cleanup in {fixture.root}.")
-        context.evidence.values["passed"] = True
-        context.evidence.save()
+            preserved = fixture.assert_run_directories_clean()
+            if preserved:
+                context.evidence.check("unacknowledged-hard-kill-preserves-private-directory-with-zero-live-processes",
+                                      directories=preserved, orphanProcesses=0)
         succeeded = True
     finally:
         if context is not None:
@@ -2557,6 +3056,7 @@ def main():
                         context.evidence.values.setdefault("cleanupFailures", []).append(str(error))
                         print(f"Owned fixture cleanup failed: {error}", file=sys.stderr)
                 fixture.close()
+                fixture.preserve_artifacts()
             context.evidence.save()
         permissions = subprocess.run(
             ["chmod", "-R", "a+rwX", str(root)],
@@ -2566,6 +3066,8 @@ def main():
         )
         if permissions.returncode != 0:
             print(f"Could not make preserved diagnostics host-readable: {permissions.stderr}", file=sys.stderr)
+    context.evidence.values["passed"] = True
+    context.evidence.save()
     print(f"WATCH_E2E_OK:{arguments.scenario}", flush=True)
 
 

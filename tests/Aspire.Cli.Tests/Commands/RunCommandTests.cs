@@ -3649,7 +3649,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
 
         Assert.False(dotnetWatchUsed, "A file-based AppHost runs normally; only its C# services are watched.");
         Assert.NotNull(appHostEnvironment);
-        Assert.Equal("true", appHostEnvironment[DotnetWatchRunEnvironment.WatchEnabledVariable]);
+        Assert.False(appHostEnvironment.ContainsKey(DotnetWatchRunEnvironment.WatchEnabledVariable));
     }
 
     [Theory]
@@ -3832,7 +3832,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         Assert.False(dotnetWatchUsed, "Unavailable AppHost coverage must not start a competing legacy dotnet watcher.");
         Assert.True(appHostNoBuild, "The AppHost was already built by the CLI.");
         Assert.NotNull(appHostEnvironment);
-        Assert.Equal("true", appHostEnvironment[DotnetWatchRunEnvironment.WatchEnabledVariable]);
+        Assert.False(appHostEnvironment.ContainsKey(DotnetWatchRunEnvironment.WatchEnabledVariable));
     }
 
     [Fact]
@@ -4534,7 +4534,6 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData("run --no-build --watch", false, nameof(RunCommandStrings.NoBuildNotSupportedWithWatchOption))]
     [InlineData("run --watch --no-build", true, nameof(RunCommandStrings.NoBuildNotSupportedWithWatchOption))]
-    [InlineData("run --no-build", true, nameof(RunCommandStrings.NoBuildNotSupportedWithDefaultWatch))]
     [InlineData("run --no-build --detach --watch", false, nameof(RunCommandStrings.NoBuildNotSupportedWithWatchOption))]
     public async Task RunCommand_WithNoBuildAndWatch_ReturnsClearError(string commandLine, bool defaultWatchEnabled, string expectedMessageName)
     {
@@ -4574,6 +4573,16 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         var context = await RunWithTestAppHostProjectAsync("run --no-build --watch false", "csharp", defaultWatchEnabled: true);
 
         Assert.False(context.Watch);
+        Assert.True(context.NoBuild);
+    }
+
+    [Fact]
+    public async Task RunCommand_WithNoBuildSuppressesTheImplicitAppHostDefault()
+    {
+        var context = await RunWithTestAppHostProjectAsync("run --no-build", "csharp", defaultWatchEnabled: true);
+
+        Assert.False(context.Watch);
+        Assert.Null(context.WatchGeneration);
         Assert.True(context.NoBuild);
     }
 

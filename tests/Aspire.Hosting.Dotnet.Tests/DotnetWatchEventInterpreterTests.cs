@@ -6,7 +6,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Dotnet.Tests;
 
-// SPIKE: the notices printed by `aspire run --watch`, derived from the watcher's status events only.
+// Resource-watch notices are derived from structured status, never console diagnostics.
 public class DotnetWatchEventInterpreterTests
 {
     private static readonly string s_root = OperatingSystem.IsWindows() ? @"C:\src" : "/src";
@@ -62,7 +62,7 @@ public class DotnetWatchEventInterpreterTests
         var failed = Assert.Single(interpreter.OnStatus("build_complete", [s_api, s_worker], false, null));
         Assert.Equal(WatchNoticeKind.BuildFailed, failed.Kind);
         Assert.Equal(LogLevel.Error, failed.Level);
-        Assert.Equal("❌ Initial build failed: see the 'dotnet-watch' resource logs for the errors. Fix it and save; api, worker start once the build succeeds.", failed.Message);
+        Assert.Equal("❌ Initial build failed: open 'dotnet-watch' Console logs in the dashboard, or run 'aspire logs dotnet-watch --tail 50'. Fix it and save; api, worker start once the build succeeds.", failed.Message);
 
         interpreter.OnStatus("building", [s_api, s_worker], null, null);
         var ready = Assert.Single(interpreter.OnStatus("build_complete", [s_api, s_worker], true, null));
@@ -71,13 +71,14 @@ public class DotnetWatchEventInterpreterTests
     }
 
     [Fact]
-    public void BuildFailureShowsTheEventsErrorWhenPresent()
+    public void BuildFailureKeepsRawProtocolDiagnosticsOutOfTheNotice()
     {
         var interpreter = CreateReady();
         Assert.Equal(WatchNoticeKind.Rebuilding, Assert.Single(interpreter.OnStatus("building", [s_api], null, null)).Kind);
 
-        var failed = Assert.Single(interpreter.OnStatus("build_complete", [s_api], false, null, "Program.cs(8,43): error CS0117"));
-        Assert.Equal("❌ Build failed for api: Program.cs(8,43): error CS0117. Fix it and save.", failed.Message);
+        var failed = Assert.Single(interpreter.OnStatus("build_complete", [s_api], false, null,
+            "Program.cs(8,43): error CS0117\n[red]RAW WATCHER DIAGNOSTIC[/]\u001b[31m"));
+        Assert.Equal("❌ Build failed for api: open 'dotnet-watch' Console logs in the dashboard, or run 'aspire logs dotnet-watch --tail 50'. Fix it and save.", failed.Message);
 
         var fixedNotice = Assert.Single(interpreter.OnStatus("build_complete", [s_api], true, null));
         Assert.Equal(WatchNoticeKind.BuildSucceeded, fixedNotice.Kind);
@@ -112,7 +113,7 @@ public class DotnetWatchEventInterpreterTests
         var crashed = Assert.Single(interpreter.OnStatus("process_exited", [s_api], null, 3));
         Assert.Equal(WatchNoticeKind.Crashed, crashed.Kind);
         Assert.Equal(LogLevel.Error, crashed.Level);
-        Assert.Equal("💥 api exited with code 3. Save a change or use Restart to relaunch it.", crashed.Message);
+        Assert.Equal("💥 api exited with code 3. Save a source change or restart the complete Aspire run to relaunch it; Restart requires a running application.", crashed.Message);
 
         // The crashed project is relaunched rather than patched; the other one is still hot reloaded.
         var updated = Assert.Single(interpreter.OnStatus("hot_reload_applied", [s_api, s_worker], null, null));
@@ -133,12 +134,10 @@ public class DotnetWatchEventInterpreterTests
         Assert.Contains("for Other.", notice.Message);
     }
 
-    [Theory]
-    [InlineData(null)]
-    [InlineData("")]
-    [InlineData("  ")]
-    public void FailureDetailFallsBackToTheLogs(string? error)
+    [Fact]
+    public void FailureDetailPointsToTheExactOwningLog()
     {
-        Assert.Equal("see the 'dotnet-watch-api' resource logs for the errors", DotnetWatchEventInterpreter.FailureDetail(error, "dotnet-watch-api"));
+        Assert.Equal("open 'dotnet-watch-api' Console logs in the dashboard, or run 'aspire logs dotnet-watch-api --tail 50'",
+            DotnetWatchEventInterpreter.FailureDetail("dotnet-watch-api"));
     }
 }

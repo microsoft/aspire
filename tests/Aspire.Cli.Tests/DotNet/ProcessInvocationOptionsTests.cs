@@ -48,6 +48,7 @@ public sealed class ProcessInvocationOptionsTests
                 ["ASPIRE_TEST_VALUE"] = "configured",
             },
             GracefulShutdownSignaler = new RecordingGracefulSignaler(),
+            GracefulShutdownTarget = () => (1234, DateTimeOffset.UnixEpoch),
             ShutdownService = new TestGracefulShutdownWindow(),
             ExtensionAppHostLaunchCompletedAsync = () => Task.CompletedTask,
         };

@@ -22,6 +22,8 @@ internal enum WatchNoticeKind
     /// <summary>Retired: the status protocol has no "no changes" event.</summary>
     NoCodeChanges = 9,
     ProjectFileChanged = 10,
+    Excluded = 11,
+    InfrastructureFailed = 12,
 }
 
 /// <summary>A concise, user-facing watch notice, attributed to the affected watched projects.</summary>
@@ -55,8 +57,8 @@ internal static class DotnetWatchStatusTypes
 /// The 10.0.x protocol carries event types and project paths only, which limits what the notices can say:
 /// </para>
 /// <list type="bullet">
-/// <item><description><c>error</c> is never set, so a failed build points to the <c>dotnet-watch</c> logs instead of
-/// naming the first error (a future watcher that fills it in gets it shown).</description></item>
+/// <item><description>A failed build points to the owning watcher log. Even if a future watcher fills in
+/// <c>error</c>, raw diagnostics stay in that log, not in a terminal notice.</description></item>
 /// <item><description><c>hot_reload_applied</c> follows every hot reload attempt: applied, blocked by compile errors and
 /// "no changes" alike, for every running project. So the notice says the edit was processed, not that it applied, and
 /// a compile error during a session has no notice of its own.</description></item>
@@ -83,12 +85,14 @@ internal sealed class DotnetWatchEventInterpreter
         _watchResourceName = watchResourceName;
     }
 
-    /// <summary>The detail shown for a failed build: the event's <c>error</c>, or a pointer to the watcher's logs.</summary>
-    public static string FailureDetail(string? error, string watchResourceName) =>
-        string.IsNullOrWhiteSpace(error) ? $"see the '{watchResourceName}' resource logs for the errors" : error;
+    /// <summary>Authored log guidance for a failed build; never includes protocol diagnostic text.</summary>
+    public static string FailureDetail(string watchResourceName) =>
+        $"open '{watchResourceName}' Console logs in the dashboard, or run 'aspire logs {watchResourceName} --tail 50'";
 
     public IReadOnlyList<WatchNotice> OnStatus(string type, IReadOnlyList<string>? projects, bool? success, int? exitCode, string? error = null)
     {
+        // The caller logs raw protocol diagnostics to the owning resource. They never belong in a notice.
+        _ = error;
         var notices = new List<WatchNotice>();
         projects = (projects ?? [])
             .Select(DotnetWatchProjectGraph.Normalize)
@@ -123,7 +127,7 @@ internal sealed class DotnetWatchEventInterpreter
 
             case DotnetWatchStatusTypes.BuildComplete:
                 _inError = true;
-                var detail = FailureDetail(error, _watchResourceName);
+                var detail = FailureDetail(_watchResourceName);
                 notices.Add(_ready
                     ? Notice(WatchNoticeKind.BuildFailed, LogLevel.Error, $"❌ Build failed for {Names(projects)}: {detail}. Fix it and save.", projects)
                     : Notice(WatchNoticeKind.BuildFailed, LogLevel.Error, $"❌ Initial build failed: {detail}. Fix it and save; {Names(projects)} start once the build succeeds.", projects));
@@ -149,7 +153,7 @@ internal sealed class DotnetWatchEventInterpreter
             case DotnetWatchStatusTypes.ProcessExited:
                 _crashed.UnionWith(projects);
                 notices.Add(Notice(WatchNoticeKind.Crashed, LogLevel.Error,
-                    $"💥 {Names(projects)} exited with code {exitCode?.ToString(CultureInfo.InvariantCulture) ?? "?"}. Save a change or use Restart to relaunch it.", projects));
+                    $"💥 {Names(projects)} exited with code {exitCode?.ToString(CultureInfo.InvariantCulture) ?? "?"}. Save a source change or restart the complete Aspire run to relaunch it; Restart requires a running application.", projects));
                 break;
 
             case DotnetWatchStatusTypes.ProcessStarted:

@@ -2132,14 +2132,14 @@ public class GuestAppHostProjectTests : IDisposable
         // Aspire.Hosting runs in the AppHost server, so the server (not only the guest) must see the watch signal.
         var serverEnvironment = sessionFactory.CapturedEnvironmentVariables;
         Assert.NotNull(serverEnvironment);
+        Assert.False(serverEnvironment.ContainsKey(DotnetWatchRunEnvironment.WatchEnabledVariable));
+        Assert.Equal("", serverEnvironment[DotnetWatchOwnership.ResourceWatchSuppressionEnvironmentVariable]);
         if (watch)
         {
-            Assert.Equal("true", serverEnvironment[DotnetWatchRunEnvironment.WatchEnabledVariable]);
             Assert.Equal(DotnetWatchOwnership.CliOwner, serverEnvironment[DotnetWatchOwnership.OwnerEnvironmentVariable]);
         }
         else
         {
-            Assert.Equal("false", serverEnvironment[DotnetWatchRunEnvironment.WatchEnabledVariable]);
             Assert.Equal("", serverEnvironment[DotnetWatchOwnership.OwnerEnvironmentVariable]);
         }
         Assert.Equal("", serverEnvironment[DotnetWatchOwnership.AppHostControlEnvironmentVariable]);
@@ -2224,12 +2224,15 @@ public class GuestAppHostProjectTests : IDisposable
         Assert.NotNull(processes.LastArguments);
         Assert.Equal([watch ? "guest-watch" : "guest-run"], processes.LastArguments);
         Assert.NotNull(processes.LastEnvironmentVariables);
-        Assert.Equal("false", processes.LastEnvironmentVariables[DotnetWatchRunEnvironment.WatchEnabledVariable]);
-        Assert.All(DotnetWatchOwnership.PrivateEnvironmentVariables,
+        Assert.Equal("true", processes.LastEnvironmentVariables[DotnetWatchRunEnvironment.WatchEnabledVariable]);
+        Assert.Equal("discovery", processes.LastEnvironmentVariables[DotnetWatchOwnership.ResourceWatchSuppressionEnvironmentVariable]);
+        Assert.All(DotnetWatchOwnership.PrivateEnvironmentVariables.Where(name =>
+            name != DotnetWatchOwnership.ResourceWatchSuppressionEnvironmentVariable),
             name => Assert.Equal("", processes.LastEnvironmentVariables[name]));
         Assert.Equal("preserved", processes.LastEnvironmentVariables["ApplicationVariable"]);
         Assert.NotNull(sessions.CapturedEnvironmentVariables);
-        Assert.Equal(watch ? "true" : "false", sessions.CapturedEnvironmentVariables[DotnetWatchRunEnvironment.WatchEnabledVariable]);
+        Assert.False(sessions.CapturedEnvironmentVariables.ContainsKey(DotnetWatchRunEnvironment.WatchEnabledVariable));
+        Assert.Equal("", sessions.CapturedEnvironmentVariables[DotnetWatchOwnership.ResourceWatchSuppressionEnvironmentVariable]);
         Assert.Equal(watch ? "cli" : "", sessions.CapturedEnvironmentVariables[DotnetWatchOwnership.OwnerEnvironmentVariable]);
         Assert.Equal("old-session", context.EnvironmentVariables[DotnetWatchOwnership.AppHostSessionEnvironmentVariable]);
     }
@@ -2309,8 +2312,10 @@ public class GuestAppHostProjectTests : IDisposable
         Assert.NotNull(processes.LastArguments);
         Assert.Equal(["guest-run"], processes.LastArguments);
         Assert.NotNull(sessions.CapturedEnvironmentVariables);
-        Assert.Equal("false", sessions.CapturedEnvironmentVariables[DotnetWatchRunEnvironment.WatchEnabledVariable]);
-        Assert.All(DotnetWatchOwnership.PrivateEnvironmentVariables,
+        Assert.False(sessions.CapturedEnvironmentVariables.ContainsKey(DotnetWatchRunEnvironment.WatchEnabledVariable));
+        Assert.Equal("native", sessions.CapturedEnvironmentVariables[DotnetWatchOwnership.ResourceWatchSuppressionEnvironmentVariable]);
+        Assert.All(DotnetWatchOwnership.PrivateEnvironmentVariables.Where(name =>
+            name != DotnetWatchOwnership.ResourceWatchSuppressionEnvironmentVariable),
             name => Assert.Equal("", sessions.CapturedEnvironmentVariables[name]));
         Assert.Equal(watch ? 1 : 0,
             interaction.DisplayedMessages.Count(message => message.Message == RunCommandStrings.WatchNativeServerUnsupported));
@@ -2335,8 +2340,10 @@ public class GuestAppHostProjectTests : IDisposable
         Assert.All(sessions.CreatedSessionEnvironments, environment =>
         {
             Assert.NotNull(environment);
-            Assert.Equal("false", environment[DotnetWatchRunEnvironment.WatchEnabledVariable]);
-            Assert.All(DotnetWatchOwnership.PrivateEnvironmentVariables, name => Assert.Equal("", environment[name]));
+            Assert.False(environment.ContainsKey(DotnetWatchRunEnvironment.WatchEnabledVariable));
+            Assert.Equal("discovery", environment[DotnetWatchOwnership.ResourceWatchSuppressionEnvironmentVariable]);
+            Assert.All(DotnetWatchOwnership.PrivateEnvironmentVariables.Where(name =>
+                name != DotnetWatchOwnership.ResourceWatchSuppressionEnvironmentVariable), name => Assert.Equal("", environment[name]));
         });
     }
 
@@ -2486,8 +2493,10 @@ public class GuestAppHostProjectTests : IDisposable
             Assert.Equal(expectedOperation, environment![NativeAppHostServerProject.OperationEnvironmentVariable]);
             Assert.False(environment.ContainsKey(KnownConfigNames.IntegrationHostBootstrap));
             Assert.NotEmpty(environment[KnownConfigNames.UnixSocketPath]);
-            Assert.Equal("false", environment[DotnetWatchRunEnvironment.WatchEnabledVariable]);
-            Assert.All(DotnetWatchOwnership.PrivateEnvironmentVariables, name => Assert.Equal("", environment[name]));
+            Assert.False(environment.ContainsKey(DotnetWatchRunEnvironment.WatchEnabledVariable));
+            Assert.Equal("discovery", environment[DotnetWatchOwnership.ResourceWatchSuppressionEnvironmentVariable]);
+            Assert.All(DotnetWatchOwnership.PrivateEnvironmentVariables.Where(name =>
+                name != DotnetWatchOwnership.ResourceWatchSuppressionEnvironmentVariable), name => Assert.Equal("", environment[name]));
         });
         Assert.Equal("run", context.EnvironmentVariables[NativeAppHostServerProject.OperationEnvironmentVariable]);
     }

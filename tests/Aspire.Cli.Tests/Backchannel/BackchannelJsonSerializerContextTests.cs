@@ -3,8 +3,10 @@
 
 using System.Text.Json;
 using Aspire.Cli.Backchannel;
+using Aspire.Cli.Commands;
 using Aspire.TestUtilities;
 using Microsoft.AspNetCore.InternalTesting;
+using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Protocol;
 using Nerdbank.Streams;
 using StreamJsonRpc;
@@ -14,6 +16,60 @@ namespace Aspire.Cli.Tests.Backchannel;
 
 public class BackchannelJsonSerializerContextTests
 {
+    [Theory]
+    [InlineData(7105, "WatchNotice.BuildFailed", "Aspire.Hosting.Dotnet.Watch")]
+    [InlineData(7190, null, "Aspire.Hosting.ResourceWatch")]
+    public void LogEntryRoundTripPreservesIntentionalNoticeIdentity(int id, string? name, string category)
+    {
+        var options = BackchannelJsonSerializerContext.CreateJsonSerializerOptions();
+        var entry = new BackchannelLogEntry
+        {
+            EventId = new(id, name),
+            LogLevel = LogLevel.Warning,
+            CategoryName = category,
+            Message = "Authored watch notice.",
+            Timestamp = DateTimeOffset.UtcNow
+        };
+
+        var json = JsonSerializer.SerializeToElement(entry, options);
+        var roundTripped = json.Deserialize<BackchannelLogEntry>(options);
+
+        Assert.NotNull(roundTripped);
+        Assert.Equal(id, roundTripped.EventId.Id);
+        Assert.Equal(name, roundTripped.EventId.Name);
+        Assert.NotNull(RunCommand.FormatWatchNotice(entry));
+        Assert.Equal(RunCommand.FormatWatchNotice(entry), RunCommand.FormatWatchNotice(roundTripped));
+    }
+
+    [Theory]
+    [InlineData("""{"id":7105,"name":"WatchNotice.BuildFailed"}""", "WatchNotice.BuildFailed")]
+    [InlineData("""{"Id":7105,"Name":"WatchNotice.BuildFailed"}""", "WatchNotice.BuildFailed")]
+    [InlineData("""{"id":7105}""", null)]
+    [InlineData("""{"id":"7105","name":null}""", null)]
+    [InlineData("""{"id":7105,"name":null,"future":{"value":true}}""", null)]
+    public void EventIdReadsExistingWireShape(string json, string? name)
+    {
+        var options = BackchannelJsonSerializerContext.CreateJsonSerializerOptions();
+
+        var eventId = JsonSerializer.Deserialize<EventId>(json, options);
+
+        Assert.Equal(7105, eventId.Id);
+        Assert.Equal(name, eventId.Name);
+    }
+
+    [Theory]
+    [InlineData("""{}""")]
+    [InlineData("""{"name":"WatchNotice.BuildFailed"}""")]
+    [InlineData("""{"id":7105,"name":true}""")]
+    [InlineData("""[]""")]
+    [InlineData("""null""")]
+    public void EventIdRejectsMalformedNoticeIdentity(string json)
+    {
+        var options = BackchannelJsonSerializerContext.CreateJsonSerializerOptions();
+
+        Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<EventId>(json, options));
+    }
+
     [Theory]
     [InlineData(0L)]
     [InlineData(-1L)]

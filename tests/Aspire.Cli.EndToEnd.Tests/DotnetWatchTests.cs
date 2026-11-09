@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.EndToEnd.Tests.Helpers;
+using Aspire.TestUtilities;
 using Hex1b.Automation;
 using Xunit;
 
@@ -79,6 +80,31 @@ public sealed class DotnetWatchPayloadTests(ITestOutputHelper output)
         DotnetWatchTestRunner.RunAsync(output, "payload");
 }
 
+public sealed class DotnetWatchPolicyTests(ITestOutputHelper output)
+{
+    [Fact]
+    [CaptureWorkspaceOnFailure]
+    public Task CSharpAndTypeScriptResourceDefaultsOverridesAndNoBuildRemainIndependent() =>
+        DotnetWatchTestRunner.RunAsync(output, "policy");
+}
+
+public sealed class DotnetWatchTerminalTests(ITestOutputHelper output)
+{
+    [Fact]
+    [CaptureWorkspaceOnFailure]
+    public Task RealForegroundPtyRetainsDiagnosticsWithoutRawWatcherOutput() =>
+        DotnetWatchTestRunner.RunAsync(output, "terminal");
+}
+
+public sealed class DotnetWatchStartupTests(ITestOutputHelper output)
+{
+    [Fact]
+    [OuterloopTest("Repeated cold/warm startup measurements and profiling captures.")]
+    [CaptureWorkspaceOnFailure]
+    public Task ResourceWatchStartupCostIsMeasuredSeparatelyFromAppHostWatching() =>
+        DotnetWatchTestRunner.RunAsync(output, "startup");
+}
+
 internal static class DotnetWatchTestRunner
 {
     internal static async Task RunAsync(ITestOutputHelper output, string scenario)
@@ -120,7 +146,7 @@ internal static class DotnetWatchTestRunner
             await auto.RunCommandAsync(
                 $"python3 verify-watch.py {scenario}",
                 counter,
-                TimeSpan.FromMinutes(12));
+                TimeSpan.FromMinutes(scenario == "startup" ? 30 : 12));
         }
         catch (InvalidOperationException)
         {

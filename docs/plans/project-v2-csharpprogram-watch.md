@@ -1,7 +1,7 @@
 # Project V2 stage 1 - .NET language integration and `aspire run --watch`
 
 This document records the .NET language integration and selective watch contracts.
-The package-owned service watcher, combined CLI activation, and C# AppHost generations are
+The package-owned default service watcher, independent CLI AppHost-watch selection, and C# AppHost generations are
 implemented in source. Historical session evidence below is not a fresh execution of every
 manual check or deployment test. Current user-facing behavior is documented in the
 [integration README][dotnet-readme].
@@ -44,10 +44,15 @@ This plan delivers the initial vertical slice:
    file-based `.cs` apps. This foundation, publishing, and default-template adoption are implemented.
 2. **Coordinated initial builds**, independent of the watch signal, followed by launches from the
    selected build output. This is implemented, subject to the IDE capability negotiation in Session 2.
-3. **`aspire run --watch`**, with Aspire-controlled C# service watching and CLI-owned C#
-   AppHost generations. Non-C# service packages need not implement watch
+3. **Default compatible `AddDotnetProject` watching**, with AppHost-owned defaults and last-call-wins resource
+   overrides. `aspire run --watch` separately selects CLI-owned C# AppHost generations. Non-C# service packages need not implement watch
    in this slice; managed-server polyglot AppHost code keeps its language-native watching.
    Native protocol-v2 servers run normally and warn that AppHost changes require stopping and rerunning Aspire.
+
+Normal shutdown stops owned watch processes and awaits contained-cleanup acknowledgement before DCP
+teardown and private-directory removal. A forcibly killed WatchHost cannot emit that acknowledgement,
+so its private run directory may be intentionally preserved even when the guardian terminates its
+children. This does not permit surviving owned processes or replace cleanup proof with a root PID exit.
 
 Partial-run selection, complete persistent/container-execution support, watch-under-debugger, and an
 events/callbacks redesign remain broader-roadmap work, not delivery promises of this slice. Existing
@@ -63,7 +68,7 @@ remaining work are recorded once, under their coding sessions.
 |---|---|
 | D1 | **The .NET language integration is `Aspire.Hosting.Dotnet`**, a peer of the other language packages, not a new special project category in core. |
 | D2 | **Project V2 uses `DotnetProjectResource : ExecutableResource`.** Core retains `ProjectResource`, `AddProject<T>`, and the path-based legacy APIs. `CSharpAppResource : ProjectResource` remains; `AddCSharpApp` / `addCSharpApp` are obsolete in favor of the new package. Existing calls are not silently redirected to V2. |
-| D3 | **Activation is `aspire run --watch`**, a local-run sub-mode, not a new `aspire watch` command. The target includes C# service watching and C# AppHost watching through the tool's `host` command, with the latter gated as described in Session 8. |
+| D3 | **Compatible `AddDotnetProject` resources are watched by default in Run mode**, with AppHost-owned defaults and per-resource overrides. `aspire run --watch` controls AppHost edits only; it is a local-run option, not a new `aspire watch` command. C# AppHost generations use the tool's `host` command as described in Session 8. |
 | D4 | **Implement watch for compatible C# AppHosts and C# services here.** Retain a general language-package seam. For managed-server polyglot AppHosts, keep the guest runtime's language-native AppHost watching and separately watch its C# services. Native protocol-v2 servers retain their backend and run without watching, with an actionable warning when watching is requested; do not wrap a native AppHost server or guest program in the .NET `host` command. |
 | D5 | **Core exposes run configuration and generic experimental hooks, not watch mechanics.** Integrations consume `ExecutionContext.RunConfiguration.WatchEnabled` and opt into lifecycle-command replacement and pure snapshot projection. The .NET package owns service preflight, bundled payloads, and WatchHost; the CLI owns effective selection and complete C# AppHost generations. |
 | D6 | **Ship the pinned watcher inside `Aspire.Hosting.Dotnet` (like DCP), never download it at run time.** Payload `10.0.403` requires a compatible .NET 10 SDK and the declared runtimes. Metadata or the restored package identifies it. Diagnosed ordinary fallback is permitted only during preflight; explicit required watch cannot silently fall back. |
@@ -301,9 +306,11 @@ and `extension/src/test-e2e/coordinatedBuild.e2e.test.ts`.
 
 `RunConfiguration` is an immutable-init `[AspireDto]` with `bool WatchEnabled`.
 `DistributedApplicationExecutionContextOptions.RunConfiguration` initializes the never-null, read-only
-execution-context property. `DistributedApplicationBuilder` reads **`AppHost:Run:WatchEnabled`** on
-both run-mode construction paths. Non-boolean inputs yield false; publish contexts report defaults even
-if caller-supplied run options request watching.
+execution-context property. Run-mode defaults are enabled; publish/inspect and neutral contexts are disabled.
+`DistributedApplicationBuilder` resolves an explicit nullable `DefaultResourceWatchEnabled` creation option
+before **`AppHost:Run:WatchEnabled`** on both run-mode construction paths. The polyglot creation DTO projects
+the same option. Non-boolean configuration inputs warn once and yield false unless code overrides the key.
+The resolved default is frozen at builder creation; final per-resource `WithWatch` choices override it.
 
 Core run configuration is state only. The .NET integration consumes it to select service watching;
 the CLI separately owns C# AppHost wrapping and compatible language-native guest activation.
@@ -531,18 +538,18 @@ owns one launched instance, and failures/cancellation never look like successful
 
 ### Session 7 - `aspire run --watch` CLI wiring
 
-**Implemented.** Explicit `--watch[=true|false]` overrides `defaultWatchEnabled`; both select one combined mode.
+**Implemented.** Explicit `--watch[=true|false]` overrides `defaultWatchEnabled`; both select AppHost edits only.
 Compatible project-based C# AppHosts use the bundled `host` command and generation replacement, not a
 competing legacy `dotnet watch` loop. Managed-server guest AppHosts use language-native watching from that same effective choice.
-The managed watch signal goes only into the final **AppHost server's** environment, not discovery or
-the guest process. Native protocol-v2 selection is retained and runs normally without AppHost or managed
+Launcher constraints go into the final **AppHost server's** environment without overriding its resource-watch
+configuration. Discovery and guest processes fence private ownership independently. Native protocol-v2 selection is retained and runs normally without AppHost or managed
 C# service watching. An effective watch request emits one warning that AppHost edits require stopping
 and rerunning Aspire; explicit false suppresses the warning even when the feature default is enabled.
 Native backend capability fences guest watching even when a toolchain can synthesize a watch command.
 The CLI hosts neither the service proxy nor service watch server (Session 6a).
 
-- `--no-build` with effective watch fails with a clear error that names the cause: an explicit `--watch`,
-  or the `defaultWatchEnabled` feature (with `--watch false` as the way out).
+- `--no-build` suppresses implicit AppHost/resource watching. Explicit AppHost or `WithWatch(true)` resource
+  requirements fail clearly; ordinary service-build behavior is retained.
 - IDE-owned runs (`ASPIRE_EXTENSION_DEBUG_SESSION_ID` or `DEBUG_SESSION_PORT`) never start the CLI
   watcher; the IDE's own watch/debug protocol applies, `--no-build` stays allowed, and an explicit
   conflicting `--watch` is rejected with a clear ownership explanation.
@@ -550,17 +557,16 @@ The CLI hosts neither the service proxy nor service watch server (Session 6a).
   wrapper to the extension. Ordinary IDE terminal delegation is unchanged.
 - `aspire run --detach` forwards an explicit `--watch`/`--watch false` to the detached child.
 
-Add the option, with explicit `--watch` enabling watch and `DefaultWatchEnabled` supplying the default.
-Project `AppHost:Run:WatchEnabled` into the process that actually hosts `Aspire.Hosting`.
-For polyglot runs that means the **AppHost server's environment**, not only the guest application's
-environment. Hosting finds the watch tool and the watch host itself; nothing else is passed.
+AppHost creation options and `AppHost:Run:WatchEnabled` resolve resource policy in Hosting; the CLI does not
+write that public key. For polyglot runs, private launcher constraints target the **AppHost server's environment**,
+not only the guest application's environment. Hosting finds the watch tool and the watch host itself.
 Unsupported C# wrappers retain ordinary AppHost launch with separately reported coverage; compatible
 service groups are evaluated independently.
 
 Preserve IDE ownership: VS Code/Visual Studio launches use their existing watch/debug/session-restart
 protocol, not this package-backed CLI watcher. Reconcile flags, diagnostics, help/localization,
 backchannel reconnect/cancellation, and existing `--no-build` behavior rather than leaving two unrelated
-watch implementations active under the same effective setting.
+watch implementations competing for the same ownership.
 
 **Acceptance:** CLI tests plus terminal E2E prove explicit/default watch selection, absence of acquisition
 in non-watch runs, correct C#/guest signal delivery, existing option validation, and service hot reload.

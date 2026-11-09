@@ -60,7 +60,6 @@ internal static class DotnetWatchMetadataUpdateHandler
     {
         var session = getEnvironmentVariable(DotnetWatchOwnership.AppHostSessionEnvironmentVariable);
         if (!DotnetWatchOwnership.IsCliOwned(getEnvironmentVariable(DotnetWatchOwnership.OwnerEnvironmentVariable)) ||
-            !bool.TryParse(getEnvironmentVariable("AppHost__Run__WatchEnabled"), out var watchEnabled) || !watchEnabled ||
             !string.IsNullOrEmpty(getEnvironmentVariable(KnownConfigNames.ExtensionDebugSessionId)) ||
             getEnvironmentVariable(DotnetWatchOwnership.AppHostControlEnvironmentVariable) is not { Length: > 0 } endpoint ||
             !DotnetWatchAppHostProtocol.IsSession(session))

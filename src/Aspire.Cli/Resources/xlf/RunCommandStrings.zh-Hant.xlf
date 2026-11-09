@@ -148,8 +148,8 @@
         <note />
       </trans-unit>
       <trans-unit id="NoBuildNotSupportedWithDefaultWatch">
-        <source>--no-build can't be used while combined watch is on by default (the defaultWatchEnabled feature). Remove --no-build, or pass --watch false to run without CLI-controlled watch.</source>
-        <target state="new">--no-build can't be used while combined watch is on by default (the defaultWatchEnabled feature). Remove --no-build, or pass --watch false to run without CLI-controlled watch.</target>
+        <source>--no-build suppresses implicit AppHost and resource watching. Explicit watch requirements cannot be combined with --no-build.</source>
+        <target state="new">--no-build suppresses implicit AppHost and resource watching. Explicit watch requirements cannot be combined with --no-build.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoBuildNotSupportedWithWatchMode">
@@ -158,8 +158,8 @@
         <note />
       </trans-unit>
       <trans-unit id="NoBuildNotSupportedWithWatchOption">
-        <source>--no-build can't be used with --watch: watching builds compatible AppHosts and C# services whenever they change. Remove --no-build, or pass --watch false.</source>
-        <target state="new">--no-build can't be used with --watch: watching builds compatible AppHosts and C# services whenever they change. Remove --no-build, or pass --watch false.</target>
+        <source>--no-build cannot be used with explicit AppHost watching. Remove --no-build, or pass --watch false. Required resource watching (WithWatch(true)) also conflicts with --no-build.</source>
+        <target state="new">--no-build cannot be used with explicit AppHost watching. Remove --no-build, or pass --watch false. Required resource watching (WithWatch(true)) also conflicts with --no-build.</target>
         <note />
       </trans-unit>
       <trans-unit id="PressCtrlCToStopAppHost">
@@ -191,6 +191,26 @@
         <source>Resource</source>
         <target state="translated">資源</target>
         <note>A column header (noun)</note>
+      </trans-unit>
+      <trans-unit id="ResourceWatchDefaultOff">
+        <source>off</source>
+        <target state="new">off</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceWatchDefaultOn">
+        <source>on</source>
+        <target state="new">on</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceWatchSummary">
+        <source>Resource watching (default {0}): {1} watching, {2} pending, {3} build failed, {4} excluded, {5} infrastructure failed, {6} unknown.</source>
+        <target state="new">Resource watching (default {0}): {1} watching, {2} pending, {3} build failed, {4} excluded, {5} infrastructure failed, {6} unknown.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceWatchUnknownSummary">
+        <source>Resource-watch coverage is unavailable from this AppHost.</source>
+        <target state="new">Resource-watch coverage is unavailable from this AppHost.</target>
+        <note />
       </trans-unit>
       <trans-unit id="RunningInstanceStopped">
         <source>Running instance stopped successfully.</source>
@@ -248,8 +268,8 @@
         <note />
       </trans-unit>
       <trans-unit id="Watch">
-        <source>Watch</source>
-        <target state="new">Watch</target>
+        <source>AppHost edits</source>
+        <target state="new">AppHost edits</target>
         <note />
       </trans-unit>
       <trans-unit id="WatchAppHostChannelFailed">
@@ -263,8 +283,8 @@
         <note />
       </trans-unit>
       <trans-unit id="WatchAppHostExitedDuringStartup">
-        <source>The watched AppHost process exited during startup before its backchannel connected.{0}</source>
-        <target state="new">The watched AppHost process exited during startup before its backchannel connected.{0}</target>
+        <source>The watched AppHost process exited during startup before its backchannel connected. See CLI logs at {0}.</source>
+        <target state="new">The watched AppHost process exited during startup before its backchannel connected. See CLI logs at {0}.</target>
         <note />
       </trans-unit>
       <trans-unit id="WatchAppHostFallback">
@@ -308,7 +328,7 @@
         <note />
       </trans-unit>
       <trans-unit id="WatchArgumentDescription">
-        <source>Enable experimental combined AppHost and compatible C# service watching</source>
+        <source>Enable experimental AppHost edit watching; resource watching is configured independently</source>
         <target state="needs-review-translation">以監視模式啟動專案資源</target>
         <note />
       </trans-unit>
@@ -322,9 +342,14 @@
         <target state="new">The restored AppHost must reference an Aspire.Hosting.Dotnet package with the ResolveAspireDotnetWatch target, and that target must successfully resolve the bundled watcher and selected SDK.</target>
         <note>Aspire.Hosting.Dotnet and ResolveAspireDotnetWatch must not be localized.</note>
       </trans-unit>
+      <trans-unit id="WatchDisabledSummary">
+        <source>Not watched; resource watching is configured independently.</source>
+        <target state="new">Not watched; resource watching is configured independently.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="WatchEnabledSummary">
-        <source>Combined watching requested (preview). Supported AppHosts and C# services will be watched; coverage diagnostics describe unavailable paths.</source>
-        <target state="new">Combined watching requested (preview). Supported AppHosts and C# services will be watched; coverage diagnostics describe unavailable paths.</target>
+        <source>Watching (preview); model changes replace the AppHost generation.</source>
+        <target state="new">Watching (preview); model changes replace the AppHost generation.</target>
         <note />
       </trans-unit>
       <trans-unit id="WatchNativeServerUnsupported">
@@ -338,8 +363,8 @@
         <note />
       </trans-unit>
       <trans-unit id="WatchOptionDescription">
-        <source>(Preview) Watch compatible C# AppHosts and reconstruct their model after changes, enable language-native watching for compatible polyglot AppHosts, and hot reload compatible C# services added with AddDotnetProject. Defaults to the defaultWatchEnabled feature; use --watch false to turn all CLI-controlled watch paths off. Real IDE-owned runs retain IDE watch policy.</source>
-        <target state="new">(Preview) Watch compatible C# AppHosts and reconstruct their model after changes, enable language-native watching for compatible polyglot AppHosts, and hot reload compatible C# services added with AddDotnetProject. Defaults to the defaultWatchEnabled feature; use --watch false to turn all CLI-controlled watch paths off. Real IDE-owned runs retain IDE watch policy.</target>
+        <source>(Preview) Watch AppHost edits: reconstruct compatible C# AppHosts and enable language-native watching for compatible polyglot AppHosts. Defaults to the defaultWatchEnabled feature. --watch false disables AppHost watching only; the AppHost controls resource watching. Real IDE-owned runs retain IDE watch policy.</source>
+        <target state="new">(Preview) Watch AppHost edits: reconstruct compatible C# AppHosts and enable language-native watching for compatible polyglot AppHosts. Defaults to the defaultWatchEnabled feature. --watch false disables AppHost watching only; the AppHost controls resource watching. Real IDE-owned runs retain IDE watch policy.</target>
         <note />
       </trans-unit>
       <trans-unit id="WatchToolOverrideInvalid">

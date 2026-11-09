@@ -24,7 +24,6 @@ public class DotnetWatchMetadataUpdateHandlerTests
     [Theory]
     [InlineData(null, null, null, null, null)]
     [InlineData("true", null, "unused", "0123456789abcdef0123456789abcdef", null)]
-    [InlineData("false", "cli", "unused", "0123456789abcdef0123456789abcdef", null)]
     [InlineData("true", "ide", "unused", "0123456789abcdef0123456789abcdef", null)]
     [InlineData("true", "cli", "", "0123456789abcdef0123456789abcdef", null)]
     [InlineData("true", "cli", "unused", "", null)]
@@ -49,14 +48,17 @@ public class DotnetWatchMetadataUpdateHandlerTests
     }
 
     [Theory]
-    [InlineData(DotnetWatchAppHostProtocol.ModelInvalidated)]
-    [InlineData(DotnetWatchAppHostProtocol.HostStarted)]
-    public async Task CliOwnedHostReceivesAProtocolNotificationEvenWithUpstreamDebugSettings(int kind)
+    [InlineData(DotnetWatchAppHostProtocol.ModelInvalidated, "true")]
+    [InlineData(DotnetWatchAppHostProtocol.HostStarted, "true")]
+    [InlineData(DotnetWatchAppHostProtocol.ModelInvalidated, "false")]
+    [InlineData(DotnetWatchAppHostProtocol.HostStarted, "false")]
+    [InlineData(DotnetWatchAppHostProtocol.HostStarted, null)]
+    public async Task CliOwnedHostReceivesAProtocolNotificationIndependentOfResourceDefault(int kind, string? resourceWatch)
     {
         await using var server = new DotnetWatchAppHostTestChannel();
         var environment = new Dictionary<string, string?>
         {
-            ["AppHost__Run__WatchEnabled"] = "true",
+            ["AppHost__Run__WatchEnabled"] = resourceWatch,
             [DotnetWatchOwnership.OwnerEnvironmentVariable] = DotnetWatchOwnership.CliOwner,
             [DotnetWatchOwnership.AppHostControlEnvironmentVariable] = server.Endpoint,
             [DotnetWatchOwnership.AppHostSessionEnvironmentVariable] = server.Session,

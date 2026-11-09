@@ -15,14 +15,14 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Hosting.Dotnet.Tests;
 
-// SPIKE: coverage for `aspire run --watch` routing (docs/plans/project-v2-csharpprogram-watch.md).
+// Final-model routing and preserved ordinary execution paths.
 public class DotnetWatchCoordinatorTests(ITestOutputHelper outputHelper)
 {
     [Fact]
-    public void WithoutWatchNoServerIsAdded()
+    public void DisabledResourceDefaultDoesNotAllocateAWatchServer()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(["AppHost:Run:WatchEnabled=false"]);
         builder.AddDotnetProject("service", Path.GetDirectoryName(CreateProject(workspace.Path))!);
 
         Assert.DoesNotContain(builder.Resources, r => r.Name == DotnetWatchCoordinator.ServerResourceName);
@@ -40,6 +40,9 @@ public class DotnetWatchCoordinatorTests(ITestOutputHelper outputHelper)
         var otherPath = Path.Combine(workspace.Path, "Other", "Other.csproj");
         CreateProjectFile(otherPath);
         builder.AddDotnetProject("other", Path.GetDirectoryName(otherPath)!);
+        DotnetWatchPreflightTestServices.Configure(builder);
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, CancellationToken.None);
 
         // One shared server per AppHost.
         var server = Assert.Single(builder.Resources.OfType<DotnetWatchServerResource>());
@@ -301,7 +304,7 @@ public class DotnetWatchCoordinatorTests(ITestOutputHelper outputHelper)
         ["AppHost:Run:WatchEnabled=true", .. extra];
 
     [Fact]
-    public void BuildEnvironmentMovesTheProjectToADedicatedServer()
+    public async Task BuildEnvironmentMovesTheSelectedProjectToADedicatedServer()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(WatchArgs());
@@ -311,6 +314,10 @@ public class DotnetWatchCoordinatorTests(ITestOutputHelper outputHelper)
         var service = builder.AddDotnetProject("service", Path.GetDirectoryName(CreateProject(workspace.Path))!);
         var other = builder.AddDotnetProject("other", Path.GetDirectoryName(otherPath)!);
         service.WithBuildEnvironment("MARKER", "1");
+        service.WithBuildEnvironment("OTHER", "2");
+        DotnetWatchPreflightTestServices.Configure(builder);
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, CancellationToken.None);
 
         var servers = builder.Resources.OfType<DotnetWatchServerResource>().ToList();
         Assert.Equal(2, servers.Count);
@@ -322,12 +329,11 @@ public class DotnetWatchCoordinatorTests(ITestOutputHelper outputHelper)
         Assert.Contains(other.Resource.Annotations.OfType<WaitAnnotation>(), w => w.Resource == shared);
 
         // A second call doesn't add yet another server.
-        service.WithBuildEnvironment("OTHER", "2");
         Assert.Equal(2, builder.Resources.OfType<DotnetWatchServerResource>().Count());
     }
 
     [Fact]
-    public void FileBasedAppGetsADedicatedServer()
+    public async Task FileBasedAppGetsADedicatedServerAfterEligibility()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(WatchArgs());
@@ -336,6 +342,9 @@ public class DotnetWatchCoordinatorTests(ITestOutputHelper outputHelper)
 
         var service = builder.AddDotnetProject("service", Path.GetDirectoryName(CreateProject(workspace.Path))!);
         var ticker = builder.AddDotnetProject("ticker", scriptPath);
+        DotnetWatchPreflightTestServices.Configure(builder);
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, CancellationToken.None);
 
         var servers = builder.Resources.OfType<DotnetWatchServerResource>().ToList();
         var shared = Assert.Single(servers, s => s.Name == DotnetWatchCoordinator.ServerResourceName);
@@ -392,7 +401,7 @@ public class DotnetWatchCoordinatorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void ProjectsUnderDifferentGlobalJsonGetSeparateServers()
+    public async Task ProjectsUnderDifferentGlobalJsonGetSeparateServers()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(WatchArgs());
@@ -406,6 +415,9 @@ public class DotnetWatchCoordinatorTests(ITestOutputHelper outputHelper)
         var service = builder.AddDotnetProject("service", Path.GetDirectoryName(CreateProject(workspace.Path))!);
         var same = builder.AddDotnetProject("other", Path.GetDirectoryName(samePath)!);
         var legacy = builder.AddDotnetProject("legacy", Path.GetDirectoryName(pinnedPath)!);
+        DotnetWatchPreflightTestServices.Configure(builder);
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, CancellationToken.None);
 
         var servers = builder.Resources.OfType<DotnetWatchServerResource>().ToList();
         Assert.Equal(2, servers.Count);
@@ -435,6 +447,9 @@ public class DotnetWatchCoordinatorTests(ITestOutputHelper outputHelper)
 
         var service = builder.AddDotnetProject("service", Path.GetDirectoryName(CreateProject(workspace.Path))!)
             .WithWorkingDirectory(workingDirectory);
+        DotnetWatchPreflightTestServices.Configure(builder);
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, CancellationToken.None);
 
         var args = await ArgumentEvaluator.GetArgumentListAsync(service.Resource);
         var index = args.IndexOf("--working-directory");
@@ -450,6 +465,9 @@ public class DotnetWatchCoordinatorTests(ITestOutputHelper outputHelper)
         using var builder = TestDistributedApplicationBuilder.Create(WatchArgs());
 
         var service = builder.AddDotnetProject("service", Path.GetDirectoryName(CreateProject(workspace.Path))!);
+        DotnetWatchPreflightTestServices.Configure(builder);
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, CancellationToken.None);
 
         Assert.DoesNotContain("--working-directory", await ArgumentEvaluator.GetArgumentListAsync(service.Resource));
     }

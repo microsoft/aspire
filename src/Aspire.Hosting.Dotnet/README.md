@@ -91,11 +91,43 @@ retain ordinary build and launch in a watch run; the bundled service watcher sup
 
 ### Watch AppHost and service changes
 
-`aspire run --watch` selects combined watching: a compatible project-based C# AppHost is wrapped in
-the bundled watcher's `host` command, managed-server polyglot AppHosts use their language-native watch path, and
-compatible C# `AddDotnetProject` resources use package-owned service watchers. The
-`features.defaultWatchEnabled` setting selects the same mode. Explicit `--watch false` disables
-these CLI-controlled paths. Watching is experimental and run-only; it does not change publishing.
+Compatible C# resources added with `AddDotnetProject` are watched during an ordinary `aspire run`
+or direct AppHost run, without a CLI flag. Legacy `AddProject` resources are unchanged.
+Watching is experimental and run-only; it does not change publishing.
+
+Configure the resource-watch default when creating the AppHost. Explicit code wins over
+`AppHost:Run:WatchEnabled` / `AppHost__Run__WatchEnabled`; an omitted setting defaults to `true`.
+An invalid configuration value warns once and defaults to `false`. Changing the key after builder
+creation does not change the resolved default. The last per-resource `WithWatch(true/false)` wins,
+including an explicit opt-in when the AppHost default is disabled.
+
+**C#**
+
+```csharp
+var builder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+{
+    Args = args,
+    DefaultResourceWatchEnabled = false
+});
+builder.AddDotnetProject("api", "../Api/Api.csproj").WithWatch(true);
+builder.AddDotnetProject("worker", "../Worker/Worker.csproj");
+```
+
+**TypeScript**
+
+```typescript
+const builder = await createBuilder({ args: process.argv.slice(2), defaultResourceWatchEnabled: false });
+await builder.addDotnetProject("api", "../Api/Api.csproj").withWatch({ enabled: true });
+await builder.addDotnetProject("worker", "../Worker/Worker.csproj");
+```
+
+`--watch` and `features.defaultWatchEnabled` control **AppHost edits only**, not resource watching.
+With AppHost watching enabled, a compatible project-based C# AppHost uses the bundled watcher's
+`host` command; managed-server polyglot AppHosts use their language-native watch path.
+`--watch false` disables AppHost watching while leaving resource policy intact. The feature remains
+off by default. `--no-build` suppresses implicit AppHost and resource watching, but explicit
+`--watch true` or `WithWatch(true)` requirements conflict with it. Ordinary resource-build behavior
+is unchanged; `--no-build` is not an all-resource build switch.
 
 C# AppHost metadata changes and replacement processes trigger complete generation replacement:
 the old AppHost, its watcher groups, and their children are stopped before a fresh model and
@@ -117,8 +149,9 @@ Before handing builds to the watcher, Aspire evaluates active project references
 and output/intermediate directories, including ordinary resources. Compatible roots that share
 outputs use one watcher. An unsupported or unprovable component retains ordinary build ownership
 with a diagnostic before handoff; explicit `.WithWatch()` / `.withWatch()` instead requires watch
-coverage. `.WithWatch(false)` / `.withWatch(false)` opts out. Completion-sensitive resources run
-ordinarily. Persistent lifetimes and custom launch tools require an explicit opt-out.
+coverage. `.WithWatch(false)` / `.withWatch({ enabled: false })` opts out. Completion-sensitive resources run
+ordinarily, as do implicit persistent lifetimes and custom launch tools. Explicit requirements
+fail rather than replacing an incompatible launch or silently disabling required watching.
 
 The watcher alone performs watched services' initial builds. Their build-output readiness barrier,
 including EF operations, completes after a successful build, not after a proxy starts. An initial
@@ -128,13 +161,19 @@ fenced across observation-inventory replacement. After handoff, infrastructure f
 affected group without silently reverting to ordinary execution; restart the complete watch run
 after fixing the reported problem.
 
+Normal AppHost shutdown waits for contained process cleanup before removing private watch run
+directories. If WatchHost is forcibly killed without a chance to acknowledge cleanup, Aspire may
+preserve its private directory for safety even after the guardian stops its children. Restarting
+the complete run uses fresh owners and directories; a root process exit alone is not cleanup proof.
+
 | Resource operation | Effectively watched service |
 |---|---|
 | Source edit | The watcher owns automatic builds, hot reload, and required restarts. |
+| Initial Start / `WithExplicitStart` | Supported; explicitly parked resources wait for Start. |
 | Rebuild | Disabled and rejected by the command callback; ordinary resources retain Rebuild. |
 | Stop | Stops the selected proxy connection and records manual-stop intent. |
 | Start after manual Stop | Disabled until the complete watch run is restarted. |
-| Restart | Restart-only control for one unambiguous, last-observed running application; no build. |
+| Restart | Restart-only control for one unambiguous, last-observed running application; no build or crash recovery. |
 | Replica/duplicate-entry Restart | Disabled because upstream control is project-wide, not instance-specific. |
 
 Replicas and duplicate entry points remain watched. Their application events are explicitly
@@ -143,6 +182,11 @@ The proxy PID, exit code, and connection acknowledgement are not application ide
 completion, or readiness. Even a single watched application has last-observed state rather than a
 complete exit feed. A processed-change notice does not prove that compilation or hot reload succeeded;
 compiler diagnostics remain in the hidden `dotnet-watch` resource logs.
+The CLI forwards only intentional, exact-category/EventId notices. Full watcher stdout/stderr and
+exception details stay in the owning resource or CLI log, including startup and early-exit failures.
+Typed, generation-scoped backchannel coverage reports pending, watching, build-failed, excluded,
+and infrastructure-failed logical resources separately from the resolved default and AppHost watching.
+Older or native AppHosts without that capability report unavailable coverage, not a guessed result.
 
 Observed project/import changes cause guarded re-evaluation and, when needed, a fresh service watcher.
 Internal refresh preserves manually stopped and explicit-start instances. SDK/output/context changes

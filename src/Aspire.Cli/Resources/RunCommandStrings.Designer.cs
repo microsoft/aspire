@@ -511,7 +511,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Enable experimental combined AppHost and compatible C# service watching.
+        ///   Looks up a localized string similar to Enable experimental AppHost edit watching; resource watching is configured independently.
         /// </summary>
         internal static string WatchArgumentDescription {
             get {
@@ -627,6 +627,36 @@ namespace Aspire.Cli.Resources {
         internal static string WatchNativeServerUnsupported {
             get {
                 return ResourceManager.GetString("WatchNativeServerUnsupported", resourceCulture);
+            }
+        }
+
+        internal static string WatchDisabledSummary {
+            get {
+                return ResourceManager.GetString("WatchDisabledSummary", resourceCulture);
+            }
+        }
+
+        internal static string ResourceWatchSummary {
+            get {
+                return ResourceManager.GetString("ResourceWatchSummary", resourceCulture);
+            }
+        }
+
+        internal static string ResourceWatchUnknownSummary {
+            get {
+                return ResourceManager.GetString("ResourceWatchUnknownSummary", resourceCulture);
+            }
+        }
+
+        internal static string ResourceWatchDefaultOn {
+            get {
+                return ResourceManager.GetString("ResourceWatchDefaultOn", resourceCulture);
+            }
+        }
+
+        internal static string ResourceWatchDefaultOff {
+            get {
+                return ResourceManager.GetString("ResourceWatchDefaultOff", resourceCulture);
             }
         }
     }

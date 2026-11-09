@@ -75,7 +75,8 @@ public class DotnetWatchOwnershipTests
             [
                 DotnetWatchOwnership.OwnerEnvironmentVariable,
                 DotnetWatchOwnership.AppHostControlEnvironmentVariable,
-                DotnetWatchOwnership.AppHostSessionEnvironmentVariable
+                DotnetWatchOwnership.AppHostSessionEnvironmentVariable,
+                DotnetWatchOwnership.ResourceWatchSuppressionEnvironmentVariable
             ],
             DotnetWatchOwnership.PrivateEnvironmentVariables);
         Assert.All(DotnetWatchOwnership.PrivateEnvironmentVariables, name =>
