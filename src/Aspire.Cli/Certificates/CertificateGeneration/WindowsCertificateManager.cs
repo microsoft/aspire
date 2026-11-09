@@ -91,12 +91,14 @@ internal sealed class WindowsCertificateManager : CertificateManager
             using var publicCertificate = X509CertificateLoader.LoadCertificate(certificate.Export(X509ContentType.Cert));
             publicCertificate.FriendlyName = certificate.FriendlyName;
 
-            // Browsers and HTTP clients only accept the localhost HTTPS endpoints served during local development
-            // if the development certificate is trusted, the same as `dotnet dev-certs https --trust` (this code is
-            // derived from that tool). The trust is deliberately narrow: only the public part of the ASP.NET Core
-            // HTTPS development certificate is added (never a private key), only to the CurrentUser store (never
-            // LocalMachine), and Windows shows its own security dialog so the user must consent to the new root.
-            // CodeQL [SM02730] Trusts only the public localhost HTTPS development certificate in the CurrentUser store (never LocalMachine) after an OS consent prompt; required for the localhost HTTPS developer workflow, same as dotnet dev-certs https --trust.
+            // Trusting the development certificate is a by-design feature: browsers and HTTP clients only accept the
+            // localhost HTTPS endpoints served during local development if it is trusted, the same as
+            // `dotnet dev-certs https --trust` (this code is derived from that tool). The trust is deliberately narrow:
+            // only the public part of the ASP.NET Core HTTPS development certificate is added (never a private key),
+            // only to the CurrentUser store (never LocalMachine), and Windows shows its own security dialog so the
+            // user must consent to the new root. The certificate is not a CA (basicConstraints CA:false), has only the
+            // serverAuth EKU, and is only valid for localhost, loopback and local container-host names.
+            // CodeQL [SM02730] Safe use per threat model: by-design dev-cert trust that adds only the public localhost HTTPS development certificate (CA:false, serverAuth, local names only) to the CurrentUser store, never LocalMachine, after an OS consent prompt.
             store.Add(publicCertificate);
             return TrustLevel.Full;
         }
