@@ -2309,6 +2309,9 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                 await page.Locator(".resource-picker").ClickAsync();
             }
             await page.Locator(".detail-page-close").ClickAsync();
+            // The full-page list renders its own table rows in place of the sidebar's, so wait for them rather than
+            // finding a sidebar row that's about to be replaced.
+            await Assertions.Expect(page.Locator(".resource-pane .resource-row-table").First).ToBeVisibleAsync();
 
             var pane = page.Locator(".resource-pane");
             // A parameter shows no type: its key icon and the Parameters section say what it is.

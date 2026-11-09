@@ -235,6 +235,22 @@
     }
 }
 
+/* Selecting a resource from the full-page list narrows the pane to the sidebar, and its table rows give way to sidebar
+   rows (see RenderSidebarRow). The rows fade in while the pane narrows, so they don't jump from one layout to the
+   other. The fade fills backwards only, so once it ends it doesn't override a row's own opacity, such as a muted
+   unavailable row's. */
+@media (prefers-reduced-motion: no-preference) {
+    .resources-layout.pane-selection-reveal .resource-row-sidebar {
+        animation: resource-row-crossfade var(--resource-pane-motion-duration) var(--resource-pane-motion-easing) backwards;
+    }
+}
+
+@keyframes resource-row-crossfade {
+    from {
+        opacity: 0;
+    }
+}
+
 /* Resource pane */
 
 .resource-pane {

@@ -901,13 +901,16 @@
     private void RenderSidebarRow(RenderTreeBuilder __builder, ResourceRowContext item)
     {
         var resource = item.Resource;
+        @* Each view keys its rows with its own prefix. The two renderers emit their rows from different places, so a
+           shared key would match a table row with a sidebar row that Blazor can't update in place, and switching views
+           would remove the old rows without inserting the new ones. *@
         <div class="@GetRowClass(item, "resource-row-sidebar")"
              data-selection-all="@(IsAllSelected ? "true" : null)"
              data-resource-name="@resource.Name"
              data-resource-parent="@GetReorderParentName(resource)"
              data-resource-tree-row="@(item.Row is not null ? "true" : null)"
              style="@(item.Depth == 0 ? null : $"--resource-row-depth: {item.Depth}")"
-             @key="resource.Name">
+             @key="@($"sidebar:{resource.Name}")">
             @{ RenderRowLead(__builder, item); }
             <a @attributes="@GetRowLinkAttributes(item)"
                @onclick="@(e => OnRowClickAsync(e, item.Name))"
@@ -976,7 +979,7 @@
              data-resource-parent="@GetReorderParentName(resource)"
              data-resource-tree-row="@(item.Row is not null ? "true" : null)"
              style="@(item.Depth == 0 ? null : $"--resource-row-depth: {item.Depth}")"
-             @key="resource.Name">
+             @key="@($"table:{resource.Name}")">
             @{ RenderRowLead(__builder, item); }
             <a @attributes="@GetRowLinkAttributes(item)"
                @onclick="@(e => OnRowClickAsync(e, item.Name))"
