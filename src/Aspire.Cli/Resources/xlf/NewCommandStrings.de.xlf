@@ -152,11 +152,6 @@
         <target state="translated">Vorlagenversion wird ermittelt...</target>
         <note />
       </trans-unit>
-      <trans-unit id="SearchingTemplateSource">
-        <source>Searching template source '{0}'...</source>
-        <target state="new">Searching template source '{0}'...</target>
-        <note />
-      </trans-unit>
       <trans-unit id="SelectAProjectTemplate">
         <source>Select a template:</source>
         <target state="translated">Wählen Sie eine Vorlage aus:</target>
@@ -282,6 +277,11 @@
         <target state="new">Expected a display name string without control characters, or null to use the source alias.</target>
         <note />
       </trans-unit>
+      <trans-unit id="TemplateSourceExplanation">
+        <source>One or more template sources are configured. A template source lets an organization share Aspire templates to customize your development experience.</source>
+        <target state="new">One or more template sources are configured. A template source lets an organization share Aspire templates to customize your development experience.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="TemplateSourceInvalidRepository">
         <source>Expected an HTTPS or SSH Git repository URL without passwords, tokens, queries, or fragments. SSH usernames are allowed.</source>
         <target state="new">Expected an HTTPS or SSH Git repository URL without passwords, tokens, queries, or fragments. SSH usernames are allowed.</target>
@@ -310,11 +310,6 @@
       <trans-unit id="TemplateSourceNameDescription">
         <source>The name of the template source.</source>
         <target state="new">The name of the template source.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="TemplateSourceNameHeader">
-        <source>Name</source>
-        <target state="new">Name</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceNameRequired">

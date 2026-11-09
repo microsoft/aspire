@@ -1,0 +1,3 @@
+﻿[yellow]Only use sources you trust. Content from these sources can run code on your machine.[/]
+[blue]Fetching templates using Git...[/]
+[blue]Fetching templates using Git...[/]
