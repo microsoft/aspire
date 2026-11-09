@@ -297,6 +297,10 @@ internal sealed class RootCommand : BaseRootCommand
         Subcommands.Add(trayCommand);
         Subcommands.Add(secretCommand);
 
+        var gitCommand = new Command("git") { Hidden = true };
+        gitCommand.Subcommands.Add(new Command("askpass") { Hidden = true });
+        Subcommands.Add(gitCommand);
+
 #if DEBUG
         Subcommands.Add(renderCommand);
 #endif

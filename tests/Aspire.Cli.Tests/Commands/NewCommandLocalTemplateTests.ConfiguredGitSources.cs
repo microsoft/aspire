@@ -195,6 +195,8 @@ public partial class NewCommandLocalTemplateTests
         await CreateSearchTemplateAsync(workspace, "local", "sample", "Sample template", "Local");
         var interaction = new TestInteractionService();
         interaction.SetupStringPromptResponse("Welcome");
+        var progress = new List<string>();
+        interaction.DisplaySubtleMessageCallback = progress.Add;
         var git = TestGitCommandRunner.CreateForTemplateCheckout((_, destination, _, _) =>
             CreateClonedSearchTemplateAsync(workspace, destination, "Remote"));
         var selectionCount = 0;
@@ -210,9 +212,11 @@ public partial class NewCommandLocalTemplateTests
             Assert.Equal(
                 providerTemplates.Select(template => template.Description),
                 options.Select(formatter).SkipLast(2));
+            Assert.Empty(interaction.ShownStatuses);
             Assert.Equal(
                 [NewCommandStrings.ResolvingTemplateRepository, NewCommandStrings.CloningTemplateRepository],
-                interaction.ShownStatuses);
+                progress.Where(message => message == NewCommandStrings.ResolvingTemplateRepository ||
+                    message == NewCommandStrings.CloningTemplateRepository));
             return options[^2];
         };
         var services = CreateServices(workspace, interaction, interactive: true);

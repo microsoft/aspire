@@ -251,9 +251,85 @@ credential helpers may authenticate there even when the checkout is already
 cached. Reusing a cached, fully specified commit SHA does not repeat the notice.
 
 Normal Git credential helpers and SSH authentication configuration remain
-available. Git's terminal credential prompts are always disabled with
-`GIT_TERMINAL_PROMPT=0`, including when Aspire itself is interactive.
-Authentication must be configured before invocation.
+available. Interactive acquisition allows Git's existing authentication UI;
+unattended acquisition disables terminal and askpass prompts while preserving
+noninteractive credential helpers and supported OpenSSH agent/key authentication.
+Captured template operations receive EOF on stdin.
+
+### HTTPS credential callback
+
+For an input-capable Aspire session, HTTPS `fetch` and `ls-remote` can invoke the
+hidden `aspire git askpass` helper instead of Git terminal prompts. An
+operation-private launcher invokes the running native CLI executable (or the
+physical CLI assembly for a `dotnet`-hosted development build).
+Its early entry point does not initialize
+logging, telemetry, configuration, acquisition, or IDE services.
+`GIT_TERMINAL_PROMPT=0` prevents uncontrolled terminal fallback.
+Credential managers still run first; their browser/UI authentication is independent
+of this callback. SSH, HTTP and other transports retain their existing behavior.
+This callback does not capture credential-manager or SSH flows.
+
+Each remote operation resolves Git's configured URL rewriting locally, then
+starts a listener in the running parent CLI, scoped to that Git operation.
+The socket is below the actual user profile's
+`.aspire/git/<random-operation>/`; `ASPIRE_HOME` does not redirect it.
+Existing shared socket-name, UTF-8 path-length and permission helpers are reused.
+On Linux/macOS, the operation directory is 0700 before binding, and the socket is
+set to 0600 and verified before Git starts. The private directory excludes other
+users even during bind/chmod; no process-global creation mask is changed.
+On Windows, the shared helper creates a protected current-user directory DACL
+with inheritable full control; the socket and launcher inherit those permissions.
+Windows pathname AF_UNIX sockets enforce filesystem write permissions on connect:
+https://devblogs.microsoft.com/commandline/af_unix-comes-to-windows/.
+Unavailable AF_UNIX support or unsafe existing permissions cause an explicit
+failure, not a fallback to an unprotected endpoint.
+
+Git receives the endpoint in `ASPIRE_GIT_ASKPASS_SOCKET`. The helper connects to
+that parent listener and sends a bounded UTF-8 prompt. Random names prevent
+accidental operation collisions; they are not access control. The filesystem
+permissions are the boundary against other ordinary OS users. Processes running
+as the same OS user are trusted, as are administrator/SYSTEM access; there is no
+same-user process isolation, TLS, certificate handshake or separate server process.
+Other Git operations/probes discard inherited callback endpoints.
+
+Git requires an executable `GIT_ASKPASS` path. An exclusively created script in
+the private operation directory executes only the fixed, quoted CLI launcher,
+forwarding Git's prompt through `"$@"` without shell interpolation. The script is
+0700 on Unix; Git for Windows interprets its shebang through Git's shell.
+It contains no prompts, credentials or responses.
+
+Only Git's username and password prompt shapes for the resolved origin/path are
+accepted. The CLI displays a label generated from the bound origin, not Git's
+raw text, username, URL userinfo, query, fragment, controls or markup. Both username
+and password/token responses are masked. Extensions advertising `secret-prompts.v1`
+use the existing dedicated masked input box; older extensions fall back to masked
+terminal input. Cancellation/disconnect dismissal is best effort: updated extensions
+close the actual input, while an older input box may remain open. Neither Git nor
+CLI teardown waits for that legacy UI, and eventual request failures are observed
+without logging credentials. Caller and interaction-service cancellation are linked through queued
+work, capability probing, input and result waits; cancelled queued work never opens
+a later prompt. Configured credential helpers continue to work in IDE sessions. Responses are
+never persisted or logged, nor put in argv or
+environment variables. The helper writes only one validated credential line to
+stdout; failures produce a fixed credential-free stderr message and a nonzero exit.
+Callback-mode remote stderr is replaced by classified diagnostics because Git can
+echo username/password URL userinfo. Parsed stdout remains unchanged.
+Template Git progress uses plain labels rather than an exclusive live spinner so
+masked terminal input can open during resolution and fetch.
+
+Prompts are serialized across operations. Connection setup and initial frames have
+ten-second deadlines. Human input (including waiting behind another credential prompt)
+has no timeout: it waits for an answer, cancellation or disconnect. Config-source
+acquisition's 30-second budget and template acquisition's two-minute budget pause
+only during that wait, then resume with their remaining Git/network time rather
+than resetting. Unattended acquisition remains bounded. Ctrl-C cancels Git, closes
+the listener and active connection, and lets the helper exit nonzero on EOF without
+waiting for UI completion. Rejection or invalid protocol input ends
+the operation without fallback. Normal disposal removes only the current operation's
+socket, fixed helper script and empty directory. Abrupt process termination can leave
+private operation directories and launcher/socket files, but cannot leave a running
+parent listener or persisted credentials;
+there is no broad startup deletion sweep.
 
 Captured template Git commands receive EOF on stdin rather than inheriting the
 CLI's input, so Git hooks or credential helpers cannot consume pending CLI input.

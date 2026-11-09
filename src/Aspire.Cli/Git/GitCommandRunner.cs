@@ -48,9 +48,39 @@ internal sealed class GitCommandRunner(ICliHostEnvironment hostEnvironment, IInt
         {
             await ConfigureUnattendedSshAsync(startInfo, arguments, cancellationToken);
         }
+        if (mode != GitCommandMode.Unattended && hostEnvironment.SupportsInteractiveInput &&
+            command is "fetch" or "ls-remote")
+        {
+            var separator = Array.IndexOf(arguments, "--");
+            if (separator >= 0 && separator + 1 < arguments.Length)
+            {
+                string[] repositoryArguments = arguments[0].StartsWith("--git-dir=", StringComparison.Ordinal) ? [arguments[0]] : [];
+                var query = CreateUnattendedQuery(startInfo,
+                    [.. repositoryArguments, "ls-remote", "--get-url", "--", arguments[separator + 1]]);
+                var repository = (await RunProcessAsync(query, captureCancellationOutput: false, GitCommandMode.Unattended, cancellationToken)).TrimEnd('\r', '\n');
+                if (Uri.TryCreate(repository, UriKind.Absolute, out var destination) && destination.Scheme == Uri.UriSchemeHttps)
+                {
+                    var helper = GitAskPassInvocation.CreateCurrentHelperCommand();
+                    await using var session = new GitAskPassSession(TimeProvider.System, destination,
+                        (prompt, token) => PromptForCredentialAsync(interaction, prompt, token), cancellationToken);
+                    session.Configure(startInfo, helper);
+                    try
+                    {
+                        return await RunProcessAsync(startInfo, captureCancellationOutput: false, mode, session.CancellationToken);
+                    }
+                    catch (OperationCanceledException) when (session.Failed && !cancellationToken.IsCancellationRequested)
+                    {
+                        throw new GitCommandException(GitFailure.AuthenticationFailed, null);
+                    }
+                }
+            }
+        }
         return await RunProcessAsync(startInfo, captureCancellationOutput: command is "fetch" or "ls-remote" && mode != GitCommandMode.Captured && startInfo.RedirectStandardOutput,
             mode, cancellationToken);
     }
+
+    internal static Task<string> PromptForCredentialAsync(IInteractionService interaction, string prompt, CancellationToken cancellationToken)
+        => interaction.PromptForStringAsync(prompt, isSecret: true, required: true, logResponse: false, cancellationToken: cancellationToken);
 
     private bool IsUnattended(GitCommandMode mode) =>
         mode == GitCommandMode.Unattended || mode == GitCommandMode.Interactive && !hostEnvironment.SupportsInteractiveInput;
@@ -113,6 +143,7 @@ internal sealed class GitCommandRunner(ICliHostEnvironment hostEnvironment, IInt
             query.Environment[name] = value;
         }
         DisableAskPass(query.Environment);
+        query.Environment.Remove(GitAskPassProtocol.SocketVariable);
 
         return query;
     }
@@ -329,6 +360,9 @@ internal sealed class GitCommandRunner(ICliHostEnvironment hostEnvironment, IInt
 
     internal static void FilterEnvironment(IDictionary<string, string?> environment, GitCommandMode mode)
     {
+        // An inherited callback belongs to a different operation, including for
+        // internal URL/config probes. Remote operations allocate their own listener.
+        environment.Remove(GitAskPassProtocol.SocketVariable);
         if (mode != GitCommandMode.Captured)
         {
             // Removing known names preserves the environment dictionary's platform-specific casing.
@@ -395,7 +429,8 @@ internal sealed class GitCommandRunner(ICliHostEnvironment hostEnvironment, IInt
         {
             throw new GitCommandException(GitFailure.RepositoryUnavailable, null);
         }
-        if (capture.StandardError.Length > 0)
+        var callback = startInfo.Environment.ContainsKey(GitAskPassProtocol.SocketVariable);
+        if (capture.StandardError.Length > 0 && !callback)
         {
             // Quiet acquisition suppresses routine Git output, not diagnostics. Keep
             // captured stderr on the operation's diagnostic path without copying parsed
@@ -404,7 +439,14 @@ internal sealed class GitCommandRunner(ICliHostEnvironment hostEnvironment, IInt
         }
         if (result.ExitCode != 0)
         {
-            throw CreateCommandException(capture.StandardError, result.ExitCode, mode);
+            var exception = CreateCommandException(capture.StandardError, result.ExitCode, callback ? GitCommandMode.Captured : mode);
+            if (callback)
+            {
+                // Git can echo userinfo in a failed authentication URL. With the
+                // callback enabled, report the classified error, never raw remote stderr.
+                interaction.DisplayRawText(exception.Message + Environment.NewLine, ConsoleOutput.Error);
+            }
+            throw exception;
         }
 
         return capture.StandardOutput;

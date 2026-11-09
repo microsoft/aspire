@@ -1124,6 +1124,14 @@ public class Program
     {
         Console.OutputEncoding = Encoding.UTF8;
 
+        // Git's helper must not initialize logging, telemetry, acquisition or IDE services.
+        // Its stdout is a credential protocol, not ordinary CLI output.
+        if (GitAskPassInvocation.Matches(args))
+        {
+            return await GitAskPassInvocation.InvokeAsync(TimeProvider.System, args, Environment.GetEnvironmentVariable,
+                Console.Out, Console.Error, CancellationToken.None).ConfigureAwait(false);
+        }
+
         if (ProcessSupervisor.IsSupervisor)
         {
             await ProcessSupervisor.RunAsync().ConfigureAwait(false);

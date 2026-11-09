@@ -4,6 +4,10 @@ import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import * as sinon from 'sinon';
+import * as tls from 'tls';
+import { CancellationTokenSource, createMessageConnection } from 'vscode-jsonrpc';
+import { StreamMessageReader, StreamMessageWriter } from 'vscode-jsonrpc/node';
+import { getSupportedCapabilities } from '../../capabilities';
 
 import { IInteractionService, InteractionService } from '../../server/interactionService';
 import { ICliRpcClient, RpcClient, ValidationResult } from '../../server/rpcClient';
@@ -91,6 +95,95 @@ suite('InteractionService endpoints', () => {
 	});
 
 	// promptForSecretString
+	test('secret prompt capabilities use v1 on all desktop platforms', () => {
+		for (const platform of ['darwin', 'linux', 'win32'] as const) {
+			assert.deepStrictEqual(getSupportedCapabilities(platform).filter(capability => capability.startsWith('secret-prompts.')),
+				['secret-prompts.v1']);
+		}
+	});
+
+	test('promptForSecretString skips an already cancelled request', async () => {
+		const testInfo = await createTestRpcServer();
+		const cancellation = new CancellationTokenSource();
+		const showInputBoxStub = sinon.stub(vscode.window, 'showInputBox');
+		try {
+			cancellation.cancel();
+			assert.strictEqual(await testInfo.interactionService.promptForSecretString(
+				'Bound origin', true, testInfo.rpcClient, cancellation.token), null);
+			sinon.assert.notCalled(showInputBoxStub);
+		}
+		finally {
+			cancellation.dispose();
+			showInputBoxStub.restore();
+			testInfo.rpcServer.dispose();
+			testInfo.interactionService.dispose();
+		}
+	});
+
+	for (const reason of ['request', 'connection']) {
+		test(`promptForSecretString ${reason} cancellation closes the actual VS Code input`, async () => {
+			const testInfo = await createTestRpcServer();
+			const cancellation = new CancellationTokenSource();
+			const realShowInputBox = vscode.window.showInputBox;
+			let opened!: () => void;
+			const inputOpened = new Promise<void>(resolve => { opened = resolve; });
+			let closed!: (value: string | undefined) => void;
+			const inputClosed = new Promise<string | undefined>(resolve => { closed = resolve; });
+			const showInputBoxStub = sinon.stub(vscode.window, 'showInputBox').callsFake((options, token) => {
+				assert.strictEqual(options?.password, true);
+				assert.ok(token, 'The real UI must receive a cancellation token');
+				// Forward to VS Code instead of simulating cancellation: the actual
+				// input-box promise must complete when the RPC/lifetime is cancelled.
+				const input = realShowInputBox(options, token);
+				input.then(value => closed(value));
+				opened();
+				return input;
+			});
+			const socket = tls.connect({
+				port: Number(testInfo.rpcServerInfo.address.replace('localhost:', '')),
+				host: 'localhost',
+				rejectUnauthorized: false
+			});
+			const connection = createMessageConnection(new StreamMessageReader(socket), new StreamMessageWriter(socket));
+			try {
+				await new Promise<void>((resolve, reject) => {
+					socket.once('secureConnect', resolve);
+					socket.once('error', reject);
+				});
+				connection.listen();
+				const request = connection.sendRequest<string | null>('promptForSecretString',
+					testInfo.rpcServerInfo.token, 'Bound origin', true, cancellation.token);
+				const settled = request.then(value => ({ value, error: undefined }), error => ({ value: undefined, error }));
+				await inputOpened;
+				if (reason === 'request') {
+					cancellation.cancel();
+				}
+				else {
+					socket.destroy();
+					connection.dispose();
+				}
+				assert.strictEqual(await inputClosed, undefined, 'The actual VS Code input must close, not only our request wait');
+				const result = await settled;
+				if (reason === 'request') {
+					assert.strictEqual(result.error, undefined);
+					assert.strictEqual(result.value, null);
+				}
+				else {
+					assert.ok(result.error, 'Closing the connection must reject its pending request');
+				}
+			}
+			finally {
+				cancellation.cancel();
+				cancellation.dispose();
+				socket.destroy();
+				connection.dispose();
+				testInfo.interactionService.dispose();
+				testInfo.rpcServer.dispose();
+				showInputBoxStub.restore();
+			}
+		});
+	}
+
 	test('promptForSecretString sets password option to true', async () => {
 		const testInfo = await createTestRpcServer();
 		let passwordOptionSet = false;

@@ -92,6 +92,16 @@
         <target state="translated">AppHost を検索しています...</target>
         <note />
       </trans-unit>
+      <trans-unit id="GitPasswordPrompt">
+        <source>Git password or token for {0} (masked):</source>
+        <target state="new">Git password or token for {0} (masked):</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="GitUsernamePrompt">
+        <source>Git username for {0} (masked):</source>
+        <target state="new">Git username for {0} (masked):</target>
+        <note />
+      </trans-unit>
       <trans-unit id="InteractiveInputNotSupported">
         <source>This prompt requires interactive input but the CLI is running in non-interactive mode. This operation does not yet support non-interactive execution.</source>
         <target state="translated">このプロンプトには対話型入力が必要ですが、CLI は非対話モードで実行されています。この操作では、対話型以外の実行はまだサポートされていません。</target>

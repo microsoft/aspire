@@ -14,6 +14,21 @@ namespace Aspire.Cli.Tests.Git;
 public partial class GitCommandRunnerTests
 {
     [Theory]
+    [InlineData(nameof(GitCommandMode.Interactive))]
+    [InlineData(nameof(GitCommandMode.Captured))]
+    [InlineData(nameof(GitCommandMode.Unattended))]
+    public void FilterEnvironment_DiscardsAnotherOperationsCallback(string mode)
+    {
+        var environment = new Dictionary<string, string?>
+        {
+            [GitAskPassProtocol.SocketVariable] = "another-operation",
+            ["UNCHANGED"] = "preserved"
+        };
+        GitCommandRunner.FilterEnvironment(environment, Enum.Parse<GitCommandMode>(mode));
+        Assert.Equal(new Dictionary<string, string?> { ["UNCHANGED"] = "preserved" }, environment);
+    }
+
+    [Theory]
     [InlineData(nameof(GitCommandMode.Unattended), true, true)]
     [InlineData(nameof(GitCommandMode.Interactive), false, true)]
     [InlineData(nameof(GitCommandMode.Interactive), true, false)]

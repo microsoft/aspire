@@ -23,6 +23,12 @@ internal sealed class TestAnsiConsoleWithInput : IAnsiConsole
         _testInput = new KeyInput(keys);
     }
 
+    public TestAnsiConsoleWithInput(IAnsiConsole inner, Func<bool, CancellationToken, Task<ConsoleKeyInfo?>> readKeyAsync)
+    {
+        _inner = inner;
+        _testInput = new CallbackInput(readKeyAsync);
+    }
+
     public Profile Profile => _inner.Profile;
     public IAnsiConsoleCursor Cursor => _inner.Cursor;
     public IAnsiConsoleInput Input => _testInput;
@@ -32,6 +38,14 @@ internal sealed class TestAnsiConsoleWithInput : IAnsiConsole
     public void Clear(bool home) => _inner.Clear(home);
     public void Write(IRenderable renderable) => _inner.Write(renderable);
     public void WriteAnsi(Action<AnsiWriter> action) => _inner.WriteAnsi(action);
+
+    private sealed class CallbackInput(Func<bool, CancellationToken, Task<ConsoleKeyInfo?>> readKeyAsync) : IAnsiConsoleInput
+    {
+        public bool IsKeyAvailable() => true;
+        public ConsoleKeyInfo? ReadKey(bool intercept) => throw new NotSupportedException("This input supports asynchronous reads only.");
+        public Task<ConsoleKeyInfo?> ReadKeyAsync(bool intercept, CancellationToken cancellationToken)
+            => readKeyAsync(intercept, cancellationToken);
+    }
 
     private sealed class KeyInput(IEnumerable<ConsoleKeyInfo> keys) : IAnsiConsoleInput
     {

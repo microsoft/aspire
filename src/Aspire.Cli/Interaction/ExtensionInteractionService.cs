@@ -42,6 +42,7 @@ internal class ExtensionInteractionService : IExtensionInteractionService, IDisp
     private readonly CancellationToken _cancellationToken;
     private readonly Channel<Func<Task>> _extensionTaskChannel;
     private readonly ILogger<ExtensionInteractionService> _logger;
+    private int _disposed;
 
     /// <summary>
     /// The background pump task that processes queued extension operations.
@@ -155,48 +156,107 @@ internal class ExtensionInteractionService : IExtensionInteractionService, IDisp
 
         if (_extensionPromptEnabled)
         {
-            var tcs = new TaskCompletionSource<string>();
-
-            await _extensionTaskChannel.Writer.WriteAsync(async () =>
+            var cancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _cancellationToken);
+            var token = cancellation.Token;
+            var tcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var completed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var consolePrompt = 0;
+            var registration = token.Register(() =>
             {
-                try
+                if (Volatile.Read(ref consolePrompt) == 0)
                 {
-                    string result;
-                    if (isSecret)
+                    tcs.TrySetCanceled(token);
+                }
+            });
+            var queued = false;
+            try
+            {
+                token.ThrowIfCancellationRequested();
+                await _extensionTaskChannel.Writer.WriteAsync(async () =>
+                {
+                    try
                     {
-                        // Check if extension supports the new secret prompts capability
-                        var hasSecretPromptsCapability = await Backchannel.HasCapabilityAsync(KnownCapabilities.SecretPrompts, _cancellationToken).ConfigureAwait(false);
-
-                        if (hasSecretPromptsCapability)
+                        // Cancelled work must not open a prompt when it reaches the queue head.
+                        token.ThrowIfCancellationRequested();
+                        string result;
+                        if (isSecret)
                         {
-                            // Use the new dedicated secret prompt method (no default value for secrets)
-                            result = await Backchannel.PromptForSecretStringAsync(StringUtils.RemoveMarkup(promptText), validator, required, _cancellationToken).ConfigureAwait(false);
+                            var hasSecretPromptsCapability = await WaitForInteractionAsync(Backchannel.HasCapabilityAsync(KnownCapabilities.SecretPrompts, token), token).ConfigureAwait(false);
+                            token.ThrowIfCancellationRequested();
+                            if (hasSecretPromptsCapability)
+                            {
+                                result = await WaitForInteractionAsync(Backchannel.PromptForSecretStringAsync(StringUtils.RemoveMarkup(promptText), validator, required, token), token).ConfigureAwait(false);
+                            }
+                            else
+                            {
+                                // Older extensions cannot mask regular input boxes.
+                                // Let local input unwind its exclusive console before
+                                // returning cancellation to a subsequent interactive call.
+                                Volatile.Write(ref consolePrompt, 1);
+                                token.ThrowIfCancellationRequested();
+                                result = await _consoleInteractionService.PromptForStringAsync(promptText, validator, isSecret, required, binding, logResponse, token).ConfigureAwait(false);
+                            }
                         }
                         else
                         {
-                            // Older extensions cannot mask regular input boxes, so keep secret entry in the terminal.
-                            result = await _consoleInteractionService.PromptForStringAsync(promptText, validator, isSecret, required, binding, logResponse, cancellationToken).ConfigureAwait(false);
+                            result = await WaitForInteractionAsync(Backchannel.PromptForStringAsync(StringUtils.RemoveMarkup(promptText), binding?.DefaultValue, validator, required, token), token).ConfigureAwait(false);
                         }
+
+                        tcs.TrySetResult(result);
                     }
-                    else
+                    catch (OperationCanceledException) when (token.IsCancellationRequested)
                     {
-                        result = await Backchannel.PromptForStringAsync(StringUtils.RemoveMarkup(promptText), binding?.DefaultValue, validator, required, _cancellationToken).ConfigureAwait(false);
+                        tcs.TrySetCanceled(token);
                     }
-
-                    tcs.SetResult(result);
-                }
-                catch (Exception ex)
+                    catch (Exception ex)
+                    {
+                        tcs.TrySetException(ex);
+                    }
+                    finally
+                    {
+                        completed.TrySetResult();
+                    }
+                }, token).ConfigureAwait(false);
+                queued = true;
+                return await tcs.Task.ConfigureAwait(false);
+            }
+            finally
+            {
+                if (queued)
                 {
-                    tcs.SetException(ex);
+                    // Cancellation can complete the caller's result wait before queued
+                    // work finishes. Keep its token/registration alive until then, or
+                    // until the pump exits and that work can no longer run.
+                    _ = DisposePromptCancellationAsync(completed.Task, PumpTask, registration, cancellation);
                 }
-            }, cancellationToken).ConfigureAwait(false);
-
-            return await tcs.Task.ConfigureAwait(false);
+                else
+                {
+                    registration.Dispose();
+                    cancellation.Dispose();
+                }
+            }
         }
         else
         {
-            return await _consoleInteractionService.PromptForStringAsync(promptText, validator, isSecret, required, binding, logResponse, cancellationToken).ConfigureAwait(false);
+            using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _cancellationToken);
+            return await _consoleInteractionService.PromptForStringAsync(promptText, validator, isSecret, required, binding, logResponse, cancellation.Token).ConfigureAwait(false);
         }
+    }
+
+    private static async Task DisposePromptCancellationAsync(Task completed, Task pump, CancellationTokenRegistration registration, CancellationTokenSource cancellation)
+    {
+        await Task.WhenAny(completed, pump).ConfigureAwait(false);
+        registration.Dispose();
+        cancellation.Dispose();
+    }
+
+    private static Task<T> WaitForInteractionAsync<T>(Task<T> task, CancellationToken cancellationToken)
+    {
+        // A legacy extension can leave its input open after RPC cancellation. Do
+        // not block the queue/teardown; observe failures if that request ends later.
+        _ = task.ContinueWith(static completed => _ = completed.Exception, CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+        return task.WaitAsync(cancellationToken);
     }
 
     public async Task<string> PromptForFilePathAsync(string promptText, Func<string, ValidationResult>? validator = null, bool directory = false, bool required = false, PromptBinding<string?>? binding = null, bool retryOnValidationFailure = false, CancellationToken cancellationToken = default)
@@ -734,6 +794,10 @@ internal class ExtensionInteractionService : IExtensionInteractionService, IDisp
 
     public void Dispose()
     {
+        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+        {
+            return;
+        }
         _extensionTaskChannel.Writer.TryComplete();
         _cts.Cancel();
         _cts.Dispose();

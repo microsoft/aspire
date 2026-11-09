@@ -80,6 +80,11 @@ public class ConfigSourceServiceGitTests(ITestOutputHelper outputHelper) : IDisp
         {
             RunCallback = (command, token) =>
             {
+                using (GitOperationTimeout.PauseCurrent())
+                {
+                    time.Advance(TimeSpan.FromMinutes(10));
+                    token.ThrowIfCancellationRequested();
+                }
                 time.Advance(TimeSpan.FromSeconds(10));
                 token.ThrowIfCancellationRequested();
                 return Task.FromResult(command.Arguments[0] == "ls-remote"

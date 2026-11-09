@@ -281,4 +281,10 @@
     <value>Available values: {0}</value>
     <comment>{0} is a comma-separated list of valid values</comment>
   </data>
+  <data name="GitUsernamePrompt" xml:space="preserve">
+    <value>Git username for {0} (masked):</value>
+  </data>
+  <data name="GitPasswordPrompt" xml:space="preserve">
+    <value>Git password or token for {0} (masked):</value>
+  </data>
 </root>
