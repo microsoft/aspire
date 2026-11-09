@@ -256,10 +256,10 @@ internal sealed class ProxylessEndpointPortAllocator : IDisposable
     private static bool TryProbePort(int port, SocketType socketType, ProtocolType protocolType)
     {
         // On macOS a wildcard bind can succeed while a loopback listener already owns the port.
-        // Probe both addresses, releasing the wildcard sockets before probing loopback so that
-        // the probe does not conflict with itself.
-        return TryProbeAddresses(port, socketType, protocolType, IPAddress.Any, IPAddress.IPv6Any)
-            && TryProbeAddresses(port, socketType, protocolType, IPAddress.Loopback, IPAddress.IPv6Loopback);
+        // Probe loopback first, releasing those sockets before probing the wildcard addresses so
+        // that the probe does not conflict with itself.
+        return TryProbeAddresses(port, socketType, protocolType, IPAddress.Loopback, IPAddress.IPv6Loopback)
+            && TryProbeAddresses(port, socketType, protocolType, IPAddress.Any, IPAddress.IPv6Any);
     }
 
     private static bool TryProbeAddresses(int port, SocketType socketType, ProtocolType protocolType, IPAddress ipv4Address, IPAddress ipv6Address)
