@@ -123,7 +123,6 @@ internal sealed partial class TemplateEngineFactory
         {
             preliminary.MoveTo(outputPath);
         }
-        interactionService.DisplaySuccess(string.Format(CultureInfo.CurrentCulture, TemplatingStrings.ProjectCreatedSuccessfully, outputPath));
         return new TemplateResult(CliExitCodes.Success, outputPath);
     }
 

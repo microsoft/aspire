@@ -8,6 +8,7 @@ using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using Aspire.Cli.Bundles;
 using Aspire.Cli.Commands;
+using Aspire.Cli.Configuration;
 using Aspire.Cli.Git;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Packaging;
@@ -1424,7 +1425,13 @@ public partial class NewCommandLocalTemplateTests(ITestOutputHelper outputHelper
             Assert.Empty(interaction.StringPromptCalls);
             var checkout = Assert.Single(Directory.GetDirectories(cacheRoot));
             Assert.True(Directory.Exists(Path.Combine(checkout, ".git")));
-            await Verify(ReadOutput(workspace)).ScrubInlineGuids().UseParameters(specifyTemplatePath);
+            var sha = (await File.ReadAllTextAsync(Path.Combine(checkout, ".git", "shallow"))).Trim();
+            var provenance = AspireConfigFile.Load(Path.Combine(workspace.Path, "out"))!.Provenance!.Template!;
+            Assert.Equal(sha, provenance.Sha);
+            Assert.Equal(specifyTemplatePath ? "templates/first" : ".", provenance.Path);
+            Assert.Equal(new Uri(repository.FullName).AbsoluteUri, provenance.Repository);
+            await Verify(ReadOutput(workspace)).ScrubInlineGuids().UseParameters(specifyTemplatePath)
+                .AddScrubber(builder => builder.Replace(sha, "COMMIT_SHA").Replace(new Uri(repository.FullName).AbsoluteUri, "file:///TEMPLATE_REPOSITORY"));
         }
 
         Assert.Single(Directory.GetFileSystemEntries(cacheRoot));
@@ -1664,7 +1671,10 @@ public partial class NewCommandLocalTemplateTests(ITestOutputHelper outputHelper
             var parseResult = command.Parse("new --template-repository=-repository --template-path template --name Demo --output out --suppress-agent-init");
             var result = await first.ApplyTemplateAsync(new TemplateInputs { Name = "Demo", Output = "out" }, parseResult, TestContext.Current.CancellationToken);
             Assert.Equal(CliExitCodes.Success, result.ExitCode);
-            await Verify(ReadOutput(workspace)).ScrubInlineGuids();
+            Assert.Equal(TestGitCommandRunner.DefaultCommitSha,
+                AspireConfigFile.Load(Path.Combine(workspace.Path, "out"))!.Provenance!.Template!.Sha);
+            await Verify(ReadOutput(workspace)).ScrubInlineGuids().AddScrubber(builder =>
+                builder.Replace(Path.Combine(workspace.Path, "-repository").Replace('\\', '/'), "TEMPLATE_REPOSITORY"));
         }
 
         Assert.All(checkouts, path =>
@@ -1725,9 +1735,12 @@ public partial class NewCommandLocalTemplateTests(ITestOutputHelper outputHelper
 
         await File.WriteAllTextAsync(identityFile, "third");
         await GitTestHelper.RunGitAsync(repository.FullName, outputHelper, "commit", "-am", "Move branch");
+        var thirdSha = (await File.ReadAllTextAsync(Path.Combine(repository.FullName, ".git", "refs", "heads", "main"))).Trim();
         await GenerateAsync("moved-branch", "main");
         Assert.Equal(3, Directory.GetFileSystemEntries(cacheRoot).Length);
-        await Verify(outputs).ScrubInlineGuids();
+        await Verify(outputs).ScrubInlineGuids().AddScrubber(builder => builder
+            .Replace(firstSha, "FIRST_COMMIT_SHA").Replace(secondSha, "SECOND_COMMIT_SHA").Replace(thirdSha, "THIRD_COMMIT_SHA")
+            .Replace(repository.FullName.Replace('\\', '/'), "TEMPLATE_REPOSITORY"));
 
         async Task GenerateAsync(string label, string? reference)
         {
@@ -1751,6 +1764,10 @@ public partial class NewCommandLocalTemplateTests(ITestOutputHelper outputHelper
 
             Assert.Equal(CliExitCodes.Success, exitCode);
             Assert.Empty(interaction.DisplayedErrors);
+            var currentSha = (await File.ReadAllTextAsync(Path.Combine(repository.FullName, ".git", "refs", "heads", "main"))).Trim();
+            var provenance = AspireConfigFile.Load(Path.Combine(workspace.Path, "out", label))!.Provenance!.Template!;
+            Assert.Equal(label is "default" or "branch" or "moved-branch" ? currentSha : firstSha, provenance.Sha);
+            Assert.Equal("template", provenance.Path);
             outputs[label] = ReadOutput(Path.Combine(workspace.Path, "out", label));
         }
     }

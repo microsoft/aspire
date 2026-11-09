@@ -1288,12 +1288,12 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         var project = workspace.CreateDirectory("created-project");
         var path = Path.Combine(project.FullName, AspireConfigFile.FileName);
         await File.WriteAllTextAsync(path, """
-            {"appHost":{"path":"apphost.mts"},"sdk":{"version":"17.0.0"},"profiles":{"default":{"applicationUrl":"https://localhost:1234"}},"docs":{"llmsTxtUrl":"https://local.example/old","custom":"local"},"custom":"local"}
+            {"appHost":{"path":"apphost.mts"},"sdk":{"version":"17.0.0"},"profiles":{"default":{"applicationUrl":"https://localhost:1234"}},"docs":{"llmsTxtUrl":"https://local.example/old","custom":"local"},"custom":"local","provenance":{"template":{"repository":"https://example.test/templates.git","sha":"0123456789abcdef0123456789abcdef01234567","path":"templates/web"}}}
             """);
         var git = new TestConfigSourceRepository
         {
             ReadConfiguration = (_, _) => Task.FromResult(("version-1", JsonNode.Parse("""
-                {"skillSources":{"team":{"repository":"example/team","custom":"copied"}},"DOCS":{"LLMSTXTURL":"https://docs.example/llms.txt","API":{"SITEMAPURL":null,"excluded":"remote"}},"sdk":{"version":"99.0.0"},"features":{"remote":true},"custom":"remote"}
+                {"skillSources":{"team":{"repository":"example/team","custom":"copied"}},"DOCS":{"LLMSTXTURL":"https://docs.example/llms.txt","API":{"SITEMAPURL":null,"excluded":"remote"}},"sdk":{"version":"99.0.0"},"features":{"remote":true},"custom":"remote","provenance":{"template":{"repository":"https://example.test/unrelated.git","sha":"different","path":"different"}}}
                 """)!.AsObject()))
         };
         var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git);
@@ -1303,6 +1303,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         Assert.Equivalent(s_appliedSource, AspireConfigFile.Load(project.FullName)!.ConfigSource, strict: true);
         Assert.Equal(1, git.Calls);
         Assert.Equal("https://local.example/old", AspireConfigFile.Load(project.FullName)!.Docs!.LlmsTxtUrl);
+        Assert.Equal("0123456789abcdef0123456789abcdef01234567", AspireConfigFile.Load(project.FullName)!.Provenance!.Template!.Sha);
         await Verify(await File.ReadAllTextAsync(path), "json");
     }
 

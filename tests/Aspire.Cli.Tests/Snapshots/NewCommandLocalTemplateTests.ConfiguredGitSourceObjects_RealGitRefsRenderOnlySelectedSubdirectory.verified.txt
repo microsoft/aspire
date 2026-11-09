@@ -1,20 +1,86 @@
 ﻿{
   branch: {
+    aspire.config.json:
+{
+  "provenance": {
+    "template": {
+      "repository": "https://example.test/templates.git",
+      "sha": "PINNED_COMMIT_SHA",
+      "path": "templates/sample"
+    }
+  }
+}
+,
     Demo.txt: Pinned: Hello
   },
   commit: {
+    aspire.config.json:
+{
+  "provenance": {
+    "template": {
+      "repository": "https://example.test/templates.git",
+      "sha": "PINNED_COMMIT_SHA",
+      "path": "templates/sample"
+    }
+  }
+}
+,
     Demo.txt: Pinned: Hello
   },
   default: {
+    aspire.config.json:
+{
+  "provenance": {
+    "template": {
+      "repository": "https://example.test/templates.git",
+      "sha": "LATEST_COMMIT_SHA",
+      "path": "templates/sample"
+    }
+  }
+}
+,
     Demo.txt: Latest: Hello
   },
   head: {
+    aspire.config.json:
+{
+  "provenance": {
+    "template": {
+      "repository": "https://example.test/templates.git",
+      "sha": "LATEST_COMMIT_SHA",
+      "path": "templates/sample"
+    }
+  }
+}
+,
     Demo.txt: Latest: Hello
   },
   qualified-tag: {
+    aspire.config.json:
+{
+  "provenance": {
+    "template": {
+      "repository": "https://example.test/templates.git",
+      "sha": "PINNED_COMMIT_SHA",
+      "path": "templates/sample"
+    }
+  }
+}
+,
     Demo.txt: Pinned: Hello
   },
   tag: {
+    aspire.config.json:
+{
+  "provenance": {
+    "template": {
+      "repository": "https://example.test/templates.git",
+      "sha": "PINNED_COMMIT_SHA",
+      "path": "templates/sample"
+    }
+  }
+}
+,
     Demo.txt: Pinned: Hello
   }
 }

@@ -1,0 +1,35 @@
+﻿{
+  "appHost": {
+    "path": "Demo.csproj",
+    "custom": true
+  },
+  "sdk": {
+    "version": "17.0.0"
+  },
+  "packages": {
+    "Aspire.Hosting.Redis": "17.0.0"
+  },
+  "profiles": {
+    "dev": {
+      "environmentVariables": {
+        "CUSTOM": "retained"
+      }
+    }
+  },
+  "custom": {
+    "nested": [
+      1,
+      true,
+      null
+    ]
+  },
+  "provenance": {
+    "custom": "retained",
+    "template": {
+      "custom": true,
+      "sha": "0123456789abcdef0123456789abcdef01234567",
+      "repository": "https://example.test/templates.git",
+      "path": "templates/web"
+    }
+  }
+}

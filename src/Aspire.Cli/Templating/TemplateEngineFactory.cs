@@ -5,13 +5,17 @@ using System.CommandLine;
 using System.Globalization;
 using System.IO.Hashing;
 using System.Text;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using Aspire.Cli.Commands;
+using Aspire.Cli.Configuration;
 using Aspire.Cli.Git;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
+using Aspire.Hosting.Utils;
 using Aspire.Shared;
 using Microsoft.Extensions.Logging;
 using Microsoft.TemplateEngine.Abstractions;
@@ -55,9 +59,11 @@ internal sealed partial class TemplateEngineFactory(
         }
 
         cancellationToken.ThrowIfCancellationRequested();
-        var fullPath = source.Repository is null
-            ? Path.GetFullPath(source.Path, executionContext.WorkingDirectory.FullName)
+        var repositoryTemplate = source.Repository is null ? null
             : await GetRepositoryTemplateAsync(source.Repository, source.Path, source.RepositoryRef, cancellationToken);
+        var fullPath = repositoryTemplate is null
+            ? Path.GetFullPath(source.Path, executionContext.WorkingDirectory.FullName)
+            : repositoryTemplate.Path;
         if (_discoveredTemplates.TryGetValue(fullPath, out var cached))
         {
             return cached;
@@ -68,7 +74,7 @@ internal sealed partial class TemplateEngineFactory(
         var resourceCount = _resources.Count;
         try
         {
-            var templates = await DiscoverTemplatesAsync(fullPath, cancellationToken);
+            var templates = await DiscoverTemplatesAsync(fullPath, repositoryTemplate, cancellationToken);
             _discoveredTemplates.Add(fullPath, templates);
             return templates;
         }
@@ -84,7 +90,7 @@ internal sealed partial class TemplateEngineFactory(
         }
     }
 
-    private async Task<ITemplate[]> DiscoverTemplatesAsync(string fullPath, CancellationToken cancellationToken)
+    private async Task<ITemplate[]> DiscoverTemplatesAsync(string fullPath, RepositoryTemplate? repositoryTemplate, CancellationToken cancellationToken)
     {
         if (!Directory.Exists(fullPath))
         {
@@ -121,7 +127,7 @@ internal sealed partial class TemplateEngineFactory(
                 template.Name,
                 (context, name) => OutputPathHelper.GetUniqueDefaultOutputPath(name, context.WorkingDirectory.FullName),
                 _ => { },
-                (_, templateInputs, result, token) => ApplyAsync(settings, creator, template, templateInputs, result, token))
+                (_, templateInputs, result, token) => ApplyWithProvenanceAsync(settings, creator, template, repositoryTemplate, templateInputs, result, token))
             {
                 SearchDescription = template.Description
             })
@@ -138,7 +144,7 @@ internal sealed partial class TemplateEngineFactory(
         return templates;
     }
 
-    private async Task<string> GetRepositoryTemplateAsync(string repository, string templatePath, string? reference, CancellationToken cancellationToken)
+    private async Task<RepositoryTemplate> GetRepositoryTemplateAsync(string repository, string templatePath, string? reference, CancellationToken cancellationToken)
     {
         var cacheRoot = Path.Combine(executionContext.CacheDirectory.FullName, "git");
         var pathRoot = Path.Combine(cacheRoot, "repository");
@@ -165,7 +171,7 @@ internal sealed partial class TemplateEngineFactory(
             DirectoryHelper.CreateWithOwnerOnlyPermissions(cacheRoot);
             if (Directory.Exists(cacheDirectory))
             {
-                return GetRepositoryTemplatePath(cacheDirectory, relativePath);
+                return CreateRepositoryTemplate(cacheDirectory, sha);
             }
 
             if (!resolveRemoteRef)
@@ -196,7 +202,10 @@ internal sealed partial class TemplateEngineFactory(
                 logger.LogDebug("Template checkout was already cached at {Path}.", cacheDirectory);
             }
 
-            return GetRepositoryTemplatePath(cacheDirectory, relativePath);
+            return CreateRepositoryTemplate(cacheDirectory, sha);
+
+            RepositoryTemplate CreateRepositoryTemplate(string checkout, string commit) =>
+                new(GetRepositoryTemplatePath(checkout, relativePath), Path.Combine(checkout, "repository"), repository, commit);
         }
         catch (GitReferenceException ex)
         {
@@ -343,6 +352,89 @@ internal sealed partial class TemplateEngineFactory(
 
         _resources.Clear();
         _discoveredTemplates.Clear();
+    }
+
+    private async Task<TemplateResult> ApplyWithProvenanceAsync(
+        IEngineEnvironmentSettings settings, TemplateCreator creator, ITemplateInfo template,
+        RepositoryTemplate? repositoryTemplate, TemplateInputs inputs, ParseResult parseResult, CancellationToken cancellationToken)
+    {
+        var result = await ApplyAsync(settings, creator, template, inputs, parseResult, cancellationToken);
+        if (result.ExitCode != CliExitCodes.Success || result.OutputPath is null)
+        {
+            return result;
+        }
+
+        if (repositoryTemplate is not null)
+        {
+            // ConfigPlace identifies the selected template, not the directory searched for templates:
+            // "/templates/web/.template.config/template.json" records "templates/web".
+            var configPath = Path.GetFullPath(template.ConfigPlace.TrimStart('/', '\\'), repositoryTemplate.Path);
+            var templateRoot = Path.GetDirectoryName(Path.GetDirectoryName(configPath))!;
+            var path = PathNormalizer.NormalizePathForStorage(Path.GetRelativePath(repositoryTemplate.Root, templateRoot));
+            await WriteProvenanceAsync(result.OutputPath, repositoryTemplate.Repository, repositoryTemplate.Sha, path, cancellationToken);
+        }
+
+        interactionService.DisplaySuccess(string.Format(CultureInfo.CurrentCulture, TemplatingStrings.ProjectCreatedSuccessfully, result.OutputPath));
+        return result;
+    }
+
+    private async Task WriteProvenanceAsync(string outputPath, string repository, string sha, string path, CancellationToken cancellationToken)
+    {
+        var configPath = Path.Combine(outputPath, AspireConfigFile.FileName);
+        using var configLock = await ConfigurationHelper.TryAcquireWorkspaceConfigLockAsync(
+            executionContext, new FileInfo(configPath), logger, cancellationToken)
+            ?? throw new IOException($"Could not acquire the configuration lock for '{configPath}'.");
+        JsonObject config;
+        try
+        {
+            config = File.Exists(configPath)
+                ? JsonNode.Parse(await File.ReadAllTextAsync(configPath, cancellationToken), documentOptions: ConfigurationHelper.ParseOptions) as JsonObject
+                    ?? throw new JsonException(string.Format(CultureInfo.CurrentCulture, ErrorStrings.ConfigurationFileMustBeJsonObject, configPath))
+                : new JsonObject();
+            ConfigurationHelper.NormalizeSettings(config);
+            var key = TemplateSourceConfiguration.GetPropertyName(config, "provenance", StringComparison.OrdinalIgnoreCase);
+            if (config[key] is not null and not JsonObject)
+            {
+                throw new JsonException(string.Format(CultureInfo.CurrentCulture, ErrorStrings.ConfigurationFileMustBeJsonObject, $"{configPath}#provenance"));
+            }
+            var provenance = config[key] as JsonObject ?? new JsonObject();
+            config[key] = provenance;
+            var templateKey = TemplateSourceConfiguration.GetPropertyName(provenance, "template", StringComparison.OrdinalIgnoreCase);
+            if (provenance[templateKey] is not null and not JsonObject)
+            {
+                throw new JsonException(string.Format(CultureInfo.CurrentCulture, ErrorStrings.ConfigurationFileMustBeJsonObject, $"{configPath}#provenance.template"));
+            }
+            var templateProvenance = provenance[templateKey] as JsonObject ?? new JsonObject();
+            provenance[templateKey] = templateProvenance;
+            templateProvenance[TemplateSourceConfiguration.GetPropertyName(templateProvenance, "repository", StringComparison.OrdinalIgnoreCase)] = GetProvenanceRepository(repository);
+            templateProvenance[TemplateSourceConfiguration.GetPropertyName(templateProvenance, "sha", StringComparison.OrdinalIgnoreCase)] = sha;
+            templateProvenance[TemplateSourceConfiguration.GetPropertyName(templateProvenance, "path", StringComparison.OrdinalIgnoreCase)] = path;
+        }
+        catch (JsonException ex)
+        {
+            throw new TemplateDiscoveryException(CliExitCodes.FailedToCreateNewProject,
+                string.Format(CultureInfo.CurrentCulture, ErrorStrings.InvalidJsonInConfigFile, configPath, ex.Message));
+        }
+        await ConfigurationHelper.WriteSettingsFileAtomicallyAsync(configPath, config, cancellationToken, rejectSymbolicLinks: true);
+    }
+
+    private string GetProvenanceRepository(string repository)
+    {
+        if (repository.Contains("://", StringComparison.Ordinal) && Uri.TryCreate(repository, UriKind.Absolute, out var uri))
+        {
+            // Authentication belongs to Git, not the generated app. Keep SSH usernames,
+            // but never persist URL passwords, HTTPS userinfo, queries, or fragments.
+            return new UriBuilder(uri)
+            {
+                UserName = uri.Scheme == "ssh" ? uri.UserInfo.Split(':')[0] : "",
+                Password = "",
+                Query = "",
+                Fragment = ""
+            }.Uri.AbsoluteUri;
+        }
+        return Path.IsPathFullyQualified(repository) || !repository.Contains(':')
+            ? PathNormalizer.NormalizePathForStorage(Path.GetFullPath(repository, executionContext.WorkingDirectory.FullName))
+            : repository;
     }
 
     private async Task<TemplateResult> ApplyAsync(IEngineEnvironmentSettings settings, TemplateCreator creator, ITemplateInfo template, TemplateInputs inputs, ParseResult parseResult, CancellationToken cancellationToken)
@@ -509,7 +601,6 @@ internal sealed partial class TemplateEngineFactory(
             await templateNuGetConfigService.CreateNuGetConfigIfMissingAsync(templateChannel, outputPath, cancellationToken);
         }
 
-        interactionService.DisplaySuccess(string.Format(CultureInfo.CurrentCulture, TemplatingStrings.ProjectCreatedSuccessfully, outputPath));
         return new TemplateResult(CliExitCodes.Success, outputPath);
     }
 
@@ -602,4 +693,6 @@ internal sealed partial class TemplateEngineFactory(
 
     private static string GetTemplateName(ITemplateInfo template) =>
         template.ShortNameList.Count > 0 ? template.ShortNameList[0] : template.Identity;
+
+    private sealed record RepositoryTemplate(string Path, string Root, string Repository, string Sha);
 }

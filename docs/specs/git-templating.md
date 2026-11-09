@@ -241,6 +241,38 @@ selected path but does not perform a fresh checkout or an integrity scan of ever
 cached file. Generated files and NuGet configuration are written to the output
 directory, not into the source tree or retained cache.
 
+### Generated-project provenance
+
+After successful Git-backed template rendering and any requested NuGet configuration
+creation, the CLI merges generation-origin metadata into the output-root
+`aspire.config.json`, creating that file when necessary:
+
+```json
+{
+  "provenance": {
+    "template": {
+      "repository": "https://github.com/example/templates.git",
+      "sha": "0123456789abcdef0123456789abcdef01234567",
+      "path": "templates/my-template"
+    }
+  }
+}
+```
+
+The SHA is the already-resolved commit used for the verified checkout, including
+cache hits; generation does not resolve the ref again. The path is the selected
+template's directory containing `.template.config`, relative to the repository,
+not the broader directory searched for templates. A root template records `.`.
+URL credentials, queries, and fragments are not persisted; local repository paths
+are absolute with forward-slash separators. Existing configuration and unrelated
+provenance fields are retained using a locked, atomic JSON merge. Invalid
+configuration fails explicitly without replacing the existing file.
+
+This is project-local origin metadata, not `templateSources` registration or a
+`configSource` binding. It does not cause fetching or inheritance. Failed or
+declined rendering writes no provenance. Directory templates and built-in templates
+have no verified Git acquisition metadata and do not add this section.
+
 ### Authentication, environment, and failures
 
 Before Git acquisition, the CLI writes **Fetching templates using Git...** to

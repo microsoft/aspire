@@ -1,4 +1,15 @@
 ﻿{
+  aspire.config.json:
+{
+  "provenance": {
+    "template": {
+      "repository": "file:///TEMPLATE_REPOSITORY",
+      "sha": "COMMIT_SHA",
+      "path": "."
+    }
+  }
+}
+,
   Demo.cs:
 namespace Demo;
 // Hello

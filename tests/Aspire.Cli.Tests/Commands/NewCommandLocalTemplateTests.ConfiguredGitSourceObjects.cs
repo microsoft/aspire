@@ -4,6 +4,7 @@
 using System.Globalization;
 using System.Text.Json;
 using Aspire.Cli.Commands;
+using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Git;
 using Aspire.Cli.Interaction;
@@ -327,6 +328,7 @@ public partial class NewCommandLocalTemplateTests
         await GitTestHelper.RunGitAsync(repository.FullName, outputHelper, "tag", "-a", "v17.0", "-m", "Pinned tag");
         await File.WriteAllTextAsync(Path.Combine(repository.FullName, "templates", "sample", "TemplateApp.txt"), "Latest: GreetingValue");
         await GitTestHelper.RunGitAsync(repository.FullName, outputHelper, "commit", "-am", "Latest templates");
+        var latestSha = (await File.ReadAllTextAsync(Path.Combine(repository.FullName, ".git", "refs", "heads", "main"))).Trim();
 
         (string Label, string? Reference)[] requests =
         [
@@ -397,10 +399,14 @@ public partial class NewCommandLocalTemplateTests
                 messages.Select(message => message.Message));
             Assert.Equal(ConsoleOutput.Error, messages[1].ConsoleOverride);
             Assert.Empty(interaction.DisplayedErrors);
+            var provenance = AspireConfigFile.Load(Path.Combine(workspace.Path, "out", label))!.Provenance!.Template!;
+            Assert.Equal(label is "default" or "head" ? latestSha : pinnedSha, provenance.Sha);
+            Assert.Equal("templates/sample", provenance.Path);
+            Assert.Equal(repositoryUrl, provenance.Repository);
             outputs[label] = ReadOutput(Path.Combine(workspace.Path, "out", label));
         }
 
         Assert.Equal(2, Directory.GetDirectories(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "cache", "git")).Length);
-        await Verify(outputs);
+        await Verify(outputs).AddScrubber(builder => builder.Replace(pinnedSha, "PINNED_COMMIT_SHA").Replace(latestSha, "LATEST_COMMIT_SHA"));
     }
 }

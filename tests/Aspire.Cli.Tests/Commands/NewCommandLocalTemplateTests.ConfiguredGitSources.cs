@@ -3,6 +3,7 @@
 
 using System.Globalization;
 using Aspire.Cli.Commands;
+using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Git;
 using Aspire.Cli.Interaction;
@@ -279,6 +280,9 @@ public partial class NewCommandLocalTemplateTests
 
         Assert.Equal(CliExitCodes.Success, result.ExitCode);
         Assert.Equal("company", selected.SourceName);
+        Assert.Equal(TestGitCommandRunner.DefaultCommitSha,
+            AspireConfigFile.Load(Path.Combine(workspace.Path, "out"))!.Provenance!.Template!.Sha);
+        Assert.Equal(3, GetGitResolutions(git).Count);
         Assert.Empty(interaction.DisplayedErrors);
         await Verify(ReadOutput(workspace));
     }
@@ -538,9 +542,11 @@ public partial class NewCommandLocalTemplateTests
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Equal(1, selections);
         Assert.Equal((repositoryUrl, "HEAD^{}"), Assert.Single(GetGitResolutions(git)));
-        Assert.Single(GetGitFetches(git));
+        var fetched = Assert.Single(GetGitFetches(git));
         Assert.Empty(interaction.DisplayedErrors);
-        await Verify(ReadOutput(workspace));
+        Assert.Equal(fetched.CommitSha,
+            AspireConfigFile.Load(Path.Combine(workspace.Path, "out"))!.Provenance!.Template!.Sha);
+        await Verify(ReadOutput(workspace)).AddScrubber(builder => builder.Replace(fetched.CommitSha, "COMMIT_SHA"));
     }
 
     [Theory]
