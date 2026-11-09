@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using System.Text;
 
 namespace Aspire.Cli.Tests.TestServices;
 
@@ -16,11 +17,39 @@ internal static class ProcessTestHelpers
         }
         else
         {
-            File.WriteAllText(path, "#!/bin/sh\n" + unixScript.ReplaceLineEndings("\n") + "\n");
-            File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            WriteUnixExecutable(path, "#!/bin/sh\n" + unixScript.ReplaceLineEndings("\n") + "\n");
         }
 
         return path;
+    }
+
+    // Tests run in parallel and fork processes at any time. A child forked while this process holds a write handle
+    // to the script inherits it until exec, and Linux fails exec of a file open for writing with ETXTBSY
+    // ("Text file busy"). Writing from a short-lived /bin/sh child keeps the write handle out of the test host.
+    private static void WriteUnixExecutable(string path, string contents)
+    {
+        var startInfo = new ProcessStartInfo("/bin/sh")
+        {
+            RedirectStandardInput = true,
+            RedirectStandardError = true,
+            StandardInputEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
+            UseShellExecute = false,
+        };
+        startInfo.ArgumentList.Add("-c");
+        startInfo.ArgumentList.Add("cat > \"$1\" && chmod 700 \"$1\"");
+        startInfo.ArgumentList.Add("sh");
+        startInfo.ArgumentList.Add(path);
+
+        using var process = Process.Start(startInfo) ?? throw new InvalidOperationException("Failed to start /bin/sh.");
+        var stderr = process.StandardError.ReadToEndAsync();
+        process.StandardInput.Write(contents);
+        process.StandardInput.Close();
+        process.WaitForExit();
+
+        if (process.ExitCode != 0)
+        {
+            throw new InvalidOperationException($"Writing executable '{path}' failed with exit code {process.ExitCode}: {stderr.GetAwaiter().GetResult()}");
+        }
     }
 
     public static async Task<int> WaitForProcessIdAsync(string pidFile, CancellationToken cancellationToken)
