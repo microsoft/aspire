@@ -4399,6 +4399,20 @@ func FormatError(err error) string {
 	if err == nil {
 		return ""
 	}
+	if joined, ok := err.(interface{ Unwrap() []error }); ok {
+		var b strings.Builder
+		for _, child := range joined.Unwrap() {
+			formatted := FormatError(child)
+			if formatted == "" {
+				continue
+			}
+			if b.Len() > 0 {
+				b.WriteByte('\n')
+			}
+			b.WriteString(formatted)
+		}
+		return b.String()
+	}
 	var capErr *CapabilityError
 	if errors.As(err, &capErr) {
 		var b strings.Builder

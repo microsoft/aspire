@@ -1518,6 +1518,48 @@ public class AtsGoCodeGeneratorTests
                     }
                 }
 
+                func TestFormatErrorIncludesEveryJoinedCapabilityError(t *testing.T) {
+                    first := &CapabilityError{err: atsError{
+                        Code:       "FIRST",
+                        Message:    "first failed",
+                        Capability: "addFirst",
+                    }}
+                    second := &CapabilityError{err: atsError{
+                        Code:       "SECOND",
+                        Message:    "second failed",
+                        Capability: "addSecond",
+                    }}
+
+                    got := FormatError(errors.Join(first, second))
+                    want := "Capability Error: first failed\n" +
+                        "  Code: FIRST\n" +
+                        "  Capability: addFirst\n" +
+                        "Capability Error: second failed\n" +
+                        "  Code: SECOND\n" +
+                        "  Capability: addSecond"
+                    if got != want {
+                        t.Errorf("FormatError() = %q, want %q", got, want)
+                    }
+                }
+
+                func TestFormatErrorIncludesJoinedCapabilityAndOrdinaryErrors(t *testing.T) {
+                    capability := &CapabilityError{err: atsError{
+                        Code:       "CAPABILITY",
+                        Message:    "capability failed",
+                        Capability: "addResource",
+                    }}
+                    ordinary := errors.New("ordinary failure")
+
+                    got := FormatError(errors.Join(capability, ordinary))
+                    want := "Capability Error: capability failed\n" +
+                        "  Code: CAPABILITY\n" +
+                        "  Capability: addResource\n" +
+                        "ordinary failure"
+                    if got != want {
+                        t.Errorf("FormatError() = %q, want %q", got, want)
+                    }
+                }
+
                 func TestPropagatedChildErrorIsNotRecordedAgain(t *testing.T) {
                     c := newClient("")
                     builder := newBuilderOn(c)
