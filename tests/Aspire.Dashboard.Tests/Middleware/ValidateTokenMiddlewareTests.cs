@@ -175,8 +175,6 @@ public class ValidateTokenMiddlewareTests
         var location = response.Headers.Location?.OriginalString;
         Assert.NotNull(location);
         Assert.StartsWith("/login?returnUrl=", location, StringComparison.Ordinal);
-        // Don't use Uri.TryCreate(..., UriKind.Absolute) to detect an external redirect. On Linux and macOS a rooted path such as
-        // "/login" is parsed as an absolute file: URI, so that check passes or fails depending on the OS.
         Assert.True(RedirectHttpResult.IsLocalUrl(location));
         Assert.DoesNotContain("t=wrong", location, StringComparison.Ordinal);
     }
