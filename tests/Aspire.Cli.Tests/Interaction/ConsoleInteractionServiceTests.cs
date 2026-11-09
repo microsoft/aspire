@@ -1581,8 +1581,8 @@ public class ConsoleInteractionServiceTests(ITestOutputHelper outputHelper)
         var interactionService = CreateInteractionService(console);
 
         var executionContext = CreateExecutionContext();
-        interactionService.DisplaySourceTrustWarning(executionContext);
-        interactionService.DisplaySourceTrustWarning(executionContext);
+        Assert.True(interactionService.DisplaySourceTrustWarning(executionContext));
+        Assert.False(interactionService.DisplaySourceTrustWarning(executionContext));
 
         var expected = enableColor
             ? $"\u001b[91m\U0001F6A8\u001b[0m \u001b[93m{SharedCommandStrings.SourceTrustWarning}\u001b[0m"

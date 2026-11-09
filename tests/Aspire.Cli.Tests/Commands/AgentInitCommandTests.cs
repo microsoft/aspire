@@ -16,7 +16,6 @@ using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.Agents;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
-using Aspire.Cli.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -287,42 +286,6 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         }
         await Verify(new { Sources = renderedSources.ToString(), Warnings = messagesBeforeRegistration })
             .UseParameters(agents).ScrubLinesWithReplace(line => line.TrimEnd());
-    }
-
-    [Fact]
-    public async Task AgentInit_DoesNotRepeatAnEarlierSourceTrustWarning()
-    {
-        using var context = new AgentConfigurationTestContext(outputHelper);
-        await AgentConfigurationTestContext.WriteAsync(Path.Combine(context.Project.FullName, AspireConfigFile.FileName), """
-            {
-              "skillSources": {
-                "team": { "repository": "example/team" }
-              }
-            }
-            """);
-        var interaction = new TestInteractionService();
-        interaction.DisplayMessageCallback = (_, message, _) =>
-        {
-            if (message == AgentCommandStrings.InitCommand_SkillSourcesExplanation)
-            {
-                interaction.DisplaySourceTrustWarning(context.ExecutionContext);
-            }
-        };
-        using var provider = context.CreateServiceCollection(outputHelper, options =>
-        {
-            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
-            options.InteractionServiceFactory = _ => interaction;
-        }).BuildServiceProvider();
-
-        var exitCode = await provider.GetRequiredService<RootCommand>()
-            .Parse("agent init --agents copilot --scope project --skills aspire")
-            .InvokeAsync().DefaultTimeout();
-
-        Assert.Equal(CliExitCodes.Success, exitCode);
-        Assert.Single(interaction.DisplayedMessages,
-            message => message.Message == $"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]");
-        Assert.Single(interaction.DisplayedRenderables);
-        Assert.True(File.Exists(context.Copilot.GetIntegrationConfigPath(AgentConfigurationScope.Project, context.Project)));
     }
 
     [Fact]

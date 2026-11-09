@@ -126,14 +126,15 @@ internal static class ConsoleHelpers
         return label;
     }
 
-    public static void DisplaySourceTrustWarning(this IInteractionService interactionService, CliExecutionContext executionContext)
+    public static bool DisplaySourceTrustWarning(this IInteractionService interactionService, CliExecutionContext executionContext)
     {
         if (!executionContext.TryMarkSourceTrustWarningDisplayed())
         {
-            return;
+            return false;
         }
 
         interactionService.DisplayMessage(KnownEmojis.PoliceCarLight, $"[yellow]{SharedCommandStrings.SourceTrustWarning.EscapeMarkup()}[/]", allowMarkup: true, consoleOverride: ConsoleOutput.Error);
+        return true;
     }
 
     public static void DisplayNuGetSearchLimitWarning(this IInteractionService interactionService)
