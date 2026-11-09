@@ -1,4 +1,4 @@
-// Licensed to the .NET Foundation under one or more agreements.
+﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
@@ -324,11 +324,12 @@ public sealed class ResourcePaneInteractionTests : PlaywrightTestsBase<Resources
                     const groups=[...hint.querySelectorAll('.resource-selection-instruction')].map(e=>e.getBoundingClientRect());
                     const counts=hint.parentElement.firstElementChild.getBoundingClientRect();
                     const actions=hint.parentElement.querySelector('.resource-pane-foot-actions').getBoundingClientRect();
-                    return [Math.abs(h.x+h.width/2-f.x-f.width/2),Math.abs(groups[0].y-groups[1].y),
+                    return [actions.left-h.right,Math.abs(groups[0].y-groups[1].y),
                         h.height,counts.right<=h.left && actions.left>=h.right ? 1:0];
                 }
                 """);
-            Assert.InRange(hintGeometry[0], 0, .5);
+            // The hint is right-aligned, just before the view options, so the counts keep their full width.
+            Assert.InRange(hintGeometry[0], 0, 8.5);
             Assert.Equal(0, hintGeometry[1]);
             Assert.InRange(hintGeometry[2], 0, 18);
             Assert.Equal(1, hintGeometry[3]);
@@ -360,8 +361,8 @@ public sealed class ResourcePaneInteractionTests : PlaywrightTestsBase<Resources
             Assert.Equal(allNames.Where(name => name != "multi-b").Order(), selectedNames.Order());
             await Assertions.Expect(GetRowLink("multi-b")).Not.ToHaveAttributeAsync("aria-current", "true");
 
-            // The full-page list, which lives on the Overview tab (the dashboard's home), shows the same hint centered in
-            // its footer.
+            // The full-page list, which lives on the Overview tab (the dashboard's home), shows the same hint at the end of
+            // its footer, before the view options.
             await page.GotoAsync("/");
             await Assertions.Expect(page.Locator(".resources-layout.pane-full-canvas")).ToBeVisibleAsync();
             await Assertions.Expect(hint).ToBeVisibleAsync();
@@ -373,7 +374,10 @@ public sealed class ResourcePaneInteractionTests : PlaywrightTestsBase<Resources
             var hintBounds = await hint.BoundingBoxAsync();
             Assert.NotNull(footerBounds);
             Assert.NotNull(hintBounds);
-            Assert.InRange(Math.Abs(hintBounds.X + hintBounds.Width / 2 - footerBounds.X - footerBounds.Width / 2), 0, .5);
+            var footerActionsBounds = await page.Locator(".resource-workspace-foot .resource-pane-foot-actions").BoundingBoxAsync();
+            Assert.NotNull(footerActionsBounds);
+            Assert.InRange(footerActionsBounds.X - (hintBounds.X + hintBounds.Width), 0, 8.5);
+            Assert.True(hintBounds.X > footerBounds.X + footerBounds.Width / 2);
             await Assertions.Expect(hint.Locator("kbd").First).ToHaveTextAsync(usesCommand ? "⌘ + click" : "Ctrl + click");
             await Assertions.Expect(hint.Locator("kbd").Last).ToHaveTextAsync("Shift + click");
             await Assertions.Expect(hint).ToContainTextAsync("Add/remove");

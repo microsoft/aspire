@@ -1,4 +1,4 @@
-// Licensed to the .NET Foundation under one or more agreements.
+﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Immutable;
@@ -1632,18 +1632,18 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                     """);
                 var source = page.Locator(".resource-row[data-resource-name='api'] .resource-row-source-value");
                 var before = page.Url;
-                // The source column leads with the type.
-                await Assertions.Expect(source).ToHaveTextAsync("Project MyFrontend.csproj");
+                // The Source column is the source alone; the type is in the name column.
+                await Assertions.Expect(source).ToHaveTextAsync("MyFrontend.csproj");
                 await source.FocusAsync();
                 await Assertions.Expect(source).ToBeFocusedAsync();
-                await Assertions.Expect(source).ToHaveAttributeAsync("data-tooltip", $"Project: {Path.Combine("workspace", "MyFrontend.csproj")}");
-                await Assertions.Expect(source).ToHaveAttributeAsync("aria-label", $"Source: Project {Path.Combine("workspace", "MyFrontend.csproj")}");
+                await Assertions.Expect(source).ToHaveAttributeAsync("data-tooltip", Path.Combine("workspace", "MyFrontend.csproj"));
+                await Assertions.Expect(source).ToHaveAttributeAsync("aria-label", $"Source: {Path.Combine("workspace", "MyFrontend.csproj")}");
                 await Assertions.Expect(page.Locator(".resource-relationship-summary, .resource-row-dependencies, .resource-row-references")).ToHaveCountAsync(0);
                 var columns = await page.Locator(".resource-row-source").EvaluateAllAsync<double[]>(
                     "sources => sources.map(source => source.getBoundingClientRect().x)");
                 Assert.InRange(columns.Max() - columns.Min(), 0, 1);
                 var image = page.Locator(".resource-row[data-resource-name='cache'] .resource-row-source-value");
-                await Assertions.Expect(image).ToHaveAttributeAsync("data-tooltip", $"Container (persistent): {MetadataResourcesFixture.LongImage}");
+                await Assertions.Expect(image).ToHaveAttributeAsync("data-tooltip", MetadataResourcesFixture.LongImage);
                 Assert.True(await image.EvaluateAsync<bool>("source => source.scrollWidth > source.clientWidth"));
                 Assert.Equal(before, page.Url);
                 await page.ScreenshotAsync(new() { Path = Path.Combine(AppContext.BaseDirectory, $"resource-tree-{theme}-canvas-{width}.png") });
@@ -2248,9 +2248,9 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             var pane = page.Locator(".resource-pane");
             var tooltip = page.Locator("aspire-tooltip-provider fluent-tooltip[aria-hidden='false']");
 
-            // While the actions show in place of the type column, the row's tooltip names the type, for the pointer and
-            // for the keyboard. The state dot stays after the name, with the state in its own tooltip.
-            foreach (var (name, expected) in new[] { ("api", "Project"), ("cache", "Container (persistent)") })
+            // While the actions show in place of the type and state columns, the row's tooltip names both, for the
+            // pointer and for the keyboard.
+            foreach (var (name, expected) in new[] { ("api", "Project · Running (Unhealthy)"), ("cache", "Container (persistent) · Running") })
             {
                 var link = pane.Locator($"[data-resource-name='{name}'] .resource-row-link").First;
                 await page.Mouse.MoveAsync(1, 1);
@@ -2270,8 +2270,8 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             var expandedLink = pane.Locator("[data-resource-name='api'] .resource-row-link").First;
             await page.Mouse.MoveAsync(1, 1);
             await expandedLink.Locator(".resource-row-name").HoverAsync();
-            // The type leads the source column when it shows, rather than having its own column.
-            await Assertions.Expect(pane.Locator("[data-resource-name='api']").First.Locator(".resource-row-type:visible, .resource-row-source-type:visible").First).ToBeVisibleAsync();
+            // The type shows in the name column, before the state dot.
+            await Assertions.Expect(pane.Locator("[data-resource-name='api']").First.Locator(".resource-row-meta .resource-row-type")).ToBeVisibleAsync();
             Assert.Null(await expandedLink.GetAttributeAsync("data-tooltip"));
         });
     }
@@ -2332,7 +2332,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                 var row = pane.Locator($"[data-resource-name='{name}']").First;
                 // When the full-page list shows its source column, the type leads the source rather than having its
                 // own column.
-                var type = row.Locator(".resource-row-type:visible, .resource-row-source-type:visible").First;
+                var type = row.Locator(".resource-row-type:visible").First;
                 var link = row.Locator(".resource-row-link");
                 await row.ScrollIntoViewIfNeededAsync();
                 await page.Mouse.MoveAsync(1, 1);
@@ -2357,7 +2357,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                 await page.Keyboard.PressAsync("Escape");
                 await Assertions.Expect(type).ToBeVisibleAsync();
             }
-            await Assertions.Expect(pane.Locator("[data-resource-name='cache']").First.Locator(".resource-row-type:visible, .resource-row-source-type:visible").First)
+            await Assertions.Expect(pane.Locator("[data-resource-name='cache']").First.Locator(".resource-row-type:visible").First)
                 .ToHaveTextAsync("Container (persistent)");
             Assert.True(await pane.EvaluateAsync<bool>("el => el.scrollWidth <= el.clientWidth + 1"));
         });
@@ -2672,7 +2672,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
         public const string Endpoint = "https://example.test/api/a-deliberately-long-endpoint-address-for-the-resource-pane?token=synthetic-secret&mode=preview";
         public const string TcpEndpoint = "tcp://example.test:5432?password=synthetic-secret";
         public static readonly string LongFriendlyName = "SyntheticFrontend" + new string('A', 150);
-        public static readonly string LongImage = "registry.example.test/testshop/" + new string('i', 120) + ":latest";
+        public static readonly string LongImage = "registry.example.test/testshop/" + new string('i', 240) + ":latest";
         public static readonly string LongResourceName = "worker-" + new string('x', 160);
         public static readonly DateTime StartTime = new(2026, 11, 2, 18, 20, 30, DateTimeKind.Utc);
 

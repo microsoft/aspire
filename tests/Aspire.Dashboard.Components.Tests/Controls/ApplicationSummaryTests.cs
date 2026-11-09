@@ -46,7 +46,7 @@ public class ApplicationSummaryTests : DashboardTestContext
         Assert.Empty(cut.FindAll(".resource-card, .home-resource-table"));
         Assert.Equal(graphEnabled ? ["Summary", "Graph"] : ["Summary"],
             outlet.FindAll(".icon-toggle").Select(e => e.GetAttribute("aria-label")));
-        Assert.IsType<Icons.Regular.Size20.DataBarVertical>(
+        Assert.IsType<Icons.Regular.Size20.DataUsage>(
             outlet.FindComponent<IconToggleGroup<GroupOverview>>().Instance.Options.Single(option => option.Value == GroupOverview.Summary).Icon);
     }
 
