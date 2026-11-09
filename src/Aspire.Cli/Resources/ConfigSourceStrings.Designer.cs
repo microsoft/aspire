@@ -122,7 +122,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ConfigurationFile", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to A configuration source is available. Specify --use-config-source to accept it or --use-config-source false to use standard Aspire configuration in non-interactive mode..
         /// </summary>
@@ -140,7 +140,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("DefaultBranch", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Microsoft employee default.
         /// </summary>
@@ -158,7 +158,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("Explanation", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Git could not be started. Ensure Git is installed and available on PATH to use this configuration source..
         /// </summary>
@@ -230,7 +230,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("InvalidReadmeUrl", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to The configuration source ref must be a branch name or full commit SHA, not an empty value, tag, revision expression, or command option..
         /// </summary>
@@ -293,7 +293,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ReadmeLink", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Apply allowed settings from the nearest local saved Git configuration source, replacing local edits to supplied settings, without updating packages or the CLI..
         /// </summary>
@@ -320,7 +320,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("SourceOrigin", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to A new version of the configuration source is available. Run `aspire update --config-source` to apply it..
         /// </summary>

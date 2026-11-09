@@ -113,7 +113,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("FetchingSource", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Fetching {0} using Git....
         /// </summary>
@@ -122,7 +122,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("FetchingSourceStatus", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Fetching {0} from {1} using Git. Git may prompt you to authenticate..
         /// </summary>
@@ -131,7 +131,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("FetchingSourceWithAuthentication", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Output format for detached AppHost results.
         /// </summary>
@@ -149,7 +149,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("GitFetchConfigurationSource", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to templates.
         /// </summary>
@@ -158,7 +158,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("GitFetchTemplates", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Language.
         /// </summary>
@@ -338,7 +338,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("NuGetSearchSourceFailedWarning", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to The environment to use for the operation. The default is &apos;Production&apos;..
         /// </summary>
@@ -446,7 +446,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("SourceFeed", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Git path.
         /// </summary>
@@ -455,7 +455,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("SourceGitPath", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Git source.
         /// </summary>
@@ -464,7 +464,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("SourceGitRepository", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Marketplace.
         /// </summary>
@@ -473,7 +473,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("SourceMarketplace", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Name.
         /// </summary>
@@ -482,7 +482,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("SourceName", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to OpenCode V1 catalog.
         /// </summary>
@@ -491,7 +491,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("SourceOpenCodeV1Catalog", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to OpenCode V2 catalog.
         /// </summary>
@@ -500,7 +500,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("SourceOpenCodeV2Catalog", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Path.
         /// </summary>
@@ -509,7 +509,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("SourcePath", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Package patterns.
         /// </summary>
@@ -518,7 +518,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("SourcePatterns", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Plugins.
         /// </summary>
@@ -527,7 +527,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("SourcePlugins", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Git ref.
         /// </summary>
@@ -536,7 +536,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("SourceRef", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Only use sources you trust. Content from these sources can run code on your machine..
         /// </summary>

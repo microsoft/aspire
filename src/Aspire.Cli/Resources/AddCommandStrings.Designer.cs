@@ -230,7 +230,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("IntegrationSourceExplanation", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to No integration packages were found. Please check your internet connection or NuGet source configuration..
         /// </summary>

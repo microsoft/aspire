@@ -68,7 +68,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("BuiltInTemplates", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Channel to use for templates (stable, daily).
         /// </summary>
@@ -554,7 +554,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("TemplateSourceDisplayNameInvalid", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to One or more template sources are configured. A template source lets an organization share Aspire templates to customize your development experience..
         /// </summary>
@@ -563,7 +563,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("TemplateSourceExplanation", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Expected an HTTPS or SSH Git repository URL without passwords, tokens, queries, or fragments. SSH usernames are allowed..
         /// </summary>
