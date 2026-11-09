@@ -7,7 +7,7 @@ import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { joinSession, createCanvas, CanvasError } from "@github/copilot-sdk/extension";
-import { describeSafeError } from "./safe-error.mjs";
+import { jsonResponse, respondWithError, toCloseFailure } from "./http-response.mjs";
 
 const repo = "microsoft/aspire";
 const [repoOwner, repoName] = repo.split("/");
@@ -870,11 +870,7 @@ async function closeIssues(numbers, reason) {
             closed.push(await closeIssue(number, reason));
         }
         catch (error) {
-            await copilotSession?.log(`Issue triage failed to close #${number}: ${String(error.stderr || error.message || error)}`, { level: "warning", ephemeral: true });
-            failures.push({
-                number,
-                error: describeSafeError(error, "The issue could not be closed. See the Copilot session log for details."),
-            });
+            failures.push(await toCloseFailure(number, error, logToSession));
         }
     }
 
@@ -890,12 +886,8 @@ async function closeIssues(numbers, reason) {
     return { closed, failures };
 }
 
-function jsonResponse(res, statusCode, body) {
-    res.writeHead(statusCode, {
-        "Content-Type": "application/json; charset=utf-8",
-        "Cache-Control": "no-store",
-    });
-    res.end(JSON.stringify(body));
+function logToSession(message, options) {
+    return copilotSession?.log(message, options);
 }
 
 async function readJsonBody(req) {
@@ -3211,17 +3203,7 @@ async function handleRequest(instanceId, req, res) {
         jsonResponse(res, 404, { error: "Not found" });
     }
     catch (error) {
-        await copilotSession?.log(`Issue triage canvas error: ${String(error.stderr || error.message || error)}`, { level: "error", ephemeral: true });
-        if (!res.headersSent) {
-            // The detail was logged above; the browser only gets a fixed message so stderr,
-            // paths, and stack traces are never exposed to the page.
-            jsonResponse(res, 500, { error: describeSafeError(error) });
-            return;
-        }
-
-        if (!res.writableEnded) {
-            res.end();
-        }
+        await respondWithError(res, error, logToSession);
     }
 }
 
