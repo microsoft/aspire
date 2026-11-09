@@ -22,6 +22,61 @@ namespace Aspire.Cli.Tests.Commands;
 public partial class NewCommandLocalTemplateTests
 {
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ConfiguredGitSources_FetchNoticesIdentifyEachRepository(bool pinned)
+    {
+        const string firstRepository = "https://example.test/first.git";
+        const string secondRepository = "ssh://git@example.test/second.git";
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var interaction = new TestInteractionService
+        {
+            PromptForSelectionCallback = (_, choices, _, _) => choices.Cast<object>().Last()
+        };
+        interaction.SetupStringPromptResponse("Hello");
+        var git = TestGitCommandRunner.CreateForTemplateCheckout((_, destination, _, _) =>
+            CreateClonedSearchTemplateAsync(workspace, destination, "Remote"));
+        var runGit = Assert.IsType<Func<GitCommandInvocation, CancellationToken, Task<string>>>(git.RunCallback);
+        git.RunCallback = (command, token) =>
+        {
+            var repository = command.Arguments[0] switch
+            {
+                "ls-remote" => command.Arguments[2],
+                "fetch" => TestGitCommandRunner.GetFetchArguments(command).Repository,
+                _ => null
+            };
+            if (repository is not null)
+            {
+                var notice = interaction.DisplayedMessages.Last(message => message.Emoji.Equals(KnownEmojis.InboxTray));
+                Assert.Contains(repository, notice.Message);
+            }
+            return runGit(command, token);
+        };
+        var services = CreateServices(workspace, interaction, interactive: true);
+        services.AddSingleton<IGitCommandRunner>(git);
+        using var provider = services.BuildServiceProvider();
+        await WriteConfiguredSourcesAsync(provider, new()
+        {
+            ["first"] = new { repository = firstRepository, @ref = pinned ? TestGitCommandRunner.DefaultCommitSha : null },
+            ["second"] = new { repository = secondRepository, @ref = pinned ? TestGitCommandRunner.DefaultCommitSha : null }
+        });
+
+        var exitCode = await provider.GetRequiredService<RootCommand>()
+            .Parse("new --name Demo --output out --suppress-agent-init").InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal([firstRepository, secondRepository], GetGitFetches(git).Select(fetch => fetch.Repository));
+        var notices = interaction.DisplayedMessages.Where(message => message.Emoji.Equals(KnownEmojis.InboxTray)).ToArray();
+        Assert.Equal(new[] { firstRepository, secondRepository }.Select(repository =>
+        {
+            var source = pinned ? $"{repository} ({SharedCommandStrings.SourceRef}: {TestGitCommandRunner.DefaultCommitSha})" : repository;
+            return $"[blue]{string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.FetchingSourceWithAuthentication,
+                string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.GitFetchTemplatesFromSource, source))}[/]";
+        }), notices.Select(notice => notice.Message));
+        Assert.All(notices, notice => Assert.Equal(ConsoleOutput.Error, notice.ConsoleOverride));
+    }
+
+    [Theory]
     [InlineData(null, null)]
     [InlineData("release/templates", null)]
     [InlineData("refs/heads/release/templates", "Company [templates]")]
@@ -40,9 +95,11 @@ public partial class NewCommandLocalTemplateTests
         var runGit = git.RunCallback ?? throw new InvalidOperationException("A template checkout must configure the Git runner.");
         git.RunCallback = (command, token) =>
         {
+            var source = reference is null ? repository : $"{repository} ({SharedCommandStrings.SourceRef}: {reference})";
             Assert.Equal(
                 [NewCommandStrings.TemplateSourceExplanation, $"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]",
-                    $"[blue]{string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.FetchingSourceWithAuthentication, SharedCommandStrings.GitFetchTemplates)}[/]"],
+                    $"[blue]{string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.FetchingSourceWithAuthentication,
+                        string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.GitFetchTemplatesFromSource, source))}[/]"],
                 interaction.DisplayedMessages.Select(message => message.Message));
             Assert.Single(interaction.DisplayedRenderables);
             Assert.Empty(interaction.DisplayedPlainText);
@@ -618,5 +675,9 @@ public partial class NewCommandLocalTemplateTests
 
     private static IReadOnlyList<(string Repository, DirectoryInfo Destination, string CommitSha)> GetGitFetches(TestGitCommandRunner git) =>
         git.Commands.Where(call => call.Arguments[0] == "fetch")
-            .Select(call => (call.Arguments[5], call.WorkingDirectory, call.Arguments[6])).ToArray();
+            .Select(call =>
+            {
+                var (repository, reference) = TestGitCommandRunner.GetFetchArguments(call);
+                return (repository, call.WorkingDirectory, reference);
+            }).ToArray();
 }
