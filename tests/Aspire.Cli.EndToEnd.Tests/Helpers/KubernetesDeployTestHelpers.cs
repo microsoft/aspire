@@ -236,9 +236,18 @@ internal static class KubernetesDeployTestHelpers
     {
         // Installing the control plane pulls several images and waits for the
         // radius-system pods to become ready, so allow a generous budget.
-        await auto.TypeAsync($"rad install kubernetes --kubecontext kind-{clusterName}");
+        // rad fetches its Helm charts (e.g. Contour) from GitHub release assets, which intermittently
+        // return 5xx; retry only those fast-failing chart download errors, never install/readiness failures.
+        // Radius is installed before Contour is fetched, so retries need --reinstall: without it rad sees the
+        // existing Radius release, exits 0, and never installs Contour.
+        await auto.TypeAsync(
+            "rad_reinstall=''; for i in 1 2 3; do " +
+            $"rad install kubernetes --kubecontext kind-{clusterName} $rad_reinstall 2>&1 | tee /tmp/rad-install.log; rad_rc=${{PIPESTATUS[0]}}; " +
+            "if [ $rad_rc -eq 0 ] || ! grep -qE 'error downloading helm chart|failed to fetch' /tmp/rad-install.log; then break; fi; " +
+            "echo \"Retry $i/3: Radius Helm chart download failed\"; rad_reinstall=--reinstall; sleep $((i * 15)); " +
+            "done; (exit $rad_rc)");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(10));
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(15));
 
         await auto.TypeAsync("rad group create default");
         await auto.EnterAsync();
