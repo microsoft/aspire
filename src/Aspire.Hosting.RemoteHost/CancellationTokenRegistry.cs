@@ -11,9 +11,15 @@ namespace Aspire.Hosting.RemoteHost;
 /// </summary>
 internal sealed class CancellationTokenRegistry : IDisposable
 {
+    // Early cancellation should normally be consumed as soon as the concurrently dispatched
+    // invocation unmarshals its arguments. Bound markers that never find a matching invocation
+    // so malformed or abandoned requests cannot retain memory for the connection lifetime.
+    private const int MaxPendingCancellations = 1024;
+
     private readonly object _lock = new();
     private readonly Dictionary<string, CancellationTokenSource> _sources = [];
-    private readonly HashSet<string> _pendingCancellations = [];
+    private readonly Dictionary<string, LinkedListNode<string>> _pendingCancellations = [];
+    private readonly LinkedList<string> _pendingCancellationOrder = [];
     private int _counter;
     private bool _disposed;
 
@@ -68,7 +74,17 @@ internal sealed class CancellationTokenRegistry : IDisposable
             {
                 // JsonRpc dispatches requests concurrently, so cancelToken can run before
                 // invokeCapability has unmarshalled and registered this guest-provided ID.
-                _pendingCancellations.Add(tokenId);
+                if (!_pendingCancellations.ContainsKey(tokenId))
+                {
+                    var node = _pendingCancellationOrder.AddLast(tokenId);
+                    _pendingCancellations.Add(tokenId, node);
+                    if (_pendingCancellations.Count > MaxPendingCancellations)
+                    {
+                        var oldest = _pendingCancellationOrder.First!;
+                        _pendingCancellationOrder.RemoveFirst();
+                        _pendingCancellations.Remove(oldest.Value);
+                    }
+                }
                 return false;
             }
         }
@@ -95,7 +111,7 @@ internal sealed class CancellationTokenRegistry : IDisposable
     {
         lock (_lock)
         {
-            _pendingCancellations.Remove(tokenId);
+            RemovePendingCancellation(tokenId);
             if (_sources.Remove(tokenId, out var cts))
             {
                 cts.Dispose();
@@ -147,7 +163,7 @@ internal sealed class CancellationTokenRegistry : IDisposable
 
             var cts = new CancellationTokenSource();
             _sources.Add(tokenId, cts);
-            if (_pendingCancellations.Remove(tokenId))
+            if (RemovePendingCancellation(tokenId))
             {
                 cts.Cancel();
             }
@@ -174,6 +190,18 @@ internal sealed class CancellationTokenRegistry : IDisposable
 
             _sources.Clear();
             _pendingCancellations.Clear();
+            _pendingCancellationOrder.Clear();
         }
+    }
+
+    private bool RemovePendingCancellation(string tokenId)
+    {
+        if (!_pendingCancellations.Remove(tokenId, out var node))
+        {
+            return false;
+        }
+
+        _pendingCancellationOrder.Remove(node);
+        return true;
     }
 }
