@@ -1,7 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics.CodeAnalysis;
+using System.Diagnostics;
 using System.Globalization;
 using System.Reflection;
 using System.Text;
@@ -31,7 +31,8 @@ internal sealed class GoExportedValueTreeNode
 ///     and aggregates errors via errors.Join.
 ///   - No init() functions; per-client wrapper / callback registries are
 ///     populated inside CreateBuilder via registerWrappers(c).
-///   - Variadic options merge via the deepUpdate helper in base.go.
+///   - Optional parameters use grpc-go-style functional options that apply to
+///     generated options structs.
 ///   - Union parameters use Go 1.18+ type-set generics — no AspireUnion wrapper.
 /// </summary>
 internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
@@ -108,11 +109,48 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
             ["aspire.go"] = GenerateAspireSdk(context)
         };
 
-        // The files mix raw string literals, StringWriter output and embedded resources, which take the line endings
-        // of the machine that built or runs the generator (CRLF on Windows). gofmt rewrites CRLF, so write LF everywhere.
-        // Only CRLF is replaced: ReplaceLineEndings would also split lines at characters such as U+2028 or form feed,
-        // which Go allows inside comments and string literals.
+        foreach (var fileName in files.Keys.Where(fileName => fileName.EndsWith(".go", StringComparison.Ordinal)).ToList())
+        {
+            files[fileName] = FormatGoSource(fileName, files[fileName]);
+        }
+
+        // gofmt writes LF, and non-Go module files must use the same deterministic line endings.
         return files.ToDictionary(file => file.Key, file => file.Value.Replace("\r\n", "\n"), StringComparer.Ordinal);
+    }
+
+    private static string FormatGoSource(string fileName, string source)
+    {
+        using var process = new Process
+        {
+            StartInfo = new ProcessStartInfo("gofmt")
+            {
+                RedirectStandardInput = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                StandardInputEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
+                StandardOutputEncoding = Encoding.UTF8,
+                StandardErrorEncoding = Encoding.UTF8
+            }
+        };
+
+        process.Start();
+        var formattedTask = process.StandardOutput.ReadToEndAsync();
+        var errorTask = process.StandardError.ReadToEndAsync();
+        process.StandardInput.Write(source);
+        process.StandardInput.Close();
+
+        process.WaitForExit();
+        var formatted = formattedTask.GetAwaiter().GetResult();
+        var error = errorTask.GetAwaiter().GetResult();
+
+        if (process.ExitCode != 0)
+        {
+            throw new InvalidOperationException($"gofmt failed for generated file '{fileName}': {error.Trim()}");
+        }
+
+        return formatted;
     }
 
     private static string GetEmbeddedResource(string name)
@@ -286,13 +324,6 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
                 .Where(p => IsCancellationToken(p) || p.IsOptional)
                 .ToList();
             if (reservationOptionals.Count == 0)
-            {
-                continue;
-            }
-
-            // Direct-options capabilities thread the DTO type directly and emit no wrapper struct,
-            // so there is no name to reserve for them.
-            if (TryGetDirectOptionsParameter(reservationOptionals, out _))
             {
                 continue;
             }
@@ -684,11 +715,10 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
 
         if (optionalParams.Count > 0)
         {
-            // A flattened options DTO is the argument itself, so its own documentation describes it best.
-            var optionsDescription = TryGetDirectOptionsParameter(optionalParams, out var directOptionsParam)
-                ? directOptionsParam.Documentation?.Summary ?? $"Optional parameters; see {RenderTypeLink(MapDtoType(directOptionsParam.Type!.TypeId))}."
-                : $"Optional parameters; see {RenderTypeLink(GetOptionsTypeName(capability))}.";
-            parameters.Add(new GoDocParameter("options", "options", optionsDescription));
+            parameters.Add(new GoDocParameter(
+                "options",
+                "options",
+                $"Optional parameters; see {RenderTypeLink(GetOptionInterfaceName(capability))}."));
         }
 
         var returnsValue = capability.ReturnType is not null && capability.ReturnType.TypeId != AtsConstants.Void;
@@ -1001,7 +1031,7 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
         }
 
         var valueType = typeRef.Category == AtsTypeCategory.Primitive
-            ? MapPrimitiveType(typeRef.TypeId)
+            ? MapPrimitiveType(typeRef)
             : MapEnumType(typeRef.TypeId);
         return $"func(value {valueType}) *{valueType} {{ return &value }}({renderedValue})";
     }
@@ -1492,21 +1522,6 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
         return (required, optional);
     }
 
-    /// <summary>
-    /// Determines whether a capability's optional parameters can be flattened so the caller passes
-    /// the DTO directly (<c>options ...*HostedAgentOptions</c>) instead of through a generated
-    /// wrapper struct. Go allows only one trailing variadic, so a coexisting cancellation token
-    /// keeps the wrapper.
-    /// </summary>
-    private static bool TryGetDirectOptionsParameter(
-        IReadOnlyList<AtsParameterInfo> optionalParams,
-        [NotNullWhen(true)] out AtsParameterInfo? directOptionsParam)
-        => AtsOptionsFlattening.TryGetDirectOptionsParameter(
-            optionalParams,
-            IsCancellationToken,
-            cancellationTokenIsSeparateParameter: false,
-            out directOptionsParam);
-
     private string RenderParameterList(
         List<AtsParameterInfo> requiredParams,
         List<AtsParameterInfo> optionalParams,
@@ -1529,17 +1544,8 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
             {
                 sb.Append(", ");
             }
-            sb.Append("options ...*");
-            // Single optional DTO named "options" is threaded directly as its DTO type instead of
-            // through a generated wrapper struct (see TryGetDirectOptionsParameter).
-            if (TryGetDirectOptionsParameter(optionalParams, out var directOptionsParam))
-            {
-                sb.Append(MapDtoType(directOptionsParam.Type!.TypeId));
-            }
-            else
-            {
-                sb.Append(GetOptionsTypeName(capability));
-            }
+            sb.Append("options ...");
+            sb.Append(GetOptionInterfaceName(capability));
         }
         return sb.ToString();
     }
@@ -1890,28 +1896,11 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
 
         if (optionalParams.Count > 0)
         {
-            // Direct-options: merge the DTO variadic under the original parameter name. Only emit the
-            // key when a non-nil option was applied, matching the wrapper path's ToMap(), which omits
-            // the nilable field when it is nil (e.g. a lone WithFoo(nil) sends no "options" key).
-            if (TryGetDirectOptionsParameter(optionalParams, out var directOptionsParam))
-            {
-                var dtoType = MapDtoType(directOptionsParam.Type!.TypeId);
-                WriteLine($"{indent}if len(options) > 0 {{");
-                WriteLine($"{indent}\tmerged := &{dtoType}{{}}");
-                WriteLine($"{indent}\tapplied := false");
-                WriteLine($"{indent}\tfor _, opt := range options {{");
-                WriteLine($"{indent}\t\tif opt != nil {{ merged = deepUpdate(merged, opt); applied = true }}");
-                WriteLine($"{indent}\t}}");
-                WriteLine($"{indent}\tif applied {{ reqArgs[{GoStringLiteral(directOptionsParam.Name)}] = serializeValue(merged) }}");
-                WriteLine($"{indent}}}");
-                return;
-            }
-
             var optionsType = GetOptionsTypeName(capability);
             WriteLine($"{indent}if len(options) > 0 {{");
             WriteLine($"{indent}\tmerged := &{optionsType}{{}}");
             WriteLine($"{indent}\tfor _, opt := range options {{");
-            WriteLine($"{indent}\t\tif opt != nil {{ merged = deepUpdate(merged, opt) }}");
+            WriteLine($"{indent}\t\tif opt != nil {{ opt.apply(merged) }}");
             WriteLine($"{indent}\t}}");
             WriteLine($"{indent}\tfor k, v := range merged.ToMap() {{ reqArgs[k] = v }}");
             // Callbacks: wrap the typed user function in a positional `any`
@@ -2120,12 +2109,6 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
                 continue;
             }
 
-            // Direct-options capabilities thread the DTO directly, so no wrapper struct is emitted.
-            if (TryGetDirectOptionsParameter(optionalParams, out _))
-            {
-                continue;
-            }
-
             var name = GetOptionsTypeName(capability);
             seenForCapability[capability.CapabilityId] = name;
             if (!emitted.Add(name))
@@ -2165,6 +2148,34 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
             }
             WriteLine("}");
             WriteLine();
+
+            var optionInterfaceName = GetOptionInterfaceName(capability);
+            var optionFuncName = ToCamelCase(optionInterfaceName) + "Func";
+            WriteLine($"// {optionInterfaceName} configures {ToPascalCase(capability.MethodName)}.");
+            WriteLine($"type {optionInterfaceName} interface {{");
+            WriteLine($"\tapply(*{name})");
+            WriteLine("}");
+            WriteLine();
+            WriteLine($"type {optionFuncName} func(*{name})");
+            WriteLine();
+            WriteLine($"func (f {optionFuncName}) apply(options *{name}) {{");
+            WriteLine("\tf(options)");
+            WriteLine("}");
+            WriteLine();
+
+            foreach (var p in optionalParams)
+            {
+                var fieldName = ToPascalCase(p.Name);
+                var functionName = GetOptionFunctionName(capability, p);
+                var parameterType = RenderOptionFunctionParameterType(p);
+                WriteLine($"// {functionName} sets {p.Name} for {ToPascalCase(capability.MethodName)}.");
+                WriteLine($"func {functionName}(value {parameterType}) {optionInterfaceName} {{");
+                WriteLine($"\treturn {optionFuncName}(func(options *{name}) {{");
+                WriteLine($"\t\toptions.{fieldName} = {RenderOptionAssignment(p)}");
+                WriteLine("\t})");
+                WriteLine("}");
+                WriteLine();
+            }
 
             WriteLine($"func (o *{name}) ToMap() map[string]any {{");
             WriteLine("\tm := map[string]any{}");
@@ -2217,6 +2228,58 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
         return _optionsTypeNames.TryGetValue(capability.CapabilityId, out var name)
             ? name
             : $"{ToPascalCase(capability.MethodName)}Options";
+    }
+
+    private string GetOptionInterfaceName(AtsCapabilityInfo capability)
+    {
+        var optionsType = GetOptionsTypeName(capability);
+        return optionsType.EndsWith("Options", StringComparison.Ordinal)
+            ? optionsType[..^1]
+            : optionsType + "Option";
+    }
+
+    private string GetOptionFunctionName(AtsCapabilityInfo capability, AtsParameterInfo parameter)
+    {
+        var prefix = GetOptionsTypeName(capability);
+        if (prefix.EndsWith("Options", StringComparison.Ordinal))
+        {
+            prefix = prefix[..^"Options".Length];
+        }
+        if (prefix.StartsWith("With", StringComparison.Ordinal))
+        {
+            prefix = prefix["With".Length..];
+        }
+
+        var name = prefix + ToPascalCase(parameter.Name);
+        return IsNameTaken(name)
+            || string.Equals(name, GetOptionsTypeName(capability), StringComparison.Ordinal)
+            || string.Equals(name, GetOptionInterfaceName(capability), StringComparison.Ordinal)
+                ? name + "Value"
+                : name;
+    }
+
+    private string RenderOptionFunctionParameterType(AtsParameterInfo parameter)
+    {
+        if (parameter.IsCallback)
+        {
+            return RenderCallbackType(parameter);
+        }
+        if (IsCancellationToken(parameter))
+        {
+            return "*CancellationToken";
+        }
+        var type = MapInputTypeRefToGo(parameter.Type, isOptional: false);
+        return parameter.Type is { Category: AtsTypeCategory.Primitive or AtsTypeCategory.Enum }
+            && type.StartsWith("*", StringComparison.Ordinal)
+                ? type[1..]
+                : type;
+    }
+
+    private string RenderOptionAssignment(AtsParameterInfo parameter)
+    {
+        return RenderOptionsFieldType(parameter) == RenderOptionFunctionParameterType(parameter)
+            ? "value"
+            : "&value";
     }
 
     private string GetOptionsQualifiedName(AtsCapabilityInfo capability, string simpleName)
@@ -2634,7 +2697,7 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
         // therefore stay concrete even for inputs.
         var baseType = typeRef.Category switch
         {
-            AtsTypeCategory.Primitive => MapPrimitiveType(typeRef.TypeId),
+            AtsTypeCategory.Primitive => MapPrimitiveType(typeRef),
             AtsTypeCategory.Enum => MapEnumType(typeRef.TypeId),
             AtsTypeCategory.Handle => MapHandleType(typeRef.TypeId, asInput),
             AtsTypeCategory.Dto => "*" + MapDtoType(typeRef.TypeId),
@@ -2725,10 +2788,10 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
     private string MapEnumType(string typeId) =>
         _enumNames.TryGetValue(typeId, out var name) ? name : "string";
 
-    private static string MapPrimitiveType(string typeId) => typeId switch
+    private static string MapPrimitiveType(AtsTypeRef typeRef) => typeRef.TypeId switch
     {
         AtsConstants.String or AtsConstants.Char => "string",
-        AtsConstants.Number => "float64",
+        AtsConstants.Number => MapNumericType(typeRef.ClrType),
         AtsConstants.Boolean => "bool",
         AtsConstants.Void => "",
         AtsConstants.Any => "any",
@@ -2739,6 +2802,22 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
         AtsConstants.CancellationToken => "*CancellationToken",
         _ => "any"
     };
+
+    private static string MapNumericType(Type? clrType)
+    {
+        clrType = Nullable.GetUnderlyingType(clrType ?? typeof(double)) ?? clrType ?? typeof(double);
+
+        return clrType == typeof(int) ? "int"
+            : clrType == typeof(long) ? "int64"
+            : clrType == typeof(float) ? "float32"
+            : clrType == typeof(short) ? "int16"
+            : clrType == typeof(byte) ? "uint8"
+            : clrType == typeof(ushort) ? "uint16"
+            : clrType == typeof(uint) ? "uint"
+            : clrType == typeof(ulong) ? "uint64"
+            : clrType == typeof(sbyte) ? "int8"
+            : "float64";
+    }
 
     /// <summary>
     /// Capabilities the generator emits with hand-written bodies. They must be

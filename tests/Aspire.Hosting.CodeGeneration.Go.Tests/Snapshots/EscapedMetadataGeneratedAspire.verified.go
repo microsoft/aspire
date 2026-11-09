@@ -17,9 +17,9 @@ const (
 // EscapedSettings represents EscapedSettings.
 type EscapedSettings struct {
 	// Bad_Name adds Foo. func init() {} //
-	Bad_Name string `json:"bad\"Name,omitempty"`
-	Back_slash float64 `json:"back\\slash,omitempty"`
-	Cal_lback func(con_text string) `json:"cal\"lback,omitempty"`
+	Bad_Name   string                `json:"bad\"Name,omitempty"`
+	Back_slash float64               `json:"back\\slash,omitempty"`
+	Cal_lback  func(con_text string) `json:"cal\"lback,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.
@@ -53,13 +53,13 @@ var Defaults_X = struct {
 var Emoji = struct {
 	Anything any
 	Greeting string
-	Lookup map[string]string
-	Status EscapedStatus
+	Lookup   map[string]string
+	Status   EscapedStatus
 }{
 	Anything: "😀",
 	Greeting: "hi 😀",
-	Lookup: map[string]string{"😀": "😀"},
-	Status: EscapedStatus("Ready😀"),
+	Lookup:   map[string]string{"😀": "😀"},
+	Status:   EscapedStatus("Ready😀"),
 }
 
 // ============================================================================
@@ -106,12 +106,12 @@ type EscapedResource interface {
 	// Parameters:
 	//   - na_me: The name.
 	//   - un_ion: The union value.
-	//   - options: Optional parameters; see [With_QuoteOptions].
-	With_Quote(na_me string, un_ion any, options ...*With_QuoteOptions) EscapedResource
+	//   - options: Optional parameters; see [With_QuoteOption].
+	With_Quote(na_me string, un_ion any, options ...With_QuoteOption) EscapedResource
 
 	// Parameters:
-	//   - options: Optional parameters; see [WithCancelOptions].
-	WithCancel(options ...*WithCancelOptions) EscapedResource
+	//   - options: Optional parameters; see [WithCancelOption].
+	WithCancel(options ...WithCancelOption) EscapedResource
 
 	// WithHostileDocumentation adds Foo. func init() {} //
 	//
@@ -151,7 +151,9 @@ func newEscapedResourceFromHandle(h *handle, c *client) EscapedResource {
 
 // Add_Child_X adds a child.
 func (s *escapedResource) Add_Child_X() Child_Quote {
-	if err := s.Err(); err != nil { return &child_Quote{resourceBuilderBase: newPropagatedErroredResourceBuilder(err, s.client)} }
+	if err := s.Err(); err != nil {
+		return &child_Quote{resourceBuilderBase: newPropagatedErroredResourceBuilder(err, s.client)}
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -170,17 +172,24 @@ func (s *escapedResource) Add_Child_X() Child_Quote {
 
 // AddFoo adds Foo. func init() {} //
 func (s *escapedResource) AddFoo() EscapedResource {
-	if s.Err() != nil { return s }
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
-	if _, err := s.client.invokeCapability(ctx, "Tests/addFoo", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Tests/addFoo", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 func (s *escapedResource) GetBackslash() (string, error) {
-	if err := s.Err(); err != nil { var zero string; return zero, err }
+	if err := s.Err(); err != nil {
+		var zero string
+		return zero, err
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -195,13 +204,18 @@ func (s *escapedResource) GetBackslash() (string, error) {
 
 // GetExpression gets an expression.
 func (s *escapedResource) GetExpression() *ReferenceExpression {
-	if s.Err() != nil { return nil }
+	if s.Err() != nil {
+		return nil
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
 	result, err := s.client.invokeCapability(ctx, "Tests/getExpression\"%d", reqArgs)
-	if err != nil { s.setErr(err); return nil }
+	if err != nil {
+		s.setErr(err)
+		return nil
+	}
 	typed, ok := result.(*ReferenceExpression)
 	if !ok {
 		s.setErr(fmt.Errorf("aspire: Tests/getExpression\"%%d returned unexpected type %T", result))
@@ -211,7 +225,9 @@ func (s *escapedResource) GetExpression() *ReferenceExpression {
 }
 
 func (s *escapedResource) Reset(cal_lback func(con_text string)) error {
-	if err := s.Err(); err != nil { return err }
+	if err := s.Err(); err != nil {
+		return err
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"tar\"get": s.handle.ToJSON(),
@@ -239,33 +255,46 @@ func (s *escapedResource) Tags() *List[string] {
 }
 
 // Allowed types for parameter un_ion: string, float64 (float64 accepts any built-in Go numeric type).
-func (s *escapedResource) With_Quote(na_me string, un_ion any, options ...*With_QuoteOptions) EscapedResource {
-	if s.Err() != nil { return s }
+func (s *escapedResource) With_Quote(na_me string, un_ion any, options ...With_QuoteOption) EscapedResource {
+	if s.Err() != nil {
+		return s
+	}
 	switch un_ion.(type) {
 	case string, float64, int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, float32:
 	default:
 		err := fmt.Errorf("aspire: With_Quote: parameter %q must be one of [string, float64], got %T", "un\"ion", un_ion)
-		s.setErr(err); return s
+		s.setErr(err)
+		return s
 	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
 	reqArgs["na\"me"] = serializeValue(na_me)
-	if !isNil(un_ion) { reqArgs["un\"ion"] = serializeValue(un_ion) }
+	if !isNil(un_ion) {
+		reqArgs["un\"ion"] = serializeValue(un_ion)
+	}
 	if len(options) > 0 {
 		merged := &With_QuoteOptions{}
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil {
+				opt.apply(merged)
+			}
 		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		for k, v := range merged.ToMap() {
+			reqArgs[k] = v
+		}
 	}
-	if _, err := s.client.invokeCapability(ctx, "Tests/with\"Quote", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Tests/with\"Quote", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
-func (s *escapedResource) WithCancel(options ...*WithCancelOptions) EscapedResource {
-	if s.Err() != nil { return s }
+func (s *escapedResource) WithCancel(options ...WithCancelOption) EscapedResource {
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -273,9 +302,13 @@ func (s *escapedResource) WithCancel(options ...*WithCancelOptions) EscapedResou
 	if len(options) > 0 {
 		merged := &WithCancelOptions{}
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil {
+				opt.apply(merged)
+			}
 		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		for k, v := range merged.ToMap() {
+			reqArgs[k] = v
+		}
 		if merged.Cancel_Token != nil {
 			ctx = merged.Cancel_Token.Context()
 			if id := s.client.registerCancellation(merged.Cancel_Token); id != "" {
@@ -283,19 +316,25 @@ func (s *escapedResource) WithCancel(options ...*WithCancelOptions) EscapedResou
 			}
 		}
 	}
-	if _, err := s.client.invokeCapability(ctx, "Tests/withCancel", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Tests/withCancel", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithHostileDocumentation adds Foo. func init() {} //
 func (s *escapedResource) WithHostileDocumentation(value string) EscapedResource {
-	if s.Err() != nil { return s }
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
 	reqArgs["value"] = serializeValue(value)
-	if _, err := s.client.invokeCapability(ctx, "Tests/withHostileDocumentation", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Tests/withHostileDocumentation", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
@@ -309,10 +348,32 @@ type With_QuoteOptions struct {
 	Op_tional *string `json:"op\"tional,omitempty"`
 }
 
+// With_QuoteOption configures With_Quote.
+type With_QuoteOption interface {
+	apply(*With_QuoteOptions)
+}
+
+type with_QuoteOptionFunc func(*With_QuoteOptions)
+
+func (f with_QuoteOptionFunc) apply(options *With_QuoteOptions) {
+	f(options)
+}
+
+// _QuoteOp_tional sets op"tional for With_Quote.
+func _QuoteOp_tional(value string) With_QuoteOption {
+	return with_QuoteOptionFunc(func(options *With_QuoteOptions) {
+		options.Op_tional = &value
+	})
+}
+
 func (o *With_QuoteOptions) ToMap() map[string]any {
 	m := map[string]any{}
-	if o == nil { return m }
-	if o.Op_tional != nil { m["op\"tional"] = serializeValue(o.Op_tional) }
+	if o == nil {
+		return m
+	}
+	if o.Op_tional != nil {
+		m["op\"tional"] = serializeValue(o.Op_tional)
+	}
 	return m
 }
 
@@ -321,9 +382,29 @@ type WithCancelOptions struct {
 	Cancel_Token *CancellationToken `json:"-"`
 }
 
+// WithCancelOption configures WithCancel.
+type WithCancelOption interface {
+	apply(*WithCancelOptions)
+}
+
+type withCancelOptionFunc func(*WithCancelOptions)
+
+func (f withCancelOptionFunc) apply(options *WithCancelOptions) {
+	f(options)
+}
+
+// CancelCancel_Token sets cancel"Token for WithCancel.
+func CancelCancel_Token(value *CancellationToken) WithCancelOption {
+	return withCancelOptionFunc(func(options *WithCancelOptions) {
+		options.Cancel_Token = value
+	})
+}
+
 func (o *WithCancelOptions) ToMap() map[string]any {
 	m := map[string]any{}
-	if o == nil { return m }
+	if o == nil {
+		return m
+	}
 	return m
 }
 

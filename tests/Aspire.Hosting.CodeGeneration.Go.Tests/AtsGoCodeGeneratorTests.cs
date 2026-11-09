@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.IO.Pipes;
 using System.Net.Sockets;
 using System.Reflection;
+using System.Text.RegularExpressions;
 using System.Text.Json.Nodes;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.RemoteHost;
@@ -94,7 +95,7 @@ public class AtsGoCodeGeneratorTests
                     }
                     options.Columns = 200
                     result := map[string]any{"p0": serializeValue(options)}
-                    expected := map[string]any{"p0": map[string]any{"columns": float64(200), "rows": float64(50)}}
+                    expected := map[string]any{"p0": map[string]any{"columns": 200, "rows": 50}}
                     if !reflect.DeepEqual(expected, result) {
                         t.Fatalf("expected %#v, got %#v", expected, result)
                     }
@@ -1327,12 +1328,12 @@ public class AtsGoCodeGeneratorTests
                 }
 
                 func TestDeepUpdateMergesNestedValuesWithoutModifyingInputs(t *testing.T) {
-                    dst := &TestNestedDto{Id: "dst", Config: &TestConfigDto{Name: "dst"}, Counts: map[string]float64{"a": 1, "b": 2}}
-                    src := &TestNestedDto{Id: "src", Config: &TestConfigDto{Name: "src"}, Counts: map[string]float64{"b": 3, "c": 4}}
+                    dst := &TestNestedDto{Id: "dst", Config: &TestConfigDto{Name: "dst"}, Counts: map[string]int{"a": 1, "b": 2}}
+                    src := &TestNestedDto{Id: "src", Config: &TestConfigDto{Name: "src"}, Counts: map[string]int{"b": 3, "c": 4}}
 
                     merged := deepUpdate(dst, src)
 
-                    want := &TestNestedDto{Id: "src", Config: &TestConfigDto{Name: "src"}, Counts: map[string]float64{"a": 1, "b": 3, "c": 4}}
+                    want := &TestNestedDto{Id: "src", Config: &TestConfigDto{Name: "src"}, Counts: map[string]int{"a": 1, "b": 3, "c": 4}}
                     if !reflect.DeepEqual(merged, want) {
                         t.Fatalf("got %+v, want %+v", merged, want)
                     }
@@ -1775,10 +1776,10 @@ public class AtsGoCodeGeneratorTests
         var aspireGo = files["aspire.go"];
 
         Assert.Contains("var TestConfigs = struct {", aspireGo);
-        Assert.Contains("Default *TestConfigDto", aspireGo);
+        Assert.Matches(@"Default\s+\*TestConfigDto", aspireGo);
         Assert.Contains("Profiles struct {", aspireGo);
-        Assert.Contains("Development *TestConfigDto", aspireGo);
-        Assert.Matches(@"Profiles struct \{\r?\n\t\tDevelopment \*TestConfigDto\r?\n\t\}\r?\n\tSecure \*TestConfigDto", aspireGo);
+        Assert.Matches(@"Development\s+\*TestConfigDto", aspireGo);
+        Assert.Matches(@"Profiles struct \{\r?\n\t\tDevelopment \*TestConfigDto\r?\n\t\}\r?\n\tSecure\s+\*TestConfigDto", aspireGo);
     }
 
     [Fact]
@@ -2362,7 +2363,7 @@ public class AtsGoCodeGeneratorTests
         var aspireGo = _generator.GenerateDistributedApplication(atsContext)["aspire.go"].ReplaceLineEndings("\n");
         var primitiveSetter = ExtractGeneratedMethod(
             aspireGo,
-            "func (s *endpointUpdateContext) SetPort(value *float64)");
+            "func (s *endpointUpdateContext) SetPort(value *int)");
         var enumSetter = ExtractGeneratedMethod(
             aspireGo,
             "func (s *containerBuildOptionsCallbackContext) SetDestination(value *ContainerImageDestination)");
@@ -2396,10 +2397,9 @@ public class AtsGoCodeGeneratorTests
         var aspireGo = files["aspire.go"].ReplaceLineEndings("\n");
         var method = ExtractGeneratedMethod(aspireGo, signature);
 
-        Assert.Contains(
-            $"if {nilGuard} {{ reqArgs[\"{parameterName}\"] = serializeValue({parameterName}) }}",
-            method,
-            StringComparison.Ordinal);
+        Assert.Matches(
+            $@"if {Regex.Escape(nilGuard)} \{{\s+reqArgs\[""{parameterName}""\] = serializeValue\({parameterName}\)\s+\}}",
+            method);
         Assert.Contains("func isNil(value any) bool", files["base.go"], StringComparison.Ordinal);
     }
 
@@ -2409,24 +2409,19 @@ public class AtsGoCodeGeneratorTests
         var atsContext = CreateContextFromBothAssemblies();
         var aspireGo = _generator.GenerateDistributedApplication(atsContext)["aspire.go"].ReplaceLineEndings("\n");
 
-        Assert.Contains(
-            "func (s *interactionInputCollection) Value(name string) (string, error) {\n" +
-            "\tinput, err := s.Get(name)\n" +
-            "\tif err != nil { return \"\", err }\n" +
-            "\tif input == nil || input.Value == nil { return \"\", nil }\n" +
-            "\treturn *input.Value, nil\n" +
-            "}",
+        var value = ExtractGeneratedMethod(
             aspireGo,
-            StringComparison.Ordinal);
-        Assert.Contains(
-            "func (s *interactionInputCollection) RequiredValue(name string) (string, error) {\n" +
-            "\tinput, err := s.Required(name)\n" +
-            "\tif err != nil { return \"\", err }\n" +
-            "\tif input.Value == nil { return \"\", nil }\n" +
-            "\treturn *input.Value, nil\n" +
-            "}",
+            "func (s *interactionInputCollection) Value(name string) (string, error)");
+        Assert.Contains("input, err := s.Get(name)", value, StringComparison.Ordinal);
+        Assert.Contains("if input == nil || input.Value == nil", value, StringComparison.Ordinal);
+        Assert.Contains("return *input.Value, nil", value, StringComparison.Ordinal);
+
+        var requiredValue = ExtractGeneratedMethod(
             aspireGo,
-            StringComparison.Ordinal);
+            "func (s *interactionInputCollection) RequiredValue(name string) (string, error)");
+        Assert.Contains("input, err := s.Required(name)", requiredValue, StringComparison.Ordinal);
+        Assert.Contains("if input.Value == nil", requiredValue, StringComparison.Ordinal);
+        Assert.Contains("return *input.Value, nil", requiredValue, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -2466,38 +2461,85 @@ public class AtsGoCodeGeneratorTests
     }
 
     [Fact]
-    public void GeneratedCode_FlattensSingleOptionalDtoOptionsParameter()
+    public void GeneratedCode_UsesFunctionalOptionsForOptionalParameters()
     {
-        // WithHttpCommand has a single optional "options" DTO, so it flattens: the DTO is threaded
-        // directly instead of through a wrapper struct (issue #17664), matching the TypeScript output.
         var atsContext = CreateContextFromBothAssemblies();
 
         var files = _generator.GenerateDistributedApplication(atsContext);
         var aspireGo = files["aspire.go"];
 
-        // Signature threads the DTO directly; no wrapper struct is emitted.
-        Assert.Contains("WithHttpCommand(path string, displayName string, options ...*HttpCommandExportOptions)", aspireGo);
-
-        // The merged DTO is sent under the original "options" arg, but only when a non-nil option
-        // was merged, so an all-nil variadic omits the key (matching the old wrapper's ToMap()).
-        Assert.Contains("applied := false", aspireGo);
-        Assert.Contains("if applied { reqArgs[\"options\"] = serializeValue(merged) }", aspireGo);
+        Assert.Contains("WithHttpEndpoint(options ...WithHttpEndpointOption)", aspireGo);
+        Assert.Contains("type WithHttpEndpointOption interface", aspireGo);
+        Assert.Contains("func HttpEndpointPort(value int) WithHttpEndpointOption", aspireGo);
+        Assert.Contains("func HttpEndpointIsProxied(value bool) WithHttpEndpointOption", aspireGo);
+        Assert.Contains("opt.apply(merged)", aspireGo);
     }
 
     [Fact]
-    public void GeneratedCode_DoesNotFlattenWhenOptionsCoexistsWithCancellationToken()
+    public void GeneratedCode_WrapsOptionalDtoAndCancellationTokenInFunctionalOptions()
     {
-        // PromptInput's only non-cancellation-token optional is the "options" DTO, but Go models a
-        // trailing cancellation token as another variadic element, so its single-variadic rule keeps
-        // the wrapper. TypeScript threads the token separately and would flatten this capability.
         var atsContext = CreateContextFromBothAssemblies();
 
         var files = _generator.GenerateDistributedApplication(atsContext);
         var aspireGo = files["aspire.go"];
 
-        Assert.Contains("PromptInput(title string, message string, input InteractionInputBuilder, options ...*PromptInputOptions)", aspireGo);
+        Assert.Contains("PromptInput(title string, message string, input InteractionInputBuilder, options ...PromptInputOption)", aspireGo);
         Assert.Contains("type PromptInputOptions struct", aspireGo);
-        Assert.Contains("Options *InteractionInputsDialogOptions `json:\"options,omitempty\"`", aspireGo);
+        Assert.Matches(@"Options\s+\*InteractionInputsDialogOptions `json:""options,omitempty""`", aspireGo);
+        Assert.Contains("func PromptInputOptionsValue(value *InteractionInputsDialogOptions) PromptInputOption", aspireGo);
+        Assert.Contains("func PromptInputCancellationToken(value *CancellationToken) PromptInputOption", aspireGo);
+    }
+
+    [Fact]
+    public void GeneratedCode_MapsClrNumericTypesAndOptionality()
+    {
+        var numericTypes = new (string Name, Type ClrType, string GoType)[]
+        {
+            ("Integer", typeof(int), "int"),
+            ("Long", typeof(long), "int64"),
+            ("Double", typeof(double), "float64"),
+            ("Float", typeof(float), "float32"),
+            ("Short", typeof(short), "int16"),
+            ("Byte", typeof(byte), "uint8"),
+            ("Decimal", typeof(decimal), "float64"),
+            ("UShort", typeof(ushort), "uint16"),
+            ("UInt", typeof(uint), "uint"),
+            ("ULong", typeof(ulong), "uint64"),
+            ("SByte", typeof(sbyte), "int8")
+        };
+        var atsContext = new AtsContext
+        {
+            Capabilities = [],
+            HandleTypes = [],
+            EnumTypes = [],
+            DtoTypes =
+            [
+                new AtsDtoTypeInfo
+                {
+                    TypeId = "Tests/NumericDto",
+                    Name = "NumericDto",
+                    Properties = numericTypes.Select(type => new AtsDtoPropertyInfo
+                    {
+                        Name = type.Name,
+                        Type = new AtsTypeRef
+                        {
+                            TypeId = AtsConstants.Number,
+                            ClrType = type.ClrType,
+                            Category = AtsTypeCategory.Primitive
+                        },
+                        IsOptional = type.Name == "Integer"
+                    }).ToList()
+                }
+            ]
+        };
+
+        var aspireGo = _generator.GenerateDistributedApplication(atsContext)["aspire.go"];
+
+        foreach (var (name, _, goType) in numericTypes)
+        {
+            var expectedType = name == "Integer" ? $"*{goType}" : goType;
+            Assert.Matches($@"{name}\s+{Regex.Escape(expectedType)}\b", aspireGo);
+        }
     }
 
     private static List<AtsCapabilityInfo> ScanCapabilitiesFromTestAssembly()

@@ -132,7 +132,7 @@ public class AtsGoDerivedBuilderTests
             [
                 "WithAksPool(pool AnyAksPoolResource) WorkloadResource",
                 "WithGpuSpotPool(pool GpuSpotPoolResource) WorkloadResource",
-                "WithOptionalPool(name string, options ...*WithOptionalPoolOptions) WorkloadResource",
+                "WithOptionalPool(name string, options ...WithOptionalPoolOption) WorkloadResource",
                 "WithPool(pool AnyPoolResource) WorkloadResource",
                 "WithPoolCallback(configure func(pool PoolResource)) WorkloadResource",
                 "WithPoolList(pools *List[PoolResource]) WorkloadResource",
@@ -147,8 +147,8 @@ public class AtsGoDerivedBuilderTests
 
         // DTO fields and options struct fields are parameter-like positions too. An optional handle parameter
         // is a pointer field in its options struct.
-        Assert.Matches(@"type PoolSettings struct \{\r?\n\tPool AnyPoolResource `json:""pool,omitempty""`", generated);
-        Assert.Matches(@"type WithOptionalPoolOptions struct \{\r?\n\tPool \*AnyPoolResource `json:""pool,omitempty""`", generated);
+        Assert.Matches(@"type PoolSettings struct \{\r?\n\tPool\s+AnyPoolResource `json:""pool,omitempty""`", generated);
+        Assert.Matches(@"type WithOptionalPoolOptions struct \{\r?\n\tPool\s+\*AnyPoolResource `json:""pool,omitempty""`", generated);
 
         // The runtime guard for a union parameter must accept derived builders as well.
         Assert.Contains("// Allowed types for parameter pool: AnyPoolResource, string.", generated, StringComparison.Ordinal);
@@ -465,7 +465,7 @@ public class AtsGoDerivedBuilderTests
             .ToArray();
 
     private static string[] GetImplMarkers(string generated) =>
-        Regex.Matches(generated, @"^func \(\*(\w+)\) (is\w+)\(\) \{\}", RegexOptions.Multiline)
+        Regex.Matches(generated, @"func\s+\(\*(\w+)\)\s+(is\w+)\(\)\s+\{\}")
             .Select(match => $"{match.Groups[1].Value}.{match.Groups[2].Value}")
             .Order(StringComparer.Ordinal)
             .ToArray();

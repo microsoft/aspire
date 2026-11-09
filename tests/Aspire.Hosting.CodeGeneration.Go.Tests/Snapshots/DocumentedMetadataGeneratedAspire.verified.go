@@ -30,8 +30,8 @@ type DocumentedSettings struct {
 	// Enabled indicates whether the resource is enabled.
 	Enabled bool `json:"enabled,omitempty"`
 	// Port is the port of the resource.
-	Port float64 `json:"port,omitempty"`
-	Undocumented string `json:"undocumented,omitempty"`
+	Port         float64 `json:"port,omitempty"`
+	Undocumented string  `json:"undocumented,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.
@@ -48,7 +48,7 @@ var DocumentedDefaults = struct {
 	// Secondary is the secondary settings.
 	Secondary *DocumentedSettings
 }{
-	Primary: &DocumentedSettings{DisplayName: "primary", Enabled: true, Port: 8080},
+	Primary:   &DocumentedSettings{DisplayName: "primary", Enabled: true, Port: 8080},
 	Secondary: &DocumentedSettings{DisplayName: "secondary", Enabled: false, Port: 8081},
 }
 
@@ -98,8 +98,8 @@ type DocumentedResource interface {
 	// WithDirectOptions applies the settings.
 	//
 	// Parameters:
-	//   - options: The settings to apply.
-	WithDirectOptions(options ...*DocumentedSettings) DocumentedResource
+	//   - options: Optional parameters; see [WithDirectOptionsOption].
+	WithDirectOptions(options ...WithDirectOptionsOption) DocumentedResource
 
 	// WithDocumentation adds documentation to the resource.
 	//
@@ -116,10 +116,10 @@ type DocumentedResource interface {
 	// Parameters:
 	//   - name: The name of the documentation.
 	//   - settings: The settings to apply, or nil to keep the defaults.
-	//   - options: Optional parameters; see [WithDocumentationOptions].
+	//   - options: Optional parameters; see [WithDocumentationOption].
 	//
 	// Returns: The resource builder.
-	WithDocumentation(name string, settings *DocumentedSettings, options ...*WithDocumentationOptions) DocumentedResource
+	WithDocumentation(name string, settings *DocumentedSettings, options ...WithDocumentationOption) DocumentedResource
 
 	// WithHeading adds a heading.
 	//
@@ -208,10 +208,10 @@ func (s *documentedResource) Tags() *List[string] { ... }
 func (s *documentedResource) Undocumented() error { ... }
 
 // WithDirectOptions applies the settings.
-func (s *documentedResource) WithDirectOptions(options ...*DocumentedSettings) DocumentedResource { ... }
+func (s *documentedResource) WithDirectOptions(options ...WithDirectOptionsOption) DocumentedResource { ... }
 
 // WithDocumentation adds documentation to the resource.
-func (s *documentedResource) WithDocumentation(name string, settings *DocumentedSettings, options ...*WithDocumentationOptions) DocumentedResource { ... }
+func (s *documentedResource) WithDocumentation(name string, settings *DocumentedSettings, options ...WithDocumentationOption) DocumentedResource { ... }
 
 // WithHeading adds a heading.
 func (s *documentedResource) WithHeading() DocumentedResource { ... }
@@ -241,8 +241,46 @@ type WithDocumentationOptions struct {
 	// Port is the port to use. Pass name to override.
 	Port *float64 `json:"port,omitempty"`
 	// Status is the initial status.
-	Status *DocumentedStatus `json:"status,omitempty"`
-	Enabled *bool `json:"enabled,omitempty"`
+	Status  *DocumentedStatus `json:"status,omitempty"`
+	Enabled *bool             `json:"enabled,omitempty"`
 }
 
+// WithDocumentationOption configures WithDocumentation.
+type WithDocumentationOption interface {
+	apply(*WithDocumentationOptions)
+}
+
+type withDocumentationOptionFunc func(*WithDocumentationOptions)
+
+func (f withDocumentationOptionFunc) apply(options *WithDocumentationOptions) { ... }
+
+// DocumentationPort sets port for WithDocumentation.
+func DocumentationPort(value float64) WithDocumentationOption { ... }
+
+// DocumentationStatus sets status for WithDocumentation.
+func DocumentationStatus(value DocumentedStatus) WithDocumentationOption { ... }
+
+// DocumentationEnabled sets enabled for WithDocumentation.
+func DocumentationEnabled(value bool) WithDocumentationOption { ... }
+
 func (o *WithDocumentationOptions) ToMap() map[string]any { ... }
+
+// WithDirectOptionsOptions carries optional parameters for WithDirectOptions.
+type WithDirectOptionsOptions struct {
+	// Options is the settings to apply.
+	Options *DocumentedSettings `json:"options,omitempty"`
+}
+
+// WithDirectOptionsOption configures WithDirectOptions.
+type WithDirectOptionsOption interface {
+	apply(*WithDirectOptionsOptions)
+}
+
+type withDirectOptionsOptionFunc func(*WithDirectOptionsOptions)
+
+func (f withDirectOptionsOptionFunc) apply(options *WithDirectOptionsOptions) { ... }
+
+// DirectOptionsOptions sets options for WithDirectOptions.
+func DirectOptionsOptions(value *DocumentedSettings) WithDirectOptionsOption { ... }
+
+func (o *WithDirectOptionsOptions) ToMap() map[string]any { ... }
