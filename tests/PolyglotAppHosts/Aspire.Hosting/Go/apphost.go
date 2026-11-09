@@ -221,9 +221,9 @@ ENTRYPOINT ["dotnet", "App.dll"]
 		DefaultCertificateDirectoryPaths: []string{"/etc/ssl/certs", "/usr/local/share/ca-certificates"},
 	})
 	container.WithContainerFiles("/usr/lib/aspire/container-files", ".", &aspire.ContainerFilesOptions{
-		DefaultOwner: aspire.IntPtr(1000),
-		DefaultGroup: aspire.IntPtr(1000),
-		Umask:        aspire.IntPtr(0o022),
+		DefaultOwner: aspire.Float64Ptr(1000),
+		DefaultGroup: aspire.Float64Ptr(1000),
+		Umask:        aspire.Float64Ptr(0o022),
 	})
 
 	// WithContainerFilesCallback — build entries dynamically via the context factory methods
@@ -239,9 +239,9 @@ ENTRYPOINT ["dotnet", "App.dll"]
 		cert := filesCtx.CreateCertificateFile("server.pem", &aspire.CreateCertificateFileOptions{Contents: aspire.StringPtr("-----BEGIN CERTIFICATE-----")})
 		return []aspire.ContainerFileSystemItem{appConfig, confDir, cert}
 	}, &aspire.ContainerFilesOptions{
-		DefaultOwner: aspire.IntPtr(1000),
-		DefaultGroup: aspire.IntPtr(1000),
-		Umask:        aspire.IntPtr(0o022),
+		DefaultOwner: aspire.Float64Ptr(1000),
+		DefaultGroup: aspire.Float64Ptr(1000),
+		Umask:        aspire.Float64Ptr(0o022),
 	})
 
 	// WithImageRegistry

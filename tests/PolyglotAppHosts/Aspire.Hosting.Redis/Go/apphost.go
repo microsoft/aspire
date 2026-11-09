@@ -27,7 +27,7 @@ func main() {
 
 	cache.WithDataVolume(&aspire.WithDataVolumeOptions{Name: aspire.StringPtr("redis-data")}).
 		WithPersistence(&aspire.WithPersistenceOptions{
-			Interval:             aspire.Int64Ptr(60000000),
+			Interval:             aspire.Float64Ptr(60000000),
 			KeysChangedThreshold: aspire.Int64Ptr(5),
 		})
 	if err = cache.Err(); err != nil {

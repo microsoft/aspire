@@ -44,7 +44,7 @@ func main() {
 
 		endpointCluster := config.AddClusterFromEndpoint(endpoint).
 			WithForwarderRequestConfig(&aspire.YarpForwarderRequestConfig{
-				ActivityTimeout:        aspire.Int64Ptr(30_000_000),
+				ActivityTimeout:        aspire.Float64Ptr(30_000_000),
 				AllowResponseBuffering: aspire.BoolPtr(true),
 				Version:                aspire.StringPtr("2.0"),
 			}).
@@ -71,16 +71,16 @@ func main() {
 				AvailableDestinationsPolicy: aspire.StringPtr("HealthyOrPanic"),
 				Active: &aspire.YarpActiveHealthCheckConfig{
 					Enabled:  aspire.BoolPtr(true),
-					Interval: aspire.Int64Ptr(50_000_000),
+					Interval: aspire.Float64Ptr(50_000_000),
 					Path:     aspire.StringPtr("/health"),
 					Policy:   aspire.StringPtr("ConsecutiveFailures"),
 					Query:    aspire.StringPtr("probe=1"),
-					Timeout:  aspire.Int64Ptr(20_000_000),
+					Timeout:  aspire.Float64Ptr(20_000_000),
 				},
 				Passive: &aspire.YarpPassiveHealthCheckConfig{
 					Enabled:            aspire.BoolPtr(true),
 					Policy:             aspire.StringPtr("TransportFailureRateHealthPolicy"),
-					ReactivationPeriod: aspire.Int64Ptr(100_000_000),
+					ReactivationPeriod: aspire.Float64Ptr(100_000_000),
 				},
 			})
 

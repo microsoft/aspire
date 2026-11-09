@@ -85,11 +85,11 @@ func main() {
 	queue.WithProperties(func(q aspire.AzureServiceBusQueueResource) {
 		// Set all queue properties
 		q.SetDeadLetteringOnMessageExpiration(aspire.BoolPtr(true))
-		q.SetDefaultMessageTimeToLive(aspire.Int64Ptr(36000000000))           // 1 hour in ticks
-		q.SetDuplicateDetectionHistoryTimeWindow(aspire.Int64Ptr(6000000000)) // 10 min in ticks
+		q.SetDefaultMessageTimeToLive(aspire.Float64Ptr(36000000000))           // 1 hour in ticks
+		q.SetDuplicateDetectionHistoryTimeWindow(aspire.Float64Ptr(6000000000)) // 10 min in ticks
 		q.SetForwardDeadLetteredMessagesTo(aspire.StringPtr("dead-letter-queue"))
 		q.SetForwardTo(aspire.StringPtr("forwarding-queue"))
-		q.SetLockDuration(aspire.Int64Ptr(300000000)) // 30 seconds in ticks
+		q.SetLockDuration(aspire.Float64Ptr(300000000)) // 30 seconds in ticks
 		q.SetMaxDeliveryCount(aspire.IntPtr(10))
 		q.SetRequiresDuplicateDetection(aspire.BoolPtr(true))
 		q.SetRequiresSession(aspire.BoolPtr(false))
@@ -102,8 +102,8 @@ func main() {
 	})
 
 	topic.WithProperties(func(t aspire.AzureServiceBusTopicResource) {
-		t.SetDefaultMessageTimeToLive(aspire.Int64Ptr(6048000000000))         // 7 days in ticks
-		t.SetDuplicateDetectionHistoryTimeWindow(aspire.Int64Ptr(3000000000)) // 5 min in ticks
+		t.SetDefaultMessageTimeToLive(aspire.Float64Ptr(6048000000000))         // 7 days in ticks
+		t.SetDuplicateDetectionHistoryTimeWindow(aspire.Float64Ptr(3000000000)) // 5 min in ticks
 		t.SetRequiresDuplicateDetection(aspire.BoolPtr(false))
 
 		_, _ = t.RequiresDuplicateDetection()
@@ -111,10 +111,10 @@ func main() {
 
 	subscription.WithProperties(func(s aspire.AzureServiceBusSubscriptionResource) {
 		s.SetDeadLetteringOnMessageExpiration(aspire.BoolPtr(true))
-		s.SetDefaultMessageTimeToLive(aspire.Int64Ptr(72000000000)) // 2 hours in ticks
+		s.SetDefaultMessageTimeToLive(aspire.Float64Ptr(72000000000)) // 2 hours in ticks
 		s.SetForwardDeadLetteredMessagesTo(aspire.StringPtr("sub-dlq"))
 		s.SetForwardTo(aspire.StringPtr("sub-forward"))
-		s.SetLockDuration(aspire.Int64Ptr(600000000)) // 1 min in ticks
+		s.SetLockDuration(aspire.Float64Ptr(600000000)) // 1 min in ticks
 		s.SetMaxDeliveryCount(aspire.IntPtr(5))
 		s.SetRequiresSession(aspire.BoolPtr(false))
 

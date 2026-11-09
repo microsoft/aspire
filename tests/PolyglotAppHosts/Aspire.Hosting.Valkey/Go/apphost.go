@@ -21,7 +21,7 @@ func main() {
 	valkey.WithDataVolume(&aspire.WithDataVolumeOptions{Name: aspire.StringPtr("valkey-data")})
 	valkey.WithDataBindMount(".", &aspire.WithDataBindMountOptions{IsReadOnly: aspire.BoolPtr(true)})
 	valkey.WithPersistence(&aspire.WithPersistenceOptions{
-		Interval:             aspire.Int64Ptr(100000000),
+		Interval:             aspire.Float64Ptr(100000000),
 		KeysChangedThreshold: aspire.Int64Ptr(1),
 	})
 	if err = valkey.Err(); err != nil {
