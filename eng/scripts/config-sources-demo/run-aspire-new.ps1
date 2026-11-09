@@ -8,6 +8,7 @@ picker, choose "Search for more templates" and leave the search empty to list cu
 Defaults to aspire new. The aspire add launcher reuses this setup with the caller's working directory.
 Source mode uses the checkout's pinned SDK to build the CLI, even when the demo app pins a different SDK.
 It runs the built CLI directly so child dotnet commands honor the demo app's SDK pin.
+Source builds display only errors.
 .EXAMPLE
 .\eng\scripts\config-sources-demo\run-aspire-new.ps1
 .EXAMPLE
@@ -68,10 +69,14 @@ try
         try
         {
             $cliProject = Join-Path $repoRoot 'src\Aspire.Cli\Aspire.Cli.csproj'
-            & (Join-Path $repoRoot 'dotnet.cmd') build $cliProject --configuration Debug -p:SkipNativeBuild=true
-            if ($LASTEXITCODE -ne 0)
+            # Capture the bootstrapper's SDK-path output so successful builds stay silent.
+            $buildOutput = & (Join-Path $repoRoot 'dotnet.cmd') build $cliProject `
+                --configuration Debug -p:SkipNativeBuild=true --nologo --verbosity quiet '-clp:ErrorsOnly;NoSummary'
+            $buildExitCode = $LASTEXITCODE
+            if ($buildExitCode -ne 0)
             {
-                throw "CLI build failed with exit code $LASTEXITCODE."
+                $buildOutput | Out-Host
+                throw "CLI build failed with exit code $buildExitCode."
             }
 
             $dotnetRoot = (Get-Content -LiteralPath (Join-Path $repoRoot 'artifacts\toolset\sdk.txt') -Raw).Trim()
