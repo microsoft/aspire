@@ -15,7 +15,7 @@
 
   <ItemGroup>
     <!-- Match the EF9 health checks used by the referenced Pomelo integration. -->
-    <PackageVersion Update="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="9.0.20" />
+    <PackageVersion Update="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="9.0.23" />
     <PackageReference Include="Testcontainers.MySql" />
   </ItemGroup>
   <ItemGroup>
