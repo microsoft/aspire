@@ -1,0 +1,96 @@
+{
+  "run_id": 42725173879,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/42725173879",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-10T01:26:19Z",
+  "verdict": "transient-infra",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 21932,
+    "title": "Write the WinUI E2E ready marker atomically so the test never reads an empty file",
+    "author": "davidfowl",
+    "state": "closed",
+    "head_branch": "aspireagent/winui-ready-marker-atomic-write",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/21932",
+    "merged_at": "2026-11-10T00:02:11Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "168a8b46555224bf41459f01088a224977209113",
+    "failed_sha": "8f00c66a046365f79e8db48073a21fa0523bccca",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "73f8459ae63a9a5395e1f50052a9e3a630fc7a26",
+        "message": "Capture CLI diagnostics when an E2E command hangs (#21651) ## Description This is a diagnostics-only change to the CLI E2E test infrastructure. It doesn't change product code. **Problem.** `SecretDotNetAppHostTests.SecretDeploymentEnvironmentLoadsSelectedAspireSecretsFile` failed twice in 284 PR jobs over 7 days, on unrelated branches (#21650). Both times, `aspire secret set` produced no output for 60s. Those failures can't be root-caused because the artifacts contain no CLI logs. On failure, `T",
+        "html_url": "https://github.com/microsoft/aspire/commit/73f8459ae63a9a5395e1f50052a9e3a630fc7a26",
+        "pull_request": {
+          "number": 21651,
+          "title": "Capture CLI diagnostics when an E2E command hangs",
+          "url": "https://github.com/microsoft/aspire/pull/21651",
+          "merged_at": "2026-11-09T23:36:28Z"
+        }
+      },
+      {
+        "sha": "b09d94ecb82f44575c03b7d8ca83f52bb4fda456",
+        "message": "Make MAUI build-queue cancellation surface a consistent OperationCanceledException (#21571) ## Description Fixes #20284. The test `MauiBuildQueueTests.CancelQueuedResource_CompletesGracefullyAndDoesNotAcquireSemaphore` was flaky: it intermittently got `TaskCanceledException` where it asserts an exact `OperationCanceledException`. ### Root cause `MauiBuildQueueEventSubscriber.OnBeforeResourceStartedAsync` handles a busy build lock in this order: 1. It registers the per-resource `CancellationToken",
+        "html_url": "https://github.com/microsoft/aspire/commit/b09d94ecb82f44575c03b7d8ca83f52bb4fda456",
+        "pull_request": {
+          "number": 21571,
+          "title": "Make MAUI build-queue cancellation surface a consistent OperationCanceledException",
+          "url": "https://github.com/microsoft/aspire/pull/21571",
+          "merged_at": "2026-11-09T23:37:07Z"
+        }
+      },
+      {
+        "sha": "16640867a2c0b3bd3c163ffc30b0869babce950f",
+        "message": "Keep captured output when ProcessCaptureRunner's post-exit drain bound expires (#21556) ## Description `PeerInstallProbeTests.ProbeAsync_PeerEmitsArrayWithNonObjectFirstElement_FallsBackToVersion(\"[\\\"string\\\"]\")` failed once on Windows with `Peer produced no usable output (and --version fallback)`. That run was [35003412018 / job 104497909578](https://github.com/microsoft/aspire/actions/runs/35003412018/job/104497909578). The test took **4.3s**. Passing runs take a median of 0.154s and a max of ",
+        "html_url": "https://github.com/microsoft/aspire/commit/16640867a2c0b3bd3c163ffc30b0869babce950f",
+        "pull_request": {
+          "number": 21556,
+          "title": "Keep captured output when ProcessCaptureRunner's post-exit drain bound expires",
+          "url": "https://github.com/microsoft/aspire/pull/21556",
+          "merged_at": "2026-11-09T23:40:38Z"
+        }
+      },
+      {
+        "sha": "91f1a1ecb3a8c0a8202722d7820f118760c3fc82",
+        "message": "Fix trace attribute filter freezing the traces page (#21910) ### Description **Problem** On the Traces page, filtering by a span attribute can freeze the page once the dashboard holds tens of thousands of spans. For example, filtering by `work_item.queue_name` contains `update`: - the trace list stays empty, - the footer keeps showing the unfiltered trace count, - the dashboard process stays at ~100% CPU until the page is closed. <img width=\"1893\" height=\"885\" alt=\"image\" src=\"https://github.com",
+        "html_url": "https://github.com/microsoft/aspire/commit/91f1a1ecb3a8c0a8202722d7820f118760c3fc82",
+        "pull_request": {
+          "number": 21910,
+          "title": "Fix trace attribute filter freezing the traces page",
+          "url": "https://github.com/microsoft/aspire/pull/21910",
+          "merged_at": "2026-11-09T23:48:40Z"
+        }
+      },
+      {
+        "sha": "8f00c66a046365f79e8db48073a21fa0523bccca",
+        "message": "Write the WinUI E2E ready marker atomically so the test never reads an empty file (#21932) **What failed:** `[vscode] Aspire WinUI debug E2E > debugs an unpackaged WinUI project through its generated apphost executable` failed on attempt 1 in [42448442647](https://github.com/microsoft/aspire/actions/runs/42448442647/job/128635064936) (tracker #21600, unowned rank 1): ``` AssertionError [ERR_ASSERTION]: The input did not match the regular expression /^ready:\\d+$/. Input: '' ``` **Why:** The gener",
+        "html_url": "https://github.com/microsoft/aspire/commit/8f00c66a046365f79e8db48073a21fa0523bccca",
+        "pull_request": {
+          "number": 21932,
+          "title": "Write the WinUI E2E ready marker atomically so the test never reads an empty file",
+          "url": "https://github.com/microsoft/aspire/pull/21932",
+          "merged_at": "2026-11-10T00:02:11Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Build native CLI archive (Windows) / Build CLI (win-x64)",
+      "id": 129531946211,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/42725173879/job/129531946211",
+      "classification": "transient-infra",
+      "reason": "Hosted runner lost communication with the server; no tests ran or failed.",
+      "failed_steps": []
+    }
+  ],
+  "failed_tests": [],
+  "causes": [
+    "hosted-runner-lost-communication-windows-template-tests"
+  ]
+}

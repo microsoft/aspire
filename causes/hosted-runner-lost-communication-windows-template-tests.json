@@ -27,6 +27,13 @@
       "job": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (windows-latest)",
       "observed_at": "2026-11-07T01:20:52Z",
       "pr_number": 0
+    },
+    {
+      "run_id": 42725173879,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/42725173879",
+      "job": "Tests / Build native CLI archive (Windows) / Build CLI (win-x64)",
+      "observed_at": "2026-11-10T01:26:19Z",
+      "pr_number": 0
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/20165"
