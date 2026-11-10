@@ -133,11 +133,13 @@ internal sealed class GitRepository(CliExecutionContext executionContext, IEnvir
             CreateNoWindow = true
         };
 
-    private static async Task<ProcessTextOutput> RunGitAsync(ProcessStartInfo startInfo, ProfilingTelemetry.ActivityScope activity, CancellationToken cancellationToken)
+    private async Task<ProcessTextOutput> RunGitAsync(ProcessStartInfo startInfo, ProfilingTelemetry.ActivityScope activity, CancellationToken cancellationToken)
     {
         // RunAndCaptureTextAsync drains stdout and stderr concurrently, and kills git when
         // cancellationToken fires so Ctrl+C doesn't leave `git ls-files` walking a large repo.
         var result = await Process.RunAndCaptureTextAsync(startInfo, cancellationToken).ConfigureAwait(false);
+        logger.LogDebug("Git stdout: {Output}", result.StandardOutput);
+        logger.LogDebug("Git stderr: {Output}", result.StandardError);
         activity.SetProcessId(result.ProcessId);
         activity.SetProcessExitCode(result.ExitStatus.ExitCode);
         activity.SetGitOutputLengths(result.StandardOutput.Length, result.StandardError.Length);

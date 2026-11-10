@@ -90,28 +90,34 @@ public class TemplateEngineFactoryGitCheckoutTests(ITestOutputHelper outputHelpe
     }
 
     [Fact]
-    public async Task RepositoryTemplate_FailureDoesNotLogPrivateRepositoryOrDiagnostics()
+    public async Task RepositoryTemplate_FailureLogsDiagnosticsWithoutExposingThemInException()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         await GitTestHelper.EnsureGitAvailableAsync(outputHelper);
         var logger = new FakeLogger<GitCommandRunner>();
+        var interaction = new TestInteractionService();
         var services = CreateServices(workspace);
         services.AddSingleton<ILogger<GitCommandRunner>>(logger);
+        services.AddSingleton<IInteractionService>(interaction);
         using var provider = services.BuildServiceProvider();
 
         var exception = await Assert.ThrowsAsync<TemplateDiscoveryException>(() => GetFactory(provider).GetTemplatesAsync(
-            new TemplateSource(".", Path.Combine(workspace.Path, "private-repository-secret-marker"), null), TestContext.Current.CancellationToken));
+            new TemplateSource(".", Path.Combine(workspace.Path, "repository-diagnostic-marker"), null), TestContext.Current.CancellationToken));
 
         Assert.Equal(CliExitCodes.FailedToInstallTemplates, exception.ExitCode);
         Assert.Equal(string.Format(NewCommandStrings.TemplateRepositoryGitExited, 128, ErrorStrings.GitRepositoryUnavailable), exception.Message);
         Assert.Null(exception.InnerException);
         var logs = logger.Collector.GetSnapshot();
-        Assert.Collection(logs,
+        var diagnostics = string.Concat(logs
+            .Where(entry => entry.Message.StartsWith("Git stderr: ", StringComparison.Ordinal))
+            .Select(entry => entry.Message["Git stderr: ".Length..]));
+        Assert.StartsWith("fatal:", diagnostics, StringComparison.Ordinal);
+        Assert.Equal(string.Concat(interaction.DisplayedRawText.Select(entry => entry.Text)), diagnostics);
+        Assert.Collection(logs.Where(entry => !entry.Message.StartsWith("Git stderr: ", StringComparison.Ordinal)),
             entry => Assert.Equal("Starting Git process.", entry.Message),
             entry => Assert.StartsWith("Git process ", entry.Message),
             entry => Assert.StartsWith("Git process ", entry.Message),
             entry => Assert.StartsWith("Git process completed after ", entry.Message));
-        Assert.All(logs, entry => Assert.False(entry.Message.Contains("private-repository-secret-marker", StringComparison.Ordinal)));
     }
 
     [Fact]
