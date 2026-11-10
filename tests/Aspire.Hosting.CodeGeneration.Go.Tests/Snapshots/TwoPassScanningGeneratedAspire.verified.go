@@ -9301,6 +9301,10 @@ type ContainerBuildOptionsCallbackContext interface {
 
 	// SetTargetPlatform sets the target platform for the container.
 	//
+	// For single-platform .NET publishing, sets RuntimeIdentifier while respecting
+	// the project's ContainerRuntimeIdentifier. If unset, the .NET SDK defaults the
+	// container runtime identifier to the publish runtime identifier.
+	//
 	// # Experimental
 	//
 	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
@@ -9308,6 +9312,10 @@ type ContainerBuildOptionsCallbackContext interface {
 	SetTargetPlatform(value *ContainerTargetPlatform) ContainerBuildOptionsCallbackContext
 
 	// TargetPlatform gets the target platform for the container.
+	//
+	// For single-platform .NET publishing, sets RuntimeIdentifier while respecting
+	// the project's ContainerRuntimeIdentifier. If unset, the .NET SDK defaults the
+	// container runtime identifier to the publish runtime identifier.
 	//
 	// # Experimental
 	//

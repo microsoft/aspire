@@ -2658,6 +2658,10 @@ export interface ContainerBuildOptionsCallbackContext {
     };
     /**
      * Gets or sets the target platform for the container.
+     *
+     * For single-platform .NET publishing, sets `RuntimeIdentifier` while respecting
+     * the project's `ContainerRuntimeIdentifier`. If unset, the .NET SDK defaults
+     * the container runtime identifier to the publish runtime identifier.
      * @experimental
      */
     targetPlatform: {
