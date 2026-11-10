@@ -671,6 +671,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData(nameof(AgentEnvironment.CopilotCli), "GitHub Copilot CLI")]
     [InlineData(nameof(AgentEnvironment.CopilotApp), "GitHub Copilot App")]
+    [InlineData($"{nameof(AgentEnvironment.CopilotApp)}, {nameof(AgentEnvironment.CopilotCli)}", "GitHub Copilot App and CLI")]
     public async Task AgentInitCommand_GlobalScope_InstallsTelemetryHook_ForSelectedDetectedEnvironment(string environmentName, string displayName)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -695,7 +696,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         Assert.True(File.Exists(hookFile), $"Expected telemetry hook at {hookFile}");
         Assert.Contains(
             interactionService.DisplayedMessages,
-            message => message.Message.Contains(displayName, StringComparison.Ordinal));
+            message => message.Message.Contains($"for: {displayName}.", StringComparison.Ordinal));
     }
 
     [Fact]

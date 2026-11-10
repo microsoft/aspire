@@ -55,7 +55,7 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
             AgentEnvironment.VsCode | AgentEnvironment.OpenCode,
             CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal(AgentEnvironment.CopilotApp | AgentEnvironment.ClaudeCode, result.ConfiguredEnvironments);
+        Assert.Equal(AgentEnvironment.CopilotApp | AgentEnvironment.CopilotCli | AgentEnvironment.ClaudeCode, result.ConfiguredEnvironments);
         Assert.Empty(result.Skipped);
         Assert.True(File.Exists(Path.Combine(home.FullName, ".copilot", "hooks", "aspire-telemetry.json")));
         Assert.True(File.Exists(Path.Combine(home.FullName, ".claude", "settings.json")));
@@ -79,7 +79,7 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(AgentEnvironment.ClaudeCode, result.ConfiguredEnvironments);
         var skip = Assert.Single(result.Skipped);
-        Assert.Equal(AgentEnvironment.CopilotApp, skip.Environment);
+        Assert.Equal(AgentEnvironment.CopilotApp | AgentEnvironment.CopilotCli, skip.Environment);
         Assert.Equal(TelemetryHookSkipReason.WriteFailed, skip.Reason);
         Assert.True(File.Exists(Path.Combine(home.FullName, ".claude", "settings.json")));
         Assert.Equal("not a directory", await File.ReadAllTextAsync(copilotHome).DefaultTimeout());
@@ -206,7 +206,7 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
     [InlineData((int)AgentEnvironment.ClaudeCode, (int)AgentEnvironment.None)]
     [InlineData(
         (int)(AgentEnvironment.CopilotApp | AgentEnvironment.CopilotCli | AgentEnvironment.ClaudeCode),
-        (int)AgentEnvironment.CopilotApp)]
+        (int)(AgentEnvironment.CopilotApp | AgentEnvironment.CopilotCli))]
     public async Task ConfigureAsync_SkipsClaude_WhenSettingsAreMalformed(
         int detectedEnvironments, int expectedEnvironments)
     {
