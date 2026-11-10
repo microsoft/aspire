@@ -151,6 +151,42 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to now.
+        /// </summary>
+        public static string ResourceStartedAgeNow {
+            get {
+                return ResourceManager.GetString("ResourceStartedAgeNow", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to {0}m ago.
+        /// </summary>
+        public static string ResourceStartedAgeMinutes {
+            get {
+                return ResourceManager.GetString("ResourceStartedAgeMinutes", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to {0}h ago.
+        /// </summary>
+        public static string ResourceStartedAgeHours {
+            get {
+                return ResourceManager.GetString("ResourceStartedAgeHours", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to {0}d ago.
+        /// </summary>
+        public static string ResourceStartedAgeDays {
+            get {
+                return ResourceManager.GetString("ResourceStartedAgeDays", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to a moment ago.
         /// </summary>
         public static string DashboardRunSelectMomentAgo {
@@ -628,11 +664,29 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Nested resources: {0}.
+        /// </summary>
+        public static string ResourcePaneNestedCount {
+            get {
+                return ResourceManager.GetString("ResourcePaneNestedCount", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Resource not found.
         /// </summary>
         public static string ResourceHeaderNotFound {
             get {
                 return ResourceManager.GetString("ResourceHeaderNotFound", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Show {0}.
+        /// </summary>
+        public static string ResourceHeaderShowReplacement {
+            get {
+                return ResourceManager.GetString("ResourceHeaderShowReplacement", resourceCulture);
             }
         }
 
@@ -750,42 +804,6 @@ namespace Aspire.Dashboard.Resources {
         public static string ResourcePaneParameterNoTerminal {
             get {
                 return ResourceManager.GetString("ResourcePaneParameterNoTerminal", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to No logs.
-        /// </summary>
-        public static string ResourcePaneNoStructuredLogsLabel {
-            get {
-                return ResourceManager.GetString("ResourcePaneNoStructuredLogsLabel", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to No traces.
-        /// </summary>
-        public static string ResourcePaneNoTracesLabel {
-            get {
-                return ResourceManager.GetString("ResourcePaneNoTracesLabel", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to No metrics.
-        /// </summary>
-        public static string ResourcePaneNoMetricsLabel {
-            get {
-                return ResourceManager.GetString("ResourcePaneNoMetricsLabel", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Not applicable.
-        /// </summary>
-        public static string ResourcePaneNotApplicableLabel {
-            get {
-                return ResourceManager.GetString("ResourcePaneNotApplicableLabel", resourceCulture);
             }
         }
 
@@ -984,15 +1002,6 @@ namespace Aspire.Dashboard.Resources {
         public static string ResourcePaneResourceActions {
             get {
                 return ResourceManager.GetString("ResourcePaneResourceActions", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to All selected.
-        /// </summary>
-        public static string ResourcePaneAllSelected {
-            get {
-                return ResourceManager.GetString("ResourcePaneAllSelected", resourceCulture);
             }
         }
 
