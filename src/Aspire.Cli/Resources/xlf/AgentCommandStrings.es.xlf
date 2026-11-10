@@ -57,6 +57,11 @@
         <target state="translated">Ejecución de "agent init" para actualizar la configuración</target>
         <note />
       </trans-unit>
+      <trans-unit id="DeprecatedConfigManualFix">
+        <source>Manually update 'mcp start' to 'agent mcp' in '{0}', preserving your custom command, arguments, and settings</source>
+        <target state="new">Manually update 'mcp start' to 'agent mcp' in '{0}', preserving your custom command, arguments, and settings</target>
+        <note />
+      </trans-unit>
       <trans-unit id="DeprecatedConfigUpdate_Description">
         <source>Update {0} config to use new 'agent mcp' command</source>
         <target state="translated">Actualización {0} de la configuración para usar el nuevo comando "agent mcp"</target>

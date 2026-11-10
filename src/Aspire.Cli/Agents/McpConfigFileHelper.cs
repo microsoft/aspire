@@ -111,7 +111,7 @@ internal static class McpConfigFileHelper
         return serverContainer as JsonObject;
     }
 
-    public static bool UpdateDeprecatedCommand(JsonObject config, string serverContainerKey)
+    public static bool CanUpdateDeprecatedCommand(JsonObject config, string serverContainerKey)
     {
         if (config[serverContainerKey] is not JsonObject servers || servers["aspire"] is not JsonObject aspire)
         {
@@ -121,21 +121,29 @@ internal static class McpConfigFileHelper
         // Legacy MCP entries use command: "aspire", args: ["mcp", "start"], or OpenCode's
         // command: ["aspire", "mcp", "start"]. Only these exact deprecated forms are repaired;
         // custom commands and version-pinned server definitions are left intact.
-        if (MatchesArgument(aspire["command"], "aspire") &&
+        return (MatchesArgument(aspire["command"], "aspire") &&
             aspire["args"] is JsonArray { Count: 2 } args &&
-            MatchesArgument(args[0], "mcp") && MatchesArgument(args[1], "start"))
-        {
-            aspire["args"] = new JsonArray("agent", "mcp");
-        }
-        else if (aspire["command"] is JsonArray { Count: 3 } command &&
+            MatchesArgument(args[0], "mcp") && MatchesArgument(args[1], "start")) ||
+            (aspire["command"] is JsonArray { Count: 3 } command &&
             MatchesArgument(command[0], "aspire") &&
-            MatchesArgument(command[1], "mcp") && MatchesArgument(command[2], "start"))
+            MatchesArgument(command[1], "mcp") && MatchesArgument(command[2], "start"));
+    }
+
+    public static bool UpdateDeprecatedCommand(JsonObject config, string serverContainerKey)
+    {
+        if (!CanUpdateDeprecatedCommand(config, serverContainerKey) ||
+            config[serverContainerKey] is not JsonObject servers || servers["aspire"] is not JsonObject aspire)
+        {
+            return false;
+        }
+
+        if (aspire["command"] is JsonArray)
         {
             aspire["command"] = new JsonArray("aspire", "agent", "mcp");
         }
         else
         {
-            return false;
+            aspire["args"] = new JsonArray("agent", "mcp");
         }
 
         return true;
