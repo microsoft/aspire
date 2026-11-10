@@ -340,10 +340,10 @@
     {
         return @<FluentButton Appearance="ButtonAppearance.Default"
                               Class="toolbar-button trace-back-button"
-                              data-tooltip="Back to traces"
+                              data-tooltip="@Loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailBackToTraces)]"
                               IconStart="@(new Icons.Regular.Size16.ArrowLeft().WithColor(Color.Primary))"
                               OnClick="@(() => NavigationManager.NavigateTo(TracesListUrl))">
-            Traces
+            @Loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailBackToTracesButton)]
         </FluentButton>;
     }
 
