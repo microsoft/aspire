@@ -21,10 +21,8 @@ internal sealed partial class DcpDependencyCheck : IDcpDependencyCheckService
 
     private readonly DcpOptions _dcpOptions;
     private readonly SemaphoreSlim _lock = new SemaphoreSlim(1, 1);
+    // The last successful DCP check, or null if no check has succeeded yet. Failed checks leave it unchanged.
     private DcpInfo? _dcpInfo;
-    private bool _checkDone;
-    private DcpInfo? _dcpVersionInfo;
-    private bool _versionCheckDone;
 
     public DcpDependencyCheck(IOptions<DcpOptions> dcpOptions)
     {
@@ -37,11 +35,11 @@ internal sealed partial class DcpDependencyCheck : IDcpDependencyCheckService
 
         try
         {
-            if (_checkDone && !force)
+            // Only a 'dcp info' result includes the container runtime status.
+            if (!force && _dcpInfo?.Containers is not null)
             {
                 return _dcpInfo;
             }
-            _checkDone = true;
 
             var arguments = "info";
             var containerRuntime = _dcpOptions.ContainerRuntime;
@@ -50,12 +48,8 @@ internal sealed partial class DcpDependencyCheck : IDcpDependencyCheckService
                 arguments += $" --container-runtime {containerRuntime}";
             }
 
-            var dcpInfo = await RunDcpAsync(arguments, cancellationToken).ConfigureAwait(false);
-            if (dcpInfo is not null)
-            {
-                _dcpInfo = dcpInfo;
-            }
-            return dcpInfo;
+            _dcpInfo = await RunDcpAsync(arguments, cancellationToken).ConfigureAwait(false);
+            return _dcpInfo;
         }
         finally
         {
@@ -69,23 +63,15 @@ internal sealed partial class DcpDependencyCheck : IDcpDependencyCheckService
 
         try
         {
-            // A successful 'dcp info' check already validated the DCP version.
             if (_dcpInfo is not null)
             {
                 return _dcpInfo;
             }
 
-            if (_versionCheckDone)
-            {
-                return _dcpVersionInfo;
-            }
-
             // 'dcp version' validates the DCP installation without probing the container runtime,
             // which 'dcp info' does and which can hang when the runtime CLI is unresponsive.
-            // Only cache a completed check so a failed or cancelled probe is retried on the next call.
-            _dcpVersionInfo = await RunDcpAsync("version", cancellationToken).ConfigureAwait(false);
-            _versionCheckDone = true;
-            return _dcpVersionInfo;
+            _dcpInfo = await RunDcpAsync("version", cancellationToken).ConfigureAwait(false);
+            return _dcpInfo;
         }
         finally
         {
@@ -93,7 +79,7 @@ internal sealed partial class DcpDependencyCheck : IDcpDependencyCheckService
         }
     }
 
-    private async Task<DcpInfo?> RunDcpAsync(string arguments, CancellationToken cancellationToken)
+    private async Task<DcpInfo> RunDcpAsync(string arguments, CancellationToken cancellationToken)
     {
         var dcpPath = _dcpOptions.CliPath;
 
@@ -141,15 +127,14 @@ internal sealed partial class DcpDependencyCheck : IDcpDependencyCheckService
 
             // Parse the output as JSON
             var output = outputStringBuilder.ToString();
-            if (output == string.Empty)
+            var dcpInfo = string.IsNullOrWhiteSpace(output) ? null : JsonSerializer.Deserialize<DcpInfo>(output);
+            if (dcpInfo is null)
             {
-                return null; // Best effort
-            }
-
-            var dcpInfo = JsonSerializer.Deserialize<DcpInfo>(output);
-            if (dcpInfo == null)
-            {
-                return null; // Best effort
+                throw new DistributedApplicationException(string.Format(
+                    CultureInfo.InvariantCulture,
+                    MessageStrings.DcpDependencyCheckFailedMessage,
+                    $"'dcp {arguments}' did not return any information. {errorStringBuilder.ToString()}"
+                ));
             }
 
             EnsureDcpVersion(dcpInfo);

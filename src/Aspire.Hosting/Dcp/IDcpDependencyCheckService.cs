@@ -12,7 +12,7 @@ internal interface IDcpDependencyCheckService
 
     /// <summary>
     /// Validates the DCP installation and version without probing the container runtime.
-    /// The returned <see cref="DcpInfo.Containers"/> is only populated if a full <see cref="GetDcpInfoAsync"/> check already completed.
+    /// The returned <see cref="DcpInfo.Containers"/> is only populated if a full <see cref="GetDcpInfoAsync"/> check already succeeded.
     /// </summary>
     Task<DcpInfo?> GetDcpVersionAsync(CancellationToken cancellationToken = default) => GetDcpInfoAsync(cancellationToken: cancellationToken);
 }

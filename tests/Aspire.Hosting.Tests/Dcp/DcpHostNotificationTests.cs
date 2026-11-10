@@ -832,6 +832,31 @@ public sealed class DcpHostNotificationTests
         }
     }
 
+    [Theory]
+    [InlineData("", false)]
+    [InlineData("", true)]
+    [InlineData("null", false)]
+    [InlineData("null", true)]
+    public async Task DependencyCheck_ThrowsWhenDcpReturnsNoInformation(string output, bool fullInfo)
+    {
+        // An empty or JSON null response is not a valid DCP answer, so the DCP version can't be validated.
+        var dcpDir = Directory.CreateTempSubdirectory("aspire-dcp-no-info");
+        try
+        {
+            var dcpOptions = Options.Create(new DcpOptions { CliPath = CreateFakeDcpWithOutput(dcpDir.FullName, output), DependencyCheckTimeout = 10 });
+            var dependencyCheck = new DcpDependencyCheck(dcpOptions);
+
+            var ex = await Assert.ThrowsAsync<DistributedApplicationException>(
+                () => fullInfo ? dependencyCheck.GetDcpInfoAsync() : dependencyCheck.GetDcpVersionAsync()).DefaultTimeout();
+            Assert.StartsWith(string.Format(CultureInfo.InvariantCulture, MessageStrings.DcpDependencyCheckFailedMessage, string.Empty).TrimEnd(), ex.Message);
+            Assert.Contains("did not return any information", ex.Message);
+        }
+        finally
+        {
+            DeleteDirectoryBestEffort(dcpDir);
+        }
+    }
+
     private static DcpHost CreateDcpHostForDependencyCheckTests(IOptions<DcpOptions> dcpOptions, IDcpDependencyCheckService dependencyCheckService, DistributedApplicationModel model)
     {
         return new DcpHost(
@@ -873,6 +898,24 @@ public sealed class DcpHostNotificationTests
             fi
             exec sleep 30
             """);
+        File.SetUnixFileMode(shellScriptPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        return shellScriptPath;
+    }
+
+    // A fake DCP that writes the given output for every command and exits successfully.
+    private static string CreateFakeDcpWithOutput(string directory, string output)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            var scriptPath = Path.Combine(directory, "dcp.cmd");
+            var echoCommand = output.Length > 0 ? $"echo {output}{Environment.NewLine}" : string.Empty;
+            File.WriteAllText(scriptPath, $"@echo off{Environment.NewLine}{echoCommand}exit /b 0{Environment.NewLine}");
+            return scriptPath;
+        }
+
+        var shellScriptPath = Path.Combine(directory, "dcp");
+        var echoLine = output.Length > 0 ? $"echo '{output}'\n" : string.Empty;
+        File.WriteAllText(shellScriptPath, $"#!/bin/sh\n{echoLine}exit 0\n");
         File.SetUnixFileMode(shellScriptPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
         return shellScriptPath;
     }
