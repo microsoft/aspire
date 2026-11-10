@@ -109,7 +109,7 @@ public class WslcDotnetPublishingTests(ITestOutputHelper output)
                 if (platform is not null)
                 {
                     var rid = platform == ContainerTargetPlatform.LinuxArm64 ? "linux-arm64" : "linux-x64";
-                    expectedArguments.AddRange([$"--property:RuntimeIdentifier={rid}", $"--property:ContainerRuntimeIdentifier={rid}"]);
+                    expectedArguments.Add($"--property:RuntimeIdentifier={rid}");
                 }
                 Assert.Equal(expectedArguments, spec.ArgumentList);
             });
@@ -164,7 +164,7 @@ public class WslcDotnetPublishingTests(ITestOutputHelper output)
         }
         else
         {
-            expectedArguments.AddRange(["--property:RuntimeIdentifier=linux-x64", "--property:ContainerRuntimeIdentifier=linux-x64"]);
+            expectedArguments.Add("--property:RuntimeIdentifier=linux-x64");
         }
         Assert.Equal(expectedArguments, spec.ArgumentList);
     }

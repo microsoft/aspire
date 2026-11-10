@@ -128,6 +128,11 @@ public class ContainerImageBuildOptions
     /// <summary>
     /// Gets the target platform for the container.
     /// </summary>
+    /// <remarks>
+    /// For single-platform .NET publishing, sets <c>RuntimeIdentifier</c> while respecting
+    /// the project's <c>ContainerRuntimeIdentifier</c>. If unset, the .NET SDK defaults
+    /// the container runtime identifier to the publish runtime identifier.
+    /// </remarks>
     public ContainerTargetPlatform? TargetPlatform { get; init; }
 
     /// <summary>
@@ -908,8 +913,9 @@ internal sealed class ResourceContainerImageManager(
         }
         else
         {
+            // The SDK defaults the container RID from the publish RID. Passing it as a global
+            // property would override project-specific values, such as win10-x64 for Nano Server.
             arguments.Add(MsBuildResponseFileFactory.CreatePropertyArgument("RuntimeIdentifier", runtimeIdentifiers));
-            arguments.Add(MsBuildResponseFileFactory.CreatePropertyArgument("ContainerRuntimeIdentifier", runtimeIdentifiers));
         }
     }
 

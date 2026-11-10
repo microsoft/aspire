@@ -116,6 +116,11 @@ public sealed class ContainerBuildOptionsCallbackContext
     /// <summary>
     /// Gets or sets the target platform for the container.
     /// </summary>
+    /// <remarks>
+    /// For single-platform .NET publishing, sets <c>RuntimeIdentifier</c> while respecting
+    /// the project's <c>ContainerRuntimeIdentifier</c>. If unset, the .NET SDK defaults
+    /// the container runtime identifier to the publish runtime identifier.
+    /// </remarks>
     public ContainerTargetPlatform? TargetPlatform { get; set; }
 
     /// <summary>
