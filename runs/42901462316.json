@@ -1,0 +1,76 @@
+{
+  "run_id": 42901462316,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/42901462316",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-10T21:42:56Z",
+  "verdict": "main-repository-breakage",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 21874,
+    "title": "Add React frontend to Go starter template",
+    "author": "IEvangelist",
+    "state": "closed",
+    "head_branch": "ievangelist-go-starter-frontend",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/21874",
+    "merged_at": "2026-11-10T21:04:38Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "32d2dd9c2214f7118628a1ab6a4e9e0795b584a9",
+    "failed_sha": "209d9226e0463b638a5d68a034505e874cae9091",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "e6a9cadfd4a9238d9f8ae3ef91e4c0c282169d21",
+        "message": "Don't probe the container runtime at startup when the app has no containers (#21957) ## Description **What failed.** On Windows runners, the Deno functional tests (`DenoTelemetryFunctionalTests.VerifyDenoAppExportsNativeTelemetryToDashboard`, `DenoFunctionalTests.VerifyDenoAppDirectExecutionWorks`, `DenoFunctionalTests.VerifyDenoAppTaskScriptWorks`) and other DCP-backed fixtures fail in `InitializeAsync` with: ``` Aspire.Hosting.DistributedApplicationException : Application orchestrator dependen",
+        "html_url": "https://github.com/microsoft/aspire/commit/e6a9cadfd4a9238d9f8ae3ef91e4c0c282169d21",
+        "pull_request": {
+          "number": 21957,
+          "title": "Don't probe the container runtime at startup when the app has no containers",
+          "url": "https://github.com/microsoft/aspire/pull/21957",
+          "merged_at": "2026-11-10T18:53:50Z"
+        }
+      },
+      {
+        "sha": "727eaa702afaf69a5a3ac8acfcd746c7af28e7f2",
+        "message": "Address deferred review feedback for the modern dashboard (#21766) ## Description Addresses the review feedback from #21412 (Modernize the dashboard experience) that was deferred to the tracking issue #21421. Each item was checked against the current code first. Item 17 was already fixed, and every other item is addressed here. The design questions are answered in a comment below. Fixes #21421 | Items | Change | |---|---| | 1, 3, 6 | Replaces `WithDashboardPosition` with `WithDisplayOrder`, back",
+        "html_url": "https://github.com/microsoft/aspire/commit/727eaa702afaf69a5a3ac8acfcd746c7af28e7f2",
+        "pull_request": {
+          "number": 21766,
+          "title": "Address deferred review feedback for the modern dashboard",
+          "url": "https://github.com/microsoft/aspire/pull/21766",
+          "merged_at": "2026-11-10T19:31:53Z"
+        }
+      },
+      {
+        "sha": "209d9226e0463b638a5d68a034505e874cae9091",
+        "message": "Add React frontend to Go starter template (#21874) ## Description The Go starter now scaffolds a complete Go API and React frontend that works with `aspire run` without additional setup. The frontend waits for the API, uses Aspire-projected endpoint configuration for its Vite proxy, and loads `/api/weatherforecast` on startup. For publish and deployment scenarios, the frontend build output is copied into the Go API container and served from `./static`. This keeps the deployed application on one ",
+        "html_url": "https://github.com/microsoft/aspire/commit/209d9226e0463b638a5d68a034505e874cae9091",
+        "pull_request": {
+          "number": 21874,
+          "title": "Add React frontend to Go starter template",
+          "url": "https://github.com/microsoft/aspire/pull/21874",
+          "merged_at": "2026-11-10T21:04:38Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Run VS Code extension unit tests (Windows) / Run VS Code extension unit tests (Windows)",
+      "id": 130129385352,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/42901462316/job/130129385352",
+      "classification": "main-repository-breakage",
+      "reason": "VS Code extension unit test 'spawnCliProcess rejects when a POSIX process group remains alive after forced termination' failed with a deterministic assertion (2 !== 0) in Run tests step.",
+      "failed_steps": [
+        "Run tests"
+      ]
+    }
+  ],
+  "failed_tests": [],
+  "causes": [
+    "vscode-ext-spawncli-posix-process-group-windows"
+  ]
+}

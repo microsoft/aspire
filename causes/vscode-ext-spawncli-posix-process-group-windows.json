@@ -1,0 +1,15 @@
+{
+  "id": "vscode-ext-spawncli-posix-process-group-windows",
+  "type": "main-repository-breakage",
+  "title": "VS Code extension unit test spawnCliProcess POSIX process group assertion fails on Windows",
+  "error_pattern": "spawnCliProcess tests rejects when a POSIX process group remains alive after forced termination:\nAssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n2 !== 0",
+  "occurrences": [
+    {
+      "run_id": 42901462316,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/42901462316",
+      "job": "Tests / Run VS Code extension unit tests (Windows) / Run VS Code extension unit tests (Windows)",
+      "observed_at": "2026-11-10T21:42:56Z",
+      "pr_number": 0
+    }
+  ]
+}
