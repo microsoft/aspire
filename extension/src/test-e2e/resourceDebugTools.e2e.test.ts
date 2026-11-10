@@ -65,6 +65,9 @@ suite('Aspire resource debug language model tool E2E', function () {
         await openAspireView();
         await waitForRepositoryIdle();
         const discovered = await waitForWorkspaceAppHost();
+        // The first discovery wait can reopen the E2E workspace folder, which reloads the window and
+        // hides the Aspire view. Reopen it so the extension keeps refreshing AppHost and resource state.
+        await openAspireView();
         const appHostPath = discovered.state.workspaceAppHostPath ?? getPrimaryAppHostProjectPath();
         const relativeAppHostPath = toWorkspaceRelativePath(appHostPath);
 
@@ -125,6 +128,7 @@ suite('Aspire resource debug language model tool E2E', function () {
         await openAspireView();
         await waitForRepositoryIdle();
         const discovered = await waitForWorkspaceAppHost();
+        await openAspireView();
         const appHostPath = discovered.state.workspaceAppHostPath ?? getPrimaryAppHostProjectPath();
         const relativeAppHostPath = toWorkspaceRelativePath(appHostPath);
 
@@ -217,6 +221,7 @@ suite('Aspire resource debug language model tool E2E', function () {
         await openAspireView();
         await waitForRepositoryIdle();
         const discovered = await waitForWorkspaceAppHost();
+        await openAspireView();
         const appHostPath = discovered.state.workspaceAppHostPath ?? getPrimaryAppHostProjectPath();
         const relativeAppHostPath = toWorkspaceRelativePath(appHostPath);
 
@@ -270,6 +275,7 @@ suite('Aspire resource debug language model tool E2E', function () {
         await openAspireView();
         await waitForRepositoryIdle();
         const discovered = await waitForWorkspaceAppHost();
+        await openAspireView();
         const appHostPath = discovered.state.workspaceAppHostPath ?? getPrimaryAppHostProjectPath();
 
         const start = (await executeE2eControlCommand({
@@ -356,6 +362,7 @@ suite('Aspire resource debug language model tool E2E', function () {
         await openAspireView();
         await waitForRepositoryIdle();
         const discovered = await waitForWorkspaceAppHost();
+        await openAspireView();
         const appHostPath = discovered.state.workspaceAppHostPath ?? getPrimaryAppHostProjectPath();
         const runBefore = getCommandInvocationCount('aspire-vscode.runAppHost');
         await executeE2eControlCommand({ name: 'runAppHost', appHostPath }, { waitFor: 'started' });
@@ -388,6 +395,7 @@ suite('Aspire resource debug language model tool E2E', function () {
         await openAspireView();
         await waitForRepositoryIdle();
         const discovered = await waitForWorkspaceAppHost();
+        await openAspireView();
         const appHostPath = discovered.state.workspaceAppHostPath ?? getPrimaryAppHostProjectPath();
         const runBefore = getCommandInvocationCount('aspire-vscode.runAppHost');
         await executeE2eControlCommand({ name: 'runAppHost', appHostPath }, { waitFor: 'started' });
@@ -475,6 +483,7 @@ func main() {
             await openAspireView();
             await executeE2eControlCommand({ name: 'refreshAppHosts' });
             await waitForSelectedWorkspaceAppHost(appHostPath, 180000);
+            await openAspireView();
             const capabilities = (await executeE2eControlCommand({ name: 'getSupportedCapabilities' })).result as string[];
             assert.ok(capabilities.includes('go-apphost.v1'), `Missing Go AppHost capability: ${JSON.stringify(capabilities)}`);
 

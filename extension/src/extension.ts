@@ -173,6 +173,16 @@ export async function activate(context: vscode.ExtensionContext) {
     telemetry: resourceDebugTelemetry,
     clock: resourceDebugClock,
   });
+  // Stopping at a breakpoint opens Run and Debug, which hides the Aspire view, and the debuggee's source
+  // replaces the AppHost editor. Neither UI signal survives a debugging session, so an attached resource
+  // debugger keeps AppHost and resource state live on its own, just as an AppHost run/debug session does.
+  const updateDebugSessionDataDemand = () => dataRepository.setAppHostDebugSessionActive(
+    aspireExtensionContext.aspireDebugSessions.some(session => session.operationKind === 'run')
+    || resourceDebugSessionRegistry.hasActiveSessions());
+  context.subscriptions.push(
+    aspireExtensionContext.onDidChangeDebugSessions(updateDebugSessionDataDemand),
+    resourceDebugSessionRegistry.onDidChangeSessions(updateDebugSessionDataDemand));
+  updateDebugSessionDataDemand();
   const resourceDebugService = new ResourceDebugService({
     appHostRepository: dataRepository,
     attachProviders: new ResourceAttachProviderRegistry(extensionResourceAttachProviders),
