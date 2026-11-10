@@ -169,6 +169,26 @@ public class AgentSkillsMigrationTests(ITestOutputHelper output) : IDisposable
     }
 
     [Fact]
+    public async Task DetectAndApply_InvalidSettingsStillFindOpenCodeOnlySkills()
+    {
+        // Only OpenCode loads .opencode/skills, and its settings fail to parse after that root is yielded.
+        var skill = Skill(_context.Project, ".opencode", "aspire");
+        await AgentConfigurationTestContext.WriteAsync(skill, "project skill");
+        await File.WriteAllTextAsync(Path.Combine(_context.Project.FullName, "opencode.json"), "{broken");
+        var migration = CreateMigration();
+
+        var descriptor = await migration.DetectAsync(_migrationContext, TestContext.Current.CancellationToken);
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            migration.ApplyAsync(_migrationContext, TestContext.Current.CancellationToken));
+
+        Assert.NotNull(descriptor);
+        Assert.Equal([".opencode/skills/aspire"], descriptor.Files);
+        Assert.Contains("opencode.json", descriptor.Detail);
+        Assert.Equal(descriptor.Detail, exception.Message);
+        Assert.Equal("project skill", await File.ReadAllTextAsync(skill));
+    }
+
+    [Fact]
     public async Task DetectAndApply_InspectionErrorWithoutCopiesIsNotPending()
     {
         await File.WriteAllTextAsync(Path.Combine(_context.Project.FullName, "opencode.json"), "{broken");

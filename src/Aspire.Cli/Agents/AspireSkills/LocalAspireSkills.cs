@@ -42,24 +42,28 @@ internal static class LocalAspireSkills
             foreach (var scope in new[] { AgentConfigurationScope.Project, AgentConfigurationScope.Global })
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                string[] directories;
+                // Clients yield their standard skill roots before parsing settings that add more.
+                // Collect as they are yielded so a settings failure still probes the standard roots.
+                List<string> directories = [];
                 try
                 {
-                    directories = scope is AgentConfigurationScope.Project
-                        ? projectDirectories.SelectMany(directory => agent.GetLocalSkillDirectories(scope, directory)).ToArray()
-                        : agent.GetLocalSkillDirectories(scope, workspaceRoot).ToArray();
+                    var discovered = scope is AgentConfigurationScope.Project
+                        ? projectDirectories.SelectMany(directory => agent.GetLocalSkillDirectories(scope, directory))
+                        : agent.GetLocalSkillDirectories(scope, workspaceRoot);
+                    foreach (var directory in discovered)
+                    {
+                        directories.Add(directory);
+                    }
                 }
                 catch (Exception ex) when (ex is JsonException or InvalidOperationException or ArgumentNullException)
                 {
                     // Invalid skill settings block plugin setup, not independently selected MCP.
                     errors.Add(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.LocalSkills_ReadFailed, agent.DisplayName, ex.Message));
-                    continue;
                 }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
                 {
                     hasFileErrors = true;
                     errors.Add(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.LocalSkills_ReadFailed, agent.DisplayName, ex.Message));
-                    continue;
                 }
 
                 foreach (var directory in directories)
