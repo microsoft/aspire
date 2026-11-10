@@ -151,13 +151,17 @@
     <value>Playwright CLI requires npm, which was not found on PATH. Skipping installation.</value>
   </data>
   <data name="InitCommand_InstalledSkillsSummary" xml:space="preserve">
-    <value>Installed Aspire agent skills:</value>
+    <value>Installed skills:</value>
   </data>
   <data name="InitCommand_InstalledSkillsSummarySkills" xml:space="preserve">
     <value>Skills: {0}</value>
   </data>
   <data name="InitCommand_InstalledSkillsSummaryLocations" xml:space="preserve">
     <value>Locations: {0}</value>
+  </data>
+  <data name="InitCommand_LocationWithAgents" xml:space="preserve">
+    <value>{0} ({1})</value>
+    <comment>{0} is a location, and {1} lists the agents that use it, separated by commas.</comment>
   </data>
   <data name="InitCommand_FailedToInstallSkill" xml:space="preserve">
     <value>Failed to install {0} skill at {1}: {2}</value>
@@ -294,9 +298,13 @@
     <comment>{0} lists the configured skill source repository and/or catalog URLs for the selected agent clients, one per line.</comment>
   </data>
   <data name="InitCommand_ConfiguredTargets" xml:space="preserve">
-    <value>Configured Aspire plugin:
+    <value>Configured sources:
   {0}</value>
-    <comment>{0} lists one agent per line, with that agent's configuration paths comma-separated.</comment>
+    <comment>{0} contains the source URLs and configuration locations, each on its own labeled line.</comment>
+  </data>
+  <data name="InitCommand_ConfiguredSourceList" xml:space="preserve">
+    <value>Sources: {0}</value>
+    <comment>{0} lists the configured repository and catalog URLs separated by commas.</comment>
   </data>
   <data name="InitCommand_ConfigurationTarget" xml:space="preserve">
     <value>{0}: {1}</value>

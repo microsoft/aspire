@@ -241,7 +241,16 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Configured Aspire plugin:
+        ///   Looks up a localized string similar to Sources: {0}.
+        /// </summary>
+        internal static string InitCommand_ConfiguredSourceList {
+            get {
+                return ResourceManager.GetString("InitCommand_ConfiguredSourceList", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Configured sources:
         ///  {0}.
         /// </summary>
         internal static string InitCommand_ConfiguredTargets {
@@ -350,7 +359,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Installed Aspire agent skills:.
+        ///   Looks up a localized string similar to Installed skills:.
         /// </summary>
         internal static string InitCommand_InstalledSkillsSummary {
             get {
@@ -364,6 +373,15 @@ namespace Aspire.Cli.Resources {
         internal static string InitCommand_InstalledSkillsSummaryLocations {
             get {
                 return ResourceManager.GetString("InitCommand_InstalledSkillsSummaryLocations", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to {0} ({1}).
+        /// </summary>
+        internal static string InitCommand_LocationWithAgents {
+            get {
+                return ResourceManager.GetString("InitCommand_LocationWithAgents", resourceCulture);
             }
         }
 
