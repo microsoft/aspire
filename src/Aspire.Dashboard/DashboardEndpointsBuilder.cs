@@ -3,7 +3,6 @@
 
 using Aspire.Dashboard.Api;
 using Aspire.Dashboard.Configuration;
-using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Utils;
 using Aspire.Otlp.Serialization;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -23,14 +22,10 @@ public static class DashboardEndpointsBuilder
 
     public static void MapDashboardApi(this IEndpointRouteBuilder endpoints, DashboardOptions dashboardOptions)
     {
-        IEndpointConventionBuilder builder;
+        // Browser-token login requests are handled by the authentication handler.
+        endpoints.MapPostNotFound("/api/validatetoken").SkipStatusCodePages();
         if (dashboardOptions.Frontend.AuthMode == FrontendAuthMode.BrowserToken)
         {
-            builder = endpoints.MapPost("/api/validatetoken", async ([FromBody] ValidateTokenRequest request, HttpContext httpContext, IOptionsMonitor<DashboardOptions> dashboardOptions) =>
-            {
-                return await ValidateTokenMiddleware.TryAuthenticateAsync(request.Token, httpContext, dashboardOptions).ConfigureAwait(false);
-            });
-
 #if DEBUG
             // Available in local debug for testing.
             endpoints.MapGet("/api/signout", async (HttpContext httpContext) =>
@@ -42,11 +37,6 @@ public static class DashboardEndpointsBuilder
             }).SkipStatusCodePages();
 #endif
         }
-        else
-        {
-            builder = endpoints.MapPostNotFound("/api/validatetoken");
-        }
-        builder.SkipStatusCodePages();
 
         if (dashboardOptions.Frontend.AuthMode == FrontendAuthMode.OpenIdConnect)
         {
@@ -289,6 +279,3 @@ public static class DashboardEndpointsBuilder
         }
     }
 }
-
-/// <param name="Token">The browser token to validate.</param>
-internal sealed record ValidateTokenRequest(string Token);

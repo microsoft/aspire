@@ -1,8 +1,9 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Globalization;
+using System.Collections.Concurrent;
 using System.Net;
+using System.Security.Cryptography;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server;
@@ -25,6 +26,7 @@ internal static class MockOpenIdAuthority
     /// </summary>
     public static async Task<Authority> CreateAsync()
     {
+        var signingKey = new SymmetricSecurityKey(RandomNumberGenerator.GetBytes(32));
         var host = new HostBuilder()
             .ConfigureWebHost(webBuilder =>
             {
@@ -42,7 +44,7 @@ internal static class MockOpenIdAuthority
                         app.UseEndpoints(endpoints =>
                         {
                             var issuer = "";
-                            var lastCode = "";
+                            var authorizationCodes = new ConcurrentDictionary<string, (string ClientId, string? Nonce)>();
                             var jwtHandler = new JsonWebTokenHandler();
 
                             endpoints.MapGet(
@@ -60,7 +62,7 @@ internal static class MockOpenIdAuthority
 
                             endpoints.MapGet(
                                 "authorize",
-                                (string redirect_uri, string? state, string? prompt, bool? preservedExtraQueryParams) =>
+                                (string redirect_uri, string client_id, string? nonce, string? state, string? prompt, bool? preservedExtraQueryParams) =>
                                 {
                                     // Require interaction so silent sign-in does not skip RedirectToLogin.razor.
                                     if (prompt == "none")
@@ -74,15 +76,16 @@ internal static class MockOpenIdAuthority
                                         return Results.Redirect($"{redirect_uri}?error=invalid_request&error_description=extraQueryParams%20not%20preserved&state={state}");
                                     }
 
-                                    lastCode = Random.Shared.Next().ToString(CultureInfo.InvariantCulture);
-                                    return Results.Redirect($"{redirect_uri}?code={lastCode}&state={state}");
+                                    var code = Guid.NewGuid().ToString("N");
+                                    authorizationCodes[code] = (client_id, nonce);
+                                    return Results.Redirect($"{redirect_uri}?code={code}&state={state}");
                                 });
 
                             endpoints.MapPost(
                                 "token",
                                 ([FromForm] string code) =>
                                 {
-                                    if (string.IsNullOrEmpty(lastCode) && code != lastCode)
+                                    if (!authorizationCodes.TryRemove(code, out var authorization))
                                     {
                                         return Results.BadRequest("Bad code");
                                     }
@@ -90,16 +93,19 @@ internal static class MockOpenIdAuthority
                                     return Results.Json(new
                                     {
                                         token_type = "Bearer",
+                                        access_token = "test-access-token",
                                         scope = "openid profile",
                                         expires_in = 3600,
                                         id_token = jwtHandler.CreateToken(new SecurityTokenDescriptor
                                         {
                                             Issuer = issuer,
-                                            Audience = "s6BhdRkqt3",
+                                            Audience = authorization.ClientId,
+                                            SigningCredentials = new SigningCredentials(signingKey, SecurityAlgorithms.HmacSha256),
                                             Claims = new Dictionary<string, object>
                                             {
                                                 ["sub"] = "248289761001",
                                                 ["name"] = "Jane Doe",
+                                                ["nonce"] = authorization.Nonce ?? "",
                                             },
                                         }),
                                     });
@@ -116,7 +122,7 @@ internal static class MockOpenIdAuthority
 
         await host.StartAsync();
 
-        return new Authority(host, url: GetBoundAddress());
+        return new Authority(host, url: GetBoundAddress(), signingKey);
 
         string GetBoundAddress()
         {
@@ -132,9 +138,10 @@ internal static class MockOpenIdAuthority
         }
     }
 
-    public sealed class Authority(IHost host, string url) : IAsyncDisposable
+    public sealed class Authority(IHost host, string url, SecurityKey signingKey) : IAsyncDisposable
     {
         public string Url => url;
+        public SecurityKey SigningKey => signingKey;
 
         public async ValueTask DisposeAsync()
         {

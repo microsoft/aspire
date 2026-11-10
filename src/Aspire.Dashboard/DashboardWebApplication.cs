@@ -548,8 +548,25 @@ public sealed class DashboardWebApplication : IAsyncDisposable
 
         });
 
-        // Redirect browser directly to /structuredlogs address if the dashboard is running without a resource service.
-        // This is done to avoid immediately navigating in the Blazor app.
+        if (!string.IsNullOrEmpty(dashboardOptions.Otlp.Cors.AllowedOrigins))
+        {
+            // Only add CORS middleware when there is CORS configuration.
+            // The default policy only allows the dashboard origin. Certain endpoints expose CORS for external origins, e.g. OTLP HTTP endpoints.
+            _app.UseCors();
+        }
+
+        // Use Forwarded Headers middleware if configured. This must run before authentication because sign-in cookie
+        // behavior depends on the normalized request scheme.
+        if (builder.Configuration.GetBool(DashboardConfigNames.ForwardedHeaders.ConfigKey) ?? false)
+        {
+            _app.UseForwardedHeaders();
+        }
+
+        _app.UseAuthentication();
+
+        // Authentication must process OIDC callbacks at "/" before the standalone-page redirect.
+        // Redirect browser directly to /structuredlogs if there is no resource service to
+        // avoid immediately navigating in the Blazor app.
         _app.Use(async (context, next) =>
         {
             if (context.Request.Path.Value is { } requestPath && TargetLocationInterceptor.GetStandaloneLocation(requestPath) is { } standaloneLocation)
@@ -565,21 +582,6 @@ public sealed class DashboardWebApplication : IAsyncDisposable
             await next(context).ConfigureAwait(false);
         });
 
-        if (!string.IsNullOrEmpty(dashboardOptions.Otlp.Cors.AllowedOrigins))
-        {
-            // Only add CORS middleware when there is CORS configuration.
-            // The default policy only allows the dashboard origin. Certain endpoints expose CORS for external origins, e.g. OTLP HTTP endpoints.
-            _app.UseCors();
-        }
-
-        // Use Forwarded Headers middleware if configured. This must run before token validation because sign-in cookie
-        // behavior depends on the normalized request scheme.
-        if (builder.Configuration.GetBool(DashboardConfigNames.ForwardedHeaders.ConfigKey) ?? false)
-        {
-            _app.UseForwardedHeaders();
-        }
-
-        _app.UseMiddleware<ValidateTokenMiddleware>();
         _app.UseMiddleware<DashboardExperienceRedirectMiddleware>();
 
         // Configure the HTTP request pipeline.
@@ -865,7 +867,15 @@ public sealed class DashboardWebApplication : IAsyncDisposable
     private static void ConfigureAuthentication(WebApplicationBuilder builder, DashboardOptions dashboardOptions)
     {
         var authentication = builder.Services
-            .AddAuthentication(o => o.DefaultScheme = ConfigureDefaultAuthScheme(dashboardOptions))
+            .AddAuthentication(o =>
+            {
+                o.DefaultScheme = ConfigureDefaultAuthScheme(dashboardOptions);
+                if (dashboardOptions.Frontend.AuthMode == FrontendAuthMode.BrowserToken)
+                {
+                    o.DefaultChallengeScheme = FrontendAuthenticationDefaults.AuthenticationSchemeBrowserToken;
+                }
+            })
+            .AddBrowserToken(FrontendAuthenticationDefaults.AuthenticationSchemeBrowserToken, o => { })
             .AddScheme<FrontendCompositeAuthenticationHandlerOptions, FrontendCompositeAuthenticationHandler>(FrontendCompositeAuthenticationDefaults.AuthenticationScheme, o => { })
             .AddScheme<OtlpCompositeAuthenticationHandlerOptions, OtlpCompositeAuthenticationHandler>(OtlpCompositeAuthenticationDefaults.AuthenticationScheme, o => { })
             .AddScheme<OtlpApiKeyAuthenticationHandlerOptions, OtlpApiKeyAuthenticationHandler>(OtlpApiKeyAuthenticationDefaults.AuthenticationScheme, o => { })
@@ -925,6 +935,23 @@ public sealed class DashboardWebApplication : IAsyncDisposable
                 };
             });
 
+        builder.Services.AddOptions<BrowserTokenAuthenticationOptions>(FrontendAuthenticationDefaults.AuthenticationSchemeBrowserToken)
+            .Configure<IOptionsFactory<DashboardOptions>>((options, factory) =>
+            {
+                // Recreate the validated options so configuration reload callback ordering cannot
+                // project a stale token from the DashboardOptions monitor.
+                var frontend = factory.Create(Options.DefaultName).Frontend;
+                options.Enabled = frontend.AuthMode == FrontendAuthMode.BrowserToken;
+                options.Token = frontend.BrowserToken;
+                options.TokenValidationPath = "/api/validatetoken";
+                options.Claims.Add(new Claim(ClaimTypes.NameIdentifier, "Local"));
+                options.Claims.Add(new Claim(FrontendAuthorizationDefaults.BrowserTokenClaimName, bool.TrueString));
+            });
+        builder.Services.AddSingleton<IOptionsChangeTokenSource<BrowserTokenAuthenticationOptions>>(
+            new ConfigurationChangeTokenSource<BrowserTokenAuthenticationOptions>(
+                FrontendAuthenticationDefaults.AuthenticationSchemeBrowserToken,
+                builder.Configuration.GetSection("Dashboard")));
+
         var (authCookieName, httpAuthCookieName) = DashboardAuthenticationCookieNames.Create(dashboardOptions.GetApplicationNameOrDefault());
 
         switch (dashboardOptions.Frontend.AuthMode)
@@ -981,24 +1008,11 @@ public sealed class DashboardWebApplication : IAsyncDisposable
                 });
                 break;
             case FrontendAuthMode.BrowserToken:
-                authentication.AddPolicyScheme(FrontendAuthenticationDefaults.AuthenticationSchemeBrowserToken, displayName: FrontendAuthenticationDefaults.AuthenticationSchemeBrowserToken, o =>
-                {
-                    o.ForwardDefault = CookieAuthenticationDefaults.AuthenticationScheme;
-                });
-
                 authentication.AddCookie(options =>
                 {
                     options.LoginPath = "/login";
                     options.ReturnUrlParameter = "returnUrl";
                     options.ExpireTimeSpan = TimeSpan.FromDays(3);
-                    options.Events.OnSigningIn = context =>
-                    {
-                        // Add claim when signing in with cookies from browser token.
-                        // Authorization requires this claim. This prevents an identity from another auth scheme from being allow.
-                        var claimsIdentity = (ClaimsIdentity)context.Principal!.Identity!;
-                        claimsIdentity.AddClaim(new Claim(FrontendAuthorizationDefaults.BrowserTokenClaimName, bool.TrueString));
-                        return Task.CompletedTask;
-                    };
                     options.Cookie.Name = authCookieName;
                     options.CookieManager = new AspireDashboardCookieManager(httpAuthCookieName);
                 });
