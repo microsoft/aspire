@@ -15,6 +15,16 @@ const enum AnsiColors {
 
 export type AppHostLogLevel = 'Trace' | 'Debug' | 'Information' | 'Warning' | 'Error' | 'Critical';
 
+/**
+ * The AppHost's effective `SimpleConsoleFormatterOptions`. AppHosts that predate this field, or whose
+ * console logger does not use the simple formatter, omit it.
+ */
+export interface AppHostConsoleFormat {
+    timestampFormat?: string | null;
+    singleLine: boolean;
+    includeScopes: boolean;
+}
+
 export interface AppHostLogEntry {
     generationId?: string;
     sequenceNumber: number;
@@ -23,6 +33,7 @@ export interface AppHostLogEntry {
     categoryName: string;
     eventId: number;
     exception?: string | null;
+    consoleFormat?: AppHostConsoleFormat | null;
 }
 
 type LogSource = 'backchannel' | 'consoleLogger' | 'debugLogger';
@@ -71,6 +82,15 @@ interface PendingConsoleRecord {
     endsWithBareLf: boolean;
 }
 
+interface ConsoleLoggerGrammar {
+    // `<timestamp><level>: <rest of line>`; group 1 is the level and group 2 the rest.
+    prefix: RegExp;
+    // `<timestamp><level>: <category>[<event id>]`; absent when records are single-line.
+    multilineHeader?: RegExp;
+    singleLine: boolean;
+    scopes: boolean;
+}
+
 interface PendingDebugRecord {
     raw: string;
     category: string;
@@ -104,6 +124,10 @@ export class AppHostLogOutputCoordinator {
     private readonly _fallbackFilters = new Map<string, AppHostParentOutputFilter>();
     private readonly _idleFlushTimers = new Map<string, ReturnType<typeof setTimeout>>();
     private _lastDebugAdapterCategory: string | undefined;
+    // Until the AppHost reports its console formatter options, accept every shape the
+    // formatter can produce. Older AppHosts never report them.
+    private _consoleGrammar = fallbackConsoleLoggerGrammar;
+    private _consoleFormatKey: string | undefined;
 
     constructor(
         private readonly _onIdleFlush?: (output: AppHostParentOutput) => void,
@@ -124,6 +148,10 @@ export class AppHostLogOutputCoordinator {
             if (this._backchannelSequenceOrder.length > AppHostLogOutputCoordinator._maxRememberedBackchannelSequences) {
                 this._backchannelSequences.delete(this._backchannelSequenceOrder.shift()!);
             }
+        }
+
+        if (entry.consoleFormat) {
+            this.useConsoleFormat(entry.consoleFormat);
         }
 
         const record = createBackchannelRecord(entry);
@@ -209,6 +237,17 @@ export class AppHostLogOutputCoordinator {
         this._pendingDebugRecords.clear();
         this._fallbackFilters.clear();
         this._lastDebugAdapterCategory = undefined;
+        this._consoleGrammar = fallbackConsoleLoggerGrammar;
+        this._consoleFormatKey = undefined;
+    }
+
+    private useConsoleFormat(format: AppHostConsoleFormat): void {
+        // Every entry carries the options, so only rebuild the grammar when they change.
+        const key = JSON.stringify([format.timestampFormat ?? null, format.singleLine, format.includeScopes]);
+        if (key !== this._consoleFormatKey) {
+            this._consoleFormatKey = key;
+            this._consoleGrammar = createReportedConsoleLoggerGrammar(format);
+        }
     }
 
     private consumeLine(line: string, category: string, outputs: AppHostParentOutput[]): void {
@@ -244,7 +283,8 @@ export class AppHostLogOutputCoordinator {
         if (pending) {
             const hasConsoleIndentation =
                 pending.record.singleLine !== true && isConsoleLoggerContinuation(line);
-            if (pending.allowsContinuation && (hasConsoleIndentation || isWindowsBareLfContinuation(pending, line))) {
+            if (pending.allowsContinuation
+                && (hasConsoleIndentation || isWindowsBareLfContinuation(pending, line, this._consoleGrammar))) {
                 if (pending.overflowed) {
                     this.emitRawConsoleLoggerOutput(line, pending.category, pending.record.logLevel, outputs);
                     updatePendingConsoleLineEnding(pending, line);
@@ -284,7 +324,7 @@ export class AppHostLogOutputCoordinator {
                 for (const alternativeRecord of pending.alternativeRecords) {
                     alternativeRecord.body += bodyLine;
                 }
-                if (!pending.hasNonScopeBodyLine && bodyLine.startsWith('=> ')) {
+                if (this._consoleGrammar.scopes && !pending.hasNonScopeBodyLine && bodyLine.startsWith('=> ')) {
                     // Each leading marker can be either scope metadata or the first message line.
                     // Store compact offsets instead of each suffix so deeply nested scopes retain
                     // linear state while `=> scope` followed by `=> message` remains distinguishable.
@@ -308,7 +348,8 @@ export class AppHostLogOutputCoordinator {
 
         if (category !== 'console'
             && line.length > AppHostLogOutputCoordinator._maxPendingDebugRecordCharacters) {
-            const record = parseMultilineConsoleLoggerHeader(line) ?? parseSingleLineConsoleLoggerRecord(line);
+            const record = parseMultilineConsoleLoggerHeader(line, this._consoleGrammar)
+                ?? parseSingleLineConsoleLoggerRecord(line, this._consoleGrammar);
             if (record) {
                 this.emitRawConsoleLoggerOutput(line, category, record.logLevel, outputs);
                 return;
@@ -317,7 +358,7 @@ export class AppHostLogOutputCoordinator {
 
         if (category !== 'console'
             && line.length <= AppHostLogOutputCoordinator._maxPendingDebugRecordCharacters
-            && singleLineConsoleLoggerPrefixRegex.test(line)) {
+            && this._consoleGrammar.prefix.test(line)) {
             this._pendingConsoleHeaderFragments.set(category, line);
             return;
         }
@@ -331,7 +372,7 @@ export class AppHostLogOutputCoordinator {
             return false;
         }
 
-        const multilineHeader = parseMultilineConsoleLoggerHeader(line);
+        const multilineHeader = parseMultilineConsoleLoggerHeader(line, this._consoleGrammar);
         if (multilineHeader) {
             this.resetFallbackFilter(category);
             this._pendingRecords.set(category, {
@@ -351,7 +392,7 @@ export class AppHostLogOutputCoordinator {
             return true;
         }
 
-        const singleLinePending = AppHostLogOutputCoordinator.createPendingSingleLineRecord(line, category);
+        const singleLinePending = AppHostLogOutputCoordinator.createPendingSingleLineRecord(line, category, this._consoleGrammar);
         if (!singleLinePending) {
             return false;
         }
@@ -390,7 +431,7 @@ export class AppHostLogOutputCoordinator {
         if (hasUnconfirmedSingleLineContinuations(pending)
             && !this.hasCorrelatedIdentityTwin(identity, 'consoleLogger')) {
             const firstLine = getFirstLine(pending.raw);
-            const firstPending = AppHostLogOutputCoordinator.createPendingSingleLineRecord(firstLine, category)!;
+            const firstPending = AppHostLogOutputCoordinator.createPendingSingleLineRecord(firstLine, category, this._consoleGrammar)!;
             const firstOutput = this.correlate(createPendingRecordIdentity(firstPending), 'consoleLogger');
             if (firstOutput) {
                 outputs.push(firstOutput);
@@ -880,8 +921,9 @@ export class AppHostLogOutputCoordinator {
 
     private static createPendingSingleLineRecord(
         line: string,
-        category: string): PendingConsoleRecord | undefined {
-        const records = parseSingleLineConsoleLoggerRecords(line);
+        category: string,
+        grammar: ConsoleLoggerGrammar): PendingConsoleRecord | undefined {
+        const records = parseSingleLineConsoleLoggerRecords(line, grammar);
         const record = records[0];
         if (!record) {
             return undefined;
@@ -895,7 +937,7 @@ export class AppHostLogOutputCoordinator {
             alternativeRecords.push(alternative);
         };
         for (const alternative of records.slice(1)) {
-            for (const offset of AppHostLogOutputCoordinator.getSingleLineScopeBodyOffsets(alternative.body)) {
+            for (const offset of AppHostLogOutputCoordinator.getSingleLineScopeBodyOffsets(alternative.body, grammar)) {
                 addAlternative({ ...alternative, body: alternative.body.slice(offset) });
             }
             // Keep the exact recent interpretation after its scope aliases. It is the only
@@ -913,7 +955,7 @@ export class AppHostLogOutputCoordinator {
             body: record.body,
             alternativeRecords,
             leadingScopeBodyOffsets:
-                AppHostLogOutputCoordinator.getSingleLineScopeBodyOffsets(record.body),
+                AppHostLogOutputCoordinator.getSingleLineScopeBodyOffsets(record.body, grammar),
             raw: line,
             category,
             allowsContinuation: true,
@@ -925,7 +967,11 @@ export class AppHostLogOutputCoordinator {
         };
     }
 
-    private static getSingleLineScopeBodyOffsets(body: string): number[] {
+    private static getSingleLineScopeBodyOffsets(body: string, grammar: ConsoleLoggerGrammar): number[] {
+        if (!grammar.scopes) {
+            return [];
+        }
+
         if (body === '=>') {
             return [body.length];
         }
@@ -1044,10 +1090,131 @@ const consoleLoggerTimestampPrefix =
 const consoleLoggerAnsiSgrSequence = String.raw`\x1b\[[0-9;]*m`;
 const consoleLoggerLevelPattern =
     String.raw`(?:${consoleLoggerAnsiSgrSequence})*(trce|dbug|info|warn|fail|crit)(?:${consoleLoggerAnsiSgrSequence})*`;
-const multilineConsoleLoggerHeaderRegex = new RegExp(
-    String.raw`^${consoleLoggerTimestampPrefix}${consoleLoggerLevelPattern}: ([\s\S]*)\[(-?\d+)\](?:\r\n|\r|\n)$`);
-const singleLineConsoleLoggerPrefixRegex = new RegExp(
-    String.raw`^${consoleLoggerTimestampPrefix}${consoleLoggerLevelPattern}: ([\s\S]*?)(?:\r\n|\r|\n)?$`);
+const fallbackConsoleLoggerGrammar = createConsoleLoggerGrammar(
+    consoleLoggerTimestampPrefix,
+    { multiline: true, singleLine: true, scopes: true });
+
+function createConsoleLoggerGrammar(
+    timestampPrefix: string,
+    shape: { multiline: boolean; singleLine: boolean; scopes: boolean }): ConsoleLoggerGrammar {
+    return {
+        prefix: new RegExp(
+            String.raw`^${timestampPrefix}${consoleLoggerLevelPattern}: ([\s\S]*?)(?:\r\n|\r|\n)?$`),
+        multilineHeader: shape.multiline
+            ? new RegExp(
+                String.raw`^${timestampPrefix}${consoleLoggerLevelPattern}: ([\s\S]*)\[(-?\d+)\](?:\r\n|\r|\n)$`)
+            : undefined,
+        singleLine: shape.singleLine,
+        scopes: shape.scopes
+    };
+}
+
+function createReportedConsoleLoggerGrammar(format: AppHostConsoleFormat): ConsoleLoggerGrammar {
+    // SimpleConsoleFormatter writes `timestamp.ToString(TimestampFormat)` directly before the level,
+    // with no separator of its own, and writes nothing when TimestampFormat is null:
+    // https://github.com/dotnet/runtime/blob/main/src/libraries/Microsoft.Extensions.Logging.Console/src/SimpleConsoleFormatter.cs
+    const timestampPrefix = format.timestampFormat === null || format.timestampFormat === undefined
+        ? ''
+        : createTimestampPattern(format.timestampFormat) ?? consoleLoggerTimestampPrefix;
+    return createConsoleLoggerGrammar(timestampPrefix, {
+        multiline: !format.singleLine,
+        singleLine: format.singleLine,
+        scopes: format.includeScopes
+    });
+}
+
+/**
+ * Translates a .NET custom date and time format string into a regex source, e.g.
+ *   `HH:mm:ss ` -> `\d{2}[^\s\d]\d{2}[^\s\d]\d{2} ` (the trailing space is literal)
+ *   `[yyyy-MM-dd'T'HH:mm:ss.FFF] ` -> `\[\d{4,}-\d{2}-\d{2}T...(?:\.\d{1,3})?\] `
+ * See https://learn.microsoft.com/dotnet/standard/base-types/custom-date-and-time-format-strings
+ * Returns undefined for a standard format (a single character, or empty, which .NET treats as "G"):
+ * its shape depends on the culture, so the caller keeps the fallback timestamp pattern.
+ */
+export function createTimestampPattern(format: string): string | undefined {
+    if (format.length <= 1) {
+        return undefined;
+    }
+
+    let pattern = '';
+    for (let index = 0; index < format.length;) {
+        const character = format[index];
+        if (character === '\'' || character === '"') {
+            // Quoted literal text such as 'T' or "UTC".
+            const end = format.indexOf(character, index + 1);
+            pattern += escapeRegExp(format.slice(index + 1, end < 0 ? format.length : end));
+            index = end < 0 ? format.length : end + 1;
+            continue;
+        }
+        if (character === '\\') {
+            pattern += escapeRegExp(format[index + 1] ?? '');
+            index += 2;
+            continue;
+        }
+        if (character === '%') {
+            // `%d` marks a lone specifier; the specifier itself follows.
+            index++;
+            continue;
+        }
+
+        let count = 1;
+        while (format[index + count] === character) {
+            count++;
+        }
+        index += count;
+
+        switch (character) {
+            case 'd':
+            case 'M':
+                // Numeric for one or two letters, then abbreviated or full day/month names.
+                pattern += count === 1 ? String.raw`\d{1,2}` : count === 2 ? String.raw`\d{2}` : String.raw`[^\s\d]+`;
+                break;
+            case 'h':
+            case 'H':
+            case 'm':
+            case 's':
+                pattern += count === 1 ? String.raw`\d{1,2}` : String.raw`\d{2}`;
+                break;
+            case 'y':
+                pattern += count === 1 ? String.raw`\d{1,2}` : count === 2 ? String.raw`\d{2}` : `\\d{${count},}`;
+                break;
+            case 'f':
+                pattern += `\\d{${count}}`;
+                break;
+            case 'F':
+                // Trailing zeros are dropped, and an all-zero fraction also drops a preceding '.'.
+                pattern = pattern.endsWith(String.raw`\.`)
+                    ? `${pattern.slice(0, -2)}(?:\\.\\d{1,${count}})?`
+                    : `${pattern}\\d{0,${count}}`;
+                break;
+            case 'z':
+                pattern += count === 1 ? String.raw`[+-]\d{1,2}` : count === 2 ? String.raw`[+-]\d{2}` : String.raw`[+-]\d{2}:\d{2}`;
+                break;
+            case 'K':
+                pattern += String.raw`(?:Z|[+-]\d{2}:\d{2})?`.repeat(count);
+                break;
+            case 't':
+            case 'g':
+                // AM/PM designator or era: culture-specific and possibly empty.
+                pattern += String.raw`[^\s\d]*`;
+                break;
+            case ':':
+            case '/':
+                // Culture-specific time and date separators.
+                pattern += String.raw`[^\s\d]`.repeat(count);
+                break;
+            default:
+                pattern += escapeRegExp(character.repeat(count));
+                break;
+        }
+    }
+
+    return pattern;
+}
+
+function escapeRegExp(value: string): string {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
 const debugLoggerLevelDelimiterRegex = /: (Trace|Debug|Information|Warning|Error|Critical): /g;
 
 function getFirstLine(value: string, startOffset = 0): string {
@@ -1155,13 +1322,13 @@ function appendPendingDebugLine(pending: PendingDebugRecord, line: string): void
     pending.raw += line;
 }
 
-function parseMultilineConsoleLoggerHeader(line: string): Omit<LogRecord, 'body'> | undefined {
+function parseMultilineConsoleLoggerHeader(line: string, grammar: ConsoleLoggerGrammar): Omit<LogRecord, 'body'> | undefined {
     // SimpleConsoleFormatter's default multiline record begins as:
     //   warn: Example.Category[7]
     //         First message line.
     // Common date/time prefixes are accepted, but arbitrary text before "warn:" is not:
     // otherwise a user line such as "status warn: ..." becomes a false log record.
-    const match = multilineConsoleLoggerHeaderRegex.exec(line);
+    const match = grammar.multilineHeader?.exec(line);
     if (!match) {
         return undefined;
     }
@@ -1173,16 +1340,16 @@ function parseMultilineConsoleLoggerHeader(line: string): Omit<LogRecord, 'body'
     };
 }
 
-function parseSingleLineConsoleLoggerRecord(line: string): LogRecord | undefined {
-    return parseSingleLineConsoleLoggerRecords(line)[0];
+function parseSingleLineConsoleLoggerRecord(line: string, grammar: ConsoleLoggerGrammar): LogRecord | undefined {
+    return parseSingleLineConsoleLoggerRecords(line, grammar)[0];
 }
 
-function parseSingleLineConsoleLoggerRecords(line: string): LogRecord[] {
+function parseSingleLineConsoleLoggerRecords(line: string, grammar: ConsoleLoggerGrammar): LogRecord[] {
     // With SimpleConsoleFormatterOptions.SingleLine, the same record is:
     //   warn: Example.Category[7] First message line.
     // Category text and message text are both arbitrary, so retain every possible event-ID
     // split and let another provider identify the actual record.
-    const match = singleLineConsoleLoggerPrefixRegex.exec(line);
+    const match = grammar.singleLine ? grammar.prefix.exec(line) : null;
     if (!match) {
         return [];
     }
@@ -1389,13 +1556,13 @@ function isConsoleLoggerContinuation(line: string): boolean {
     return content.startsWith('      ');
 }
 
-function isWindowsBareLfContinuation(pending: PendingConsoleRecord, line: string): boolean {
+function isWindowsBareLfContinuation(pending: PendingConsoleRecord, line: string, grammar: ConsoleLoggerGrammar): boolean {
     // On Windows SimpleConsoleFormatter only indents Environment.NewLine (`\r\n`).
     // A bare LF embedded in the message therefore leaves the following line unindented.
     return pending.endsWithBareLf
         && (pending.record.singleLine === true
-            ? !parseSingleLineConsoleLoggerRecord(line)
-                && !parseMultilineConsoleLoggerHeader(line)
+            ? !parseSingleLineConsoleLoggerRecord(line, grammar)
+                && !parseMultilineConsoleLoggerHeader(line, grammar)
             : pending.hasCrLf);
 }
 

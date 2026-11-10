@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Backchannel;
@@ -150,5 +151,52 @@ public class BackchannelLoggerProviderTests
         // Channels are completed after unsubscribe
         await channel1.Reader.Completion;
         await channel2.Reader.Completion;
+    }
+
+    [Fact]
+    public void Log_ReportsDefaultConsoleFormat()
+    {
+        var format = LogWithConsoleLogging(logging => logging.AddConsole());
+
+        Assert.NotNull(format);
+        Assert.Equal(((string?)null, false, false), (format.TimestampFormat, format.SingleLine, format.IncludeScopes));
+    }
+
+    [Fact]
+    public void Log_ReportsConfiguredSimpleConsoleFormat()
+    {
+        var format = LogWithConsoleLogging(logging => logging.AddSimpleConsole(options =>
+        {
+            options.TimestampFormat = "HH:mm:ss ";
+            options.SingleLine = true;
+            options.IncludeScopes = true;
+        }));
+
+        Assert.NotNull(format);
+        Assert.Equal(("HH:mm:ss ", true, true), (format.TimestampFormat, format.SingleLine, format.IncludeScopes));
+    }
+
+    [Fact]
+    public void Log_ReportsNoConsoleFormatForOtherFormatters()
+    {
+        Assert.Null(LogWithConsoleLogging(logging => logging.AddJsonConsole()));
+        Assert.Null(LogWithConsoleLogging(logging => logging.AddSystemdConsole()));
+    }
+
+    private static BackchannelConsoleFormat? LogWithConsoleLogging(Action<ILoggingBuilder> configureLogging)
+    {
+        // Resolve the provider the way DistributedApplicationBuilder registers it, so the test
+        // also covers which constructor dependency injection picks.
+        var services = new ServiceCollection();
+        services.AddLogging(configureLogging);
+        services.AddSingleton<BackchannelLoggerProvider>();
+        using var serviceProvider = services.BuildServiceProvider();
+        var provider = serviceProvider.GetRequiredService<BackchannelLoggerProvider>();
+
+        provider.CreateLogger("TestCategory").LogInformation("Message");
+
+        var (snapshot, subscriberId, _) = provider.Subscribe();
+        provider.Unsubscribe(subscriberId);
+        return Assert.Single(snapshot).ConsoleFormat;
     }
 }

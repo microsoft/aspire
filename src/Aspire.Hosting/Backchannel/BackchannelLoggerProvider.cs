@@ -3,6 +3,8 @@
 
 using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Console;
+using Microsoft.Extensions.Options;
 
 namespace Aspire.Hosting.Backchannel;
 
@@ -14,7 +16,64 @@ internal class BackchannelLoggerProvider : ILoggerProvider
     private readonly Guid _generationId = Guid.NewGuid();
     private int _nextSubscriberId;
     private long _nextSequenceNumber;
+    private readonly IOptionsMonitor<ConsoleLoggerOptions>? _consoleLoggerOptions;
+    private readonly IOptionsMonitor<SimpleConsoleFormatterOptions>? _simpleConsoleFormatterOptions;
     private const int MaxReplayEntries = 1000;
+
+    /// <summary>
+    /// Creates a provider that does not describe a console logger, so its entries carry no
+    /// <see cref="BackchannelLogEntry.ConsoleFormat"/>.
+    /// </summary>
+    public BackchannelLoggerProvider()
+    {
+    }
+
+    public BackchannelLoggerProvider(
+        IOptionsMonitor<ConsoleLoggerOptions> consoleLoggerOptions,
+        IOptionsMonitor<SimpleConsoleFormatterOptions> simpleConsoleFormatterOptions)
+    {
+        _consoleLoggerOptions = consoleLoggerOptions;
+        _simpleConsoleFormatterOptions = simpleConsoleFormatterOptions;
+    }
+
+    internal BackchannelConsoleFormat? GetConsoleFormat()
+    {
+        // Read the options per record so a reloaded configuration is reported with the
+        // records the console logger rendered using it.
+        return _consoleLoggerOptions is null || _simpleConsoleFormatterOptions is null
+            ? null
+            : GetConsoleFormat(_consoleLoggerOptions.CurrentValue, _simpleConsoleFormatterOptions.CurrentValue);
+    }
+
+    internal static BackchannelConsoleFormat? GetConsoleFormat(
+        ConsoleLoggerOptions consoleLoggerOptions,
+        SimpleConsoleFormatterOptions simpleConsoleFormatterOptions)
+    {
+        // Mirrors how ConsoleLoggerProvider.ReloadLoggerOptions picks the formatter and its options:
+        // https://github.com/dotnet/runtime/blob/main/src/libraries/Microsoft.Extensions.Logging.Console/src/ConsoleLoggerProvider.cs
+        // - No FormatterName: the obsolete ConsoleLoggerOptions.Format picks the formatter, and the
+        //   simple formatter is configured from the obsolete ConsoleLoggerOptions properties.
+        // - FormatterName "simple" (matched case-insensitively): SimpleConsoleFormatterOptions applies.
+        // Anything else (json, systemd, custom) is not the simple formatter's shape, so report
+        // nothing and let the client keep its fallback parser.
+#pragma warning disable CS0618 // Type or member is obsolete
+        return consoleLoggerOptions.FormatterName switch
+        {
+            null when consoleLoggerOptions.Format is ConsoleLoggerFormat.Default => new()
+            {
+                TimestampFormat = consoleLoggerOptions.TimestampFormat,
+                IncludeScopes = consoleLoggerOptions.IncludeScopes,
+            },
+            string name when string.Equals(name, ConsoleFormatterNames.Simple, StringComparison.OrdinalIgnoreCase) => new()
+            {
+                TimestampFormat = simpleConsoleFormatterOptions.TimestampFormat,
+                SingleLine = simpleConsoleFormatterOptions.SingleLine,
+                IncludeScopes = simpleConsoleFormatterOptions.IncludeScopes,
+            },
+            _ => null
+        };
+#pragma warning restore CS0618
+    }
 
     /// <summary>
     /// Gets a snapshot of buffered log entries and subscribes for new entries.
@@ -105,6 +164,7 @@ internal class BackchannelLogger(string categoryName, BackchannelLoggerProvider 
                 EventId = eventId,
                 Message = formatter(state, exception),
                 Exception = exception?.ToString(),
+                ConsoleFormat = provider.GetConsoleFormat(),
             };
 
             provider.WriteEntry(entry);

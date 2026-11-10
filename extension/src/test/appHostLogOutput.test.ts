@@ -1,10 +1,12 @@
 import * as assert from 'assert';
 import * as sinon from 'sinon';
 import {
+    AppHostConsoleFormat,
     AppHostLogEntry,
     AppHostLogOutputCoordinator,
     AppHostParentOutput,
-    AppHostParentOutputFilter
+    AppHostParentOutputFilter,
+    createTimestampPattern
 } from '../debugger/appHostLogOutput';
 
 suite('AppHost log output coordinator', () => {
@@ -2533,6 +2535,147 @@ suite('AppHost log output coordinator', () => {
     });
 
 });
+
+suite('AppHost log output coordinator with reported console formatter options', () => {
+    const portIsBusy: AppHostParentOutput = {
+        output: '\x1b[33mExample.Category: Warning: Port is busy.\x1b[0m\n',
+        category: 'stdout'
+    };
+    const scopedMessage: AppHostParentOutput = {
+        output: 'Example.Category: Information: Scoped message.\n',
+        category: 'stdout'
+    };
+
+    test('deduplicates the default format', () => {
+        assertDeduplicatedInBothOrders(
+            { timestampFormat: null, singleLine: false, includeScopes: false },
+            'warn: Example.Category[7]\n      Port is busy.\n',
+            { logLevel: 'Warning', message: 'Port is busy.' },
+            portIsBusy);
+    });
+
+    test('deduplicates TimestampFormat output that the fallback parser cannot recognize', () => {
+        const cases: [string, string][] = [
+            ['MM/dd/yyyy hh:mm:ss tt ', '08/10/2026 05:40:09 PM warn: Example.Category[7]\n      Port is busy.\n'],
+            ['HH:mm:ss', '17:40:09warn: Example.Category[7]\n      Port is busy.\n'],
+            ['dd MMM yyyy HH:mm:ss.FFF zzz | ', '10 Aug 2026 17:40:09 +02:00 | warn: Example.Category[7]\n      Port is busy.\n'],
+            ['\'<\'yyyyMMdd\'T\'HHmmss.fff\'>\' ', '<20260810T174009.123> warn: Example.Category[7]\n      Port is busy.\n'],
+        ];
+
+        for (const [timestampFormat, console] of cases) {
+            assertDeduplicatedInBothOrders(
+                { timestampFormat, singleLine: false, includeScopes: false },
+                console,
+                { logLevel: 'Warning', message: 'Port is busy.' },
+                portIsBusy);
+        }
+    });
+
+    test('keeps the fallback parser for AppHosts that do not report their format', () => {
+        const coordinator = new AppHostLogOutputCoordinator();
+        assert.deepStrictEqual(
+            coordinator.handleBackchannelEntry(createEntry({ logLevel: 'Warning', message: 'Port is busy.' })),
+            portIsBusy);
+
+        // Unrecognized timestamps pass through, which shows the record twice as before.
+        assert.notDeepStrictEqual(
+            renderConsole(coordinator, '08/10/2026 05:40:09 PM warn: Example.Category[7]\n      Port is busy.\n', 'stdout'),
+            []);
+
+        // Recognized shapes still deduplicate.
+        assert.ok(coordinator.handleBackchannelEntry(createEntry({ sequenceNumber: 2, logLevel: 'Warning', message: 'Port is busy.' })));
+        assert.deepStrictEqual(
+            renderConsole(coordinator, '2026-08-10 17:40:09 warn: Example.Category[7]\n      Port is busy.\n', 'stdout'),
+            []);
+    });
+
+    test('deduplicates SingleLine output', () => {
+        assertDeduplicatedInBothOrders(
+            { timestampFormat: 'HH:mm:ss ', singleLine: true, includeScopes: false },
+            '17:40:09 warn: Example.Category[7] Port is busy.\n',
+            { logLevel: 'Warning', message: 'Port is busy.' },
+            portIsBusy);
+    });
+
+    test('deduplicates IncludeScopes output', () => {
+        assertDeduplicatedInBothOrders(
+            { timestampFormat: null, singleLine: false, includeScopes: true },
+            'info: Example.Category[7]\n      => RequestPath:/health => ConnectionId:42\n      Scoped message.\n',
+            { message: 'Scoped message.' },
+            scopedMessage,
+            // Before its twin arrives, the console copy renders as written, scopes included.
+            {
+                output: 'Example.Category: Information: => RequestPath:/health => ConnectionId:42\nScoped message.\n',
+                category: 'stdout'
+            });
+        assertDeduplicatedInBothOrders(
+            { timestampFormat: null, singleLine: true, includeScopes: true },
+            'info: Example.Category[7] => RequestPath:/health => ConnectionId:42 Scoped message.\n',
+            { message: 'Scoped message.' },
+            scopedMessage,
+            {
+                output: 'Example.Category: Information: => RequestPath:/health => ConnectionId:42 Scoped message.\n',
+                category: 'stdout'
+            });
+    });
+
+    test('does not read scope-shaped message lines as scopes when IncludeScopes is off', () => {
+        const coordinator = new AppHostLogOutputCoordinator();
+        assert.deepStrictEqual(
+            coordinator.handleBackchannelEntry(createEntry({
+                message: 'Scoped message.',
+                consoleFormat: { timestampFormat: null, singleLine: false, includeScopes: false }
+            })),
+            scopedMessage);
+
+        assert.deepStrictEqual(
+            renderConsole(coordinator, 'info: Example.Category[7]\n      => RequestPath:/health\n      Scoped message.\n', 'stdout'),
+            [{
+                output: 'Example.Category: Information: => RequestPath:/health\nScoped message.\n',
+                category: 'stdout'
+            }]);
+    });
+
+    test('translates .NET custom timestamp formats', () => {
+        const cases: [string, string][] = [
+            ['HH:mm:ss ', '17:40:09 '],
+            ['yyyy-MM-ddTHH:mm:ss.fffK', '2026-08-10T17:40:09.123+02:00'],
+            ['yyyy-MM-dd HH:mm:ss.FFF', '2026-08-10 17:40:09'],
+            ['yyyy-MM-dd HH:mm:ss.FFF', '2026-08-10 17:40:09.12'],
+            ['[dddd, d MMMM yyyy h:mm tt] ', '[Monday, 10 August 2026 5:40 PM] '],
+            ['%H\\h', '17h'],
+        ];
+
+        for (const [format, timestamp] of cases) {
+            const pattern = createTimestampPattern(format);
+            assert.ok(pattern, format);
+            assert.ok(new RegExp(`^${pattern}$`).test(timestamp), `${format} should match ${timestamp}`);
+        }
+
+        assert.strictEqual(createTimestampPattern('O'), undefined);
+        assert.strictEqual(createTimestampPattern(''), undefined);
+    });
+});
+
+function assertDeduplicatedInBothOrders(
+    consoleFormat: AppHostConsoleFormat,
+    console: string,
+    entry: Partial<AppHostLogEntry>,
+    expected: AppHostParentOutput,
+    consoleFirstExpected = expected): void {
+    const backchannelFirst = new AppHostLogOutputCoordinator();
+    assert.deepStrictEqual(backchannelFirst.handleBackchannelEntry(createEntry({ ...entry, consoleFormat })), expected);
+    assert.deepStrictEqual(renderConsole(backchannelFirst, console, 'stdout'), [], console);
+
+    // The format arrives with backchannel entries, so an earlier entry must have reported it.
+    const consoleFirst = new AppHostLogOutputCoordinator();
+    assert.ok(consoleFirst.handleBackchannelEntry(createEntry({ message: 'Earlier record.', consoleFormat })));
+    assert.deepStrictEqual(renderConsole(consoleFirst, console, 'stdout'), [consoleFirstExpected], console);
+    assert.strictEqual(
+        consoleFirst.handleBackchannelEntry(createEntry({ ...entry, sequenceNumber: 2, consoleFormat })),
+        undefined,
+        console);
+}
 
 function renderConsole(
     coordinator: AppHostLogOutputCoordinator,
