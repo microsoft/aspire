@@ -2263,7 +2263,7 @@ public sealed partial class AnalyzeCiFailureWorkflowTests(ITestOutputHelper outp
         var metadataPath = Path.Combine(_workspace.Path, "issue-metadata.json");
         await File.WriteAllTextAsync(
             causePath,
-            """{"id":"main-build-break","type":"main-repository-breakage","title":"PR #19999 broke main","error_pattern":"Introduced by PR #19999; revert it"}""");
+            """{"id":"main-build-break","type":"main-repository-breakage","title":"PR #19999 broke main","error_pattern":"Timed out after 590033ms waiting for resource 'standalone' state Running."}""");
         await File.WriteAllTextAsync(runContextPath, """{"head_sha":"trusted-failure"}""");
         await File.WriteAllTextAsync(lastSuccessfulRunPath, """{"head_sha":"trusted-success"}""");
         await File.WriteAllTextAsync(
@@ -2308,7 +2308,7 @@ public sealed partial class AnalyzeCiFailureWorkflowTests(ITestOutputHelper outp
 
             ## Error Message
 
-                The main branch CI run failed. See the linked workflow run and trusted commit context above for diagnostics.
+                Timed out after 590033ms waiting for resource 'standalone' state Running.
 
             ## Description
 
@@ -2344,7 +2344,7 @@ public sealed partial class AnalyzeCiFailureWorkflowTests(ITestOutputHelper outp
         var metadataPath = Path.Combine(_workspace.Path, "issue-metadata.json");
         await File.WriteAllTextAsync(
             causePath,
-            """{"id":"main-build-break","type":"main-repository-breakage","title":"PR #19999 broke main","error_pattern":"Introduced by PR #19999; revert it"}""");
+            """{"id":"main-build-break","type":"main-repository-breakage","title":"PR #19999 broke main","error_pattern":"Timed out after 590033ms waiting for resource 'standalone' state Running."}""");
         await File.WriteAllTextAsync(runContextPath, """{"head_sha":"trusted-failure"}""");
         await File.WriteAllTextAsync(lastSuccessfulRunPath, """{"head_sha":"trusted-success"}""");
         await File.WriteAllTextAsync(
@@ -2388,7 +2388,7 @@ public sealed partial class AnalyzeCiFailureWorkflowTests(ITestOutputHelper outp
 
             ## Error Message
 
-                The main branch CI run failed. See the linked workflow run and trusted commit context above for diagnostics.
+                Timed out after 590033ms waiting for resource 'standalone' state Running.
 
             ## Description
 
@@ -4706,7 +4706,7 @@ public sealed partial class AnalyzeCiFailureWorkflowTests(ITestOutputHelper outp
 
             ## Error Message
 
-                The main branch CI run failed. See the linked workflow run and trusted commit context above for diagnostics.
+                Timed out waiting for resource 'standalone' state Running.
 
             ## Description
 
@@ -4742,7 +4742,7 @@ public sealed partial class AnalyzeCiFailureWorkflowTests(ITestOutputHelper outp
 
             ## Error Message
 
-                The main branch CI run failed. See the linked workflow run and trusted commit context above for diagnostics.
+                Timed out waiting for resource 'standalone' state Running.
 
             ## Description
 

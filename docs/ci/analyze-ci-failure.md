@@ -485,6 +485,20 @@ PR-directed effects check fresh open/unlocked state. Rendering retains the
 65,000-byte comment budget, issue-body budgets, Markdown inertness, Unicode
 handling and secret redaction.
 
+Main-breakage issues show the stored cause's `error_pattern`, using the same
+secret redaction, control-character removal and 500-code-point display limit
+as other cause issues. They no longer replace it with generic main-failure
+boilerplate. The pattern remains the cause's original representative diagnostic,
+not necessarily the latest occurrence's exact text or elapsed time. Main titles
+and build context still come from trusted metadata. Sanitization does not verify
+the diagnostic's meaning or remove speculative prose from legacy cause records.
+
+Cause matching must compare the diagnostic and failing phase, not just a shared
+test, job or timeout message. For readiness timeouts, inspect earlier diagnostics
+and captured last state before treating canceled launch, failed resource startup
+and incomplete AppHost startup as one mechanism. Collection/replay projects
+evidence; it does not rerun the workflow agent's classification.
+
 Structured fixture failures caused by runner infrastructure remain in the exact
 test inventory with classification `transient-infra`; they are not omitted or
 mislabelled flaky. Each must belong to an infrastructure-classified job covered

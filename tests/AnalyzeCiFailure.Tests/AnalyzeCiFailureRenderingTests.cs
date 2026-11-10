@@ -4,12 +4,63 @@
 using System.Globalization;
 using System.Text.Json.Nodes;
 using AnalyzeCiFailure;
+using VerifyXunit;
+using Xunit;
 
 namespace Infrastructure.Tests;
 
 /// <summary>Exercises production Markdown and metadata projections through shared scenario helpers.</summary>
 public sealed partial class AnalyzeCiFailureWorkflowTests
 {
+    [Theory]
+    [InlineData("41503655043", 570124)]
+    [InlineData("41534093007", 576917)]
+    [InlineData("42879814558", 590033)]
+    public async Task MainIssuePreservesBrowserDebuggerDiagnostic(string runId, int elapsedMilliseconds)
+    {
+        var diagnostic = $"Timed out after {elapsedMilliseconds}ms waiting for resource 'standalone' state Running.\nLast error: <none>";
+        var body = RenderMainDiagnostic(diagnostic, runId);
+
+        await Verifier.Verify(body, "md").UseDirectory("Snapshots").UseParameters(runId, elapsedMilliseconds);
+    }
+
+    [Fact]
+    public async Task MainIssueSanitizesAndBoundsMultilineDiagnostic()
+    {
+        var diagnostic = "\u001b[31mResource failed to start.\u001b[0m\r\nAuthorization: Bearer synthetic-secret\r\n" +
+            "token=synthetic-token\r\n" + new string('x', 600);
+        var body = RenderMainDiagnostic(diagnostic, "123");
+        var error = body.Split("## Error Message\n\n", StringSplitOptions.None)[1]
+            .Split("\n\n## Description", StringSplitOptions.None)[0];
+
+        Assert.Contains("    Authorization: Bearer [REDACTED]\n    token=[REDACTED]\n", error, StringComparison.Ordinal);
+        Assert.Equal(500, string.Join('\n', error.Split('\n').Select(line => line[4..])).EnumerateRunes().Count());
+        await Verifier.Verify(body, "md").UseDirectory("Snapshots");
+    }
+
+    private static string RenderMainDiagnostic(string diagnostic, string runId)
+    {
+        var cause = new JsonObject
+        {
+            ["id"] = "browser-debugger-resource-running-timeout",
+            ["type"] = "main-repository-breakage",
+            ["title"] = "Untrusted attribution must not become the main issue title",
+            ["error_pattern"] = diagnostic,
+        };
+        var evidence = new PublicationEvidence(null, null, null, CandidateHistoryState.Unavailable, null);
+        var draft = CauseIssueRenderer.RenderCanonicalIssue(
+            cause,
+            CiFailureJson.ToContract<RunContext>(JsonNode.Parse("""{"head_sha":"failed-sha"}""")),
+            evidence,
+            $"https://github.com/microsoft/aspire/actions/runs/{runId}",
+            "main",
+            "0",
+            "Browser debugger",
+            $"| 2026-11-10 | [Build](https://github.com/microsoft/aspire/actions/runs/{runId}) | `Browser debugger` | main |");
+
+        return draft.Body!;
+    }
+
     // The fixtures exercise the production functions, with file I/O kept here only
     // to preserve the representative inputs and independently asserted outputs.
     private static Task<CommandResult> RunFunctionAsync(Func<string> operation, int errorCode = 1)

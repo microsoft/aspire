@@ -82,9 +82,7 @@ internal static partial class CauseIssueRenderer
         {
             error = "No diagnostic pattern recorded.";
         }
-        error = main
-            ? "The main branch CI run failed. See the linked workflow run and trusted commit context above for diagnostics."
-            : DiagnosticTextSanitizer.Sanitize(error, limit: 500, multiline: true);
+        error = DiagnosticTextSanitizer.Sanitize(error, limit: 500, multiline: true);
         var body = MarkdownTemplate.Render(
             "CauseIssue",
             ("CAUSE_ID", id),

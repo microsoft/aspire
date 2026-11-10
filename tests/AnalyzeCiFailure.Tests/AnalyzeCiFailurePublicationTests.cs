@@ -428,6 +428,7 @@ public sealed partial class AnalyzeCiFailureWorkflowTests
         var causePath = Path.Combine(analysis, "causes", "debugger-timeout.json");
         var cause = JsonNode.Parse(await File.ReadAllTextAsync(causePath))!;
         cause["type"] = "main-repository-breakage";
+        cause["error_pattern"] = "Timed out after 570124ms waiting for resource 'standalone' state Running.\nLast error: <none>";
         cause.AsObject().Remove("tests");
         await File.WriteAllTextAsync(causePath, cause.ToJsonString());
         var body = ExistingGroupedIssue.Replace("cause-type:flaky-test", "cause-type:main-repository-breakage", StringComparison.Ordinal);
@@ -491,6 +492,16 @@ public sealed partial class AnalyzeCiFailureWorkflowTests
         {
             Assert.False(File.Exists(bodyPath));
         }
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq", "git"])]
+    public async Task MainPublicationPreservesStoredDiagnostic()
+    {
+        await MainPublicationRefreshesMetadataAndPreservesNotesAcrossMigration("valid");
+
+        await Verifier.Verify(await File.ReadAllTextAsync(Path.Combine(_workspace.Path, "issue-body.md")), "md")
+            .UseDirectory("Snapshots");
     }
 
     [Fact]
