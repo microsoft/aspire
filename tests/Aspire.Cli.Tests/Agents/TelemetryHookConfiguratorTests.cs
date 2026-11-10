@@ -62,6 +62,20 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task ConfigureAsync_RegistersCopilotHookWhenOnlyVsCodeIsDetected()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var home = workspace.CreateDirectory("home");
+        var configurator = CreateConfigurator(workspace, home);
+        var result = await configurator.ConfigureAsync(AgentEnvironment.VsCode, CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal([CopilotAgentClient.ClientId], GetClientIds(result.ConfiguredClients));
+        Assert.Empty(result.Skipped);
+        Assert.True(File.Exists(Path.Combine(home.FullName, ".copilot", "hooks", "aspire-telemetry.json")));
+        Assert.False(Directory.Exists(Path.Combine(home.FullName, ".claude")));
+    }
+
+    [Fact]
     public async Task ConfigureAsync_ConfiguresClaudeWhenCopilotHookWriteFails()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -311,7 +325,7 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
 
     [Theory]
     [InlineData((int)AgentEnvironment.None)]
-    [InlineData((int)(AgentEnvironment.VsCode | AgentEnvironment.OpenCode))]
+    [InlineData((int)AgentEnvironment.OpenCode)]
     public async Task ConfigureAsync_IsNoOp_ForUnsupportedClients(int detectedEnvironments)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
