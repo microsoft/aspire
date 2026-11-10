@@ -167,6 +167,30 @@ public class Program
         return null;
     }
 
+    /// <summary>
+    /// Determines whether a successful one-shot command's automatic log can be deleted at exit.
+    /// Commands opt in through <see cref="BaseCommand.DiscardsLogOnSuccess"/>, and root <c>--version</c>
+    /// always opts in. Logs are kept when the user asked for diagnostics (<c>--debug</c>, <c>--log-level</c>,
+    /// or <c>--log-file</c>), when the command does not opt in, such as follow modes, or when the run was
+    /// cancelled. Cancellation is checked separately because some commands, such as <c>ls</c>, report
+    /// a cancelled run with a success exit code.
+    /// </summary>
+    /// <remarks>
+    /// The diagnostic options are read from the parse result rather than the raw-argument pre-parse in
+    /// <see cref="ParseLoggingOptions"/>, which only recognizes the space-separated form, so inline forms
+    /// such as <c>--log-level=Debug</c> also keep the log.
+    /// </remarks>
+    internal static bool ShouldDiscardLogOnSuccess(int exitCode, bool cancellationRequested, ParseResult parseResult)
+        => exitCode == CliExitCodes.Success
+            && !cancellationRequested
+            && !parseResult.GetValue(RootCommand.DebugOption)
+            && parseResult.GetValue(RootCommand.DebugLevelOption) is null
+            && parseResult.GetValue(RootCommand.s_logFileOption) is null
+            // Root --version runs an option action instead of a BaseCommand, so it can't opt in through
+            // DiscardsLogOnSuccess. The VS Code extension runs it periodically to check for an outdated CLI.
+            && (parseResult.Action is IdentityVersionAction
+                || (parseResult.CommandResult.Command is BaseCommand command && command.DiscardsLogOnSuccess(parseResult)));
+
     private static async Task<string> GetGlobalSettingsPathAsync(ILogger logger, bool migrate, CancellationToken cancellationToken)
     {
         var usersAspirePath = GetUsersAspirePath();
@@ -1379,6 +1403,13 @@ public class Program
                         exitCode = CliExitCodes.DashboardFailure;
                     }
                 }
+            }
+
+            if (profileCaptureOptions is null && ShouldDiscardLogOnSuccess(exitCode, cancellationManager.Token.IsCancellationRequested, parseResult))
+            {
+                // The provider deletes the file when it is disposed after the shutdown below, and
+                // keeps it if anything logs a warning or error before then.
+                startupContext.FileLoggerProvider.DeleteOnDisposeIfNoWarnings();
             }
 
             return exitCode;

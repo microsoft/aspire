@@ -1,6 +1,9 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
+using Aspire.Cli.Commands;
+using Aspire.Hosting;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.DotNet.RemoteExecutor;
 
@@ -165,6 +168,44 @@ public class CliSmokeTests(ITestOutputHelper outputHelper)
         outputHelper.WriteLine(result.Process.StandardOutput.ReadToEnd());
     }
 
+    [Fact]
+    public void SuccessfulOneShotQueryDeletesAutomaticLog()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var home = workspace.CreateDirectory("aspire-home");
+
+        RunMainInIsolatedHome(workspace, home.FullName, CliExitCodes.Success, "config", "info", "--json", "--non-interactive", "--nologo");
+
+        var logsDirectory = Path.Combine(home.FullName, "logs");
+        Assert.True(Directory.Exists(logsDirectory), $"Expected the automatic log to be written under '{logsDirectory}'.");
+        Assert.Empty(Directory.GetFiles(logsDirectory, "cli_*.log"));
+    }
+
+    [Fact]
+    public void FailedOneShotQueryKeepsAutomaticLog()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var home = workspace.CreateDirectory("aspire-home");
+
+        // A `ps` snapshot without `--follow` is rejected before any AppHost is scanned, so this
+        // failure never touches AppHosts running on the machine.
+        RunMainInIsolatedHome(workspace, home.FullName, CliExitCodes.InvalidCommand, "ps", "--output", "snapshot", "--non-interactive", "--nologo");
+
+        Assert.Single(Directory.GetFiles(Path.Combine(home.FullName, "logs"), "cli_*.log"));
+    }
+
+    [Fact]
+    public void SuccessfulOneShotQueryKeepsExplicitLogFile()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var home = workspace.CreateDirectory("aspire-home");
+        var logFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, "explicit.log");
+
+        RunMainInIsolatedHome(workspace, home.FullName, CliExitCodes.Success, "config", "info", "--json", "--log-file", logFilePath, "--non-interactive", "--nologo");
+
+        Assert.True(File.Exists(logFilePath), $"Expected the explicit log file '{logFilePath}' to be kept.");
+    }
+
 #if DEBUG
     [Fact]
     public void RenderScenarioOutputsPublishSummaryStressCase()
@@ -201,4 +242,29 @@ public class CliSmokeTests(ITestOutputHelper outputHelper)
         outputHelper.WriteLine(result.Process.StandardOutput.ReadToEnd());
     }
 #endif
+
+    private void RunMainInIsolatedHome(TemporaryWorkspace workspace, string homePath, int expectedExitCode, params string[] args)
+    {
+        var options = new RemoteInvokeOptions();
+        options.StartInfo.RedirectStandardOutput = true;
+        options.StartInfo.WorkingDirectory = workspace.Path;
+        options.StartInfo.Environment[KnownConfigNames.AspireHome] = homePath;
+
+        // A test started from an editor terminal would otherwise route the child's output through
+        // the extension backchannel instead of the console.
+        foreach (var name in options.StartInfo.Environment.Keys.Where(AppHostLauncher.IsExtensionEnvironmentVariable).ToList())
+        {
+            options.StartInfo.Environment.Remove(name);
+        }
+
+        // RemoteExecutor only passes string arguments to the child process, so the CLI arguments
+        // are joined with a newline, which none of them contain.
+        using var result = RemoteExecutor.Invoke(static async (joinedArgs, expected) =>
+        {
+            var exitCode = await Program.Main(joinedArgs.Split('\n')).DefaultTimeout();
+            Assert.Equal(int.Parse(expected, CultureInfo.InvariantCulture), exitCode);
+        }, string.Join('\n', args), expectedExitCode.ToString(CultureInfo.InvariantCulture), options);
+
+        outputHelper.WriteLine(result.Process.StandardOutput.ReadToEnd());
+    }
 }

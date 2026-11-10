@@ -28,6 +28,7 @@ public sealed class ProcessInvocationOptionsTests
             StartDebugSession = true,
             Debug = true,
             SuppressLogging = true,
+            LogFailureAsDebug = true,
             // Non-default: this property initializes to true, so false is the "changed" value.
             KillEntireProcessTreeOnCancel = false,
             IsolateConsole = true,

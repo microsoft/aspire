@@ -27,6 +27,10 @@ internal abstract class BaseCommand : Command
     // until they have work to report, rather than paying that startup cost on every invocation.
     internal virtual bool InitializeTelemetryOnStartup => true;
 
+    // Tools poll one-shot query commands, so keeping a log for every clean run accumulates
+    // thousands of files. Long-running modes such as --follow keep their logs.
+    internal virtual bool DiscardsLogOnSuccess(ParseResult parseResult) => false;
+
     internal virtual bool PrefetchesTemplatePackageMetadata => false;
 
     internal bool PrefetchesTemplatePackageMetadataForInvocation

@@ -3,6 +3,7 @@
 
 using System.Globalization;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Channels;
 using Aspire.Cli.Interaction;
 using Aspire.Shared;
@@ -17,15 +18,24 @@ namespace Aspire.Cli.Diagnostics;
 /// independent of console verbosity settings.
 /// On Unix, log files are restricted to the current user, including reused files.
 /// </summary>
-internal sealed class FileLoggerProvider : ILoggerProvider
+internal sealed partial class FileLoggerProvider : ILoggerProvider
 {
     private const int MaxQueuedMessages = 1024;
+
+    // Includes the current process's file.
+    private const int RetainedLogFileCount = 100;
+
+    // Pruning runs on the startup path. Directories that accumulated tens of thousands of logs
+    // before pruning existed drain over several runs instead of stalling one.
+    private const int MaxPrunedLogFilesPerRun = 100;
 
     private readonly string _logFilePath;
     private readonly StreamWriter? _writer;
     private readonly Channel<string>? _channel;
     private readonly Task? _writerTask;
     private bool _disposed;
+    private volatile bool _hasWarnings;
+    private volatile bool _deleteOnDispose;
 
     private FileLoggerProvider(string logFilePath)
     {
@@ -78,7 +88,8 @@ internal sealed class FileLoggerProvider : ILoggerProvider
     }
 
     /// <summary>
-    /// Creates a file logger and repairs permissions when its parent is the dedicated logs directory.
+    /// Creates a file logger. When its parent is the dedicated logs directory, repairs the directory's
+    /// permissions and prunes old log files.
     /// </summary>
     internal FileLoggerProvider(string logFilePath, string? logsDirectory, IStartupErrorWriter errorWriter)
     {
@@ -94,6 +105,7 @@ internal sealed class FileLoggerProvider : ILoggerProvider
                 if (logsDirectory is not null && Path.GetRelativePath(logsDirectory, directory) == ".")
                 {
                     DirectoryHelper.CreateWithOwnerOnlyPermissions(directory);
+                    PruneOldLogFiles(directory);
                 }
                 else if (OperatingSystem.IsWindows())
                 {
@@ -115,6 +127,70 @@ internal sealed class FileLoggerProvider : ILoggerProvider
             WriteWarning(errorWriter, logFilePath, ex.Message);
             _writer = null;
             _channel = null;
+        }
+    }
+
+    // Every CLI invocation creates a log file, and tools such as the VS Code extension poll
+    // commands like `aspire ps`, so the logs directory grows without bound unless old files are removed.
+    // Pruning is best-effort: concurrent CLI processes may prune at the same time, and any file that
+    // cannot be deleted is left for a later run.
+    private static void PruneOldLogFiles(string logsDirectory)
+    {
+        FileInfo[] logFiles;
+        try
+        {
+            logFiles = new DirectoryInfo(logsDirectory).GetFiles("cli_*.log")
+                .Where(file => GeneratedLogFileNameRegex().IsMatch(file.Name))
+                .ToArray();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return;
+        }
+
+        // Leave room for the file this process is about to create.
+        var excessCount = logFiles.Length - (RetainedLogFileCount - 1);
+
+        // Only deleted files count toward the per-run limit. Otherwise old logs that can't be deleted, such as
+        // logs held open by long-running commands, could fill the limit on every run and keep newer inactive
+        // logs from ever being pruned.
+        var prunedCount = 0;
+        foreach (var file in logFiles.OrderBy(file => file.LastWriteTimeUtc).Take(excessCount))
+        {
+            // Opening a link with DeleteOnClose on Windows deletes the link target, which may live outside the logs directory.
+            if (file.Attributes.HasFlag(FileAttributes.ReparsePoint))
+            {
+                continue;
+            }
+
+            if (TryDeleteInactiveLogFile(file.FullName) && ++prunedCount == MaxPrunedLogFilesPerRun)
+            {
+                break;
+            }
+        }
+    }
+
+    // Only names the CLI generates are counted and pruned, so a custom --log-file name in the logs directory,
+    // such as cli_support.log, is left alone. Generated names start with "cli_" and a UTC timestamp:
+    //   cli_20260212T180000_1a2b3c4d.log                                          (GenerateLogFilePath)
+    //   cli_20260212T180000000_detach-child_0123456789abcdef0123456789abcdef.log  (AppHostLauncher.GenerateChildLogFilePath)
+    [GeneratedRegex(@"^cli_[0-9]{8}T[0-9]{6}(?:[0-9]{3})?_.+\.log$")]
+    private static partial Regex GeneratedLogFileNameRegex();
+
+    private static bool TryDeleteInactiveLogFile(string path)
+    {
+        try
+        {
+            // Long-running commands such as `aspire run` keep their log open with FileShare.Read.
+            // Requesting FileShare.None fails for those files, so an active log is not removed. On Unix
+            // .NET enforces this with an advisory flock, which is skipped when DOTNET_SYSTEM_IO_DISABLEFILELOCKING
+            // is set and on some network filesystems. File.Delete would unlink an active log on Unix regardless.
+            using var handle = File.OpenHandle(path, FileMode.Open, FileAccess.Write, FileShare.None, FileOptions.DeleteOnClose);
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false;
         }
     }
 
@@ -238,6 +314,11 @@ internal sealed class FileLoggerProvider : ILoggerProvider
 
     internal void WriteLog(DateTimeOffset timestamp, LogLevel level, string category, string message, Exception? exception = null)
     {
+        if (level >= LogLevel.Warning && level != LogLevel.None)
+        {
+            _hasWarnings = true;
+        }
+
         var ts = timestamp.UtcDateTime.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture);
         var lvl = GetLogLevelString(level);
 
@@ -272,6 +353,33 @@ internal sealed class FileLoggerProvider : ILoggerProvider
         _writerTask?.GetAwaiter().GetResult();
 
         _writer?.Dispose();
+
+        // Deleting after the writer drains means late warnings, such as those logged during
+        // host shutdown, still keep the log.
+        if (_deleteOnDispose && !_hasWarnings && _writer is not null)
+        {
+            try
+            {
+                File.Delete(_logFilePath);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // The startup prune removes the file later.
+            }
+        }
+    }
+
+    /// <summary>
+    /// Deletes the log file on dispose unless a warning or error was logged.
+    /// </summary>
+    /// <remarks>
+    /// Tools such as the VS Code extension run one-shot query commands like <c>aspire ps</c> repeatedly.
+    /// Their logs are still written as the command runs, so a hang, crash, or kill leaves a log behind.
+    /// Only a clean run's log is discarded.
+    /// </remarks>
+    internal void DeleteOnDisposeIfNoWarnings()
+    {
+        _deleteOnDispose = true;
     }
 }
 

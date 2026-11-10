@@ -138,6 +138,28 @@ public sealed class AppHostInfoResolverTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task GetAppHostInfoAsync_LogsEvaluationFailureAtDebug()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var projectFile = CreateProjectFile(workspace);
+        bool? logFailureAsDebug = null;
+        var runner = new TestDotNetCliRunner
+        {
+            GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, options, _) =>
+            {
+                logFailureAsDebug = options.LogFailureAsDebug;
+                return (1, null);
+            },
+        };
+        var resolver = new AppHostInfoResolver(runner, new NullAppHostInfoDiskCache());
+
+        var info = await resolver.GetAppHostInfoAsync(projectFile, CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(1, info.ExitCode);
+        Assert.True(logFailureAsDebug);
+    }
+
+    [Fact]
     public async Task GetAppHostInfoAsync_CoalescesConcurrentMsBuildEvaluationInMemory()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
