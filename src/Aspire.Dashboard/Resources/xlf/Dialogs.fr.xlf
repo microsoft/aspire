@@ -1083,11 +1083,6 @@ Pour découvrir plus d’informations sur l’utilisation des assistants IA avec
         <target state="new">Compact</target>
         <note />
       </trans-unit>
-      <trans-unit id="SettingsDialogResourceListDensitySpacious">
-        <source>Spacious</source>
-        <target state="new">Spacious</target>
-        <note />
-      </trans-unit>
       <trans-unit id="SettingsDialogSystemTheme">
         <source>System</source>
         <target state="translated">Système</target>

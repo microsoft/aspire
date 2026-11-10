@@ -13,20 +13,16 @@ namespace Aspire.Dashboard.Model;
 /// </summary>
 public enum ResourceListDensity
 {
+    // Keep the values stable for numeric preferences accepted by Enum.TryParse: 1 was Spacious, which was removed.
     /// <summary>
     /// Two lines per resource: the name, then its state and type.
     /// </summary>
-    Comfortable,
-
-    /// <summary>
-    /// Three lines per resource: the name, state and type, then health and primary endpoint details.
-    /// </summary>
-    Spacious,
+    Comfortable = 0,
 
     /// <summary>
     /// One line per resource, with its state, type and persistence in aligned columns on the right.
     /// </summary>
-    Compact
+    Compact = 2
 }
 
 /// <summary>
@@ -153,7 +149,7 @@ public sealed class DashboardViewPreferences(ILocalStorage localStorage, IOption
     {
         try
         {
-            var density = await ReadAsync(BrowserStorageKeys.ResourceListDensity, DefaultDensity).ConfigureAwait(false);
+            var density = await ReadDensityAsync().ConfigureAwait(false);
             var groupOverview = await ReadGroupOverviewAsync().ConfigureAwait(false);
             var recordingsStyle = await ReadAsync(BrowserStorageKeys.RecordingsStyle, default(RecordingsStyle)).ConfigureAwait(false);
             if (density != Density || groupOverview != GroupOverview || recordingsStyle != RecordingsStyle)
@@ -169,6 +165,20 @@ public sealed class DashboardViewPreferences(ILocalStorage localStorage, IOption
             // The circuit is gone. Load again if another component asks.
             _loadTask = null;
         }
+    }
+
+    private async Task<ResourceListDensity> ReadDensityAsync()
+    {
+        var result = await localStorage.GetUnprotectedAsync<string>(BrowserStorageKeys.ResourceListDensity).ConfigureAwait(false);
+        // An earlier density, "Spacious", was stored by name. Replace that removed choice once with the closest one,
+        // Comfortable, rather than falling back to the default, Compact, which is the furthest from it.
+        if (result.Success && result.Value is "Spacious")
+        {
+            await localStorage.SetUnprotectedAsync(BrowserStorageKeys.ResourceListDensity, nameof(ResourceListDensity.Comfortable)).ConfigureAwait(false);
+            return ResourceListDensity.Comfortable;
+        }
+
+        return result.Success && Enum.TryParse<ResourceListDensity>(result.Value, out var value) && Enum.IsDefined(value) ? value : DefaultDensity;
     }
 
     private async Task<GroupOverview> ReadGroupOverviewAsync()
