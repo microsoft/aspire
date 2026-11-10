@@ -10,10 +10,10 @@ internal sealed class TelemetryHookConfigurator(
     public async Task<TelemetryHookConfigurationResult> ConfigureAsync(
         AgentEnvironment detectedEnvironments, CancellationToken cancellationToken)
     {
-        // VS Code and OpenCode do not yet have verified telemetry hook schemas.
-        var supportedEnvironments = detectedEnvironments &
-            (AgentEnvironment.CopilotApp | AgentEnvironment.CopilotCli | AgentEnvironment.ClaudeCode);
-        if (supportedEnvironments == AgentEnvironment.None)
+        var eligibleClients = clients
+            .Where(client => (client.TelemetryHookEnvironments & detectedEnvironments) != AgentEnvironment.None)
+            .ToList();
+        if (eligibleClients.Count == 0)
         {
             return TelemetryHookConfigurationResult.None;
         }
@@ -23,9 +23,9 @@ internal sealed class TelemetryHookConfigurator(
 
         var configured = new List<IAgentClient>();
         var skipped = new List<TelemetryHookSkip>();
-        foreach (var client in clients.Where(client => (client.Environments & supportedEnvironments) != AgentEnvironment.None))
+        foreach (var client in eligibleClients)
         {
-            var result = await client.ConfigureTelemetryHooksAsync(supportedEnvironments, cancellationToken);
+            var result = await client.ConfigureTelemetryHookAsync(cancellationToken);
             configured.AddRange(result.ConfiguredClients);
             skipped.AddRange(result.Skipped);
         }

@@ -192,8 +192,9 @@ internal sealed class OpenCodeAgentClient(CliExecutionContext context, IEnvironm
     }
 
     // OpenCode does not yet have a verified telemetry hook schema.
-    public Task<TelemetryHookConfigurationResult> ConfigureTelemetryHooksAsync(
-        AgentEnvironment detectedEnvironments, CancellationToken cancellationToken)
+    public AgentEnvironment TelemetryHookEnvironments => AgentEnvironment.None;
+
+    public Task<TelemetryHookConfigurationResult> ConfigureTelemetryHookAsync(CancellationToken cancellationToken)
         => Task.FromResult(TelemetryHookConfigurationResult.None);
 
     public override string ToString() => Id;
