@@ -89,8 +89,8 @@ public partial class SettingsDialog : IDisposable
         _densityOptions =
         [
             new(ResourceListDensity.Spacious, new Icons.Regular.Size20.TextBulletListLtr(), Loc[nameof(Dashboard.Resources.Dialogs.SettingsDialogResourceListDensitySpacious)]),
-            new(ResourceListDensity.Comfortable, new Icons.Regular.Size20.AppsListDetail(), Loc[nameof(Dashboard.Resources.Dialogs.SettingsDialogResourceListDensityComfortable)]),
             new(ResourceListDensity.Compact, new Icons.Regular.Size20.AppsList(), Loc[nameof(Dashboard.Resources.Dialogs.SettingsDialogResourceListDensityCompact)]),
+            new(ResourceListDensity.Comfortable, new Icons.Regular.Size20.AppsListDetail(), Loc[nameof(Dashboard.Resources.Dialogs.SettingsDialogResourceListDensityComfortable)]),
         ];
         _groupOverviewOptions = new IconToggleOption<GroupOverview>[]
         {
