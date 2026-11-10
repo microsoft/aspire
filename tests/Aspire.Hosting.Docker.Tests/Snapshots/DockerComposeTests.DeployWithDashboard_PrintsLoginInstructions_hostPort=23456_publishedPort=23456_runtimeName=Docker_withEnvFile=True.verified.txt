@@ -7,7 +7,7 @@
     },
     {
       Key: Env-dashboard,
-      Value: http://localhost:23456,
+      Value: http://localhost:23456, http://localhost:51325, http://localhost:51326,
       EnableMarkdown: false
     },
     {
@@ -17,7 +17,7 @@
     }
   ],
   DashboardLogs: [
-    Successfully deployed **Env-dashboard** to [http://localhost:23456](http://localhost:23456).,
+    Successfully deployed **Env-dashboard** to [http://localhost:23456](http://localhost:23456), [http://localhost:51325](http://localhost:51325), [http://localhost:51326](http://localhost:51326).,
     From `<compose-output>`, run `docker compose --file docker-compose.yaml --env-file ".env.Production" --project-name aspire-env-abc123de logs --tail=50 env-dashboard` to retrieve the dashboard login token. Copy the token from the logs into the login page at [http://localhost:23456](http://localhost:23456); the URL in the container logs uses the container port.
   ]
 }

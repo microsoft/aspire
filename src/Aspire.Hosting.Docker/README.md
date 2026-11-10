@@ -43,6 +43,7 @@ Generated input names include a stable suffix for hyphenated endpoint names so d
 
 After `aspire deploy`, open the dashboard's mapped host URL from the deployment summary.
 The dashboard login entry includes the output directory and a Compose command scoped to the deployed project and dashboard service to retrieve the login token.
+The command includes an env file only when one exists. Login instructions appear only when the dashboard's browser endpoint is published, not for telemetry-only endpoints.
 Copy the token from those logs into the login page at the mapped URL. The URL printed inside the container logs uses the container port, which can differ from the host port.
 The deployment summary does not print the token or change dashboard authentication.
 

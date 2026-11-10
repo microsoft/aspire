@@ -407,10 +407,11 @@ public class DockerComposeTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData(null, 51324, "Docker")]
-    [InlineData(23456, 23456, "Docker")]
-    [InlineData(null, 51324, "Podman")]
-    public async Task DeployWithDashboard_PrintsLoginInstructions(int? hostPort, int publishedPort, string runtimeName)
+    [InlineData(null, 51324, "Docker", false)]
+    [InlineData(23456, 23456, "Docker", true)]
+    [InlineData(null, 51324, "Podman", false)]
+    [InlineData(null, 51324, "Podman", true)]
+    public async Task DeployWithDashboard_PrintsLoginInstructions(int? hostPort, int publishedPort, string runtimeName, bool withEnvFile)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var reporter = new TestPipelineActivityReporter(outputHelper);
@@ -418,7 +419,16 @@ public class DockerComposeTests(ITestOutputHelper outputHelper)
         {
             ComposeServices =
             [
-                new() { Service = "env-dashboard", Publishers = [new() { TargetPort = 18888, PublishedPort = publishedPort }] },
+                new()
+                {
+                    Service = "env-dashboard",
+                    Publishers =
+                    [
+                        new() { TargetPort = 18888, PublishedPort = publishedPort },
+                        new() { TargetPort = 18889, PublishedPort = 51325 },
+                        new() { TargetPort = 18890, PublishedPort = 51326 }
+                    ]
+                },
                 new() { Service = "api", Publishers = [new() { TargetPort = 80, PublishedPort = 23457 }] }
             ]
         };
@@ -438,13 +448,21 @@ public class DockerComposeTests(ITestOutputHelper outputHelper)
                 {
                     dashboard.WithHostPort(hostPort);
                 }
+
+                dashboard.WithEndpoint("otlp-grpc", endpoint => endpoint.IsExternal = true)
+                    .WithEndpoint("otlp-http", endpoint => endpoint.IsExternal = true);
             });
-        builder.AddContainer("api", "nginx:alpine")
+        var api = builder.AddContainer("api", "nginx:alpine")
             .WithEndpoint(scheme: "http", targetPort: 80, isExternal: true);
+        if (withEnvFile)
+        {
+            api.WithEnvironment("SETTING", builder.AddParameter("setting", "value"));
+        }
 
         using var app = builder.Build();
         await app.RunAsync();
 
+        Assert.Equal(withEnvFile, File.Exists(Path.Combine(workspace.Path, ".env.Production")));
         Assert.NotNull(reporter.PipelineSummary);
         await Verify(new
         {
@@ -452,14 +470,15 @@ public class DockerComposeTests(ITestOutputHelper outputHelper)
             DashboardLogs = reporter.LoggedMessages
                 .Where(log => log.StepTitle == "print-Env-dashboard-summary")
                 .Select(log => log.Message)
-        }).UseParameters(hostPort, publishedPort, runtimeName)
+        }).UseParameters(hostPort, publishedPort, runtimeName, withEnvFile)
             .ScrubLinesWithReplace(line => line.Replace(workspace.Path, "<compose-output>", StringComparison.Ordinal));
     }
 
     [Theory]
-    [InlineData(false, true)]
-    [InlineData(true, false)]
-    public async Task DeployWithoutExposedDashboard_OmitsLoginInstructions(bool dashboardEnabled, bool dashboardExposed)
+    [InlineData(false, true, false)]
+    [InlineData(true, false, false)]
+    [InlineData(true, false, true)]
+    public async Task DeployWithoutExposedDashboard_OmitsLoginInstructions(bool dashboardEnabled, bool dashboardExposed, bool telemetryExposed)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var reporter = new TestPipelineActivityReporter(outputHelper);
@@ -467,7 +486,13 @@ public class DockerComposeTests(ITestOutputHelper outputHelper)
         {
             ComposeServices =
             [
-                new() { Service = "env-dashboard", Publishers = [] },
+                new()
+                {
+                    Service = "env-dashboard",
+                    Publishers = telemetryExposed
+                        ? [new() { TargetPort = 18889, PublishedPort = 51325 }, new() { TargetPort = 18890, PublishedPort = 51326 }]
+                        : []
+                },
                 new() { Service = "api", Publishers = [new() { TargetPort = 80, PublishedPort = 23457 }] }
             ]
         };
@@ -486,6 +511,12 @@ public class DockerComposeTests(ITestOutputHelper outputHelper)
                 {
                     dashboard.WithHostPort(null);
                 }
+
+                if (telemetryExposed)
+                {
+                    dashboard.WithEndpoint("otlp-grpc", endpoint => endpoint.IsExternal = true)
+                        .WithEndpoint("otlp-http", endpoint => endpoint.IsExternal = true);
+                }
             });
         environment.WithDashboard(dashboardEnabled);
         builder.AddContainer("api", "nginx:alpine")
@@ -500,7 +531,7 @@ public class DockerComposeTests(ITestOutputHelper outputHelper)
             DashboardLogs = reporter.LoggedMessages
                 .Where(log => log.StepTitle == "print-env-dashboard-summary")
                 .Select(log => log.Message)
-        }).UseParameters(dashboardEnabled, dashboardExposed);
+        }).UseParameters(dashboardEnabled, dashboardExposed, telemetryExposed);
     }
 
     [Fact]
