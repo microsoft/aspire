@@ -240,6 +240,7 @@
   "command.viewAppHostLogFile": "Open AppHost logs file",
   "command.copyLogFilePath": "Copy Path",
   "command.expandAll": "Expand all resources",
+  "command.collapseAll": "Collapse all resources",
   "walkthrough.getStarted.title": "Get started with Aspire",
   "walkthrough.getStarted.description": "Learn how to create, run, and monitor distributed applications with Aspire.",
   "walkthrough.getStarted.welcome.title": "Welcome to Aspire",

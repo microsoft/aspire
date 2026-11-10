@@ -127,7 +127,6 @@ export async function activate(context: vscode.ExtensionContext) {
   const appHostTreeProvider = new AspireAppHostTreeProvider(dataRepository, terminalProvider, appHostLaunchService, context.globalState);
   const appHostTreeView = vscode.window.createTreeView('aspire-vscode.appHosts', {
     treeDataProvider: appHostTreeProvider,
-    showCollapseAll: true,
   });
   appHostTreeProvider.setTreeView(appHostTreeView);
 

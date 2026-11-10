@@ -554,6 +554,11 @@
         "icon": "$(expand-all)"
       },
       {
+        "command": "aspire-vscode.collapseAll",
+        "title": "%command.collapseAll%",
+        "category": "Aspire"
+      },
+      {
         "command": "aspire-vscode.viewAppHostLogFile",
         "title": "%command.viewAppHostLogFile%",
         "category": "Aspire",
@@ -735,6 +740,10 @@
           "when": "false"
         },
         {
+          "command": "aspire-vscode.collapseAll",
+          "when": "false"
+        },
+        {
           "command": "aspire-vscode.viewAppHostLogFile",
           "when": "false"
         },
@@ -783,7 +792,12 @@
         {
           "command": "aspire-vscode.expandAll",
           "when": "view == aspire-vscode.appHosts && viewItem =~ /^(appHost(:stopping)?$|workspaceResources(:|$))/",
-          "group": "inline"
+          "group": "2_view@1"
+        },
+        {
+          "command": "aspire-vscode.collapseAll",
+          "when": "view == aspire-vscode.appHosts && viewItem =~ /^(appHost(:stopping)?$|workspaceResources(:|$))/",
+          "group": "2_view@2"
         },
         {
           "command": "aspire-vscode.openAppHostSource",
