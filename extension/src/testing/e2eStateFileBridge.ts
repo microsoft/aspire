@@ -1602,6 +1602,11 @@ async function proveAttachedResourceDebugging(
         return body;
       },
       detach: async () => {
+        // Stopping at the breakpoint opened Run and Debug and hid the Aspire view, so the attach session is
+        // the only thing keeping resource state live. Show the Aspire view before detaching, as a user
+        // checking on the resource afterwards would, so the post-detach response check and later attaches
+        // still read live resource state.
+        await vscode.commands.executeCommand('workbench.view.extension.aspire-panel');
         await vscode.debug.stopDebugging(attachedSessionForDetach);
         await waitForE2eValue(
           `${expectedDebugType} attach session termination`,
@@ -3047,6 +3052,13 @@ async function stopDebuggingForE2E(
   appHostLaunchService: AppHostLaunchService,
   appHostTreeProvider: AspireAppHostTreeProvider
 ): Promise<void> {
+  // Earlier test steps can leave the Aspire view hidden: opening the workspace folder or reloading the
+  // window restarts VS Code with Explorer showing, and some tests switch to Explorer on purpose. Once the
+  // last debug session ends with the view hidden, nothing is watching the AppHost list, so it stops
+  // refreshing and the stopped AppHost never leaves the snapshot. Show the Aspire view, as a user
+  // watching the AppHost stop would.
+  await vscode.commands.executeCommand('workbench.view.extension.aspire-panel');
+
   const trackedSessions = aspireContext.aspireDebugSessions;
   if (trackedSessions.length > 0) {
     const stoppedDebugSessionIds = new Set(trackedSessions.map(debugSession => debugSession.debugSessionId));

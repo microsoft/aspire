@@ -96,6 +96,7 @@ suite('E2E state file bridge', () => {
                 }, 10);
             });
             sandbox.stub(vscode.debug, 'addBreakpoints');
+            const executeCommand = sandbox.stub(vscode.commands, 'executeCommand').resolves(undefined);
             const session = createDebugSession('attach-proof', debugType, 'Attached worker', { request: 'attach' });
             let continueAccepted = false;
             let targetResponded = false;
@@ -114,6 +115,10 @@ suite('E2E state file bridge', () => {
                 assert.strictEqual(stopped, session);
                 assert.strictEqual(removeBreakpoints.called, true);
                 assert.strictEqual(targetResponded, true, 'An accepted continue request is not proof of target progress.');
+                assert.deepStrictEqual(
+                    executeCommand.getCalls().map(call => call.args),
+                    [['workbench.view.extension.aspire-panel']],
+                    'The Aspire view must be shown before detaching.');
                 detached = true;
                 terminateListener?.(session);
             });
