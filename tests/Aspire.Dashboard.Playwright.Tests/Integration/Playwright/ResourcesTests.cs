@@ -219,7 +219,7 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
             await graphButton.ClickAsync();
             await Assertions.Expect(graphButton).ToHaveAttributeAsync("aria-pressed", "true");
 
-            var graphContainer = page.GetByRole(AriaRole.Region, new() { Name = Dashboard.Resources.ControlsStrings.ChartContainerGraphAccessibleLabel });
+            var graphContainer = page.GetByRole(AriaRole.Region, new() { Name = Dashboard.Resources.ControlsStrings.OverviewGraphAccessibleLabel });
             await Assertions.Expect(graphContainer).ToBeVisibleAsync();
 
             var graphWidth = await graphContainer.EvaluateAsync<double>("element => element.getBoundingClientRect().width");
@@ -393,7 +393,7 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
             var node = page.Locator(".resource-group[resource-name='TestResource']");
             await Assertions.Expect(node).ToBeVisibleAsync();
 
-            var graphContainer = page.GetByRole(AriaRole.Region, new() { Name = Dashboard.Resources.ControlsStrings.ChartContainerGraphAccessibleLabel });
+            var graphContainer = page.GetByRole(AriaRole.Region, new() { Name = Dashboard.Resources.ControlsStrings.OverviewGraphAccessibleLabel });
             var game = page.GetByRole(AriaRole.Application, new() { Name = Dashboard.Resources.Resources.ResourceGraphGameInstructions, Exact = true });
             var cog = node.GetByRole(AriaRole.Button, new()
             {

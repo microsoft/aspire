@@ -394,26 +394,53 @@ internal sealed class AgentInitCommand : BaseCommand
                 skillSources = SkillSource.Resolve(configurationDirectory, new FileInfo(_configurationService.GetSettingsFilePath(isGlobal: true)));
                 var usesPlugins = selectedClients.Any(client => client.Id != OpenCodeAgentClient.ClientId);
                 var usesOpenCode = selectedClients.Any(client => client.Id == OpenCodeAgentClient.ClientId);
-                var sourceUrls = new List<string>();
+                List<IReadOnlyList<(string Label, string Value)>> sourceDetails = [];
                 foreach (var skillSource in skillSources)
                 {
+                    var sourceName = skillSource.GetName();
+                    if (sourceName.Equals(SkillSource.DefaultName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+                    List<(string Label, string Value)> details = [(SharedCommandStrings.SourceName, sourceName)];
                     if (usesPlugins)
                     {
-                        sourceUrls.Add(skillSource.GetRepositoryUrl());
+                        details.Add((SharedCommandStrings.SourceGitRepository, skillSource.GetRepositoryUrl()));
+                        if (skillSource.Ref is not null)
+                        {
+                            details.Add((SharedCommandStrings.SourceRef, skillSource.Ref));
+                        }
+                        if (!string.Equals(skillSource.Marketplace, sourceName, StringComparison.OrdinalIgnoreCase))
+                        {
+                            details.Add((SharedCommandStrings.SourceMarketplace, skillSource.Marketplace!));
+                        }
+                        details.Add((SharedCommandStrings.SourcePlugins, string.Join(", ", skillSource.GetPluginNames())));
                     }
                     if (usesOpenCode)
                     {
-                        sourceUrls.AddRange(new[] { skillSource.OpenCodeV1Catalog, skillSource.OpenCodeV2Catalog }.OfType<string>());
+                        if (skillSource.OpenCodeV1Catalog is not null)
+                        {
+                            details.Add((SharedCommandStrings.SourceOpenCodeV1Catalog, skillSource.OpenCodeV1Catalog));
+                        }
+                        if (skillSource.OpenCodeV2Catalog is not null)
+                        {
+                            details.Add((SharedCommandStrings.SourceOpenCodeV2Catalog, skillSource.OpenCodeV2Catalog));
+                        }
+                    }
+                    if (details.Count > 1)
+                    {
+                        sourceDetails.Add(details);
                     }
                 }
 
-                if (sourceUrls.Count > 0)
+                if (sourceDetails.Count > 0)
                 {
-                    InteractionService.DisplayMessage(KnownEmojis.Information, string.Format(CultureInfo.CurrentCulture,
-                        AgentCommandStrings.InitCommand_SkillSources,
-                        string.Join(System.Environment.NewLine, sourceUrls.Distinct(StringComparer.Ordinal))));
-                    InteractionService.DisplaySourceTrustWarning(ExecutionContext);
-                    InteractionService.DisplayEmptyLine();
+                    InteractionService.DisplayMessage(KnownEmojis.Information, AgentCommandStrings.InitCommand_SkillSourcesExplanation);
+                    InteractionService.DisplaySourceDetails(sourceDetails);
+                    if (InteractionService.DisplaySourceTrustWarning(ExecutionContext))
+                    {
+                        InteractionService.DisplayEmptyLine();
+                    }
                 }
 
                 var local = LocalAspireSkills.Find(ExecutionContext.WorkingDirectory, workspaceRoot,
@@ -528,7 +555,7 @@ internal sealed class AgentInitCommand : BaseCommand
         {
             cancellationToken.ThrowIfCancellationRequested();
             registrationResults = await AgentConfiguration.ApplyRemoteAsync(selectedClients, workspaceRoot, scope, skillSources, cancellationToken);
-            hasErrors |= DisplayRemoteConfigurationResults(registrationResults, skillSources, workspaceRoot);
+            hasErrors |= DisplayRemoteConfigurationResults(registrationResults, workspaceRoot);
         }
 
         // --- Phase 3: Apply copied skill files at each unique destination ---
@@ -882,7 +909,7 @@ internal sealed class AgentInitCommand : BaseCommand
         InteractionService.DisplayEmptyLine();
     }
 
-    private bool DisplayRemoteConfigurationResults(IReadOnlyList<AgentTargetResult> results, IReadOnlyList<SkillSource> sources, DirectoryInfo workspaceRoot)
+    private bool DisplayRemoteConfigurationResults(IReadOnlyList<AgentTargetResult> results, DirectoryInfo workspaceRoot)
     {
         var hasErrors = false;
         foreach (var resultGroup in results.GroupBy(result => result.Status switch
@@ -912,26 +939,9 @@ internal sealed class AgentInitCommand : BaseCommand
                 string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_LocationWithAgents,
                     AgentPath.GetDisplayPath(result.TargetPath, workspaceRoot, ExecutionContext),
                     string.Join(", ", result.Clients.Select(static client => client.DisplayName))));
-            var sourceUrls = new List<string>();
-            if (resultGroup.Any(result => result.Clients.Any(client => client.Id != OpenCodeAgentClient.ClientId)))
-            {
-                sourceUrls.AddRange(sources.Select(static source => source.GetRepositoryUrl()));
-            }
-
-            foreach (var result in resultGroup.Where(result => result.Clients.Any(client => client.Id == OpenCodeAgentClient.ClientId)))
-            {
-                var catalogs = AspireSkillsRemoteConfiguration.ReadOpenCodeSkills(result.Configuration!);
-                sourceUrls.AddRange((catalogs ?? []).Select(AspireSkillsRemoteConfiguration.String).OfType<string>()
-                    .Where(url => sources.Any(source => AspireSkillsRemoteConfiguration.IsOpenCodeCatalog(url, source))));
-            }
-
-            var sourceLine = string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_ConfiguredSourceList,
-                string.Join(", ", sourceUrls.Distinct(StringComparer.Ordinal)));
-            var locationLine = string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_InstalledSkillsSummaryLocations,
-                string.Join(", ", targets));
             InteractionService.DisplayMessage(KnownEmojis.Robot,
                 string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_ConfiguredTargets,
-                    $"{sourceLine}{Environment.NewLine}  {locationLine}"));
+                    string.Join(", ", targets)));
             InteractionService.DisplayEmptyLine();
         }
 

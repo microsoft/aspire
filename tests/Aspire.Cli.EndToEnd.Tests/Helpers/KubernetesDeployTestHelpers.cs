@@ -16,12 +16,10 @@ internal static class KubernetesDeployTestHelpers
     private const string GatewayApiStandardInstallUrl =
         "https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/standard-install.yaml";
 
-    // Each download attempt must end on its own, or a stalled GitHub release connection (seen in CI on the
-    // KinD download) uses the whole 90s prompt timeout and the retry loop never runs. An attempt gives up after
-    // 10s without a connection, or once the transfer stays under 1 KB/s for 10s. A stall check is used instead
-    // of a total time cap so large downloads such as kubectl (~55 MB) can still finish on a slow link. When every
-    // attempt hangs, the worst case is 3 attempts x ~20s + 3 x 5s retry delay = ~75s, inside the callers' 90s budget.
-    // A download that keeps making progress is not cut off; it is bounded only by the caller's prompt timeout.
+    // Each download attempt must end on its own, or a stalled GitHub release connection uses the whole prompt
+    // timeout and the retry loop never runs. An attempt gives up after 10s without a connection, or once the
+    // transfer stays under 1 KB/s for 10s. When every attempt hangs, the worst case is 3 attempts x ~20s +
+    // 3 x 5s retry delay = ~75s, inside the Gateway API CRD install's 2-minute budget.
     internal const int DownloadAttempts = 3;
     internal const int DownloadRetryDelaySeconds = 5;
     internal const int DownloadConnectTimeoutSeconds = 10;
@@ -73,7 +71,6 @@ internal static class KubernetesDeployTestHelpers
     /// <summary>
     /// Installs KinD, Helm, and kubectl binaries to ~/.local/bin and adds to PATH.
     /// Skips downloads for tools already on PATH.
-    /// Retries downloads up to 3 times, bounding each attempt, to handle transient or stalled GitHub CDN downloads.
     /// </summary>
     internal static async Task InstallKindAndHelmAsync(
         this Hex1bTerminalAutomator auto,
@@ -87,30 +84,32 @@ internal static class KubernetesDeployTestHelpers
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
 
-        // Download KinD if not already installed — GitHub CDN can transiently return HTML or stall instead of serving the binary.
-        const string kindPath = "~/.local/bin/kind";
-        await auto.TypeAsync("command -v kind >/dev/null 2>&1 || { " + GetRetryingDownloadCommand(
-            "KinD",
-            $"https://github.com/kubernetes-sigs/kind/releases/download/{KindVersion}/kind-linux-$K8S_TOOL_ARCH",
-            kindPath,
-            $"chmod +x {kindPath} && {kindPath} version >/dev/null 2>&1") + "; }");
+        await auto.TypeAsync(GetToolDownloadCommand(
+            toolName: "KinD",
+            url: $"https://github.com/kubernetes-sigs/kind/releases/download/{KindVersion}/kind-linux-$K8S_TOOL_ARCH",
+            downloadPath: "~/.local/bin/kind",
+            installCommand: "chmod +x ~/.local/bin/kind",
+            verifyCommand: "~/.local/bin/kind version"));
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(90));
+        await auto.WaitForSuccessPromptAsync(counter, s_toolDownloadTimeout);
 
-        // Download Helm if not already installed
-        await auto.TypeAsync($"command -v helm >/dev/null 2>&1 || {{ for i in 1 2 3; do curl {CurlDownloadOptions} https://get.helm.sh/helm-{HelmVersion}-linux-$K8S_TOOL_ARCH.tar.gz | tar xz -C /tmp && test -f /tmp/linux-$K8S_TOOL_ARCH/helm && break; echo \"Retry $i: Helm download failed, retrying in 5s...\"; sleep 5; done && mv /tmp/linux-$K8S_TOOL_ARCH/helm ~/.local/bin/helm && rm -rf /tmp/linux-$K8S_TOOL_ARCH; }}");
+        await auto.TypeAsync(GetToolDownloadCommand(
+            toolName: "Helm",
+            url: $"https://get.helm.sh/helm-{HelmVersion}-linux-$K8S_TOOL_ARCH.tar.gz",
+            downloadPath: "/tmp/helm.tar.gz",
+            installCommand: "tar xzf /tmp/helm.tar.gz -C /tmp && mv -f /tmp/linux-$K8S_TOOL_ARCH/helm ~/.local/bin/helm && rm -rf /tmp/linux-$K8S_TOOL_ARCH /tmp/helm.tar.gz",
+            verifyCommand: "~/.local/bin/helm version --short"));
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(90));
+        await auto.WaitForSuccessPromptAsync(counter, s_toolDownloadTimeout);
 
-        // Download kubectl if not already installed
-        const string kubectlPath = "~/.local/bin/kubectl";
-        await auto.TypeAsync("command -v kubectl >/dev/null 2>&1 || { " + GetRetryingDownloadCommand(
-            "kubectl",
-            $"https://dl.k8s.io/release/{KubectlVersion}/bin/linux/$K8S_TOOL_ARCH/kubectl",
-            kubectlPath,
-            $"chmod +x {kubectlPath} && {kubectlPath} version --client >/dev/null 2>&1") + "; }");
+        await auto.TypeAsync(GetToolDownloadCommand(
+            toolName: "kubectl",
+            url: $"https://dl.k8s.io/release/{KubectlVersion}/bin/linux/$K8S_TOOL_ARCH/kubectl",
+            downloadPath: "~/.local/bin/kubectl",
+            installCommand: "chmod +x ~/.local/bin/kubectl",
+            verifyCommand: "~/.local/bin/kubectl version --client"));
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(90));
+        await auto.WaitForSuccessPromptAsync(counter, s_toolDownloadTimeout);
 
         await auto.TypeAsync("export PATH=\"$HOME/.local/bin:$PATH\"");
         await auto.EnterAsync();
@@ -282,9 +281,18 @@ internal static class KubernetesDeployTestHelpers
     {
         // Installing the control plane pulls several images and waits for the
         // radius-system pods to become ready, so allow a generous budget.
-        await auto.TypeAsync($"rad install kubernetes --kubecontext kind-{clusterName}");
+        // rad fetches its Helm charts (e.g. Contour) from GitHub release assets, which intermittently
+        // return 5xx; retry only those fast-failing chart download errors, never install/readiness failures.
+        // Radius is installed before Contour is fetched, so retries need --reinstall: without it rad sees the
+        // existing Radius release, exits 0, and never installs Contour.
+        await auto.TypeAsync(
+            "rad_reinstall=''; for i in 1 2 3; do " +
+            $"rad install kubernetes --kubecontext kind-{clusterName} $rad_reinstall 2>&1 | tee /tmp/rad-install.log; rad_rc=${{PIPESTATUS[0]}}; " +
+            "if [ $rad_rc -eq 0 ] || ! grep -qE 'error downloading helm chart|failed to fetch' /tmp/rad-install.log; then break; fi; " +
+            "echo \"Retry $i/3: Radius Helm chart download failed\"; rad_reinstall=--reinstall; sleep $((i * 15)); " +
+            "done; (exit $rad_rc)");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(10));
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(15));
 
         await auto.TypeAsync("rad group create default");
         await auto.EnterAsync();
@@ -586,6 +594,32 @@ internal static class KubernetesDeployTestHelpers
     {
         await auto.RunCommandAsync(GetDeletePodCommand(@namespace, podName), counter, TimeSpan.FromSeconds(60));
         await auto.RunCommandAsync(GetWaitForRecreatedPodReadyCommand(@namespace, podName), counter, TimeSpan.FromMinutes(7));
+    }
+
+    private const int ToolDownloadAttempts = 6;
+
+    // Worst case: every attempt hits the curl --max-time (60s) plus the linear backoff between attempts (10+20+30+40+50s).
+    private static readonly TimeSpan s_toolDownloadTimeout = TimeSpan.FromMinutes(9);
+
+    /// <summary>
+    /// Builds a shell command that downloads a Kubernetes tool unless the tool is already on PATH.
+    /// GitHub release assets and other tool CDNs intermittently answer with HTTP error pages for
+    /// tens of seconds at a time, so the download fails on HTTP errors, logs the status code, and
+    /// retries with a linearly increasing backoff instead of a short fixed delay.
+    /// </summary>
+    internal static string GetToolDownloadCommand(string toolName, string url, string downloadPath, string installCommand, string verifyCommand)
+    {
+        var binaryName = verifyCommand.Split(' ')[0].Split('/')[^1];
+        return
+            $"command -v {binaryName} >/dev/null 2>&1 || {{ " +
+            $"for i in $(seq 1 {ToolDownloadAttempts}); do " +
+            $"if http_code=$(curl -sSL --connect-timeout 15 --max-time 60 -o {downloadPath} -w '%{{http_code}}' \"{url}\") && " +
+            $"[ \"$http_code\" = 200 ] && {installCommand} && {verifyCommand} >/dev/null 2>&1; then break; fi; " +
+            $"echo \"Retry $i/{ToolDownloadAttempts}: {toolName} download failed (HTTP ${{http_code:-none}})\"; " +
+            $"rm -f {downloadPath}; " +
+            $"if [ $i -lt {ToolDownloadAttempts} ]; then sleep $((i * 10)); fi; " +
+            $"done; " +
+            $"{verifyCommand} >/dev/null 2>&1; }}";
     }
 
     // `kubectl delete` waits for the old pod to be removed, so any pod with this name afterwards is

@@ -50,7 +50,7 @@ public class SettingsSchemaBuilderTests
 
         Assert.Equal(
             ["appHost", "certificates", "channel", "configSource", "containerTunnel", "docs", "features",
-                "integrationSources", "packages", "profiles", "sdk", "skillSources", "templateSources"],
+                "integrationSources", "packages", "portAllocation", "profiles", "sdk", "skillSources", "templateSources"],
             schema.Properties.Select(property => property.Name));
         var configSource = Assert.Single(schema.Properties, property => property.Name == "configSource");
         Assert.NotNull(configSource.SubProperties);

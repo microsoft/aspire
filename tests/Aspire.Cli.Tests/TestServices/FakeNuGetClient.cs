@@ -179,6 +179,12 @@ internal sealed class FakeNuGetClient : INuGetClient
         string workingDirectory)
         => NuGetTestHelper.CreateClient().FilterPackageSearchResults(packages, nugetConfigPath, workingDirectory);
 
+    public IReadOnlyList<NuGetPackage> ResolveSdkPackageSearchSourceNames(
+        IReadOnlyList<NuGetPackage> packages,
+        string? nugetConfigPath,
+        string workingDirectory)
+        => NuGetTestHelper.CreateClient().ResolveSdkPackageSearchSourceNames(packages, nugetConfigPath, workingDirectory);
+
     public void WriteNuGetConfig(NuGetConfigOverlay overlay, string outputPath)
         => WriteNuGetConfig(overlay, outputPath, originalContent: null);
 

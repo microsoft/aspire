@@ -296,14 +296,7 @@ public class AtsGoCodeGeneratorTests
         using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(3));
         try
         {
-            // The tests only exercise transport.go and base.go, so an empty model is enough.
-            var files = _generator.GenerateDistributedApplication(new AtsContext
-            {
-                Capabilities = [],
-                HandleTypes = [],
-                EnumTypes = [],
-                DtoTypes = []
-            });
+            var files = _generator.GenerateDistributedApplication(CreateContextFromTestAssembly());
             foreach (var (name, content) in files)
             {
                 await File.WriteAllTextAsync(Path.Combine(directory.FullName, name), content, timeout.Token);
@@ -317,6 +310,7 @@ public class AtsGoCodeGeneratorTests
                     "bytes"
                     "context"
                     "errors"
+                    "math"
                     "net"
                     "runtime"
                     "strconv"
@@ -389,6 +383,7 @@ public class AtsGoCodeGeneratorTests
                         {"string", func(...any) any { panic("boom") }, "Callback execution failed: boom"},
                         {"error", func(...any) any { panic(errors.New("bad input")) }, "Callback execution failed: bad input"},
                         {"runtime error", func(...any) any { nilMap["k"] = 1; return nil }, "Callback execution failed: assignment to entry in nil map"},
+                        {"Goexit", func(...any) any { runtime.Goexit(); return nil }, "Callback execution failed: goroutine exited without returning"},
                     }
                     for i, tc := range cases {
                         host.write(callbackRequest(i+1, c.registerCallback(tc.callback), nil))
@@ -426,6 +421,147 @@ public class AtsGoCodeGeneratorTests
                     }
                 }
 
+                func TestCallbackWithInvalidTypedArgumentIsNotCalled(t *testing.T) {
+                    c, host := newFakeHost(t)
+                    for _, args := range []any{nil, map[string]any{"p0": "not a number"}} {
+                        called := false
+                        id := c.registerCallback(func(args ...any) any {
+                            value := callbackArg[int](args, 0)
+                            called = true
+                            return value
+                        })
+                        host.write(callbackRequest(1, id, args))
+                        response := host.read()
+                        errObj, _ := response["error"].(map[string]any)
+                        if called || errObj["code"] != float64(-32602) {
+                            t.Fatalf("got %v, called=%v; want invalid params without calling user code", response, called)
+                        }
+                    }
+                }
+
+                func TestTokenBearingCallbackAcceptsTokenIdAndOmittedNone(t *testing.T) {
+                    for _, tc := range []struct {
+                        name      string
+                        args      any
+                        wantToken bool
+                    }{
+                        {"token ID", map[string]any{"p0": "ct_callback"}, true},
+                        {"CancellationToken.None", nil, false},
+                    } {
+                        t.Run(tc.name, func(t *testing.T) {
+                            c, host := newFakeHost(t)
+                            resource := newTestRedisResourceFromHandle(&handle{
+                                HandleID: "redis",
+                                TypeID:   "Aspire.Hosting.CodeGeneration.Go.Tests/TestRedisResource",
+                            }, c)
+                            received := make(chan *CancellationToken, 1)
+                            done := make(chan TestRedisResource, 1)
+                            go func() {
+                                done <- resource.WithCancellableOperation(func(token *CancellationToken) {
+                                    received <- token
+                                })
+                            }()
+
+                            invocation := host.read()
+                            params, _ := invocation["params"].([]any)
+                            capabilityArgs, _ := params[1].(map[string]any)
+                            callbackID, _ := capabilityArgs["operation"].(string)
+                            if callbackID == "" {
+                                t.Fatalf("missing callback ID in %v", invocation)
+                            }
+
+                            host.write(callbackRequest(2, callbackID, tc.args))
+                            if response := host.read(); response["result"] == nil && response["error"] != nil {
+                                t.Fatalf("callback failed: %v", response)
+                            }
+                            token := <-received
+                            if (token != nil) != tc.wantToken {
+                                t.Fatalf("got token %v, want token=%v", token, tc.wantToken)
+                            }
+                            if token != nil {
+                                token.Cancel()
+                                cancellation := host.read()
+                                cancellationParams, _ := cancellation["params"].([]any)
+                                if cancellation["method"] != "cancelToken" || len(cancellationParams) != 1 || cancellationParams[0] != "ct_callback" {
+                                    t.Fatalf("got %v, want cancellation for the callback token", cancellation)
+                                }
+                                host.write(map[string]any{"jsonrpc": "2.0", "id": cancellation["id"], "result": true})
+                            }
+
+                            host.write(map[string]any{"jsonrpc": "2.0", "id": invocation["id"], "result": nil})
+                            if result := <-done; result.Err() != nil {
+                                t.Fatal(result.Err())
+                            }
+                        })
+                    }
+                }
+
+                func TestUnencodableValuesDoNotDisconnect(t *testing.T) {
+                    c, host := newFakeHost(t)
+                    for _, value := range []any{math.NaN(), make(chan int)} {
+                        if _, err := c.sendRequest(context.Background(), "bad", []any{value}); err == nil {
+                            t.Fatal("unencodable request succeeded")
+                        }
+                        host.write(callbackRequest(1, c.registerCallback(func(...any) any { return value }), nil))
+                        response := host.read()
+                        errObj, _ := response["error"].(map[string]any)
+                        if errObj["code"] != float64(-32603) {
+                            t.Fatalf("got %v, want a callback encoding error", response)
+                        }
+                    }
+                    done := make(chan error, 1)
+                    go func() { _, err := c.ping(context.Background()); done <- err }()
+                    request := host.read()
+                    host.write(map[string]any{"jsonrpc": "2.0", "id": request["id"], "result": "pong"})
+                    if err := <-done; err != nil {
+                        t.Fatal(err)
+                    }
+                }
+
+                func TestWrapperErrorIsConcurrentAndFirstErrorWins(t *testing.T) {
+                    wrapper := newHandleWrapperBase(&handle{HandleID: "h", TypeID: "Test/Type"}, nil)
+                    first := errors.New("first")
+                    wrapper.setErr(first)
+                    var wg sync.WaitGroup
+                    for range 100 {
+                        wg.Add(1)
+                        go func() {
+                            defer wg.Done()
+                            for range 100 {
+                                wrapper.setErr(errors.New("later"))
+                                if wrapper.Err() != first {
+                                    t.Error("lost the original error")
+                                }
+                            }
+                        }()
+                    }
+                    wg.Wait()
+                }
+
+                func TestCollectionToJSONKeepsResolutionError(t *testing.T) {
+                    want := errors.New("getter failed")
+                    parent := newErroredHandleWrapperBase(want, nil)
+                    list := newListWithGetter[string](parent, "Test/getList")
+                    dict := newDictWithGetter[string, string](parent, "Test/getDict")
+                    if list.ToJSON() != nil || list.Err() != want {
+                        t.Fatalf("list lost the error: %v", list.Err())
+                    }
+                    if dict.ToJSON() != nil || dict.Err() != want {
+                        t.Fatalf("dictionary lost the error: %v", dict.Err())
+                    }
+                    // A failure first encountered by ToJSON must also reach Err,
+                    // rather than only preserving an error already on the parent.
+                    c := newClient("")
+                    list = newListWithGetter[string](newHandleWrapperBase(&handle{}, c), "Test/getList")
+                    dict = newDictWithGetter[string, string](newHandleWrapperBase(&handle{}, c), "Test/getDict")
+                    if list.ToJSON() != nil || list.Err() == nil || list.Err().Error() != "not connected to AppHost" {
+                        t.Fatalf("list swallowed its getter failure: %v", list.Err())
+                    }
+                    if dict.ToJSON() != nil || dict.Err() == nil || dict.Err().Error() != "not connected to AppHost" {
+                        t.Fatalf("dictionary swallowed its getter failure: %v", dict.Err())
+                    }
+                }
+
                 func TestRegisterCancellationIDsAreUnique(t *testing.T) {
                     c := newClient("")
                     const count = 5000
@@ -454,6 +590,7 @@ public class AtsGoCodeGeneratorTests
 
                     token := NewCancellationToken()
                     id := c.registerCancellation(token)
+                    c.startCancellations(map[string]any{"cancellationToken": id})
                     token.Cancel()
                     request := host.read()
                     params, _ := request["params"].([]any)
@@ -493,6 +630,58 @@ public class AtsGoCodeGeneratorTests
                     }
                     if msg, err := readMessage(host.reader); err == nil {
                         t.Fatalf("the host received %v after the call returned", msg)
+                    }
+                }
+
+                func TestCancellationIsQueuedAfterItsInvocation(t *testing.T) {
+                    c, host := newFakeHost(t)
+                    token := NewCancellationToken()
+                    id := c.registerCancellation(token)
+                    token.Cancel()
+                    done := make(chan error, 1)
+                    go func() {
+                        _, err := c.invokeCapability(context.Background(), "Test/capability", map[string]any{"cancellationToken": id})
+                        done <- err
+                    }()
+                    request := host.read()
+                    if request["method"] != "invokeCapability" {
+                        t.Fatalf("cancellation overtook invocation: %v", request)
+                    }
+                    cancellation := host.read()
+                    if cancellation["method"] != "cancelToken" {
+                        t.Fatalf("expected cancellation after invocation, got %v", cancellation)
+                    }
+                    host.write(map[string]any{"jsonrpc": "2.0", "id": cancellation["id"], "result": true})
+                    host.write(map[string]any{"jsonrpc": "2.0", "id": request["id"], "result": nil})
+                    if err := <-done; err != nil {
+                        t.Fatal(err)
+                    }
+                }
+
+                func TestUnansweredCancellationIsBounded(t *testing.T) {
+                    c, host := newFakeHost(t)
+                    done := make(chan bool, 1)
+                    go func() { done <- c.cancelToken("ct_unanswered") }()
+                    request := host.read()
+                    if request["method"] != "cancelToken" {
+                        t.Fatalf("unexpected request: %v", request)
+                    }
+                    select {
+                    case result := <-done:
+                        if result {
+                            t.Fatal("unanswered cancellation succeeded")
+                        }
+                    case <-time.After(7 * time.Second):
+                        t.Fatal("unanswered cancellation did not time out")
+                    }
+                    c.mu.Lock()
+                    conn := c.conn
+                    c.mu.Unlock()
+                    conn.mu.Lock()
+                    pending := len(conn.pending)
+                    conn.mu.Unlock()
+                    if pending != 0 {
+                        t.Fatalf("%d unanswered cancellations still pending", pending)
                     }
                 }
 
@@ -577,6 +766,23 @@ public class AtsGoCodeGeneratorTests
                     msg, err := readMessage(bufio.NewReader(&frame))
                     if err != nil || msg["result"] != "ok" {
                         t.Fatalf("a valid frame: got %v, %v", msg, err)
+                    }
+                }
+
+                func TestReadMessageBoundsHeaders(t *testing.T) {
+                    for name, tc := range map[string]struct{ headers, want string }{
+                        "unterminated line": {strings.Repeat("x", maxHeaderSize + 1), "AppHost message headers exceed 8192 bytes"},
+                        "too many headers": {strings.Repeat("X: y\r\n", maxHeaderCount + 1), "AppHost message has more than 16 headers"},
+                        "total size": {strings.Repeat("X: " + strings.Repeat("y", 1020) + "\r\n", 9), "AppHost message headers exceed 8192 bytes"},
+                    } {
+                        if _, err := readMessage(bufio.NewReader(strings.NewReader(tc.headers + "\r\n{}"))); err == nil || err.Error() != tc.want {
+                            t.Errorf("%s: got %v, want %q", name, err, tc.want)
+                        }
+                    }
+                    // A long but valid line may span several reader buffers.
+                    headers := "X: " + strings.Repeat("y", 7000) + "\r\nContent-Length: 2\r\n\r\n{}"
+                    if _, err := readMessage(bufio.NewReaderSize(strings.NewReader(headers), 32)); err != nil {
+                        t.Fatalf("valid bounded headers rejected: %v", err)
                     }
                 }
 
@@ -948,10 +1154,9 @@ public class AtsGoCodeGeneratorTests
                         t.Errorf("DTO pointer: got %v, %v", pointer, err)
                     }
 
-                    // A DTO field of the wrong type is skipped instead of failing the whole value.
-                    partial, err := decodeWire[decodeTestDto](t, c, `{"name":5,"count":3}`)
-                    if err != nil || partial != (decodeTestDto{"", 3}) {
-                        t.Errorf("DTO with a bad field: got %v, %v", partial, err)
+                    // A malformed DTO must fail rather than silently substitute zero-valued fields.
+                    if _, err := decodeWire[decodeTestDto](t, c, `{"name":5,"count":3}`); err == nil {
+                        t.Error("a DTO with a bad field decoded without an error")
                     }
 
                     // []byte arrives as a base64 string and a map with integer keys is not a string-keyed
@@ -1001,14 +1206,16 @@ public class AtsGoCodeGeneratorTests
                 }
                 """, timeout.Token);
 
-            using var process = Process.Start(new ProcessStartInfo("go")
+            var startInfo = new ProcessStartInfo("go")
             {
                 WorkingDirectory = directory.FullName,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
                 ArgumentList = { "test", "-timeout", "30s", "." }
-            })!;
+            };
+            EnableGoRaceDetection(startInfo);
+            using var process = Process.Start(startInfo)!;
             var stdout = process.StandardOutput.ReadToEndAsync(timeout.Token);
             var stderr = process.StandardError.ReadToEndAsync(timeout.Token);
             try
@@ -1049,10 +1256,46 @@ public class AtsGoCodeGeneratorTests
                 package aspire
 
                 import (
+                    "bufio"
+                    "errors"
+                    "fmt"
+                    "net"
                     "reflect"
+                    "slices"
+                    "strconv"
                     "strings"
+                    "sync"
                     "testing"
                 )
+
+                func TestCallbackAndMainCanChainOnCapturedBuilder(t *testing.T) {
+                    c := newClient("")
+                    resource := newTestRedisResourceFromHandle(&handle{HandleID: "h", TypeID: "Test/Redis"}, c)
+                    callback := c.registerCallback(func(...any) any {
+                        resource.WithPersistence()
+                        resource.GetTags()
+                        return nil
+                    })
+                    var wg sync.WaitGroup
+                    wg.Add(1)
+                    go func() {
+                        defer wg.Done()
+                        for range 1000 {
+                            if _, err := c.invokeCallback(callback, nil); err != nil {
+                                t.Error(err)
+                            }
+                        }
+                    }()
+                    for range 1000 {
+                        resource.WithPersistence()
+                        resource.GetTags()
+                        resource.Err()
+                    }
+                    wg.Wait()
+                    if resource.Err() == nil {
+                        t.Fatal("the disconnected capability error was lost")
+                    }
+                }
 
                 func TestDeepUpdateKeepsCallback(t *testing.T) {
                     calls := 0
@@ -1162,16 +1405,269 @@ public class AtsGoCodeGeneratorTests
                         }
                     }
                 }
+
+                const (
+                    testRedisTypeID   = "Aspire.Hosting.CodeGeneration.Go.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestRedisResource"
+                    applicationTypeID = "application"
+                )
+
+                // connectChildErrorHost connects a client to an in-process AppHost that answers
+                // every capability call with a new handle, or with an error when the method (the
+                // part of the capability ID after the last "/") is in failing. The returned
+                // function lists the methods the AppHost has received, in order.
+                func connectChildErrorHost(t *testing.T, failing ...string) (*client, func() []string) {
+                    t.Helper()
+
+                    clientEnd, serverEnd := net.Pipe()
+                    c := newClient("")
+                    conn := newConnection(clientEnd, c, c.onConnectionClose)
+                    c.mu.Lock()
+                    c.conn = conn
+                    c.mu.Unlock()
+                    conn.start()
+                    registerWrappers(c)
+                    c.registerHandleWrapper(applicationTypeID, func(h *handle, c *client) any {
+                        return &distributedApplication{resourceBuilderBase: newResourceBuilderBase(h, c)}
+                    })
+                    t.Cleanup(func() {
+                        c.disconnect()
+                        serverEnd.Close()
+                    })
+
+                    var mu sync.Mutex
+                    var received []string
+                    go func() {
+                        reader := bufio.NewReader(serverEnd)
+                        for n := 1; ; n++ {
+                            request, err := readMessage(reader)
+                            if err != nil {
+                                return
+                            }
+                            capability := request["params"].([]any)[0].(string)
+                            method := capability[strings.LastIndex(capability, "/")+1:]
+                            mu.Lock()
+                            received = append(received, method)
+                            mu.Unlock()
+
+                            response := map[string]any{"jsonrpc": "2.0", "id": request["id"]}
+                            switch {
+                            case slices.Contains(failing, method):
+                                response["error"] = map[string]any{"message": fmt.Sprintf("%s failed (request %d)", method, n)}
+                            case method == "build":
+                                response["result"] = map[string]any{"$handle": "application", "$type": applicationTypeID}
+                            default:
+                                response["result"] = map[string]any{"$handle": strconv.Itoa(n), "$type": testRedisTypeID}
+                            }
+                            if writeMessage(serverEnd, response) != nil {
+                                return
+                            }
+                        }
+                    }()
+
+                    return c, func() []string {
+                        mu.Lock()
+                        defer mu.Unlock()
+                        return slices.Clone(received)
+                    }
+                }
+
+                func newBuilderOn(c *client) IDistributedApplicationBuilder {
+                    return newIDistributedApplicationBuilderFromHandle(&handle{HandleID: "0", TypeID: "builder"}, c)
+                }
+
+                func TestFailedChildErrorReachesBuilder(t *testing.T) {
+                    c, received := connectChildErrorHost(t, "addTestRedis")
+                    builder := newBuilderOn(c)
+
+                    cache := builder.AddTestRedis("cache")
+                    if cache.Err() == nil {
+                        t.Fatal("the failed AddTestRedis left no error on the child")
+                    }
+                    if !errors.Is(builder.Err(), cache.Err()) {
+                        t.Errorf("builder.Err() = %v, want the child's error %v", builder.Err(), cache.Err())
+                    }
+
+                    app, err := builder.Build()
+                    if app != nil || !errors.Is(err, cache.Err()) {
+                        t.Errorf("Build() = %v, %v; want nil and the child's error %v", app, err, cache.Err())
+                    }
+                    if got, want := received(), []string{"addTestRedis"}; !slices.Equal(got, want) {
+                        t.Errorf("the AppHost received %v, want %v (Build must not be sent)", got, want)
+                    }
+                }
+
+                func TestAllRecordedChildErrorsReachBuilder(t *testing.T) {
+                    c, received := connectChildErrorHost(t, "addTestRedis")
+                    builder := newBuilderOn(c)
+
+                    first := builder.AddTestRedis("first")
+                    second := builder.AddTestRedis("second")
+
+                    got := builder.Err()
+                    if !errors.Is(got, first.Err()) || !errors.Is(got, second.Err()) {
+                        t.Errorf("builder.Err() = %v, want both %v and %v", got, first.Err(), second.Err())
+                    }
+                    if want := first.Err().Error() + "\n" + second.Err().Error(); got.Error() != want {
+                        t.Errorf("builder.Err() = %q, want %q", got, want)
+                    }
+                    if _, err := builder.Build(); !errors.Is(err, first.Err()) || !errors.Is(err, second.Err()) {
+                        t.Errorf("Build() error = %v, want both %v and %v", err, first.Err(), second.Err())
+                    }
+                    if got, want := received(), []string{"addTestRedis", "addTestRedis"}; !slices.Equal(got, want) {
+                        t.Errorf("the AppHost received %v, want %v (Build must not be sent)", got, want)
+                    }
+                }
+
+                func TestFormatErrorIncludesEveryJoinedCapabilityError(t *testing.T) {
+                    first := &CapabilityError{err: atsError{
+                        Code:       "FIRST",
+                        Message:    "first failed",
+                        Capability: "addFirst",
+                    }}
+                    second := &CapabilityError{err: atsError{
+                        Code:       "SECOND",
+                        Message:    "second failed",
+                        Capability: "addSecond",
+                    }}
+
+                    got := FormatError(errors.Join(first, second))
+                    want := "Capability Error: first failed\n" +
+                        "  Code: FIRST\n" +
+                        "  Capability: addFirst\n" +
+                        "Capability Error: second failed\n" +
+                        "  Code: SECOND\n" +
+                        "  Capability: addSecond"
+                    if got != want {
+                        t.Errorf("FormatError() = %q, want %q", got, want)
+                    }
+                }
+
+                func TestFormatErrorIncludesJoinedCapabilityAndOrdinaryErrors(t *testing.T) {
+                    capability := &CapabilityError{err: atsError{
+                        Code:       "CAPABILITY",
+                        Message:    "capability failed",
+                        Capability: "addResource",
+                    }}
+                    ordinary := errors.New("ordinary failure")
+
+                    got := FormatError(errors.Join(capability, ordinary))
+                    want := "Capability Error: capability failed\n" +
+                        "  Code: CAPABILITY\n" +
+                        "  Capability: addResource\n" +
+                        "ordinary failure"
+                    if got != want {
+                        t.Errorf("FormatError() = %q, want %q", got, want)
+                    }
+                }
+
+                func TestFormatErrorPreservesOrdinaryMultiWrappedError(t *testing.T) {
+                    resourceErr := errors.New("resource failure")
+                    cleanupErr := errors.New("cleanup failure")
+                    joined := fmt.Errorf("deployment failed for cache: %w; cleanup failed: %w", resourceErr, cleanupErr)
+
+                    if got := FormatError(joined); got != joined.Error() {
+                        t.Errorf("FormatError() = %q, want %q", got, joined.Error())
+                    }
+                }
+
+                func TestPropagatedChildErrorIsNotRecordedAgain(t *testing.T) {
+                    c := newClient("")
+                    builder := newBuilderOn(c)
+
+                    failure := fmt.Errorf("child failed")
+                    newErroredHandleWrapperBase(failure, c)
+                    newPropagatedErroredResourceBuilder(failure, c)
+                    newPropagatedErroredResourceBuilder(failure, c)
+
+                    if got := builder.Err(); !errors.Is(got, failure) || got.Error() != failure.Error() {
+                        t.Errorf("builder.Err() = %v, want the original error %v", got, failure)
+                    }
+                }
+
+                func TestFailedWithCallOnChildReachesBuilder(t *testing.T) {
+                    c, _ := connectChildErrorHost(t, "withConnectionStringDirect")
+                    builder := newBuilderOn(c)
+
+                    cache := builder.AddTestRedis("cache")
+                    if builder.Err() != nil {
+                        t.Fatalf("builder.Err() = %v before any call failed", builder.Err())
+                    }
+
+                    cache.WithConnectionStringDirect("connection")
+                    if cache.Err() == nil || !errors.Is(builder.Err(), cache.Err()) {
+                        t.Errorf("builder.Err() = %v, want the child's error %v", builder.Err(), cache.Err())
+                    }
+                }
+
+                func TestBuildSucceedsWhenNoCallFailed(t *testing.T) {
+                    c, received := connectChildErrorHost(t)
+                    builder := newBuilderOn(c)
+
+                    builder.AddTestRedis("cache").WithConnectionStringDirect("connection")
+                    if builder.Err() != nil {
+                        t.Fatalf("builder.Err() = %v, want nil", builder.Err())
+                    }
+                    if _, err := builder.Build(); err != nil {
+                        t.Fatalf("Build() error = %v", err)
+                    }
+                    if got, want := received(), []string{"addTestRedis", "withConnectionStringDirect", "build"}; !slices.Equal(got, want) {
+                        t.Errorf("the AppHost received %v, want %v", got, want)
+                    }
+                }
+
+                func TestConcurrentChildErrorsAreAggregated(t *testing.T) {
+                    c := newClient("")
+                    builder := newBuilderOn(c)
+
+                    errs := make([]error, 64)
+                    var ready, done sync.WaitGroup
+                    ready.Add(1)
+                    done.Add(1)
+                    go func() {
+                        defer done.Done()
+                        ready.Wait()
+                        for range errs {
+                            _ = builder.Err()
+                        }
+                    }()
+                    for i := range errs {
+                        errs[i] = fmt.Errorf("error %d", i)
+                        done.Add(1)
+                        go func() {
+                            defer done.Done()
+                            ready.Wait()
+                            if i%2 == 0 {
+                                newHandleWrapperBase(&handle{HandleID: "1", TypeID: "type"}, c).setErr(errs[i])
+                            } else {
+                                newErroredHandleWrapperBase(errs[i], c)
+                            }
+                        }()
+                    }
+                    ready.Done()
+                    done.Wait()
+
+                    got := builder.Err()
+                    for _, err := range errs {
+                        if !errors.Is(got, err) {
+                            t.Errorf("builder.Err() = %v, want it to include %v", got, err)
+                        }
+                    }
+                    if gotLines := strings.Count(got.Error(), "\n") + 1; gotLines != len(errs) {
+                        t.Errorf("builder.Err() contains %d errors, want %d", gotLines, len(errs))
+                    }
+                }
                 """, timeout.Token);
 
-            using var process = Process.Start(new ProcessStartInfo("go")
+            var startInfo = new ProcessStartInfo("go")
             {
                 WorkingDirectory = directory.FullName,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
                 ArgumentList = { "test", "-timeout", "30s", "." }
-            })!;
+            };
+            EnableGoRaceDetection(startInfo);
+            using var process = Process.Start(startInfo)!;
             var stdout = process.StandardOutput.ReadToEndAsync(timeout.Token);
             var stderr = process.StandardError.ReadToEndAsync(timeout.Token);
             try
@@ -1191,6 +1687,17 @@ public class AtsGoCodeGeneratorTests
         finally
         {
             directory.Delete(recursive: true);
+        }
+    }
+
+    private static void EnableGoRaceDetection(ProcessStartInfo startInfo)
+    {
+        // Linux CI runners provide GCC; Go's race detector needs cgo and a C compiler.
+        // Keep ordinary runtime coverage on Windows, where that toolchain is not guaranteed.
+        if (OperatingSystem.IsLinux())
+        {
+            startInfo.ArgumentList.Insert(1, "-race");
+            startInfo.Environment["CGO_ENABLED"] = "1";
         }
     }
 

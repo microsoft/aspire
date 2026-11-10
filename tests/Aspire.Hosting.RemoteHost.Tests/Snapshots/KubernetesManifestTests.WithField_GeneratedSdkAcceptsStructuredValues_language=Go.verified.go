@@ -62,7 +62,7 @@ func newKubernetesManifestResourceFromHandle(h *handle, c *client) KubernetesMan
 
 // WithField adds or updates a manifest field using a dot-separated path.
 func (s *kubernetesManifestResource) WithField(path string, value any) KubernetesManifestResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -103,9 +103,16 @@ type DistributedApplication interface { handleReference }
 
 type distributedApplication struct { *resourceBuilderBase }
 
+// Err returns an error combining every failure recorded by this builder or by
+// any handle created from it.
+func (b *distributedApplicationBuilder) Err() error {
+	if err := b.client.combinedError(); err != nil { return err }
+	return b.resourceBuilderBase.Err()
+}
+
 // Build invokes the build capability and returns the running application.
 func (b *distributedApplicationBuilder) Build() (DistributedApplication, error) {
-	if b.err != nil { return nil, b.err }
+	if err := b.Err(); err != nil { return nil, err }
 	result, err := b.client.invokeCapability(context.Background(), "Aspire.Hosting/build", map[string]any{
 		"context": b.handle.ToJSON(),
 	})

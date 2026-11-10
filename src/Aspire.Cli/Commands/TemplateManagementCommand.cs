@@ -127,7 +127,7 @@ internal sealed class TemplateManagementCommand : ParentCommand
             else
             {
                 var table = new Table()
-                    .AddBoldColumn(NewCommandStrings.TemplateSourceNameHeader)
+                    .AddBoldColumn(SharedCommandStrings.SourceName)
                     .AddBoldColumn(NewCommandStrings.TemplateSourceConfigurationHeader);
                 foreach (var (name, source) in orderedSources)
                 {

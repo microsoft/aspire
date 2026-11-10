@@ -11,6 +11,37 @@ else if (DisplayedUrls.Count == 1)
         @WriteUrl(DisplayedUrls[0])
     </div>
 }
+else if (ShowFirstUrlOnly)
+{
+    var moreButtonId = _moreButtonId;
+    <div class="url-container first-url-only" @onclick:stopPropagation="true" @onkeydown:stopPropagation="true">
+        <div class="first-url">
+            @WriteUrl(DisplayedUrls[0])
+        </div>
+        <FluentButton Id="@moreButtonId"
+                      Appearance="ButtonAppearance.Default"
+                      Class="url-button url-button-neutral"
+                      Style="@($"anchor-name: --{moreButtonId}")"
+                      aria-label="@($"{Loc[nameof(Resources.Columns.UrlsColumnDisplayOverflowTitle)]}: {DisplayedUrls.Count - 1}")"
+                      OnClick="() => _popoverVisible = !_popoverVisible">
+            @($"+{DisplayedUrls.Count - 1}")
+        </FluentButton>
+        <FluentPopover AnchorId="@moreButtonId"
+                       @bind-Opened="_popoverVisible"
+                       Class="content-list-popover url-overflow-popover"
+                       Style="@($"--url-overflow-anchor: --{moreButtonId};")">
+            <strong>@Loc[nameof(Resources.Columns.UrlsColumnDisplayOverflowTitle)]</strong>
+            <div class="content-list-popover-items url-popup">
+                @foreach (var item in DisplayedUrls.Skip(1))
+                {
+                    <div class="url-link">
+                        @WriteUrl(item)
+                    </div>
+                }
+            </div>
+        </FluentPopover>
+    </div>
+}
 else if (DisplayedUrls.Count > 1)
 {
     <div class="url-container" @onclick:stopPropagation="true" @onkeydown:stopPropagation="true">

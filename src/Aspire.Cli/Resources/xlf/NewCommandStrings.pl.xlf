@@ -17,11 +17,6 @@
         <target state="translated">Kanał do użycia dla szablonów (stabilny, przejściowy, zdalny)</target>
         <note />
       </trans-unit>
-      <trans-unit id="CloningTemplateRepository">
-        <source>Cloning template repository...</source>
-        <target state="new">Cloning template repository...</target>
-        <note />
-      </trans-unit>
       <trans-unit id="ConfiguredTemplateConflictingOptions">
         <source>Templates from configured sources cannot be combined with --source, --version, --channel, or --language.</source>
         <target state="new">Templates from configured sources cannot be combined with --source, --version, --channel, or --language.</target>
@@ -142,19 +137,9 @@
         <target state="translated">Ścieżka wyjściowa „{0}” zawiera nieprawidłowe znaki.</target>
         <note />
       </trans-unit>
-      <trans-unit id="ResolvingTemplateRepository">
-        <source>Resolving template repository ref...</source>
-        <target state="new">Resolving template repository ref...</target>
-        <note />
-      </trans-unit>
       <trans-unit id="ResolvingTemplateVersion">
         <source>Resolving template version...</source>
         <target state="translated">Trwa rozpoznawanie wersji szablonu...</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="SearchingTemplateSource">
-        <source>Searching template source '{0}'...</source>
-        <target state="new">Searching template source '{0}'...</target>
         <note />
       </trans-unit>
       <trans-unit id="SelectAProjectTemplate">
@@ -282,6 +267,11 @@
         <target state="new">Expected a display name string without control characters, or null to use the source alias.</target>
         <note />
       </trans-unit>
+      <trans-unit id="TemplateSourceExplanation">
+        <source>One or more template sources are configured. A template source lets an organization share Aspire templates to customize your development experience.</source>
+        <target state="new">One or more template sources are configured. A template source lets an organization share Aspire templates to customize your development experience.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="TemplateSourceInvalidRepository">
         <source>Expected an HTTPS or SSH Git repository URL without passwords, tokens, queries, or fragments. SSH usernames are allowed.</source>
         <target state="new">Expected an HTTPS or SSH Git repository URL without passwords, tokens, queries, or fragments. SSH usernames are allowed.</target>
@@ -310,11 +300,6 @@
       <trans-unit id="TemplateSourceNameDescription">
         <source>The name of the template source.</source>
         <target state="new">The name of the template source.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="TemplateSourceNameHeader">
-        <source>Name</source>
-        <target state="new">Name</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceNameRequired">

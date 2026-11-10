@@ -18,6 +18,14 @@ const execFileAsync = promisify(execFile);
 const fsAccessAsync = promisify(fs.access);
 
 /**
+ * Budget for an `aspire --version` probe. A cold or contended start of a valid CLI (for
+ * example a CI runner stall or first-run extraction) can take several seconds before the
+ * first write, so a tight bound rejects a working CLI as invalid. 30s matches the budget
+ * the version capability check already uses for the same command.
+ */
+export const cliVersionProbeTimeoutMs = 30_000;
+
+/**
  * Gets the default installation paths for the Aspire CLI, in priority order.
  *
  * The CLI can be installed through the bundle installer or as a .NET global
@@ -147,10 +155,10 @@ export async function tryExecuteCli(cliPath: string, execute: CliProbeExecutor =
             // quote, so a shim under a directory such as `C:\Users\a&b\.dotnet\tools` reaches
             // cmd.exe unquoted and gets split at the `&`, rejecting a working CLI.
             const { command, args, windowsVerbatimArguments } = getCmdShimSpawnCommand(cliPath, ['--version']);
-            await execute(command, args, { timeout: 5000, windowsVerbatimArguments });
+            await execute(command, args, { timeout: cliVersionProbeTimeoutMs, windowsVerbatimArguments });
         }
         else {
-            await execute(cliPath, ['--version'], { timeout: 5000 });
+            await execute(cliPath, ['--version'], { timeout: cliVersionProbeTimeoutMs });
         }
 
         return true;
