@@ -237,7 +237,7 @@ public class GoScaffoldTests(ITestOutputHelper outputHelper)
         File.WriteAllText(path, content);
     }
 
-    // `gofmt -l -d` prints the name and the diff of every file whose formatting differs and nothing otherwise.
+    // `gofmt -s -l -d` prints the name and the simplified diff of every file whose formatting differs.
     private static async Task<string> RunGofmtAsync(string directory)
     {
         using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(1));
@@ -248,7 +248,7 @@ public class GoScaffoldTests(ITestOutputHelper outputHelper)
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
-            ArgumentList = { "-l", "-d", "." }
+            ArgumentList = { "-s", "-l", "-d", "." }
         };
         process.Start();
 

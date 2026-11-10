@@ -971,7 +971,7 @@ func (s *goObsoleteContext) GetObsoleteWireDto() (*GoObsoleteWireDto, error) {
 // GetObsoleteWireHandle invokes the GetObsoleteWireHandle method
 func (s *goObsoleteContext) GetObsoleteWireHandle() GoObsoleteWireHandle {
 	if err := s.Err(); err != nil {
-		return &goObsoleteWireHandle{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+		return &goObsoleteWireHandle{resourceBuilderBase: newPropagatedErroredResourceBuilder(err, s.client)}
 	}
 	ctx := context.Background()
 	reqArgs := map[string]any{

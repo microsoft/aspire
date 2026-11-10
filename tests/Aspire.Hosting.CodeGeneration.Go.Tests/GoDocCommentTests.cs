@@ -330,7 +330,7 @@ public class GoDocCommentTests
             // covers top-level declarations. Tab-indented interface-method and struct-field comments are never
             // reformatted; Render_EndsHeadingLookingRemarksWithAPeriod covers the heading rule they depend on.
             // The code itself is not gofmt-formatted, only the comments are checked.
-            var formatted = await RunAsync("gofmt", directory.FullName, timeout.Token, "aspire.go");
+            var formatted = await RunAsync("gofmt", directory.FullName, timeout.Token, "-s", "aspire.go");
             Assert.True(formatted.ExitCode == 0, $"gofmt failed:{Environment.NewLine}{formatted.Output}");
 
             var generated = CommentLines(files["aspire.go"]);
