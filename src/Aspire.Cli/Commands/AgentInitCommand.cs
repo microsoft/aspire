@@ -522,10 +522,14 @@ internal sealed class AgentInitCommand : BaseCommand
                 cancellationToken: cancellationToken);
         }
 
-        // The hooks only classify Aspire skill and Aspire MCP tool usage, so they are installed only
-        // when this run configures the Aspire skills or the Aspire MCP server. Third-party skills
-        // (playwright-cli, dotnet-inspect) alone produce no events the hooks would report.
-        var installTelemetryHooks = configureAspire || configureMcp;
+        // The hooks only classify skills shipped by the aspire@aspire-skills plugin and Aspire MCP tool
+        // usage, so they are installed only when this run registers that plugin or configures the Aspire
+        // MCP server. Selecting the aspire skill choice is not enough on its own: skill sources can
+        // disable the default source or replace its plugins with ones the hooks do not report on.
+        // Third-party skills (playwright-cli, dotnet-inspect) alone produce no events either.
+        var configureAspireSkillsPlugin = configureAspire && skillSources.Any(source =>
+            source.GetPluginNames().Contains(AspireSkillsRemoteConfiguration.PluginName, StringComparer.Ordinal));
+        var installTelemetryHooks = configureAspireSkillsPlugin || configureMcp;
 
         if (installTelemetryHooks && detectedEnvironments is null)
         {

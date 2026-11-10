@@ -1379,12 +1379,20 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData("aspire", false, true)]
-    [InlineData("none", true, true)]
-    [InlineData("playwright-cli", false, false)]
-    public async Task AgentInit_Hooks_RequireAspireSkillsOrMcp(string skills, bool mcp, bool expectHooks)
+    [InlineData("aspire", false, null, true)]
+    [InlineData("aspire", false, """{"skillSources":{"contoso":{"repository":"contoso/skills"}}}""", true)]
+    [InlineData("aspire", false, """{"skillSources":{"default":{"enabled":false},"contoso":{"repository":"contoso/skills"}}}""", false)]
+    [InlineData("aspire", false, """{"skillSources":{"default":{"plugins":["other"]}}}""", false)]
+    [InlineData("aspire", true, """{"skillSources":{"default":{"enabled":false},"contoso":{"repository":"contoso/skills"}}}""", true)]
+    [InlineData("none", true, null, true)]
+    [InlineData("playwright-cli", false, null, false)]
+    public async Task AgentInit_Hooks_RequireAspireSkillsPluginOrMcp(string skills, bool mcp, string? config, bool expectHooks)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        if (config is not null)
+        {
+            await File.WriteAllTextAsync(Path.Combine(workspace.WorkspaceRoot.FullName, "aspire.config.json"), config);
+        }
         var hooks = new TestTelemetryHookConfigurator();
         var playwrightVersion = SemVersion.Parse("0.1.3", SemVersionStyles.Strict);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
