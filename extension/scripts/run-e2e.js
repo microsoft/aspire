@@ -2021,7 +2021,11 @@ public partial class App : Application
     {
         var readyFile = Environment.GetEnvironmentVariable("ASPIRE_WINUI_E2E_READY_FILE")
             ?? throw new InvalidOperationException("ASPIRE_WINUI_E2E_READY_FILE is required.");
-        File.WriteAllText(readyFile, $"ready:{Environment.ProcessId}");
+        // Publish the marker atomically: the E2E test polls for this file and asserts on its
+        // first successful read, so it must never observe a created-but-empty file.
+        var pendingReadyFile = readyFile + ".tmp";
+        File.WriteAllText(pendingReadyFile, $"ready:{Environment.ProcessId}");
+        File.Move(pendingReadyFile, readyFile, overwrite: true);
 
         _window = new Window
         {
