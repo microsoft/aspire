@@ -437,7 +437,9 @@ internal sealed class UpdateCommand : BaseCommand
             if (projectFile is null || project is null)
             {
                 await _repositoryToolUpdater.UpdateAsync(toolManifests, channel, confirmBinding, cancellationToken);
-                return CommandResult.Success();
+                return await HandlePendingMigrationsAsync(parseResult.GetValue(s_migrateOption), null, confirmBinding, cancellationToken)
+                    ? CommandResult.Success()
+                    : CommandResult.Failure(CliExitCodes.FailedToUpgradeProject);
             }
 
             // A repository-pinned CLI is updated through its manifest, not by replacing the
@@ -468,8 +470,11 @@ internal sealed class UpdateCommand : BaseCommand
             // updated, since a migration may depend on the newer package version. Without --migrate
             // we stay non-destructive and only surface a non-blocking advisory. Detection reuses the
             // same IMigration registry behind `aspire doctor`, so any future migration shows up here
-            // automatically.
-            await HandlePendingMigrationsAsync(parseResult.GetValue(s_migrateOption), projectFile, confirmBinding, cancellationToken);
+            // automatically. A failed migration only warns because the package update already succeeded.
+            if (!await HandlePendingMigrationsAsync(parseResult.GetValue(s_migrateOption), projectFile, confirmBinding, cancellationToken))
+            {
+                InteractionService.DisplayMessage(KnownEmojis.PoliceCarLight, UpdateCommandStrings.MigrationApplyFailedWarning);
+            }
 
             // After successful project update, check if CLI update is available and prompt
             // Only prompt if the channel supports CLI downloads (has a non-null CliDownloadBaseUrl)
@@ -523,6 +528,16 @@ internal sealed class UpdateCommand : BaseCommand
             // Check if this is a "no project found" error and prompt for self-update
             if (ex.FailureReason == ProjectLocatorFailureReason.NoProjectFileFound)
             {
+                // Some migrations, such as replacing copied agent skills, do not need an AppHost.
+                // Nothing else was updated, so a failed migration fails the command.
+                var applyMigrations = parseResult.GetValue(s_migrateOption);
+                var migrated = await HandlePendingMigrationsAsync(applyMigrations, projectFile: null,
+                    PromptBinding.Create(parseResult, s_yesOption, defaultValue: true), cancellationToken);
+                if (applyMigrations)
+                {
+                    return migrated ? CommandResult.Success() : CommandResult.Failure(CliExitCodes.FailedToUpgradeProject);
+                }
+
                 // dotnet tool and npm installs have package-manager-specific update commands, so
                 // this recovery path does not prompt for archive self-update in those cases. Nix
                 // does not have a launcher-provided command here; let it reach ExecuteSelfUpdateAsync
@@ -553,14 +568,15 @@ internal sealed class UpdateCommand : BaseCommand
     }
 
     /// <summary>
-    /// After a successful project update, detects pending migrations from the <see cref="IMigration"/>
-    /// registry. When <paramref name="applyRequested"/> is <c>true</c> (the user passed <c>--migrate</c>)
+    /// Detects pending migrations from the <see cref="IMigration"/> registry. When
+    /// <paramref name="applyRequested"/> is <c>true</c> (the user passed <c>--migrate</c>)
     /// the migrations are applied in <see cref="IMigration.Order"/> after an optional confirmation;
     /// otherwise a non-blocking advisory is printed nudging the user toward <c>aspire update --migrate</c>.
     /// Migrations run after the package update so that any migration depending on a newer package
-    /// version sees the updated packages. A failure here never turns a successful update into a failure.
+    /// version sees the updated packages. A failed migration is reported and the remaining migrations still run.
     /// </summary>
-    private async Task HandlePendingMigrationsAsync(bool applyRequested, FileInfo projectFile, PromptBinding<bool> confirmBinding, CancellationToken cancellationToken)
+    /// <returns><see langword="false"/> when any migration failed to apply; otherwise <see langword="true"/>.</returns>
+    private async Task<bool> HandlePendingMigrationsAsync(bool applyRequested, FileInfo? projectFile, PromptBinding<bool> confirmBinding, CancellationToken cancellationToken)
     {
         var context = new MigrationContext(projectFile);
 
@@ -579,7 +595,7 @@ internal sealed class UpdateCommand : BaseCommand
             }
             catch (Exception ex)
             {
-                // A broken migration provider must not turn a successful update into a failure.
+                // A broken migration provider must not block the update or the other migrations.
                 _logger.LogDebug(ex, "Migration '{MigrationId}' detection failed", migration.Id);
                 continue;
             }
@@ -594,7 +610,7 @@ internal sealed class UpdateCommand : BaseCommand
         {
             if (pending.Count == 0)
             {
-                return;
+                return true;
             }
 
             InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.PendingMigrationsHeader);
@@ -604,19 +620,24 @@ internal sealed class UpdateCommand : BaseCommand
             }
 
             InteractionService.DisplaySubtleMessage(UpdateCommandStrings.PendingMigrationsHint);
-            return;
+            return true;
         }
 
         if (pending.Count == 0)
         {
             InteractionService.DisplaySubtleMessage(MigrationStrings.NothingToMigrate);
-            return;
+            return true;
         }
 
         InteractionService.DisplayMessage(KnownEmojis.Gear, MigrationStrings.AvailableMigrationsHeader);
         foreach (var (_, descriptor) in pending)
         {
             InteractionService.DisplaySubtleMessage($"  - {descriptor.Title}");
+            // List what will change so the user can review deletions before confirming.
+            foreach (var file in descriptor.Files ?? [])
+            {
+                InteractionService.DisplaySubtleMessage($"    {file}");
+            }
         }
 
         // Applying migrations rewrites source files, so confirm before doing so. The shared
@@ -629,9 +650,10 @@ internal sealed class UpdateCommand : BaseCommand
         if (!confirmed)
         {
             InteractionService.DisplaySubtleMessage(MigrationStrings.MigrationCancelled);
-            return;
+            return true;
         }
 
+        var succeeded = true;
         foreach (var (migration, _) in pending)
         {
             try
@@ -644,12 +666,15 @@ internal sealed class UpdateCommand : BaseCommand
             }
             catch (Exception ex)
             {
-                // The packages were already updated successfully; a migration failure should warn
-                // but not fail the overall update so the user keeps the successful package update.
+                // Migrations throw instead of reporting their own failures, so show the reason and
+                // keep applying the rest. The caller decides whether the failure fails the command.
                 _logger.LogDebug(ex, "Migration '{MigrationId}' apply failed", migration.Id);
-                InteractionService.DisplayMessage(KnownEmojis.PoliceCarLight, UpdateCommandStrings.MigrationApplyFailedWarning);
+                InteractionService.DisplayError(ex.Message);
+                succeeded = false;
             }
         }
+
+        return succeeded;
     }
 
     private async Task<(CommandResult? Result, bool SkipRepositoryToolUpdates)> TryUpdateCliBeforeGuestProjectUpdateAsync(

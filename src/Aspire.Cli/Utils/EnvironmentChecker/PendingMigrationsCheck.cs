@@ -71,6 +71,7 @@ internal sealed class PendingMigrationsCheck : IEnvironmentCheck
                 Status = EnvironmentCheckStatus.Warning,
                 Message = descriptor.Detail,
                 Fix = DoctorCommandStrings.PendingMigrationFix,
+                Files = descriptor.Files,
                 Metadata = descriptor.Metadata
             });
         }

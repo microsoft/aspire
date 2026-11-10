@@ -190,11 +190,11 @@
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_LocalSkillsConflict">
-        <source>Local Aspire skill files may override plugin skills
-{0}</source>
-        <target state="new">Local Aspire skill files may override plugin skills
-{0}</target>
-        <note>{0} lists the local skill entry-point paths, one per line.</note>
+        <source>{0} Run 'aspire update --migrate' to replace them.
+{1}</source>
+        <target state="new">{0} Run 'aspire update --migrate' to replace them.
+{1}</target>
+        <note>{0} explains that configured skill sources supersede copied Aspire skills. {1} lists the copied skill directories, one per line.</note>
       </trans-unit>
       <trans-unit id="InitCommand_LocationWithAgents">
         <source>{0} ({1})</source>

@@ -146,4 +146,25 @@
   <data name="RegenerateFailedWarning" xml:space="preserve">
     <value>Migration completed, but regenerating the SDK code failed. Run 'aspire restore' to regenerate it.</value>
   </data>
+  <data name="AgentSkillsTitle" xml:space="preserve">
+    <value>Replace copied Aspire skills with configured skill sources.</value>
+  </data>
+  <data name="AgentSkillsDetail" xml:space="preserve">
+    <value>Configured skill sources supersede copied Aspire skills.</value>
+  </data>
+  <data name="AgentSkillsApplied" xml:space="preserve">
+    <value>Replaced copied Aspire skills with configured skill sources. Each copied skill directory was deleted.</value>
+  </data>
+  <data name="AgentSkillsDeletedNoSources" xml:space="preserve">
+    <value>Deleted copied Aspire skills. No skill sources are configured and enabled, so nothing was registered.</value>
+  </data>
+  <data name="AgentSkillsDeletedNoAgents" xml:space="preserve">
+    <value>Deleted copied Aspire skills. No detected agent loads them, so nothing was registered.</value>
+  </data>
+  <data name="AgentSkillsRegistrationFailed" xml:space="preserve">
+    <value>Copied Aspire skills were left in place because configured skill sources could not be registered.</value>
+  </data>
+  <data name="AgentSkillsLinked" xml:space="preserve">
+    <value>Copied Aspire skills were left in place because these are reached through a linked folder and may be shared: {0}. Remove them manually.</value>
+  </data>
 </root>

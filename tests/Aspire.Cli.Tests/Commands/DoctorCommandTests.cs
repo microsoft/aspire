@@ -5,7 +5,6 @@ using System.Text.Json;
 using Aspire.Cli.Acquisition;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
-using Aspire.Cli.Tests.Agents;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
@@ -33,81 +32,6 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
         
         // Help should return success
         Assert.Equal(CliExitCodes.Success, exitCode);
-    }
-
-    [Fact]
-    public async Task DoctorCommand_Json_IncludesStaticSkillsGuidance()
-    {
-        using var context = new AgentConfigurationTestContext(outputHelper);
-        var skills = new[] { context.Project, context.Home }
-            .Select(directory => Path.Combine(directory.FullName, ".agents", "skills", "aspire", "SKILL.md"))
-            .Order(StringComparers.FileSystemPath).ToArray();
-        foreach (var skill in skills)
-        {
-            await AgentConfigurationTestContext.WriteAsync(skill, "static guidance");
-        }
-
-        using var doc = await RunDoctorJsonAsync(context.Workspace,
-            configureOptions: options =>
-            {
-                options.CliExecutionContextFactory = _ => context.ExecutionContext;
-                options.CliUpdateNotifierFactory = _ => new TestCliUpdateNotifier();
-            },
-            configureServices: services =>
-            {
-                services.AddSingleton<IEnvironment>(context.Environment);
-                services.AddSingleton<IEnvironmentCheck, AspireSkillsCheck>();
-            });
-
-        var check = GetCheckByName(doc, AspireSkillsCheck.CheckName);
-        var workspacePath = JsonEncodedText.Encode(
-            context.Project.FullName, JsonSourceGenerationContext.RelaxedEscaping.Options.Encoder).ToString();
-        await Verify(check.GetRawText().Replace(workspacePath, "<workspace>", StringComparison.Ordinal), "json");
-
-        foreach (var skill in skills)
-        {
-            Assert.Equal("static guidance", await File.ReadAllTextAsync(skill));
-        }
-    }
-
-    [Fact]
-    public async Task DoctorCommand_HumanReadable_IncludesStaticSkillsGuidance()
-    {
-        using var context = new AgentConfigurationTestContext(outputHelper);
-        foreach (var directory in new[] { context.Project, context.Home })
-        {
-            await AgentConfigurationTestContext.WriteAsync(
-                Path.Combine(directory.FullName, ".agents", "skills", "aspire", "SKILL.md"), "static guidance");
-        }
-        var output = new StringWriter();
-        var console = AnsiConsole.Create(new AnsiConsoleSettings
-        {
-            Ansi = AnsiSupport.No,
-            ColorSystem = ColorSystemSupport.NoColors,
-            Interactive = InteractionSupport.No,
-            Out = new AnsiConsoleOutput(output),
-            Enrichment = new ProfileEnrichment { UseDefaultEnrichers = false },
-        });
-        console.Profile.Width = int.MaxValue;
-
-        var services = CreateDoctorVersionServiceCollection(context.Workspace, outputHelper, options =>
-        {
-            options.CliExecutionContextFactory = _ => context.ExecutionContext;
-            options.CliUpdateNotifierFactory = _ => new TestCliUpdateNotifier();
-        });
-        services.RemoveAll<IEnvironmentCheck>();
-        services.RemoveAll<IAnsiConsole>();
-        services.AddSingleton<IAnsiConsole>(console);
-        services.AddSingleton<IEnvironment>(context.Environment);
-        services.AddSingleton<IEnvironmentCheck, AspireSkillsCheck>();
-        using var provider = services.BuildServiceProvider();
-
-        var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
-        var exitCode = await command.Parse("doctor").InvokeAsync().DefaultTimeout();
-
-        Assert.Equal(CliExitCodes.Success, exitCode);
-        var rendered = string.Join(Environment.NewLine, output.ToString().Split('\n').Select(line => line.TrimEnd()));
-        await Verify(rendered.Replace('\\', '/'), "txt");
     }
 
     [Fact]

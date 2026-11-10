@@ -8,9 +8,7 @@ using System.Globalization;
 using System.Text.Json;
 using Aspire.Cli.Agents;
 using Aspire.Cli.Agents.AspireSkills;
-using Aspire.Cli.Agents.Copilot;
 using Aspire.Cli.Agents.Hooks;
-using Aspire.Cli.Agents.OpenCode;
 using Aspire.Cli.Agents.Playwright;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Git;
@@ -347,14 +345,7 @@ internal sealed class AgentInitCommand : BaseCommand
                 async () => await _agentEnvironmentDetector.DetectAsync(context, cancellationToken),
                 emoji: KnownEmojis.Robot);
 
-            // Shared discovery does not authorize configuring another agent. Defaults
-            // express detected agent use, independently of assets and their destinations.
-            var defaultClients = _clients
-                .Where(client => (client.Environments & detectedEnvironments.Value) != AgentEnvironment.None).ToArray();
-            if (defaultClients.Length == 0)
-            {
-                defaultClients = [_clients.Single(client => string.Equals(client.Id, CopilotAgentClient.ClientId, StringComparisons.AgentClientId))];
-            }
+            var defaultClients = AgentEnvironmentDetector.GetDefaultClients(_clients, detectedEnvironments.Value);
 
             selectedClients = await InteractionService.PromptForSelectionsAsync(
                 AgentCommandStrings.InitCommand_SelectAgentsPrompt,
@@ -392,66 +383,17 @@ internal sealed class AgentInitCommand : BaseCommand
             try
             {
                 skillSources = SkillSource.Resolve(configurationDirectory, new FileInfo(_configurationService.GetSettingsFilePath(isGlobal: true)));
-                var usesPlugins = selectedClients.Any(client => client.Id != OpenCodeAgentClient.ClientId);
-                var usesOpenCode = selectedClients.Any(client => client.Id == OpenCodeAgentClient.ClientId);
-                List<IReadOnlyList<(string Label, string Value)>> sourceDetails = [];
-                foreach (var skillSource in skillSources)
-                {
-                    var sourceName = skillSource.GetName();
-                    if (sourceName.Equals(SkillSource.DefaultName, StringComparison.OrdinalIgnoreCase))
-                    {
-                        continue;
-                    }
-                    List<(string Label, string Value)> details = [(SharedCommandStrings.SourceName, sourceName)];
-                    if (usesPlugins)
-                    {
-                        details.Add((SharedCommandStrings.SourceGitRepository, skillSource.GetRepositoryUrl()));
-                        if (skillSource.Ref is not null)
-                        {
-                            details.Add((SharedCommandStrings.SourceRef, skillSource.Ref));
-                        }
-                        if (!string.Equals(skillSource.Marketplace, sourceName, StringComparison.OrdinalIgnoreCase))
-                        {
-                            details.Add((SharedCommandStrings.SourceMarketplace, skillSource.Marketplace!));
-                        }
-                        details.Add((SharedCommandStrings.SourcePlugins, string.Join(", ", skillSource.GetPluginNames())));
-                    }
-                    if (usesOpenCode)
-                    {
-                        if (skillSource.OpenCodeV1Catalog is not null)
-                        {
-                            details.Add((SharedCommandStrings.SourceOpenCodeV1Catalog, skillSource.OpenCodeV1Catalog));
-                        }
-                        if (skillSource.OpenCodeV2Catalog is not null)
-                        {
-                            details.Add((SharedCommandStrings.SourceOpenCodeV2Catalog, skillSource.OpenCodeV2Catalog));
-                        }
-                    }
-                    if (details.Count > 1)
-                    {
-                        sourceDetails.Add(details);
-                    }
-                }
-
-                if (sourceDetails.Count > 0)
-                {
-                    InteractionService.DisplayMessage(KnownEmojis.Information, AgentCommandStrings.InitCommand_SkillSourcesExplanation);
-                    InteractionService.DisplaySourceDetails(sourceDetails);
-                    if (InteractionService.DisplaySourceTrustWarning(ExecutionContext))
-                    {
-                        InteractionService.DisplayEmptyLine();
-                    }
-                }
+                InteractionService.DisplaySkillSources(skillSources, selectedClients, ExecutionContext);
 
                 var local = LocalAspireSkills.Find(ExecutionContext.WorkingDirectory, workspaceRoot,
                     selectedClients, cancellationToken);
-                if (local.Files.Count > 0)
+                if (local.Directories.Count > 0)
                 {
                     InteractionService.DisplayMessage(KnownEmojis.PoliceCarLight,
                         string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_LocalSkillsConflict,
-                            string.Join(System.Environment.NewLine, local.Files
-                                .Select(path => $"  {AgentPath.GetDisplayPath(path, workspaceRoot, ExecutionContext)}")
-                                .Order(StringComparer.Ordinal))));
+                            MigrationStrings.AgentSkillsDetail,
+                            string.Join(System.Environment.NewLine, LocalAspireSkills.GetDisplayPaths(local.Directories, workspaceRoot, ExecutionContext)
+                                .Select(path => $"  {path}"))));
                     InteractionService.DisplayEmptyLine();
                 }
                 if (local.HasFileErrors)
@@ -555,7 +497,7 @@ internal sealed class AgentInitCommand : BaseCommand
         {
             cancellationToken.ThrowIfCancellationRequested();
             registrationResults = await AgentConfiguration.ApplyRemoteAsync(selectedClients, workspaceRoot, scope, skillSources, cancellationToken);
-            hasErrors |= DisplayRemoteConfigurationResults(registrationResults, workspaceRoot);
+            hasErrors |= InteractionService.DisplayRemoteConfigurationResults(registrationResults, workspaceRoot, ExecutionContext);
         }
 
         // --- Phase 3: Apply copied skill files at each unique destination ---
@@ -907,45 +849,6 @@ internal sealed class AgentInitCommand : BaseCommand
 
         InteractionService.DisplayMessage(KnownEmojis.Robot, message, allowMarkup: true);
         InteractionService.DisplayEmptyLine();
-    }
-
-    private bool DisplayRemoteConfigurationResults(IReadOnlyList<AgentTargetResult> results, DirectoryInfo workspaceRoot)
-    {
-        var hasErrors = false;
-        foreach (var resultGroup in results.GroupBy(result => result.Status switch
-        {
-            AgentConfigurationStatus.Configured or AgentConfigurationStatus.Unchanged => false,
-            AgentConfigurationStatus.Failed => true,
-            _ => throw new UnreachableException()
-        }))
-        {
-            if (resultGroup.Key)
-            {
-                var failedTargets = resultGroup.SelectMany(result => result.Clients, (result, client) =>
-                {
-                    var target = string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_ConfigurationTarget,
-                        client.DisplayName, AgentPath.GetDisplayPath(result.TargetPath, workspaceRoot, ExecutionContext));
-
-                    return result.Message is null ? target : $"{target}{Environment.NewLine}  {result.Message}";
-                });
-                InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_FailedTarget,
-                    string.Join($"{Environment.NewLine}  ", failedTargets)));
-                InteractionService.DisplayEmptyLine();
-                hasErrors = true;
-                continue;
-            }
-
-            var targets = resultGroup.Select(result =>
-                string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_LocationWithAgents,
-                    AgentPath.GetDisplayPath(result.TargetPath, workspaceRoot, ExecutionContext),
-                    string.Join(", ", result.Clients.Select(static client => client.DisplayName))));
-            InteractionService.DisplayMessage(KnownEmojis.Robot,
-                string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_ConfiguredTargets,
-                    string.Join(", ", targets)));
-            InteractionService.DisplayEmptyLine();
-        }
-
-        return hasErrors;
     }
 
     private sealed record InstalledSkillSummaryItem(string SkillName, string Directory);

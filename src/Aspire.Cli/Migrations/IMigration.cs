@@ -59,9 +59,10 @@ internal interface IMigration
 
     /// <summary>
     /// Applies the migration to the selected project. Implementations own their own progress,
-    /// success, and best-effort failure messaging via <c>IInteractionService</c>. Applying must be
-    /// idempotent: if there is nothing to migrate (for example because a previous run already
-    /// completed), this should be a no-op.
+    /// success, and best-effort failure messaging via <c>IInteractionService</c>, and throw when the
+    /// migration fails; the caller reports the exception message and continues with the remaining
+    /// migrations. Applying must be idempotent: if there is nothing to migrate (for example because
+    /// a previous run already completed), this should be a no-op.
     /// </summary>
     /// <param name="context">The AppHost to mutate, or the current working directory when no AppHost is specified.</param>
     /// <param name="cancellationToken">Cancellation token.</param>

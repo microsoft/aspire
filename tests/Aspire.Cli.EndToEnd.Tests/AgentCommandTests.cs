@@ -205,8 +205,8 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         await File.WriteAllTextAsync(localSkillPath, localSkillContent);
         string[] expectedWarnings =
         [
-            "Local Aspire skill files may override plugin skills",
-            ".agents/skills/aspire/SKILL.md"
+            "Configured skill sources supersede copied Aspire skills",
+            ".agents/skills/aspire"
         ];
 
         // Accept agents before choosing independent assets and project scope.

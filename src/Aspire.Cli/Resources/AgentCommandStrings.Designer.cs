@@ -403,7 +403,8 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Local Aspire skill files may override plugin skills {0}.
+        ///   Looks up a localized string similar to {0} Run &apos;aspire update --migrate&apos; to replace them.
+        ///{1}.
         /// </summary>
         internal static string InitCommand_LocalSkillsConflict {
             get {

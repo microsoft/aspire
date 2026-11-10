@@ -460,7 +460,7 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
         var expectedWarnings = new[]
         {
             string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_LocalSkillsConflict,
-                "  .agents/skills/aspire/SKILL.md")
+                MigrationStrings.AgentSkillsDetail, "  .agents/skills/aspire")
         };
         var interaction = new TestInteractionService
         {
@@ -1454,9 +1454,10 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
             Assert.Empty(interaction.DisplayedErrors);
             Assert.Contains(interaction.DisplayedMessages, message => message.Emoji.Equals(KnownEmojis.PoliceCarLight) &&
                 message.Message == string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_LocalSkillsConflict,
+                    MigrationStrings.AgentSkillsDetail,
                     string.Join(System.Environment.NewLine,
-                        $"  {projectDirectory}/skills/aspire-init/SKILL.md",
-                        "  ~/.agents/skills/aspire/SKILL.md")));
+                        $"  {projectDirectory}/skills/aspire-init",
+                        "  ~/.agents/skills/aspire")));
             Assert.Equal(content, await File.ReadAllTextAsync(projectSkillPath));
             Assert.True(File.Exists(context.Copilot.GetIntegrationConfigPath(AgentConfigurationScope.Global, context.Project)));
             Assert.True(File.Exists(context.Copilot.GetMcpConfigPath(AgentConfigurationScope.Global, context.Project)));

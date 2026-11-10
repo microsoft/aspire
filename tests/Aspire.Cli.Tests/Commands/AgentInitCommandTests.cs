@@ -976,7 +976,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         Assert.Empty(interaction.DisplayedErrors);
         Assert.Contains(interaction.DisplayedMessages, message => message.Emoji.Equals(KnownEmojis.PoliceCarLight) &&
             message.Message == string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_LocalSkillsConflict,
-                "  team-skills/aspire/SKILL.md"));
+                MigrationStrings.AgentSkillsDetail, "  team-skills/aspire"));
         Assert.Equal(skill, await File.ReadAllTextAsync(skillPath));
         var config = JsonNode.Parse(await File.ReadAllTextAsync(configPath))!;
         var sources = array ? config["skills"]!.AsArray() : config["skills"]!["urls"]!.AsArray();

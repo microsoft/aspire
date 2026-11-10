@@ -288,9 +288,9 @@
     <comment>{0} lists each agent's configuration path and failure details, one target per line.</comment>
   </data>
   <data name="InitCommand_LocalSkillsConflict" xml:space="preserve">
-    <value>Local Aspire skill files may override plugin skills
-{0}</value>
-    <comment>{0} lists the local skill entry-point paths, one per line.</comment>
+    <value>{0} Run 'aspire update --migrate' to replace them.
+{1}</value>
+    <comment>{0} explains that configured skill sources supersede copied Aspire skills. {1} lists the copied skill directories, one per line.</comment>
   </data>
   <data name="InitCommand_SkillSourcesExplanation" xml:space="preserve">
     <value>One or more skill sources are configured. A skill source lets an organization share skills to customize your development experience.</value>

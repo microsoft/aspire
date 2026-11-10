@@ -1,7 +1,11 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
 using System.Globalization;
+using Aspire.Cli.Agents;
+using Aspire.Cli.Agents.AspireSkills;
+using Aspire.Cli.Agents.OpenCode;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Resources;
@@ -75,6 +79,101 @@ internal static class ConsoleHelpers
         interactionService.DisplayMessage(KnownEmojis.Information, NewCommandStrings.TemplateSourceExplanation);
         interactionService.DisplaySourceDetails(details);
         interactionService.DisplaySourceTrustWarning(executionContext);
+    }
+
+    public static void DisplaySkillSources(this IInteractionService interactionService, IReadOnlyList<SkillSource> sources, IReadOnlyList<IAgentClient> clients, CliExecutionContext executionContext)
+    {
+        var usesPlugins = clients.Any(client => client.Id != OpenCodeAgentClient.ClientId);
+        var usesOpenCode = clients.Any(client => client.Id == OpenCodeAgentClient.ClientId);
+        List<IReadOnlyList<(string Label, string Value)>> sourceDetails = [];
+        foreach (var skillSource in sources)
+        {
+            var sourceName = skillSource.GetName();
+            if (sourceName.Equals(SkillSource.DefaultName, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+            List<(string Label, string Value)> details = [(SharedCommandStrings.SourceName, sourceName)];
+            if (usesPlugins)
+            {
+                details.Add((SharedCommandStrings.SourceGitRepository, skillSource.GetRepositoryUrl()));
+                if (skillSource.Ref is not null)
+                {
+                    details.Add((SharedCommandStrings.SourceRef, skillSource.Ref));
+                }
+                if (!string.Equals(skillSource.Marketplace, sourceName, StringComparison.OrdinalIgnoreCase))
+                {
+                    details.Add((SharedCommandStrings.SourceMarketplace, skillSource.Marketplace!));
+                }
+                details.Add((SharedCommandStrings.SourcePlugins, string.Join(", ", skillSource.GetPluginNames())));
+            }
+            if (usesOpenCode)
+            {
+                if (skillSource.OpenCodeV1Catalog is not null)
+                {
+                    details.Add((SharedCommandStrings.SourceOpenCodeV1Catalog, skillSource.OpenCodeV1Catalog));
+                }
+                if (skillSource.OpenCodeV2Catalog is not null)
+                {
+                    details.Add((SharedCommandStrings.SourceOpenCodeV2Catalog, skillSource.OpenCodeV2Catalog));
+                }
+            }
+            if (details.Count > 1)
+            {
+                sourceDetails.Add(details);
+            }
+        }
+
+        if (sourceDetails.Count > 0)
+        {
+            interactionService.DisplayMessage(KnownEmojis.Information, AgentCommandStrings.InitCommand_SkillSourcesExplanation);
+            interactionService.DisplaySourceDetails(sourceDetails);
+            if (interactionService.DisplaySourceTrustWarning(executionContext))
+            {
+                interactionService.DisplayEmptyLine();
+            }
+        }
+    }
+
+    // Returns true when any target failed to register the skill sources.
+    public static bool DisplayRemoteConfigurationResults(this IInteractionService interactionService,
+        IReadOnlyList<AgentTargetResult> results, DirectoryInfo workspaceRoot, CliExecutionContext executionContext)
+    {
+        var hasErrors = false;
+        foreach (var resultGroup in results.GroupBy(result => result.Status switch
+        {
+            AgentConfigurationStatus.Configured or AgentConfigurationStatus.Unchanged => false,
+            AgentConfigurationStatus.Failed => true,
+            _ => throw new UnreachableException()
+        }))
+        {
+            if (resultGroup.Key)
+            {
+                var failedTargets = resultGroup.SelectMany(result => result.Clients, (result, client) =>
+                {
+                    var target = string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_ConfigurationTarget,
+                        client.DisplayName, AgentPath.GetDisplayPath(result.TargetPath, workspaceRoot, executionContext));
+
+                    return result.Message is null ? target : $"{target}{Environment.NewLine}  {result.Message}";
+                });
+                interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_FailedTarget,
+                    string.Join($"{Environment.NewLine}  ", failedTargets)));
+                interactionService.DisplayEmptyLine();
+                hasErrors = true;
+                continue;
+            }
+
+            var targets = resultGroup.Select(result =>
+                string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_LocationWithAgents,
+                    AgentPath.GetDisplayPath(result.TargetPath, workspaceRoot, executionContext),
+                    string.Join(", ", result.Clients.Select(static client => client.DisplayName))));
+            interactionService.DisplayMessage(KnownEmojis.Robot,
+                string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_ConfiguredTargets,
+                    string.Join(", ", targets)));
+            interactionService.DisplayEmptyLine();
+        }
+
+        return hasErrors;
     }
 
     public static void DisplayTemplateGitFetchNotice(this IInteractionService interactionService,
