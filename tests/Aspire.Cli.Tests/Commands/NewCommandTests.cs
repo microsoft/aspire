@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Xml.Linq;
 using Aspire.Cli.Agents;
 using Aspire.Cli.Agents.AspireSkills;
+using Aspire.Cli.Agents.ClaudeCode;
 using Aspire.Cli.Utils;
 using Aspire.Cli.Commands;
 using RootCommand = Aspire.Cli.Commands.RootCommand;
@@ -3513,10 +3514,12 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var homeDirectory = workspace.CreateDirectory("fake-home");
+        var hooks = new TestTelemetryHookConfigurator();
         var services = CreateServiceCollection(workspace, options =>
         {
             options.CliExecutionContextFactory = _ => TestExecutionContextHelper.CreateExecutionContext(
                 workspace.WorkspaceRoot, identityChannel: PackageChannelNames.Stable, homeDirectory: homeDirectory);
+            options.TelemetryHookConfiguratorFactory = _ => hooks;
         });
         using var provider = services.BuildServiceProvider();
 
@@ -3527,6 +3530,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.True(AspireSkillsRemoteConfiguration.HasPluginRegistration(
             [configurationPath], [SkillSource.BuiltIn]));
         Assert.Equal([configurationPath], Directory.EnumerateFiles(homeDirectory.FullName, "*", SearchOption.AllDirectories));
+        Assert.Equal([ClaudeCodeAgentClient.ClientId], hooks.SelectedClientIds);
         var outputDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, "output");
         Assert.False(Directory.Exists(Path.Combine(outputDirectory, ".claude", "skills")));
         Assert.False(Directory.Exists(Path.Combine(outputDirectory, ".agents", "skills")));
