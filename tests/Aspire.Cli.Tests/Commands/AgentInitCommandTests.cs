@@ -1056,7 +1056,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.InvalidCommand, await result.InvokeAsync().DefaultTimeout());
         Assert.Equal(original, await File.ReadAllTextAsync(path));
         Assert.True(File.Exists(context.Copilot.GetMcpConfigPath(scope, context.Project)));
-        Assert.Equal(AgentEnvironment.CopilotCli, hooks.ConfiguredEnvironments);
+        Assert.Equal(scope is AgentConfigurationScope.Global ? AgentEnvironment.CopilotCli : AgentEnvironment.None, hooks.ConfiguredEnvironments);
         Assert.Equal(string.Format(CultureInfo.CurrentCulture,
             AgentCommandStrings.McpServerContainerMustBeJsonObject, "mcp.servers", path), Assert.Single(interaction.DisplayedErrors));
     }

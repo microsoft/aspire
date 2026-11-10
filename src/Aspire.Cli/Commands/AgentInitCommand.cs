@@ -523,13 +523,13 @@ internal sealed class AgentInitCommand : BaseCommand
         }
 
         // The hooks only classify skills shipped by the aspire@aspire-skills plugin and Aspire MCP tool
-        // usage, so they are installed only when this run registers that plugin or configures the Aspire
-        // MCP server. Selecting the aspire skill choice is not enough on its own: skill sources can
+        // usage, so global setup installs them only when this run registers that plugin or configures the
+        // Aspire MCP server. Selecting the aspire skill choice is not enough on its own: skill sources can
         // disable the default source or replace its plugins with ones the hooks do not report on.
         // Third-party skills (playwright-cli, dotnet-inspect) alone produce no events either.
         var configureAspireSkillsPlugin = configureAspire && skillSources.Any(source =>
             source.GetPluginNames().Contains(AspireSkillsRemoteConfiguration.PluginName, StringComparer.Ordinal));
-        var installTelemetryHooks = configureAspireSkillsPlugin || configureMcp;
+        var installTelemetryHooks = scope is AgentConfigurationScope.Global && (configureAspireSkillsPlugin || configureMcp);
 
         if (installTelemetryHooks && detectedEnvironments is null)
         {
@@ -698,11 +698,8 @@ internal sealed class AgentInitCommand : BaseCommand
         }
 
         // --- Phase 6: Install agent telemetry hooks (default-on, parity with azure-skills) ---
-        // Registers one user-level hook per selected agent client that a detected environment makes
-        // eligible. Hooks are always installed globally, even for project scope: Copilot also reads
-        // repository `.claude/settings.json`, so project-level hooks for both clients would report
-        // the same tool call twice, and repository files would pin a machine-specific CLI path.
-        // Whether telemetry is actually transmitted stays gated by the single
+        // Global setup registers one hook per selected agent client that a detected environment makes
+        // eligible. Whether telemetry is actually transmitted stays gated by the single
         // ASPIRE_CLI_TELEMETRY_OPTOUT opt-out, which both the hook scripts and the
         // `aspire agent telemetry` command path re-check at runtime.
         if (installTelemetryHooks)

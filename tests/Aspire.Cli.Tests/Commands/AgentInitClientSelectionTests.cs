@@ -118,7 +118,7 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
         var unselectedRoot = scope == "project" ? homeDirectory : workspace.WorkspaceRoot;
         Assert.False(Directory.Exists(Path.Combine(unselectedRoot.FullName, ".agents")));
         Assert.Equal(
-            (configureAspire || configureMcp) && detectedEnvironment is { } detected &&
+            (configureAspire || configureMcp) && selectedScope is AgentConfigurationScope.Global && detectedEnvironment is { } detected &&
                 defaults.Any(client => (client.Environments & detected) != AgentEnvironment.None) ? detected : AgentEnvironment.None,
             hooks.ConfiguredEnvironments);
     }
@@ -126,9 +126,9 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData("project", false, 0)]
     [InlineData("global", false, 0)]
-    [InlineData("project", true, 1)]
+    [InlineData("project", true, 0)]
     [InlineData("global", true, 1)]
-    public async Task AgentInit_ExplicitAgents_DetectsOnlyWhenInstallingTelemetryHooks(string scope, bool configureMcp, int expectedScanCount)
+    public async Task AgentInit_ExplicitAgents_DetectsOnlyForConsentedGlobalAssets(string scope, bool configureMcp, int expectedScanCount)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var homeDirectory = workspace.CreateDirectory("fake-home");
@@ -1359,7 +1359,7 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData("project")]
     [InlineData("global")]
-    public async Task AgentInit_Hooks_AreLimitedToSelectedDetectedEnvironmentsInEitherScope(string scope)
+    public async Task AgentInit_Hooks_AreLimitedToSelectedDetectedEnvironmentsInGlobalScope(string scope)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var hooks = new TestTelemetryHookConfigurator();
@@ -1375,7 +1375,7 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
 
         var result = provider.GetRequiredService<RootCommand>().Parse($"agent init --agents claude --scope {scope} --skills aspire");
         Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
-        Assert.Equal(AgentEnvironment.ClaudeCode, hooks.ConfiguredEnvironments);
+        Assert.Equal(scope == "global" ? AgentEnvironment.ClaudeCode : AgentEnvironment.None, hooks.ConfiguredEnvironments);
     }
 
     [Theory]
