@@ -158,7 +158,7 @@ The Dashboard creates the directory with `Directory.CreateTempSubdirectory`, rem
         └── run.json
 ```
 
-All applications store run directories directly beneath the shared `runs` directory. Run IDs use the UTC start time in `yyyyMMddTHHmmssfffZ` format. Each run directory contains an empty file named with the application storage key. Discovery checks for this marker before opening `run.json`, avoiding metadata reads for other applications. `run.json` contains:
+All applications store run directories directly beneath the shared `runs` directory. Run IDs use the UTC start time in `yyyyMMddTHHmmssfffZ` format. A Dashboard claims a run ID by taking its run lock and then creating a new run directory. If another Dashboard holds that lock or the directory already exists, such as when two AppHosts start in the same millisecond, the start time advances by one millisecond and the claim is retried. Each run directory contains an empty file named with the application storage key. Discovery checks for this marker before opening `run.json`, avoiding metadata reads for other applications. `run.json` contains:
 
 - schema version
 - run ID
@@ -388,7 +388,8 @@ SQL values are parameterized. Schema SQL is compiled into the Dashboard assembly
 
 ## Failure behavior
 
-- A lock collision fails startup instead of allowing two writers to share a run database.
+- A run ID collision advances the run ID to the next millisecond instead of allowing two writers to share a run database.
+- A resume-mode lock collision fails startup instead of allowing two writers to share an application database.
 - An invalid persistence mode fails Dashboard option validation and lists the accepted values.
 - Incomplete or unreadable historical metadata is ignored during discovery.
 - A historical run that disappears between discovery and selection leaves the previous run selected.

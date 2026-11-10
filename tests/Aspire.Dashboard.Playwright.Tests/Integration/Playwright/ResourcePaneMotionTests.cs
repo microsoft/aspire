@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Tests.Integration.Playwright.Infrastructure;
 using Aspire.Dashboard.Utils;
 using Aspire.TestUtilities;
@@ -143,7 +144,11 @@ public sealed class ResourcePaneMotionTests(ResourcePaneResponsiveTests.Metadata
             }
             else
             {
-                await page.GetByRole(AriaRole.Separator, new() { Name = Resources.Layout.ResourcePaneResize }).PressAsync("Home");
+                // The handle takes keyboard focus only once its handlers are attached, so a key pressed earlier is lost.
+                var separator = page.GetByRole(AriaRole.Separator, new() { Name = Resources.Layout.ResourcePaneResize });
+                await Assertions.Expect(separator).ToHaveAttributeAsync("tabindex", "0");
+                await separator.PressAsync("Home");
+                await Assertions.Expect(separator).ToHaveAttributeAsync("aria-valuenow", "300");
             }
             await ResourcePaneNavigation.ToggleResourceListAsync(page);
             await page.WaitForFunctionAsync("""
@@ -203,7 +208,8 @@ public sealed class ResourcePaneMotionTests(ResourcePaneResponsiveTests.Metadata
             await Assertions.Expect(page.Locator(".resource-content")).Not.ToHaveAttributeAsync("inert", "");
             var layoutBox = await page.Locator(".resources-layout").BoundingBoxAsync();
             Assert.NotNull(layoutBox);
-            var expectedDetailsWidth = layoutBox.Width - (width > 768 ? 420 : 0);
+            // Home shrank the pane to its minimum width, 300px.
+            var expectedDetailsWidth = layoutBox.Width - (width > 768 ? 300 : 0);
             Assert.NotEmpty(frames);
             Assert.All(await page.EvaluateAsync<string[]>("() => window.selectionRevealTitles"),
                 title => Assert.Equal("api", title));
@@ -226,7 +232,7 @@ public sealed class ResourcePaneMotionTests(ResourcePaneResponsiveTests.Metadata
             });
             if (width > 768)
             {
-                var intermediate = frames.Where(frame => frame[0] > 420.1 && frame[0] < layoutBox.Width - .1).ToList();
+                var intermediate = frames.Where(frame => frame[0] > 300.1 && frame[0] < layoutBox.Width - .1).ToList();
                 Assert.Equal(!reducedMotion, intermediate.Count > 0);
                 Assert.All(intermediate, frame =>
                 {
@@ -337,7 +343,7 @@ public sealed class ResourcePaneMotionTests(ResourcePaneResponsiveTests.Metadata
             if (interruption == "reverse")
             {
                 await Assertions.Expect(page.Locator(".resource-content")).ToHaveAttributeAsync("inert", "");
-                await Assertions.Expect(pane.Locator(".resource-select-all-toggle")).ToHaveAttributeAsync("aria-description", Resources.Layout.ResourcePaneAllSelected);
+                await Assertions.Expect(pane.Locator(".resource-row-all .resource-row-link")).ToHaveAttributeAsync("aria-current", "page");
                 await pane.Locator("[data-resource-name='api'] .resource-row-link").First.ClickAsync();
             }
             else
@@ -394,16 +400,19 @@ public sealed class ResourcePaneMotionTests(ResourcePaneResponsiveTests.Metadata
             var separator = page.GetByRole(AriaRole.Separator, new() { Name = Resources.Layout.ResourcePaneResize });
             await separator.PressAsync("End");
             var expectedWidth = await separator.EvaluateAsync<double>("e => Number(e.getAttribute('aria-valuenow'))");
-            var toggle = page.Locator(".detail-page-close, .pane-full-canvas .resource-select-all-toggle");
+            var toggle = page.Locator(".detail-page-close, .pane-full-canvas .resource-row-all .resource-row-link");
             await ToggleAsync();
             await Assertions.Expect(page.Locator(".pane-full-canvas")).ToBeVisibleAsync();
 
-            // Kind changes must not change the saved width while the resizer is unmounted.
-            var parametersToggle = pane.Locator(".resource-kind-toggle").Nth(1);
-            await parametersToggle.ClickAsync();
+            // Filtering must not change the saved width while the resizer is unmounted.
+            await page.Locator("#resourcePaneFilterButton").ClickAsync();
+            var parameterType = page.GetByRole(AriaRole.Group, new() { Name = Resources.ControlsStrings.ChartContainerFiltersHeader, Exact = true })
+                .GetByRole(AriaRole.Checkbox, new() { Name = KnownResourceTypes.Parameter, Exact = true });
+            await parameterType.ClickAsync();
             await Assertions.Expect(parameter).ToHaveCountAsync(0);
-            await parametersToggle.ClickAsync();
+            await parameterType.ClickAsync();
             await Assertions.Expect(parameter).ToHaveCountAsync(1);
+            await page.Keyboard.PressAsync("Escape");
             await ToggleAsync();
             await AssertReturnedAsync();
 
@@ -464,7 +473,7 @@ public sealed class ResourcePaneMotionTests(ResourcePaneResponsiveTests.Metadata
             }
             var layout = page.Locator(".resources-layout");
             var pane = page.Locator(".resource-pane");
-            var toggle = page.Locator(".detail-page-close, .pane-full-canvas .resource-select-all-toggle");
+            var toggle = page.Locator(".detail-page-close, .pane-full-canvas .resource-row-all .resource-row-link");
             var header = page.Locator(".resource-tabs-nav");
             var headerBox = await header.BoundingBoxAsync();
             var toolbarBox = await pane.Locator(".resource-pane-head").BoundingBoxAsync();

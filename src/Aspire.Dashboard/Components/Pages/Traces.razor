@@ -93,19 +93,16 @@
                                 </div>
                             </AspireTemplateColumn>
                             <AspireTemplateColumn ColumnId="@SpansColumn" ColumnManager="@_manager" Title="@Loc[nameof(Dashboard.Resources.Traces.TracesSpansColumnHeader)]">
-                                @* Typed items filter stale browser overflow indexes against the current resource list. *@
-                                <FluentOverflow TItem="TraceResourceSummary" Items="@context.Resources">
-                                    <ItemTemplate Context="item">
-                                        <div>
-                                            @RenderTraceResourceSummary(item)
-                                        </div>
-                                    </ItemTemplate>
-                                    <MoreTemplate Context="overflow">
-                                        <span class="trace-tag">
-                                            @($"+{overflow.OverflowCount}")
-                                        </span>
-                                    </MoreTemplate>
-                                </FluentOverflow>
+                                @* Not FluentOverflow: one per row forced a layout for each row whenever new traces arrived,
+                                   which blocked the browser. app-tag-overflow.js measures every row in one pass, in the browser,
+                                   and fills the "+N" tag with the count and a tooltip listing the hidden resources. *@
+                                <aspire-tag-overflow>
+                                    @foreach (var item in context.Resources)
+                                    {
+                                        @RenderTraceResourceSummary(item)
+                                    }
+                                    <span class="trace-tag" data-tag-overflow-more aria-hidden="true"></span>
+                                </aspire-tag-overflow>
                             </AspireTemplateColumn>
                             <AspireTemplateColumn ColumnId="@DurationColumn" ColumnManager="@_manager" Title="@ControlsStringsLoc[nameof(ControlsStrings.DurationColumnHeader)]">
                                 <div class="duration-container">

@@ -17,6 +17,7 @@ public class SkillSourceTests(ITestOutputHelper output)
     {
         var source = new SkillSource { Marketplace = "team" };
 
+        Assert.Equal(SkillSource.DefaultName, source.GetName());
         Assert.Equal(["aspire@team"], source.GetPluginNames());
         Assert.Null(source.Plugins);
     }
@@ -48,6 +49,22 @@ public class SkillSourceTests(ITestOutputHelper output)
                 Assert.Equal("https://example.com/v1/", source.OpenCodeV1Catalog);
                 Assert.Equal("https://example.com/v2/", source.OpenCodeV2Catalog);
             });
+    }
+
+    [Theory]
+    [InlineData("team")]
+    [InlineData("TEAM")]
+    public void GetName_PreservesConfigurationKeyWhenMarketplaceDiffers(string name)
+    {
+        using var configuration = new ConfigurationManager();
+        configuration["skillSources:default:enabled"] = "false";
+        configuration[$"skillSources:{name}:repository"] = "example/team";
+        configuration[$"skillSources:{name}:marketplace"] = "custom-market";
+
+        var source = Assert.Single(SkillSource.Resolve(configuration));
+
+        Assert.Equal(name, source.GetName());
+        Assert.Equal("custom-market", source.Marketplace);
     }
 
     [Fact]

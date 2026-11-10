@@ -5,8 +5,8 @@
 .trace-id {
     color: var(--colorNeutralForeground3);
     padding-left: 0.5rem;
-    font-size: 12px;
-    font-weight: normal;
+    font-size: var(--aspire-font-size-secondary);
+    font-weight: var(--aspire-font-weight-regular);
 }
 
 ::deep .trace-name-container {
@@ -28,7 +28,7 @@
     align-items: center;
     border: 1px solid var(--colorNeutralStroke1);
     padding: 2px 7px;
-    font-size: 12px;
+    font-size: var(--aspire-font-size-secondary);
     background-color: var(--colorNeutralBackground1);
     color: var(--colorNeutralForeground1);
 }

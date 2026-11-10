@@ -32,7 +32,7 @@
 .manage-data-dialog-body ::deep > [slot="action"] fluent-button::part(control),
 .button-container ::deep fluent-button,
 .button-container ::deep fluent-button::part(control) {
-    border-radius: 6px;
+    border-radius: var(--aspire-radius-small);
 }
 
 .manage-data-dialog-body ::deep > [slot="title-action"] fluent-button {
@@ -60,6 +60,6 @@
 
 .error-message {
     color: var(--error);
-    font-size: var(--fontSizeBase200);
+    font-size: var(--aspire-font-size-secondary);
     margin-top: 8px;
 }

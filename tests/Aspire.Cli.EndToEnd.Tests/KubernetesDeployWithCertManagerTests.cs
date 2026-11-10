@@ -48,10 +48,7 @@ public sealed class KubernetesDeployWithCertManagerTests(ITestOutputHelper outpu
             await auto.VerifyPullRequestCliVersionAsync(counter);
             await auto.InstallKindAndHelmAsync(counter);
             await auto.CreateKindClusterWithRegistryAsync(counter, clusterName);
-            await auto.RunCommandAsync(
-                "kubectl apply --server-side -f " +
-                "https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/standard-install.yaml",
-                counter, TimeSpan.FromMinutes(2));
+            await auto.InstallGatewayApiCrdsAsync(counter);
 
             if (typeScript)
             {
