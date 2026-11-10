@@ -3,6 +3,7 @@
 
 using Microsoft.AspNetCore.Components;
 using Microsoft.FluentUI.AspNetCore.Components;
+using Microsoft.JSInterop;
 
 namespace Aspire.Dashboard.Components.Controls.Grid;
 
@@ -44,6 +45,34 @@ public class DisposalSafeFluentDataGrid<TGridItem> : FluentDataGrid<TGridItem>
             // The grid is gone, so the calls it skips here (column resizing and reordering, auto-fit, popup position)
             // have nothing left to set up. Only that case is ignored: the same exception while the grid is still in
             // use is a real error and still surfaces.
+        }
+
+        if (_disposalStarted)
+        {
+            await StopGridControllerAfterDisposalAsync();
+        }
+    }
+
+    // Fluent UI stops the grid's JavaScript controller when the grid is disposed, but only a controller that has arrived.
+    // When disposal runs while the grid's Initialize call is pending, the controller arrives afterwards, whether or not
+    // the render then fails, and keeps the removed grid registered in the browser with its click, mousedown and keydown
+    // listeners on document.body. Fluent UI's controller cleanup is DisposeAsync(IJSObjectReference): it stops and
+    // releases the controller once and does nothing after that, so it's run again here once a render that resumed after
+    // disposal completes. Its argument is unused by FluentDataGrid.
+    private async Task StopGridControllerAfterDisposalAsync()
+    {
+        if (!JSModule.Imported)
+        {
+            return;
+        }
+
+        try
+        {
+            await DisposeAsync(JSModule.ObjectReference);
+        }
+        catch (Exception ex) when (ex is JSDisconnectedException or OperationCanceledException)
+        {
+            // The circuit is gone, and the browser's controller with it.
         }
     }
 

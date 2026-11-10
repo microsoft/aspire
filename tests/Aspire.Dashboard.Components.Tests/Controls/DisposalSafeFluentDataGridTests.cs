@@ -23,14 +23,28 @@ public sealed class DisposalSafeFluentDataGridTests : DashboardTestContext
     [InlineData(true)]
     public async Task RemovedWhileInitializing_IgnoresTheLateCallInsteadOfEndingTheCircuit(bool aspireGrid)
     {
-        var module = aspireGrid
-            ? await RemoveResizableGridWhileItInitializesAsync<AspireFluentDataGrid<string>>()
-            : await RemoveResizableGridWhileItInitializesAsync<DisposalSafeFluentDataGrid<string>>();
+        var (module, controller) = aspireGrid
+            ? await RemoveGridWhileItInitializesAsync<AspireFluentDataGrid<string>>(resizableColumns: true)
+            : await RemoveGridWhileItInitializesAsync<DisposalSafeFluentDataGrid<string>>(resizableColumns: true);
 
         // The grid resumed after disposal and reached its released module, which rejected the call. The grid ignored
-        // the rejection, so nothing reached the renderer, which would have ended the circuit.
+        // the rejection, so nothing reached the renderer, which would have ended the circuit. The controller that
+        // arrived after disposal was stopped and released.
         Assert.Equal([EnableColumnResizing], module.RejectedInvocations);
         Assert.False(Renderer.UnhandledException.IsCompleted);
+        AssertStoppedAndReleased(controller);
+    }
+
+    [Fact]
+    public async Task RemovedWhileInitializing_StopsTheGridControllerThatArrivesAfterDisposal()
+    {
+        // Without resizable or reorderable columns, the render that resumes after disposal makes no other call and
+        // completes without an error, but the controller still arrives after Fluent UI's cleanup ran.
+        var (module, controller) = await RemoveGridWhileItInitializesAsync<DisposalSafeFluentDataGrid<string>>(resizableColumns: false);
+
+        Assert.Empty(module.RejectedInvocations);
+        Assert.False(Renderer.UnhandledException.IsCompleted);
+        AssertStoppedAndReleased(controller);
     }
 
     // Fluent UI bug https://github.com/microsoft/fluentui-blazor/issues/5580, which DisposalSafeFluentDataGrid works
@@ -39,22 +53,33 @@ public sealed class DisposalSafeFluentDataGridTests : DashboardTestContext
     [Fact]
     public async Task FluentDataGrid_StillCallsIntoItsDisposedModuleWhenRemovedWhileInitializing()
     {
-        var module = await RemoveResizableGridWhileItInitializesAsync<FluentDataGrid<string>>();
+        var (module, controller) = await RemoveGridWhileItInitializesAsync<FluentDataGrid<string>>(resizableColumns: true);
 
         Assert.Equal([EnableColumnResizing], module.RejectedInvocations);
         Assert.IsType<ObjectDisposedException>(await Renderer.UnhandledException.DefaultTimeout());
+        // Fluent UI also leaves the controller that arrived after disposal running.
+        Assert.Empty(controller.Invocations);
+        Assert.Equal(0, controller.DisposeCount);
     }
 
-    // Renders a grid with resizable columns, removes it while its first OnAfterRenderAsync awaits the grid's JavaScript
-    // initialization, and then lets the initialization complete. This follows the order seen in the dashboard: the grid
-    // renders its rows while its JavaScript module is still loading, which leaves the column setup for later, and is
-    // removed after the module arrives but before the grid's initialization returns.
-    private async Task<TestJSObjectReference> RemoveResizableGridWhileItInitializesAsync<TGrid>() where TGrid : FluentDataGrid<string>
+    private static void AssertStoppedAndReleased(TestJSObjectReference controller)
+    {
+        Assert.Equal(["stop"], controller.Invocations.Select(invocation => invocation.Identifier));
+        Assert.Equal(1, controller.DisposeCount);
+    }
+
+    // Renders a grid, removes it while its first OnAfterRenderAsync awaits the grid's JavaScript initialization, and
+    // then lets the initialization complete, returning the grid's controller after disposal. This follows the order seen
+    // in the dashboard: the grid renders its rows while its JavaScript module is still loading, which leaves the setup of
+    // resizable columns for later, and is removed after the module arrives but before the grid's initialization returns.
+    private async Task<(TestJSObjectReference Module, TestJSObjectReference Controller)> RemoveGridWhileItInitializesAsync<TGrid>(bool resizableColumns)
+        where TGrid : FluentDataGrid<string>
     {
         FluentUISetupHelpers.AddCommonDashboardServices(this);
         FluentUISetupHelpers.SetupFluentUIComponents(this);
         var initializeStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var releaseInitialize = new TaskCompletionSource();
+        var controller = new TestJSObjectReference();
         var module = new TestJSObjectReference
         {
             BeforeInvokeAsync = async identifier =>
@@ -64,16 +89,17 @@ public sealed class DisposalSafeFluentDataGridTests : DashboardTestContext
                     initializeStarted.TrySetResult();
                     await releaseInitialize.Task;
                 }
-            }
+            },
+            GetResult = identifier => identifier == InitializeGrid ? controller : null
         };
         var import = TestJSObjectReference.SetupImport(this, DataGridModulePath);
 
         var cut = Render<TGrid>(builder => builder
             .Add(grid => grid.ItemsProvider, EnumerableGridItemsProvider.Create(() => new[] { "value" }))
-            .Add(grid => grid.ResizableColumns, true)
+            .Add(grid => grid.ResizableColumns, resizableColumns)
             .Add(grid => grid.ChildContent, RenderColumn));
 
-        // The render that shows the rows comes before the module, so it skips the column setup and leaves it for later.
+        // The render that shows the rows comes before the module, so it leaves the column setup for later.
         cut.WaitForAssertion(() => Assert.Equal("value", cut.Find("[role=gridcell]").TextContent));
         await Renderer.Dispatcher.InvokeAsync(() => { });
         Assert.Empty(module.Invocations);
@@ -92,7 +118,7 @@ public sealed class DisposalSafeFluentDataGridTests : DashboardTestContext
         // posted to the renderer's dispatcher, and runs before this empty work item queued after it.
         releaseInitialize.SetResult();
         await Renderer.Dispatcher.InvokeAsync(() => { });
-        return module;
+        return (module, controller);
 
         static void RenderColumn(RenderTreeBuilder builder)
         {

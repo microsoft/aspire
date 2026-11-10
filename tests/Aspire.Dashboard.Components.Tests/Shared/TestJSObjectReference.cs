@@ -15,6 +15,9 @@ internal sealed class TestJSObjectReference : IJSObjectReference
     // Calls made after disposal, which throw ObjectDisposedException like Microsoft.JSInterop's JSObjectReference.
     public ConcurrentQueue<string> RejectedInvocations { get; } = new();
     public Func<string, Task>? BeforeInvokeAsync { get; init; }
+    // The value a call returns, for example another reference for a call that creates a JavaScript object. Calls return
+    // default when it's not set or gives a value of another type.
+    public Func<string, object?>? GetResult { get; init; }
     public int DisposeCount => Volatile.Read(ref _disposeCount);
 
     public static JSRuntimeInvocationHandler<IJSObjectReference> SetupImport(BunitContext context, string modulePath)
@@ -40,7 +43,7 @@ internal sealed class TestJSObjectReference : IJSObjectReference
         {
             await beforeInvoke(identifier);
         }
-        return default!;
+        return GetResult?.Invoke(identifier) is TValue result ? result : default!;
     }
 
     public ValueTask DisposeAsync()
