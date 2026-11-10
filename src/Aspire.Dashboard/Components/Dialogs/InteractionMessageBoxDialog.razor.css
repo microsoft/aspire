@@ -1,6 +1,6 @@
 .interaction-message-box-content {
     display: flex;
-    gap: 12px;
+    gap: var(--aspire-space-3);
     align-items: start;
 }
 

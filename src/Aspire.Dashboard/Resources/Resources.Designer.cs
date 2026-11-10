@@ -196,11 +196,29 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Inactive.
+        ///   Looks up a localized string similar to Finished.
         /// </summary>
-        public static string HomeInactiveLabel {
+        public static string HomeFinishedLabel {
             get {
-                return ResourceManager.GetString("HomeInactiveLabel", resourceCulture);
+                return ResourceManager.GetString("HomeFinishedLabel", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Not started.
+        /// </summary>
+        public static string HomeNotStartedLabel {
+            get {
+                return ResourceManager.GetString("HomeNotStartedLabel", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Unknown.
+        /// </summary>
+        public static string HomeUnknownLabel {
+            get {
+                return ResourceManager.GetString("HomeUnknownLabel", resourceCulture);
             }
         }
 
@@ -421,15 +439,6 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to No requests in the last 15 minutes.
-        /// </summary>
-        public static string HomeNoRecentRequests {
-            get {
-                return ResourceManager.GetString("HomeNoRecentRequests", resourceCulture);
-            }
-        }
-
-        /// <summary>
         ///   Looks up a localized string similar to {0}: {1} ({2} requests).
         /// </summary>
         public static string HomeEndpointTooltip {
@@ -489,15 +498,6 @@ namespace Aspire.Dashboard.Resources {
         public static string HomeErrorHotspotsHint {
             get {
                 return ResourceManager.GetString("HomeErrorHotspotsHint", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to No errors in the last 15 minutes.
-        /// </summary>
-        public static string HomeNoRecentActivityErrors {
-            get {
-                return ResourceManager.GetString("HomeNoRecentActivityErrors", resourceCulture);
             }
         }
 
@@ -849,6 +849,15 @@ namespace Aspire.Dashboard.Resources {
         public static string ResourceOverviewInternalEndpoint {
             get {
                 return ResourceManager.GetString("ResourceOverviewInternalEndpoint", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to {0}, also at {1}.
+        /// </summary>
+        public static string ResourceOverviewEndpointAlsoAt {
+            get {
+                return ResourceManager.GetString("ResourceOverviewEndpointAlsoAt", resourceCulture);
             }
         }
 
