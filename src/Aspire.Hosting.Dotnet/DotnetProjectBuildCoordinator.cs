@@ -395,11 +395,28 @@ internal static partial class DotnetProjectBuildCoordinator
             return true;
         }
 
-        return DebugSessionInfoParser.TryGetSupportedLaunchConfigurations(
+        // Visual Studio does not send DEBUG_SESSION_INFO. It builds and launches loaded projects itself.
+        if (!DebugSessionInfoParser.TryGetSupportedLaunchConfigurations(
                 builder.Configuration[DebugSessionInfoConfigurationKey],
                 out var supportedLaunchConfigurations)
-            && supportedLaunchConfigurations?.Contains(
-                KnownLaunchConfigurationTypes.ProjectWithExternalBuild) is true;
+            || supportedLaunchConfigurations is null)
+        {
+            return false;
+        }
+
+        // The IDE honors coordinated-build values and build suppression.
+        if (supportedLaunchConfigurations.Contains(KnownLaunchConfigurationTypes.ProjectWithExternalBuild))
+        {
+            return true;
+        }
+
+        // An IDE that advertises an explicit capability list without "project" (for example VS Code without the
+        // C# extension) cannot launch project resources, so DCP runs them as processes exactly as it does outside
+        // an IDE. Without the coordinated build each process runs its own implicit `dotnet run` restore and build,
+        // and resources that share a project build it concurrently: one build can fail on files the other holds
+        // open in obj/ (for example rjsmrazor.dswa.cache.json), and that resource exits right after starting.
+        // Only an IDE that advertises "project" without the external-build capability owns the build itself.
+        return !supportedLaunchConfigurations.Contains(KnownLaunchConfigurationTypes.Project);
     }
 
     internal sealed class CoordinatorState : IDisposable

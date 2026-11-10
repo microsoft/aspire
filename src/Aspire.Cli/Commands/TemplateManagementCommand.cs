@@ -58,7 +58,7 @@ internal sealed class TemplateManagementCommand : ParentCommand
         private void Validate()
         {
             TemplateSourceConfiguration.ValidateName(Name);
-            TemplateSourceConfiguration.Parse(Path, Repository, Ref, $"{AspireConfigFile.TemplateSourcesSectionName}.{Name}", requireComplete: true);
+            TemplateSourceConfiguration.Parse(Path, Repository, Ref, displayName: null, $"{AspireConfigFile.TemplateSourcesSectionName}.{Name}", requireComplete: true);
         }
     }
 
@@ -127,7 +127,7 @@ internal sealed class TemplateManagementCommand : ParentCommand
             else
             {
                 var table = new Table()
-                    .AddBoldColumn(NewCommandStrings.TemplateSourceNameHeader)
+                    .AddBoldColumn(SharedCommandStrings.SourceName)
                     .AddBoldColumn(NewCommandStrings.TemplateSourceConfigurationHeader);
                 foreach (var (name, source) in orderedSources)
                 {
@@ -170,7 +170,7 @@ internal sealed class TemplateManagementCommand : ParentCommand
             try
             {
                 var options = AddSourceOptions.FromParseResult(parseResult);
-                InteractionService.DisplayMessage(KnownEmojis.Warning, SharedCommandStrings.SourceTrustWarning, consoleOverride: ConsoleOutput.Error);
+                InteractionService.DisplaySourceTrustWarning(ExecutionContext);
                 var confirmed = await InteractionService.PromptConfirmAsync(
                     string.Format(CultureInfo.CurrentCulture, NewCommandStrings.TemplateSourceTrustPrompt,
                         options.Name.EscapeMarkup(), (options.Repository ?? options.Path!).EscapeMarkup()),

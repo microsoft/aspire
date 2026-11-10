@@ -6,6 +6,7 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using Aspire.Cli.Backchannel;
+using Aspire.Cli.Caching;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.NuGet;
@@ -2735,6 +2736,14 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         processStartInfo.ArgumentList.Add("-t:ComputeRunArguments");
         processStartInfo.ArgumentList.Add("-getProperty:RunCommand,RunArguments,RunWorkingDirectory");
         processStartInfo.ArgumentList.Add("-nologo");
+        // -getProperty sends all MSBuild logging to stderr, and NuGet audit fetches vulnerability
+        // data over the network. A transient feed failure then surfaces as warning NU1900 on stderr
+        // even though restore and ComputeRunArguments succeed, so keep this test off the network.
+        processStartInfo.ArgumentList.Add("-p:NuGetAudit=false");
+        // When a newly launched MSBuild server misses the client's connect window (common on loaded CI
+        // runners), MSBuild writes "MSBuild server unavailable: ..." to stderr and falls back to an
+        // in-process build. Build in-process so the stderr assertion only sees diagnostics from this project.
+        processStartInfo.Environment["DOTNET_CLI_USE_MSBUILD_SERVER"] = "0";
 
         using var process = Process.Start(processStartInfo) ?? throw new InvalidOperationException("Failed to start dotnet msbuild.");
         var stdout = await process.StandardOutput.ReadToEndAsync(TestContext.Current.CancellationToken);
@@ -2747,7 +2756,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         Assert.False(string.IsNullOrWhiteSpace(properties.GetProperty("RunCommand").GetString()));
         Assert.Equal("--from-msbuild", properties.GetProperty("RunArguments").GetString());
         Assert.Equal(Path.Combine(projectDirectory.FullName, "relative-working-directory"), properties.GetProperty("RunWorkingDirectory").GetString());
-        Assert.True(string.IsNullOrWhiteSpace(stderr));
+        Assert.True(string.IsNullOrWhiteSpace(stderr), stderr);
     }
 
     [Fact]
@@ -2784,6 +2793,65 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
             options,
             CancellationToken.None
         );
+    }
+
+    [Theory]
+    [InlineData(false, false, 1)]
+    [InlineData(false, false, 2)]
+    [InlineData(false, true, 2)]
+    [InlineData(true, true, 1)]
+    public async Task SearchPackagesAsync_ResolvesSourceNamesInLiveAndCachedResults(
+        bool exactMatch, bool sharedLocation, int take)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var otherSource = sharedLocation
+            ? "https://selected.example/v3/index.json"
+            : "https://other.example/v3/index.json";
+        var configFile = new FileInfo(Path.Combine(workspace.Path, "NuGet.Config"));
+        await File.WriteAllTextAsync(configFile.FullName, $"""
+            <configuration>
+              <packageSources>
+                <clear />
+                <add key="selected" value="https://selected.example/v3/index.json" />
+                <add key="https://selected.example/v3/index.json" value="{otherSource}" />
+              </packageSources>
+            </configuration>
+            """);
+        using var provider = CliTestHelper.CreateServiceCollection(workspace, outputHelper).BuildServiceProvider();
+        var executionContext = workspace.CreateExecutionContext();
+        var diskCache = new DiskCache(
+            NullLogger<DiskCache>.Instance, executionContext, provider.GetRequiredService<IConfiguration>());
+        var (runner, executor) = DotNetCliRunnerTestHelper.CreateWithRetry(
+            provider,
+            executionContext,
+            (_, _) => (0, """
+                {
+                  "version": 2,
+                  "searchResult": [
+                    {"sourceName":"selected","packages":[{"id":"Aspire.Hosting.SourceProbe","latestVersion":"1.0.0"}]},
+                    {"sourceName":"https://selected.example/v3/index.json","packages":[{"id":"Aspire.Hosting.SourceProbe","latestVersion":"9.0.0"}]}
+                  ]
+                }
+                """),
+            diskCache: diskCache);
+
+        for (var iteration = 0; iteration < 2; iteration++)
+        {
+            var result = await runner.SearchPackagesAsync(
+                workspace.WorkspaceRoot, "Aspire.Hosting.SourceProbe", exactMatch, prerelease: false,
+                take, skip: 0, configFile, useCache: true,
+                new ProcessInvocationOptions { SuppressLogging = true }, NuGetTestHelper.CreateClient(), TestContext.Current.CancellationToken);
+
+            Assert.Equal(CliExitCodes.Success, result.ExitCode);
+            Assert.NotNull(result.Packages);
+            Assert.Equal(
+                [("Aspire.Hosting.SourceProbe", "1.0.0", "https://selected.example/v3/index.json"),
+                 ("Aspire.Hosting.SourceProbe", "9.0.0", otherSource)],
+                result.Packages.Select(package => (package.Id, package.Version, package.Source)));
+            Assert.Empty(result.FailedSources);
+            Assert.Equal(!exactMatch && take == 1, result.HasFullSourcePage);
+            Assert.Equal(1, executor.AttemptCount);
+        }
     }
 
     [Fact]
@@ -2825,6 +2893,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
             nugetConfigFile: null,
             useCache: false,
             options,
+            NuGetTestHelper.CreateClient(),
             CancellationToken.None
         );
 
@@ -2867,6 +2936,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
             nugetConfigFile: null,
             useCache: false,
             options,
+            NuGetTestHelper.CreateClient(),
             CancellationToken.None
         );
 
@@ -2909,12 +2979,61 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
             nugetConfigFile: null,
             useCache: false,
             options,
+            NuGetTestHelper.CreateClient(),
             CancellationToken.None
         );
 
         Assert.Equal(0, result.ExitCode);
         Assert.NotNull(result.Packages);
         Assert.Equal(1, executor.AttemptCount); // Should have attempted only once
+    }
+
+    [Fact]
+    public async Task SearchPackagesAsyncPreservesRedactedSourceFailures()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var configFile = new FileInfo(Path.Combine(workspace.Path, "NuGet.Config"));
+        await File.WriteAllTextAsync(configFile.FullName, """
+            <configuration>
+              <packageSources>
+                <clear />
+                <add key="public-feed" value="https://public.example/v3/index.json" />
+              </packageSources>
+            </configuration>
+            """);
+        using var provider = CliTestHelper.CreateServiceCollection(workspace, outputHelper).BuildServiceProvider();
+        var runner = DotNetCliRunnerTestHelper.Create(
+            provider,
+            CreateExecutionContext(workspace.WorkspaceRoot),
+            (_, _, _, options) => options.StandardOutputCallback?.Invoke(
+                """
+                {
+                  "version": 2,
+                  "problems": [],
+                  "searchResult": [
+                    {
+                      "sourceName": "https://private.example/v3/index.json?sig=secret",
+                      "problems": [{"problemType": "Error", "text": "Diagnostic with secret"}],
+                      "packages": []
+                    },
+                    {
+                      "sourceName": "public-feed",
+                      "problems": [{"problemType": "Warning", "text": "A warning"}],
+                      "packages": [{"id": "Aspire.Hosting.Redis", "latestVersion": "1.0.0"}]
+                    }
+                  ]
+                }
+                """),
+            0);
+
+        var result = await runner.SearchPackagesAsync(
+            workspace.WorkspaceRoot, "Aspire.Hosting", exactMatch: false, prerelease: false,
+            take: 100, skip: 0, nugetConfigFile: configFile, useCache: false,
+            new ProcessInvocationOptions { SuppressLogging = true }, NuGetTestHelper.CreateClient(), TestContext.Current.CancellationToken);
+
+        Assert.Equal(CliExitCodes.Success, result.ExitCode);
+        Assert.Equal(["https://private.example/v3/index.json"], result.FailedSources);
+        Assert.Equal("Aspire.Hosting.Redis", Assert.Single(result.Packages!).Id);
     }
 
     [Fact]
@@ -2956,6 +3075,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
             nugetConfigFile: null,
             useCache: false,
             options,
+            NuGetTestHelper.CreateClient(),
             CancellationToken.None);
 
         Assert.Equal(0, result.ExitCode);

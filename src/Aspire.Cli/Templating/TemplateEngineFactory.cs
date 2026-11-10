@@ -40,7 +40,6 @@ internal sealed partial class TemplateEngineFactory(
     private readonly List<IDisposable> _resources = [];
     private readonly Dictionary<string, ITemplate[]> _discoveredTemplates = new(StringComparer.Ordinal);
     private bool _disposed;
-    private bool _sourceTrustWarningDisplayed;
 
     public IEnumerable<ITemplate> GetTemplates() => [];
 
@@ -145,16 +144,18 @@ internal sealed partial class TemplateEngineFactory(
         var pathRoot = Path.Combine(cacheRoot, "repository");
         var relativePath = TemplateSource.GetRepositoryRelativePath(templatePath, pathRoot);
 
-        if (!_sourceTrustWarningDisplayed)
-        {
-            interactionService.DisplayMessage(KnownEmojis.Warning, SharedCommandStrings.SourceTrustWarning, consoleOverride: ConsoleOutput.Error);
-            _sourceTrustWarningDisplayed = true;
-        }
+        interactionService.DisplaySourceTrustWarning(executionContext);
         try
         {
-            var sha = await interactionService.ShowStatusAsync(NewCommandStrings.ResolvingTemplateRepository,
-                () => WithGitTimeoutAsync(
-                    token => git.ResolveReferenceAsync(repository, reference, executionContext.WorkingDirectory, GitCommandMode.Captured, token), cancellationToken));
+            // Ref resolution can authenticate even when its commit is already cached.
+            // Keep Git outside animated status so authentication prompts remain visible.
+            var resolveRemoteRef = reference is null || !GitClient.IsCommitSha(reference);
+            if (resolveRemoteRef)
+            {
+                interactionService.DisplayTemplateGitFetchNotice(repository, templatePath, reference, hostEnvironment.SupportsInteractiveInput);
+            }
+            var sha = await WithGitTimeoutAsync(
+                token => git.ResolveReferenceAsync(repository, reference, executionContext.WorkingDirectory, GitCommandMode.Captured, token), cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             // Different paths and refs at the same commit share the complete repository snapshot.
             // NUL separates the repository address and SHA without ambiguous delimiters.
@@ -167,13 +168,13 @@ internal sealed partial class TemplateEngineFactory(
                 return GetRepositoryTemplatePath(cacheDirectory, relativePath);
             }
 
+            if (!resolveRemoteRef)
+            {
+                interactionService.DisplayTemplateGitFetchNotice(repository, templatePath, reference, hostEnvironment.SupportsInteractiveInput);
+            }
             using var checkout = TemporaryCacheDirectory.Create(cacheRoot, "repo", DeleteCheckout, DeleteLease);
             var repositoryRoot = new DirectoryInfo(Path.Combine(checkout.FullName, "repository"));
-            await interactionService.ShowStatusAsync(NewCommandStrings.CloningTemplateRepository, async () =>
-            {
-                await CheckoutRepositoryAsync(repository, repositoryRoot, sha, cancellationToken);
-                return true;
-            });
+            await CheckoutRepositoryAsync(repository, repositoryRoot, sha, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
 
             // Root templates must not copy Git history/configuration into generated projects.

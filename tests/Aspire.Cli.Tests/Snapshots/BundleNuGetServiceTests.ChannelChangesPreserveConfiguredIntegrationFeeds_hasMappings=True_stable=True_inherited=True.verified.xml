@@ -1,0 +1,25 @@
+﻿<configurations>
+  <preview>
+    <configuration>
+      <disabledPackageSources>
+        <clear />
+        <add key="aspire-staging" value="true" />
+      </disabledPackageSources>
+      <packageSourceMapping>
+        <clear />
+        <packageSource key="aspire-daily">
+          <package pattern="Aspire.Hosting.Private" />
+        </packageSource>
+        <packageSource key="team-alias">
+          <package pattern="Contoso.*" />
+        </packageSource>
+        <packageSource key="public">
+          <package pattern="*" />
+        </packageSource>
+      </packageSourceMapping>
+    </configuration>
+  </preview>
+  <persisted>
+    <configuration />
+  </persisted>
+</configurations>

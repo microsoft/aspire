@@ -7,6 +7,7 @@ using System.IO.Hashing;
 using System.Text;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Packaging;
+using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
 using Microsoft.Extensions.Logging;
@@ -66,7 +67,7 @@ internal interface INuGetClient
         string? runtimeIdentifier,
         CancellationToken cancellationToken);
 
-    Task<IReadOnlyList<NuGetSearchResult>> SearchAsync(
+    Task<PackageSearchResult<NuGetSearchResult>> SearchAsync(
         string query,
         bool prerelease,
         int take,
@@ -87,6 +88,8 @@ internal interface INuGetClient
     void WriteNuGetConfig(IReadOnlyList<string> configPaths, string outputPath);
 
     IReadOnlyList<NuGetPackage> FilterPackageSearchResults(IReadOnlyList<NuGetPackage> packages, string? nugetConfigPath, string workingDirectory);
+
+    IReadOnlyList<NuGetPackage> ResolveSdkPackageSearchSourceNames(IReadOnlyList<NuGetPackage> packages, string? nugetConfigPath, string workingDirectory);
 
     void WriteNuGetConfig(NuGetConfigOverlay configuration, string outputPath);
 
@@ -156,6 +159,12 @@ internal sealed class NuGetClient(
     internal Func<string, IMachineWideSettings, ISettings> AmbientSettingsLoader { get; init; }
         = static (workingDirectory, machineWideSettings) =>
             Settings.LoadDefaultSettings(workingDirectory, configFileName: null, machineWideSettings);
+
+    /// <summary>
+    /// Creates the repository used to query a package source, allowing tests to supply in-memory protocol resources.
+    /// </summary>
+    internal Func<PackageSource, SourceRepository> SourceRepositoryFactory { get; init; }
+        = static source => Repository.Factory.GetCoreV3(source);
 
     public Task RestoreAsync(
         IReadOnlyList<(string Id, string Version)> packages,
@@ -505,7 +514,7 @@ internal sealed class NuGetClient(
         }
     }
 
-    public async Task<IReadOnlyList<NuGetSearchResult>> SearchAsync(
+    public async Task<PackageSearchResult<NuGetSearchResult>> SearchAsync(
         string query,
         bool prerelease,
         int take,
@@ -539,16 +548,21 @@ internal sealed class NuGetClient(
 
             // Shape the results exactly as the helper did, including its comparers. Versions are compared as strings
             // rather than as NuGet versions because that is what decided which source's entry survived deduplication.
-            return searchResults
+            var packages = searchResults
                 // Filter each source's results before deduplication, otherwise an ineligible
                 // feed's higher version can discard the package that restore is allowed to use.
-                .SelectMany((packages, index) => packages.Where(package =>
-                    sourceFilter(package.Id, packageSources[index].Name)))
+                .SelectMany((result, index) => result.Packages.Where(package =>
+                    sourceFilter(package.Id, packageSources[index].Source)))
                 .GroupBy(package => package.Id, StringComparer.OrdinalIgnoreCase)
                 .Select(group => group.OrderByDescending(package => package.Version).First())
                 .OrderBy(package => package.Id)
                 .Take(take)
                 .ToArray();
+
+            return new(
+                packages,
+                searchResults.Any(result => result.LimitReached),
+                searchResults.SelectMany(result => result.FailedSources).Distinct(StringComparer.OrdinalIgnoreCase).ToArray());
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -562,7 +576,7 @@ internal sealed class NuGetClient(
         }
     }
 
-    private static async Task<IReadOnlyList<NuGetSearchResult>> SearchSourceSafelyAsync(
+    private async Task<PackageSearchResult<NuGetSearchResult>> SearchSourceSafelyAsync(
         PackageSource source,
         string query,
         global::NuGet.Protocol.Core.Types.SearchFilter filter,
@@ -580,7 +594,10 @@ internal sealed class NuGetClient(
             // exception message, but NuGet protocol failures format the feed URL into it -- often a derived resource
             // URL rather than the configured source -- which would leak UserInfo/SAS credentials into ~/.aspire/logs.
             output.WriteLine($"Warning: Failed to search {PackageSourceRedactor.RedactForDisplay(source.Name)}: {ex.GetType().Name}");
-            return [];
+            return new(
+                [],
+                LimitReached: false,
+                FailedSources: [PackageSourceRedactor.RedactForDisplay(source.Name)]);
         }
     }
 
@@ -664,7 +681,7 @@ internal sealed class NuGetClient(
         }
     }
 
-    private static async Task<IReadOnlyList<NuGetSearchResult>> SearchSourceAsync(
+    private async Task<PackageSearchResult<NuGetSearchResult>> SearchSourceAsync(
         PackageSource source,
         string query,
         global::NuGet.Protocol.Core.Types.SearchFilter filter,
@@ -672,34 +689,46 @@ internal sealed class NuGetClient(
         INuGetLogger nuGetLogger,
         CancellationToken cancellationToken)
     {
-        var repository = Repository.Factory.GetCoreV3(source);
+        var repository = SourceRepositoryFactory(source);
         var searchResource = await repository.GetResourceAsync<PackageSearchResource>(cancellationToken).ConfigureAwait(false);
         if (searchResource is null)
         {
-            return [];
+            return new([], LimitReached: false, FailedSources: []);
         }
-
-        // The helper requested a single page starting at the first result; it never paged further.
-        var results = await searchResource.SearchAsync(
-            query,
-            filter,
-            skip: 0,
-            take,
-            nuGetLogger,
-            cancellationToken).ConfigureAwait(false);
 
         var packages = new List<NuGetSearchResult>();
-        foreach (var result in results)
+        var skip = 0;
+        while (skip < take && skip <= NuGetSearchLimits.MaxSkip)
         {
-            var versions = await result.GetVersionsAsync().ConfigureAwait(false);
-            packages.Add(new NuGetSearchResult(
-                result.Identity.Id,
-                result.Identity.Version.ToString(),
-                source.Source,
-                versions?.Select(version => version.Version.ToString()).ToArray() ?? []));
+            // Unrestricted integration sources can require an empty search term. Follow pagination
+            // so matching packages are not limited to the first page.
+            var pageSize = Math.Min(NuGetSearchLimits.PageSize, take - skip);
+            var results = (await searchResource.SearchAsync(
+                query, filter, skip, pageSize, nuGetLogger, cancellationToken).ConfigureAwait(false)).ToArray();
+            logger.LogTrace(
+                "NuGet search page from '{SourceName}' ({Source}) for query '{Query}': skip {Skip}, take {Take}, returned {PackageCount} packages.",
+                PackageSourceRedactor.RedactForDisplay(source.Name),
+                PackageSourceRedactor.RedactForDisplay(source.Source),
+                PackageSourceRedactor.RedactForDisplay(query),
+                skip, pageSize, results.Length);
+
+            foreach (var result in results)
+            {
+                var versions = await result.GetVersionsAsync().ConfigureAwait(false);
+                packages.Add(new NuGetSearchResult(
+                    result.Identity.Id,
+                    result.Identity.Version.ToString(),
+                    source.Source,
+                    versions?.Select(version => version.Version.ToString()).ToArray() ?? []));
+            }
+            if (results.Length < pageSize)
+            {
+                break;
+            }
+            skip += results.Length;
         }
 
-        return packages;
+        return new(packages, LimitReached: skip > NuGetSearchLimits.MaxSkip && skip < take, FailedSources: []);
     }
 
     internal static List<PackageSource> LoadPackageSources(
@@ -730,6 +759,36 @@ internal sealed class NuGetClient(
         return packages.Where(package => filter(package.Id, package.Source)).ToArray();
     }
 
+    public IReadOnlyList<NuGetPackage> ResolveSdkPackageSearchSourceNames(
+        IReadOnlyList<NuGetPackage> packages,
+        string? nugetConfigPath,
+        string workingDirectory)
+    {
+        var settings = LoadSearchSettings(nugetConfigPath, workingDirectory);
+        var sources = new PackageSourceProvider(settings).LoadPackageSources()
+            .ToDictionary(source => source.Name, StringComparer.OrdinalIgnoreCase);
+
+        // SDK JSON reports {"sourceName":"private-feed","packages":[...]} using the alias,
+        // even when that alias looks like another feed's URL. Resolve names only at this boundary.
+        // https://github.com/NuGet/NuGet.Client/blob/dev/src/NuGet.Core/NuGet.CommandLine.XPlat/Commands/PackageSearch/PackageSearchResultJsonRenderer.cs
+        return packages.Select(package =>
+        {
+            if (!sources.TryGetValue(package.Source, out var source))
+            {
+                logger.LogError("NuGet package search returned an unknown source name '{SourceName}'.",
+                    PackageSourceRedactor.RedactForDisplay(package.Source));
+                throw new NuGetOperationException(ErrorStrings.FailedToParsePackageSearchResults);
+            }
+
+            return new NuGetPackage
+            {
+                Id = package.Id,
+                Version = package.Version,
+                Source = source.Source
+            };
+        }).ToArray();
+    }
+
     private static Func<string, string, bool> CreatePackageSearchSourceFilter(
         ISettings settings,
         IReadOnlyList<PackageSource> sources)
@@ -740,17 +799,13 @@ internal sealed class NuGetClient(
             return static (_, _) => true;
         }
 
-        // SDK JSON uses {"sourceName":"private","packages":[{"id":"Aspire.Hosting.Redis",...}]};
-        // sourceName can also be a location. Resolve either spelling to NuGet's source alias.
-        // Native settings and credential-bearing PackageSource objects stay inside this boundary.
-        return (packageId, sourceNameOrLocation) =>
+        return (packageId, sourceLocation) =>
         {
             var allowedKeys = mapping.GetConfiguredPackageSources(packageId);
             return sources.Any(source =>
                 source.IsEnabled &&
                 allowedKeys.Contains(source.Name, StringComparer.OrdinalIgnoreCase) &&
-                (string.Equals(source.Name, sourceNameOrLocation, StringComparison.OrdinalIgnoreCase) ||
-                 PackageSourceIdentity.Comparer.Equals(source.Source, sourceNameOrLocation)));
+                PackageSourceIdentity.Comparer.Equals(source.Source, sourceLocation));
         };
     }
 

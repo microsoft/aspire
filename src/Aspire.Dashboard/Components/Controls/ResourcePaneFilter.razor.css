@@ -4,29 +4,43 @@
 
 .resource-pane-filter ::deep .resource-filter-popover::part(dialog) {
     position-anchor: var(--resource-filter-anchor);
-    /* Fluent sets the dialog insets inline; the anchor position must override them. */
-    top: anchor(bottom) !important;
-    left: anchor(left) !important;
-    right: auto !important;
-    bottom: auto !important;
-    margin-top: 6px;
-    position-try-fallbacks: flip-block, flip-inline;
+    /* Clear Fluent's inline insets without overriding the browser's fallback placement.
+       The position area also bounds the height to the space beside the anchor.
+       https://developer.mozilla.org/en-US/docs/Web/CSS/position-area */
+    inset: auto !important;
+    position-area: bottom span-right;
+    justify-self: start;
+    margin: 6px 0 12px;
+    position-try-fallbacks: flip-inline, flip-block, flip-block flip-inline;
+    position-try-order: most-height;
     box-sizing: border-box;
     width: min(320px, calc(100vw - 24px));
     max-width: none;
-    max-height: none;
+    /* Leave room for the dialog's 6px and 12px block margins. */
+    max-height: calc(100% - 18px);
+    /* A candidate must fit the non-scrolling header and footer before it can win
+       collision placement; otherwise flex shrinking can conceal the action buttons. */
+    min-height: 112px;
     padding: 0;
     overflow: hidden;
     cursor: default;
+}
+
+/* Preserve the browser's display: none for natively dismissed popovers. */
+.resource-pane-filter ::deep .resource-filter-popover::part(dialog):popover-open {
+    display: flex;
+    flex-direction: column;
 }
 
 .resource-filter {
     display: flex;
     flex-direction: column;
     min-width: 0;
+    min-height: 0;
 }
 
 .resource-filter-header {
+    flex-shrink: 0;
     display: grid;
     grid-template-columns: 32px minmax(0, 1fr);
     align-items: center;
@@ -35,9 +49,10 @@
     margin-bottom: 4px;
     padding: 0 8px 4px 4px;
     border-bottom: var(--strokeWidthThin) solid var(--colorNeutralStroke2);
-    color: var(--colorNeutralForeground3);
-    font-size: var(--fontSizeBase300);
-    font-weight: var(--fontWeightSemibold);
+    /* The same as a menu's header (see .aspire-menu-header), such as the grouping menu next to this one. */
+    color: var(--colorNeutralForeground2);
+    font-size: var(--aspire-font-size-body);
+    font-weight: var(--aspire-font-weight-semibold);
     line-height: 20px;
 }
 
@@ -57,16 +72,16 @@
 /* Reset and OK are always visible below the list, so closing the popover never needs a scroll. */
 .resource-filter-footer {
     display: flex;
+    flex-shrink: 0;
     align-items: center;
     justify-content: flex-end;
-    gap: 8px;
+    gap: var(--aspire-space-2);
     padding: 10px 12px;
     border-top: 1px solid var(--colorNeutralStroke2);
 }
 /* The list scrolls inside the popover, so a long list of values never runs off the bottom of the window. */
 .resource-filter-body {
-    /* Use the height the window has below the filter button; the list scrolls only once that is used up. */
-    max-height: max(200px, calc(100dvh - 280px));
+    min-height: 0;
     overflow-x: hidden;
     overflow-y: auto;
     overscroll-behavior: contain;
@@ -93,17 +108,17 @@
 .resource-filter-group-header {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--aspire-space-2);
     width: 100%;
     min-height: 32px;
     padding: 0 8px;
     border: 0;
-    border-radius: 8px;
+    border-radius: var(--aspire-radius-medium);
     background: transparent;
     color: var(--colorNeutralForeground1);
     font: inherit;
-    font-size: var(--fontSizeBase300);
-    font-weight: var(--fontWeightSemibold);
+    font-size: var(--aspire-font-size-body);
+    font-weight: var(--aspire-font-weight-semibold);
     text-align: start;
     cursor: pointer;
     transition: background-color 120ms ease;
@@ -142,11 +157,11 @@
 .resource-filter-group-summary {
     flex: none;
     padding: 0 8px;
-    border-radius: 10px;
+    border-radius: var(--aspire-radius-medium);
     background: var(--resource-brand-soft);
     color: var(--colorNeutralForeground1);
-    font-size: var(--fontSizeBase200);
-    font-weight: var(--fontWeightSemibold);
+    font-size: var(--aspire-font-size-secondary);
+    font-weight: var(--aspire-font-weight-semibold);
     line-height: 18px;
 }
 .resource-filter-options {
@@ -165,7 +180,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 8px;
+    gap: var(--aspire-space-2);
     min-width: 0;
 }
 
@@ -184,10 +199,10 @@
     flex: none;
     min-width: 20px;
     padding: 0 6px;
-    border-radius: 10px;
+    border-radius: var(--aspire-radius-medium);
     background: var(--colorNeutralBackground3);
     color: var(--colorNeutralForeground2);
-    font-size: var(--fontSizeBase200);
+    font-size: var(--aspire-font-size-secondary);
     line-height: 18px;
     text-align: center;
 }

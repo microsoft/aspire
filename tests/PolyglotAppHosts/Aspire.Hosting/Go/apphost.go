@@ -27,6 +27,14 @@ func main() {
 			log.Fatal(aspire.FormatError(err))
 		}
 	})
+	aks.WithSystemNodePool(func(pool *aspire.AksNodePoolConfig) {
+		pool.OsSku = aspire.StringPtr("AzureLinux")
+	})
+	aks.AddNodePool("workers", func(pool *aspire.AksNodePoolConfig) {
+		pool.VmSize = aspire.AksNodeVmSizes.StandardDSv5.StandardD2sV5
+		pool.OsSku = aspire.StringPtr("AzureLinux")
+	})
+	aks.AddPersistentVolume("aks-data").WithCapacity("20Gi")
 	if aks.Err() != nil {
 		log.Fatal(aspire.FormatError(aks.Err()))
 	}
@@ -93,14 +101,14 @@ ENTRYPOINT ["dotnet", "App.dll"]
 		log.Fatal(aspire.FormatError(err))
 	}
 
-	// AddProject (pre-existing)
-	project := builder.AddProject("myproject", "./src/MyProject", &aspire.AddProjectOptions{
-		LaunchProfileOrOptions: "https",
+	// AddDotnetProject
+	project := builder.AddDotnetProject("myproject", "./src/MyProject", &aspire.AddDotnetProjectOptions{
+		Options: &aspire.DotnetProjectOptions{LaunchProfileName: aspire.StringPtr("https")},
 	})
 	if err = project.Err(); err != nil {
 		log.Fatal(aspire.FormatError(err))
 	}
-	projectWithoutLaunchProfile := builder.AddProject("myproject-noprofile", "./src/MyProject")
+	projectWithoutLaunchProfile := builder.AddDotnetProject("myproject-noprofile", "./src/MyProject")
 	if err = projectWithoutLaunchProfile.Err(); err != nil {
 		log.Fatal(aspire.FormatError(err))
 	}
@@ -111,8 +119,8 @@ ENTRYPOINT ["dotnet", "App.dll"]
 	}
 	project.WithReferenceEnvironment(referenceEnvironmentOptions)
 
-	// AddCSharpApp
-	csharpApp := builder.AddCSharpApp("csharpapp", "./src/CSharpApp")
+	// AddDotnetProject for a C# app
+	csharpApp := builder.AddDotnetProject("csharpapp", "./src/CSharpApp")
 	if err = csharpApp.Err(); err != nil {
 		log.Fatal(aspire.FormatError(err))
 	}
@@ -212,10 +220,12 @@ ENTRYPOINT ["dotnet", "App.dll"]
 		DefaultCertificateBundlePaths:    []string{"/etc/ssl/certs/ca-certificates.crt"},
 		DefaultCertificateDirectoryPaths: []string{"/etc/ssl/certs", "/usr/local/share/ca-certificates"},
 	})
-	container.WithContainerFiles("/usr/lib/aspire/container-files", ".", &aspire.ContainerFilesOptions{
-		DefaultOwner: aspire.Float64Ptr(1000),
-		DefaultGroup: aspire.Float64Ptr(1000),
-		Umask:        aspire.Float64Ptr(0o022),
+	container.WithContainerFiles("/usr/lib/aspire/container-files", ".", &aspire.WithContainerFilesOptions{
+		Options: &aspire.ContainerFilesOptions{
+			DefaultOwner: aspire.Float64Ptr(1000),
+			DefaultGroup: aspire.Float64Ptr(1000),
+			Umask:        aspire.Float64Ptr(0o022),
+		},
 	})
 
 	// WithContainerFilesCallback — build entries dynamically via the context factory methods
@@ -225,15 +235,17 @@ ENTRYPOINT ["dotnet", "App.dll"]
 		filesLogger := filesLoggerFactory.CreateLogger("ValidationAppHost.ContainerFilesCallback")
 		_ = filesLogger.LogInformation("ContainerFilesCallback services")
 
-		appConfig := filesCtx.CreateFile("app.conf", &aspire.CreateFileOptions{Contents: aspire.StringPtr("key=value"), Mode: aspire.Float64Ptr(0o644)})
+		appConfig := filesCtx.CreateFile("app.conf", &aspire.CreateFileOptions{Contents: aspire.StringPtr("key=value"), Mode: aspire.IntPtr(0o644)})
 		nestedConfig := filesCtx.CreateFile("nested.conf", &aspire.CreateFileOptions{Contents: aspire.StringPtr("nested=true")})
-		confDir := filesCtx.CreateDirectory("conf.d", []aspire.ContainerFileSystemItem{nestedConfig}, &aspire.CreateDirectoryOptions{Mode: aspire.Float64Ptr(0o755)})
+		confDir := filesCtx.CreateDirectory("conf.d", []aspire.ContainerFileSystemItem{nestedConfig}, &aspire.CreateDirectoryOptions{Mode: aspire.IntPtr(0o755)})
 		cert := filesCtx.CreateCertificateFile("server.pem", &aspire.CreateCertificateFileOptions{Contents: aspire.StringPtr("-----BEGIN CERTIFICATE-----")})
 		return []aspire.ContainerFileSystemItem{appConfig, confDir, cert}
-	}, &aspire.ContainerFilesOptions{
-		DefaultOwner: aspire.Float64Ptr(1000),
-		DefaultGroup: aspire.Float64Ptr(1000),
-		Umask:        aspire.Float64Ptr(0o022),
+	}, &aspire.WithContainerFilesCallbackOptions{
+		Options: &aspire.ContainerFilesOptions{
+			DefaultOwner: aspire.Float64Ptr(1000),
+			DefaultGroup: aspire.Float64Ptr(1000),
+			Umask:        aspire.Float64Ptr(0o022),
+		},
 	})
 
 	// WithImageRegistry
@@ -245,7 +257,7 @@ ENTRYPOINT ["dotnet", "App.dll"]
 
 	dockerContainer.WithHttpEndpoint(&aspire.WithHttpEndpointOptions{
 		Name:       aspire.StringPtr("http"),
-		TargetPort: aspire.Float64Ptr(80),
+		TargetPort: aspire.IntPtr(80),
 	})
 
 	endpoint := dockerContainer.GetEndpoint("http")
@@ -330,6 +342,9 @@ ENTRYPOINT ["dotnet", "App.dll"]
 	container.WithIconName("Database", &aspire.WithIconNameOptions{
 		IconVariant: &iconVariant,
 	})
+
+	// WithResourceTypeDisplayName
+	container.WithResourceTypeDisplayName("Validation Service")
 
 	// WithHttpProbe
 	container.WithHttpProbe(aspire.ProbeTypeLiveness, &aspire.WithHttpProbeOptions{
@@ -476,7 +491,7 @@ ENTRYPOINT ["dotnet", "App.dll"]
 	_, _ = builderConfiguration.Exists("MyConfig:Key")
 
 	builderExecutionContext := builder.ExecutionContext()
-	executionContextServiceProvider := builderExecutionContext.ServiceProvider()
+	executionContextServiceProvider := builderExecutionContext.Services()
 	_ = executionContextServiceProvider.GetDistributedApplicationModel()
 	resourceCommandService := executionContextServiceProvider.GetResourceCommandService()
 
@@ -653,7 +668,7 @@ ENTRYPOINT ["dotnet", "App.dll"]
 		_ = echoLogger.LogInformation("Echo command services")
 		message, err := ctx.Arguments().Value("message")
 		if err != nil {
-			return &aspire.ExecuteCommandResult{Success: false, ErrorMessage: aspire.StringPtr(aspire.FormatError(err))}
+			return &aspire.ExecuteCommandResult{Success: false, Message: aspire.StringPtr(aspire.FormatError(err))}
 		}
 		return &aspire.ExecuteCommandResult{Success: message == "hello"}
 	}, &aspire.WithCommandOptions{
@@ -671,11 +686,11 @@ ENTRYPOINT ["dotnet", "App.dll"]
 	_ = container.WithCommand("restart", "Restart", func(ctx aspire.ExecuteCommandContext) *aspire.ExecuteCommandResult {
 		cancellationToken, err := ctx.CancellationToken()
 		if err != nil {
-			return &aspire.ExecuteCommandResult{Success: false, ErrorMessage: aspire.StringPtr(aspire.FormatError(err))}
+			return &aspire.ExecuteCommandResult{Success: false, Message: aspire.StringPtr(aspire.FormatError(err))}
 		}
 		result, err := resourceCommandService.ExecuteCommandAsync(container, "echo", &aspire.ExecuteCommandAsyncOptions{Arguments: map[string]string{"message": "hello"}, CancellationToken: cancellationToken})
 		if err != nil {
-			return &aspire.ExecuteCommandResult{Success: false, ErrorMessage: aspire.StringPtr(aspire.FormatError(err))}
+			return &aspire.ExecuteCommandResult{Success: false, Message: aspire.StringPtr(aspire.FormatError(err))}
 		}
 
 		return result
@@ -726,7 +741,7 @@ ENTRYPOINT ["dotnet", "App.dll"]
 
 		available, err := interactionService.IsAvailable()
 		if err != nil {
-			return &aspire.ExecuteCommandResult{Success: false, ErrorMessage: aspire.StringPtr(aspire.FormatError(err))}
+			return &aspire.ExecuteCommandResult{Success: false, Message: aspire.StringPtr(aspire.FormatError(err))}
 		}
 		if !available {
 			return &aspire.ExecuteCommandResult{Success: true, Message: aspire.StringPtr("Interaction service is not available.")}
@@ -749,7 +764,7 @@ ENTRYPOINT ["dotnet", "App.dll"]
 
 		canceled, err := result.Canceled()
 		if err != nil {
-			return &aspire.ExecuteCommandResult{Success: false, ErrorMessage: aspire.StringPtr(aspire.FormatError(err))}
+			return &aspire.ExecuteCommandResult{Success: false, Message: aspire.StringPtr(aspire.FormatError(err))}
 		}
 		return &aspire.ExecuteCommandResult{Success: !canceled, Canceled: aspire.BoolPtr(canceled)}
 	})
@@ -762,7 +777,7 @@ ENTRYPOINT ["dotnet", "App.dll"]
 
 		available, err := interactionService.IsAvailable()
 		if err != nil {
-			return &aspire.ExecuteCommandResult{Success: false, ErrorMessage: aspire.StringPtr(aspire.FormatError(err))}
+			return &aspire.ExecuteCommandResult{Success: false, Message: aspire.StringPtr(aspire.FormatError(err))}
 		}
 		if !available {
 			return &aspire.ExecuteCommandResult{Success: true, Message: aspire.StringPtr("Interaction service is not available.")}
@@ -780,7 +795,7 @@ ENTRYPOINT ["dotnet", "App.dll"]
 			},
 		})
 		if err != nil {
-			return &aspire.ExecuteCommandResult{Success: false, ErrorMessage: aspire.StringPtr(aspire.FormatError(err))}
+			return &aspire.ExecuteCommandResult{Success: false, Message: aspire.StringPtr(aspire.FormatError(err))}
 		}
 
 		infoIntent := aspire.MessageIntentInformation
@@ -788,7 +803,7 @@ ENTRYPOINT ["dotnet", "App.dll"]
 			Options: &aspire.InteractionMessageBoxOptions{PrimaryButtonText: aspire.StringPtr("OK"), Intent: &infoIntent},
 		})
 		if err != nil {
-			return &aspire.ExecuteCommandResult{Success: false, ErrorMessage: aspire.StringPtr(aspire.FormatError(err))}
+			return &aspire.ExecuteCommandResult{Success: false, Message: aspire.StringPtr(aspire.FormatError(err))}
 		}
 
 		warnIntent := aspire.MessageIntentWarning
@@ -801,7 +816,7 @@ ENTRYPOINT ["dotnet", "App.dll"]
 			},
 		})
 		if err != nil {
-			return &aspire.ExecuteCommandResult{Success: false, ErrorMessage: aspire.StringPtr(aspire.FormatError(err))}
+			return &aspire.ExecuteCommandResult{Success: false, Message: aspire.StringPtr(aspire.FormatError(err))}
 		}
 
 		progress, err := interactionService.PromptProgress("Completing **work**...", &aspire.PromptProgressOptions{
@@ -815,22 +830,30 @@ ENTRYPOINT ["dotnet", "App.dll"]
 			},
 		})
 		if err != nil {
-			return &aspire.ExecuteCommandResult{Success: false, ErrorMessage: aspire.StringPtr(aspire.FormatError(err))}
+			return &aspire.ExecuteCommandResult{Success: false, Message: aspire.StringPtr(aspire.FormatError(err))}
 		}
 
-		textInput := interactionService.CreateTextInput("name", &aspire.CreateInteractionInputOptions{
-			Label:                     aspire.StringPtr("Name"),
-			Description:               aspire.StringPtr("Your **name**"),
-			EnableDescriptionMarkdown: aspire.BoolPtr(true),
-			Required:                  aspire.BoolPtr(true),
-			Placeholder:               aspire.StringPtr("Jane Doe"),
-			Value:                     aspire.StringPtr("Jane"),
-			MaxLength:                 aspire.Float64Ptr(64),
-			Disabled:                  aspire.BoolPtr(false),
+		textInput := interactionService.CreateTextInput("name", &aspire.CreateTextInputOptions{
+			Options: &aspire.CreateInteractionInputOptions{
+				Label:                     aspire.StringPtr("Name"),
+				Description:               aspire.StringPtr("Your **name**"),
+				EnableDescriptionMarkdown: aspire.BoolPtr(true),
+				Required:                  aspire.BoolPtr(true),
+				Placeholder:               aspire.StringPtr("Jane Doe"),
+				Value:                     aspire.StringPtr("Jane"),
+				MaxLength:                 aspire.IntPtr(64),
+				Disabled:                  aspire.BoolPtr(false),
+			},
 		})
-		secretInput := interactionService.CreateSecretInput("password", &aspire.CreateInteractionInputOptions{Required: aspire.BoolPtr(true)})
-		booleanInput := interactionService.CreateBooleanInput("enabled", &aspire.CreateInteractionInputOptions{Value: aspire.StringPtr("true")})
-		numberInput := interactionService.CreateNumberInput("count", &aspire.CreateInteractionInputOptions{Value: aspire.StringPtr("1")})
+		secretInput := interactionService.CreateSecretInput("password", &aspire.CreateSecretInputOptions{
+			Options: &aspire.CreateInteractionInputOptions{Required: aspire.BoolPtr(true)},
+		})
+		booleanInput := interactionService.CreateBooleanInput("enabled", &aspire.CreateBooleanInputOptions{
+			Options: &aspire.CreateInteractionInputOptions{Value: aspire.StringPtr("true")},
+		})
+		numberInput := interactionService.CreateNumberInput("count", &aspire.CreateNumberInputOptions{
+			Options: &aspire.CreateInteractionInputOptions{Value: aspire.StringPtr("1")},
+		})
 		choiceInput := interactionService.CreateChoiceInput("color", &aspire.CreateChoiceInputOptions{
 			Choices: []*aspire.InteractionChoiceOption{{Value: "r", Label: "Red"}, {Value: "g", Label: "Green"}},
 			Options: &aspire.CreateInteractionInputOptions{AllowCustomChoice: aspire.BoolPtr(true)},
@@ -847,7 +870,9 @@ ENTRYPOINT ["dotnet", "App.dll"]
 			}
 			_ = input.SetChoiceOptions(shades)
 			_ = input.SetValue(inputName)
-		}, &aspire.DynamicLoadingOptions{AlwaysLoadOnStart: aspire.BoolPtr(true), DependsOnInputs: []string{"color"}})
+		}, &aspire.WithDynamicLoadingOptions{
+			Options: &aspire.DynamicLoadingOptions{AlwaysLoadOnStart: aspire.BoolPtr(true), DependsOnInputs: []string{"color"}},
+		})
 
 		single, err := interactionService.PromptInput("Single input", "Enter a value.", interactionService.CreateTextInput("solo"), &aspire.PromptInputOptions{
 			Options: &aspire.InteractionInputsDialogOptions{
@@ -861,7 +886,7 @@ ENTRYPOINT ["dotnet", "App.dll"]
 			},
 		})
 		if err != nil {
-			return &aspire.ExecuteCommandResult{Success: false, ErrorMessage: aspire.StringPtr(aspire.FormatError(err))}
+			return &aspire.ExecuteCommandResult{Success: false, Message: aspire.StringPtr(aspire.FormatError(err))}
 		}
 
 		multi := interactionService.PromptInputs("Multiple inputs", "Fill out the form.",
@@ -887,7 +912,7 @@ ENTRYPOINT ["dotnet", "App.dll"]
 
 		multiCanceled, err := multi.Canceled()
 		if err != nil {
-			return &aspire.ExecuteCommandResult{Success: false, ErrorMessage: aspire.StringPtr(aspire.FormatError(err))}
+			return &aspire.ExecuteCommandResult{Success: false, Message: aspire.StringPtr(aspire.FormatError(err))}
 		}
 
 		success := !confirmation.Canceled &&

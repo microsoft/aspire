@@ -81,7 +81,7 @@ func main() {
 			log.Fatal(aspire.FormatError(err))
 		}
 
-		if err := app.ConfigureScale(&aspire.AzureContainerAppScaleConfig{MinReplicas: aspire.Float64Ptr(1)}); err != nil {
+		if err := app.ConfigureScale(&aspire.AzureContainerAppScaleConfig{MinReplicas: aspire.IntPtr(1)}); err != nil {
 			log.Fatal(aspire.FormatError(err))
 		}
 	})

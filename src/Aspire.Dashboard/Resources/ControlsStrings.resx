@@ -132,6 +132,9 @@
   <data name="ChartContainerGraphAccessibleLabel" xml:space="preserve">
     <value>Graph. For an accessible view please navigate to the Table tab</value>
   </data>
+  <data name="OverviewGraphAccessibleLabel" xml:space="preserve">
+    <value>Resource graph. The resource list shows the same resources in an accessible format</value>
+  </data>
   <data name="EnvironmentVariablesFilterToggleShowSpecOnly" xml:space="preserve">
     <value>Show core properties</value>
   </data>
@@ -186,15 +189,6 @@
   <data name="ParameterSetValueAction" xml:space="preserve">
     <value>Click to set parameter value</value>
   </data>
-  <data name="ParameterEditShortAction" xml:space="preserve">
-    <value>Edit</value>
-  </data>
-  <data name="ParameterSetShortAction" xml:space="preserve">
-    <value>Set</value>
-  </data>
-  <data name="ParameterDeleteShortAction" xml:space="preserve">
-    <value>Delete</value>
-  </data>
   <data name="ParameterDeleteValueAction" xml:space="preserve">
     <value>Delete value</value>
   </data>
@@ -229,6 +223,10 @@
   </data>
   <data name="SummaryDetailsViewCloseView" xml:space="preserve">
     <value>Close</value>
+  </data>
+  <data name="SummaryDetailsViewCloseViewWithShortcut" xml:space="preserve">
+    <value>Close (Esc)</value>
+    <comment>Tooltip of a close button that the Escape key also triggers. Esc is the label of the Escape key on keyboards.</comment>
   </data>
   <data name="SelectAResource" xml:space="preserve">
     <value>Select a resource</value>

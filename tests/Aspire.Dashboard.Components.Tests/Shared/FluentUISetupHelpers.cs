@@ -52,8 +52,8 @@ internal static class FluentUISetupHelpers
     public static void SetupFluentOverflow(BunitContext context)
     {
         var overflowModule = context.JSInterop.SetupModule(GetFluentFile("./_content/Microsoft.FluentUI.AspNetCore.Components/Components/Overflow/FluentOverflow.razor.js"));
-        overflowModule.SetupVoid("fluentOverflowInitialize", _ => true);
-        overflowModule.SetupVoid("fluentOverflowDispose", _ => true);
+        overflowModule.SetupVoid("fluentOverflowInitialize", _ => true).SetVoidResult();
+        overflowModule.SetupVoid("fluentOverflowDispose", _ => true).SetVoidResult();
     }
 
     public static void SetupFluentAnchor(BunitContext context)
@@ -64,9 +64,9 @@ internal static class FluentUISetupHelpers
     public static void SetupFluentAnchoredRegion(BunitContext context)
     {
         var module = context.JSInterop.SetupModule(GetFluentFile("./_content/Microsoft.FluentUI.AspNetCore.Components/Components/AnchoredRegion/FluentAnchoredRegion.razor.js"));
-        module.SetupVoid("goToNextFocusableElement", _ => true);
-        module.SetupVoid("initializeKeyboardNavigation", _ => true);
-        module.SetupVoid("removeKeyboardNavigation", _ => true);
+        module.SetupVoid("goToNextFocusableElement", _ => true).SetVoidResult();
+        module.SetupVoid("initializeKeyboardNavigation", _ => true).SetVoidResult();
+        module.SetupVoid("removeKeyboardNavigation", _ => true).SetVoidResult();
     }
 
     public static void SetupFluentDivider(BunitContext context)
@@ -195,7 +195,7 @@ internal static class FluentUISetupHelpers
         context.JSInterop.SetupVoid("Microsoft.FluentUI.Blazor.Utilities.Attributes.copyToShadow", _ => true);
         context.JSInterop.SetupVoid("Blazor.theme.setThemeMode", _ => true);
         var tooltipModule = context.JSInterop.SetupModule("./_content/Microsoft.FluentUI.AspNetCore.Components/Components/Tooltip/FluentTooltip.razor.js");
-        tooltipModule.SetupVoid("Microsoft.FluentUI.Blazor.Tooltip.FluentTooltipInitialize", _ => true);
+        tooltipModule.SetupVoid("Microsoft.FluentUI.Blazor.Tooltip.FluentTooltipInitialize", _ => true).SetVoidResult();
         context.Services.AddLocalization();
         context.Services.AddSingleton<BrowserTimeProvider>(browserTimeProvider ?? new TestTimeProvider());
         context.Services.AddSingleton(TimeProvider.System);
@@ -270,9 +270,10 @@ internal static class FluentUISetupHelpers
         context.Services.AddScoped<SpanMenuBuilder>();
         context.Services.AddScoped<TraceMenuBuilder>();
         context.Services.AddSingleton<IOptions<DashboardOptions>>(Options.Create(new DashboardOptions()));
-        context.Services.AddSingleton(new ResourceTagStore(databasePath: null, Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance));
-        context.Services.AddSingleton(new ResourceOrderStore(databasePath: null, Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance));
-        context.Services.AddSingleton(new MetricPinStore(databasePath: null, Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance));
+        context.Services.AddSingleton<LocalStorageLocks>();
+        context.Services.AddScoped<ResourceTagStore>();
+        context.Services.AddScoped<ResourceOrderStore>();
+        context.Services.AddScoped<MetricPinStore>();
         context.Services.AddScoped<ResourcePaneState>();
         context.Services.AddScoped<Aspire.Dashboard.Components.Layout.TerminalDockState>();
         context.Services.AddScoped<DashboardViewPreferences>();

@@ -328,6 +328,21 @@ button.brand:focus-visible { outline: 2px solid var(--focus); outline-offset: 1p
    order) instead of multi-column height balancing. */
 .grid.mcol { column-width: auto; display: flex; align-items: flex-start; gap: 12px; }
 .mcol-col { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; }
+/* The prioritized queue reads across each row, never down masonry columns. */
+.focus-queue {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
+  align-items: start; gap: 12px; margin: 0; padding: 2px 0 0; list-style: none;
+}
+.focus-queue > li { min-width: 0; }
+.focus-queue .card { margin-bottom: 0; }
+.queue-position { display: block; margin-bottom: 4px; color: var(--muted); font-size: 12px; font-weight: 600; }
+.queue-remainder { margin: 10px 0 0; padding: 0; list-style: none; }
+.queue-remainder > li { display: flex; align-items: baseline; gap: 10px; padding: 8px 0; border-top: 1px solid var(--border); }
+.queue-remainder .queue-position { min-width: 3ch; flex: none; margin: 0; }
+.queue-reference { min-width: 0; overflow-wrap: anywhere; }
+.queue-reference a { color: var(--fg); text-decoration: none; }
+.queue-reference a:hover { text-decoration: underline; }
+.queue-reference .repo { display: block; margin-top: 3px; color: var(--muted); font-size: 11px; }
 
 /* Review board section dividers (For you / Needs attention / breakdown / Community). */
 .board-sep {
@@ -2106,7 +2121,100 @@ function goView(next, forward) {
 
 /* ---- cards ---- */
 
-function pill(s) { return '<span class="pill ' + (s.tone || "muted") + '">' + esc(s.label) + "</span>"; }
+const signalExplanations = {
+  "review debt": "The PR is not currently approved and its relevant activity is at least 14 days old. Reviews have been waiting too long; this does not mean nobody has reviewed it. Address review to run a fresh review, or Discuss review to work through existing feedback.",
+  "finish review": "Review activity exists, but the PR has not reached approval. Finish the review or clarify what is still needed.",
+  "newer": "The PR's relevant activity is less than 12 hours old. This is freshness context, not a blocker; allow time for review and CI.",
+  "old first": "The PR's relevant activity is at least 7 days old. Prioritize a follow-up on its next review, author, or merge action.",
+  "draft": "The author has marked this PR as a draft. Wait for it to be ready for review, or finish the work and mark it ready.",
+  "regression": "A regression label is present on this item or, for a PR, a linked issue. Prioritize investigation and confirm the fix restores the previous behavior.",
+  "fix ci": "Blocking CI checks are failing. Evaluate CI failures to identify the cause and decide whether a fix or rerun is appropriate.",
+  "wait for ci": "The PR is approved, but CI is pending or its result is unknown. Wait for a conclusive result before merging.",
+  "proof of presence": "The failing checks match this repository's configured non-blocking proof-of-presence rule. Inspect the informational gate if needed; it alone does not block the review queue.",
+  "merge conflicts": "The PR conflicts with its target branch. Resolve conflicts and rerun relevant checks before finishing review or merging.",
+  "resolve conflicts": "Your PR conflicts with its target branch. Resolve conflicts and rerun relevant checks.",
+  "resolve feedback": "Review conversations remain unresolved. Address each thread and resolve it when the feedback has been handled.",
+  "unresolved feedback": "Review conversations remain unresolved. Address each thread and resolve it when the feedback has been handled.",
+  "land approval": "The PR is approved and its approval reference is at least 2 days old. Check remaining blockers and land it if it is still ready.",
+  "approved but aging": "The PR is approved and its approval reference is at least 2 days old. Check remaining blockers and land it if it is still ready.",
+  "merge": "The PR has approval and no pending CI signal in the review model. Confirm required checks, feedback, and merge rules on GitHub before merging.",
+  "ready to merge": "The PR meets this queue's approval, CI, conflict, and review requirements. Confirm the live GitHub merge state and merge when appropriate.",
+  "re-review": "The author pushed a commit after the latest review. Review the new changes and update your review.",
+  "re-review needed": "The author pushed a commit after the latest review. Review the new changes and update your review.",
+  "commit after review": "The author pushed a commit after the latest review. Review the new changes and update your review.",
+  "author fix": "Changes have been requested. The author should address the feedback or discuss it with the reviewer.",
+  "author response": "Changes have been requested. The author should address the feedback or discuss it with the reviewer.",
+  "changes requested": "Changes have been requested. Address the feedback or discuss it with the reviewer before seeking approval.",
+  "aged out community": "An external contributor's public PR has had no update for more than 14 days. Re-engage the contributor and arrange review or clarify whether the work should continue.",
+  "community wait": "An external contributor's public PR has waited at least 12 hours for its first review, or has been reviewed and idle for at least 7 days. Follow up with a review or a clear next step.",
+  "community": "This public PR is from an external contributor. Welcome the contribution and help the author reach the next review step.",
+  "community list": "This active external-contributor PR is routed to the Community list instead of Needs attention. Follow up there.",
+  "unstick": "The PR has had no update for at least 7 days. Ask what is blocking progress and agree on the next step.",
+  "stalled": "The PR has had no update for at least 7 days. Ask what is blocking progress and agree on the next step.",
+  "stalled only": "The PR has gone quiet without a fresher actionable lane. Check whether it still needs work and identify the next owner.",
+  "quick win": "A core-team PR awaiting its first review: at most 3 files, 80 changed lines, 2 commits, and 1 linked issue; not release-targeted, idle, conflicting, or carrying unresolved feedback. Pick it up for a small review.",
+  "needs reviewer": "No submitted review is recorded. Find a reviewer and start the review.",
+  "needs review": "No submitted review is recorded. Find a reviewer and start the review.",
+  "no reviews": "No submitted review is recorded. Find a reviewer and start the review.",
+  "review started": "The PR has review activity without a more specific actionable bucket. Check the discussion and finish the review.",
+  "automation": "The PR is attributed to a bot or automation account. Check the generated changes and CI before approving.",
+  "bot": "This item is attributed to a bot or automation account. Check its generated content and follow up with the owning workflow or team.",
+  "copilot": "The PR is attributed to a human via Copilot. The human remains the owner; review the generated changes normally.",
+  "docs": "This is a generated docs PR in microsoft/aspire.dev with the docs-from-code label. Review the generated documentation for accuracy.",
+  "docs review": "This is a generated docs PR in microsoft/aspire.dev with the docs-from-code label. Review the generated documentation for accuracy.",
+  "community toolkit": "The PR belongs to CommunityToolkit/Aspire. Review it in the toolkit's specialized lane.",
+  "toolkit review": "The PR belongs to CommunityToolkit/Aspire. Review it in the toolkit's specialized lane.",
+  "docs lane": "This PR is routed to the generated documentation lane instead of Needs attention. Review it there.",
+  "community toolkit lane": "This PR is routed to the Community Toolkit lane instead of Needs attention. Review it there.",
+  "bots / automation lane": "This PR is routed to the automation lane instead of Needs attention. Check its changes and CI there.",
+  "held by label": "A needs-author-action or no-merge label keeps this PR out of the focused queue. Address the hold before proceeding.",
+  "stale activity": "The PR's actionable lane has no fresh activity within 14 days. Reassess the work and arrange the next action.",
+  "outside queue": "The PR does not match a focused actionable lane. Check its current state before choosing a next action.",
+  "review this": "A review has been requested from you. Review the changes and submit your feedback.",
+  "respond here": "Your PR has changes requested. Address the feedback or discuss the review.",
+  "finish this": "Your PR is approved and still open. Check remaining CI and merge requirements, then land it when ready.",
+  "needs your attention": "Your PR is held by a needs-author-action or no-merge label. Read the label and discussion, and address the hold.",
+  "blocking release": "An issue label contains blocking-release. Prioritize the blocker and confirm it is resolved before shipping.",
+  "cti team": "The issue title contains [aspiree2e]. Coordinate with the CTI team and validate the reported end-to-end scenario.",
+  "afscrome finds": "The issue was reported by afscrome. Triage the finding, reproduce it, and track the next action.",
+  "unowned": "No assignee is recorded for this issue. Identify an owner and triage the issue.",
+  "needs validation": "The issue matches a validation signal, has linked open PRs, or needs follow-up as an assigned issue. Reproduce the scenario or verify the proposed fix; this tag is not proof of a confirmed bug.",
+  "needs pr": "Linked-PR data reports no open PR for this issue. Confirm whether implementation is needed and link the work.",
+  "installer/acquisition": "Issue text or labels match installer or acquisition terms. Route to the relevant owner and validate the installation scenario.",
+  "typescript/polyglot": "Issue text or labels match TypeScript or polyglot terms. Route to the relevant owner and reproduce in the affected language.",
+  "cli channel/versioning": "Issue text or labels match CLI, channel, versioning, feed, or template terms. Check the affected CLI version and channel.",
+  "docs/release readiness": "Issue text or labels match documentation or release-readiness terms. Review the documentation or release follow-up.",
+  "milestone": "The issue has a milestone. Check its target and remaining work before closing or shipping.",
+};
+
+function signalExplanation(s) {
+  if (s.kind === "repo-label") return 'GitHub repository label: "' + s.label + '". Use the repository label guidance for meaning and follow-up; this is not a computed dashboard status.';
+  const label = String(s.label || "").toLowerCase();
+  if (/^(open |ci )/.test(label)) return null;
+  if (Object.hasOwn(signalExplanations, label)) return signalExplanations[label];
+  // Generated labels include values, e.g. "idle 7d" and "3 reviewers · 0 approvals".
+  // Match the concept without hardcoding the count.
+  if (/^idle /.test(label)) return "Time since the item's last update. Follow up with the owner if progress has stalled.";
+  if (/^approved /.test(label)) return signalExplanations["approved but aging"];
+  if (/^reviewed /.test(label)) return "Time since the latest submitted review. Check for newer commits or unanswered feedback before deciding the next step.";
+  if (/^release /.test(label)) return "The current release is mentioned in the title, milestone, labels, or a linked issue. Confirm release scope and prioritize the remaining work.";
+  if (/^base /.test(label)) return "The PR targets the named release branch. Verify the fix and release or backport requirements for that branch.";
+  if (/^\d+ unresolved\b/.test(label)) return signalExplanations["unresolved feedback"];
+  if (/^\d+ change requests?$/.test(label)) return signalExplanations["changes requested"];
+  if (/^\d+ approvals?$/.test(label)) return "Number of recorded approving review submissions, including earlier reviews from the same reviewer. This is not a count of current approvers. Confirm the latest reviews and branch rules before merging.";
+  if (/^\d+ reviewers? · 0 approvals$/.test(label)) return "Reviewers have submitted reviews, but no approving review submissions are recorded. Finish the discussion, address requested changes, or seek an approving review.";
+  if (/^\d+ review comments?$/.test(label)) return "Number of comment-only submitted reviews, not individual comments or approvals. Read the feedback and determine what remains before approval.";
+  if (/^\d+ open prs?$/.test(label)) return "Open PRs are linked to this issue. Track their progress and validate the outcome before closing the issue.";
+  return 'Dashboard tag: "' + s.label + '". Check the item discussion for context and the next step.';
+}
+
+function pill(s) {
+  const explanation = signalExplanation(s);
+  const help = explanation
+    ? ' tabindex="0" aria-describedby="agent-action-tooltip" data-tooltip="' + esc(explanation) + '"'
+    : "";
+  return '<span class="pill ' + (s.tone || "muted") + '"' + help + '>' + esc(s.label) + "</span>";
+}
 
 let agentTooltipOwner = null;
 let agentTooltipHideTimer = null;
@@ -2158,7 +2266,7 @@ function scheduleAgentTooltipHide() {
 
 function wireAgentActionTooltips() {
   document.addEventListener("pointerover", (event) => {
-    const owner = event.target.closest?.(".cb-split[data-tooltip]");
+    const owner = event.target.closest?.(".cb-split[data-tooltip], .pill[data-tooltip]");
     if (owner) showAgentActionTooltip(owner);
     else if (document.getElementById("agent-action-tooltip")?.contains(event.target)) cancelAgentTooltipHide();
   });
@@ -2169,7 +2277,7 @@ function wireAgentActionTooltips() {
       && !owner.contains(event.relatedTarget) && !tooltip?.contains(event.relatedTarget)) scheduleAgentTooltipHide();
   });
   document.addEventListener("focusin", (event) => {
-    const owner = event.target.closest?.(".cb-split[data-tooltip]");
+    const owner = event.target.closest?.(".cb-split[data-tooltip], .pill[data-tooltip]");
     if (owner) showAgentActionTooltip(owner);
   });
   document.addEventListener("focusout", (event) => {
@@ -2425,12 +2533,14 @@ function prCard(item, actions) {
       "<span>by " + esc(pr.author) + "</span>" +
     "</div>" +
     (item.reason ? '<div class="reason">' + esc(item.reason) + "</div>" : "") +
-    ((item.signals && item.signals.length) ? '<div class="pills">' + item.signals.map(pill).join("") + "</div>" : "") +
   "</a>";
+  const signals = (item.signals && item.signals.length)
+    ? '<div class="pills">' + item.signals.map(pill).join("") + "</div>"
+    : "";
   const acts = (actions && actions.length)
     ? '<div class="card-actions">' + actions.map((a) => cardActionBtn(pr, a)).join("") + "</div>"
     : "";
-  return '<div class="card">' + main + acts + "</div>";
+  return '<div class="card">' + main + signals + acts + "</div>";
 }
 
 function issueCard(item) {
@@ -2441,9 +2551,10 @@ function issueCard(item) {
       avatarTag(is.authorAvatarUrl, is.author, "avatar", 36) +
       '<span class="repo">' + esc(shortRepo(is.repository)) + " #" + is.number + "</span>" +
       "<span>by " + esc(is.author) + "</span>" +
-    "</div>" +
-    ((item.signals && item.signals.length) ? '<div class="pills">' + item.signals.map(pill).join("") + "</div>" : "") +
-  "</a>";
+    "</div></a>";
+  const signals = (item.signals && item.signals.length)
+    ? '<div class="pills">' + item.signals.map(pill).join("") + "</div>"
+    : "";
   const linkedPullRequests = (is.linkedPullRequests || []).filter((pr) => pr.state !== "CLOSED");
   const linked = linkedPullRequests.length
     ? linkedPullRequests.map((pr) => {
@@ -2457,7 +2568,7 @@ function issueCard(item) {
         );
       }).join("")
     : "";
-  return '<div class="card">' + main + linked + "</div>";
+  return '<div class="card">' + main + signals + linked + "</div>";
 }
 
 function laneIcon(lane) {
@@ -2510,6 +2621,7 @@ function seedReviewCollapse(att) {
   for (const b of att.buckets || []) collapsedLanes.add(slugId(b.label));
   collapsedLanes.add("community");
   collapsedLanes.add("attention-breakdown");
+  collapsedLanes.add("later-in-queue");
 }
 
 function developerCountsHtml(list) {
@@ -2546,14 +2658,14 @@ function collapsibleSect(opts) {
   const count = (opts.count != null)
     ? '<span class="sect-count">' + esc(String(opts.count)) + "</span>" : "";
   return '<section class="sect-group collapsible' + (collapsed ? " collapsed" : "") + '" data-sect="' + esc(id) + '">' +
-    '<button class="sect-head" data-collapse="' + esc(id) + '" aria-expanded="' + (collapsed ? "false" : "true") + '">' +
+    '<button class="sect-head" data-collapse="' + esc(id) + '" aria-controls="' + esc(id) + '-body" aria-expanded="' + (collapsed ? "false" : "true") + '">' +
       (opts.icon ? '<span class="sect-icon t-' + (opts.iconTone || "muted") + '">' + opts.icon + "</span>" : "") +
       '<span class="sect-title">' + esc(opts.title) + "</span>" +
       (opts.note ? '<span class="sect-note">' + esc(opts.note) + "</span>" : "") +
       count +
       '<span class="sect-caret t-' + (opts.iconTone || "muted") + '">' + ICONS.chev + "</span>" +
     "</button>" +
-    '<div class="collapse-body"><div class="collapse-inner">' +
+    '<div class="collapse-body" id="' + esc(id) + '-body"' + (collapsed ? " inert" : "") + '><div class="collapse-inner">' +
       (opts.subtitle ? '<p class="sect-sub">' + esc(opts.subtitle) + "</p>" : "") +
       (opts.body || "") +
     "</div></div>" +
@@ -2565,16 +2677,22 @@ function collapsibleSect(opts) {
 function queuePanel(opts) {
   const items = opts.items || [];
   const n = items.length;
-  // exactCount: the shown items are not a prefix of the source list (e.g. the focus lane keeps
-  // review-debt cards that spill past the cap), so "top N of total" would be false — higher-ranked
-  // cards were skipped. Report the honest shown count instead; the uncapped total still shows in
-  // the header summary badge.
-  const capped = !opts.exactCount && typeof opts.cappedTotal === "number" && opts.cappedTotal > n;
+  const capped = typeof opts.cappedTotal === "number" && opts.cappedTotal > n;
   const metric = capped ? "top " + n + " of " + opts.cappedTotal : n + " shown";
   const cardActions = typeof opts.cardActions === "function" ? opts.cardActions : null;
-  const body = n
-    ? '<div class="grid">' + items.map((it) => (it.pr ? prCard(it, cardActions ? cardActions(it) : null) : issueCard(it))).join("") + "</div>"
-    : '<div class="lane-empty">' + esc(opts.emptyText || "Nothing here right now.") + "</div>";
+  let body;
+  if (n) {
+    const cards = items.map((it, index) => {
+      const card = it.pr ? prCard(it, cardActions ? cardActions(it) : null) : issueCard(it);
+      if (!opts.numbered) return card;
+      const position = it.queuePosition || index + 1;
+      return '<li value="' + position + '"><span class="queue-position">' + position + ".</span>" + card + "</li>";
+    }).join("");
+    body = opts.numbered ? '<ol class="focus-queue" role="list" aria-label="Needs attention, first-readiness order">' + cards + "</ol>"
+      : '<div class="grid">' + cards + "</div>";
+  } else {
+    body = '<div class="lane-empty">' + esc(opts.emptyText || "Nothing here right now.") + "</div>";
+  }
   const collapsed = collapsedLanes.has(opts.id);
   return '<section class="qpanel collapsible' + (collapsed ? " collapsed" : "") + '" data-q="' + esc(opts.id) + '">' +
     '<button class="qhead" data-collapse="' + esc(opts.id) + '" aria-expanded="' + (collapsed ? "false" : "true") + '">' +
@@ -2608,11 +2726,26 @@ function reviewBoardHtml() {
   // 2. Needs attention — the focused, team-managed review queue (the headline).
   html += queuePanel({
     id: "needs-attention", title: "Needs attention", tone: "danger", icon: ICONS.alertSm,
-    subtitle: "One actionable row per PR with fresh activity, waiting on a review or a merge.",
-    items: att.focus || [], cappedTotal: att.focusTotal, exactCount: !!att.focusMixed,
+    subtitle: "First readiness, oldest first. Blocked PRs keep their priority when they return.",
+    items: att.focus || [], cappedTotal: att.focusTotal,
+    numbered: true,
     cardActions: focusCardActions,
     emptyText: "Nothing is waiting on a reviewer right now \u00b7 anything blocked sits in the breakdown below.",
   });
+
+  const remainder = att.focusRemainder || [];
+  if (remainder.length) {
+    html += collapsibleSect({
+      id: "later-in-queue", title: "Later in queue", icon: ICONS.clock,
+      count: remainder.length,
+      subtitle: "Find a PR\u2019s position here. Prioritize the first 10 in Needs attention for review.",
+      body: '<ol class="queue-remainder" start="' + remainder[0].queuePosition + '" role="list" aria-label="Later in queue, first-readiness order">' +
+        remainder.map((item) => '<li value="' + item.queuePosition + '"><span class="queue-position">' + item.queuePosition +
+          '.</span><div class="queue-reference"><a href="' + safeHref(item.pr.url) + '" target="_blank" rel="noreferrer">' +
+          esc(item.pr.title) + '</a><span class="repo">' + esc(item.pr.repository) + " #" + item.pr.number + "</span></div></li>").join("") +
+        "</ol>",
+    });
+  }
 
   // 3. Your PRs outside Needs attention — the viewer's own out-of-queue work,
   //    sat directly under the focused queue so it's easy to see what got filtered.
@@ -3079,11 +3212,10 @@ function pipelineEditorHtml() {
 
 function settingsView() {
   const n = prefs.notifications;
-  const limit = (state.reviewLimit || 10);
   return '<div class="page">' +
     '<div class="page-head"><h2>Settings</h2><p>Tune the shared review queue, delivery health, the ship milestone, and when the canvas speaks up. Watched repositories are configured per account in the Accounts tab.</p></div>' +
     '<div class="section"><h3>Review queue</h3>' +
-      '<p class="hint">The shared queue is team-managed, not individually sorted. It shows at most <b>' + limit + '</b> PRs, ranked so the oldest waits surface first.</p>' +
+      '<p class="hint">The shared queue is team-managed, not individually sorted. Needs attention shows the first <b>10</b> PRs in first-readiness order, oldest first. Later in queue starts collapsed and lets you look up the remaining positions; prioritize the first 10 for review.</p>' +
       '<div class="policy">' +
         '<div class="policy-row">' + ICONS.eye + '<span>A PR only enters the shared queue once <b>checks are green</b> and <b>all review feedback is resolved</b>. Unfinished work stays in the author\u2019s <b>Your PRs</b> lane.</span></div>' +
         '<div class="policy-row">' + ICONS.pr + '<span>Draft PRs are hidden by default. They are prototypes and experiments, not review work.</span></div>' +
@@ -3614,6 +3746,8 @@ function wire() {
       const nowCollapsed = !sec.classList.contains("collapsed");
       sec.classList.toggle("collapsed", nowCollapsed);
       b.setAttribute("aria-expanded", nowCollapsed ? "false" : "true");
+      const body = sec.querySelector(".collapse-body");
+      if (body) body.inert = nowCollapsed;
       if (nowCollapsed) collapsedLanes.add(id); else collapsedLanes.delete(id);
     }));
 

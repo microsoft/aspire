@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Commands;
+using Aspire.Cli.Configuration;
 using Aspire.Cli.Documentation.ApiDocs;
 using Aspire.Cli.Documentation.Docs;
 
@@ -9,6 +10,39 @@ namespace Aspire.Cli.Tests.Commands;
 
 public class SettingsSchemaBuilderTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void BuildSchema_DescribesSourceNameConstraints(bool global)
+    {
+        foreach (var schema in new[]
+        {
+            SettingsSchemaBuilder.BuildSchema(excludeLocalOnly: global),
+            SettingsSchemaBuilder.BuildConfigFileSchema(excludeLocalOnly: global)
+        })
+        {
+            foreach (var source in schema.Properties.Where(property =>
+                property.Name is "integrationSources" or "skillSources" or "templateSources"))
+            {
+                Assert.EndsWith(SourceNameValidator.Description, source.Description, StringComparison.Ordinal);
+            }
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void BuildConfigFileSchema_IncludesOptionalTemplateSourceDisplayName(bool global)
+    {
+        var schema = SettingsSchemaBuilder.BuildConfigFileSchema(excludeLocalOnly: global);
+        var sources = Assert.Single(schema.Properties, property => property.Name == "templateSources");
+        var displayName = Assert.Single(sources.SubProperties!, property => property.Name == "displayName");
+
+        Assert.Equal("string", displayName.Type);
+        Assert.False(displayName.Required);
+        Assert.Contains("alias", displayName.Description, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void BuildConfigFileSchema_HonorsConditionalJsonIgnore()
     {
@@ -16,7 +50,7 @@ public class SettingsSchemaBuilderTests
 
         Assert.Equal(
             ["appHost", "certificates", "channel", "configSource", "containerTunnel", "docs", "features",
-                "packages", "profiles", "sdk", "skillSources", "templateSources"],
+                "integrationSources", "packages", "portAllocation", "profiles", "sdk", "skillSources", "templateSources"],
             schema.Properties.Select(property => property.Name));
         var configSource = Assert.Single(schema.Properties, property => property.Name == "configSource");
         Assert.NotNull(configSource.SubProperties);
@@ -26,6 +60,23 @@ public class SettingsSchemaBuilderTests
         var optOut = Assert.Single(configSource.SubProperties, property => property.Name == "optOut");
         Assert.Equal("boolean", optOut.Type);
         Assert.False(optOut.Required);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void BuildSchema_IncludesNamedIntegrationSources(bool global)
+    {
+        foreach (var schema in new[]
+        {
+            SettingsSchemaBuilder.BuildSchema(excludeLocalOnly: global),
+            SettingsSchemaBuilder.BuildConfigFileSchema(excludeLocalOnly: global)
+        })
+        {
+            var sources = Assert.Single(schema.Properties, property => property.Name == "integrationSources");
+            Assert.Equal("object", sources.AdditionalPropertiesType);
+            Assert.Equal(["enabled", "source", "patterns"], sources.SubProperties!.Select(property => property.Name));
+        }
     }
 
     [Theory]

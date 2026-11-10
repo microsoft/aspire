@@ -2107,6 +2107,7 @@ public class GuestAppHostProjectTests : IDisposable
             AppHostFile = appHostFile,
             LaunchGroup = launchGroup,
             WorkingDirectory = _workspace.WorkspaceRoot,
+            Isolated = true,
             EnvironmentVariables = new Dictionary<string, string>()
         };
 
@@ -2131,6 +2132,8 @@ public class GuestAppHostProjectTests : IDisposable
                 new KeyValuePair<string, string>(launchGroup is not null ? "Aspire__LaunchGroup" : profileVariableName!, expectedLaunchGroup),
                 Assert.Single(launchGroupVariables));
         }
+        Assert.Equal("true", sessionFactory.CapturedEnvironmentVariables["DcpPublisher__RandomizePorts"]);
+        Assert.False(sessionFactory.CapturedEnvironmentVariables.ContainsKey(KnownConfigNames.PersistPortsInIsolatedMode));
     }
 
     [Fact]
@@ -2465,7 +2468,7 @@ public class GuestAppHostProjectTests : IDisposable
             },
             m =>
             {
-                Assert.Equal("warning", m.Emoji.Name);
+                Assert.Equal(KnownEmojis.PoliceCarLight.Name, m.Emoji.Name);
                 Assert.Equal(ErrorStrings.LegacyTypeScriptAppHostWarning, Markup.Remove(m.Message));
             },
             m =>
@@ -2561,12 +2564,12 @@ public class GuestAppHostProjectTests : IDisposable
             },
             m =>
             {
-                Assert.Equal("warning", m.Emoji.Name);
+                Assert.Equal(KnownEmojis.PoliceCarLight.Name, m.Emoji.Name);
                 Assert.Equal(expectedWarning, Markup.Remove(m.Message));
             },
             m =>
             {
-                Assert.Equal("warning", m.Emoji.Name);
+                Assert.Equal(KnownEmojis.PoliceCarLight.Name, m.Emoji.Name);
                 Assert.Equal(ErrorStrings.LegacyTypeScriptAppHostWarning, Markup.Remove(m.Message));
             },
             m =>
@@ -2631,6 +2634,10 @@ public class GuestAppHostProjectTests : IDisposable
         // ConsoleCancellationManager so the fixture doesn't register process-global OS signal handlers;
         // none of the tests here drive the launcher or AppHostServerSession paths that would fire it.
         var shutdownWindow = new TestGracefulShutdownWindow();
+        var configurationService = new TestConfigurationService
+        {
+            OnGetConfigurationFromDirectory = (key, _) => effectiveConfiguration[key.Replace('.', ':')]
+        };
         var fileLoggerProvider = new FileLoggerProvider(logFilePath, new TestStartupErrorWriter());
         _fileLoggerProviders.Add(fileLoggerProvider);
 
@@ -2650,10 +2657,7 @@ public class GuestAppHostProjectTests : IDisposable
             executionContext: executionContext,
             environment: effectiveEnvironment,
             appHostConfigurationProjector: new AppHostConfigurationProjector(
-                new TestConfigurationService
-                {
-                    OnGetConfigurationFromDirectory = (key, _) => effectiveConfiguration[key.Replace('.', ':')]
-                },
+                configurationService,
                 effectiveEnvironment),
             logger: NullLogger<GuestAppHostProject>.Instance,
             fileLoggerProvider: fileLoggerProvider,

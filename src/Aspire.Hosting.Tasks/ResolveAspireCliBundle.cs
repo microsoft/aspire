@@ -15,6 +15,8 @@ public sealed class ResolveAspireCliBundle : Microsoft.Build.Utilities.Task
     private const string VersionsDirectoryName = "versions";
     private const string InstallSidecarFileName = ".aspire-install.json";
     private const string AspireHomeEnvironmentVariable = "ASPIRE_HOME";
+    private const string PinnedLayoutsDirectoryName = "dnx";
+    private const string PinnedCliPackageDirectoryName = "aspire.cli";
     private const int MaxInstallSidecarBytes = 64 * 1024;
     private static readonly Version s_unversionedDirectoryVersion = new(0, 0);
 
@@ -42,10 +44,28 @@ public sealed class ResolveAspireCliBundle : Microsoft.Build.Utilities.Task
     public bool WarnOnInvalidPaths { get; set; } = true;
 
     /// <summary>
+    /// Gets or sets the Aspire CLI package version that DNX runs when the invocation is pinned to the AppHost version.
+    /// </summary>
+    /// <remarks>
+    /// When set, and no explicit bundle or CLI path is configured, only the layout extracted for this version is
+    /// accepted. Shared Aspire home layouts can belong to a different CLI and its DCP build, so they are ignored.
+    /// </remarks>
+    public string? PinnedAspireCliVersion { get; set; }
+
+    /// <summary>
     /// The Aspire home directory used to find and prepare extracted bundle layouts.
     /// </summary>
     [Output]
     public string? AspireHomeDirectory { get; set; }
+
+    /// <summary>
+    /// The directory that automatic bundle setup should extract into.
+    /// </summary>
+    /// <remarks>
+    /// This is the Aspire home directory, or a version-specific directory under it when <see cref="PinnedAspireCliVersion"/> is set.
+    /// </remarks>
+    [Output]
+    public string? AspireCliSetupDirectory { get; set; }
 
     /// <summary>
     /// The resolved DCP directory.
@@ -90,6 +110,7 @@ public sealed class ResolveAspireCliBundle : Microsoft.Build.Utilities.Task
     {
         var aspireHomeDirectory = GetDefaultAspireHomeDirectory();
         AspireHomeDirectory = aspireHomeDirectory;
+        AspireCliSetupDirectory = aspireHomeDirectory;
 
         if (!string.IsNullOrWhiteSpace(AspireCliBundlePath))
         {
@@ -118,6 +139,19 @@ public sealed class ResolveAspireCliBundle : Microsoft.Build.Utilities.Task
             if (WarnOnInvalidPaths)
             {
                 Log.LogWarning("The AspireCliPath value '{0}' does not point to an existing Aspire CLI executable with a valid bundle layout.", AspireCliPath);
+            }
+
+            return true;
+        }
+
+        if (!string.IsNullOrWhiteSpace(PinnedAspireCliVersion))
+        {
+            var pinnedLayoutDirectory = GetPinnedLayoutDirectory(aspireHomeDirectory, PinnedAspireCliVersion!);
+            AspireCliSetupDirectory = pinnedLayoutDirectory;
+
+            if (TryResolveFromLayoutPath(pinnedLayoutDirectory, out var pinnedBundle))
+            {
+                SetOutputs(pinnedBundle);
             }
 
             return true;
@@ -498,6 +532,19 @@ public sealed class ResolveAspireCliBundle : Microsoft.Build.Utilities.Task
         return string.IsNullOrWhiteSpace(aspireHome)
             ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".aspire")
             : aspireHome;
+    }
+
+    internal static string GetPinnedLayoutDirectory(string aspireHomeDirectory, string version)
+    {
+        // Package versions only contain alphanumerics, '.', '-' and '+'. Replace anything else so
+        // the version cannot escape the pinned layouts directory.
+        var directoryName = new string(version.Trim().Select(static ch => char.IsLetterOrDigit(ch) || ch is '.' or '-' or '+' ? ch : '_').ToArray());
+        if (directoryName.Trim('.').Length == 0)
+        {
+            directoryName = directoryName.Replace('.', '_');
+        }
+
+        return Path.Combine(aspireHomeDirectory, PinnedLayoutsDirectoryName, PinnedCliPackageDirectoryName, directoryName);
     }
 
     private static StringComparer GetPathComparer()

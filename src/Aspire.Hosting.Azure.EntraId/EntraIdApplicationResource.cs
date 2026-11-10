@@ -553,13 +553,17 @@ public class EntraIdApplicationResource : AzureProvisioningResource, IResourceWi
                 continue;
             }
 
-            if (value is IEntraIdDerivedRedirectUri derivedRedirectUri)
+            if (value is EntraIdEndpointRedirectUri endpointRedirect)
             {
-                // The value is only known when the parameter is resolved: after endpoint allocation when running
-                // locally, from the compute environment when deploying, or from the host parameter's value.
-                var uriParameter = derivedRedirectUri
-                    .CreateExpression()
-                    .AsProvisioningParameter(infrastructure, NextDerivedParameterName());
+                var origin = endpointRedirect.Origin().AsProvisioningParameter(infrastructure, NextDerivedParameterName());
+                literals.Add(BicepFunction.Interpolate($"{origin.Value}{endpointRedirect.Path}").Compile());
+                continue;
+            }
+
+            if (value is ReferenceExpression uriExpression)
+            {
+                // Keep runtime browser origins and deployment parameters/outputs deferred until resolution.
+                var uriParameter = uriExpression.AsProvisioningParameter(infrastructure, NextDerivedParameterName());
                 literals.Add(uriParameter.Value.Compile());
                 continue;
             }
@@ -692,7 +696,7 @@ public class EntraIdApplicationResource : AzureProvisioningResource, IResourceWi
             // The Graph extension names a child as '{applicationUniqueName}/{credentialName}'. Referencing the
             // application's property, rather than reusing its name expression, makes the child depend on the application.
             BicepValue<string> applicationUniqueName = application.UniqueName.ToBicepExpression();
-            infrastructure.Add(new FederatedIdentityCredential(credentialIdentifier)
+            infrastructure.Add(new MicrosoftGraphFederatedIdentityCredential(credentialIdentifier)
             {
                 Name = BicepFunction.Interpolate($"{applicationUniqueName}/{credentialName}").Compile(),
                 Issuer = BicepFunction.Interpolate($"{EntraIdFederation.GetIssuerPrefix(resource.Instance)}/{BicepFunction.GetTenant().TenantId}/v2.0").Compile(),
@@ -799,14 +803,16 @@ public class EntraIdApplicationResource : AzureProvisioningResource, IResourceWi
     /// </remarks>
     public IReadOnlyList<ParameterResource> RedirectUriParameters => [.. _redirectUriValues.OfType<ParameterResource>()];
 
-    // Holds string or ParameterResource entries in the order they were added, so registration order matches call order.
+    // Keep literal, parameter, expression, and endpoint-derived entries in registration order.
     private readonly List<object> _redirectUriValues = [];
 
     internal void AddRedirectUri(string redirectUri) => _redirectUriValues.Add(redirectUri);
 
     internal void AddRedirectUri(ParameterResource redirectUri) => _redirectUriValues.Add(redirectUri);
 
-    internal void AddRedirectUri(IEntraIdDerivedRedirectUri redirectUri) => _redirectUriValues.Add(redirectUri);
+    internal void AddRedirectUri(ReferenceExpression redirectUri) => _redirectUriValues.Add(redirectUri);
+
+    internal void AddRedirectUri(EntraIdEndpointRedirectUri redirectUri) => _redirectUriValues.Add(redirectUri);
 
     /// <summary>
     /// Gets the application roles to declare on an application created by Aspire.

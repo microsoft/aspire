@@ -10,13 +10,23 @@ public sealed class ConfigSourceTests(ITestOutputHelper output)
 {
     [Fact]
     [CaptureWorkspaceOnFailure]
+    public Task Add_UsesAllMaterializedIntegrationSources()
+        => ConfigSourceTestContext.RunAsync(output, "sha1", async context =>
+        {
+            await context.CreateProjectAsync();
+            await context.AssertSourceAppliedAsync("original");
+            await context.AddAndAssertIntegrationSourcesAsync();
+        });
+
+    [Fact]
+    [CaptureWorkspaceOnFailure]
     public Task Init_SolutionModeBindsAndRefreshesAppHostConfiguration()
         => ConfigSourceTestContext.RunAsync(output, "sha1", async context =>
         {
             await context.InitializeSolutionAsync();
             var original = await context.AssertSourceAppliedAsync("original");
             await context.UpdateSourceAsync();
-            await context.RefreshConfigurationAsync(expectChanges: true);
+            await context.RefreshConfigurationAsync();
             await context.AssertConfigurationUpdatedAsync(original);
         });
 
@@ -125,18 +135,18 @@ public sealed class ConfigSourceTests(ITestOutputHelper output)
             var original = await context.AssertSourceAppliedAsync("original");
             Assert.Equal(objectIdLength, original["configSource"]!["appliedVersion"]!.GetValue<string>().Length);
             await context.UpdateSourceAsync();
-            await context.RefreshConfigurationAsync(expectChanges: true);
+            await context.RefreshConfigurationAsync();
             await context.AssertConfigurationUpdatedAsync(original);
         });
 
     [Fact]
     [CaptureWorkspaceOnFailure]
-    public Task Update_ConfigSourceReportsAlreadyUpToDate()
+    public Task Update_ConfigSourcePreservesUnchangedConfiguration()
         => ConfigSourceTestContext.RunAsync(output, "sha1", async context =>
         {
             await context.CreateProjectAsync();
             var original = await context.AssertSourceAppliedAsync("original");
-            await context.RefreshConfigurationAsync(expectChanges: false);
+            await context.RefreshConfigurationAsync();
             await context.AssertConfigurationUnchangedAsync(original);
         });
 
@@ -162,7 +172,7 @@ public sealed class ConfigSourceTests(ITestOutputHelper output)
             var original = await context.AssertSourceAppliedAsync("original");
             await context.UseAppHostDirectoryAsync();
             await context.UpdateSourceAsync();
-            await context.RefreshConfigurationAsync(expectChanges: true);
+            await context.RefreshConfigurationAsync();
             await context.AssertConfigurationUpdatedAsync(original);
             await context.AssertNoLocalConfigurationAsync();
         });

@@ -268,6 +268,7 @@ internal static class CliTestHelper
         services.AddSingleton<IDcpConnectionChecker, TestDcpConnectionChecker>();
         services.AddSingleton<IEnvironmentCheck, DcpConnectionHealthCheck>();
         services.AddSingleton<IEnvironmentCheck, DeprecatedAgentConfigCheck>();
+        services.AddSingleton<IEnvironmentCheck, AspireSkillsCheck>();
         services.AddSingleton<IEnvironmentChecker, EnvironmentChecker>();
 
         // MCP server transport
@@ -465,7 +466,7 @@ internal sealed class CliServiceCollectionTestOptions
     public Func<IServiceProvider, IAddCommandPrompter> AddCommandPrompterFactory { get; set; } = (IServiceProvider serviceProvider) =>
     {
         var interactionService = serviceProvider.GetRequiredService<IInteractionService>();
-        return new AddCommandPrompter(interactionService);
+        return new AddCommandPrompter(interactionService, serviceProvider.GetRequiredService<CliExecutionContext>());
     };
 
     public Func<IServiceProvider, IPublishCommandPrompter> PublishCommandPrompterFactory { get; set; } = (IServiceProvider serviceProvider) =>
@@ -617,7 +618,8 @@ internal sealed class CliServiceCollectionTestOptions
         var telemetry = serviceProvider.GetRequiredService<AspireCliTelemetry>();
         var features = serviceProvider.GetRequiredService<IFeatures>();
         var nuGetService = serviceProvider.GetRequiredService<BundleNuGetService>();
-        return new NuGetPackageCache(cliRunner, cache, telemetry, features, nuGetService);
+        var logger = serviceProvider.GetRequiredService<ILogger<NuGetPackageCache>>();
+        return new NuGetPackageCache(cliRunner, cache, telemetry, features, nuGetService, serviceProvider.GetRequiredService<INuGetClient>(), logger);
     };
 
     public Func<IServiceProvider, INuGetClient> NuGetClientFactory { get; set; } = _ => new FakeNuGetClient();

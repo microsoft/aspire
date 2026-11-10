@@ -21,7 +21,12 @@ public class ProcessUtilTests(ITestOutputHelper outputHelper)
 
         var spec = CreateSingleLineOutputProcessSpec(workspace, output =>
         {
-            Assert.Equal("final-line", output);
+            // File-based apps can emit SDK build diagnostics before their own output.
+            if (output != "final-line")
+            {
+                return;
+            }
+
             callbackStarted.TrySetResult();
             releaseCallback.Task.GetAwaiter().GetResult();
         }, pid => processStarted.TrySetResult(System.Diagnostics.Process.GetProcessById(pid)));

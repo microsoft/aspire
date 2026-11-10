@@ -24,7 +24,7 @@ public sealed class GoKubernetesDeployTests(ITestOutputHelper output)
         using var workspace = TemporaryWorkspace.Create(output);
 
         var clusterName = KubernetesDeployTestHelpers.GenerateUniqueClusterName();
-        const string k8sNamespace = "default";
+        var k8sNamespace = $"test-{clusterName[..16]}";
 
         output.WriteLine($"Cluster name: {clusterName}");
         output.WriteLine($"Namespace: {k8sNamespace}");
@@ -38,7 +38,6 @@ public sealed class GoKubernetesDeployTests(ITestOutputHelper output)
         await auto.InstallAspireCliAsync(strategy, counter);
 
         await auto.VerifyPullRequestCliVersionAsync(counter);
-        await auto.EnableExperimentalGoSupportAsync(counter);
 
         try
         {
@@ -65,11 +64,6 @@ public sealed class GoKubernetesDeployTests(ITestOutputHelper output)
             // Regenerate the Go SDK with Kubernetes types
             await auto.RunCommandAsync("aspire restore --non-interactive", counter, TimeSpan.FromMinutes(3));
 
-            // The starter ships api/go.mod without a go.sum, and its "go mod tidy" resource only runs
-            // under "aspire run". The generated Dockerfile builds from go.mod and go.sum alone, so
-            // the container build needs the go.sum that "go mod tidy" writes.
-            await auto.RunCommandAsync("(cd api && go mod tidy)", counter, TimeSpan.FromMinutes(3));
-
             // =====================================================================
             // Phase 3: Modify apphost.go to add Kubernetes environment
             // =====================================================================
@@ -78,9 +72,6 @@ public sealed class GoKubernetesDeployTests(ITestOutputHelper output)
 
             output.WriteLine($"Looking for apphost.go at: {appHostFilePath}");
 
-            // The AppHost passes no WithHelm callback: a Configure func inside the generated Go options
-            // struct panics the options merge (https://github.com/microsoft/aspire/issues/18080), so the
-            // Helm defaults apply (namespace "default", chart version 0.1.0).
             GoAppHostTestHelpers.InsertBeforeBuild(
                 appHostFilePath,
                 """
@@ -88,8 +79,14 @@ public sealed class GoKubernetesDeployTests(ITestOutputHelper output)
                 registryEndpoint := builder.AddParameter("registryendpoint")
                 builder.AddContainerRegistry("registry", registryEndpoint)
 
-                // Add Kubernetes environment (Helm is the default deployment engine)
-                builder.AddKubernetesEnvironment("env")
+                namespace := builder.AddParameter("namespace")
+                chartVersion := builder.AddParameter("chartversion")
+                builder.AddKubernetesEnvironment("env").WithHelm(aspire.HelmConfigure(
+                    func(helm aspire.HelmChartOptions) {
+                        helm.WithNamespace(namespace)
+                        helm.WithChartVersion(chartVersion)
+                    },
+                ))
                 """);
             output.WriteLine("Modified apphost.go with Kubernetes environment configuration");
 
@@ -102,6 +99,8 @@ public sealed class GoKubernetesDeployTests(ITestOutputHelper output)
                 parameterResponses:
                 [
                     ("registryendpoint", "localhost:5001"),
+                    ("namespace", k8sNamespace),
+                    ("chartversion", "0.1.0"),
                 ]);
 
             // =====================================================================

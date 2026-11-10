@@ -1,4 +1,4 @@
-﻿// Licensed to the .NET Foundation under one or more agreements.
+// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Dashboard.Components.Tests.Shared;
@@ -14,6 +14,36 @@ namespace Aspire.Dashboard.Components.Tests.Controls;
 
 public class AspireMenuTests : DashboardTestContext
 {
+    [Theory]
+    [InlineData(MenuItemRole.Radio, false)]
+    [InlineData(MenuItemRole.Radio, true)]
+    [InlineData(MenuItemRole.Checkbox, false)]
+    [InlineData(MenuItemRole.Checkbox, true)]
+    public void CheckableItem_ExposesMenuParentAndCurrentAriaState(MenuItemRole role, bool isChecked)
+    {
+        FluentUISetupHelpers.AddCommonDashboardServices(this);
+        FluentUISetupHelpers.SetupFluentUIComponents(this);
+        FluentUISetupHelpers.SetupFluentMenu(this);
+        FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
+        var header = new MenuButtonItem { Text = "Resource", IsHeader = true };
+        var item = new MenuButtonItem { Text = "Choice", Role = role, Checked = isChecked };
+        var menuHost = Render<AspireMenu>(builder =>
+        {
+            builder.Add(p => p.Anchor, "menu-anchor");
+            builder.Add(p => p.Open, true);
+            builder.Add(p => p.Items, new[] { header, item });
+        });
+
+        var menu = menuHost.Find("fluent-menu-list[role='menu']");
+        Assert.Equal(header.Id, menu.GetAttribute("aria-labelledby"));
+        Assert.Equal(isChecked ? "true" : "false", Assert.Single(menu.QuerySelectorAll("fluent-menu-item")).GetAttribute("aria-checked"));
+
+        item.Checked = !isChecked;
+        menuHost.Render();
+
+        Assert.Equal(isChecked ? "false" : "true", menuHost.Find("fluent-menu-item").GetAttribute("aria-checked"));
+    }
+
     [Theory]
     [InlineData(false, null, "Item")]
     [InlineData(false, "", "")]

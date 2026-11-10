@@ -12,24 +12,26 @@ func main() {
 		log.Fatal(aspire.FormatError(err))
 	}
 
-	// A Redis cache the API will use for read-through caching.
-	cache := builder.AddRedis("cache")
-
 	// The Go HTTP API. WithModTidy runs "go mod tidy" before launching so that
 	// go.sum is always up to date. Aspire injects:
-	//   - "ConnectionStrings__cache" so the API can dial Redis.
 	//   - "OTEL_EXPORTER_OTLP_*" env vars (via WithOtlpExporter) so traces,
 	//     metrics, and logs flow to the Aspire dashboard.
 	api := builder.AddGoApp("api", "./api").
 		WithModTidy().
-		WithReference(cache).
-		WaitFor(cache).
-		WithHttpEndpoint(&aspire.WithHttpEndpointOptions{Env: aspire.StringPtr("PORT")}).
+		WithHttpEndpoint(aspire.HttpEndpointEnv("PORT")).
 		WithExternalHttpEndpoints().
 		WithOtlpExporter()
+	resources := []aspire.Resource{api}
+	// {{#redis}}
+
+	// WithReference injects ConnectionStrings__cache for read-through caching.
+	cache := builder.AddRedis("cache")
+	api.WithReference(cache).WaitFor(cache)
+	resources = append(resources, cache)
+	// {{/redis}}
 
 	// Each call records its failure on the handle that it returns, so check every resource.
-	for _, resource := range []aspire.Resource{cache, api} {
+	for _, resource := range resources {
 		if err := resource.Err(); err != nil {
 			log.Fatal(aspire.FormatError(err))
 		}

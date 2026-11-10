@@ -380,6 +380,41 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
+    [InlineData("")]
+    [InlineData("node,browser")]
+    public void DebugSessionWithoutProjectCapabilityCoordinatesBuildForProcessLaunches(string supportedLaunchConfigurations)
+    {
+        // VS Code without the C# extension advertises an explicit capability list without "project". DCP then runs
+        // project resources as processes, so they need the same single coordinated build as outside an IDE. Otherwise
+        // resources that share a project each run an implicit, concurrent `dotnet run` build of it, and one can exit
+        // on files the other holds open in obj/.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path,
+            outputHelper);
+        builder.Configuration["DEBUG_SESSION_PORT"] = "localhost:12345";
+        builder.Configuration[KnownConfigNames.DebugSessionInfo] = JsonSerializer.Serialize(new RunSessionInfo
+        {
+            ProtocolsSupported = ["test"],
+            SupportedLaunchConfigurations = supportedLaunchConfigurations.Split(',', StringSplitOptions.RemoveEmptyEntries)
+        });
+
+        var projectPath = CreateProject(workspace.Path, "Worker", "Worker.csproj");
+        var worker = builder.AddDotnetProject("worker", projectPath, options => options.ExcludeLaunchProfile = true);
+        var terminal = builder.AddDotnetProject("terminal", projectPath, options => options.ExcludeLaunchProfile = true);
+
+        Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
+        Assert.All(
+            new[] { worker, terminal },
+            project =>
+            {
+                Assert.True(Assert.Single(project.Resource.Annotations.OfType<DotnetProjectMetadata>()).SuppressBuild);
+                Assert.Single(project.Resource.Annotations.OfType<DotnetProgramBuildCompletionAnnotation>());
+                Assert.False(project.Resource.SupportsDebugging(builder.Configuration, out _));
+            });
+    }
+
+    [Theory]
     [InlineData("null")]
     [InlineData("[]")]
     [InlineData("42")]
@@ -602,6 +637,40 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         AddExpectedConfiguration(builder, expectedFileArgs);
         expectedFileArgs.Add("--no-launch-profile");
         Assert.Equal(expectedFileArgs, fileArgs);
+    }
+
+    [Fact]
+    public async Task RebuilderDoesNotForwardAppHostGlobalArtifactsPath()
+    {
+        // The AppHost's global artifacts path is only forwarded to legacy ProjectResource launches
+        // (https://github.com/microsoft/aspire/issues/6887). The coordinated build and launch of
+        // AddDotnetProject don't use it, so the rebuild must keep writing to the same output.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path,
+            outputHelper);
+        UseDotnetSdkVersion(builder, "11.0.100-rc.2.26504.105");
+        var filePath = Path.Combine(workspace.Path, "worker.cs");
+        File.WriteAllText(filePath, "System.Console.WriteLine(\"Hello\");");
+
+        builder.AddDotnetProject("worker", filePath, options => options.ExcludeLaunchProfile = true);
+        var rebuilder = Assert.Single(builder.Resources.OfType<ProjectRebuilderResource>());
+        await using var app = builder.Build();
+        app.Services.GetRequiredService<DistributedApplicationOptions>().GlobalArtifactsPath =
+            Path.Combine(workspace.Path, "artifacts");
+
+        await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
+        await EventingTestHelpers.SubscribeEventingSubscribersAsync(
+            app,
+            TestContext.Current.CancellationToken);
+        await builder.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(rebuilder, app.Services),
+            TestContext.Current.CancellationToken);
+        var rebuildArgs = await ArgumentEvaluator.GetArgumentListAsync(rebuilder, app.Services);
+
+        var expectedRebuildArgs = new List<string> { "build", filePath };
+        AddExpectedConfiguration(builder, expectedRebuildArgs);
+        Assert.Equal(expectedRebuildArgs, rebuildArgs);
     }
 
     [Theory]

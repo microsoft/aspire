@@ -9,6 +9,7 @@ using Aspire.Cli.Configuration;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
+using Aspire.Cli.Secrets;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
@@ -83,6 +84,7 @@ internal abstract class BaseCommand : Command
         ConfigSources = services.ConfigSources;
         SetAction((Func<ParseResult, CancellationToken, Task<int>>)(async (parseResult, cancellationToken) =>
         {
+            _executionContext.ResetSourceTrustWarning();
             SelectForExecution(parseResult);
 
             // Route human-readable output to stderr when a machine-readable format is requested so
@@ -185,9 +187,13 @@ internal abstract class BaseCommand : Command
                 }
             }
         }
+        catch (InvalidSecretsFileException ex)
+        {
+            result = CommandResult.Failure(CliExitCodes.InvalidCommand, ex.Message);
+        }
         catch (ConfigSourceException ex)
         {
-            ConfigSourceService.DisplayGitTimeoutOutput(InteractionService, ex.GitOutput);
+            ConfigSourceService.DisplayGitOutput(InteractionService, ex.GitOutput);
             result = CommandResult.Failure(CliExitCodes.InvalidCommand, ex.Message);
         }
         catch (NonInteractiveException)

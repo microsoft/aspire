@@ -19,6 +19,7 @@ using Aspire.Cli.Tests.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Spectre.Console;
 
 namespace Aspire.Cli.Tests.Commands;
 
@@ -218,10 +219,17 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
                 "default": { "openCodeV1Catalog": "https://third-party.example/skills/" },
                 "team": {
                   "repository": "example/team",
+                  "marketplace": "TEAM",
                   "openCodeV1Catalog": "https://team.example/skills/",
                   "openCodeV2Catalog": "https://team.example/skills/"
                 },
                 "pluginsOnly": { "repository": "example/plugins" },
+                "teamAlias": {
+                  "repository": "example/team",
+                  "marketplace": "team-marketplace",
+                  "ref": "source-demo",
+                  "openCodeV1Catalog": "https://team.example/skills/"
+                },
                 "disabled": {
                   "enabled": false,
                   "repository": "example/disabled",
@@ -230,16 +238,16 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
               }
             }
             """);
-        var warningsBeforeRegistration = new List<string>();
+        var messagesBeforeRegistration = new List<string>();
         var interaction = new TestInteractionService
         {
             DisplayMessageCallback = (emoji, message, _) =>
             {
-                if (emoji.Equals(KnownEmojis.Warning))
+                if (emoji.Equals(KnownEmojis.Information) || emoji.Equals(KnownEmojis.PoliceCarLight))
                 {
                     Assert.All(context.Clients, client => Assert.False(File.Exists(
                         client.GetIntegrationConfigPath(AgentConfigurationScope.Project, context.Project))));
-                    warningsBeforeRegistration.Add(message);
+                    messagesBeforeRegistration.Add(message);
                 }
             },
             PromptForSelectionCallback = (_, _, _, _) => throw new InvalidOperationException("No source or scope prompt is expected.")
@@ -253,11 +261,31 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             $"agent init --agents {agents} --scope project --skills aspire");
 
         Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
-        Assert.NotEmpty(warningsBeforeRegistration);
-        Assert.Equal(warningsBeforeRegistration, interaction.DisplayedMessages
-            .Where(message => message.Emoji.Equals(KnownEmojis.Warning))
+        Assert.Equal([AgentCommandStrings.InitCommand_SkillSourcesExplanation, $"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]"],
+            messagesBeforeRegistration);
+        Assert.NotEmpty(interaction.DisplayedRenderables);
+        var warning = Assert.Single(interaction.DisplayedMessages, message => message.Emoji.Equals(KnownEmojis.PoliceCarLight));
+        Assert.Equal($"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]", warning.Message);
+        Assert.Equal(ConsoleOutput.Error, warning.ConsoleOverride);
+        Assert.Equal(messagesBeforeRegistration, interaction.DisplayedMessages
+            .Where(message => message.Emoji.Equals(KnownEmojis.Information) || message.Emoji.Equals(KnownEmojis.PoliceCarLight))
             .Select(message => message.Message));
-        await Verify(warningsBeforeRegistration).UseParameters(agents);
+        using var renderedSources = new StringWriter();
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.No,
+            ColorSystem = ColorSystemSupport.NoColors,
+            Out = new AnsiConsoleOutput(renderedSources),
+            Enrichment = new ProfileEnrichment { UseDefaultEnrichers = false }
+        });
+        console.Profile.Width = 160;
+        foreach (var source in interaction.DisplayedRenderables)
+        {
+            console.Write(source);
+            console.WriteLine();
+        }
+        await Verify(new { Sources = renderedSources.ToString(), Warnings = messagesBeforeRegistration })
+            .UseParameters(agents).ScrubLinesWithReplace(line => line.TrimEnd());
     }
 
     [Fact]
@@ -742,23 +770,15 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         var config = JsonNode.Parse(await File.ReadAllTextAsync(expectedPath))!.AsObject();
         Assert.Equal(client == "opencode" ? ["skills"] : new[] { "enabledPlugins", "extraKnownMarketplaces" }, config.Select(property => property.Key).Order());
         Assert.Empty(messages);
-        var sourceUrls = client == "opencode"
-            ? string.Join(", ", SkillSource.DefaultV1Catalog, SkillSource.DefaultV2Catalog)
-            : AspireSkillsRemoteConfiguration.RepositoryUrl;
+        Assert.Empty(interaction.DisplayedRenderables);
         Assert.Collection(interaction.DisplayedMessages,
-            message =>
-            {
-                Assert.Equal(KnownEmojis.Warning, message.Emoji);
-                Assert.Equal(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_PluginRiskWarning,
-                    sourceUrls), message.Message);
-            },
             message =>
             {
                 Assert.Equal(KnownEmojis.Robot, message.Emoji);
                 Assert.Equal(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_ConfiguredTargets,
-                    string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_ConfigurationTarget,
-                        context.Clients.Single(value => value.Id == client).DisplayName,
-                        scope == "project" ? relativePath : $"~/{relativePath}")), message.Message);
+                    string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_LocationWithAgents,
+                        scope == "project" ? relativePath : $"~/{relativePath}",
+                        context.Clients.Single(value => value.Id == client).DisplayName)), message.Message);
             });
         Assert.Empty(interaction.DisplayedErrors);
     }
@@ -783,7 +803,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         var scopeRoot = scope is AgentConfigurationScope.Project ? context.Project : context.Home;
         var prefix = scope is AgentConfigurationScope.Global ? "~/" : string.Empty;
         var targetEntries = context.Clients.Select(client =>
-            $"{client.DisplayName}: {prefix}{Path.GetRelativePath(scopeRoot.FullName, client.GetIntegrationConfigPath(scope, context.Project)).Replace(Path.DirectorySeparatorChar, '/')}").ToArray();
+            $"{prefix}{Path.GetRelativePath(scopeRoot.FullName, client.GetIntegrationConfigPath(scope, context.Project)).Replace(Path.DirectorySeparatorChar, '/')} ({client.DisplayName})").ToArray();
 
         for (var invocation = 0; invocation < 2; invocation++)
         {
@@ -793,13 +813,69 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
 
             Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
             var messages = interaction.DisplayedMessages.Skip(previousMessageCount).ToArray();
-            Assert.Equal(2, messages.Length);
-            Assert.Equal(KnownEmojis.Warning, messages[0].Emoji);
-            Assert.Equal(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_ConfiguredTargets,
-                string.Join($"{System.Environment.NewLine}  ", targetEntries)),
-                Assert.Single(messages, message => message.Emoji.Equals(KnownEmojis.Robot)).Message);
+            Assert.Collection(messages,
+                message =>
+                {
+                    Assert.Equal(KnownEmojis.Robot, message.Emoji);
+                    Assert.Equal(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_ConfiguredTargets,
+                        string.Join(", ", targetEntries)), message.Message);
+                });
             Assert.Empty(interaction.DisplayedErrors);
         }
+    }
+
+    [Fact]
+    public async Task Remote_SummaryListsAgentConfigurationFiles()
+    {
+        using var context = new AgentConfigurationTestContext(outputHelper);
+        await AgentConfigurationTestContext.WriteAsync(Path.Combine(context.Project.FullName, "aspire.config.json"), """
+            {"skillSources":{"team":{"repository":"example/team","plugins":["deployment"]}}}
+            """);
+        var interaction = new TestInteractionService();
+        using var provider = context.CreateServiceCollection(outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interaction;
+        }).BuildServiceProvider();
+        var result = provider.GetRequiredService<RootCommand>().Parse(
+            "agent init --agents copilot,claude --scope project --skills aspire --mcp=false");
+
+        Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
+        var summary = Assert.Single(interaction.DisplayedMessages, message => message.Emoji.Equals(KnownEmojis.Robot));
+        await Verify(summary.Message);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task Remote_SummaryListsAgentConfigurationFilesWithExistingOpenCodeCatalogs(bool array, bool pinned)
+    {
+        using var context = new AgentConfigurationTestContext(outputHelper);
+        var catalogs = new JsonArray("https://example.test/unrelated-catalog/");
+        if (pinned)
+        {
+            catalogs.Add("https://raw.githubusercontent.com/microsoft/aspire-skills/release/opencode/v2/");
+        }
+        var config = new JsonObject
+        {
+            ["skills"] = array ? catalogs : new JsonObject { ["urls"] = catalogs }
+        };
+        await AgentConfigurationTestContext.WriteAsync(
+            context.OpenCode.GetIntegrationConfigPath(AgentConfigurationScope.Project, context.Project), config.ToJsonString());
+        var interaction = new TestInteractionService();
+        using var provider = context.CreateServiceCollection(outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interaction;
+        }).BuildServiceProvider();
+        var result = provider.GetRequiredService<RootCommand>().Parse(
+            "agent init --agents copilot,claude,opencode --scope project --skills aspire --mcp=false");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+        outputHelper.WriteLine(string.Join(System.Environment.NewLine, interaction.DisplayedErrors));
+        Assert.Empty(interaction.DisplayedErrors);
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        var summary = Assert.Single(interaction.DisplayedMessages, message => message.Emoji.Equals(KnownEmojis.Robot));
+        await Verify(summary.Message).UseParameters(array, pinned);
     }
 
     [Fact]
@@ -898,7 +974,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
         Assert.Empty(interaction.DisplayedErrors);
-        Assert.Contains(interaction.DisplayedMessages, message => message.Emoji.Equals(KnownEmojis.Warning) &&
+        Assert.Contains(interaction.DisplayedMessages, message => message.Emoji.Equals(KnownEmojis.PoliceCarLight) &&
             message.Message == string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_LocalSkillsConflict,
                 "  team-skills/aspire/SKILL.md"));
         Assert.Equal(skill, await File.ReadAllTextAsync(skillPath));

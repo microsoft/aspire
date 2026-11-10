@@ -1,12 +1,10 @@
 ﻿::deep.layout > header {
-    /* The recording pill is centered on the header. */
-    position: relative;
     display: flex;
     align-items: center;
     min-width: 0;
     height: 50px;
     padding: 0 12px;
-    gap: 6px;
+    gap: var(--aspire-space-1);
     overflow: hidden;
     white-space: nowrap;
 }
@@ -22,8 +20,8 @@
     overflow: hidden;
     color: var(--colorNeutralForeground1);
     font-family: var(--aspire-font-display);
-    font-size: 20px;
-    font-weight: var(--fontWeightRegular);
+    font-size: var(--aspire-font-size-title);
+    font-weight: var(--aspire-font-weight-regular);
     line-height: 28px;
     text-decoration: none;
     text-overflow: ellipsis;
@@ -59,7 +57,7 @@
     height: 32px;
     padding: 0;
     border: 0;
-    border-radius: 8px;
+    border-radius: var(--aspire-radius-medium);
     background: var(--aspire-button-background);
 }
 
@@ -68,7 +66,7 @@
     height: 32px;
     padding: 0;
     border: 0;
-    border-radius: 8px;
+    border-radius: var(--aspire-radius-medium);
     background: transparent;
 }
 
@@ -97,7 +95,7 @@
     padding: 0;
     background-color: var(--colorNeutralBackgroundInverted);
     color: var(--colorNeutralForegroundInverted);
-    font-weight: var(--fontWeightRegular);
+    font-weight: var(--aspire-font-weight-regular);
     pointer-events: none;
 }
 
@@ -110,7 +108,7 @@
     flex: 1 1 auto;
     min-width: 0;
     padding: 8px;
-    gap: 6px;
+    gap: var(--aspire-space-1);
 }
 
 ::deep.layout > .messagebar-container > .top-messagebar:empty {
@@ -122,11 +120,11 @@
 }
 
 ::deep fluent-toast-b.resource-command-toast::part(dialog) {
-    font-size: 13px;
+    font-size: var(--aspire-font-size-body);
 }
 
 ::deep fluent-toast-b.resource-command-toast > [slot="title"] {
-    font-weight: var(--fontWeightSemibold);
+    font-weight: var(--aspire-font-weight-semibold);
 }
 
 ::deep.layout {
@@ -159,6 +157,48 @@
 
 ::deep.layout > .messagebar-container:has(> .top-messagebar:empty) {
     display: none;
+}
+
+/* When the banners don't all fit, the area scrolls. It rests on a banner's top edge rather than partway through one,
+   and fades out at the bottom while there's more to scroll to, so a banner cut off at the edge reads as "scroll for
+   more" rather than as a clipped banner. The fade follows the scroll position (a scroll-driven animation); browsers
+   without them show no fade. */
+::deep.layout > .messagebar-container {
+    scroll-snap-type: y proximity;
+}
+
+::deep.layout > .messagebar-container .dashboard-message-bar {
+    scroll-snap-align: start;
+}
+
+@supports (animation-timeline: scroll()) {
+    ::deep.layout > .messagebar-container {
+        /* No fade unless the area scrolls: without overflow the scroll timeline is inactive and this value applies. */
+        --messagebar-fade: 0px;
+        mask-image: linear-gradient(to bottom, #000 calc(100% - var(--messagebar-fade)), transparent);
+        animation: messagebar-fade-out linear both;
+        animation-timeline: scroll(self);
+    }
+}
+
+@keyframes messagebar-fade-out {
+    from {
+        --messagebar-fade: 24px;
+    }
+
+    99% {
+        --messagebar-fade: 24px;
+    }
+
+    to {
+        --messagebar-fade: 0px;
+    }
+}
+
+@property --messagebar-fade {
+    syntax: "<length>";
+    inherits: false;
+    initial-value: 0px;
 }
 
 ::deep .header-right {
@@ -220,7 +260,7 @@
         align-self: stretch;
         align-items: center;
         min-height: 50px;
-        gap: 6px;
+        gap: var(--aspire-space-1);
         padding: 0;
         border: 0;
         border-radius: 0;
@@ -232,9 +272,9 @@
         height: 32px;
         padding: 0 10px;
         border: 0;
-        border-radius: 8px;
+        border-radius: var(--aspire-radius-medium);
         background: transparent;
-        font-weight: var(--fontWeightSemibold);
+        font-weight: var(--aspire-font-weight-semibold);
     }
 
     ::deep.layout > header .resources-tab-header fluent-tab[aria-selected="true"] {
@@ -249,7 +289,7 @@
         bottom: -9px;
         display: block;
         height: 3px;
-        border-radius: 2px 2px 0 0;
+        border-radius: var(--aspire-radius-small) var(--aspire-radius-small) 0 0;
         background: var(--colorBrandBackground);
     }
 
@@ -278,6 +318,10 @@
 }
 
 @media (max-width: 768px) {
+    ::deep.layout > header > a.application-name {
+        max-width: none;
+    }
+
     ::deep.layout {
         /* MobileNavMenu uses this same value to place its sheet directly under the header and to keep its
            scrollport within the visible viewport instead of extending underneath the header at high zoom. */

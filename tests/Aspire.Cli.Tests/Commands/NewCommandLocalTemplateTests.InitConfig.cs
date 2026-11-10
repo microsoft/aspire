@@ -5,12 +5,14 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Git;
+using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Templating;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
+using Spectre.Console;
 using RootCommand = Aspire.Cli.Commands.RootCommand;
 
 namespace Aspire.Cli.Tests.Commands;
@@ -68,8 +70,8 @@ public partial class NewCommandLocalTemplateTests
             ReadConfiguration = (_, _) => Task.FromResult(("version-1", JsonNode.Parse("""
                 {
                   "templateSources": {
-                    "enterprise": { "repository": "https://git.example/enterprise", "ref": "inherited", "path": "templates" },
-                    "shared": { "repository": "https://git.example/shared", "ref": "shared-preview" }
+                    "enterprise": { "repository": "https://git.example/enterprise", "ref": "inherited", "path": "templates", "displayName": "Inherited enterprise" },
+                    "shared": { "repository": "https://git.example/shared", "ref": "shared-preview", "displayName": "Shared templates" }
                   }
                 }
                 """)!.AsObject()))
@@ -92,19 +94,25 @@ public partial class NewCommandLocalTemplateTests
 
         Assert.Equal(["Enterprise", "shared"], sources.Select(source => source.Key).Order(StringComparer.Ordinal));
         Assert.Equal(new TemplateSource(workspace.Path, null, null), sources.Single(source => source.Key == "Enterprise").Value.Template);
+        Assert.Null(sources.Single(source => source.Key == "Enterprise").Value.DisplayName);
         Assert.Equal(new TemplateSource(".", "https://git.example/shared", "shared-preview"),
             sources.Single(source => source.Key == "shared").Value.Template);
+        Assert.Equal("Shared templates", sources.Single(source => source.Key == "shared").Value.DisplayName);
         Assert.Equal(["Enterprise", "shared"], listed.Select(source => source.Key).Order(StringComparer.Ordinal));
         Assert.Equal(original, await File.ReadAllTextAsync(settings.GetSettingsFilePath(true)));
         Assert.False(await store.RemoveAsync("shared", default));
         Assert.False(File.Exists(localPath));
 
-        await store.AddAsync("SHARED", new JsonObject { ["path"] = workspace.Path }, default);
+        await store.AddAsync("SHARED", new JsonObject { ["path"] = workspace.Path, ["displayName"] = "Personal templates" }, default);
         Assert.Equal(new TemplateSource(workspace.Path, null, null),
             (await discovery.GetSourcesAsync(default)).Single(source => source.Key == "SHARED").Value.Template);
+        Assert.Equal("Personal templates",
+            (await discovery.GetSourcesAsync(default)).Single(source => source.Key == "SHARED").Value.DisplayName);
         Assert.True(await store.RemoveAsync("shared", default));
         Assert.Equal("shared-preview",
             (await discovery.GetSourcesAsync(default)).Single(source => source.Key == "shared").Value.Template?.RepositoryRef);
+        Assert.Equal("Shared templates",
+            (await discovery.GetSourcesAsync(default)).Single(source => source.Key == "shared").Value.DisplayName);
         Assert.True(JsonNode.DeepEquals(JsonNode.Parse(original),
             JsonNode.Parse(await File.ReadAllTextAsync(settings.GetSettingsFilePath(true)))));
         Assert.Equal(1, git.Calls);
@@ -117,34 +125,32 @@ public partial class NewCommandLocalTemplateTests
         await CreateSearchTemplateAsync(workspace, "enterprise", "enterprise", "Enterprise", "Enterprise");
         await CreateSearchTemplateAsync(workspace, "personal", "personal", "Personal", "Personal");
         var interaction = new TestInteractionService();
-        interaction.SetupStringPromptResponse("");
         interaction.SetupStringPromptResponse("Hello");
         var selectionCount = 0;
         interaction.PromptForSelectionCallback = (_, choices, formatter, _) =>
         {
             var options = choices.Cast<object>().ToArray();
-            if (++selectionCount == 1)
-            {
-                return options[^1];
-            }
+            selectionCount++;
             Assert.Equal(
-                ["Enterprise (enterprise) - enterprise", "Personal (personal) - personal",
-                    Aspire.Cli.Resources.NewCommandStrings.SearchTemplatesAgain, Aspire.Cli.Resources.NewCommandStrings.BackToDefaultTemplates],
-                options.Select(formatter));
-            return options[0];
+                ["Enterprise (enterprise) - enterprise", "Personal (personal) - personal"],
+                options.Select(formatter).TakeLast(2));
+            return options[^2];
         };
         var git = new TestConfigSourceRepository
         {
             ReadConfiguration = (_, _) => Task.FromResult(("version-1", JsonNode.Parse($$"""
                 {
-                  "templateSources": { "enterprise": { "path": {{JsonSerializer.Serialize(Path.Combine(workspace.Path, "enterprise"))}} } },
+                  "templateSources": { "enterprise": { "path": {{JsonSerializer.Serialize(Path.Combine(workspace.Path, "enterprise"))}}, "displayName": "Team [templates]" } },
                   "skillSources": { "team": { "repository": "example/team", "plugins": ["deployment"] } },
                   "docs": { "llmsTxtUrl": "https://docs.example/llms.txt" }
                 }
                 """)!.AsObject()))
         };
         using var provider = CreateInheritedTemplateServices(workspace, interaction, git, interactive: true).BuildServiceProvider();
-        await WriteConfiguredSourcesAsync(provider, new() { ["personal"] = Path.Combine(workspace.Path, "personal") });
+        await WriteConfiguredSourcesAsync(provider, new()
+        {
+            ["personal"] = new { path = Path.Combine(workspace.Path, "personal"), displayName = "Team [templates]" }
+        });
         var globalPath = provider.GetRequiredService<IConfigurationService>().GetSettingsFilePath(true);
         var originalGlobal = await File.ReadAllTextAsync(globalPath);
 
@@ -154,8 +160,12 @@ public partial class NewCommandLocalTemplateTests
 
         Assert.Equal(CliExitCodes.Success, result);
         Assert.Empty(interaction.DisplayedErrors);
-        Assert.Equal(2, selectionCount);
+        Assert.Equal(1, selectionCount);
         Assert.Equal(1, git.Calls);
+        Assert.Equal(
+            [new SelectionChoiceGroup("source:enterprise", "Team [templates]") { Style = new Style(Color.Green) },
+                new SelectionChoiceGroup("source:personal", "Team [templates]") { Style = new Style(Color.Green) }],
+            Assert.Single(interaction.GroupedSelectionPromptCalls).TakeLast(2).Select(choice => choice.Group));
         Assert.Equal(originalGlobal, await File.ReadAllTextAsync(globalPath));
         var projectConfig = Path.Combine(workspace.Path, "out", AspireConfigFile.FileName);
         await Verify(await File.ReadAllTextAsync(projectConfig), "json");
@@ -170,25 +180,21 @@ public partial class NewCommandLocalTemplateTests
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         await CreateSearchTemplateAsync(workspace, "personal", "personal", "Personal", "Personal");
         var interaction = new TestInteractionService();
-        interaction.SetupStringPromptResponse("");
+        interaction.ConfirmCallback = (prompt, _) =>
+        {
+            Assert.Equal(ConfigSourceStrings.UseSourcePrompt, prompt);
+            return false;
+        };
         interaction.SetupStringPromptResponse("Hello");
         var selectionCount = 0;
-        interaction.PromptForSelectionCallback = (prompt, choices, formatter, _) =>
+        interaction.PromptForSelectionCallback = (_, choices, formatter, _) =>
         {
-            if (prompt == ConfigSourceStrings.UseSourcePrompt)
-            {
-                return ConfigSourceStrings.Decline;
-            }
             var options = choices.Cast<object>().ToArray();
-            if (++selectionCount == 1)
-            {
-                Assert.Equal(NewCommandStrings.SearchForMoreTemplates, formatter(options[^1]));
-                return options[^1];
-            }
+            selectionCount++;
             Assert.Equal(
-                ["Personal (personal) - personal", NewCommandStrings.SearchTemplatesAgain, NewCommandStrings.BackToDefaultTemplates],
-                options.Select(formatter));
-            return options[0];
+                ["Personal (personal) - personal"],
+                options.Select(formatter).TakeLast(1));
+            return options[^1];
         };
         var git = new TestConfigSourceRepository
         {
@@ -205,7 +211,7 @@ public partial class NewCommandLocalTemplateTests
 
         Assert.Equal(CliExitCodes.Success, result);
         Assert.Empty(interaction.DisplayedErrors);
-        Assert.Equal(2, selectionCount);
+        Assert.Equal(1, selectionCount);
         Assert.Equal(0, git.Calls);
         Assert.Empty(git.FetchModes);
         Assert.Equal(originalGlobal, await File.ReadAllTextAsync(globalPath));
@@ -222,7 +228,7 @@ public partial class NewCommandLocalTemplateTests
         var git = new TestConfigSourceRepository
         {
             ReadConfiguration = (_, _) => Task.FromResult(("version-1", JsonNode.Parse("""
-                {"templateSources":{"enterprise":{"repository":"https://git.example/templates","ref":"preview","future":true}}}
+                {"templateSources":{"enterprise":{"repository":"https://git.example/templates","ref":"preview","displayName":"Enterprise templates","future":true}}}
                 """)!.AsObject()))
         };
         using var provider = CreateInheritedTemplateServices(workspace, interaction, git, interactive: true).BuildServiceProvider();

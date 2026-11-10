@@ -22,7 +22,7 @@ public partial class GitCommandRunnerTests
     {
         var runner = new GitCommandRunner(interactiveHost
             ? TestHelpers.CreateInteractiveHostEnvironment()
-            : TestHelpers.CreateNonInteractiveHostEnvironment(), _loggerFactory.CreateLogger<GitCommandRunner>());
+            : TestHelpers.CreateNonInteractiveHostEnvironment(), new TestInteractionService(), _loggerFactory.CreateLogger<GitCommandRunner>());
         var info = runner.CreateStartInfo(Environment.CurrentDirectory, ["ls-remote", "--", "repository"], Enum.Parse<GitCommandMode>(mode));
 
         Assert.Equal(disabled
@@ -230,6 +230,42 @@ public partial class GitCommandRunnerTests
         Assert.Equal("ssh", info.Environment["GIT_SSH_VARIANT"]);
         Assert.Equal("preserved-agent", info.Environment["SSH_AUTH_SOCK"]);
         Assert.Equal(configuration, await File.ReadAllTextAsync(config));
+    }
+
+    [Fact]
+    public async Task VerifyOpenSshAsync_AllowsSlowStartup()
+    {
+        var probe = CreateShellStartInfo(
+            "sleep 6; printf 'OpenSSH_test' >&2",
+            "Start-Sleep -Seconds 6; [Console]::Error.Write('OpenSSH_test')");
+        probe.RedirectStandardInput = true;
+
+        Assert.True(await CreateRunner().VerifyOpenSshAsync(probe, TestContext.Current.CancellationToken));
+    }
+
+    [Theory]
+    [InlineData("OpenSSH_test", 0, true)]
+    [InlineData("OpenSSH_test", 1, false)]
+    [InlineData("not OpenSSH", 0, false)]
+    public async Task VerifyOpenSshAsync_RequiresSuccessfulOpenSshBanner(string banner, int exitCode, bool expected)
+    {
+        var probe = CreateShellStartInfo(
+            $"printf '%s' '{banner}' >&2; exit {exitCode}",
+            $"[Console]::Error.Write('{banner}'); exit {exitCode}");
+        probe.RedirectStandardInput = true;
+
+        Assert.Equal(expected, await CreateRunner().VerifyOpenSshAsync(probe, TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task VerifyOpenSshAsync_HonorsCancellation()
+    {
+        var probe = CreateShellStartInfo("sleep 60", "Start-Sleep -Seconds 60");
+        probe.RedirectStandardInput = true;
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        cancellation.CancelAfter(TimeSpan.FromMilliseconds(100));
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => CreateRunner().VerifyOpenSshAsync(probe, cancellation.Token));
     }
 
     [Fact]

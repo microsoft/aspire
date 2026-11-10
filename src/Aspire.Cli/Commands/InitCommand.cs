@@ -254,7 +254,7 @@ internal sealed class InitCommand : BaseCommand
         if (value is not null)
         {
             InteractionService.DisplayMessage(
-                KnownEmojis.Warning,
+                KnownEmojis.PoliceCarLight,
                 string.Format(CultureInfo.CurrentCulture, InitCommandStrings.DeprecatedOptionWarning, optionName));
         }
     }
@@ -622,7 +622,7 @@ internal sealed class InitCommand : BaseCommand
                 catch (JsonException ex)
                 {
                     InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, InitCommandStrings.FailedToParseExistingConfig, AspireConfigFile.FileName, configPath, ex.Message));
-                    InteractionService.DisplayMessage(KnownEmojis.Warning, string.Format(CultureInfo.CurrentCulture, InitCommandStrings.FixOrRemoveConfigAndRerun, AspireConfigFile.FileName));
+                    InteractionService.DisplayMessage(KnownEmojis.PoliceCarLight, string.Format(CultureInfo.CurrentCulture, InitCommandStrings.FixOrRemoveConfigAndRerun, AspireConfigFile.FileName));
                     return (CliExitCodes.FailedToCreateNewProject, default);
                 }
             }

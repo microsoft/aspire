@@ -3295,7 +3295,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
 
         // Verify a warning was displayed (not an error)
         var m = Assert.Single(testInteractionService.DisplayedMessages);
-        Assert.Equal(KnownEmojis.Warning, m.Emoji);
+        Assert.Equal(KnownEmojis.PoliceCarLight, m.Emoji);
         Assert.Equal(RunCommandStrings.DashboardFailedToStart, m.Message);
         Assert.Empty(testInteractionService.DisplayedErrors);
     }

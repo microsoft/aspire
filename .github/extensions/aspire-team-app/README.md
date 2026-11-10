@@ -62,6 +62,11 @@ card shows are driven by its lane and its signal pills:
   into a preferred order that persists across reloads.
 - **Signal pills** — Draft, CI failing, Merge conflicts, Changes requested,
   N unresolved, Approved, Ready to merge, Needs review, Quick win, Stalled.
+  Hover or keyboard-focus explanatory pills to see their meaning and expected next
+  action; open-age and CI status tags stay plain. **Review debt** means the PR is
+  not currently approved and its relevant activity is at least 14 days old,
+  not that nobody has reviewed it. Raw GitHub
+  labels are identified separately from computed dashboard signals.
 - **Notifications** — review requested, your PR ready to merge, changes requested,
   CI failing, with per-category preferences. Live updates over SSE.
 - **Stable background refresh** — GitHub data is assembled into a complete snapshot
@@ -79,6 +84,40 @@ card shows are driven by its lane and its signal pills:
   except the `msft.ghe.com` enterprise account, which defaults to the Proxima
   `coreai/aspire-1p` and `coreai/sisyphus` repos. Defaults only fill in accounts
   you haven't configured — they never overwrite an explicit repo list.
+
+## Needs attention order
+
+Needs attention is numbered, left-to-right across each row, in ascending order of
+**first-ever non-draft readiness**. A PR opened ready uses its creation time; a PR
+opened as a draft uses its earliest ready-for-review event. Complete, paginated
+draft/ready transition history distinguishes these cases, including PRs opened
+ready that later returned to draft. Equal timestamps use ordinal host/repository
+order, then PR number, independent of fetch completion and user locale.
+
+Later draft cycles, comments, label changes, commits, and human or Copilot reviews
+do not reset this priority. Existing eligibility rules still hide blocked PRs;
+when eligible again, they return at their original first-readiness priority.
+This is an approximation of reviewability: a PR marked ready on Monday but
+conflicted until Thursday still precedes one first marked ready on Tuesday.
+The canvas only reads GitHub; it does not persist queue state or write metadata.
+If transition history is missing, inconsistent, or exceeds the pagination safety
+limit, the PR is omitted from Needs attention with a visible error, not assigned
+a guessed timestamp. A later refresh retries.
+
+The main queue shows the first **10** eligible PRs (or all of them when fewer than
+10 qualify), with no review-debt spillover or per-user limit override.
+**Later in queue** shows the remaining count and starts collapsed. Expand it to
+look up a PR's position, not to pick an alternative review pool: prioritize the
+first 10 in Needs attention. This compact reference list has PR links but no
+review-action buttons. Positions continue at 11 without gaps or duplicates and
+keep their order at every window width. Expansion follows your choice during
+refreshes, but starts collapsed when the canvas reloads.
+
+The loader preserves the full eligible queue as `attention.focus` (positions
+1–10), `attention.focusRemainder` (11 onward), and `attention.focusTotal`.
+Other lanes, personal watched repositories, eligibility, and refresh preferences are unchanged.
+Shared PRs have the same relative order for the same GitHub snapshot, but different
+repository access, scopes, and refresh times can still produce different lists.
 
 ## Health mode
 

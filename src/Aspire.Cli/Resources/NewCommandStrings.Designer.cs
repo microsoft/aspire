@@ -10,8 +10,8 @@
 
 namespace Aspire.Cli.Resources {
     using System;
-
-
+    
+    
     /// <summary>
     ///   A strongly-typed resource class, for looking up localized strings, etc.
     /// </summary>
@@ -23,15 +23,15 @@ namespace Aspire.Cli.Resources {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
     internal class NewCommandStrings {
-
+        
         private static global::System.Resources.ResourceManager resourceMan;
-
+        
         private static global::System.Globalization.CultureInfo resourceCulture;
-
+        
         [global::System.Diagnostics.CodeAnalysis.SuppressMessageAttribute("Microsoft.Performance", "CA1811:AvoidUncalledPrivateCode")]
         internal NewCommandStrings() {
         }
-
+        
         /// <summary>
         ///   Returns the cached ResourceManager instance used by this class.
         /// </summary>
@@ -45,7 +45,7 @@ namespace Aspire.Cli.Resources {
                 return resourceMan;
             }
         }
-
+        
         /// <summary>
         ///   Overrides the current thread's CurrentUICulture property for all
         ///   resource lookups using this strongly typed resource class.
@@ -59,16 +59,16 @@ namespace Aspire.Cli.Resources {
                 resourceCulture = value;
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Back to default templates.
+        ///   Looks up a localized string similar to Built-in templates.
         /// </summary>
-        internal static string BackToDefaultTemplates {
+        internal static string BuiltInTemplates {
             get {
-                return ResourceManager.GetString("BackToDefaultTemplates", resourceCulture);
+                return ResourceManager.GetString("BuiltInTemplates", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Channel to use for templates (stable, daily).
         /// </summary>
@@ -77,7 +77,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ChannelOptionDescription", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Channel to use for templates (stable, staging, daily).
         /// </summary>
@@ -86,16 +86,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ChannelOptionDescriptionWithStaging", resourceCulture);
             }
         }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Cloning template repository....
-        /// </summary>
-        internal static string CloningTemplateRepository {
-            get {
-                return ResourceManager.GetString("CloningTemplateRepository", resourceCulture);
-            }
-        }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Templates from configured sources cannot be combined with --source, --version, --channel, or --language..
         /// </summary>
@@ -104,7 +95,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ConfiguredTemplateConflictingOptions", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Directly in the selected folder.
         /// </summary>
@@ -113,7 +104,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("CreateProjectDirectlyInSelectedFolderChoice", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to In a subdirectory named &apos;{0}&apos; in the selected folder.
         /// </summary>
@@ -122,7 +113,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("CreateProjectNameSubdirectoryChoice", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Create a new app from an Aspire starter template.
         /// </summary>
@@ -131,7 +122,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("Description", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Enter the output path.
         /// </summary>
@@ -140,7 +131,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("EnterTheOutputPath", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Enter the project name.
         /// </summary>
@@ -149,7 +140,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("EnterTheProjectName", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Expected a source object with an absolute &apos;path&apos;, or a &apos;repository&apos; and optional &apos;ref&apos;/&apos;path&apos;. Use &apos;aspire template source add&apos; to configure a source..
         /// </summary>
@@ -158,7 +149,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("InvalidConfiguredTemplateSource", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Invalid project name..
         /// </summary>
@@ -167,7 +158,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("InvalidProjectName", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to The programming language for the AppHost.
         /// </summary>
@@ -176,7 +167,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("LanguageOptionDescription", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Could not create the local template ({0}): {1}.
         /// </summary>
@@ -185,7 +176,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("LocalTemplateCreationFailed", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Could not load the local template: {0}.
         /// </summary>
@@ -194,7 +185,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("LocalTemplateLoadFailed", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to The directory contains multiple templates. Run interactively to select one, or point --template-path at a single template directory..
         /// </summary>
@@ -203,7 +194,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("LocalTemplateSelectionRequiresInteraction", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to The name of the project to create.
         /// </summary>
@@ -212,7 +203,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("NameArgumentDescription", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to No channel found matching &apos;{0}&apos;. Valid options are: {1}..
         /// </summary>
@@ -221,7 +212,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("NoChannelFoundMatching", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to No usable template sources are configured. Use &apos;aspire template source add &lt;name&gt;&apos; with &apos;--path&apos; or &apos;--repository&apos;. Sources are stored globally..
         /// </summary>
@@ -230,7 +221,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("NoConfiguredTemplateSources", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to No .NET templates were found in &apos;{0}&apos;. Expected a .template.config/template.json file in the directory or one of its subdirectories..
         /// </summary>
@@ -239,16 +230,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("NoLocalTemplatesFound", resourceCulture);
             }
         }
-
-        /// <summary>
-        ///   Looks up a localized string similar to No matching templates were found in the configured sources..
-        /// </summary>
-        internal static string NoMatchingConfiguredTemplates {
-            get {
-                return ResourceManager.GetString("NoMatchingConfiguredTemplates", resourceCulture);
-            }
-        }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to No matching local Aspire.ProjectTemplates package was found for Aspire CLI version &apos;{0}&apos;. Build and stage matching packages with localhive.sh (macOS/Linux) or localhive.ps1 (Windows), set ASPIRE_CLI_PACKAGES to a directory containing the package, or explicitly choose feed-backed templates with --channel, --source, or --version..
         /// </summary>
@@ -257,7 +239,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("NoMatchingLocalTemplatePackage", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to A template must be specified when running in non-interactive mode. Use &apos;aspire new &lt;template&gt;&apos;..
         /// </summary>
@@ -266,7 +248,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("NonInteractiveTemplateRequired", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to No package channels are available..
         /// </summary>
@@ -275,7 +257,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("NoPackageChannelsAvailable", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to No template versions found in channel &apos;{0}&apos;..
         /// </summary>
@@ -284,7 +266,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("NoTemplateVersionsFoundInChannel", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to The output path for the project.
         /// </summary>
@@ -293,7 +275,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("OutputArgumentDescription", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to The output directory &apos;{0}&apos; already exists and is not empty. Specify a different location..
         /// </summary>
@@ -302,7 +284,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("OutputDirectoryNotEmptyInteractive", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to The output directory &apos;{0}&apos; already exists and is not empty. Specify --output with a different location..
         /// </summary>
@@ -311,7 +293,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("OutputDirectoryNotEmptyNonInteractive", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to The output path &apos;{0}&apos; contains invalid characters..
         /// </summary>
@@ -320,16 +302,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("OutputPathContainsInvalidCharacters", resourceCulture);
             }
         }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Resolving template repository ref....
-        /// </summary>
-        internal static string ResolvingTemplateRepository {
-            get {
-                return ResourceManager.GetString("ResolvingTemplateRepository", resourceCulture);
-            }
-        }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Resolving template version....
         /// </summary>
@@ -338,34 +311,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ResolvingTemplateVersion", resourceCulture);
             }
         }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Search for more templates.
-        /// </summary>
-        internal static string SearchForMoreTemplates {
-            get {
-                return ResourceManager.GetString("SearchForMoreTemplates", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Searching template source &apos;{0}&apos;....
-        /// </summary>
-        internal static string SearchingTemplateSource {
-            get {
-                return ResourceManager.GetString("SearchingTemplateSource", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Search again.
-        /// </summary>
-        internal static string SearchTemplatesAgain {
-            get {
-                return ResourceManager.GetString("SearchTemplatesAgain", resourceCulture);
-            }
-        }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Select a template:.
         /// </summary>
@@ -374,7 +320,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("SelectAProjectTemplate", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Select a template version:.
         /// </summary>
@@ -383,7 +329,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("SelectATemplateVersion", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Where do you want the project to be created?.
         /// </summary>
@@ -392,7 +338,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("SelectProjectCreationLocation", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to The NuGet source to use for the project templates.
         /// </summary>
@@ -401,7 +347,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("SourceArgumentDescription", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to The local NuGet source directory &apos;{0}&apos; does not exist..
         /// </summary>
@@ -410,7 +356,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("SourceDirectoryNotFound", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to The --source URL includes credentials, a query string, or a fragment and cannot be written to the project&apos;s NuGet.config. Configure credentials with NuGet credential providers or user-level NuGet configuration, then pass the feed URL without embedded secrets..
         /// </summary>
@@ -419,7 +365,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("SourceWithCredentialsCannotBePersisted", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Manage project templates..
         /// </summary>
@@ -428,7 +374,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("TemplateCommandDescription", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to The template directory &apos;{0}&apos; does not exist..
         /// </summary>
@@ -437,7 +383,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("TemplateDirectoryNotFound", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to --template-path and --template-repository require non-empty values and cannot be combined with a template subcommand, --source, --version, --channel, or --language..
         /// </summary>
@@ -446,7 +392,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("TemplatePathConflictingOptions", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Path to an unpacked .NET template package directory (relative to the repository when --template-repository is specified).
         /// </summary>
@@ -455,7 +401,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("TemplatePathOptionDescription", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Git failed with exit code {0}: {1}.
         /// </summary>
@@ -464,7 +410,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("TemplateRepositoryGitExited", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Could not access the template repository: {0}.
         /// </summary>
@@ -473,7 +419,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("TemplateRepositoryGitFailed", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Git could not be started. Install Git and ensure it is on PATH..
         /// </summary>
@@ -482,7 +428,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("TemplateRepositoryGitUnavailable", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Clone a Git repository containing templates; --template-path is relative to its root.
         /// </summary>
@@ -491,7 +437,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("TemplateRepositoryOptionDescription", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Template repository paths must be relative and stay within the repository without traversing symbolic links..
         /// </summary>
@@ -500,7 +446,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("TemplateRepositoryPathInvalid", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Could not resolve template repository ref &apos;{0}&apos; to a commit SHA. Specify a branch, tag, or full commit SHA..
         /// </summary>
@@ -509,7 +455,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("TemplateRepositoryRefNotFound", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Template repository branch, tag, or full commit SHA (requires --template-repository; defaults to the remote HEAD).
         /// </summary>
@@ -518,7 +464,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("TemplateRepositoryRefOptionDescription", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to --template-repository-ref requires --template-repository and a non-empty ref value..
         /// </summary>
@@ -527,16 +473,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("TemplateRepositoryRefRequiresRepository", resourceCulture);
             }
         }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Search templates (leave empty to list all).
-        /// </summary>
-        internal static string TemplateSearchPrompt {
-            get {
-                return ResourceManager.GetString("TemplateSearchPrompt", resourceCulture);
-            }
-        }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Add a named template source to global configuration after confirming you trust it..
         /// </summary>
@@ -545,7 +482,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("TemplateSourceAddDescription", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Template source &apos;{0}&apos; added to global configuration..
         /// </summary>
@@ -554,7 +491,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("TemplateSourceAdded", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to A template source with this name already exists. Remove it before adding a replacement..
         /// </summary>
@@ -563,7 +500,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("TemplateSourceAlreadyExists", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to This source is a string. Delete it with &apos;aspire config delete {0} --global&apos; before setting object fields..
         /// </summary>
@@ -572,7 +509,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("TemplateSourceCannotExtendString", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Manage global template sources..
         /// </summary>
@@ -581,7 +518,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("TemplateSourceCommandDescription", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Configuration.
         /// </summary>
@@ -590,7 +527,25 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("TemplateSourceConfigurationHeader", resourceCulture);
             }
         }
-
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Expected a display name string without control characters, or null to use the source alias..
+        /// </summary>
+        internal static string TemplateSourceDisplayNameInvalid {
+            get {
+                return ResourceManager.GetString("TemplateSourceDisplayNameInvalid", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to One or more template sources are configured. A template source lets an organization share Aspire templates to customize your development experience..
+        /// </summary>
+        internal static string TemplateSourceExplanation {
+            get {
+                return ResourceManager.GetString("TemplateSourceExplanation", resourceCulture);
+            }
+        }
+        
         /// <summary>
         ///   Looks up a localized string similar to Expected an HTTPS or SSH Git repository URL without passwords, tokens, queries, or fragments. SSH usernames are allowed..
         /// </summary>
@@ -599,7 +554,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("TemplateSourceInvalidRepository", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Template sources require aspire.config.json. Run &apos;aspire config info&apos; to migrate your legacy global configuration, then retry..
         /// </summary>
@@ -608,7 +563,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("TemplateSourceLegacyConfiguration", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to List named template sources without discovering templates..
         /// </summary>
@@ -617,7 +572,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("TemplateSourceListDescription", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to No template sources are configured. Use &apos;aspire template source add&apos; to add one..
         /// </summary>
@@ -626,7 +581,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("TemplateSourceListEmpty", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Specify an absolute &apos;path&apos; for a local source or &apos;repository&apos; for a Git source. &apos;ref&apos; requires &apos;repository&apos;..
         /// </summary>
@@ -635,7 +590,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("TemplateSourceMissingLocation", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to The name of the template source..
         /// </summary>
@@ -644,25 +599,16 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("TemplateSourceNameDescription", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Name.
-        /// </summary>
-        internal static string TemplateSourceNameHeader {
-            get {
-                return ResourceManager.GetString("TemplateSourceNameHeader", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Template source names must be nonempty and must not contain dots, colons, or control characters..
+        ///   Looks up a localized string similar to Template source names must be 1-64 ASCII letters, digits, dots, hyphens, or underscores, starting with a letter or digit..
         /// </summary>
         internal static string TemplateSourceNameRequired {
             get {
                 return ResourceManager.GetString("TemplateSourceNameRequired", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Template source &apos;{0}&apos; was not found in global configuration..
         /// </summary>
@@ -671,7 +617,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("TemplateSourceNotFound", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to An absolute local template directory, or a repository-relative directory when --repository is specified..
         /// </summary>
@@ -680,7 +626,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("TemplateSourcePathDescription", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Could not read global template sources. Check the configuration file&apos;s JSON format and file permissions..
         /// </summary>
@@ -689,7 +635,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("TemplateSourceReadFailed", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to A Git branch, tag, or full commit SHA (requires --repository; defaults to HEAD)..
         /// </summary>
@@ -698,7 +644,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("TemplateSourceRefDescription", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Template source &apos;{0}&apos; removed from global configuration..
         /// </summary>
@@ -707,7 +653,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("TemplateSourceRemoved", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Remove a named template source from global configuration..
         /// </summary>
@@ -716,7 +662,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("TemplateSourceRemoveDescription", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to An HTTPS or SSH Git repository URL containing templates..
         /// </summary>
@@ -725,7 +671,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("TemplateSourceRepositoryDescription", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Could not search template source &apos;{0}&apos;: {1}.
         /// </summary>
@@ -734,7 +680,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("TemplateSourceSearchFailed", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Invalid template setting &apos;{0}&apos;: {1}.
         /// </summary>
@@ -743,7 +689,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("TemplateSourceSettingInvalid", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to The global &apos;templateSources&apos; setting must be an object containing named template sources..
         /// </summary>
@@ -752,7 +698,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("TemplateSourcesMustBeObject", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Expected a nonempty string without control characters..
         /// </summary>
@@ -761,7 +707,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("TemplateSourceStringRequired", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Do you trust template source &apos;{0}&apos; ({1})?.
         /// </summary>
@@ -770,16 +716,16 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("TemplateSourceTrustPrompt", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Unknown source field. Use an absolute &apos;path&apos;, or &apos;repository&apos; with optional &apos;ref&apos;/&apos;path&apos;..
+        ///   Looks up a localized string similar to Unknown source field. Use &apos;path&apos;, &apos;repository&apos;, &apos;ref&apos;, or &apos;displayName&apos;..
         /// </summary>
         internal static string TemplateSourceUnknownField {
             get {
                 return ResourceManager.GetString("TemplateSourceUnknownField", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Could not update global template sources. Check the configuration file&apos;s JSON format and file permissions..
         /// </summary>
@@ -788,7 +734,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("TemplateSourceWriteFailed", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Trust the template source and skip confirmation..
         /// </summary>
@@ -797,7 +743,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("TemplateSourceYesOptionDescription", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to (use pre-release templates).
         /// </summary>
@@ -806,7 +752,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("UsePrereleaseTemplates", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to The version of the project templates to use.
         /// </summary>

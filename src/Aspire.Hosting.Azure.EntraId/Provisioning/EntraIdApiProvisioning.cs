@@ -74,7 +74,10 @@ internal static class EntraIdApiProvisioning
             // The default URI contains the client ID, which exists only after the application is created, and Graph
             // cannot read a property of the resource that is being created. Declaring the application a second time under the same
             // unique name updates the created application in place (PATCH semantics) with a value that refers to the first
-            // declaration's appId, so no tenant policy needs to allow a name-based URI.
+            // declaration's appId, so no tenant policy needs to allow a name-based URI. The Graph reference describes a default
+            // api://<appId> URI, but it isn't applied; this second declaration is the workaround reported in
+            // https://github.com/microsoftgraph/msgraph-bicep-types/issues/239. Updates by unique name are documented at
+            // https://learn.microsoft.com/graph/templates/bicep/concept-uniquely-named-resources.
             target = new MicrosoftGraphApplication(symbolNames.ApplicationIdentity(resource))
             {
                 DisplayName = registrationName,

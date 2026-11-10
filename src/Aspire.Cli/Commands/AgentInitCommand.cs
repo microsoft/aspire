@@ -380,6 +380,91 @@ internal sealed class AgentInitCommand : BaseCommand
         var availableSkillChoices = s_skillChoices
             .Where(name => name != SkillDefinition.DotnetInspect.Name || SkillDefinition.DotnetInspect.IsApplicableToLanguage(detectedLanguage))
             .ToArray();
+        var (skillsProvided, requestedSkills) = skillsBinding.Resolve();
+        var showSkillWarnings = (_hostEnvironment.SupportsInteractiveInput && (!skillsProvided || requestedSkills is null)) ||
+            ConsoleInteractionService.MatchChoices(requestedSkills ?? CommonAgentApplicators.AspireSkillName,
+                availableSkillChoices, static name => name)?.Contains(CommonAgentApplicators.AspireSkillName) is true;
+        IReadOnlyList<SkillSource> skillSources = [];
+        string? skillConfigurationError = null;
+        if (showSkillWarnings)
+        {
+            configurationDirectory ??= await GetConfigurationDirectoryAsync(cancellationToken);
+            try
+            {
+                skillSources = SkillSource.Resolve(configurationDirectory, new FileInfo(_configurationService.GetSettingsFilePath(isGlobal: true)));
+                var usesPlugins = selectedClients.Any(client => client.Id != OpenCodeAgentClient.ClientId);
+                var usesOpenCode = selectedClients.Any(client => client.Id == OpenCodeAgentClient.ClientId);
+                List<IReadOnlyList<(string Label, string Value)>> sourceDetails = [];
+                foreach (var skillSource in skillSources)
+                {
+                    var sourceName = skillSource.GetName();
+                    if (sourceName.Equals(SkillSource.DefaultName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+                    List<(string Label, string Value)> details = [(SharedCommandStrings.SourceName, sourceName)];
+                    if (usesPlugins)
+                    {
+                        details.Add((SharedCommandStrings.SourceGitRepository, skillSource.GetRepositoryUrl()));
+                        if (skillSource.Ref is not null)
+                        {
+                            details.Add((SharedCommandStrings.SourceRef, skillSource.Ref));
+                        }
+                        if (!string.Equals(skillSource.Marketplace, sourceName, StringComparison.OrdinalIgnoreCase))
+                        {
+                            details.Add((SharedCommandStrings.SourceMarketplace, skillSource.Marketplace!));
+                        }
+                        details.Add((SharedCommandStrings.SourcePlugins, string.Join(", ", skillSource.GetPluginNames())));
+                    }
+                    if (usesOpenCode)
+                    {
+                        if (skillSource.OpenCodeV1Catalog is not null)
+                        {
+                            details.Add((SharedCommandStrings.SourceOpenCodeV1Catalog, skillSource.OpenCodeV1Catalog));
+                        }
+                        if (skillSource.OpenCodeV2Catalog is not null)
+                        {
+                            details.Add((SharedCommandStrings.SourceOpenCodeV2Catalog, skillSource.OpenCodeV2Catalog));
+                        }
+                    }
+                    if (details.Count > 1)
+                    {
+                        sourceDetails.Add(details);
+                    }
+                }
+
+                if (sourceDetails.Count > 0)
+                {
+                    InteractionService.DisplayMessage(KnownEmojis.Information, AgentCommandStrings.InitCommand_SkillSourcesExplanation);
+                    InteractionService.DisplaySourceDetails(sourceDetails);
+                    if (InteractionService.DisplaySourceTrustWarning(ExecutionContext))
+                    {
+                        InteractionService.DisplayEmptyLine();
+                    }
+                }
+
+                var local = LocalAspireSkills.Find(ExecutionContext.WorkingDirectory, workspaceRoot,
+                    selectedClients, cancellationToken);
+                if (local.Files.Count > 0)
+                {
+                    InteractionService.DisplayMessage(KnownEmojis.PoliceCarLight,
+                        string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_LocalSkillsConflict,
+                            string.Join(System.Environment.NewLine, local.Files
+                                .Select(path => $"  {AgentPath.GetDisplayPath(path, workspaceRoot, ExecutionContext)}")
+                                .Order(StringComparer.Ordinal))));
+                    InteractionService.DisplayEmptyLine();
+                }
+                if (local.HasFileErrors)
+                {
+                    skillConfigurationError = string.Join(System.Environment.NewLine, local.Errors);
+                }
+            }
+            catch (Exception ex) when (ex is JsonException or InvalidOperationException or IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+            {
+                skillConfigurationError = ex.Message;
+            }
+        }
+
         var selectedSkillNames = await InteractionService.PromptForSelectionsAsync(
             AgentCommandStrings.InitCommand_SelectSkills,
             availableSkillChoices,
@@ -395,35 +480,11 @@ internal sealed class AgentInitCommand : BaseCommand
         var playwright = selectedSkillNames.Contains(SkillDefinition.PlaywrightCli.Name);
         var dotnetInspect = selectedSkillNames.Contains(SkillDefinition.DotnetInspect.Name);
         var configureAspire = selectedSkillNames.Contains(CommonAgentApplicators.AspireSkillName);
-        IReadOnlyList<SkillSource> skillSources = [];
 
-        if (configureAspire)
+        if (configureAspire && skillConfigurationError is not null)
         {
-            configurationDirectory ??= await GetConfigurationDirectoryAsync(cancellationToken);
-            skillSources = SkillSource.Resolve(configurationDirectory, new FileInfo(_configurationService.GetSettingsFilePath(isGlobal: true)));
-            var usesPlugins = selectedClients.Any(client => client.Id != OpenCodeAgentClient.ClientId);
-            var usesOpenCode = selectedClients.Any(client => client.Id == OpenCodeAgentClient.ClientId);
-            foreach (var skillSource in skillSources)
-            {
-                var sourceUrls = new List<string>();
-                if (usesPlugins)
-                {
-                    sourceUrls.Add(skillSource.GetRepositoryUrl());
-                }
-                if (usesOpenCode)
-                {
-                    sourceUrls.AddRange(new[] { skillSource.OpenCodeV1Catalog, skillSource.OpenCodeV2Catalog }.OfType<string>());
-                }
-                if (sourceUrls.Count == 0)
-                {
-                    continue;
-                }
-
-                InteractionService.DisplayMessage(KnownEmojis.Warning, string.Format(CultureInfo.CurrentCulture,
-                    AgentCommandStrings.InitCommand_PluginRiskWarning,
-                    string.Join(", ", sourceUrls.Distinct(StringComparer.Ordinal))));
-                InteractionService.DisplayEmptyLine();
-            }
+            InteractionService.DisplayError(skillConfigurationError);
+            return new(CliExitCodes.InvalidCommand, selectedClients, []);
         }
 
         // `mcpBinding` is only supplied by standalone `aspire agent init` (see s_mcpOption).
@@ -470,41 +531,6 @@ internal sealed class AgentInitCommand : BaseCommand
                 emoji: KnownEmojis.Robot);
         }
 
-        try
-        {
-            string? conflict = null;
-            if (configureAspire)
-            {
-                var local = LocalAspireSkills.Find(ExecutionContext.WorkingDirectory, workspaceRoot,
-                    selectedClients, cancellationToken);
-                // Malformed settings are reported per target below, so other clients and
-                // independently requested MCP remain configurable.
-                if (local.HasFileErrors)
-                {
-                    conflict = string.Join(System.Environment.NewLine, local.Errors);
-                }
-                if (local.Files.Count > 0)
-                {
-                    InteractionService.DisplayMessage(KnownEmojis.Warning,
-                        string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_LocalSkillsConflict,
-                            string.Join(System.Environment.NewLine, local.Files
-                                .Select(path => $"  {GetDisplayConfigurationPath(path, workspaceRoot)}")
-                                .Order(StringComparer.Ordinal))));
-                    InteractionService.DisplayEmptyLine();
-                }
-            }
-            if (conflict is not null)
-            {
-                InteractionService.DisplayError(conflict);
-                return new(CliExitCodes.InvalidCommand, selectedClients, []);
-            }
-        }
-        catch (Exception ex) when (ex is JsonException or InvalidOperationException or IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
-        {
-            InteractionService.DisplayError(ex.Message);
-            return new(CliExitCodes.InvalidCommand, selectedClients, []);
-        }
-
         List<SkillDefinition> selectedSkills = [];
         var hasErrors = false;
         if (playwright)
@@ -514,10 +540,6 @@ internal sealed class AgentInitCommand : BaseCommand
         if (dotnetInspect)
         {
             selectedSkills.Add(SkillDefinition.DotnetInspect);
-        }
-        if (selectedSkills.Count > 0 || configureMcp)
-        {
-            DisplayInstallationLocations(selectedClients, scope, workspaceRoot, selectedSkills.Count > 0, configureMcp);
         }
 
         // The selected clients determine destinations; defaults never fabricate detection.
@@ -553,32 +575,32 @@ internal sealed class AgentInitCommand : BaseCommand
 
                 var installResult = await InstallSkillAsync(
                     skillDirectory,
-                    GetDisplayConfigurationPath(skillDirectory, scope, workspaceRoot),
                     skill,
                     cancellationToken);
-                hasErrors |= !installResult.Succeeded;
-                if (installResult.UpdatedSkill is not null)
+                if (installResult is not null)
                 {
-                    installedSkills.Add(installResult.UpdatedSkill);
+                    installedSkills.Add(installResult);
+                }
+                else
+                {
+                    hasErrors = true;
                 }
             }
         }
-
-        DisplayInstalledSkillsSummary(installedSkills);
 
         // --- Phase 4: Handle Playwright CLI (installs binary + mirrors skill files to registered directories) ---
         if (selectedSkills.Contains(SkillDefinition.PlaywrightCli))
         {
             try
             {
-                var (status, message) = await _playwrightCliInstaller.InstallSelectedAsync(selectedSkillDirs, cancellationToken);
+                var (status, message, installedSkillDirectories) = await _playwrightCliInstaller.InstallSelectedAsync(selectedSkillDirs, cancellationToken);
                 switch (status)
                 {
                     case PlaywrightInstallStatus.Installed:
                         InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, AgentCommandStrings.InitCommand_InstalledPlaywrightCli);
                         break;
                     case PlaywrightInstallStatus.InstalledWithWarnings:
-                        InteractionService.DisplayMessage(KnownEmojis.Warning, message!);
+                        InteractionService.DisplayMessage(KnownEmojis.PoliceCarLight, message!);
                         break;
                     case PlaywrightInstallStatus.Failed:
                         InteractionService.DisplayError(message!);
@@ -591,13 +613,20 @@ internal sealed class AgentInitCommand : BaseCommand
                     default:
                         throw new UnreachableException($"Unexpected PlaywrightInstallStatus: {status}");
                 }
+
+                installedSkills.AddRange(installedSkillDirectories.Select(directory =>
+                    new InstalledSkillSummaryItem(SkillDefinition.PlaywrightCli.Name, directory)));
             }
             catch (InvalidOperationException ex)
             {
                 InteractionService.DisplayError(ex.Message);
                 hasErrors = true;
             }
+
+            InteractionService.DisplayEmptyLine();
         }
+
+        DisplayInstalledSkillsSummary(installedSkills, scope, workspaceRoot);
 
         // --- Phase 5: Apply MCP server configuration if the user confirmed ---
         if (configureMcp)
@@ -672,7 +701,7 @@ internal sealed class AgentInitCommand : BaseCommand
 
         if (hasErrors)
         {
-            InteractionService.DisplayMessage(KnownEmojis.Warning, AgentCommandStrings.ConfigurationCompletedWithErrors);
+            InteractionService.DisplayMessage(KnownEmojis.PoliceCarLight, AgentCommandStrings.ConfigurationCompletedWithErrors);
         }
         else
         {
@@ -806,10 +835,8 @@ internal sealed class AgentInitCommand : BaseCommand
     /// <summary>
     /// Installs the files for a skill at the specified location, creating or updating them as needed.
     /// </summary>
-    /// <returns>The install result, including the skill/location pair when files were updated.</returns>
-    private async Task<SkillInstallResult> InstallSkillAsync(
+    private async Task<InstalledSkillSummaryItem?> InstallSkillAsync(
         string skillBaseDirectory,
-        string displayLocation,
         SkillDefinition skill,
         CancellationToken cancellationToken)
     {
@@ -831,52 +858,55 @@ internal sealed class AgentInitCommand : BaseCommand
                 var existingContent = await File.ReadAllTextAsync(fullPath, cancellationToken);
                 if (string.Equals(existingContent.ReplaceLineEndings("\n"), skillContent.ReplaceLineEndings("\n"), StringComparison.Ordinal))
                 {
-                    return new(Succeeded: true, UpdatedSkill: null);
+                    return new(skill.Name, skillBaseDirectory);
                 }
             }
 
             await File.WriteAllTextAsync(fullPath, skillContent, cancellationToken);
-            return new(Succeeded: true, new InstalledSkillSummaryItem(skill.Name, displayLocation));
+            return new(skill.Name, skillBaseDirectory);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
         {
             InteractionService.DisplayError(
                 string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_FailedToInstallSkill, skill.Name, fullSkillDirectoryPath, ex.Message));
-            return new(Succeeded: false, UpdatedSkill: null);
+            return null;
         }
     }
 
-    private void DisplayInstalledSkillsSummary(IReadOnlyList<InstalledSkillSummaryItem> installedSkills)
+    private void DisplayInstalledSkillsSummary(IReadOnlyList<InstalledSkillSummaryItem> installedSkills, AgentConfigurationScope scope, DirectoryInfo workspaceRoot)
     {
         if (installedSkills.Count == 0)
         {
             return;
         }
 
-        var skillNames = string.Join(", ", GetUniqueValues(installedSkills.Select(static installedSkill => installedSkill.SkillName)));
-        var locations = string.Join(", ", GetUniqueValues(installedSkills.Select(static installedSkill => installedSkill.DisplayLocation)));
-        var message = string.Join(Environment.NewLine,
-            AgentCommandStrings.InitCommand_InstalledSkillsSummary,
-            $"  {string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_InstalledSkillsSummarySkills, skillNames)}",
-            $"  {string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_InstalledSkillsSummaryLocations, locations)}");
-
-        InteractionService.DisplayMessage(KnownEmojis.Robot, message);
-    }
-
-    private static IReadOnlyList<string> GetUniqueValues(IEnumerable<string> values)
-    {
-        var uniqueValues = new List<string>();
-        var seenValues = new HashSet<string>(StringComparer.Ordinal);
-
-        foreach (var value in values)
+        var lines = new List<string> { AgentCommandStrings.InitCommand_InstalledSkillsSummary };
+        lines.Add($"  {string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_InstalledSkillsSummarySkills,
+            string.Join(", ", installedSkills.Select(static skill => skill.SkillName).Distinct(StringComparer.Ordinal)))}");
+        var locations = new List<string>();
+        var hasSharedLocation = false;
+        foreach (var directory in installedSkills.Select(static skill => skill.Directory).Distinct(StringComparers.FileSystemPath))
         {
-            if (seenValues.Add(value))
-            {
-                uniqueValues.Add(value);
-            }
+            var clients = _clients.Where(client =>
+                StringComparers.FileSystemPath.Equals(directory, client.GetSkillBaseDirectory(scope, workspaceRoot)))
+                .ToArray();
+            hasSharedLocation |= clients.Length > 1;
+            locations.Add(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_LocationWithAgents,
+                AgentPath.GetDisplayPath(directory, scope, workspaceRoot, ExecutionContext),
+                string.Join(", ", clients.Select(static client => client.DisplayName))));
         }
 
-        return uniqueValues;
+        lines.Add($"  {string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_InstalledSkillsSummaryLocations,
+            string.Join(", ", locations))}");
+
+        var message = string.Join(Environment.NewLine, lines.Select(static line => line.EscapeMarkup()));
+        if (hasSharedLocation)
+        {
+            message += $"{Environment.NewLine}  [dim]{AgentCommandStrings.InitCommand_SharedLocationNotice.EscapeMarkup()}[/]";
+        }
+
+        InteractionService.DisplayMessage(KnownEmojis.Robot, message, allowMarkup: true);
+        InteractionService.DisplayEmptyLine();
     }
 
     private bool DisplayRemoteConfigurationResults(IReadOnlyList<AgentTargetResult> results, DirectoryInfo workspaceRoot)
@@ -889,115 +919,36 @@ internal sealed class AgentInitCommand : BaseCommand
             _ => throw new UnreachableException()
         }))
         {
-            var entries = resultGroup.SelectMany(result => result.Clients, (result, client) => (Result: result, Client: client));
-            var targets = resultGroup.Key
-                ? entries.Select(entry =>
-                {
-                    var target = string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_ConfigurationTarget,
-                        entry.Client.DisplayName, GetDisplayConfigurationPath(entry.Result.TargetPath, workspaceRoot));
-
-                    return entry.Result.Message is null ? target : $"{target}{Environment.NewLine}  {entry.Result.Message}";
-                })
-                : entries.GroupBy(entry => entry.Client.Id, StringComparers.AgentClientId).Select(agent =>
-                    string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_ConfigurationTarget,
-                        agent.First().Client.DisplayName,
-                        string.Join(", ", agent.Select(entry => entry.Result.TargetPath).Distinct(StringComparers.FileSystemPath)
-                            .Select(path => GetDisplayConfigurationPath(path, workspaceRoot)))));
-            var format = resultGroup.Key ? AgentCommandStrings.InitCommand_FailedTarget : AgentCommandStrings.InitCommand_ConfiguredTargets;
-            var message = string.Format(CultureInfo.CurrentCulture, format, string.Join($"{Environment.NewLine}  ", targets));
             if (resultGroup.Key)
             {
-                InteractionService.DisplayError(message);
+                var failedTargets = resultGroup.SelectMany(result => result.Clients, (result, client) =>
+                {
+                    var target = string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_ConfigurationTarget,
+                        client.DisplayName, AgentPath.GetDisplayPath(result.TargetPath, workspaceRoot, ExecutionContext));
+
+                    return result.Message is null ? target : $"{target}{Environment.NewLine}  {result.Message}";
+                });
+                InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_FailedTarget,
+                    string.Join($"{Environment.NewLine}  ", failedTargets)));
+                InteractionService.DisplayEmptyLine();
                 hasErrors = true;
+                continue;
             }
-            else
-            {
-                InteractionService.DisplayMessage(KnownEmojis.Robot, message);
-            }
+
+            var targets = resultGroup.Select(result =>
+                string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_LocationWithAgents,
+                    AgentPath.GetDisplayPath(result.TargetPath, workspaceRoot, ExecutionContext),
+                    string.Join(", ", result.Clients.Select(static client => client.DisplayName))));
+            InteractionService.DisplayMessage(KnownEmojis.Robot,
+                string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_ConfiguredTargets,
+                    string.Join(", ", targets)));
+            InteractionService.DisplayEmptyLine();
         }
 
         return hasErrors;
     }
 
-    private string GetDisplayConfigurationPath(string path, DirectoryInfo workspaceRoot)
-    {
-        var displayPath = GetDisplayConfigurationPath(path, AgentConfigurationScope.Project, workspaceRoot);
-
-        return Path.IsPathRooted(displayPath)
-            ? GetDisplayConfigurationPath(path, AgentConfigurationScope.Global, workspaceRoot)
-            : displayPath;
-    }
-
-    private string GetDisplayConfigurationPath(string path, AgentConfigurationScope scope, DirectoryInfo workspaceRoot)
-    {
-        var root = scope is AgentConfigurationScope.Project ? workspaceRoot : ExecutionContext.HomeDirectory;
-        var relativePath = Path.GetRelativePath(root.FullName, path);
-        if (Path.IsPathRooted(relativePath) || relativePath == ".." ||
-            relativePath.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
-        {
-            return path;
-        }
-
-        var displayRelativePath = relativePath
-            .Replace(Path.DirectorySeparatorChar, '/')
-            .Replace(Path.AltDirectorySeparatorChar, '/');
-
-        return scope is AgentConfigurationScope.Global ? $"~/{displayRelativePath}" : displayRelativePath;
-    }
-
-    private void DisplayInstallationLocations(IReadOnlyList<IAgentClient> clients, AgentConfigurationScope scope, DirectoryInfo workspaceRoot, bool installSkills, bool configureMcp)
-    {
-        var lines = new List<string> { AgentCommandStrings.InitCommand_InstallationLocations };
-        var pathComparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
-        var hasSharedLocation = false;
-        if (installSkills)
-        {
-            var directories = clients.Select(client => client.GetSkillBaseDirectory(scope, workspaceRoot))
-                .Distinct(pathComparer);
-            foreach (var directory in directories)
-            {
-                AddLocation(AgentCommandStrings.InitCommand_SkillsLocationHint, directory,
-                    [.. _clients.Where(client => pathComparer.Equals(directory,
-                        client.GetSkillBaseDirectory(scope, workspaceRoot)))]);
-            }
-        }
-
-        if (configureMcp)
-        {
-            var paths = clients.Select(client => client.GetMcpConfigPath(scope, workspaceRoot))
-                .Distinct(pathComparer);
-            foreach (var path in paths)
-            {
-                AddLocation(AgentCommandStrings.InitCommand_McpLocationHint, path,
-                    [.. _clients.Where(client => pathComparer.Equals(path,
-                        client.GetMcpConfigPath(scope, workspaceRoot)))]);
-            }
-        }
-
-        if (hasSharedLocation)
-        {
-            lines.Add(AgentCommandStrings.InitCommand_SharedLocationNotice);
-        }
-
-        InteractionService.DisplaySubtleMessage(string.Join(Environment.NewLine, lines));
-
-        void AddLocation(string format, string path, IReadOnlyList<IAgentClient> sharedClients)
-        {
-            var location = GetDisplayConfigurationPath(path, scope, workspaceRoot);
-            if (sharedClients.Count > 1)
-            {
-                hasSharedLocation = true;
-                location = string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_SharedLocation,
-                    location, string.Join(", ", sharedClients.Select(static client => client.DisplayName)));
-            }
-
-            lines.Add($"  {string.Format(CultureInfo.CurrentCulture, format, location)}");
-        }
-    }
-
-    private sealed record InstalledSkillSummaryItem(string SkillName, string DisplayLocation);
-
-    private readonly record struct SkillInstallResult(bool Succeeded, InstalledSkillSummaryItem? UpdatedSkill);
+    private sealed record InstalledSkillSummaryItem(string SkillName, string Directory);
 }
 
 internal readonly record struct AgentInitExecutionResult(

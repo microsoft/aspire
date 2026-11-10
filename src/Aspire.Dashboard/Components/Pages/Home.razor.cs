@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.Components;
 namespace Aspire.Dashboard.Components.Pages;
 
 /// <summary>
-/// The root URL. It redirects to the resources, with all resources selected, whose overview summarizes the app.
+/// The root URL. It redirects to the resources, with all resources selected, shown as the full resource list.
 /// </summary>
 /// <remarks>
 /// The root URL used to host the resources page. Links created by older tools, such as
@@ -27,11 +27,24 @@ public sealed partial class Home : ComponentBase
     [Inject]
     public required IDashboardClient DashboardClient { get; init; }
 
-    protected override void OnInitialized()
+    // The redirect runs after the first render, not in OnInitialized. When "/" is the first page the browser loads,
+    // a navigation started while the circuit is still initializing is applied without its history entry state, so
+    // the resources layout couldn't tell the home navigation apart from a plain link to /resources.
+    protected override void OnAfterRender(bool firstRender)
     {
-        var url = TryGetLegacyRedirectUrl(LegacyResourceName, LegacyViewKind)
-            ?? (DashboardClient.IsEnabled ? DashboardUrls.ResourceListUrl() : DashboardUrls.StructuredLogsUrl());
-        NavigationManager.NavigateTo(url, new NavigationOptions { ReplaceHistoryEntry = true });
+        if (!firstRender)
+        {
+            return;
+        }
+
+        var legacyUrl = TryGetLegacyRedirectUrl(LegacyResourceName, LegacyViewKind);
+        var url = legacyUrl ?? (DashboardClient.IsEnabled ? DashboardUrls.ResourceListUrl() : DashboardUrls.StructuredLogsUrl());
+        NavigationManager.NavigateTo(url, new NavigationOptions
+        {
+            ReplaceHistoryEntry = true,
+            // The resources URL opens as the full resource list, the dashboard's home.
+            HistoryEntryState = legacyUrl is null && DashboardClient.IsEnabled ? Aspire.Dashboard.Components.Layout.ResourcesLayout.ResourceListHomeHistoryEntryState : null
+        });
     }
 
     internal static string? TryGetLegacyRedirectUrl(string? resourceName, string? viewKind)

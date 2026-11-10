@@ -118,7 +118,7 @@
     <value>MCP: {0}</value>
   </data>
   <data name="InitCommand_SelectScopePrompt" xml:space="preserve">
-    <value>Installation scope</value>
+    <value>Where should skills and tools be installed?</value>
   </data>
   <data name="InitCommand_NoConfigurationSelected" xml:space="preserve">
     <value>No agent configuration selected. Existing configuration was left unchanged.</value>
@@ -127,10 +127,10 @@
     <value>Could not safely update '{0}'. Check for concurrent changes, links, or restrictive permissions, then retry or configure it manually.</value>
   </data>
   <data name="InitCommand_ProjectScope" xml:space="preserve">
-    <value>Project (Install in your workspace root; committed with your project)</value>
+    <value>This project (In your workspace, ready to commit with your project)</value>
   </data>
   <data name="InitCommand_GlobalScope" xml:space="preserve">
-    <value>Global (Install in your home directory; available across all projects)</value>
+    <value>Global (In your home directory, available across all projects)</value>
   </data>
   <data name="InitCommand_EnvironmentLocationDescription" xml:space="preserve">
     <value>{0}: {1}</value>
@@ -151,13 +151,17 @@
     <value>Playwright CLI requires npm, which was not found on PATH. Skipping installation.</value>
   </data>
   <data name="InitCommand_InstalledSkillsSummary" xml:space="preserve">
-    <value>Installed Aspire agent skills:</value>
+    <value>Installed skills:</value>
   </data>
   <data name="InitCommand_InstalledSkillsSummarySkills" xml:space="preserve">
     <value>Skills: {0}</value>
   </data>
   <data name="InitCommand_InstalledSkillsSummaryLocations" xml:space="preserve">
     <value>Locations: {0}</value>
+  </data>
+  <data name="InitCommand_LocationWithAgents" xml:space="preserve">
+    <value>{0} ({1})</value>
+    <comment>{0} is a location, and {1} lists the agents that use it, separated by commas.</comment>
   </data>
   <data name="InitCommand_FailedToInstallSkill" xml:space="preserve">
     <value>Failed to install {0} skill at {1}: {2}</value>
@@ -239,7 +243,7 @@
     <value>Invalid scope '{0}'. Use 'project' or 'global'.</value>
   </data>
   <data name="InitCommand_SkillsOptionDescription" xml:space="preserve">
-    <value>Comma-separated skill/tool IDs ({0}), '{1}', or '{2}' (default: aspire)</value>
+    <value>Comma-separated skill/tool IDs ({0}), '{1}', or '{2}' (default: aspire). The 'dotnet-inspect' skill requires a C# AppHost in the workspace</value>
   </data>
   <data name="InitCommand_McpOptionDescription" xml:space="preserve">
     <value>Configure the Aspire MCP server for selected agent environments. Omit to leave MCP unconfigured, pass '--mcp' to opt in, or pass '--mcp=false' to explicitly opt out</value>
@@ -284,21 +288,21 @@
     <comment>{0} lists each agent's configuration path and failure details, one target per line.</comment>
   </data>
   <data name="InitCommand_LocalSkillsConflict" xml:space="preserve">
-    <value>Local Aspire skill files may override plugin skills:
+    <value>Local Aspire skill files may override plugin skills
 {0}</value>
     <comment>{0} lists the local skill entry-point paths, one per line.</comment>
   </data>
-  <data name="InitCommand_PluginRiskWarning" xml:space="preserve">
-    <value>Use the Aspire plugin at your own risk.
-Review the source before enabling it.
-
-Prefer skill files only? Install skills directly from {0}.</value>
-    <comment>{0} lists the comma-separated configured skill source repository and/or catalog URLs for the selected agent clients.</comment>
+  <data name="InitCommand_SkillSourcesExplanation" xml:space="preserve">
+    <value>One or more skill sources are configured. A skill source lets an organization share skills to customize your development experience.</value>
+  </data>
+  <data name="InitCommand_SkillSources" xml:space="preserve">
+    <value>Skill sources:
+{0}</value>
+    <comment>{0} lists the configured skill source repository and/or catalog URLs for the selected agent clients, one per line.</comment>
   </data>
   <data name="InitCommand_ConfiguredTargets" xml:space="preserve">
-    <value>Configured Aspire plugin:
-  {0}</value>
-    <comment>{0} lists one agent per line, with that agent's configuration paths comma-separated.</comment>
+    <value>Configured sources in {0}</value>
+    <comment>{0} lists the configuration file paths with their agent names in parentheses, separated by commas.</comment>
   </data>
   <data name="InitCommand_ConfigurationTarget" xml:space="preserve">
     <value>{0}: {1}</value>

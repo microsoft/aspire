@@ -113,6 +113,37 @@ internal static class DashboardUIHelpers
         return (int)milliseconds;
     }
 
+    public static string MaskUrlForDisplay(string url)
+    {
+        // For example, redis://:password@host:6379/?token=secret#access_token=secret must
+        // display only redis://host:6379/?token=<mask>. Slice the original text to preserve
+        // escaping, casing and paths; URI normalization would change the displayed address.
+        var fragmentIndex = url.IndexOf('#');
+        if (fragmentIndex >= 0)
+        {
+            url = url[..fragmentIndex];
+        }
+
+        var schemeEnd = url.IndexOf("://", StringComparison.Ordinal);
+        if (schemeEnd >= 0)
+        {
+            var authorityStart = schemeEnd + 3;
+            var authority = url.AsSpan(authorityStart);
+            var authorityLength = authority.IndexOfAny('/', '?');
+            if (authorityLength < 0)
+            {
+                authorityLength = authority.Length;
+            }
+            var userInfoLength = authority[..authorityLength].LastIndexOf('@') + 1;
+            if (userInfoLength > 0)
+            {
+                url = url.Remove(authorityStart, userInfoLength);
+            }
+        }
+
+        return MaskQueryStringValues(url);
+    }
+
     /// <summary>
     /// Masks querystring parameter values in a URL for display purposes.
     /// For example, "http://localhost:5000/login?t=token123" becomes "http://localhost:5000/login?t=●●●●●●●●"

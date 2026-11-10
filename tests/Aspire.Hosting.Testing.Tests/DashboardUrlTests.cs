@@ -124,12 +124,10 @@ public class DashboardUrlTests
                 var page = await context.NewPageAsync();
                 await page.GotoAsync(dashboardUri.AbsoluteUri);
 
-                // The dashboard's default view renders each resource as a card labelled with the resource name.
-                var resourceCard = page.Locator($"article.resource-card[aria-label='{resourceName}']");
-                var stateCell = resourceCard.Locator(".state-column-cell");
+                var resourceRow = page.Locator($".resource-row[data-resource-name='{resourceName}']");
 
-                await Assertions.Expect(resourceCard).ToBeVisibleAsync();
-                await Assertions.Expect(stateCell).ToContainTextAsync(initialState);
+                await Assertions.Expect(resourceRow).ToBeVisibleAsync();
+                await Assertions.Expect(DashboardResourceAssertions.RowState(resourceRow, initialState)).ToBeVisibleAsync();
 
                 var updatedResourceTask = app.ResourceNotifications.WaitForResourceAsync(
                     resourceName,
@@ -143,7 +141,7 @@ public class DashboardUrlTests
 
                 // PublishUpdateAsync updates the application notification stream while the AppHost breakpoint remains held.
                 // Dashboard consumption and browser rendering are asynchronous, so wait separately for the rendered change.
-                await Assertions.Expect(stateCell).ToContainTextAsync(updatedState);
+                await Assertions.Expect(DashboardResourceAssertions.RowState(resourceRow, updatedState)).ToBeVisibleAsync();
             }
             finally
             {

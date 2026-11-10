@@ -117,6 +117,22 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
+  <data name="FetchingSource" xml:space="preserve">
+    <value>Fetching {0} from {1} using Git...</value>
+    <comment>{0} is the localized content being fetched, such as "configuration source" or "templates". {1} is the Git repository, optionally followed by its path and ref.</comment>
+  </data>
+  <data name="FetchingSourceWithAuthentication" xml:space="preserve">
+    <value>Fetching {0} from {1} using Git. Git may prompt you to authenticate.</value>
+    <comment>{0} is the localized content being fetched, such as "configuration source" or "templates". {1} is the Git repository, optionally followed by its path and ref.</comment>
+  </data>
+  <data name="GitFetchConfigurationSource" xml:space="preserve">
+    <value>configuration source</value>
+    <comment>The content inserted into the Git-fetch notice.</comment>
+  </data>
+  <data name="GitFetchTemplates" xml:space="preserve">
+    <value>templates</value>
+    <comment>The content inserted into the Git-fetch notice.</comment>
+  </data>
   <data name="ScanningForRunningAppHosts" xml:space="preserve">
     <value>Scanning for running AppHosts...</value>
   </data>
@@ -241,5 +257,46 @@
   </data>
   <data name="SourceTrustWarning" xml:space="preserve">
     <value>Only use sources you trust. Content from these sources can run code on your machine.</value>
+  </data>
+  <data name="SourceName" xml:space="preserve">
+    <value>Name</value>
+  </data>
+  <data name="SourceGitRepository" xml:space="preserve">
+    <value>Git source</value>
+  </data>
+  <data name="SourceGitPath" xml:space="preserve">
+    <value>Git path</value>
+  </data>
+  <data name="SourcePath" xml:space="preserve">
+    <value>Path</value>
+  </data>
+  <data name="SourceRef" xml:space="preserve">
+    <value>Git ref</value>
+  </data>
+  <data name="SourceFeed" xml:space="preserve">
+    <value>Package feed</value>
+  </data>
+  <data name="SourcePatterns" xml:space="preserve">
+    <value>Package patterns</value>
+  </data>
+  <data name="SourceMarketplace" xml:space="preserve">
+    <value>Marketplace</value>
+  </data>
+  <data name="SourcePlugins" xml:space="preserve">
+    <value>Plugins</value>
+  </data>
+  <data name="SourceOpenCodeV1Catalog" xml:space="preserve">
+    <value>OpenCode V1 catalog</value>
+  </data>
+  <data name="SourceOpenCodeV2Catalog" xml:space="preserve">
+    <value>OpenCode V2 catalog</value>
+  </data>
+  <data name="NuGetSearchLimitWarning" xml:space="preserve">
+    <value>NuGet search results may be incomplete because the limit of {0} packages per feed was reached. Use narrower integration source patterns.</value>
+    <comment>{0} is the maximum number of packages searched per feed.</comment>
+  </data>
+  <data name="NuGetSearchSourceFailedWarning" xml:space="preserve">
+    <value>Failed to search NuGet source '{0}'. Some integrations may be missing. Check the source configuration and authentication. See the CLI logs for details.</value>
+    <comment>{0} is the redacted NuGet source name or URL.</comment>
   </data>
 </root>

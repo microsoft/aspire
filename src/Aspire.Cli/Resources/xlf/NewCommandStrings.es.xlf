@@ -2,9 +2,9 @@
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="es" original="../NewCommandStrings.resx">
     <body>
-      <trans-unit id="BackToDefaultTemplates">
-        <source>Back to default templates</source>
-        <target state="new">Back to default templates</target>
+      <trans-unit id="BuiltInTemplates">
+        <source>Built-in templates</source>
+        <target state="new">Built-in templates</target>
         <note />
       </trans-unit>
       <trans-unit id="ChannelOptionDescription">
@@ -15,11 +15,6 @@
       <trans-unit id="ChannelOptionDescriptionWithStaging">
         <source>Channel to use for templates (stable, staging, daily)</source>
         <target state="translated">Canal que se va a usar para plantillas (estable, de ensayo, diariamente)</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="CloningTemplateRepository">
-        <source>Cloning template repository...</source>
-        <target state="new">Cloning template repository...</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfiguredTemplateConflictingOptions">
@@ -102,11 +97,6 @@
         <target state="new">No .NET templates were found in '{0}'. Expected a .template.config/template.json file in the directory or one of its subdirectories.</target>
         <note />
       </trans-unit>
-      <trans-unit id="NoMatchingConfiguredTemplates">
-        <source>No matching templates were found in the configured sources.</source>
-        <target state="new">No matching templates were found in the configured sources.</target>
-        <note />
-      </trans-unit>
       <trans-unit id="NoMatchingLocalTemplatePackage">
         <source>No matching local Aspire.ProjectTemplates package was found for Aspire CLI version '{0}'. Build and stage matching packages with localhive.sh (macOS/Linux) or localhive.ps1 (Windows), set ASPIRE_CLI_PACKAGES to a directory containing the package, or explicitly choose feed-backed templates with --channel, --source, or --version.</source>
         <target state="translated">No hay ningún Aspire local que coincida. Se encontró el paquete ProjectTemplates para Aspire versión CLI '{0}'. Compile y almacene paquetes coincidentes con localhive.sh (macOS/Linux) o localhive.ps1 (Windows), establezca ASPIRE_CLI_PACKAGES en un directorio que contenga el paquete o elija explícitamente plantillas respaldadas por fuentes con --channel, --source o --version.</target>
@@ -147,29 +137,9 @@
         <target state="translated">La ruta de acceso de salida "{0}" contiene caracteres no válidos.</target>
         <note />
       </trans-unit>
-      <trans-unit id="ResolvingTemplateRepository">
-        <source>Resolving template repository ref...</source>
-        <target state="new">Resolving template repository ref...</target>
-        <note />
-      </trans-unit>
       <trans-unit id="ResolvingTemplateVersion">
         <source>Resolving template version...</source>
         <target state="translated">Resolviendo versión de plantilla...</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="SearchForMoreTemplates">
-        <source>Search for more templates</source>
-        <target state="new">Search for more templates</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="SearchTemplatesAgain">
-        <source>Search again</source>
-        <target state="new">Search again</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="SearchingTemplateSource">
-        <source>Searching template source '{0}'...</source>
-        <target state="new">Searching template source '{0}'...</target>
         <note />
       </trans-unit>
       <trans-unit id="SelectAProjectTemplate">
@@ -262,11 +232,6 @@
         <target state="new">--template-repository-ref requires --template-repository and a non-empty ref value.</target>
         <note />
       </trans-unit>
-      <trans-unit id="TemplateSearchPrompt">
-        <source>Search templates (leave empty to list all)</source>
-        <target state="new">Search templates (leave empty to list all)</target>
-        <note />
-      </trans-unit>
       <trans-unit id="TemplateSourceAddDescription">
         <source>Add a named template source to global configuration after confirming you trust it.</source>
         <target state="new">Add a named template source to global configuration after confirming you trust it.</target>
@@ -295,6 +260,16 @@
       <trans-unit id="TemplateSourceConfigurationHeader">
         <source>Configuration</source>
         <target state="new">Configuration</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceDisplayNameInvalid">
+        <source>Expected a display name string without control characters, or null to use the source alias.</source>
+        <target state="new">Expected a display name string without control characters, or null to use the source alias.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceExplanation">
+        <source>One or more template sources are configured. A template source lets an organization share Aspire templates to customize your development experience.</source>
+        <target state="new">One or more template sources are configured. A template source lets an organization share Aspire templates to customize your development experience.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceInvalidRepository">
@@ -327,14 +302,9 @@
         <target state="new">The name of the template source.</target>
         <note />
       </trans-unit>
-      <trans-unit id="TemplateSourceNameHeader">
-        <source>Name</source>
-        <target state="new">Name</target>
-        <note />
-      </trans-unit>
       <trans-unit id="TemplateSourceNameRequired">
-        <source>Template source names must be nonempty and must not contain dots, colons, or control characters.</source>
-        <target state="new">Template source names must be nonempty and must not contain dots, colons, or control characters.</target>
+        <source>Template source names must be 1-64 ASCII letters, digits, dots, hyphens, or underscores, starting with a letter or digit.</source>
+        <target state="new">Template source names must be 1-64 ASCII letters, digits, dots, hyphens, or underscores, starting with a letter or digit.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceNotFound">
@@ -393,8 +363,8 @@
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceUnknownField">
-        <source>Unknown source field. Use an absolute 'path', or 'repository' with optional 'ref'/'path'.</source>
-        <target state="new">Unknown source field. Use an absolute 'path', or 'repository' with optional 'ref'/'path'.</target>
+        <source>Unknown source field. Use 'path', 'repository', 'ref', or 'displayName'.</source>
+        <target state="new">Unknown source field. Use 'path', 'repository', 'ref', or 'displayName'.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceWriteFailed">

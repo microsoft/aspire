@@ -273,15 +273,7 @@ public sealed class TestEnvironment : IDisposable
                 """;
         }
 
-        var tempGhScriptPath = Path.Combine(mockBinDir, isWindows ? "gh.tmp.cmd" : "gh.tmp");
-        await File.WriteAllTextAsync(tempGhScriptPath, scriptContent);
-
-        if (!isWindows)
-        {
-            FileHelper.MakeExecutable(tempGhScriptPath);
-        }
-
-        File.Move(tempGhScriptPath, ghScriptPath, overwrite: true);
+        await FileHelper.WriteExecutableFileAsync(ghScriptPath, scriptContent);
 
         testOutput.WriteLine($"Created mock gh script at: {ghScriptPath}");
         return mockBinDir;

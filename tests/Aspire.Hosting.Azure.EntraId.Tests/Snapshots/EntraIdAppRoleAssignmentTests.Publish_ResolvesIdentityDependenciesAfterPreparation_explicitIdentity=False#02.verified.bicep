@@ -9,14 +9,14 @@ param worker_identity_outputs_id string
 
 param worker_identity_outputs_clientid string
 
-resource worker 'Microsoft.App/containerApps@2025-07-01' = {
+resource worker 'Microsoft.App/containerApps@2026-07-01' = {
   name: 'worker'
   location: location
   properties: {
+    environmentId: env_outputs_azure_container_apps_environment_id
     configuration: {
       activeRevisionsMode: 'Single'
     }
-    environmentId: env_outputs_azure_container_apps_environment_id
     template: {
       containers: [
         {
