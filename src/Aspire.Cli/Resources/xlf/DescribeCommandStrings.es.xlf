@@ -72,6 +72,11 @@
         <target state="translated">describir</target>
         <note />
       </trans-unit>
+      <trans-unit id="StateWithExitCode">
+        <source>{0} (exit code: {1})</source>
+        <target state="new">{0} (exit code: {1})</target>
+        <note>{0} is the resource state; {1} is the process exit code.</note>
+      </trans-unit>
     </body>
   </file>
 </xliff>
