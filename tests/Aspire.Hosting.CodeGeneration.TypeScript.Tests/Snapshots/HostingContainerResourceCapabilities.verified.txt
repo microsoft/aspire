@@ -546,10 +546,10 @@
     ]
   },
   {
-    CapabilityId: Aspire.Hosting/withDashboardPosition,
-    MethodName: withDashboardPosition,
+    CapabilityId: Aspire.Hosting/withDeveloperCertificateTrust,
+    MethodName: withDeveloperCertificateTrust,
     TargetType: {
-      TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource,
+      TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment,
       IsInterface: true
     },
     ExpandedTargetTypes: [
@@ -560,10 +560,10 @@
     ]
   },
   {
-    CapabilityId: Aspire.Hosting/withDeveloperCertificateTrust,
-    MethodName: withDeveloperCertificateTrust,
+    CapabilityId: Aspire.Hosting/withDisplayOrder,
+    MethodName: withDisplayOrder,
     TargetType: {
-      TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment,
+      TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource,
       IsInterface: true
     },
     ExpandedTargetTypes: [
