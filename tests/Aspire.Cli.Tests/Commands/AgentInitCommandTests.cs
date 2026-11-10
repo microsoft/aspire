@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Agents;
 using Aspire.Cli.Agents.AspireSkills;
+using Aspire.Cli.Agents.Hooks;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
@@ -697,6 +698,46 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         Assert.Contains(
             interactionService.DisplayedMessages,
             message => message.Message.Contains("for: GitHub Copilot.", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData((int)TelemetryHookSkipReason.MalformedConfig)]
+    [InlineData((int)TelemetryHookSkipReason.UnexpectedConfigShape)]
+    [InlineData((int)TelemetryHookSkipReason.WriteFailed)]
+    public async Task AgentInitCommand_DisplaysSkippedTelemetryHookMessage_UsingClientDisplayName(int reasonValue)
+    {
+        var reason = (TelemetryHookSkipReason)reasonValue;
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var homeDirectory = workspace.CreateDirectory("fake-home");
+        var interactionService = new TestInteractionService();
+        var subtleMessages = new List<string>();
+        interactionService.DisplaySubtleMessageCallback = subtleMessages.Add;
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => CreateExecutionContext(workspace.WorkspaceRoot, homeDirectory);
+            options.AgentEnvironmentDetectorFactory = _ => new TestAgentEnvironmentDetector { DetectedEnvironments = AgentEnvironment.CopilotCli };
+            options.InteractionServiceFactory = _ => interactionService;
+            options.TelemetryHookConfiguratorFactory = _ => new TestTelemetryHookConfigurator
+            {
+                ResultFactory = selected => new TelemetryHookConfigurationResult([], [new TelemetryHookSkip(selected[0], reason)])
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"agent init --workspace-root {workspace.WorkspaceRoot.FullName} --agents copilot --scope global --skills aspire");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        var format = reason switch
+        {
+            TelemetryHookSkipReason.MalformedConfig => AgentCommandStrings.InitCommand_TelemetryHookSkippedMalformedConfig,
+            TelemetryHookSkipReason.UnexpectedConfigShape => AgentCommandStrings.InitCommand_TelemetryHookSkippedUnexpectedShape,
+            _ => AgentCommandStrings.InitCommand_TelemetryHookWriteFailed,
+        };
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Contains(string.Format(CultureInfo.CurrentCulture, format, "GitHub Copilot"), subtleMessages);
     }
 
     [Fact]

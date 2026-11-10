@@ -12,13 +12,15 @@ namespace Aspire.Cli.Agents.Hooks;
 internal interface ITelemetryHookConfigurator
 {
     /// <summary>
-    /// Materializes the hook scripts and registers one hook for each agent client made eligible by a
-    /// detected environment.
+    /// Materializes the hook scripts and registers one hook for each selected agent client made eligible
+    /// by a detected environment.
     /// </summary>
+    /// <param name="selectedClients">The agent clients the user selected for configuration.</param>
     /// <param name="detectedEnvironments">The detected agent environments used to decide client eligibility.</param>
     /// <param name="cancellationToken">A token to cancel the operation.</param>
     /// <returns>A summary of which agent clients were configured and which were skipped (and why).</returns>
     Task<TelemetryHookConfigurationResult> ConfigureAsync(
+        IReadOnlyList<IAgentClient> selectedClients,
         AgentEnvironment detectedEnvironments,
         CancellationToken cancellationToken);
 }

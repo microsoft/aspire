@@ -690,14 +690,12 @@ internal sealed class AgentInitCommand : BaseCommand
 
         // --- Phase 6: Install agent telemetry hooks (default-on, parity with azure-skills) ---
         // Global setup registers one hook per selected agent client that a detected environment makes
-        // eligible. Whether telemetry is actually
-        // transmitted stays gated by the single ASPIRE_CLI_TELEMETRY_OPTOUT opt-out, which both the
-        // hook scripts and the `aspire agent telemetry` command path re-check at runtime.
+        // eligible. Whether telemetry is actually transmitted stays gated by the single
+        // ASPIRE_CLI_TELEMETRY_OPTOUT opt-out, which both the hook scripts and the
+        // `aspire agent telemetry` command path re-check at runtime.
         if (scope is AgentConfigurationScope.Global)
         {
-            var selectedEnvironments = selectedClients.Aggregate(AgentEnvironment.None,
-                static (environments, client) => environments | client.Environments);
-            await ConfigureTelemetryHooksAsync(detectedEnvironments.GetValueOrDefault() & selectedEnvironments, cancellationToken);
+            await ConfigureTelemetryHooksAsync(selectedClients, detectedEnvironments.GetValueOrDefault(), cancellationToken);
         }
 
         if (hasErrors)
@@ -719,12 +717,15 @@ internal sealed class AgentInitCommand : BaseCommand
         };
     }
 
-    private async Task ConfigureTelemetryHooksAsync(AgentEnvironment detectedEnvironments, CancellationToken cancellationToken)
+    private async Task ConfigureTelemetryHooksAsync(
+        IReadOnlyList<IAgentClient> selectedClients,
+        AgentEnvironment detectedEnvironments,
+        CancellationToken cancellationToken)
     {
         TelemetryHookConfigurationResult result;
         try
         {
-            result = await _telemetryHookConfigurator.ConfigureAsync(detectedEnvironments, cancellationToken);
+            result = await _telemetryHookConfigurator.ConfigureAsync(selectedClients, detectedEnvironments, cancellationToken);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

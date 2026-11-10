@@ -3,14 +3,14 @@
 
 namespace Aspire.Cli.Agents.Hooks;
 
-internal sealed class TelemetryHookConfigurator(
-    ITelemetryHookInstaller installer,
-    IEnumerable<IAgentClient> clients) : ITelemetryHookConfigurator
+internal sealed class TelemetryHookConfigurator(ITelemetryHookInstaller installer) : ITelemetryHookConfigurator
 {
     public async Task<TelemetryHookConfigurationResult> ConfigureAsync(
-        AgentEnvironment detectedEnvironments, CancellationToken cancellationToken)
+        IReadOnlyList<IAgentClient> selectedClients,
+        AgentEnvironment detectedEnvironments,
+        CancellationToken cancellationToken)
     {
-        var eligibleClients = clients
+        var eligibleClients = selectedClients
             .Where(client => (client.TelemetryHookEnvironments & detectedEnvironments) != AgentEnvironment.None)
             .ToList();
         if (eligibleClients.Count == 0)
