@@ -160,36 +160,109 @@ internal sealed class ChartDataCalculator
     {
         if (temporality == OtlpAggregationTemporality.Delta)
         {
-            return [.. CalculateChartValues(dimensions, startTime, static t => t, string.Empty).Traces[0].Values];
+            return CalculateDeltaIncreases(dimensions, startTime);
         }
 
         // A cumulative counter has a running total per dimension (attribute set). The increases are calculated per
         // dimension and then added up, rather than calculated from the sum of the totals. A dimension can be missing
         // from an interval, for example when it's exported less often, and a sum of A=10,000 and B=5,000 that drops
         // to 10,000 without B would otherwise look like a counter reset followed by an increase of 10,000.
-        List<double?>? total = null;
+        var totals = new FiniteSum[_pointCount + 2];
+        var hasTotal = new bool[_pointCount + 2];
         foreach (var dimension in dimensions)
         {
             var values = CalculateChartValues([dimension], startTime, static t => t, string.Empty).Traces[0].Values;
             var increases = CalculateCounterIncreases(values, temporality);
-            if (total is null)
+            for (var i = 0; i < increases.Count; i++)
             {
-                total = increases;
-                continue;
-            }
-
-            for (var i = 0; i < total.Count; i++)
-            {
-                total[i] = (total[i], increases[i]) switch
+                if (increases[i] is { } increase)
                 {
-                    (null, null) => null,
-                    var (current, increase) => (current ?? 0) + (increase ?? 0)
-                };
+                    totals[i].Add(increase);
+                    hasTotal[i] = true;
+                }
             }
         }
 
-        return total ?? [.. Enumerable.Repeat<double?>(null, _pointCount + 2)];
+        return [.. totals.Select((total, i) => hasTotal[i] ? total.Value : (double?)null)];
     }
+
+    private List<double?> CalculateDeltaIncreases(List<DimensionScope> dimensions, DateTimeOffset startTime)
+    {
+        var pointDuration = _duration / _pointCount;
+        var values = new List<double?>(_pointCount + 2);
+
+        // Same points as CalculateChartValues, generated in reverse order, so the results line up with its x-values.
+        for (var pointIndex = 0; pointIndex < (_pointCount + 2); pointIndex++)
+        {
+            var start = CalcOffset(pointIndex, startTime, pointDuration);
+            var end = CalcOffset(pointIndex - 1, startTime, pointDuration);
+            values.Add(TryCalculateDeltaPoint(dimensions, start, end, out var value) ? value : null);
+        }
+
+        values.Reverse();
+        return values;
+    }
+
+    /// <summary>
+    /// Adds up the delta observations in an interval. Each one is a change, so unlike the level that
+    /// <see cref="TryCalculatePoint"/> calculates, all of the observations in the interval count.
+    /// </summary>
+    internal static bool TryCalculateDeltaPoint(List<DimensionScope> dimensions, DateTimeOffset start, DateTimeOffset end, out double pointValue)
+    {
+        var hasValue = false;
+        var sum = new FiniteSum();
+        var startUnixNano = OtlpHelpers.DateTimeToUnixNanoseconds(start.UtcDateTime);
+        var endUnixNano = OtlpHelpers.DateTimeToUnixNanoseconds(end.UtcDateTime);
+
+        foreach (var dimension in dimensions)
+        {
+            var dimensionValues = dimension.Values;
+            for (var i = dimensionValues.Count - 1; i >= 0; i--)
+            {
+                var metric = dimensionValues[i];
+
+                // An observation is at the end of its export interval, which puts it in exactly one chart interval so it
+                // can't be counted twice. Values are ordered by start, and an instrument's integer and double values
+                // are rolled up separately, so their ends aren't in order. An earlier end doesn't end the search.
+                // Compare in nanoseconds: End is truncated to 100ns ticks, which would move an end just past a chart
+                // boundary back onto it, into the interval before the one its rollup was grouped into.
+                if (metric.EndTimeUnixNano <= startUnixNano || metric.EndTimeUnixNano > endUnixNano)
+                {
+                    continue;
+                }
+
+                var value = metric switch
+                {
+                    MetricValue<long> longMetric => longMetric.Value,
+                    MetricValue<double> doubleMetric => doubleMetric.Value,
+                    _ => 0
+                };
+
+                // Only values stored by an older dashboard can have a count above one, without their individual times.
+                sum.Add(value, metric.Count);
+                hasValue = true;
+            }
+        }
+
+        pointValue = sum.Value;
+
+        // JS interop doesn't support serializing NaN values.
+        if (double.IsNaN(pointValue))
+        {
+            pointValue = default;
+            return false;
+        }
+
+        return hasValue;
+    }
+
+    /// <summary>
+    /// Gets the value, or the largest finite value of its sign when it's beyond a double's range. Each stored value is
+    /// finite, but sums and differences of them can overflow. JS interop serializes chart values with System.Text.Json,
+    /// which throws on infinity, so an overflow would stop the chart from rendering. The largest finite value still draws
+    /// as off the scale.
+    /// </summary>
+    internal static double ToFinite(double value) => Math.Clamp(value, double.MinValue, double.MaxValue);
 
     internal static List<double?> CalculateCounterIncreases(IReadOnlyList<double?> values, OtlpAggregationTemporality temporality)
     {
@@ -215,7 +288,7 @@ internal sealed class ChartDataCalculator
             }
 
             // The first point has nothing to compare against.
-            increases.Add(previous is { } last ? (current >= last ? current - last : current) : null);
+            increases.Add(previous is { } last ? (current >= last ? ToFinite(current - last) : current) : null);
             previous = current;
         }
 
@@ -225,12 +298,16 @@ internal sealed class ChartDataCalculator
     internal static bool TryCalculatePoint(List<DimensionScope> dimensions, DateTimeOffset start, DateTimeOffset end, out double pointValue)
     {
         var hasValue = false;
-        pointValue = 0d;
+        var sum = new FiniteSum();
+        var endUnixNano = OtlpHelpers.DateTimeToUnixNanoseconds(end.UtcDateTime);
 
         foreach (var dimension in dimensions)
         {
             var dimensionValues = dimension.Values;
             var dimensionValue = 0d;
+            // The first value replaces the initial zero rather than being compared with it. Gauges and up-down counters
+            // can be negative, and comparing -5 with zero would report a level of 0.
+            var hasDimensionValue = false;
             for (var i = dimensionValues.Count - 1; i >= 0; i--)
             {
                 var metric = dimensionValues[i];
@@ -240,11 +317,11 @@ internal sealed class ChartDataCalculator
                 var metricStart = new DateTimeOffset(metric.Start, TimeSpan.Zero);
                 var metricEnd = new DateTimeOffset(metric.End, TimeSpan.Zero);
 
-                // Values are stored chronologically (oldest at index 0). We iterate newest-first,
-                // so once a metric ends before our window starts, all remaining are older — stop.
+                // Values are ordered by start, oldest first. An instrument's integer and double values are rolled up
+                // separately, so their ends aren't in order and an earlier end doesn't end the search.
                 if (metricEnd < start)
                 {
-                    break;
+                    continue;
                 }
 
                 if (metric is HistogramValue histogram)
@@ -271,7 +348,9 @@ internal sealed class ChartDataCalculator
                     continue;
                 }
 
-                if (metricStart <= end)
+                // Compare in nanoseconds: Start is truncated to 100ns ticks, which would move a start just past the
+                // interval end back onto it, and into this interval.
+                if (metric.StartTimeUnixNano <= endUnixNano)
                 {
                     var value = metric switch
                     {
@@ -280,13 +359,16 @@ internal sealed class ChartDataCalculator
                         _ => 0
                     };
 
-                    dimensionValue = Math.Max(value, dimensionValue);
+                    dimensionValue = hasDimensionValue ? Math.Max(value, dimensionValue) : value;
+                    hasDimensionValue = true;
                     hasValue = true;
                 }
             }
 
-            pointValue += dimensionValue;
+            sum.Add(dimensionValue);
         }
+
+        pointValue = sum.Value;
 
         // JS interop doesn't support serializing NaN values.
         if (double.IsNaN(pointValue))
@@ -476,5 +558,30 @@ internal sealed class ChartDataCalculator
             value += histogramValue.Values[i];
         }
         return value;
+    }
+
+    /// <summary>
+    /// Adds up values, with a finite total that doesn't depend on their order. Clamping each addition would: for
+    /// <c>double.MaxValue</c>, <c>double.MaxValue</c> and <c>-double.MaxValue</c>, it would give 0 in that order and
+    /// <c>double.MaxValue</c> with the negative value first.
+    /// </summary>
+    private struct FiniteSum
+    {
+        // A power of two, so scaling is exact except for values below about 1e-298, which don't matter next to a total
+        // beyond a double's range. 2^32 values of double.MaxValue fit in the scaled total.
+        private static readonly double s_scaleDown = Math.ScaleB(1, -32);
+        private static readonly double s_scaleUp = Math.ScaleB(1, 32);
+
+        private double _sum;
+        private double _scaledSum;
+
+        public void Add(double value, double count = 1)
+        {
+            _sum += value * count;
+            _scaledSum += value * s_scaleDown * count;
+        }
+
+        // The total is used as is unless it overflowed, so it's unchanged for values in a double's range.
+        public readonly double Value => double.IsFinite(_sum) ? _sum : ToFinite(_scaledSum * s_scaleUp);
     }
 }

@@ -17,7 +17,6 @@ public sealed class ResourceOrderStore
 
     private readonly Lock _lock = new();
     private readonly Dictionary<string, long> _positions = new(StringComparers.ResourceName);
-    private readonly Dictionary<string, long> _defaultPositions = new(StringComparers.ResourceName);
     private readonly Dictionary<string, Dictionary<string, long>> _groupPositions = new(StringComparer.Ordinal);
     private readonly DashboardSettingsDatabase _database;
     private bool _loaded;
@@ -35,7 +34,28 @@ public sealed class ResourceOrderStore
 
     public event Action? Changed;
 
+    /// <summary>
+    /// Gets the stored resource positions, shared by every run.
+    /// </summary>
     public IReadOnlyDictionary<string, long> GetPositions() => GetPositions(grouping: null);
+
+    /// <summary>
+    /// Gets the positions to display the given run's resources with. AppHost display orders apply until the user reorders.
+    /// </summary>
+    /// <remarks>
+    /// Display orders declared by the AppHost aren't stored: they come with the resources of a run, and a circuit can
+    /// switch between the live run and recordings. They're provided by the caller so opening a recording can't change
+    /// the order of the live run.
+    /// </remarks>
+    public IReadOnlyDictionary<string, long> GetPositions(IEnumerable<ResourceViewModel> resources)
+    {
+        var displayOrders = GetDisplayOrders(resources);
+        lock (_lock)
+        {
+            EnsureLoaded();
+            return GetEffectiveResourcePositions(displayOrders);
+        }
+    }
 
     public IReadOnlyDictionary<string, long> GetGroupPositions(string grouping) => GetPositions(grouping);
 
@@ -44,39 +64,13 @@ public sealed class ResourceOrderStore
         lock (_lock)
         {
             EnsureLoaded();
-            return grouping is null ? GetEffectiveResourcePositions() : new Dictionary<string, long>(GetScopePositions(grouping), StringComparers.ResourceName);
+            return new Dictionary<string, long>(GetScopePositions(grouping), StringComparers.ResourceName);
         }
     }
 
     // Keys must be ResourceViewModel.PersistentKey, not run-specific resource names. Keep positions for absent
     // resources so restarting a run, temporarily removing a resource, or changing its state doesn't reset its order.
     public void EnsureResources(IEnumerable<string> resourceKeys) => EnsureItems(grouping: null, resourceKeys);
-
-    public void EnsureResources(IEnumerable<ResourceViewModel> resources)
-    {
-        var snapshot = resources.ToList();
-        var defaultsChanged = false;
-        lock (_lock)
-        {
-            foreach (var resource in snapshot)
-            {
-                if (resource.DefaultDashboardPosition is { } position)
-                {
-                    defaultsChanged |= !_defaultPositions.TryGetValue(resource.PersistentKey, out var previous) || previous != position;
-                    _defaultPositions[resource.PersistentKey] = position;
-                }
-                else
-                {
-                    defaultsChanged |= _defaultPositions.Remove(resource.PersistentKey);
-                }
-            }
-        }
-        EnsureItems(grouping: null, snapshot.Select(r => r.PersistentKey));
-        if (defaultsChanged)
-        {
-            Changed?.Invoke();
-        }
-    }
 
     public void EnsureGroups(string grouping, IEnumerable<string> groupKeys) => EnsureItems(grouping, groupKeys);
 
@@ -105,11 +99,29 @@ public sealed class ResourceOrderStore
         }
     }
 
-    public bool TryMove(string resourceKey, string targetKey, bool after) => TryMove(grouping: null, resourceKey, targetKey, after);
+    public bool TryMove(string resourceKey, string targetKey, bool after) => TryMove(grouping: null, resourceKey, targetKey, after, [], []);
 
-    public bool TryMoveGroup(string grouping, string groupKey, string targetKey, bool after) => TryMove(grouping, groupKey, targetKey, after);
+    /// <summary>
+    /// Moves a resource within the order the given run's resources are displayed in, which becomes the stored order.
+    /// </summary>
+    public bool TryMove(string resourceKey, string targetKey, bool after, IEnumerable<ResourceViewModel> resources)
+    {
+        var snapshot = resources.ToList();
 
-    private bool TryMove(string? grouping, string resourceKey, string targetKey, bool after)
+        // Resources can share a position, for example the same AppHost display order. Those are displayed by name, so
+        // the move needs the same tie-breaker or the moved resource lands somewhere other than where it was dropped.
+        var nameRanks = new Dictionary<string, int>(StringComparers.ResourceName);
+        foreach (var resource in snapshot.OrderBy(r => r, ResourceViewModelNameComparer.Instance))
+        {
+            nameRanks.TryAdd(resource.PersistentKey, nameRanks.Count);
+        }
+
+        return TryMove(grouping: null, resourceKey, targetKey, after, GetDisplayOrders(snapshot), nameRanks);
+    }
+
+    public bool TryMoveGroup(string grouping, string groupKey, string targetKey, bool after) => TryMove(grouping, groupKey, targetKey, after, [], []);
+
+    private bool TryMove(string? grouping, string resourceKey, string targetKey, bool after, Dictionary<string, int> displayOrders, Dictionary<string, int> nameRanks)
     {
         lock (_lock)
         {
@@ -124,8 +136,12 @@ public sealed class ResourceOrderStore
                 return true;
             }
 
-            var effectivePositions = grouping is null ? GetEffectiveResourcePositions() : currentPositions;
-            var orderedKeys = effectivePositions.OrderBy(pair => pair.Value).Select(pair => pair.Key).ToList();
+            var effectivePositions = grouping is null ? GetEffectiveResourcePositions(displayOrders) : currentPositions;
+            var orderedKeys = effectivePositions
+                .OrderBy(pair => pair.Value)
+                .ThenBy(pair => nameRanks.GetValueOrDefault(pair.Key, int.MaxValue))
+                .Select(pair => pair.Key)
+                .ToList();
             orderedKeys.RemoveAll(key => StringComparers.ResourceName.Equals(key, resourceKey));
             var targetIndex = orderedKeys.FindIndex(key => StringComparers.ResourceName.Equals(key, targetKey));
             orderedKeys.Insert(targetIndex + (after ? 1 : 0), resourceKey);
@@ -164,20 +180,56 @@ public sealed class ResourceOrderStore
         return positions;
     }
 
-    private Dictionary<string, long> GetEffectiveResourcePositions()
+    private static Dictionary<string, int> GetDisplayOrders(IEnumerable<ResourceViewModel> resources)
     {
-        if (_hasCustomResourceOrder || _defaultPositions.Count == 0)
+        var orders = new Dictionary<string, int>(StringComparers.ResourceName);
+        foreach (var resource in resources)
+        {
+            // An explicit 0 is the same as no order. Recording it would give the resource a shared, name-sorted
+            // position ahead of resources without an order, so merely adding WithDisplayOrder(0) would move it.
+            if (resource.DisplayOrder is { } order and not 0)
+            {
+                orders[resource.PersistentKey] = order;
+            }
+        }
+
+        return orders;
+    }
+
+    private Dictionary<string, long> GetEffectiveResourcePositions(Dictionary<string, int> displayOrders)
+    {
+        if (_hasCustomResourceOrder || displayOrders.Count == 0)
         {
             return new Dictionary<string, long>(_positions, StringComparers.ResourceName);
         }
 
-        // Keep declared defaults separate from saved order: a new AppHost default must take
+        // Keep declared display orders separate from stored order: a new AppHost value must take
         // effect until the user explicitly reorders, including after restarting the dashboard.
+        //
+        // Display orders are relative sort keys like ResourceUrlAnnotation.DisplayOrder: higher values
+        // come first and resources without one count as 0. Resources declaring the same nonzero order
+        // share a position so they're displayed by name; resources at 0 keep their stored order, so
+        // declaring an order on one resource doesn't reshuffle all the others.
         var positions = new Dictionary<string, long>(StringComparers.ResourceName);
-        var nextPosition = _defaultPositions.Values.Max() + 1;
-        foreach (var pair in _positions.OrderBy(p => p.Value))
+        var nextPosition = 0L;
+        var storedOrder = _positions.OrderBy(pair => pair.Value).Select(pair => pair.Key);
+        var groups = storedOrder.GroupBy(key => displayOrders.GetValueOrDefault(key)).OrderByDescending(group => group.Key);
+        foreach (var group in groups)
         {
-            positions[pair.Key] = _defaultPositions.TryGetValue(pair.Key, out var position) ? position : nextPosition++;
+            var hasDeclaredOrder = false;
+            foreach (var key in group.Where(displayOrders.ContainsKey))
+            {
+                positions[key] = nextPosition;
+                hasDeclaredOrder = true;
+            }
+            if (hasDeclaredOrder)
+            {
+                nextPosition++;
+            }
+            foreach (var key in group.Where(key => !displayOrders.ContainsKey(key)))
+            {
+                positions[key] = nextPosition++;
+            }
         }
 
         return positions;

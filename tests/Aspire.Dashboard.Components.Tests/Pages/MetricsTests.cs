@@ -1517,6 +1517,61 @@ public partial class MetricsTests : DashboardTestContext
     }
 
     [Fact]
+    public async Task LiveMetricTiles_DeltaCounter_ShowsTotalChangeOfLatestInterval()
+    {
+        MetricsSetupHelpers.SetupMetricsPage(this);
+        var end = s_testTime.AddMinutes(1);
+
+        // A five minute sparkline has 10s intervals and 1s rollups, so these exports stay separate rows in its last interval.
+        await FluentUISetupHelpers.ConfigureTelemetryRepository(this, readOnly: true, telemetryRepository => telemetryRepository.AddMetricsAsync(new AddContext(), new RepeatedField<ResourceMetrics>
+        {
+            new ResourceMetrics
+            {
+                Resource = CreateResource(name: "TestApp"),
+                ScopeMetrics =
+                {
+                    new ScopeMetrics
+                    {
+                        Scope = CreateScope(name: "test-meter"),
+                        Metrics =
+                        {
+                            new Metric
+                            {
+                                Name = "test-instrument",
+                                Unit = "widget",
+                                Sum = new Sum
+                                {
+                                    AggregationTemporality = AggregationTemporality.Delta,
+                                    IsMonotonic = true,
+                                    DataPoints =
+                                    {
+                                        new NumberDataPoint { AsInt = 4, StartTimeUnixNano = DateTimeToUnixNanoseconds(end.AddSeconds(-8)), TimeUnixNano = DateTimeToUnixNanoseconds(end.AddSeconds(-4)) },
+                                        new NumberDataPoint { AsInt = 6, StartTimeUnixNano = DateTimeToUnixNanoseconds(end.AddSeconds(-4)), TimeUnixNano = DateTimeToUnixNanoseconds(end) }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }));
+
+        var repository = Services.GetRequiredService<DashboardDataSource>().TelemetryRepository;
+        var resource = Assert.Single(repository.GetResources());
+
+        var cut = Render<LiveMetricTiles>(builder =>
+        {
+            builder.Add(c => c.ResourceKey, resource.ResourceKey);
+            builder.Add(c => c.Instruments, repository.GetInstrumentSummaries(resource.ResourceKey));
+            builder.Add(c => c.Duration, TimeSpan.FromMinutes(5));
+            builder.Add(c => c.GetInstrumentUrl, instrument => $"/metrics/{instrument.Name}");
+        });
+
+        // The change in the interval is both exports, not the larger one that the chart value would be.
+        cut.WaitForAssertion(() => Assert.Equal("10", Assert.Single(cut.FindAll(".live-metric-tile-number")).TextContent));
+    }
+
+    [Fact]
     public async Task MeterOverview_VisibleCardsReported_RefreshesOnlyVisibleCardsUntilOthersAreShown()
     {
         MetricsSetupHelpers.SetupMetricsPage(this);
