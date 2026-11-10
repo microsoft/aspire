@@ -522,7 +522,12 @@ internal sealed class AgentInitCommand : BaseCommand
                 cancellationToken: cancellationToken);
         }
 
-        if (scope is AgentConfigurationScope.Global && detectedEnvironments is null)
+        // The hooks only classify Aspire skill and Aspire MCP tool usage, so they are installed only
+        // when this run configures the Aspire skills or the Aspire MCP server. Third-party skills
+        // (playwright-cli, dotnet-inspect) alone produce no events the hooks would report.
+        var installTelemetryHooks = configureAspire || configureMcp;
+
+        if (installTelemetryHooks && detectedEnvironments is null)
         {
             // Capture hook evidence before configuration can create new detection markers.
             detectedEnvironments = await InteractionService.ShowStatusAsync(
@@ -689,14 +694,14 @@ internal sealed class AgentInitCommand : BaseCommand
         }
 
         // --- Phase 6: Install agent telemetry hooks (default-on, parity with azure-skills) ---
-        // Global setup registers one hook per selected agent client that a detected environment makes
-        // eligible. Whether telemetry is actually transmitted stays gated by the single
+        // Registers one user-level hook per selected agent client that a detected environment makes
+        // eligible. Hooks are always installed globally, even for project scope: Copilot also reads
+        // repository `.claude/settings.json`, so project-level hooks for both clients would report
+        // the same tool call twice, and repository files would pin a machine-specific CLI path.
+        // Whether telemetry is actually transmitted stays gated by the single
         // ASPIRE_CLI_TELEMETRY_OPTOUT opt-out, which both the hook scripts and the
         // `aspire agent telemetry` command path re-check at runtime.
-        // The hooks only classify Aspire skill and Aspire MCP tool usage, so they are installed only
-        // when this run configures the Aspire skills or the Aspire MCP server. Third-party skills
-        // (playwright-cli, dotnet-inspect) alone produce no events the hooks would report.
-        if (scope is AgentConfigurationScope.Global && (configureAspire || configureMcp))
+        if (installTelemetryHooks)
         {
             await ConfigureTelemetryHooksAsync(selectedClients, detectedEnvironments.GetValueOrDefault(), cancellationToken);
         }
