@@ -4,6 +4,7 @@ Runs aspire add in the caller's current directory with the configuration-source 
 .DESCRIPTION
 Uses the installed CLI by default. Use -Cli source to build and run the CLI from
 this checkout with published packages. Additional arguments are forwarded to aspire add.
+Source builds display only errors.
 .EXAMPLE
 & 'C:\Development\Source\aspire\eng\scripts\config-sources-demo\run-aspire-add.ps1'
 .EXAMPLE

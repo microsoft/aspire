@@ -1131,6 +1131,9 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(accepted ? "example/team" : null, configuration["skillSources"]?["team"]?["repository"]?.GetValue<string>());
         Assert.Equal(accepted ? 1 : 0, Assert.IsType<TestConfigSourceRepository>(provider.GetRequiredService<IGitClient>()).Calls);
         Assert.False(File.Exists(Path.Combine(workspace.Path, AspireConfigFile.FileName)));
+        var interaction = Assert.IsType<TestInteractionService>(provider.GetRequiredService<IInteractionService>());
+        Assert.Single(interaction.DisplayedMessages,
+            message => message.Message == $"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]");
     }
 
     [Theory]

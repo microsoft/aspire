@@ -247,10 +247,6 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
                 {
                     Assert.All(context.Clients, client => Assert.False(File.Exists(
                         client.GetIntegrationConfigPath(AgentConfigurationScope.Project, context.Project))));
-                    if (emoji.Equals(KnownEmojis.Information))
-                    {
-                        context.ExecutionContext.TryMarkSourceTrustWarningDisplayed();
-                    }
                     messagesBeforeRegistration.Add(message);
                 }
             },

@@ -599,7 +599,9 @@ internal sealed class ConfigSourceService(
                 Ref = source.Ref
             };
             interaction.DisplayGitFetchNotice(SharedCommandStrings.GitFetchConfigurationSource,
+                PackageSourceRedactor.RedactForDisplay(identity.Repository),
                 allowInteractiveInput && hostEnvironment.SupportsInteractiveInput);
+            // Keep Git outside animated status so authentication prompts remain visible.
             var (commit, version, configuration) = await AcquireRepositoryAsync(identity, snapshotDirectory, allowInteractiveInput, cancellationToken);
             ConfigurationHelper.NormalizeSettings(configuration);
             var now = timeProvider.GetUtcNow();
