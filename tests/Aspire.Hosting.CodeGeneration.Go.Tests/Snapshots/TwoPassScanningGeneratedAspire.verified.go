@@ -8,6 +8,7 @@ package aspire
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -16,6 +17,7 @@ import (
 
 // Compile-time references to keep imports used in minimal SDKs.
 var _ = context.Background
+var _ = json.Number("")
 var _ = fmt.Errorf
 var _ = os.Getenv
 var _ = strings.EqualFold
@@ -48635,7 +48637,7 @@ type TestRedisResource interface {
 	// WithScalarField sets a scalar field value
 	//
 	// Allowed types for parameter value: string, float64, bool (float64 accepts any
-	// built-in Go numeric type).
+	// built-in Go numeric type and json.Number).
 	WithScalarField(path string, value any) TestRedisResource
 
 	// WithSerializedAnnotation stores a serialized ATS annotation payload on a
@@ -51742,12 +51744,18 @@ func (s *testRedisResource) WithResourceTypeDisplayName(resourceTypeDisplayName 
 }
 
 // WithScalarField sets a scalar field value
-// Allowed types for parameter value: string, float64, bool (float64 accepts any built-in Go numeric type).
+// Allowed types for parameter value: string, float64, bool (float64 accepts any built-in Go numeric type and json.Number).
 func (s *testRedisResource) WithScalarField(path string, value any) TestRedisResource {
 	if s.Err() != nil {
 		return s
 	}
-	switch value.(type) {
+	switch value := value.(type) {
+	case json.Number:
+		if !isValidJSONNumber(value) {
+			err := fmt.Errorf("aspire: WithScalarField: parameter %q must be one of [string, float64, bool], got invalid json.Number %q", "value", value)
+			s.setErr(err)
+			return s
+		}
 	case string, float64, bool, int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, float32:
 	default:
 		err := fmt.Errorf("aspire: WithScalarField: parameter %q must be one of [string, float64, bool], got %T", "value", value)

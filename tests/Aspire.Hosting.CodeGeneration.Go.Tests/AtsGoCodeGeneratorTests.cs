@@ -1358,6 +1358,8 @@ public class AtsGoCodeGeneratorTests
 
                 import (
                     "bufio"
+                    "bytes"
+                    "encoding/json"
                     "errors"
                     "fmt"
                     "net"
@@ -1495,6 +1497,28 @@ public class AtsGoCodeGeneratorTests
                         if err == nil || !strings.Contains(err.Error(), "not connected to AppHost") {
                             t.Errorf("%T: got %v, want the transport error", value, err)
                         }
+                    }
+                }
+
+                func TestUnionGuardAcceptsPreservedJSONNumber(t *testing.T) {
+                    var wire bytes.Buffer
+                    if err := writeMessageBody(&wire, []byte(`{"jsonrpc":"2.0","id":1,"result":9007199254740993}`)); err != nil {
+                        t.Fatal(err)
+                    }
+                    message, err := readMessage(bufio.NewReader(&wire))
+                    if err != nil {
+                        t.Fatal(err)
+                    }
+                    value, ok := message["result"].(json.Number)
+                    if !ok {
+                        t.Fatalf("result is %T, want json.Number", message["result"])
+                    }
+                    if err := scalarFieldError(value); err == nil || !strings.Contains(err.Error(), "not connected to AppHost") {
+                        t.Fatalf("got %v, want the transport error", err)
+                    }
+
+                    if err := scalarFieldError(json.Number("NaN")); err == nil || !strings.Contains(err.Error(), "invalid json.Number") {
+                        t.Fatalf("got %v, want an invalid json.Number error", err)
                     }
                 }
 
@@ -2615,6 +2639,12 @@ public class AtsGoCodeGeneratorTests
             ClrType = typeof(string),
             Category = AtsTypeCategory.Primitive
         };
+        var int64Type = new AtsTypeRef
+        {
+            TypeId = AtsConstants.Number,
+            ClrType = typeof(long),
+            Category = AtsTypeCategory.Primitive
+        };
         var voidType = new AtsTypeRef { TypeId = AtsConstants.Void, Category = AtsTypeCategory.Primitive };
         var capabilities = new[]
         {
@@ -2630,6 +2660,13 @@ public class AtsGoCodeGeneratorTests
                 CapabilityId = "Tests/withFooBar",
                 MethodName = "withFooBar",
                 Parameters = [new AtsParameterInfo { Name = "baz", Type = stringType, IsOptional = true }],
+                ReturnType = voidType
+            },
+            new AtsCapabilityInfo
+            {
+                CapabilityId = "Tests/withInt64",
+                MethodName = "withInt64",
+                Parameters = [new AtsParameterInfo { Name = "ptr", Type = int64Type, IsOptional = true }],
                 ReturnType = voidType
             }
         };
@@ -2657,6 +2694,8 @@ public class AtsGoCodeGeneratorTests
         Assert.Equal(2, optionTypes.Count);
         Assert.Equal(2, optionTypes.Distinct(StringComparer.Ordinal).Count());
         Assert.All(optionTypes, name => Assert.True(char.IsUpper(name[0])));
+        Assert.DoesNotContain("type Int64Ptr int64", aspireGo);
+        Assert.Contains("type Int64Ptr2 int64", aspireGo);
     }
 
     [Fact]

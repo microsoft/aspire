@@ -8,6 +8,7 @@ package aspire
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -16,6 +17,7 @@ import (
 
 // Compile-time references to keep imports used in minimal SDKs.
 var _ = context.Background
+var _ = json.Number("")
 var _ = fmt.Errorf
 var _ = os.Getenv
 var _ = strings.EqualFold

@@ -376,6 +376,18 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
         _enumNames.Clear();
         _acceptingNames.Clear();
         _acceptingMarkers.Clear();
+        _reservedNames.Clear();
+
+        foreach (var resourceName in new[] { "base.go", "transport.go" })
+        {
+            foreach (var declaration in GoDeclarationScanner.ScanRuntime(GetEmbeddedResource(resourceName)))
+            {
+                if (declaration.Kind is GoDeclarationKind.Type or GoDeclarationKind.Function or GoDeclarationKind.Constant)
+                {
+                    _reservedNames.Add(declaration.Name);
+                }
+            }
+        }
 
         foreach (var enumType in context.EnumTypes)
         {
@@ -856,6 +868,7 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
 
             import (
                 "context"
+                "encoding/json"
                 "fmt"
                 "os"
                 "strings"
@@ -864,6 +877,7 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
 
             // Compile-time references to keep imports used in minimal SDKs.
             var _ = context.Background
+            var _ = json.Number("")
             var _ = fmt.Errorf
             var _ = os.Getenv
             var _ = strings.EqualFold
@@ -2729,7 +2743,21 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
         {
             var paramName = GetLocalIdentifier(p.Name);
             var allowed = GetUnionAllowedTypes(p.Type!);
-            WriteLine($"{indent}switch {paramName}.(type) {{");
+            var acceptsNumbers = AllowsGoNumericTypes(GetUnionMemberTypes(p.Type!));
+            WriteLine(acceptsNumbers
+                ? $"{indent}switch value := {paramName}.(type) {{"
+                : $"{indent}switch {paramName}.(type) {{");
+            if (acceptsNumbers)
+            {
+                WriteLine($"{indent}case json.Number:");
+                WriteLine($"{indent}\tif !isValidJSONNumber(value) {{");
+                WriteLine($"{indent}\t\terr := fmt.Errorf(\"aspire: {methodName}: parameter %q must be one of [{allowed}], got invalid json.Number %q\", {GoStringLiteral(p.Name)}, value)");
+                foreach (var line in errorActionLines)
+                {
+                    WriteLine($"{indent}\t\t{line}");
+                }
+                WriteLine($"{indent}\t}}");
+            }
             WriteLine($"{indent}case {GetUnionTypeSwitchCases(p.Type!)}:");
             WriteLine($"{indent}default:");
             WriteLine($"{indent}\terr := fmt.Errorf(\"aspire: {methodName}: parameter %q must be one of [{allowed}], got %T\", {GoStringLiteral(p.Name)}, {paramName})");
@@ -2757,7 +2785,9 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
             .Select(p =>
             {
                 var allowed = GetUnionAllowedTypes(p.Type!);
-                var numericNote = AllowsGoNumericTypes(GetUnionMemberTypes(p.Type!)) ? " (float64 accepts any built-in Go numeric type)" : "";
+                var numericNote = AllowsGoNumericTypes(GetUnionMemberTypes(p.Type!))
+                    ? " (float64 accepts any built-in Go numeric type and json.Number)"
+                    : "";
                 return $"Allowed types for parameter {GetLocalIdentifier(p.Name)}: {allowed}{numericNote}.";
             })
             .ToList();

@@ -762,6 +762,11 @@ func isNil(value any) bool {
 	}
 }
 
+func isValidJSONNumber(value json.Number) bool {
+	_, err := json.Marshal(value)
+	return err == nil
+}
+
 func serializeReflectedCollection(value any) (any, bool) {
 	reflectedValue := reflect.ValueOf(value)
 	switch reflectedValue.Kind() {
