@@ -11,7 +11,7 @@ internal sealed class TelemetryHookConfigurator(ITelemetryHookInstaller installe
         CancellationToken cancellationToken)
     {
         var eligibleClients = selectedClients
-            .Where(client => (client.TelemetryHookEnvironments & detectedEnvironments) != AgentEnvironment.None)
+            .Where(client => client.SupportsTelemetryHooks && (client.Environments & detectedEnvironments) != AgentEnvironment.None)
             .ToList();
         if (eligibleClients.Count == 0)
         {

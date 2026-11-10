@@ -101,9 +101,9 @@ internal sealed class CopilotAgentClient(
     }
 
     // VS Code, the Copilot App, and the Copilot CLI share the Copilot harness, which reads user hooks from
-    // ~/.copilot/hooks, so detecting any of them makes Copilot eligible:
+    // ~/.copilot/hooks, so one registration covers all of them:
     // https://code.visualstudio.com/docs/agent-customization/hooks#_choose-a-hook-source
-    public AgentEnvironment TelemetryHookEnvironments => Environments;
+    public bool SupportsTelemetryHooks => true;
 
     public async Task<TelemetryHookConfigurationResult> ConfigureTelemetryHookAsync(CancellationToken cancellationToken)
     {

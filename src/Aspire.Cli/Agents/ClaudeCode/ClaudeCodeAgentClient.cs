@@ -77,7 +77,7 @@ internal sealed class ClaudeCodeAgentClient(
         return (repaired, added);
     }
 
-    public AgentEnvironment TelemetryHookEnvironments => AgentEnvironment.ClaudeCode;
+    public bool SupportsTelemetryHooks => true;
 
     public async Task<TelemetryHookConfigurationResult> ConfigureTelemetryHookAsync(CancellationToken cancellationToken)
     {
