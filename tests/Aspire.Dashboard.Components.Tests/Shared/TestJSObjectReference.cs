@@ -12,6 +12,8 @@ internal sealed class TestJSObjectReference : IJSObjectReference
     private int _disposeCount;
 
     public ConcurrentQueue<Invocation> Invocations { get; } = new();
+    // Calls made after disposal, which throw ObjectDisposedException like Microsoft.JSInterop's JSObjectReference.
+    public ConcurrentQueue<string> RejectedInvocations { get; } = new();
     public Func<string, Task>? BeforeInvokeAsync { get; init; }
     public int DisposeCount => Volatile.Read(ref _disposeCount);
 
@@ -28,7 +30,11 @@ internal sealed class TestJSObjectReference : IJSObjectReference
 
     public async ValueTask<TValue> InvokeAsync<TValue>(string identifier, CancellationToken cancellationToken, object?[]? args)
     {
-        ObjectDisposedException.ThrowIf(DisposeCount != 0, this);
+        if (DisposeCount != 0)
+        {
+            RejectedInvocations.Enqueue(identifier);
+            throw new ObjectDisposedException(GetType().FullName);
+        }
         Invocations.Enqueue(new(identifier, args ?? []));
         if (BeforeInvokeAsync is { } beforeInvoke)
         {
