@@ -1380,6 +1380,8 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
 
     [Theory]
     [InlineData("aspire", false, null, true)]
+    [InlineData("aspire", false, "{}", true)]
+    [InlineData("aspire", false, """{"skillSources":{}}""", true)]
     [InlineData("aspire", false, """{"skillSources":{"contoso":{"repository":"contoso/skills"}}}""", true)]
     [InlineData("aspire", false, """{"skillSources":{"default":{"enabled":false},"contoso":{"repository":"contoso/skills"}}}""", false)]
     [InlineData("aspire", false, """{"skillSources":{"default":{"plugins":["other"]}}}""", false)]
