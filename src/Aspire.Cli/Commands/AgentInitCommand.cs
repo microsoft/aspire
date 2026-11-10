@@ -737,9 +737,7 @@ internal sealed class AgentInitCommand : BaseCommand
 
         if (result.ConfiguredEnvironments != AgentEnvironment.None)
         {
-            var environmentNames = string.Join(", ", Enum.GetValues<AgentEnvironment>()
-                .Where(environment => environment != AgentEnvironment.None && result.ConfiguredEnvironments.HasFlag(environment))
-                .Select(GetEnvironmentDisplayName));
+            var environmentNames = GetEnvironmentDisplayName(result.ConfiguredEnvironments);
             InteractionService.DisplayMessage(
                 KnownEmojis.BarChart,
                 string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_TelemetryHooksInstalled, environmentNames));
@@ -761,16 +759,33 @@ internal sealed class AgentInitCommand : BaseCommand
         }
     }
 
-    private static string GetEnvironmentDisplayName(AgentEnvironment environment)
-        => environment switch
+    private static string GetEnvironmentDisplayName(AgentEnvironment environments)
+    {
+        const AgentEnvironment copilot = AgentEnvironment.CopilotApp | AgentEnvironment.CopilotCli;
+        var names = new List<string>();
+
+        // The Copilot App and CLI share one hook, so name them together rather than listing the
+        // App and CLI as if they were separate installations.
+        if ((environments & copilot) == copilot)
         {
-            AgentEnvironment.CopilotCli => "GitHub Copilot CLI",
-            AgentEnvironment.CopilotApp => "GitHub Copilot App",
-            AgentEnvironment.ClaudeCode => "Claude Code",
-            AgentEnvironment.VsCode => "VS Code",
-            AgentEnvironment.OpenCode => "OpenCode",
-            _ => environment.ToString(),
-        };
+            names.Add("GitHub Copilot App and CLI");
+            environments &= ~copilot;
+        }
+
+        names.AddRange(Enum.GetValues<AgentEnvironment>()
+            .Where(environment => environment != AgentEnvironment.None && environments.HasFlag(environment))
+            .Select(environment => environment switch
+            {
+                AgentEnvironment.CopilotCli => "GitHub Copilot CLI",
+                AgentEnvironment.CopilotApp => "GitHub Copilot App",
+                AgentEnvironment.ClaudeCode => "Claude Code",
+                AgentEnvironment.VsCode => "VS Code",
+                AgentEnvironment.OpenCode => "OpenCode",
+                _ => environment.ToString(),
+            }));
+
+        return string.Join(", ", names);
+    }
 
     /// <summary>
     /// Extracts the single short sentence from a skill description so the selection prompt

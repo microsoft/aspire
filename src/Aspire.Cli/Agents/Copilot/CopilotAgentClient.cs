@@ -103,14 +103,10 @@ internal sealed class CopilotAgentClient(
     public async Task<TelemetryHookConfigurationResult> ConfigureTelemetryHooksAsync(
         AgentEnvironment detectedEnvironments, CancellationToken cancellationToken)
     {
-        var targetEnvironment = detectedEnvironments & (AgentEnvironment.CopilotApp | AgentEnvironment.CopilotCli);
-        // App and CLI share one user hook. Prefer the App display name when both are detected.
-        // Canonical scripts still attribute App events to copilot-cli:
+        // App and CLI share one user hook, so a single write configures every detected Copilot
+        // environment. Canonical scripts still attribute App events to copilot-cli:
         // https://github.com/microsoft/aspire-skills/issues/71.
-        if (targetEnvironment.HasFlag(AgentEnvironment.CopilotApp))
-        {
-            targetEnvironment = AgentEnvironment.CopilotApp;
-        }
+        var targetEnvironment = detectedEnvironments & (AgentEnvironment.CopilotApp | AgentEnvironment.CopilotCli);
         if (targetEnvironment == AgentEnvironment.None)
         {
             return new TelemetryHookConfigurationResult(AgentEnvironment.None, []);
