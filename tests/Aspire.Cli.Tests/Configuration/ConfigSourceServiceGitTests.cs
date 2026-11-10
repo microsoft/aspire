@@ -24,7 +24,8 @@ public class ConfigSourceServiceGitTests(ITestOutputHelper outputHelper) : IDisp
     public void Dispose() => _loggerFactory.Dispose();
 
     private GitCommandRunner CreateRunner(ICliHostEnvironment hostEnvironment) =>
-        new(hostEnvironment, new TestInteractionService(), _loggerFactory.CreateLogger<GitCommandRunner>());
+        new(hostEnvironment, new TestInteractionService(), TestHelpers.CreateConsoleEnvironment(TextWriter.Null, TextWriter.Null),
+            _loggerFactory.CreateLogger<GitCommandRunner>());
 
     private IGitClient CreateClient(ICliHostEnvironment hostEnvironment) =>
         new GitClient(CreateRunner(hostEnvironment));

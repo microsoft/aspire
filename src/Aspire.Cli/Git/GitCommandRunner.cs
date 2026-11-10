@@ -17,7 +17,7 @@ internal interface IGitCommandRunner
     Task<string> RunAsync(DirectoryInfo workingDirectory, string[] arguments, GitCommandMode mode, CancellationToken cancellationToken);
 }
 
-internal sealed class GitCommandRunner(ICliHostEnvironment hostEnvironment, IInteractionService interaction, ILogger<GitCommandRunner> logger) : IGitCommandRunner
+internal sealed class GitCommandRunner(ICliHostEnvironment hostEnvironment, IInteractionService interaction, ConsoleEnvironment consoleEnvironment, ILogger<GitCommandRunner> logger) : IGitCommandRunner
 {
     private Action<string> StandardErrorHandler { get; init; } =
         output => interaction.DisplayRawText(output, ConsoleOutput.Error);
@@ -25,7 +25,7 @@ internal sealed class GitCommandRunner(ICliHostEnvironment hostEnvironment, IInt
     // Keep diagnostic routing operation-local: foreground and background Git work
     // can share the registered runner without changing each other's output.
     public IGitCommandRunner WithStandardErrorHandler(Action<string> standardErrorHandler) =>
-        new GitCommandRunner(hostEnvironment, interaction, logger) { StandardErrorHandler = standardErrorHandler };
+        new GitCommandRunner(hostEnvironment, interaction, consoleEnvironment, logger) { StandardErrorHandler = standardErrorHandler };
 
     private static readonly HashSet<string> s_repositoryEnvironmentVariables = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -379,7 +379,7 @@ internal sealed class GitCommandRunner(ICliHostEnvironment hostEnvironment, IInt
                     logger.LogDebug("Git stdout: {Output}", output);
                     if (forwardStandardOutput)
                     {
-                        Console.Out.Write(output);
+                        consoleEnvironment.Out.Profile.Out.Writer.Write(output);
                     }
                 }, token);
                 var stderr = ReadOutputAsync(process.StandardError, output =>
@@ -387,7 +387,7 @@ internal sealed class GitCommandRunner(ICliHostEnvironment hostEnvironment, IInt
                     logger.LogDebug("Git stderr: {Output}", output);
                     if (forwardStandardError)
                     {
-                        Console.Error.Write(output);
+                        consoleEnvironment.Error.Profile.Out.Writer.Write(output);
                     }
                 }, token);
                 await Task.WhenAll(stdout, stderr);

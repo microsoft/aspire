@@ -2,14 +2,12 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
-using System.Globalization;
 using System.Text;
 using Aspire.Cli.Git;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
 using Microsoft.AspNetCore.InternalTesting;
-using Microsoft.DotNet.RemoteExecutor;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Testing;
 
@@ -18,11 +16,12 @@ namespace Aspire.Cli.Tests.Git;
 public partial class GitCommandRunnerTests(ITestOutputHelper outputHelper) : IDisposable
 {
     private readonly ILoggerFactory _loggerFactory = LoggerFactory.Create(builder => builder.SetMinimumLevel(LogLevel.Trace).AddXunit(outputHelper));
+    private readonly ConsoleEnvironment _consoleEnvironment = TestHelpers.CreateConsoleEnvironment(TextWriter.Null, TextWriter.Null);
 
     public void Dispose() => _loggerFactory.Dispose();
 
     private GitCommandRunner CreateRunner() =>
-        new(TestHelpers.CreateInteractiveHostEnvironment(), new TestInteractionService(), _loggerFactory.CreateLogger<GitCommandRunner>());
+        new(TestHelpers.CreateInteractiveHostEnvironment(), new TestInteractionService(), _consoleEnvironment, _loggerFactory.CreateLogger<GitCommandRunner>());
 
     [Fact]
     public void CreateStartInfo_CapturedCommandsUseLiteralArgumentsAndPreserveCredentialHelpers()
@@ -137,7 +136,7 @@ public partial class GitCommandRunnerTests(ITestOutputHelper outputHelper) : IDi
     {
         var logger = new FakeLogger<GitCommandRunner>();
         var interaction = new TestInteractionService();
-        var runner = new GitCommandRunner(TestHelpers.CreateNonInteractiveHostEnvironment(), interaction, logger);
+        var runner = new GitCommandRunner(TestHelpers.CreateNonInteractiveHostEnvironment(), interaction, _consoleEnvironment, logger);
         var message = $"{diagnostic}: repository-diagnostic-marker";
         var startInfo = CreateShellStartInfo($"printf '%s' '{message}' >&2; exit 128",
             $"[Console]::Error.Write('{message}'); exit 128");
@@ -203,7 +202,7 @@ public partial class GitCommandRunnerTests(ITestOutputHelper outputHelper) : IDi
     public async Task RunProcess_PreservesNulDelimitersNewlinesAndPartialLines()
     {
         var logger = new FakeLogger<GitCommandRunner>();
-        var runner = new GitCommandRunner(TestHelpers.CreateNonInteractiveHostEnvironment(), new TestInteractionService(), logger);
+        var runner = new GitCommandRunner(TestHelpers.CreateNonInteractiveHostEnvironment(), new TestInteractionService(), _consoleEnvironment, logger);
         var startInfo = CreateShellStartInfo("printf 'first\\r\\nsecond\\000last'", "[Console]::Out.Write(\"first`r`nsecond`0last\")");
 
         var output = await runner.RunProcessAsync(startInfo, captureCancellationOutput: false, GitCommandMode.Captured, TestContext.Current.CancellationToken);
@@ -218,7 +217,7 @@ public partial class GitCommandRunnerTests(ITestOutputHelper outputHelper) : IDi
     public async Task RunProcess_LogsBothStreamsWithoutTruncation(int exitCode)
     {
         var logger = new FakeLogger<GitCommandRunner>();
-        var runner = new GitCommandRunner(TestHelpers.CreateNonInteractiveHostEnvironment(), new TestInteractionService(), logger);
+        var runner = new GitCommandRunner(TestHelpers.CreateNonInteractiveHostEnvironment(), new TestInteractionService(), _consoleEnvironment, logger);
         var startInfo = CreateShellStartInfo(
             $"printf '%71680s' '' | tr ' ' o; printf '\\r\\n\\000last'; printf '%71680s' '' | tr ' ' e >&2; printf '\\r\\nlast' >&2; exit {exitCode}",
             $"[Console]::Out.Write(('o' * 71680) + \"`r`n`0last\"); [Console]::Error.Write(('e' * 71680) + \"`r`nlast\"); exit {exitCode}");
@@ -246,58 +245,44 @@ public partial class GitCommandRunnerTests(ITestOutputHelper outputHelper) : IDi
     [InlineData("fetch", 128)]
     [InlineData("ls-remote", 0)]
     [InlineData("ls-remote", 128)]
-    public void RunProcess_InteractiveRemoteForwardsAndLogsBothStreams(string command, int exitCode)
+    public async Task RunProcess_InteractiveRemoteForwardsAndLogsBothStreams(string command, int exitCode)
     {
-        // Console writers are process-wide; isolate forwarding assertions from parallel tests.
-        using var remote = RemoteExecutor.Invoke(static async (gitCommand, code) =>
+        using var stdout = new StringWriter();
+        using var stderr = new StringWriter();
+        var logger = new FakeLogger<GitCommandRunner>();
+        var interaction = new TestInteractionService();
+        var consoleEnvironment = TestHelpers.CreateConsoleEnvironment(stdout, stderr);
+        var runner = new GitCommandRunner(TestHelpers.CreateInteractiveHostEnvironment(), interaction, consoleEnvironment, logger);
+        var startInfo = runner.CreateStartInfo(Environment.CurrentDirectory, [command], GitCommandMode.Interactive);
+        var shell = CreateShellStartInfo(
+            $"printf 'refs\\000blob'; printf 'Authentication required: ' >&2; exit {exitCode}",
+            $"[Console]::Out.Write(\"refs`0blob\"); [Console]::Error.Write('Authentication required: '); exit {exitCode}");
+        startInfo.FileName = shell.FileName;
+        startInfo.ArgumentList.Clear();
+        foreach (var argument in shell.ArgumentList)
         {
-            var logger = new FakeLogger<GitCommandRunner>();
-            var interaction = new TestInteractionService();
-            var runner = new GitCommandRunner(TestHelpers.CreateInteractiveHostEnvironment(), interaction, logger);
-            var startInfo = runner.CreateStartInfo(Environment.CurrentDirectory, [gitCommand], GitCommandMode.Interactive);
-            var shell = CreateShellStartInfo(
-                $"printf 'refs\\000blob'; printf 'Authentication required: ' >&2; exit {code}",
-                $"[Console]::Out.Write(\"refs`0blob\"); [Console]::Error.Write('Authentication required: '); exit {code}");
-            startInfo.FileName = shell.FileName;
-            startInfo.ArgumentList.Clear();
-            foreach (var argument in shell.ArgumentList)
-            {
-                startInfo.ArgumentList.Add(argument);
-            }
-            using var stdout = new StringWriter();
-            using var stderr = new StringWriter();
-            var originalOut = Console.Out;
-            var originalError = Console.Error;
-            try
-            {
-                Console.SetOut(stdout);
-                Console.SetError(stderr);
-                var run = runner.RunProcessAsync(startInfo, captureCancellationOutput: false,
-                    GitCommandMode.Interactive, CancellationToken.None);
-                if (code == "0")
-                {
-                    Assert.Equal(gitCommand == "fetch" ? string.Empty : "refs\0blob", await run);
-                }
-                else
-                {
-                    var exception = await Assert.ThrowsAsync<GitCommandException>(() => run);
-                    Assert.Equal(GitFailure.AuthenticationFailed, exception.Failure);
-                    Assert.Equal(128, exception.ExitCode);
-                }
-            }
-            finally
-            {
-                Console.SetOut(originalOut);
-                Console.SetError(originalError);
-            }
+            startInfo.ArgumentList.Add(argument);
+        }
 
-            Assert.False(startInfo.RedirectStandardInput);
-            Assert.Equal(gitCommand == "fetch" ? "refs\0blob" : string.Empty, stdout.ToString());
-            Assert.Equal("Authentication required: ", stderr.ToString());
-            Assert.Empty(interaction.DisplayedRawText);
-            Assert.Equal("refs\0blob", GetLoggedOutput(logger, "stdout"));
-            Assert.Equal("Authentication required: ", GetLoggedOutput(logger, "stderr"));
-        }, command, exitCode.ToString(CultureInfo.InvariantCulture));
+        var run = runner.RunProcessAsync(startInfo, captureCancellationOutput: false,
+            GitCommandMode.Interactive, TestContext.Current.CancellationToken);
+        if (exitCode == 0)
+        {
+            Assert.Equal(command == "fetch" ? string.Empty : "refs\0blob", await run);
+        }
+        else
+        {
+            var exception = await Assert.ThrowsAsync<GitCommandException>(() => run);
+            Assert.Equal(GitFailure.AuthenticationFailed, exception.Failure);
+            Assert.Equal(128, exception.ExitCode);
+        }
+
+        Assert.False(startInfo.RedirectStandardInput);
+        Assert.Equal(command == "fetch" ? "refs\0blob" : string.Empty, stdout.ToString());
+        Assert.Equal("Authentication required: ", stderr.ToString());
+        Assert.Empty(interaction.DisplayedRawText);
+        Assert.Equal("refs\0blob", GetLoggedOutput(logger, "stdout"));
+        Assert.Equal("Authentication required: ", GetLoggedOutput(logger, "stderr"));
     }
 
     [Fact]
@@ -305,7 +290,7 @@ public partial class GitCommandRunnerTests(ITestOutputHelper outputHelper) : IDi
     {
         var logger = new FakeLogger<GitCommandRunner>();
         var interaction = new TestInteractionService();
-        var runner = new GitCommandRunner(TestHelpers.CreateNonInteractiveHostEnvironment(), interaction, logger);
+        var runner = new GitCommandRunner(TestHelpers.CreateNonInteractiveHostEnvironment(), interaction, _consoleEnvironment, logger);
         var startInfo = CreateShellStartInfo(
             "printf 'partial stdout'; printf 'Enter passphrase: ' >&2; sleep 60",
             "[Console]::Out.Write('partial stdout'); [Console]::Error.Write('Enter passphrase: '); Start-Sleep -Seconds 60");
@@ -333,7 +318,7 @@ public partial class GitCommandRunnerTests(ITestOutputHelper outputHelper) : IDi
     public async Task RunProcess_CapturedSuccessDisplaysStderrWithoutDisplayingParsedStdout()
     {
         var interaction = new TestInteractionService();
-        var runner = new GitCommandRunner(TestHelpers.CreateNonInteractiveHostEnvironment(), interaction,
+        var runner = new GitCommandRunner(TestHelpers.CreateNonInteractiveHostEnvironment(), interaction, _consoleEnvironment,
             _loggerFactory.CreateLogger<GitCommandRunner>());
         var startInfo = CreateShellStartInfo("printf 'refs\\000blob'; printf 'Git warning' >&2",
             "[Console]::Out.Write(\"refs`0blob\"); [Console]::Error.Write('Git warning')");
@@ -356,7 +341,7 @@ public partial class GitCommandRunnerTests(ITestOutputHelper outputHelper) : IDi
     {
         var interaction = new TestInteractionService();
         var logger = new FakeLogger<GitCommandRunner>();
-        var runner = new GitCommandRunner(TestHelpers.CreateNonInteractiveHostEnvironment(), interaction, logger);
+        var runner = new GitCommandRunner(TestHelpers.CreateNonInteractiveHostEnvironment(), interaction, _consoleEnvironment, logger);
         var diagnostics = new List<string>();
         var capturedRunner = Assert.IsType<GitCommandRunner>(runner.WithStandardErrorHandler(diagnostics.Add));
         async Task RunAsync(GitCommandRunner commands)
