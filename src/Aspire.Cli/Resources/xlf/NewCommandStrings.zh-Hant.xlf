@@ -17,11 +17,6 @@
         <target state="translated">用於範本的通道 (穩定、暫存、每日)</target>
         <note />
       </trans-unit>
-      <trans-unit id="CloningTemplateRepository">
-        <source>Cloning template repository...</source>
-        <target state="new">Cloning template repository...</target>
-        <note />
-      </trans-unit>
       <trans-unit id="ConfiguredTemplateConflictingOptions">
         <source>Templates from configured sources cannot be combined with --source, --version, --channel, or --language.</source>
         <target state="new">Templates from configured sources cannot be combined with --source, --version, --channel, or --language.</target>
@@ -140,11 +135,6 @@
       <trans-unit id="OutputPathContainsInvalidCharacters">
         <source>The output path '{0}' contains invalid characters.</source>
         <target state="translated">輸出路徑 '{0}' 包含無效的字元。</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ResolvingTemplateRepository">
-        <source>Resolving template repository ref...</source>
-        <target state="new">Resolving template repository ref...</target>
         <note />
       </trans-unit>
       <trans-unit id="ResolvingTemplateVersion">

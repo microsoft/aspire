@@ -854,7 +854,7 @@ internal interface IAddCommandPrompter
     Task<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> PromptForIntegrationVersionAsync(IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> packages, string? configuredChannel, CancellationToken cancellationToken);
 }
 
-internal class AddCommandPrompter(IInteractionService interactionService) : IAddCommandPrompter
+internal class AddCommandPrompter(IInteractionService interactionService, CliExecutionContext executionContext) : IAddCommandPrompter
 {
     public virtual async Task<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> PromptForIntegrationVersionAsync(IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> packages, string? configuredChannel, CancellationToken cancellationToken)
     {
@@ -964,7 +964,7 @@ internal class AddCommandPrompter(IInteractionService interactionService) : IAdd
         }
         if (packages.Any(package => !PackageSourceIdentity.Comparer.Equals(package.Package.Source, PackageSources.NuGetOrg)))
         {
-            interactionService.DisplaySourceTrustWarning();
+            interactionService.DisplaySourceTrustWarning(executionContext);
         }
     }
 

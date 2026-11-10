@@ -19,6 +19,7 @@ using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
+using Spectre.Console;
 
 namespace Aspire.Cli.Tests.Configuration;
 
@@ -75,7 +76,8 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
             message => Assert.Equal($"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]", message.Message),
             message =>
             {
-                Assert.Equal($"[blue]{string.Format(SharedCommandStrings.FetchingSource, SharedCommandStrings.GitFetchConfigurationSource)}[/]", message.Message);
+                Assert.Equal($"[blue]{string.Format(SharedCommandStrings.FetchingSource,
+                    SharedCommandStrings.GitFetchConfigurationSource, "https://git.example/configuration")}[/]", message.Message);
                 Assert.Equal(ConsoleOutput.Error, message.ConsoleOverride);
             });
         var definition = Assert.Single(sources);
@@ -1032,7 +1034,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         if (consent is not false)
         {
             expectedMessages.Add($"[blue]{string.Format(interactive ? SharedCommandStrings.FetchingSourceWithAuthentication : SharedCommandStrings.FetchingSource,
-                SharedCommandStrings.GitFetchConfigurationSource)}[/]");
+                SharedCommandStrings.GitFetchConfigurationSource, s_source.Repository)}[/]");
         }
         Assert.Equal(expectedMessages, interaction.DisplayedMessages.Select(message => message.Message));
         Assert.Single(interaction.DisplayedRenderables);
@@ -1704,15 +1706,21 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task Acquire_NotifiesBeforeGitAndDoesNotRepeatForCachedSnapshot(bool interactive)
+    [InlineData(false, "https://git.example/configuration")]
+    [InlineData(true, "https://git.example/configuration")]
+    [InlineData(false, "ssh://git@git.example/team/configuration.git")]
+    [InlineData(true, "ssh://git@git.example/team/configuration.git")]
+    [InlineData(false, "https://git.example/configuration/[team]")]
+    [InlineData(true, "https://git.example/configuration/[team]")]
+    public async Task Acquire_NotifiesBeforeGitWithoutStatusOrRepeatingForCachedSnapshot(
+        bool interactive, string repository)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var source = new ConfigSource { Repository = repository, Path = AspireConfigFile.FileName };
         var git = new TestConfigSourceRepository();
         var interaction = new TestInteractionService();
         var fetchMessage = $"[blue]{string.Format(interactive ? SharedCommandStrings.FetchingSourceWithAuthentication : SharedCommandStrings.FetchingSource,
-            SharedCommandStrings.GitFetchConfigurationSource)}[/]";
+            SharedCommandStrings.GitFetchConfigurationSource, repository).EscapeMarkup()}[/]";
         var notified = false;
         interaction.DisplayMessageCallback = (emoji, message, consoleOverride) =>
         {
@@ -1728,16 +1736,18 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         git.ReadConfiguration = (_, _) =>
         {
             Assert.True(notified);
+            Assert.Empty(interaction.ShownStatuses);
             return Task.FromResult(("version-1", new JsonObject()));
         };
         using var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(),
             git: git, interaction: interaction, interactive: interactive);
 
-        var first = await service.AcquireAsync(s_source, force: false, CancellationToken.None);
-        var cached = await service.AcquireAsync(s_source, force: false, CancellationToken.None);
+        var first = await service.AcquireAsync(source, force: false, CancellationToken.None);
+        var cached = await service.AcquireAsync(source, force: false, CancellationToken.None);
 
         Assert.Same(first, cached);
         Assert.Equal(1, git.Calls);
+        Assert.Empty(interaction.ShownStatuses);
         Assert.Collection(interaction.DisplayedMessages,
             message => Assert.Equal($"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]", message.Message),
             message => Assert.Equal(fetchMessage, message.Message));
@@ -2091,7 +2101,8 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
             },
             message =>
             {
-                Assert.Equal($"[blue]{string.Format(SharedCommandStrings.FetchingSource, SharedCommandStrings.GitFetchConfigurationSource)}[/]", message.Message);
+                Assert.Equal($"[blue]{string.Format(SharedCommandStrings.FetchingSource,
+                    SharedCommandStrings.GitFetchConfigurationSource, s_source.Repository)}[/]", message.Message);
                 Assert.Equal(ConsoleOutput.Error, message.ConsoleOverride);
             });
         if (!changed)
