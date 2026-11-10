@@ -27,9 +27,6 @@ func main() {
 
 	// Bundle the frontend into the API container for same-origin production serving.
 	api.PublishWithContainerFiles(frontend, "./static")
-	api.PublishAsDockerFile(func(container aspire.ContainerResource) {
-		container.WithEnvironment("ASPIRE_BIND_ADDRESS", "0.0.0.0")
-	})
 
 	app, err := builder.Build()
 	if err != nil {
