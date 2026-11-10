@@ -42,6 +42,7 @@ public class GoStarterTemplateTests
         Assert.Contains("WithHttpHealthCheck(aspire.HttpHealthCheckPath(\"/health\"))", appHost, StringComparison.Ordinal);
         Assert.DoesNotContain(".Err()", appHost, StringComparison.Ordinal);
         Assert.Contains("api.PublishWithContainerFiles(frontend, \"./static\")", appHost, StringComparison.Ordinal);
+        Assert.Contains("container.WithEnvironment(\"ASPIRE_BIND_ADDRESS\", \"0.0.0.0\")", appHost, StringComparison.Ordinal);
 
         var viteConfig = File.ReadAllText(Path.Combine(GetGoStarterDirectory(), "frontend", "vite.config.ts"));
         Assert.Contains("process.env.API_HTTPS || process.env.API_HTTP", viteConfig, StringComparison.Ordinal);
@@ -53,8 +54,8 @@ public class GoStarterTemplateTests
         Assert.DoesNotContain("parseAspireRedisConnString", api, StringComparison.Ordinal);
         Assert.Contains("redisotel.InstrumentTracing(cache)", api, StringComparison.Ordinal);
         Assert.Contains("redisotel.InstrumentMetrics(cache)", api, StringComparison.Ordinal);
-        Assert.Contains("runtime.GOOS == \"windows\"", api, StringComparison.Ordinal);
-        Assert.Contains("host = \"127.0.0.1\"", api, StringComparison.Ordinal);
+        Assert.Contains("host := os.Getenv(\"ASPIRE_BIND_ADDRESS\")", api, StringComparison.Ordinal);
+        Assert.Contains("host = \"localhost\"", api, StringComparison.Ordinal);
     }
 
     [Theory]

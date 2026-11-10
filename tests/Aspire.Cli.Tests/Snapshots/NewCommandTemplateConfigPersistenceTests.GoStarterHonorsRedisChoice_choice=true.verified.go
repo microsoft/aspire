@@ -27,6 +27,9 @@ func main() {
 
 	// Bundle the frontend into the API container for same-origin production serving.
 	api.PublishWithContainerFiles(frontend, "./static")
+	api.PublishAsDockerFile(func(container aspire.ContainerResource) {
+		container.WithEnvironment("ASPIRE_BIND_ADDRESS", "0.0.0.0")
+	})
 
 	// Expose cache connection properties, including CACHE_URI, to the API.
 	cache := builder.AddRedis("cache")

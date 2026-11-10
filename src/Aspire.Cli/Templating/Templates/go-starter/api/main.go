@@ -13,7 +13,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"runtime"
 	"strings"
 	"syscall"
 	"time"
@@ -83,17 +82,16 @@ func main() {
 
 // listenAddress uses Aspire's endpoint, or loopback:8080 for standalone runs.
 func listenAddress() string {
-	host := "0.0.0.0"
-	if runtime.GOOS == "windows" {
-		// Each `go run` build has a new executable path, so loopback avoids repeated Windows Firewall prompts.
-		host = "127.0.0.1"
+	host := os.Getenv("ASPIRE_BIND_ADDRESS")
+	if host == "" {
+		host = "localhost"
 	}
 
 	if port := os.Getenv("PORT"); port != "" {
 		return host + ":" + port
 	}
 	if urls := os.Getenv("ASPNETCORE_URLS"); urls != "" {
-		// "http://localhost:5000;https://localhost:5001" → "127.0.0.1:5000"
+		// "http://localhost:5000;https://localhost:5001" → "localhost:5000"
 		first := strings.Split(urls, ";")[0]
 		if i := strings.LastIndex(first, ":"); i != -1 {
 			return host + first[i:]
