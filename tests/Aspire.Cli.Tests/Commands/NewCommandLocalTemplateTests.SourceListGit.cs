@@ -267,10 +267,9 @@ public partial class NewCommandLocalTemplateTests
         Assert.Equal(CliExitCodes.Success, result);
         Assert.Equal(1, selections);
         Assert.Empty(interaction.DisplayedErrors);
-        var warnings = interaction.DisplayedMessages.Where(
-            message => message.Message == $"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]").ToArray();
-        Assert.Equal(2, warnings.Length);
-        Assert.All(warnings, warning => Assert.Equal(ConsoleOutput.Error, warning.ConsoleOverride));
+        var warning = Assert.Single(interaction.DisplayedMessages,
+            message => message.Message == $"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]");
+        Assert.Equal(ConsoleOutput.Error, warning.ConsoleOverride);
         Assert.Equal(originalGlobal, await File.ReadAllTextAsync(globalPath));
         Assert.Equal(usesInheritedSource ? "Inherited: Hello" : "Personal: Hello",
             await File.ReadAllTextAsync(Path.Combine(workspace.Path, "out", "Demo.txt")));

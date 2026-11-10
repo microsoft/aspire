@@ -71,7 +71,7 @@ public partial class NewCommandLocalTemplateTests
         {
             var source = pinned ? $"{repository} ({SharedCommandStrings.SourceRef}: {TestGitCommandRunner.DefaultCommitSha})" : repository;
             return $"[blue]{string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.FetchingSourceWithAuthentication,
-                string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.GitFetchTemplatesFromSource, source))}[/]";
+                SharedCommandStrings.GitFetchTemplates, source)}[/]";
         }), notices.Select(notice => notice.Message));
         Assert.All(notices, notice => Assert.Equal(ConsoleOutput.Error, notice.ConsoleOverride));
     }
@@ -99,7 +99,7 @@ public partial class NewCommandLocalTemplateTests
             Assert.Equal(
                 [NewCommandStrings.TemplateSourceExplanation, $"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]",
                     $"[blue]{string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.FetchingSourceWithAuthentication,
-                        string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.GitFetchTemplatesFromSource, source))}[/]"],
+                        SharedCommandStrings.GitFetchTemplates, source)}[/]"],
                 interaction.DisplayedMessages.Select(message => message.Message));
             Assert.Single(interaction.DisplayedRenderables);
             Assert.Empty(interaction.DisplayedPlainText);
@@ -188,7 +188,7 @@ public partial class NewCommandLocalTemplateTests
     }
 
     [Fact]
-    public async Task ConfiguredGitSources_MixedSearchSelectsGitTemplateAndShowsAcquisitionStages()
+    public async Task ConfiguredGitSources_MixedSearchSelectsGitTemplateWithoutAcquisitionStatus()
     {
         const string repository = "https://example.test/templates.git";
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -210,9 +210,7 @@ public partial class NewCommandLocalTemplateTests
             Assert.Equal(
                 providerTemplates.Select(template => template.Description),
                 options.Select(formatter).SkipLast(2));
-            Assert.Equal(
-                [NewCommandStrings.ResolvingTemplateRepository, NewCommandStrings.CloningTemplateRepository],
-                interaction.ShownStatuses);
+            Assert.Empty(interaction.ShownStatuses);
             return options[^2];
         };
         var services = CreateServices(workspace, interaction, interactive: true);

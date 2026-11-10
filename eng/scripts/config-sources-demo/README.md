@@ -20,7 +20,8 @@ required.
 
 Source mode builds the CLI using the checkout's SDK, while child `dotnet`
 commands honor the generated app's SDK pin. Installed mode does not build the CLI
-or override its channel or version. Environment overrides and the caller's working
+or override its channel or version. Source builds display only errors to keep demo
+recordings focused on the CLI. Environment overrides and the caller's working
 directory are restored when the scripts finish.
 
 ## Create an AppHost in a specified directory

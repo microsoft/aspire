@@ -106,7 +106,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
             options.InteractionServiceFactory = _ => interaction;
             options.NuGetClientFactory = _ => NuGetTestHelper.CreateClient();
-            options.AddCommandPrompterFactory = provider => new AddCommandPrompter(provider.GetRequiredService<IInteractionService>());
+            options.AddCommandPrompterFactory = provider => new AddCommandPrompter(provider.GetRequiredService<IInteractionService>(), provider.GetRequiredService<CliExecutionContext>());
             options.DotNetCliExecutionFactoryFactory = _ => new TestProcessExecutionFactory
             {
                 AssertionCallback = (args, _, workingDirectory, invocationOptions) =>
@@ -185,6 +185,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
     [InlineData(true, true)]
     public async Task AddCommandPrompter_ConfiguredSourcesExplainBeforeSelectionDespiteAmbientDuplicates(bool versions, bool ambientFirst)
     {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var cache = new FakeNuGetPackageCache();
         var implicitChannel = PackageChannel.CreateImplicitChannel(cache, new TestFeatures(), NullLogger.Instance);
         var configuredChannel = new PackageChannel("integration:team", PackageChannelQuality.Both,
@@ -233,7 +234,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             Assert.Equal("team", configuredChoice.Group!.Label);
             return selected;
         };
-        var prompter = new AddCommandPrompter(interaction);
+        var prompter = new AddCommandPrompter(interaction, workspace.CreateExecutionContext());
 
         if (versions)
         {
@@ -364,7 +365,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
             options.InteractionServiceFactory = _ => interaction;
             options.NuGetClientFactory = _ => NuGetTestHelper.CreateClient();
-            options.AddCommandPrompterFactory = provider => new AddCommandPrompter(provider.GetRequiredService<IInteractionService>());
+            options.AddCommandPrompterFactory = provider => new AddCommandPrompter(provider.GetRequiredService<IInteractionService>(), provider.GetRequiredService<CliExecutionContext>());
         });
         services.AddSingleton<INuGetPackageCache>(cache);
         services.AddSingleton<IAppHostProjectFactory>(factory);
@@ -400,6 +401,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
     [InlineData(true)]
     public async Task AddCommandPrompter_DuplicateSourceNamesRemainSelectableInFlatClients(bool versions)
     {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var cache = new FakeNuGetPackageCache();
         var firstChannel = PackageChannel.CreateExplicitChannel("team", PackageChannelQuality.Both,
             [new PackageMapping("Aspire*", "https://example.test/first")], cache, new TestFeatures(), NullLogger.Instance);
@@ -418,7 +420,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
                 return byLabel.Last().Value;
             }
         };
-        var prompter = new AddCommandPrompter(interaction);
+        var prompter = new AddCommandPrompter(interaction, workspace.CreateExecutionContext());
 
         var selected = versions
             ? await prompter.PromptForIntegrationVersionAsync(packages, null, CancellationToken.None)
@@ -556,7 +558,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             options.InteractionServiceFactory = _ => interactionService;
             options.NuGetClientFactory = _ => NuGetTestHelper.CreateClient();
             options.EnabledFeatures = filterPolyglot ? [KnownFeatures.PolyglotIntegrationFilterEnabled] : [];
-            options.AddCommandPrompterFactory = sp => new TestAddCommandPrompter(sp.GetRequiredService<IInteractionService>())
+            options.AddCommandPrompterFactory = sp => new TestAddCommandPrompter(sp.GetRequiredService<IInteractionService>(), sp.GetRequiredService<CliExecutionContext>())
             {
                 PromptForIntegrationCallback = packages =>
                 {
@@ -1378,7 +1380,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             options.AddCommandPrompterFactory = (sp) =>
             {
                 var interactionService = sp.GetRequiredService<IInteractionService>();
-                var prompter = new TestAddCommandPrompter(interactionService);
+                var prompter = new TestAddCommandPrompter(interactionService, sp.GetRequiredService<CliExecutionContext>());
                 prompter.PromptForIntegrationCallback = (_) =>
                 {
                     promptedForIntegration = true;
@@ -2275,7 +2277,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             options.AddCommandPrompterFactory = (sp) =>
             {
                 var interactionService = sp.GetRequiredService<IInteractionService>();
-                var prompter = new TestAddCommandPrompter(interactionService);
+                var prompter = new TestAddCommandPrompter(interactionService, sp.GetRequiredService<CliExecutionContext>());
                 prompter.PromptForIntegrationCallback = packages =>
                 {
                     promptedPackages = packages.Select(p => p.Package.Id).ToArray();
@@ -2358,7 +2360,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             options.AddCommandPrompterFactory = (sp) =>
             {
                 var interactionService = sp.GetRequiredService<IInteractionService>();
-                var prompter = new TestAddCommandPrompter(interactionService);
+                var prompter = new TestAddCommandPrompter(interactionService, sp.GetRequiredService<CliExecutionContext>());
 
                 prompter.PromptForIntegrationCallback = (packages) =>
                 {
@@ -2435,7 +2437,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             options.AddCommandPrompterFactory = (sp) =>
             {
                 var interactionService = sp.GetRequiredService<IInteractionService>();
-                var prompter = new TestAddCommandPrompter(interactionService);
+                var prompter = new TestAddCommandPrompter(interactionService, sp.GetRequiredService<CliExecutionContext>());
 
                 prompter.PromptForIntegrationCallback = (packages) =>
                 {
@@ -2519,7 +2521,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             options.AddCommandPrompterFactory = (sp) =>
             {
                 var interactionService = sp.GetRequiredService<IInteractionService>();
-                var prompter = new TestAddCommandPrompter(interactionService);
+                var prompter = new TestAddCommandPrompter(interactionService, sp.GetRequiredService<CliExecutionContext>());
 
                 prompter.PromptForIntegrationCallback = (packages) =>
                 {
@@ -2599,7 +2601,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             options.AddCommandPrompterFactory = (sp) =>
             {
                 var interactionService = sp.GetRequiredService<IInteractionService>();
-                var prompter = new TestAddCommandPrompter(interactionService);
+                var prompter = new TestAddCommandPrompter(interactionService, sp.GetRequiredService<CliExecutionContext>());
                 prompter.PromptForIntegrationVersionCallback = (packages) =>
                 {
                     promptedForVersion = true;
@@ -2754,7 +2756,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             options.AddCommandPrompterFactory = (sp) =>
             {
                 var interactionService = sp.GetRequiredService<IInteractionService>();
-                var prompter = new TestAddCommandPrompter(interactionService);
+                var prompter = new TestAddCommandPrompter(interactionService, sp.GetRequiredService<CliExecutionContext>());
                 prompter.PromptForIntegrationCallback = (packages) =>
                 {
                     promptedForIntegration = true;
@@ -2842,7 +2844,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             options.AddCommandPrompterFactory = (sp) =>
             {
                 var interactionService = sp.GetRequiredService<IInteractionService>();
-                var prompter = new TestAddCommandPrompter(interactionService);
+                var prompter = new TestAddCommandPrompter(interactionService, sp.GetRequiredService<CliExecutionContext>());
                 prompter.PromptForIntegrationCallback = (packages) =>
                 {
                     promptedForIntegration = true;
@@ -2908,7 +2910,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             options.AddCommandPrompterFactory = (sp) =>
             {
                 var interactionService = sp.GetRequiredService<IInteractionService>();
-                var prompter = new TestAddCommandPrompter(interactionService);
+                var prompter = new TestAddCommandPrompter(interactionService, sp.GetRequiredService<CliExecutionContext>());
                 prompter.PromptForIntegrationVersionCallback = (packages) =>
                 {
                     promptedForVersion = true;
@@ -2981,7 +2983,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             options.AddCommandPrompterFactory = (sp) =>
             {
                 var interactionService = sp.GetRequiredService<IInteractionService>();
-                var prompter = new TestAddCommandPrompter(interactionService);
+                var prompter = new TestAddCommandPrompter(interactionService, sp.GetRequiredService<CliExecutionContext>());
                 prompter.PromptForIntegrationCallback = (packages) => packages.Single(package => package.Package.Id == "Aspire.Hosting.Redis");
                 prompter.PromptForIntegrationVersionCallback = (packages) =>
                 {
@@ -3059,7 +3061,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             options.AddCommandPrompterFactory = (sp) =>
             {
                 var interactionService = sp.GetRequiredService<IInteractionService>();
-                var prompter = new TestAddCommandPrompter(interactionService);
+                var prompter = new TestAddCommandPrompter(interactionService, sp.GetRequiredService<CliExecutionContext>());
                 prompter.PromptForIntegrationCallback = (packages) => packages.Single(package => package.Package.Id == "Aspire.Hosting.Redis");
                 prompter.PromptForIntegrationVersionCallback = (packages) =>
                     throw new InvalidOperationException("Should not have been prompted for integration version.");
@@ -3128,7 +3130,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             options.AddCommandPrompterFactory = (sp) =>
             {
                 var interactionService = sp.GetRequiredService<IInteractionService>();
-                var prompter = new TestAddCommandPrompter(interactionService);
+                var prompter = new TestAddCommandPrompter(interactionService, sp.GetRequiredService<CliExecutionContext>());
                 prompter.PromptForIntegrationVersionCallback = (packages) =>
                 {
                     promptedForVersion = true;
@@ -3200,7 +3202,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             options.AddCommandPrompterFactory = (sp) =>
             {
                 var interactionService = sp.GetRequiredService<IInteractionService>();
-                var prompter = new TestAddCommandPrompter(interactionService);
+                var prompter = new TestAddCommandPrompter(interactionService, sp.GetRequiredService<CliExecutionContext>());
                 prompter.PromptForIntegrationCallback = (packages) =>
                 {
                     promptedForIntegration = true;
@@ -3277,7 +3279,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             options.AddCommandPrompterFactory = (sp) =>
             {
                 var interactionService = sp.GetRequiredService<IInteractionService>();
-                var prompter = new TestAddCommandPrompter(interactionService);
+                var prompter = new TestAddCommandPrompter(interactionService, sp.GetRequiredService<CliExecutionContext>());
 
                 prompter.PromptForIntegrationCallback = (packages) =>
                 {
@@ -3373,7 +3375,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             options.AddCommandPrompterFactory = (sp) =>
             {
                 var interactionService = sp.GetRequiredService<IInteractionService>();
-                return new TestAddCommandPrompter(interactionService);
+                return new TestAddCommandPrompter(interactionService, sp.GetRequiredService<CliExecutionContext>());
             };
 
             options.ProjectLocatorFactory = _ => new TestProjectLocator();
@@ -3515,7 +3517,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             options.AddCommandPrompterFactory = (sp) =>
             {
                 var interactionService = sp.GetRequiredService<IInteractionService>();
-                var prompter = new TestAddCommandPrompter(interactionService);
+                var prompter = new TestAddCommandPrompter(interactionService, sp.GetRequiredService<CliExecutionContext>());
                 prompter.PromptForIntegrationCallback = (packages) =>
                 {
                     promptedForIntegration = true;
@@ -3588,6 +3590,42 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task AddCommandPrompter_WarnsOnceAcrossPackageAndVersionSelection()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var executionContext = workspace.CreateExecutionContext();
+        var interaction = new TestInteractionService
+        {
+            PromptForSelectionCallback = (_, choices, _, _) => choices.Cast<object>().First()
+        };
+        var cache = new FakeNuGetPackageCache();
+        var implicitChannel = PackageChannel.CreateImplicitChannel(cache, new TestFeatures(), NullLogger.Instance);
+        const string feed = "https://example.test/team";
+        var configuredChannel = new PackageChannel("integration:team", PackageChannelQuality.Both,
+            [new PackageMapping("Aspire.Hosting.*", feed)], cache, new TestFeatures(), NullLogger.Instance)
+        {
+            IntegrationSource = new IntegrationSourceConfiguration { Name = "team", Source = feed }
+        };
+        (string FriendlyName, NuGetPackage Package, PackageChannel Channel)[] packages =
+        [
+            ("redis", new() { Id = "Aspire.Hosting.Redis", Version = "1.0.0", Source = feed }, configuredChannel),
+            ("redis", new() { Id = "Aspire.Hosting.Redis", Version = "2.0.0", Source = PackageSources.NuGetOrg }, implicitChannel)
+        ];
+        var prompter = new AddCommandPrompter(interaction, executionContext);
+
+        await prompter.PromptForIntegrationAsync(packages, CancellationToken.None);
+        await prompter.PromptForIntegrationVersionAsync(packages, null, CancellationToken.None);
+
+        var warning = Assert.Single(interaction.DisplayedMessages,
+            message => message.Message == $"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]");
+        Assert.Equal(ConsoleOutput.Error, warning.ConsoleOverride);
+        Assert.Equal(2, interaction.DisplayedRenderables.Count);
+        Assert.Equal(2, interaction.GroupedSelectionPromptCalls.Count);
+        Assert.Equal(2, interaction.DisplayedMessages.Count(
+            message => message.Message == AddCommandStrings.IntegrationSourceExplanation));
+    }
+
+    [Fact]
     public async Task AddCommandPrompter_FiltersToHighestVersionPerPackageId()
     {
         // Arrange
@@ -3612,7 +3650,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
         var interactionService = provider.GetRequiredService<IInteractionService>();
 
-        var prompter = new AddCommandPrompter(interactionService);
+        var prompter = new AddCommandPrompter(interactionService, provider.GetRequiredService<CliExecutionContext>());
 
         // Create a fake channel
         var fakeCache = new FakeNuGetPackageCache();
@@ -3660,7 +3698,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
         var interactionService = provider.GetRequiredService<IInteractionService>();
 
-        var prompter = new AddCommandPrompter(interactionService);
+        var prompter = new AddCommandPrompter(interactionService, provider.GetRequiredService<CliExecutionContext>());
 
         // Create a fake channel
         var fakeCache = new FakeNuGetPackageCache();
@@ -3708,7 +3746,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
         var interactionService = provider.GetRequiredService<IInteractionService>();
 
-        var prompter = new AddCommandPrompter(interactionService);
+        var prompter = new AddCommandPrompter(interactionService, provider.GetRequiredService<CliExecutionContext>());
 
         // Create two different channels
         var fakeCache = new FakeNuGetPackageCache();
@@ -3765,7 +3803,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
         var interactionService = provider.GetRequiredService<IInteractionService>();
 
-        var prompter = new AddCommandPrompter(interactionService);
+        var prompter = new AddCommandPrompter(interactionService, provider.GetRequiredService<CliExecutionContext>());
 
         var fakeCache = new FakeNuGetPackageCache();
         var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures(), NullLogger.Instance);
@@ -3792,6 +3830,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AddCommandPrompter_StagingChannelPreservesAllChannelChoices()
     {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         List<string>? displayedLabels = null;
         var interactionService = new TestInteractionService
         {
@@ -3802,7 +3841,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
                 return choicesList.First();
             }
         };
-        var prompter = new AddCommandPrompter(interactionService);
+        var prompter = new AddCommandPrompter(interactionService, workspace.CreateExecutionContext());
         var cache = new FakeNuGetPackageCache();
         var implicitChannel = PackageChannel.CreateImplicitChannel(cache, new TestFeatures(), NullLogger.Instance);
         var stagingChannel = PackageChannel.CreateExplicitChannel(PackageChannelNames.Staging, PackageChannelQuality.Both, [new PackageMapping("Aspire*", "staging")], cache, new TestFeatures(), NullLogger.Instance);
@@ -3857,7 +3896,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         {
             PromptForSelectionCallback = (_, choices, _, _) => choices.Cast<object>().First()
         };
-        var prompter = new AddCommandPrompter(interactionService);
+        var prompter = new AddCommandPrompter(interactionService, workspace.CreateExecutionContext());
 
         var result = await prompter.PromptForIntegrationVersionAsync(packages, PackageChannelNames.Staging, CancellationToken.None).DefaultTimeout();
 
@@ -3940,7 +3979,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             options.AppHostProjectFactory = _ => projectFactory;
             options.AddCommandPrompterFactory = sp =>
             {
-                var prompter = new TestAddCommandPrompter(sp.GetRequiredService<IInteractionService>());
+                var prompter = new TestAddCommandPrompter(sp.GetRequiredService<IInteractionService>(), sp.GetRequiredService<CliExecutionContext>());
                 prompter.PromptForIntegrationVersionCallback = _ =>
                 {
                     promptedForVersion = true;
@@ -4018,7 +4057,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         {
             options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
             options.InteractionServiceFactory = _ => interaction;
-            options.AddCommandPrompterFactory = provider => new AddCommandPrompter(provider.GetRequiredService<IInteractionService>());
+            options.AddCommandPrompterFactory = provider => new AddCommandPrompter(provider.GetRequiredService<IInteractionService>(), provider.GetRequiredService<CliExecutionContext>());
             options.PackagingServiceFactory = _ => new TestPackagingService
             {
                 GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>(
@@ -4443,7 +4482,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             options.AddCommandPrompterFactory = (sp) =>
             {
                 var interactionService = sp.GetRequiredService<IInteractionService>();
-                var prompter = new TestAddCommandPrompter(interactionService);
+                var prompter = new TestAddCommandPrompter(interactionService, sp.GetRequiredService<CliExecutionContext>());
                 prompter.PromptForIntegrationVersionCallback = (packages) =>
                 {
                     promptedForVersion = true;
@@ -4512,7 +4551,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             options.AddCommandPrompterFactory = (sp) =>
             {
                 var interactionService = sp.GetRequiredService<IInteractionService>();
-                var prompter = new TestAddCommandPrompter(interactionService);
+                var prompter = new TestAddCommandPrompter(interactionService, sp.GetRequiredService<CliExecutionContext>());
                 prompter.PromptForIntegrationVersionCallback = (packages) =>
                 {
                     promptedForVersion = true;
@@ -5232,7 +5271,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
     }
 }
 
-internal sealed class TestAddCommandPrompter(IInteractionService interactionService) : AddCommandPrompter(interactionService)
+internal sealed class TestAddCommandPrompter(IInteractionService interactionService, CliExecutionContext executionContext) : AddCommandPrompter(interactionService, executionContext)
 {
     public Func<IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)>, (string FriendlyName, NuGetPackage Package, PackageChannel Channel)>? PromptForIntegrationCallback { get; set; }
     public Func<IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)>, (string FriendlyName, NuGetPackage Package, PackageChannel Channel)>? PromptForIntegrationVersionCallback { get; set; }
@@ -5270,7 +5309,7 @@ public class AddCommandFuzzySearchTests(ITestOutputHelper outputHelper)
             options.AddCommandPrompterFactory = (sp) =>
             {
                 var interactionService = sp.GetRequiredService<IInteractionService>();
-                var prompter = new TestAddCommandPrompter(interactionService);
+                var prompter = new TestAddCommandPrompter(interactionService, sp.GetRequiredService<CliExecutionContext>());
 
                 prompter.PromptForIntegrationCallback = (packages) =>
                 {
@@ -5475,7 +5514,7 @@ public class AddCommandFuzzySearchTests(ITestOutputHelper outputHelper)
             options.AddCommandPrompterFactory = (sp) =>
             {
                 var interactionService = sp.GetRequiredService<IInteractionService>();
-                var prompter = new TestAddCommandPrompter(interactionService);
+                var prompter = new TestAddCommandPrompter(interactionService, sp.GetRequiredService<CliExecutionContext>());
                 prompter.PromptForIntegrationCallback = (packages) =>
                 {
                     promptedPackages.AddRange(packages);
@@ -5544,7 +5583,7 @@ public class AddCommandFuzzySearchTests(ITestOutputHelper outputHelper)
             options.AddCommandPrompterFactory = (sp) =>
             {
                 var interactionService = sp.GetRequiredService<IInteractionService>();
-                var prompter = new TestAddCommandPrompter(interactionService);
+                var prompter = new TestAddCommandPrompter(interactionService, sp.GetRequiredService<CliExecutionContext>());
                 prompter.PromptForIntegrationCallback = (packages) =>
                 {
                     promptedPackages.AddRange(packages);
@@ -5709,7 +5748,7 @@ public class AddCommandFuzzySearchTests(ITestOutputHelper outputHelper)
             options.AddCommandPrompterFactory = (sp) =>
             {
                 var interactionService = sp.GetRequiredService<IInteractionService>();
-                var prompter = new TestAddCommandPrompter(interactionService);
+                var prompter = new TestAddCommandPrompter(interactionService, sp.GetRequiredService<CliExecutionContext>());
 
                 prompter.PromptForIntegrationCallback = (packages) =>
                 {
@@ -5797,7 +5836,7 @@ public class AddCommandFuzzySearchTests(ITestOutputHelper outputHelper)
             options.AddCommandPrompterFactory = (sp) =>
             {
                 var interactionService = sp.GetRequiredService<IInteractionService>();
-                var prompter = new TestAddCommandPrompter(interactionService);
+                var prompter = new TestAddCommandPrompter(interactionService, sp.GetRequiredService<CliExecutionContext>());
                 prompter.PromptForIntegrationCallback = (packages) =>
                 {
                     promptedForIntegration = true;
@@ -5881,7 +5920,7 @@ public class AddCommandFuzzySearchTests(ITestOutputHelper outputHelper)
             options.AddCommandPrompterFactory = (sp) =>
             {
                 var interactionService = sp.GetRequiredService<IInteractionService>();
-                var prompter = new TestAddCommandPrompter(interactionService);
+                var prompter = new TestAddCommandPrompter(interactionService, sp.GetRequiredService<CliExecutionContext>());
                 prompter.PromptForIntegrationCallback = (packages) =>
                 {
                     promptedForIntegration = true;
@@ -5969,7 +6008,7 @@ public class AddCommandFuzzySearchTests(ITestOutputHelper outputHelper)
             options.AddCommandPrompterFactory = (sp) =>
             {
                 var interactionService = sp.GetRequiredService<IInteractionService>();
-                var prompter = new TestAddCommandPrompter(interactionService);
+                var prompter = new TestAddCommandPrompter(interactionService, sp.GetRequiredService<CliExecutionContext>());
                 prompter.PromptForIntegrationCallback = (packages) =>
                 {
                     promptedForIntegration = true;
@@ -6057,7 +6096,7 @@ public class AddCommandFuzzySearchTests(ITestOutputHelper outputHelper)
             options.AddCommandPrompterFactory = (sp) =>
             {
                 var interactionService = sp.GetRequiredService<IInteractionService>();
-                var prompter = new TestAddCommandPrompter(interactionService);
+                var prompter = new TestAddCommandPrompter(interactionService, sp.GetRequiredService<CliExecutionContext>());
                 prompter.PromptForIntegrationCallback = (packages) =>
                 {
                     promptedForIntegration = true;
@@ -6135,7 +6174,7 @@ public class AddCommandFuzzySearchTests(ITestOutputHelper outputHelper)
             options.AddCommandPrompterFactory = (sp) =>
             {
                 var interactionService = sp.GetRequiredService<IInteractionService>();
-                return new TestAddCommandPrompter(interactionService);
+                return new TestAddCommandPrompter(interactionService, sp.GetRequiredService<CliExecutionContext>());
             };
 
             // Fuzzy fallback only fires in interactive mode after the Layer-3 fix for #17724;

@@ -1450,7 +1450,7 @@ public partial class NewCommandLocalTemplateTests(ITestOutputHelper outputHelper
         var source = new TemplateSource("template", "-repository", pinnedCommit ? TestGitCommandRunner.DefaultCommitSha : "main");
         var fetchSource = $"-repository ({SharedCommandStrings.SourceGitPath}: template, {SharedCommandStrings.SourceRef}: {source.RepositoryRef})";
         var fetchMessage = $"[blue]{string.Format(interactive ? SharedCommandStrings.FetchingSourceWithAuthentication : SharedCommandStrings.FetchingSource,
-            string.Format(SharedCommandStrings.GitFetchTemplatesFromSource, fetchSource))}[/]";
+            SharedCommandStrings.GitFetchTemplates, fetchSource)}[/]";
         interaction.DisplayMessageCallback = (emoji, message, consoleOverride) =>
         {
             if (message == fetchMessage)
