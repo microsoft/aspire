@@ -49,8 +49,7 @@ public class ResourceRowAvailabilityTests : DashboardTestContext
         var link = row.QuerySelector(".resource-row-link")!;
         var unavailable = reason is not null;
         Assert.Equal(unavailable, row.ClassList.Contains("resource-row-unavailable"));
-        Assert.Equal(unavailable ? [Resources.Layout.ResourcePaneNotApplicableLabel] : [],
-            row.QuerySelectorAll(".resource-row-availability").Select(badge => badge.TextContent));
+        Assert.Equal(reason, link.GetAttribute("data-resource-unavailable-reason"));
         Assert.Equal(reason, link.GetAttribute("data-tooltip"));
         if (reason is not null)
         {
@@ -67,7 +66,7 @@ public class ResourceRowAvailabilityTests : DashboardTestContext
         Assert.Equal("resources/key", navigation.ToBaseRelativePath(navigation.Uri));
         Assert.Equal(["key"], cut.Instance.SelectedResourceNames);
         Assert.False(cut.Find("[data-resource-name='key']").ClassList.Contains("resource-row-unavailable"));
-        Assert.Empty(cut.FindAll("[data-resource-name='key'] .resource-row-availability"));
+        Assert.Null(cut.Find("[data-resource-name='key'] .resource-row-link").GetAttribute("data-resource-unavailable-reason"));
     }
 
     [Fact]
@@ -82,12 +81,12 @@ public class ResourceRowAvailabilityTests : DashboardTestContext
         var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
         await UseComfortableDensityAsync(cut);
-        Assert.Single(cut.FindAll("[data-resource-name='test-TestId'] .resource-row-availability"));
+        // Rows have no availability badge at any density: an unavailable row is muted instead.
+        Assert.Empty(cut.FindAll("[data-resource-name='test-TestId'] .resource-row-availability"));
 
         await cut.InvokeAsync(() => Services.GetRequiredService<DashboardViewPreferences>().SetDensityAsync(ResourceListDensity.Compact));
 
-        // A single-line row has no room for the badge, so the row stays muted and keeps the reason in its tooltip
-        // and accessible description.
+        // A single-line row stays muted and keeps the reason in its tooltip and accessible description.
         cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".resource-pane-list.density-compact")));
         var row = cut.Find("[data-resource-name='test-TestId']");
         var link = row.QuerySelector(".resource-row-link")!;
@@ -110,8 +109,9 @@ public class ResourceRowAvailabilityTests : DashboardTestContext
         await UseComfortableDensityAsync(cut);
         Assert.Equal(["test-TestId", "key"], GetUnavailableRows());
 
-        // Closing the content leaves no view selected, so nothing is unavailable for it any more.
-        await cut.Find(".detail-page-close").ClickAsync();
+        // Showing the full resource list leaves no view selected, so nothing is unavailable for it any more. The data
+        // tabs have no close button for it (the full list lives on the Overview tab), so the test opens it directly.
+        ResourceSetupHelpers.ToggleResourceList(cut);
         cut.Render();
         Assert.True(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
         Assert.Empty(GetUnavailableRows());
@@ -151,13 +151,7 @@ public class ResourceRowAvailabilityTests : DashboardTestContext
             _ => Resources.Layout.ResourcePaneNoMetrics
         };
         var link = cut.Find("[data-resource-name='test-TestId'] .resource-row-link");
-        var label = signal switch
-        {
-            AspireDataType.StructuredLogs => Resources.Layout.ResourcePaneNoStructuredLogsLabel,
-            AspireDataType.Traces => Resources.Layout.ResourcePaneNoTracesLabel,
-            _ => Resources.Layout.ResourcePaneNoMetricsLabel
-        };
-        Assert.Equal(label, cut.Find("[data-resource-name='test-TestId'] .resource-row-availability").TextContent);
+        Assert.Equal(tooltip, link.GetAttribute("data-resource-unavailable-reason"));
         Assert.Equal(tooltip, link.GetAttribute("data-tooltip"));
         Assert.Contains(tooltip, link.GetAttribute("aria-description"));
         Assert.False(link.HasAttribute("aria-disabled"));
@@ -176,7 +170,7 @@ public class ResourceRowAvailabilityTests : DashboardTestContext
         {
             Assert.False(cut.Find("[data-resource-name='test-TestId']").ClassList.Contains("resource-row-unavailable"));
             Assert.Null(cut.Find("[data-resource-name='test-TestId'] .resource-row-link").GetAttribute("data-tooltip"));
-            Assert.Empty(cut.FindAll("[data-resource-name='test-TestId'] .resource-row-availability"));
+            Assert.Null(cut.Find("[data-resource-name='test-TestId'] .resource-row-link").GetAttribute("data-resource-unavailable-reason"));
         });
         Assert.Equal(selectedUrl.TrimStart('/'), navigation.ToBaseRelativePath(navigation.Uri));
         Assert.Equal(["test-TestId"], cut.Instance.SelectedResourceNames);
@@ -184,17 +178,18 @@ public class ResourceRowAvailabilityTests : DashboardTestContext
 
         await repository.ClearSelectedSignalsAsync(new() { ["test-TestId"] = [signal] });
         cut.WaitForAssertion(() => Assert.Equal(tooltip, cut.Find("[data-resource-name='test-TestId'] .resource-row-link").GetAttribute("data-tooltip")));
-        Assert.Equal(label, cut.Find("[data-resource-name='test-TestId'] .resource-row-availability").TextContent);
+        Assert.Equal(tooltip, cut.Find("[data-resource-name='test-TestId'] .resource-row-link").GetAttribute("data-resource-unavailable-reason"));
         Assert.Equal(["test-TestId"], cut.Instance.SelectedResourceNames);
         Assert.Equal(selectedUrl.TrimStart('/'), navigation.ToBaseRelativePath(navigation.Uri));
         Assert.Equal(1, client.ResourceSubscriptionCount);
     }
 
     [Theory]
-    [InlineData(AspireDataType.StructuredLogs, "/structuredlogs", "No logs")]
-    [InlineData(AspireDataType.Traces, "/traces", "No traces")]
-    public async Task RetentionEvictsLastItem_RestoresBadgeWithoutChangingSelection(AspireDataType signal, string url, string label)
+    [InlineData(AspireDataType.StructuredLogs, "/structuredlogs")]
+    [InlineData(AspireDataType.Traces, "/traces")]
+    public async Task RetentionEvictsLastItem_RestoresUnavailableStateWithoutChangingSelection(AspireDataType signal, string url)
     {
+        var reason = signal == AspireDataType.StructuredLogs ? Resources.Layout.ResourcePaneNoStructuredLogs : Resources.Layout.ResourcePaneNoTraces;
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
             initialResources: [ModelTestHelpers.CreateResource("test-TestId")],
@@ -239,8 +234,8 @@ public class ResourceRowAvailabilityTests : DashboardTestContext
             ]);
         }
 
-        cut.WaitForAssertion(() => Assert.Equal(label,
-            cut.Find("[data-resource-name='test-TestId'] .resource-row-availability").TextContent));
+        cut.WaitForAssertion(() => Assert.Equal(reason,
+            cut.Find("[data-resource-name='test-TestId'] .resource-row-link").GetAttribute("data-resource-unavailable-reason")));
         Assert.Equal(["test-TestId"], cut.Instance.SelectedResourceNames);
         Assert.Equal(selectedUri, navigation.Uri);
         var resource = repository.GetResourceByCompositeName("test-TestId")!;
@@ -296,7 +291,7 @@ public class ResourceRowAvailabilityTests : DashboardTestContext
 
         Assert.Equal(reportedSignal is null || reportAfterSpan, repository.GetResourceByCompositeName("cache")!.UninstrumentedPeer);
         Assert.False(cut.Find("[data-resource-name='cache']").ClassList.Contains("resource-row-unavailable"));
-        Assert.Empty(cut.FindAll("[data-resource-name='cache'] .resource-row-availability"));
+        Assert.Null(cut.Find("[data-resource-name='cache'] .resource-row-link").GetAttribute("data-resource-unavailable-reason"));
         Assert.Equal(["cache"], cut.Instance.SelectedResourceNames);
         Assert.Equal(["cache"], cut.Instance.GetSelectionTelemetryKeys(null)!.Select(key => key.Name));
 
@@ -307,15 +302,15 @@ public class ResourceRowAvailabilityTests : DashboardTestContext
             {
                 Assert.False(repository.GetResourceByCompositeName("cache")!.UninstrumentedPeer);
                 Assert.False(cut.Find("[data-resource-name='cache']").ClassList.Contains("resource-row-unavailable"));
-                Assert.Empty(cut.FindAll("[data-resource-name='cache'] .resource-row-availability"));
+                Assert.Null(cut.Find("[data-resource-name='cache'] .resource-row-link").GetAttribute("data-resource-unavailable-reason"));
             });
         }
 
         var traces = await repository.GetTracesAsync(GetTracesRequest.ForResourceKey(new("cache", null)), CancellationToken.None);
         Assert.Single(traces.PagedResult.Items);
         await repository.ClearSelectedSignalsAsync(new() { ["api-TestId"] = [AspireDataType.Traces] });
-        cut.WaitForAssertion(() => Assert.Equal(Resources.Layout.ResourcePaneNoTracesLabel,
-            cut.Find("[data-resource-name='cache'] .resource-row-availability").TextContent));
+        cut.WaitForAssertion(() => Assert.Equal(Resources.Layout.ResourcePaneNoTraces,
+            cut.Find("[data-resource-name='cache'] .resource-row-link").GetAttribute("data-resource-unavailable-reason")));
         Assert.Equal(["cache"], cut.Instance.SelectedResourceNames);
 
         Task AddPeerSignalAsync()
@@ -376,8 +371,8 @@ public class ResourceRowAvailabilityTests : DashboardTestContext
             Assert.Equal(2, cut.FindAll(".resource-row-kind-telemetry").Count);
             if (appModelEnabled)
             {
-                Assert.Equal(Resources.Layout.ResourcePaneNoStructuredLogsLabel,
-                    cut.Find(".resource-row-kind-resource[data-resource-name='api-a-1'] .resource-row-availability").TextContent);
+                Assert.Equal(Resources.Layout.ResourcePaneNoStructuredLogs,
+                    cut.Find(".resource-row-kind-resource[data-resource-name='api-a-1'] .resource-row-link").GetAttribute("data-resource-unavailable-reason"));
                 Assert.Empty(cut.Instance.GetSelectionTelemetryKeys(["api-a-1"])!);
             }
         });
@@ -406,7 +401,7 @@ public class ResourceRowAvailabilityTests : DashboardTestContext
         await UseComfortableDensityAsync(cut);
 
         Assert.Equal(Resources.Layout.ResourcePaneNoStructuredLogs, cut.Find(".resource-row-kind-telemetry .resource-row-link").GetAttribute("data-tooltip"));
-        Assert.Equal(Resources.Layout.ResourcePaneNoStructuredLogsLabel, cut.Find(".resource-row-kind-telemetry .resource-row-availability").TextContent);
+        Assert.Equal(Resources.Layout.ResourcePaneNoStructuredLogs, cut.Find(".resource-row-kind-telemetry .resource-row-link").GetAttribute("data-resource-unavailable-reason"));
         await cut.Find(".resource-row-kind-telemetry .resource-row-link").ClickAsync();
         cut.Render();
         Assert.Equal(["test"], cut.Instance.SelectedResourceNames);
@@ -414,7 +409,7 @@ public class ResourceRowAvailabilityTests : DashboardTestContext
 
         await TelemetryHelpSetupHelpers.AddSignalAsync(repository, AspireDataType.StructuredLogs);
         cut.WaitForAssertion(() => Assert.Null(cut.Find(".resource-row-kind-telemetry .resource-row-link").GetAttribute("data-tooltip")));
-        Assert.Empty(cut.FindAll(".resource-row-kind-telemetry .resource-row-availability"));
+        Assert.Null(cut.Find(".resource-row-kind-telemetry .resource-row-link").GetAttribute("data-resource-unavailable-reason"));
         Assert.Equal(["test"], cut.Instance.SelectedResourceNames);
     }
 

@@ -28,7 +28,7 @@ public class TemplateEngineFactoryGitTests(ITestOutputHelper outputHelper)
         var run = Assert.IsType<Func<GitCommandInvocation, CancellationToken, Task<string>>>(commands.RunCallback);
         commands.RunCallback = (command, token) =>
         {
-            var warning = Assert.Single(interaction.DisplayedMessages);
+            var warning = Assert.Single(interaction.DisplayedMessages, message => message.Emoji.Equals(KnownEmojis.PoliceCarLight));
             Assert.Equal(KnownEmojis.PoliceCarLight, warning.Emoji);
             Assert.Equal($"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]", warning.Message);
             Assert.Equal(ConsoleOutput.Error, warning.ConsoleOverride);
@@ -49,7 +49,7 @@ public class TemplateEngineFactoryGitTests(ITestOutputHelper outputHelper)
         var templates = await factory.GetTemplatesAsync(source, TestContext.Current.CancellationToken);
 
         Assert.Equal("git-template", Assert.Single(templates).Name);
-        var warning = Assert.Single(interaction.DisplayedMessages);
+        var warning = Assert.Single(interaction.DisplayedMessages, message => message.Emoji.Equals(KnownEmojis.PoliceCarLight));
         Assert.Equal($"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]", warning.Message);
         Assert.Equal(ConsoleOutput.Error, warning.ConsoleOverride);
     }
@@ -78,10 +78,10 @@ public class TemplateEngineFactoryGitTests(ITestOutputHelper outputHelper)
             },
             command =>
             {
-                Assert.Equal(["fetch", "--depth", "1", "--no-tags", "--", "-repository with spaces", commit], command.Arguments);
+                Assert.Equal(["fetch", "--quiet", "--depth", "1", "--no-tags", "--", "-repository with spaces", commit], command.Arguments);
                 Assert.Equal(destination, command.WorkingDirectory.FullName);
             },
-            command => Assert.Equal(["checkout", "--detach", "--force", "FETCH_HEAD"], command.Arguments),
+            command => Assert.Equal(["checkout", "--quiet", "--detach", "--force", "FETCH_HEAD"], command.Arguments),
             command => Assert.Equal(["rev-parse", "--verify", "HEAD"], command.Arguments));
         Assert.All(commands.Commands, command => Assert.Equal(GitCommandMode.Captured, command.Mode));
     }

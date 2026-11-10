@@ -142,6 +142,15 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Resource graph. The resource list shows the same resources in an accessible format.
+        /// </summary>
+        public static string OverviewGraphAccessibleLabel {
+            get {
+                return ResourceManager.GetString("OverviewGraphAccessibleLabel", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Graph.
         /// </summary>
         public static string ChartContainerGraphTab {

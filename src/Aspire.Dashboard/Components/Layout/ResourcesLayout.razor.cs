@@ -1,4 +1,4 @@
-// Licensed to the .NET Foundation under one or more agreements.
+﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Concurrent;
@@ -37,9 +37,11 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private const string FilterButtonId = "resourcePaneFilterButton";
     private const string GroupingButtonId = "resourcePaneGroupingButton";
     private const string ResourcePickerButtonId = "resourcePanePickerButton";
-    internal const int MinimumPaneWidthPx = 420;
+    // The list has layouts down to this width (see the resource-pane container queries in ResourcesLayout.razor.css):
+    // the type column narrows and the lowest-priority row actions give way first. It opens wider, at the default.
+    internal const int MinimumPaneWidthPx = 300;
     internal const int MaximumPaneWidthPx = 560;
-    internal const int DefaultPaneWidthPx = MinimumPaneWidthPx;
+    internal const int DefaultPaneWidthPx = 420;
     private const string ResourcesSectionKey = "section:resources";
     private const string ParametersSectionKey = "section:parameters";
     private const string TelemetrySectionKey = "section:telemetry";
@@ -52,6 +54,18 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private readonly List<MenuButtonItem> _paneMenuItems = [];
     private readonly ResourcesPage.ResourcesViewModel _filter = new() { SelectedViewKind = ResourcesPage.ResourceViewKind.Table };
     private readonly string _tabOverflowRegistrationId = Guid.NewGuid().ToString("N");
+    // Blazor compares event handlers and delegates by reference when it diffs a render. A lambda created for each row
+    // on each render would make every row's handlers, buttons and menus look changed, so each resource's handlers
+    // are created once and reused across renders (see RowHandlers). They're keyed by the resource's unique name, not
+    // the name a row shows: a display name can equal another resource's unique name.
+    private readonly Dictionary<string, RowHandlers> _rowHandlers = new(StringComparers.ResourceName);
+    // Telemetry-only rows have no resource, only a name to select, and are kept apart so they can't share an entry
+    // with a resource whose unique name is the same.
+    private readonly Dictionary<string, EventCallback<MouseEventArgs>> _telemetryRowClicks = new(StringComparers.ResourceName);
+    // Resources whose display name is shared by another resource, such as replicas, are shown by their unique name.
+    // The set is rebuilt lazily when the resources change, so resolving a name doesn't scan every resource.
+    private DuplicateDisplayNames _duplicateDisplayNames = new(Version: -1, Names: new(StringComparers.ResourceName));
+    private int _resourceVersion;
 
     private Task? _resourceSubscriptionTask;
     private Task? _ageRefreshTask;
@@ -67,6 +81,12 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private bool _isDrawerOpen;
     private bool _isPaneFullCanvas;
     private string? _fullCanvasNavigation;
+
+    /// <summary>
+    /// History entry state for a navigation to the dashboard's home: the unscoped resources URL opened as the
+    /// full-width resource list rather than the overview summary.
+    /// </summary>
+    internal const string ResourceListHomeHistoryEntryState = "aspire-resource-list-home";
     private bool _animatePaneTransition;
     private bool _isPaneSelectionReveal;
     private Task? _paneInteractionsRegistration;
@@ -96,6 +116,11 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private string? _lastLocation;
     // The tab a click on the tab strip is navigating to, until the new location arrives. See OnTabChanged.
     private ResourceTab? _navigatingToTab;
+    // A close (the page's close button or Escape) clears the stored selection before it navigates to the parent, so
+    // there's a moment when it has started but the location hasn't changed. A tab chosen then waits for the close and
+    // opens for the parent's selection, rather than racing it with a URL for the resource being closed.
+    private string? _closingToLocation;
+    private ResourceTab? _tabAfterClose;
     private bool _isDisposed;
     private IReadOnlyList<string> _selectedResourceNames = [];
     private List<SelectedResourceItem> _selectedItems = [];
@@ -258,6 +283,15 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         _lastLocation = NavigationManager.Uri;
         UpdateFromLocation(_lastLocation);
 
+        // When the dashboard is first opened, "/" renders without this layout and redirects to /resources, so this
+        // layout is created by the home navigation itself. OnParametersSetAsync then sees no location change and
+        // wouldn't check for it, so the home check also runs here. No transition: there's no earlier view to animate from.
+        if (IsResourceListHomeNavigation(_lastLocation))
+        {
+            SetResourceListVisible(true);
+            _animatePaneTransition = false;
+        }
+
         _unviewedErrorCounts = TelemetryRepository.GetResourceUnviewedErrorLogsCount();
         UpdateTelemetryOnlyResources();
 
@@ -361,6 +395,8 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             await InvokeAsync(() =>
             {
                 UpdateTelemetryOnlyResources();
+                // Standalone, this is the only callback: removed telemetry sources must drop their row handlers here.
+                PruneRowHandlers();
                 UpdateSelection();
                 QueuePaneActivityRefresh();
                 StateHasChanged();
@@ -416,6 +452,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
                     else if (changeType == ResourceViewModelChangeType.Delete)
                     {
                         _resourceByName.TryRemove(resource.Name, out _);
+                        Interlocked.Increment(ref _resourceVersion);
                     }
                 }
 
@@ -424,6 +461,9 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
                     UpdateResourceTagFilters();
                     EnsureGroupOrder();
                     UpdateTelemetryOnlyResources();
+                    // After the telemetry sources are refreshed, so both kinds of row handlers are pruned against
+                    // the current rows.
+                    PruneRowHandlers();
                     UpdateSelection();
                     UpdatePaneMenuItems();
                     await TryRedirectLandingAsync();
@@ -439,6 +479,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private void UpsertResource(ResourceViewModel resource)
     {
         _resourceByName[resource.Name] = resource;
+        Interlocked.Increment(ref _resourceVersion);
 
         // New types and states are visible unless the user has hidden them already.
         _filter.ResourceTypesToVisibility.TryAdd(resource.ResourceType, true);
@@ -489,9 +530,13 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         _startPaneSelectionReveal = _isPaneSelectionReveal ? location : null;
         _focusPaneSelectionReveal = null;
         _animatedPaneNavigation = null;
-        var showResourceList = restoringPageState || string.Equals(location, _fullCanvasNavigation, StringComparison.Ordinal);
+        var showResourceList = restoringPageState || string.Equals(location, _fullCanvasNavigation, StringComparison.Ordinal) ||
+            IsResourceListHomeNavigation(location);
         _isPaneFullCanvas = false;
         _fullCanvasNavigation = null;
+        _closingToLocation = null;
+        var tabAfterClose = _tabAfterClose;
+        _tabAfterClose = null;
         ClearPaneActivity();
         _navigatingToTab = null;
         var previousTab = CurrentTab;
@@ -521,6 +566,11 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         await TryRedirectLandingAsync();
         await PersistSelectedResourcesAsync();
 
+        // The close has landed: open the tab chosen while it was in flight, for the new selection.
+        if (tabAfterClose is { } chosenTab && GetTabs().FirstOrDefault(t => t.Tab == chosenTab && t.IsVisible)?.Href is { } chosenHref)
+        {
+            await NavigateToTabAsync(chosenHref);
+        }
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -585,7 +635,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             }
             if (registrationChanged && showResizer)
             {
-                await _jsModule.InvokeVoidAsync("registerPaneResizer", _layoutElement, _selfRef, MinimumPaneWidthPx, MaximumPaneWidthPx);
+                await _jsModule.InvokeVoidAsync("registerPaneResizer", _layoutElement, _selfRef, MinimumPaneWidthPx, MaximumPaneWidthPx, DefaultPaneWidthPx);
             }
             else if (registrationChanged)
             {
@@ -662,6 +712,20 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private string? GetLayoutStyle() => _paneWidth is { } width && ViewportInformation.IsDesktop
         ? string.Create(CultureInfo.InvariantCulture, $"--resource-pane-expanded-width: {width}px")
         : null;
+
+    // The home page is the full-width resource list, with its URLs, on desktop. The overview summary stays at the
+    // same URL and opens from the list's "All resources" row, so links to /resources keep showing the summary.
+    private bool IsResourceListHomeNavigation(string location)
+    {
+        if (!ViewportInformation.IsDesktop || !DashboardClient.IsEnabled ||
+            !string.Equals(NavigationManager.HistoryEntryState, ResourceListHomeHistoryEntryState, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var parsed = ParseLocation(NavigationManager.ToBaseRelativePath(location));
+        return parsed.Tab == ResourceTab.Overview && parsed.RouteResourceName is null && parsed.SelectedResourceNames.Count == 0;
+    }
 
     internal void SetResourceListVisible(bool visible)
     {
@@ -879,6 +943,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     private async Task CloseDetailAsync(string parentUrl)
     {
+        _closingToLocation = NavigationManager.ToAbsoluteUri(parentUrl).AbsoluteUri;
         if (ParseLocation(NavigationManager.ToBaseRelativePath(NavigationManager.ToAbsoluteUri(parentUrl).AbsoluteUri)).SelectedResourceNames.Count == 0)
         {
             // An unscoped overview normally restores the previous selection. Closing explicitly
@@ -889,8 +954,14 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         var target = NavigationManager.ToAbsoluteUri(parentUrl).AbsoluteUri;
         if (string.Equals(target, NavigationManager.Uri, StringComparison.Ordinal))
         {
-            // Closing an unscoped tab changes presentation without changing its URL.
+            // Closing an unscoped tab changes presentation without changing its URL, so it's done: nothing will land.
+            _closingToLocation = null;
             SetResourceListVisible(true);
+            if (_tabAfterClose is { } chosenTab)
+            {
+                _tabAfterClose = null;
+                await OpenChosenTabAsync(chosenTab);
+            }
         }
         else
         {
@@ -1649,11 +1720,16 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         return true;
     }
 
-    private async Task OnToggleCollapseAsync(ResourceGridViewModel viewModel)
+    private async Task OnToggleCollapseAsync(string uniqueResourceName)
     {
-        if (!_collapsedResourceNames.Remove(viewModel.Resource.PersistentKey))
+        if (!_resourceByName.TryGetValue(uniqueResourceName, out var resource))
         {
-            _collapsedResourceNames.Add(viewModel.Resource.PersistentKey);
+            return;
+        }
+
+        if (!_collapsedResourceNames.Remove(resource.PersistentKey))
+        {
+            _collapsedResourceNames.Add(resource.PersistentKey);
         }
 
         await PersistCollapsedResourceNamesAsync();
@@ -1706,9 +1782,18 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     {
         _paneMenuItems.Clear();
 
+        // Collect the parent names once rather than scanning every resource for each resource.
+        var parentNames = new HashSet<string>(StringComparers.ResourceName);
+        foreach (var resource in _resourceByName.Values)
+        {
+            if (resource.GetResourcePropertyValue(KnownProperties.Resource.ParentName) is { Length: > 0 } parentName)
+            {
+                parentNames.Add(parentName);
+            }
+        }
+
         var resourcesWithChildren = _resourceByName.Values
-            .Where(r => !r.IsResourceHidden(_filter.ShowHiddenResources))
-            .Where(r => _resourceByName.Values.Any(nested => string.Equals(nested.GetResourcePropertyValue(KnownProperties.Resource.ParentName), r.Name, StringComparisons.ResourceName)))
+            .Where(r => !r.IsResourceHidden(_filter.ShowHiddenResources) && parentNames.Contains(r.Name))
             .ToList();
 
         if (resourcesWithChildren.Count > 0)
@@ -1756,8 +1841,10 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     // The density is set in the settings panel, which isn't part of this layout.
     private void OnViewPreferencesChanged() => InvokeAsync(StateHasChanged);
 
+    // Tabs that show a resource's data rather than the resource itself.
+    private bool IsDataTab => CurrentTab is ResourceTab.Console or ResourceTab.StructuredLogs or ResourceTab.Traces or ResourceTab.Metrics;
+
     private bool IsCompact => ViewPreferences.Density == ResourceListDensity.Compact;
-    private bool IsSpacious => ViewPreferences.Density == ResourceListDensity.Spacious;
 
     // The time a row shows, in the sidebar and in the full canvas's health column: when the resource stopped, once it
     // has, rather than when it started, since "Started 3 h ago" says little about a resource that exited a minute ago.
@@ -1769,12 +1856,33 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
                 ? (Loc[nameof(Resources.Layout.ResourceHeaderStarted)], startTimeStamp)
                 : null;
 
-    private string GetAge(DateTime time) =>
-        Aspire.Dashboard.Components.Controls.DashboardRunSelect.FormatRunAge(new DateTimeOffset(time), TimeProvider.GetUtcNow(), Loc);
-
-    // For example "Stopped 1 minute ago (11/6/2026 2:30:12 PM)".
+    // For example "Stopped 1m ago (11/6/2026 2:30:12 PM)". It contains the short age the row shows, so the accessible
+    // name includes the visible text (WCAG 2.5.3, label in name: https://www.w3.org/WAI/WCAG22/Understanding/label-in-name).
     private string GetRowTimeDescription((string Label, DateTime Time) rowTime) =>
-        $"{rowTime.Label} {GetAge(rowTime.Time)} ({FormatHelpers.FormatDateTime(TimeProvider, rowTime.Time)})";
+        $"{GetRowTimeText(rowTime)} ({FormatHelpers.FormatDateTime(TimeProvider, rowTime.Time)})";
+
+    // What a row shows: the verb, so a stopped resource doesn't read as running, and a short age ("Started 7m ago").
+    private string GetRowTimeText((string Label, DateTime Time) rowTime) => $"{rowTime.Label} {GetShortAge(rowTime.Time)}";
+
+    // The short age ("7m ago"), which every row repeats; the tooltip and accessible label add the exact time (see
+    // GetRowTimeDescription).
+    private string GetShortAge(DateTime time)
+    {
+        // Clamp so a time slightly in the future (clock skew between processes) reads as "now".
+        var age = TimeProvider.GetUtcNow() - new DateTimeOffset(time);
+        if (age < TimeSpan.Zero)
+        {
+            age = TimeSpan.Zero;
+        }
+
+        return age switch
+        {
+            { TotalMinutes: < 1 } => Loc[nameof(Dashboard.Resources.Layout.ResourceStartedAgeNow)],
+            { TotalHours: < 1 } => Loc[nameof(Dashboard.Resources.Layout.ResourceStartedAgeMinutes), (int)age.TotalMinutes],
+            { TotalDays: < 1 } => Loc[nameof(Dashboard.Resources.Layout.ResourceStartedAgeHours), (int)age.TotalHours],
+            _ => Loc[nameof(Dashboard.Resources.Layout.ResourceStartedAgeDays), (int)age.TotalDays]
+        };
+    }
 
     // Relative ages remain current even when the resource itself has no updates.
     private async Task RefreshAgesPeriodicallyAsync(CancellationToken cancellationToken)
@@ -1953,6 +2061,19 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         NavigationManager.NavigateTo(GetResourceTerminalUrl(resource));
     }
 
+    private Task ExecuteResourceCommandAsync(string uniqueResourceName, string commandName)
+    {
+        // The row's handler is shared across renders, so the resource and command are resolved when it runs: the
+        // resource may have been replaced by an update since the handler was created.
+        if (!_resourceByName.TryGetValue(uniqueResourceName, out var resource) ||
+            resource.Commands.FirstOrDefault(c => string.Equals(c.Name, commandName, StringComparisons.CommandName)) is not { } command)
+        {
+            return Task.CompletedTask;
+        }
+
+        return ExecuteResourceCommandAsync(resource, command);
+    }
+
     private Task ExecuteResourceCommandAsync(ResourceViewModel resource, CommandViewModel command)
     {
         if (resource.IsParameter &&
@@ -1965,7 +2086,81 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         return DashboardCommandExecutor.ExecuteAsync(resource, command, GetResourceName);
     }
 
-    internal string GetResourceName(ResourceViewModel resource) => ResourceViewModel.GetResourceName(resource, _resourceByName);
+    internal string GetResourceName(ResourceViewModel resource) =>
+        GetDuplicateDisplayNames().Contains(resource.DisplayName) ? resource.Name : resource.DisplayName;
+
+    private HashSet<string> GetDuplicateDisplayNames()
+    {
+        // Renders and command completions (which continue on the thread pool) can both get here, while the resource
+        // subscription updates the resources and then the version on another thread. The set and the version it was
+        // built for are published together as one immutable snapshot, so concurrent rebuilds can't pair a set built
+        // from older resources with a newer version, which would keep it stale until the next resource update. A
+        // snapshot built while an update is in progress is labeled with the earlier version and rebuilt next time.
+        var version = Volatile.Read(ref _resourceVersion);
+        var snapshot = Volatile.Read(ref _duplicateDisplayNames);
+        if (snapshot.Version != version)
+        {
+            var seen = new HashSet<string>(StringComparers.ResourceName);
+            var duplicates = new HashSet<string>(StringComparers.ResourceName);
+            foreach (var resource in _resourceByName.Values)
+            {
+                if (!seen.Add(resource.DisplayName))
+                {
+                    duplicates.Add(resource.DisplayName);
+                }
+            }
+
+            snapshot = new DuplicateDisplayNames(version, duplicates);
+            Volatile.Write(ref _duplicateDisplayNames, snapshot);
+        }
+
+        return snapshot.Names;
+    }
+
+    private sealed record DuplicateDisplayNames(int Version, HashSet<string> Names);
+
+    private RowHandlers GetRowHandlers(ResourceViewModel resource)
+    {
+        if (!_rowHandlers.TryGetValue(resource.Name, out var handlers))
+        {
+            handlers = new RowHandlers(this, resource.Name);
+            _rowHandlers[resource.Name] = handlers;
+        }
+
+        return handlers;
+    }
+
+    private EventCallback<MouseEventArgs> GetTelemetryRowClick(string telemetryResourceName)
+    {
+        if (!_telemetryRowClicks.TryGetValue(telemetryResourceName, out var click))
+        {
+            click = EventCallback.Factory.Create<MouseEventArgs>(this, e => OnRowClickAsync(e, telemetryResourceName));
+            _telemetryRowClicks[telemetryResourceName] = click;
+        }
+
+        return click;
+    }
+
+    // The telemetry sources that have a row click handler, for tests.
+    internal IReadOnlyCollection<string> TelemetryRowClickNames => _telemetryRowClicks.Keys;
+
+    // Removes the handlers of resources and telemetry sources that no longer exist.
+    private void PruneRowHandlers()
+    {
+        foreach (var name in _rowHandlers.Keys.Where(name => !_resourceByName.ContainsKey(name)).ToList())
+        {
+            _rowHandlers.Remove(name);
+        }
+
+        if (_telemetryRowClicks.Count > 0)
+        {
+            var telemetryNames = _telemetryOnlyResources.Select(resource => resource.Name).ToHashSet(StringComparers.ResourceName);
+            foreach (var name in _telemetryRowClicks.Keys.Where(name => !telemetryNames.Contains(name)).ToList())
+            {
+                _telemetryRowClicks.Remove(name);
+            }
+        }
+    }
 
     private string GetResourceTypeLabel(ResourceViewModel resource) => resource.GetResourceTypeDisplayName(ResourcesLoc);
 
@@ -2004,8 +2199,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         return string.Join("; ", descriptions);
     }
 
-    private bool HasMultipleReplicas(ResourceViewModel resource)
-        => _resourceByName.Values.Count(r => string.Equals(r.DisplayName, resource.DisplayName, StringComparisons.ResourceName)) > 1;
+    private bool HasMultipleReplicas(ResourceViewModel resource) => GetDuplicateDisplayNames().Contains(resource.DisplayName);
 
     private OtlpResource? GetTelemetryResource(ResourceViewModel resource) => _telemetryResourcesByName.GetValueOrDefault(resource.Name);
 
@@ -2059,14 +2253,6 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             _ => null
         };
     }
-
-    private string GetResourceUnavailableLabel(bool isParameter) => CurrentTab switch
-    {
-        ResourceTab.StructuredLogs when !isParameter => Loc[nameof(Resources.Layout.ResourcePaneNoStructuredLogsLabel)].Value,
-        ResourceTab.Traces when !isParameter => Loc[nameof(Resources.Layout.ResourcePaneNoTracesLabel)].Value,
-        ResourceTab.Metrics when !isParameter => Loc[nameof(Resources.Layout.ResourcePaneNoMetricsLabel)].Value,
-        _ => Loc[nameof(Resources.Layout.ResourcePaneNotApplicableLabel)].Value
-    };
 
     internal int GetUnviewedErrorCount(ResourceViewModel resource)
     {
@@ -2234,6 +2420,21 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             counts[0],
             (combined, count) => string.Format(CultureInfo.CurrentCulture, Loc[nameof(Resources.Layout.ResourcePaneMixedCount)], combined, count));
     }
+
+    /// <summary>
+    /// Gets the replicas that run now of the resource a missing replica belonged to. A replica's name is its resource's
+    /// display name and a suffix ("catalogservice-wfpmezqc"), and restarting the app replaces it with a replica under
+    /// a new suffix, so a page left open on the old name finds nothing. Resources whose name is their display name
+    /// aren't replicas, and "catalog-shell" isn't a replica of "catalog": the suffix has no hyphen.
+    /// </summary>
+    internal List<ResourceViewModel> GetReplacementReplicas(string missingName) =>
+        _resourceByName.Values
+            .Where(resource => !string.Equals(resource.Name, resource.DisplayName, StringComparisons.ResourceName) &&
+                missingName.Length > resource.DisplayName.Length + 1 &&
+                missingName.StartsWith(resource.DisplayName + "-", StringComparisons.ResourceName) &&
+                !missingName.AsSpan(resource.DisplayName.Length + 1).Contains('-'))
+            .OrderBy(resource => resource.Name, StringComparers.ResourceName)
+            .ToList();
 
     /// <summary>
     /// Gets a value indicating whether an app model resource is one of the named resources. Names are either the
@@ -2435,11 +2636,9 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
                     // Closing a scoped detail can retain this selection and its filtered parent URL.
                     SetResourceListVisible(false);
                 }
-                else
-                {
-                    // Selecting the only selected row again deselects it, like toggling.
-                    await ClearSelectionAsync();
-                }
+
+                // Selecting the only selected row again keeps it selected. Clearing the selection here would silently
+                // widen the view to every resource on an accidental second click; "All resources" does that explicitly.
                 return;
             }
 
@@ -2490,7 +2689,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         {
             if (IsResourceGroupSelected(groupResourceNames))
             {
-                await ClearSelectionAsync();
+                // Like a row, selecting the selected group again keeps the selection.
                 return;
             }
 
@@ -2545,16 +2744,6 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         }
 
         return names;
-    }
-
-    /// <summary>
-    /// Deselects everything without leaving the current tab, e.g. clearing a selection on Metrics stays on Metrics.
-    /// </summary>
-    private async Task ClearSelectionAsync()
-    {
-        _selectionAnchor = null;
-        await SetStoredSelectionAsync([]);
-        NavigateToSelection([]);
     }
 
     private void NavigateToSelection(IReadOnlyList<string> resourceNames)
@@ -2641,11 +2830,32 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         // URL is a user selecting a tab.
         // Switching between the live view and a recording re-creates the page, and the outgoing layout's tabs
         // raise changes while they're torn down, which would otherwise navigate to another tab.
+        // A delayed event from the previous header must not navigate the newly selected resource, unless the user really
+        // chose that tab: a click that lands just as a navigation finishes reaches the layout from the outgoing header.
+        // The script records real activations, which the header's own change events while it's torn down never are.
+        var isStale = !string.Equals(renderedLocation, _lastLocation, StringComparison.Ordinal)
+            || !string.Equals(NavigationManager.Uri, _lastLocation, StringComparison.Ordinal);
+        if (isStale && newTab?.Id is { } staleId && staleId.StartsWith("tab-", StringComparison.Ordinal) &&
+            _jsModule is not null && !_isDisposed && isDesktop == ViewportInformation.IsDesktop)
+        {
+            try
+            {
+                if (await _jsModule.InvokeAsync<bool>("consumeRecentTabActivation", staleId) &&
+                    Enum.TryParse<ResourceTab>(staleId["tab-".Length..], out var staleTab) &&
+                    string.Equals(NavigationManager.Uri, _lastLocation, StringComparison.Ordinal))
+                {
+                    await OpenChosenTabAsync(staleTab);
+                }
+            }
+            catch (JSDisconnectedException)
+            {
+            }
+            return;
+        }
+
         if (_isDisposed
             || isDesktop != ViewportInformation.IsDesktop
-            // A delayed event from the previous header must not navigate the newly selected resource.
-            || !string.Equals(renderedLocation, _lastLocation, StringComparison.Ordinal)
-            || !string.Equals(NavigationManager.Uri, _lastLocation, StringComparison.Ordinal)
+            || isStale
             || newTab?.Id is not { } id
             || !id.StartsWith("tab-", StringComparison.Ordinal)
             || !Enum.TryParse<ResourceTab>(id["tab-".Length..], out var tab)
@@ -2685,6 +2895,32 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             {
                 _navigatingToTab = null;
             }
+            return;
+        }
+
+        if (_closingToLocation is not null)
+        {
+            // A close is in flight: open this tab once it lands (see OnParametersSetAsync).
+            _tabAfterClose = tab;
+            return;
+        }
+
+        await NavigateToTabAsync(href);
+    }
+
+    // Opens a tab the user chose, for the current selection. While the full-page list is showing, choosing the tab that's
+    // already current opens its content; otherwise it navigates to the tab.
+    private async Task OpenChosenTabAsync(ResourceTab tab)
+    {
+        if (GetTabs().FirstOrDefault(t => t.Tab == tab && t.IsVisible)?.Href is not { } href ||
+            (tab == CurrentTab && !_isPaneFullCanvas))
+        {
+            return;
+        }
+
+        if (_closingToLocation is not null)
+        {
+            _tabAfterClose = tab;
             return;
         }
 
@@ -2745,15 +2981,15 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             yield break;
         }
 
-        var resource = SelectedResource;
         var isTelemetryOnly = SelectedTelemetryOnlyResource is not null;
-        var isMultiSelection = IsMultiSelection;
 
         // Every tab is always rendered and hidden when it doesn't apply. Removing a FluentTab makes FluentTabs
         // activate its first tab, which would navigate away from the current page.
         var errorCount = _selectedItems.Sum(i => i.Resource is { } r ? GetUnviewedErrorCount(r) : 0);
+        // Overview stays for a resource that isn't known, such as a replica that was replaced: its page says the
+        // resource wasn't found, and the tab is the way back to it from the resource's other pages.
         yield return CreateTab(ResourceTab.Overview, Loc[nameof(Resources.Layout.ResourceTabOverview)], new Icons.Regular.Size24.Board(),
-            isVisible: DashboardClient.IsEnabled && !isTelemetryOnly && (resource is not null || isMultiSelection || _selectedItems.Count == 0));
+            isVisible: DashboardClient.IsEnabled && !isTelemetryOnly);
         yield return CreateTab(ResourceTab.Console, Loc[nameof(Resources.Layout.NavMenuConsoleLogsTab)], new Icons.Regular.Size24.SlideText(),
             isVisible: DashboardClient.IsEnabled && !isTelemetryOnly);
         yield return CreateTab(ResourceTab.Terminal, TerminalLoc[nameof(TerminalStrings.TerminalTitle)], new Icons.Regular.Size20.WindowConsole(),
@@ -2863,6 +3099,49 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private sealed record ResourceGroup(string? Value, List<ResourceViewModel> Resources);
 
     private sealed record TabItem(ResourceTab Tab, string Text, Icon Icon, bool IsVisible, string Href, int ErrorCount, bool IsAvailable);
+
+    /// <summary>
+    /// The event handlers of a resource's row, and of its actions in the resource overview. They're created once per
+    /// resource and reused by every render, so Blazor sees unchanged handlers and skips re-rendering the row's buttons
+    /// and menus. Each handler resolves the current resource by its unique name when it runs. The name a row shows,
+    /// and selects, is its display name unless another resource shares it, and a display name can equal another
+    /// resource's unique name, so it can't be used to find the resource.
+    /// </summary>
+    private sealed class RowHandlers
+    {
+        private readonly ResourcesLayout _layout;
+        private readonly string _resourceName;
+        private readonly Dictionary<string, EventCallback<MouseEventArgs>> _commands = new(StringComparers.CommandName);
+
+        public RowHandlers(ResourcesLayout layout, string uniqueResourceName)
+        {
+            _layout = layout;
+            _resourceName = uniqueResourceName;
+            Click = EventCallback.Factory.Create<MouseEventArgs>(layout, e =>
+                layout._resourceByName.TryGetValue(uniqueResourceName, out var resource)
+                    ? layout.OnRowClickAsync(e, layout.GetResourceName(resource))
+                    : Task.CompletedTask);
+            ToggleCollapse = EventCallback.Factory.Create<MouseEventArgs>(layout, () => layout.OnToggleCollapseAsync(uniqueResourceName));
+            MenuItems = () => layout._resourceByName.TryGetValue(uniqueResourceName, out var resource) ? layout.GetResourceMenuItems(resource) : [];
+        }
+
+        public EventCallback<MouseEventArgs> Click { get; }
+
+        public EventCallback<MouseEventArgs> ToggleCollapse { get; }
+
+        public Func<IList<MenuButtonItem>> MenuItems { get; }
+
+        public EventCallback<MouseEventArgs> Command(string commandName)
+        {
+            if (!_commands.TryGetValue(commandName, out var callback))
+            {
+                callback = EventCallback.Factory.Create<MouseEventArgs>(_layout, () => _layout.ExecuteResourceCommandAsync(_resourceName, commandName));
+                _commands[commandName] = callback;
+            }
+
+            return callback;
+        }
+    }
 }
 
 // These enums are top-level rather than nested in ResourcesLayout because pages reference the layout through

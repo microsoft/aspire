@@ -27,11 +27,21 @@ public sealed class AspireMenuLayoutTests : PlaywrightTestsBase<DashboardServerF
     public async Task StructuredLogActions_TriggerRemainsVisibleAndMenuItemsSharePopup()
     {
         var repository = DashboardServerFixture.DashboardApp.Services.GetRequiredService<ITelemetryRepositoryWriter>();
+
+        // The dashboard attaches telemetry to an app resource when the telemetry's composite name,
+        // "{service.name}-{service.instance.id}" or just service.name when there is no instance ID,
+        // equals the resource's name (see ResourceKey.GetCompositeName). TestResource1 is named
+        // "TestResource" with no replica suffix, so its telemetry must not have an instance ID.
+        // With one, it becomes a separate telemetry source that only shares TestResource1's name,
+        // and selecting "TestResource" resolves to the app resource, which then has no logs.
+        var resource = CreateResource(name: MockDashboardClient.TestResource1.Name);
+        resource.Attributes.Remove(resource.Attributes.Single(attribute => attribute.Key == OtlpResource.SERVICE_INSTANCE_ID));
+
         await repository.AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>
         {
             new ResourceLogs
             {
-                Resource = TelemetryResources.Create(MockDashboardClient.TestResource1),
+                Resource = resource,
                 ScopeLogs =
                 {
                     new ScopeLogs
@@ -46,7 +56,7 @@ public sealed class AspireMenuLayoutTests : PlaywrightTestsBase<DashboardServerF
         await RunTestAsync(async page =>
         {
             await page.SetViewportSizeAsync(1024, 400);
-            await page.GotoAsync($"/structuredlogs/resource/{MockDashboardClient.TestResource1.Name}?pane=telemetry");
+            await page.GotoAsync($"/structuredlogs/resource/{MockDashboardClient.TestResource1.Name}");
 
             var trigger = page.Locator(".grid-action-container").GetByRole(AriaRole.Button, new() { Name = "Actions", Exact = true }).First;
             await Assertions.Expect(trigger).ToBeVisibleAsync();
