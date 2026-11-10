@@ -103,13 +103,12 @@ internal sealed class CopilotAgentClient(
     public async Task<TelemetryHookConfigurationResult> ConfigureTelemetryHooksAsync(
         AgentEnvironment detectedEnvironments, CancellationToken cancellationToken)
     {
-        // App and CLI share one user hook, so a single write configures every detected Copilot
-        // environment. Canonical scripts still attribute App events to copilot-cli:
+        // The App and CLI share one user hook, so a single write configures Copilot whichever of them
+        // was detected. Canonical scripts still attribute App events to copilot-cli:
         // https://github.com/microsoft/aspire-skills/issues/71.
-        var targetEnvironment = detectedEnvironments & (AgentEnvironment.CopilotApp | AgentEnvironment.CopilotCli);
-        if (targetEnvironment == AgentEnvironment.None)
+        if ((detectedEnvironments & (AgentEnvironment.CopilotApp | AgentEnvironment.CopilotCli)) == AgentEnvironment.None)
         {
-            return new TelemetryHookConfigurationResult(AgentEnvironment.None, []);
+            return TelemetryHookConfigurationResult.None;
         }
 
         try
@@ -140,13 +139,12 @@ internal sealed class CopilotAgentClient(
             await edit.ReadBytesForEditAsync(filePath, cancellationToken);
             await edit.PublishAsync(filePath, config, cancellationToken);
 
-            return new TelemetryHookConfigurationResult(targetEnvironment, []);
+            return new TelemetryHookConfigurationResult([this], []);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            logger.LogDebug(ex, "Failed to write Copilot CLI telemetry hook configuration.");
-            return new TelemetryHookConfigurationResult(AgentEnvironment.None,
-                [new TelemetryHookSkip(targetEnvironment, TelemetryHookSkipReason.WriteFailed)]);
+            logger.LogDebug(ex, "Failed to write Copilot telemetry hook configuration.");
+            return new TelemetryHookConfigurationResult([], [new TelemetryHookSkip(this, TelemetryHookSkipReason.WriteFailed)]);
         }
     }
 

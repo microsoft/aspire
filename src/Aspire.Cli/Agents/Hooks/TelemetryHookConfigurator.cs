@@ -15,18 +15,18 @@ internal sealed class TelemetryHookConfigurator(
             (AgentEnvironment.CopilotApp | AgentEnvironment.CopilotCli | AgentEnvironment.ClaudeCode);
         if (supportedEnvironments == AgentEnvironment.None)
         {
-            return new TelemetryHookConfigurationResult(AgentEnvironment.None, []);
+            return TelemetryHookConfigurationResult.None;
         }
 
         // Keep compatibility scripts current for existing registrations and older clients.
         await installer.EnsureInstalledAsync(cancellationToken);
 
-        var configured = AgentEnvironment.None;
+        var configured = new List<IAgentClient>();
         var skipped = new List<TelemetryHookSkip>();
         foreach (var client in clients.Where(client => (client.Environments & supportedEnvironments) != AgentEnvironment.None))
         {
             var result = await client.ConfigureTelemetryHooksAsync(supportedEnvironments, cancellationToken);
-            configured |= result.ConfiguredEnvironments;
+            configured.AddRange(result.ConfiguredClients);
             skipped.AddRange(result.Skipped);
         }
 

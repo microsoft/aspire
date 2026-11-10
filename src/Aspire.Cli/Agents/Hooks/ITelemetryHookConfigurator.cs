@@ -16,39 +16,42 @@ internal interface ITelemetryHookConfigurator
     /// </summary>
     /// <param name="detectedEnvironments">The detected agent environments.</param>
     /// <param name="cancellationToken">A token to cancel the operation.</param>
-    /// <returns>A summary of which environments were configured and which were skipped (and why).</returns>
+    /// <returns>A summary of which agent clients were configured and which were skipped (and why).</returns>
     Task<TelemetryHookConfigurationResult> ConfigureAsync(
         AgentEnvironment detectedEnvironments,
         CancellationToken cancellationToken);
 }
 
 /// <summary>
-/// The reason a telemetry hook could not be registered for an environment.
+/// The reason a telemetry hook could not be registered for an agent client.
 /// </summary>
 internal enum TelemetryHookSkipReason
 {
-    /// <summary>The environment's existing configuration file contained malformed JSON.</summary>
+    /// <summary>The client's existing configuration file contained malformed JSON.</summary>
     MalformedConfig,
 
-    /// <summary>The environment's existing configuration had a hooks shape Aspire does not recognize.</summary>
+    /// <summary>The client's existing configuration had a hooks shape Aspire does not recognize.</summary>
     UnexpectedConfigShape,
 
-    /// <summary>Writing the environment's configuration failed.</summary>
+    /// <summary>Writing the client's configuration failed.</summary>
     WriteFailed,
 }
 
 /// <summary>
-/// Describes an environment whose telemetry hook registration was skipped.
+/// Describes an agent client whose telemetry hook registration was skipped.
 /// </summary>
-/// <param name="Environment">The environment that was skipped.</param>
+/// <param name="Client">The agent client that was skipped.</param>
 /// <param name="Reason">Why registration was skipped.</param>
-internal sealed record TelemetryHookSkip(AgentEnvironment Environment, TelemetryHookSkipReason Reason);
+internal sealed record TelemetryHookSkip(IAgentClient Client, TelemetryHookSkipReason Reason);
 
 /// <summary>
 /// The outcome of <see cref="ITelemetryHookConfigurator.ConfigureAsync"/>.
 /// </summary>
-/// <param name="ConfiguredEnvironments">Environments whose telemetry hook was registered or refreshed.</param>
-/// <param name="Skipped">Environments whose registration was skipped, with the reason.</param>
+/// <param name="ConfiguredClients">Agent clients whose telemetry hook was registered or refreshed.</param>
+/// <param name="Skipped">Agent clients whose registration was skipped, with the reason.</param>
 internal sealed record TelemetryHookConfigurationResult(
-    AgentEnvironment ConfiguredEnvironments,
-    IReadOnlyList<TelemetryHookSkip> Skipped);
+    IReadOnlyList<IAgentClient> ConfiguredClients,
+    IReadOnlyList<TelemetryHookSkip> Skipped)
+{
+    public static TelemetryHookConfigurationResult None { get; } = new([], []);
+}
