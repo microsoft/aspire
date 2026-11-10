@@ -810,20 +810,53 @@ suite('E2E state file bridge', () => {
         });
     }
 
-    test('accepts target disconnection during Page.close only after all proof sessions terminate', async () => {
+    // js-debug v1.117.0's CDP proxy forwards Page.close with sendOrDie. When the page session ends
+    // first, it replies with this error and keeps the client socket open.
+    const targetClosedReply = '{"id":1,"error":{"code":0,"message":"Connection is closed"}}';
+
+    for (const disconnection of ['socket close', 'target-closed reply'] as const) {
+        test(`accepts target disconnection (${disconnection}) during Page.close only after all proof sessions terminate`, async () => {
+            const harness = createBlazorProofHarness(sandbox, { closeMode: 'natural' });
+            harness.cdpSocket.send.callsFake(() => {
+                harness.terminateAllSessions();
+                if (disconnection === 'socket close') {
+                    harness.cdpSocket.readyState = WebSocket.CLOSED;
+                    harness.cdpSocket.emit('close');
+                }
+                else {
+                    harness.cdpSocket.emit('message', Buffer.from(targetClosedReply));
+                }
+            });
+
+            const proof = await dispatchControlCommand(
+                harness.command, harness.repository, harness.launchService, harness.provider, harness.terminalProvider) as Record<string, any>;
+
+            assert.strictEqual(proof.commandStateAfterStop.state, 'Enabled');
+            assert.strictEqual(harness.stopDebugging.called, false);
+            assert.strictEqual(harness.cdpSocket.terminate.called, disconnection === 'target-closed reply');
+            assert.deepStrictEqual(harness.cdpSocket.eventNames(), []);
+        });
+    }
+
+    test('rejects a target-closed Page.close reply while a proof session remains active', async () => {
+        const clock = sandbox.useFakeTimers({ shouldClearNativeTimers: true });
         const harness = createBlazorProofHarness(sandbox, { closeMode: 'natural' });
         harness.cdpSocket.send.callsFake(() => {
-            harness.terminateAllSessions();
-            harness.cdpSocket.readyState = WebSocket.CLOSED;
-            harness.cdpSocket.emit('close');
+            harness.terminateSession('root');
+            harness.terminateSession('browser');
+            harness.setBrowserCommandState('Enabled');
+            harness.cdpSocket.emit('message', Buffer.from(targetClosedReply));
         });
 
-        const proof = await dispatchControlCommand(
-            harness.command, harness.repository, harness.launchService, harness.provider, harness.terminalProvider) as Record<string, any>;
+        const failure = captureError(() => dispatchControlCommand(
+            harness.command, harness.repository, harness.launchService, harness.provider, harness.terminalProvider));
+        await clock.tickAsync(1100);
+        const error = await failure;
+        const diagnostics = JSON.parse(error.message.split('\nDiagnostics:\n')[1]);
 
-        assert.strictEqual(proof.commandStateAfterStop.state, 'Enabled');
-        assert.strictEqual(harness.stopDebugging.called, false);
-        assert.strictEqual(harness.cdpSocket.terminate.called, false);
+        assert.match(error.message, /'debug-in-browser' to be enabled after natural browser close/);
+        assert.deepStrictEqual(diagnostics.activeSessionIds, ['managed']);
+        assert.strictEqual(harness.stopDebugging.callCount, 1);
         assert.deepStrictEqual(harness.cdpSocket.eventNames(), []);
     });
 

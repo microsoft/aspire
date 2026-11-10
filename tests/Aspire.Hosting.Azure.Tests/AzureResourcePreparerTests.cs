@@ -154,7 +154,7 @@ public class AzureResourcePreparerTests(ITestOutputHelper testOutputHelper)
         builder.AddProject<Project>("api", launchProfileName: null)
             .WithRoleAssignments(storage, StorageBuiltInRole.StorageBlobDataReader);
 
-        var app = builder.Build();
+        using var app = builder.Build();
 
         if (operation == DistributedApplicationOperation.Publish)
         {
@@ -163,7 +163,8 @@ public class AzureResourcePreparerTests(ITestOutputHelper testOutputHelper)
         }
         else
         {
-            await app.StartAsync();
+            // Run the Azure before-start hooks directly: app.StartAsync() would also launch DCP, which this test doesn't need.
+            await ExecuteBeforeStartHooksAsync(app, default);
             // no exception is thrown in Run mode
         }
     }

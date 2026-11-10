@@ -17,7 +17,7 @@ func main() {
 
 	mysql := builder.AddMySql("mysql", &aspire.AddMySqlOptions{
 		Password: &rootPassword,
-		Port:     aspire.Float64Ptr(3306),
+		Port:     aspire.IntPtr(3306),
 	})
 
 	mysql.WithPassword(rootPassword)
@@ -28,7 +28,7 @@ func main() {
 	mysql.WithPhpMyAdmin(&aspire.WithPhpMyAdminOptions{
 		ContainerName: aspire.StringPtr("phpmyadmin"),
 		ConfigureContainer: func(container aspire.PhpMyAdminContainerResource) {
-			container.WithHostPort(aspire.Float64Ptr(8080))
+			container.WithHostPort(aspire.IntPtr(8080))
 		},
 	})
 
