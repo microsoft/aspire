@@ -87,6 +87,44 @@ suite('withScopedFakeTimers', () => {
         }
     });
 
+    test('restores the real globals when the body resolves, rejects or throws', async () => {
+        const captureGlobals = () => ({
+            setTimeout: globalThis.setTimeout,
+            clearTimeout: globalThis.clearTimeout,
+            setInterval: globalThis.setInterval,
+            clearInterval: globalThis.clearInterval,
+            setImmediate: globalThis.setImmediate,
+            clearImmediate: globalThis.clearImmediate,
+            queueMicrotask: globalThis.queueMicrotask,
+            Date: globalThis.Date,
+            dateNow: globalThis.Date.now,
+            nextTick: process.nextTick,
+        });
+        const originals = captureGlobals();
+        const failure = new Error('body failed');
+
+        const bodies: [string, () => unknown][] = [
+            ['resolves', async () => { }],
+            ['rejects', async () => { await Promise.resolve(); throw failure; }],
+            ['throws synchronously', () => { throw failure; }],
+        ];
+        for (const [outcome, body] of bodies) {
+            const run = withScopedFakeTimers(clock => {
+                assert.notStrictEqual(globalThis.setTimeout, originals.setTimeout, 'The helper should be installed while the body runs.');
+                assert.ok(clock);
+                return body();
+            });
+            if (outcome === 'resolves') {
+                await run;
+            }
+            else {
+                await assert.rejects(run, failure);
+            }
+
+            assert.deepStrictEqual(captureGlobals(), originals, `Globals were not restored after the body ${outcome}.`);
+        }
+    });
+
     test('preserves Date subclasses inside and outside the body', async () => {
         const foreignContext = new AsyncResource('foreign-context');
 
