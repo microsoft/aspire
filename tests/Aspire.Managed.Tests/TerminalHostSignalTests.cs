@@ -100,8 +100,10 @@ public partial class TerminalHostSignalTests
     public async Task TerminalHostSubcommandStopsWhenOwningAppHostIsGone()
         => await AssertTerminalHostStopsWhenOwningAppHostIsGoneAsync(hostAssemblyPath: null);
 
-    [Fact]
-    public async Task RequestShutdownAsyncDeliversNotificationBeforeClosingConnection()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RequestShutdownAsyncDeliversNotificationBeforeClosingConnection(bool closeWithUnreadData)
     {
         var root = Directory.CreateTempSubdirectory();
         try
@@ -116,7 +118,9 @@ public partial class TerminalHostSignalTests
             for (var i = 0; i < 5; i++)
             {
                 using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-                var serverTask = ReceiveShutdownAsync(listener, timeout.Token);
+                var serverTask = closeWithUnreadData
+                    ? PeekShutdownAndResetAsync(listener, timeout.Token)
+                    : ReceiveShutdownAsync(listener, timeout.Token);
                 await TerminalHostForwarder.RequestShutdownAsync(["--control-uds", controlPath], timeout.Token);
                 Assert.True(await serverTask, $"Shutdown request {i} closed the connection without delivering the notification.");
             }
@@ -136,6 +140,38 @@ public partial class TerminalHostSignalTests
             rpc.StartListening();
             await Task.WhenAny(received.Task, rpc.Completion).WaitAsync(cancellationToken);
             return received.Task.IsCompletedSuccessfully;
+        }
+
+        // Closing a socket whose receive queue still holds data makes the peer's pending read fail
+        // with a connection reset, on Linux as well as Windows. This is how the client observes the
+        // terminal host closing its control connection on Windows, so it must be handled as a close.
+        static async Task<bool> PeekShutdownAndResetAsync(Socket listener, CancellationToken cancellationToken)
+        {
+            using var client = await listener.AcceptAsync(cancellationToken);
+            var buffer = new byte[4096];
+            while (true)
+            {
+                var count = await client.ReceiveAsync(buffer, SocketFlags.Peek, cancellationToken);
+                if (count == 0)
+                {
+                    return false;
+                }
+
+                var text = System.Text.Encoding.UTF8.GetString(buffer, 0, count);
+                var headerEnd = text.IndexOf("\r\n\r\n", StringComparison.Ordinal);
+                if (headerEnd >= 0)
+                {
+                    var lengthHeader = text[..headerEnd].Split("\r\n").Single(h => h.StartsWith("Content-Length:", StringComparison.OrdinalIgnoreCase));
+                    var bodyLength = int.Parse(lengthHeader["Content-Length:".Length..].Trim(), CultureInfo.InvariantCulture);
+                    if (count >= headerEnd + 4 + bodyLength)
+                    {
+                        return text.Substring(headerEnd + 4, bodyLength).Contains("\"method\":\"shutdown\"", StringComparison.Ordinal);
+                    }
+                }
+
+                // The notification can arrive in more than one write; peek again once more data is queued.
+                await Task.Delay(TimeSpan.FromMilliseconds(10), cancellationToken);
+            }
         }
     }
 
