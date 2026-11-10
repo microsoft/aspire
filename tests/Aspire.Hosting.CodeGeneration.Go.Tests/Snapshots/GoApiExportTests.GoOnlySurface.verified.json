@@ -20,7 +20,7 @@
           "name": "CreateBuilder",
           "typeId": "Aspire.Hosting/createBuilder",
           "owningAssembly": "Aspire.Hosting",
-          "declaration": "func CreateBuilder(options ...*CreateBuilderOptions) (DistributedApplicationBuilder, error)",
+          "declaration": "func CreateBuilder(options ...CreateBuilderOption) (DistributedApplicationBuilder, error)",
           "summary": "CreateBuilder establishes a connection to the AppHost and returns a new builder."
         },
         {
@@ -36,7 +36,7 @@
               "id": "DistributedApplicationBuilder.AddTestRedis",
               "kind": "method",
               "name": "AddTestRedis",
-              "declaration": "AddTestRedis(name string, options ...*AddTestRedisOptions) TestRedisResource",
+              "declaration": "AddTestRedis(name string, options ...AddTestRedisOption) TestRedisResource",
               "capabilityId": "Aspire.Hosting.CodeGeneration.Go.Tests/addTestRedis",
               "targetTypeId": "Aspire.Hosting/Aspire.Hosting.IDistributedApplicationBuilder",
               "capabilityKind": "method",
@@ -55,11 +55,11 @@
                 }
               ],
               "options": {
-                "typeName": "AddTestRedisOptions",
+                "typeName": "AddTestRedisOption",
                 "fields": [
                   {
                     "name": "Port",
-                    "type": "*float64",
+                    "type": "*int",
                     "optional": true,
                     "jsonName": "port"
                   }
@@ -195,7 +195,7 @@
               "id": "TestRedisResource.GetStatusAsync",
               "kind": "method",
               "name": "GetStatusAsync",
-              "declaration": "GetStatusAsync(options ...*GetStatusAsyncOptions) (string, error)",
+              "declaration": "GetStatusAsync(options ...GetStatusAsyncOption) (string, error)",
               "capabilityId": "Aspire.Hosting.CodeGeneration.Go.Tests/getStatusAsync",
               "targetTypeId": "Aspire.Hosting.CodeGeneration.Go.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestRedisResource",
               "capabilityKind": "method",
@@ -204,7 +204,7 @@
               "errorModel": "returned",
               "summary": "Gets the status of the resource asynchronously",
               "options": {
-                "typeName": "GetStatusAsyncOptions",
+                "typeName": "GetStatusAsyncOption",
                 "fields": [
                   {
                     "name": "CancellationToken",
@@ -231,7 +231,7 @@
               "id": "TestRedisResource.WithPersistence",
               "kind": "method",
               "name": "WithPersistence",
-              "declaration": "WithPersistence(options ...*WithPersistenceOptions) TestRedisResource",
+              "declaration": "WithPersistence(options ...WithPersistenceOption) TestRedisResource",
               "capabilityId": "Aspire.Hosting.CodeGeneration.Go.Tests/withPersistence",
               "targetTypeId": "Aspire.Hosting.CodeGeneration.Go.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestRedisResource",
               "capabilityKind": "method",
@@ -242,7 +242,7 @@
               "returnsReceiver": true,
               "returnsBuilder": true,
               "options": {
-                "typeName": "WithPersistenceOptions",
+                "typeName": "WithPersistenceOption",
                 "fields": [
                   {
                     "name": "Mode",
@@ -369,10 +369,10 @@
               "id": "TestConfigDto.Port",
               "kind": "field",
               "name": "Port",
-              "declaration": "Port float64 \u0060json:\u0022port,omitempty\u0022\u0060",
+              "declaration": "Port int \u0060json:\u0022port,omitempty\u0022\u0060",
               "summary": "Port is the port used by the test config.",
               "jsonName": "port",
-              "type": "float64",
+              "type": "int",
               "optional": false
             },
             {
@@ -464,7 +464,7 @@
           "name": "TestConfigs",
           "typeId": "Aspire.Hosting.CodeGeneration.Go.Tests/TestConfigs",
           "owningAssembly": "Aspire.Hosting.CodeGeneration.Go.Tests",
-          "declaration": "var TestConfigs = struct {\n\tDefault *TestConfigDto\n\tProfiles struct {\n\t\tDevelopment *TestConfigDto\n\t}\n\tSecure *TestConfigDto\n\tUnicodeGreeting string\n}{\n\tDefault: \u0026TestConfigDto{Name: \u0022default\u0022, Port: 6379, Enabled: true, OptionalField: func(value string) *string { return \u0026value }(\u0022cache\u0022)},\n\tProfiles: struct {\n\t\tDevelopment *TestConfigDto\n\t}{\n\t\tDevelopment: \u0026TestConfigDto{Name: \u0022development\u0022, Port: 5001, Enabled: false, OptionalField: nil},\n\t},\n\tSecure: \u0026TestConfigDto{Name: \u0022secure\u0022, Port: 6380, Enabled: true, OptionalField: nil},\n\tUnicodeGreeting: \u0022\u4F60\u597D\u3053\u3093\u306B\u3061\u306F\u0022,\n}",
+          "declaration": "var TestConfigs = struct {\n\tDefault  *TestConfigDto\n\tProfiles struct {\n\t\tDevelopment *TestConfigDto\n\t}\n\tSecure          *TestConfigDto\n\tUnicodeGreeting string\n}{\n\tDefault: \u0026TestConfigDto{Name: \u0022default\u0022, Port: 6379, Enabled: true, OptionalField: func(value string) *string { return \u0026value }(\u0022cache\u0022)},\n\tProfiles: struct {\n\t\tDevelopment *TestConfigDto\n\t}{\n\t\tDevelopment: \u0026TestConfigDto{Name: \u0022development\u0022, Port: 5001, Enabled: false, OptionalField: nil},\n\t},\n\tSecure:          \u0026TestConfigDto{Name: \u0022secure\u0022, Port: 6380, Enabled: true, OptionalField: nil},\n\tUnicodeGreeting: \u0022\u4F60\u597D\u3053\u3093\u306B\u3061\u306F\u0022,\n}",
           "members": [
             {
               "id": "TestConfigs.Default",

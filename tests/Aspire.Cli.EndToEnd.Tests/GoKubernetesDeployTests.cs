@@ -81,12 +81,12 @@ public sealed class GoKubernetesDeployTests(ITestOutputHelper output)
 
                 namespace := builder.AddParameter("namespace")
                 chartVersion := builder.AddParameter("chartversion")
-                builder.AddKubernetesEnvironment("env").WithHelm(&aspire.WithHelmOptions{
-                    Configure: func(helm aspire.HelmChartOptions) {
+                builder.AddKubernetesEnvironment("env").WithHelm(aspire.HelmConfigure(
+                    func(helm aspire.HelmChartOptions) {
                         helm.WithNamespace(namespace)
                         helm.WithChartVersion(chartVersion)
                     },
-                })
+                ))
                 """);
             output.WriteLine("Modified apphost.go with Kubernetes environment configuration");
 

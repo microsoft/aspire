@@ -27,7 +27,7 @@ func main() {
 		AddAzureFunctionsProject("chained-func", "../OtherFunc/OtherFunc.csproj").
 		WithHostStorage(storage).
 		WithEnvironment("MY_KEY", "my-value").
-		WithHttpEndpoint(&aspire.WithHttpEndpointOptions{Port: aspire.Float64Ptr(7071)})
+		WithHttpEndpoint(&aspire.WithHttpEndpointOptions{Port: aspire.IntPtr(7071)})
 	if chainedFunc.Err() != nil {
 		log.Fatal(aspire.FormatError(chainedFunc.Err()))
 	}

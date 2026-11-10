@@ -1,7 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics.CodeAnalysis;
+using System.Diagnostics;
 using System.Globalization;
 using System.Reflection;
 using System.Text;
@@ -31,7 +31,8 @@ internal sealed class GoExportedValueTreeNode
 ///     and aggregates errors via errors.Join.
 ///   - No init() functions; per-client wrapper / callback registries are
 ///     populated inside CreateBuilder via registerWrappers(c).
-///   - Variadic options merge via the deepUpdate helper in base.go.
+///   - Optional parameters use grpc-go-style functional options that apply to
+///     generated options structs.
 ///   - Union parameters use Go 1.18+ type-set generics — no AspireUnion wrapper.
 /// </summary>
 internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
@@ -71,6 +72,10 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
 
     // capabilityId → resolved Options type name (qualified when simple name collides with a DTO or another capability's Options)
     private readonly Dictionary<string, string> _optionsTypeNames = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, string> _optionInterfaceNames = new(StringComparer.Ordinal);
+    private readonly Dictionary<(string CapabilityId, string ParameterName), string> _optionValueNames = new();
+    private string? _createBuilderOptionInterfaceName;
+    private readonly Dictionary<string, string> _createBuilderOptionValueNames = new(StringComparer.Ordinal);
 
     // typeId → documentation captured for the handle type
     private readonly Dictionary<string, AtsDocumentationInfo> _handleDocumentation = new(StringComparer.Ordinal);
@@ -96,6 +101,8 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
     /// <inheritdoc />
     public Dictionary<string, string> GenerateDistributedApplication(AtsContext context)
     {
+        context = FilterObsoleteSymbols(context);
+
         var files = new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["go.mod"] = """
@@ -108,11 +115,217 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
             ["aspire.go"] = GenerateAspireSdk(context)
         };
 
-        // The files mix raw string literals, StringWriter output and embedded resources, which take the line endings
-        // of the machine that built or runs the generator (CRLF on Windows). gofmt rewrites CRLF, so write LF everywhere.
-        // Only CRLF is replaced: ReplaceLineEndings would also split lines at characters such as U+2028 or form feed,
-        // which Go allows inside comments and string literals.
+        foreach (var fileName in files.Keys.Where(fileName => fileName.EndsWith(".go", StringComparison.Ordinal)).ToList())
+        {
+            files[fileName] = FormatGoSource(fileName, files[fileName]);
+        }
+
+        // gofmt writes LF, and non-Go module files must use the same deterministic line endings.
         return files.ToDictionary(file => file.Key, file => file.Value.Replace("\r\n", "\n"), StringComparer.Ordinal);
+    }
+
+    private static AtsContext FilterObsoleteSymbols(AtsContext context)
+    {
+            var capabilities = context.Capabilities.Where(capability => !IsObsoleteCapability(context, capability)).ToList();
+            var exportedValues = context.ExportedValues.Where(value => !AtsTypeSystemCompatibility.IsObsolete(value)).ToList();
+            var requiredTypeIds = new HashSet<string>(StringComparer.Ordinal);
+
+            foreach (var capability in capabilities)
+            {
+                CollectRequiredType(capability.TargetType, requiredTypeIds);
+                CollectRequiredType(capability.ReturnType, requiredTypeIds);
+                foreach (var expandedTarget in capability.ExpandedTargetTypes)
+                {
+                    CollectRequiredType(expandedTarget, requiredTypeIds);
+                }
+                foreach (var parameter in capability.Parameters)
+                {
+                    CollectRequiredType(parameter.Type, requiredTypeIds);
+                    CollectRequiredType(parameter.CallbackReturnType, requiredTypeIds);
+                    foreach (var callbackParameter in parameter.CallbackParameters ?? [])
+                    {
+                        CollectRequiredType(callbackParameter.Type, requiredTypeIds);
+                    }
+                }
+            }
+
+            foreach (var value in exportedValues)
+            {
+                CollectRequiredType(value.Type, requiredTypeIds);
+            }
+
+            foreach (var dto in context.DtoTypes.Where(dto => !AtsTypeSystemCompatibility.IsObsolete(dto)))
+            {
+                foreach (var property in dto.Properties.Where(property => !AtsTypeSystemCompatibility.IsObsolete(dto, property)))
+                {
+                    CollectRequiredType(property.Type, requiredTypeIds);
+                    CollectRequiredType(property.CallbackReturnType, requiredTypeIds);
+                    foreach (var callbackParameter in property.CallbackParameters ?? [])
+                    {
+                        CollectRequiredType(callbackParameter.Type, requiredTypeIds);
+                    }
+                }
+            }
+
+            var requiredDtoIds = new HashSet<string>(requiredTypeIds, StringComparer.Ordinal);
+            var changed = true;
+            while (changed)
+            {
+                changed = false;
+                foreach (var dto in context.DtoTypes.Where(dto => requiredDtoIds.Contains(dto.TypeId)))
+                {
+                    var before = requiredTypeIds.Count;
+                    var properties = AtsTypeSystemCompatibility.IsObsolete(dto)
+                        ? dto.Properties
+                        : dto.Properties.Where(property => !AtsTypeSystemCompatibility.IsObsolete(dto, property));
+                    foreach (var property in properties)
+                    {
+                        CollectRequiredType(property.Type, requiredTypeIds);
+                        CollectRequiredType(property.CallbackReturnType, requiredTypeIds);
+                        foreach (var callbackParameter in property.CallbackParameters ?? [])
+                        {
+                            CollectRequiredType(callbackParameter.Type, requiredTypeIds);
+                        }
+                    }
+                    if (requiredTypeIds.Count != before)
+                    {
+                        requiredDtoIds.UnionWith(requiredTypeIds);
+                        changed = true;
+                    }
+                }
+            }
+
+            var dtoTypes = context.DtoTypes
+                .Where(dto => !AtsTypeSystemCompatibility.IsObsolete(dto) || requiredTypeIds.Contains(dto.TypeId))
+                .Select(dto => AtsTypeSystemCompatibility.IsObsolete(dto)
+                    ? dto
+                    : new AtsDtoTypeInfo
+                    {
+                        TypeId = dto.TypeId,
+                        Name = dto.Name,
+                        Description = dto.Description,
+                        Documentation = dto.Documentation,
+                        ClrType = dto.ClrType,
+                        Properties = dto.Properties.Where(property => !AtsTypeSystemCompatibility.IsObsolete(dto, property)).ToList()
+                    })
+                .ToList();
+
+            var enumTypes = context.EnumTypes
+                .Where(enumType => !AtsTypeSystemCompatibility.IsObsolete(enumType) || requiredTypeIds.Contains(enumType.TypeId))
+                .Select(enumType =>
+                {
+                    if (AtsTypeSystemCompatibility.IsObsolete(enumType))
+                    {
+                        return enumType;
+                    }
+
+                    var obsoleteValues = enumType.ValueInfos
+                        .Where(value => AtsTypeSystemCompatibility.IsObsolete(enumType, value))
+                        .Select(value => value.Name)
+                        .ToHashSet(StringComparer.Ordinal);
+                    return new AtsEnumTypeInfo
+                    {
+                        TypeId = enumType.TypeId,
+                        Name = enumType.Name,
+                        ClrType = enumType.ClrType,
+                        Values = enumType.Values.Where(value => !obsoleteValues.Contains(value)).ToList(),
+                        ValueInfos = enumType.ValueInfos.Where(value => !AtsTypeSystemCompatibility.IsObsolete(enumType, value)).ToList(),
+                        Documentation = enumType.Documentation
+                    };
+                })
+                .ToList();
+
+        var filtered = new AtsContext
+        {
+            Capabilities = capabilities,
+            HandleTypes = context.HandleTypes.Where(type => !AtsTypeSystemCompatibility.IsObsolete(type) || requiredTypeIds.Contains(type.AtsTypeId)).ToList(),
+            DtoTypes = dtoTypes,
+            EnumTypes = enumTypes,
+            ExportedValues = exportedValues,
+            Diagnostics = context.Diagnostics
+        };
+        var capabilityIds = capabilities.Select(capability => capability.CapabilityId).ToHashSet(StringComparer.Ordinal);
+        foreach (var (capabilityId, method) in context.Methods)
+        {
+            if (capabilityIds.Contains(capabilityId))
+            {
+                filtered.Methods[capabilityId] = method;
+            }
+        }
+        foreach (var (capabilityId, property) in context.Properties)
+        {
+            if (capabilityIds.Contains(capabilityId))
+            {
+                filtered.Properties[capabilityId] = property;
+            }
+        }
+
+        return filtered;
+    }
+
+    private static void CollectRequiredType(AtsTypeRef? type, HashSet<string> requiredTypeIds)
+    {
+        if (type is null)
+        {
+            return;
+        }
+
+        requiredTypeIds.Add(type.TypeId);
+        CollectRequiredType(type.ElementType, requiredTypeIds);
+        CollectRequiredType(type.KeyType, requiredTypeIds);
+        CollectRequiredType(type.ValueType, requiredTypeIds);
+        CollectRequiredType(type.BaseType, requiredTypeIds);
+        foreach (var unionType in type.UnionTypes ?? [])
+        {
+            CollectRequiredType(unionType, requiredTypeIds);
+        }
+        foreach (var implementedInterface in type.ImplementedInterfaces)
+        {
+            CollectRequiredType(implementedInterface, requiredTypeIds);
+        }
+    }
+
+    private static bool IsObsoleteCapability(AtsContext context, AtsCapabilityInfo capability)
+    {
+        return capability.IsObsolete
+            || context.Properties.TryGetValue(capability.CapabilityId, out var property)
+                && AttributeDataReader.GetObsoleteData(property) is not null;
+    }
+
+    private static string FormatGoSource(string fileName, string source)
+    {
+        using var process = new Process
+        {
+            StartInfo = new ProcessStartInfo("gofmt")
+            {
+                RedirectStandardInput = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                StandardInputEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
+                StandardOutputEncoding = Encoding.UTF8,
+                StandardErrorEncoding = Encoding.UTF8,
+                ArgumentList = { "-s" }
+            }
+        };
+
+        process.Start();
+        var formattedTask = process.StandardOutput.ReadToEndAsync();
+        var errorTask = process.StandardError.ReadToEndAsync();
+        process.StandardInput.Write(source);
+        process.StandardInput.Close();
+
+        process.WaitForExit();
+        var formatted = formattedTask.GetAwaiter().GetResult();
+        var error = errorTask.GetAwaiter().GetResult();
+
+        if (process.ExitCode != 0)
+        {
+            throw new InvalidOperationException($"gofmt failed for generated file '{fileName}': {error.Trim()}");
+        }
+
+        return formatted;
     }
 
     private static string GetEmbeddedResource(string name)
@@ -144,6 +357,7 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
         GenerateAcceptingInterfaces();
         GenerateConcreteHandleTypes(capabilitiesByConcreteImpl);
         GenerateOptionsStructs(context.Capabilities);
+        GenerateCreateBuilderOptions(context);
         GenerateRegisterWrappers();
         GenerateCreateBuilder(context);
 
@@ -162,6 +376,18 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
         _enumNames.Clear();
         _acceptingNames.Clear();
         _acceptingMarkers.Clear();
+        _reservedNames.Clear();
+
+        foreach (var resourceName in new[] { "base.go", "transport.go" })
+        {
+            foreach (var declaration in GoDeclarationScanner.ScanRuntime(GetEmbeddedResource(resourceName)))
+            {
+                if (declaration.Kind is GoDeclarationKind.Type or GoDeclarationKind.Function or GoDeclarationKind.Constant)
+                {
+                    _reservedNames.Add(declaration.Name);
+                }
+            }
+        }
 
         foreach (var enumType in context.EnumTypes)
         {
@@ -290,13 +516,6 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
                 continue;
             }
 
-            // Direct-options capabilities thread the DTO type directly and emit no wrapper struct,
-            // so there is no name to reserve for them.
-            if (TryGetDirectOptionsParameter(reservationOptionals, out _))
-            {
-                continue;
-            }
-
             var simpleName = $"{ToPascalCase(capability.MethodName)}Options";
             string resolvedName;
 
@@ -339,6 +558,78 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
             }
 
             _optionsTypeNames[capability.CapabilityId] = resolvedName;
+        }
+
+        // Generated option interfaces and values are package-level declarations too. Reserve all names
+        // once, before emission, so independently derived names cannot collide with each other or with
+        // exported values and enum constants.
+        _reservedNames.UnionWith(_optionsTypeNames.Values);
+        _reservedNames.UnionWith(BuildExportedValueTree(context.ExportedValues).Children.Keys);
+        foreach (var enumType in context.EnumTypes)
+        {
+            if (enumType.ClrType is null)
+            {
+                continue;
+            }
+
+            foreach (var member in enumType.Values)
+            {
+                _reservedNames.Add(GetEnumMemberConstantName(_enumNames[enumType.TypeId], member));
+            }
+        }
+
+        _optionInterfaceNames.Clear();
+        _optionValueNames.Clear();
+        var interfaceNamesByOptionsType = new Dictionary<string, string>(StringComparer.Ordinal);
+        var valueNamesByOptionsField = new Dictionary<(string OptionsType, string FieldName), string>();
+        foreach (var capability in context.Capabilities)
+        {
+            if (!_optionsTypeNames.TryGetValue(capability.CapabilityId, out var optionsType))
+            {
+                continue;
+            }
+
+            if (!interfaceNamesByOptionsType.TryGetValue(optionsType, out var optionInterface))
+            {
+                var candidate = optionsType.EndsWith("Options", StringComparison.Ordinal)
+                    ? optionsType[..^1]
+                    : optionsType + "Option";
+                optionInterface = ReserveName(candidate, takenLowercase: false);
+                interfaceNamesByOptionsType[optionsType] = optionInterface;
+            }
+            _optionInterfaceNames[capability.CapabilityId] = optionInterface;
+
+            var targetParamName = capability.TargetParameterName ?? "builder";
+            foreach (var parameter in capability.Parameters.Where(parameter =>
+                !string.Equals(parameter.Name, targetParamName, StringComparison.Ordinal)
+                && (IsCancellationToken(parameter) || parameter.IsOptional)))
+            {
+                var fieldName = ToPascalCase(parameter.Name);
+                var sharedKey = (optionsType, fieldName);
+                if (!valueNamesByOptionsField.TryGetValue(sharedKey, out var optionValue))
+                {
+                    var candidate = GetOptionValueNameCandidate(optionsType, fieldName);
+                    if (candidate == optionsType || candidate == optionInterface)
+                    {
+                        candidate += "Value";
+                    }
+                    optionValue = ReserveName(candidate, takenLowercase: true);
+                    valueNamesByOptionsField[sharedKey] = optionValue;
+                }
+                _optionValueNames[(capability.CapabilityId, parameter.Name)] = optionValue;
+            }
+        }
+
+        _createBuilderOptionInterfaceName = null;
+        _createBuilderOptionValueNames.Clear();
+        if (context.DtoTypes.FirstOrDefault(dto => dto.Name == "CreateBuilderOptions") is { } createBuilderOptions)
+        {
+            _createBuilderOptionInterfaceName = ReserveName("CreateBuilderOption", takenLowercase: false);
+            foreach (var property in createBuilderOptions.Properties)
+            {
+                var candidate = $"CreateBuilder{ToPascalCase(property.Name)}";
+                _createBuilderOptionValueNames[property.Name] = ReserveName(candidate, takenLowercase: false);
+            }
         }
 
         BuildAcceptingInterfaces(context);
@@ -391,26 +682,6 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
         if (baseTypeIds.Count == 0)
         {
             return;
-        }
-
-        // Options struct names are resolved above but not reserved, exported value roots are emitted
-        // verbatim as package-level vars (see GenerateExportedValues), and enum members are emitted as
-        // package-level consts named after their enum (see GenerateEnumTypes). Reserve all of them here
-        // to keep an accepting interface from colliding with any of them. This is the last step of
-        // BuildNameMaps, so it cannot change a name chosen earlier.
-        _reservedNames.UnionWith(_optionsTypeNames.Values);
-        _reservedNames.UnionWith(BuildExportedValueTree(context.ExportedValues).Children.Keys);
-        foreach (var enumType in context.EnumTypes)
-        {
-            if (enumType.ClrType is null)
-            {
-                continue;
-            }
-
-            foreach (var member in Enum.GetNames(enumType.ClrType))
-            {
-                _reservedNames.Add(GetEnumMemberConstantName(_enumNames[enumType.TypeId], member));
-            }
         }
 
         foreach (var typeId in baseTypeIds.OrderBy(id => _interfaceNames[id], StringComparer.Ordinal))
@@ -597,6 +868,7 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
 
             import (
                 "context"
+                "encoding/json"
                 "fmt"
                 "os"
                 "strings"
@@ -605,6 +877,7 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
 
             // Compile-time references to keep imports used in minimal SDKs.
             var _ = context.Background
+            var _ = json.Number("")
             var _ = fmt.Errorf
             var _ = os.Getenv
             var _ = strings.EqualFold
@@ -684,11 +957,10 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
 
         if (optionalParams.Count > 0)
         {
-            // A flattened options DTO is the argument itself, so its own documentation describes it best.
-            var optionsDescription = TryGetDirectOptionsParameter(optionalParams, out var directOptionsParam)
-                ? directOptionsParam.Documentation?.Summary ?? $"Optional parameters; see {RenderTypeLink(MapDtoType(directOptionsParam.Type!.TypeId))}."
-                : $"Optional parameters; see {RenderTypeLink(GetOptionsTypeName(capability))}.";
-            parameters.Add(new GoDocParameter("options", "options", optionsDescription));
+            parameters.Add(new GoDocParameter(
+                "options",
+                "options",
+                $"Optional parameters; see {RenderTypeLink(GetOptionInterfaceName(capability))}."));
         }
 
         var returnsValue = capability.ReturnType is not null && capability.ReturnType.TypeId != AtsConstants.Void;
@@ -755,7 +1027,7 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
             WriteLine();
             WriteLine("const (");
             var valueDocumentation = enumType.ValueInfos.ToDictionary(value => value.Name, value => value.Documentation, StringComparer.Ordinal);
-            foreach (var member in Enum.GetNames(enumType.ClrType))
+            foreach (var member in enumType.Values)
             {
                 var memberName = GetEnumMemberConstantName(enumName, member);
                 if (valueDocumentation.TryGetValue(member, out var memberDocumentation))
@@ -1001,7 +1273,7 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
         }
 
         var valueType = typeRef.Category == AtsTypeCategory.Primitive
-            ? MapPrimitiveType(typeRef.TypeId)
+            ? MapPrimitiveType(typeRef)
             : MapEnumType(typeRef.TypeId);
         return $"func(value {valueType}) *{valueType} {{ return &value }}({renderedValue})";
     }
@@ -1492,21 +1764,6 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
         return (required, optional);
     }
 
-    /// <summary>
-    /// Determines whether a capability's optional parameters can be flattened so the caller passes
-    /// the DTO directly (<c>options ...*HostedAgentOptions</c>) instead of through a generated
-    /// wrapper struct. Go allows only one trailing variadic, so a coexisting cancellation token
-    /// keeps the wrapper.
-    /// </summary>
-    private static bool TryGetDirectOptionsParameter(
-        IReadOnlyList<AtsParameterInfo> optionalParams,
-        [NotNullWhen(true)] out AtsParameterInfo? directOptionsParam)
-        => AtsOptionsFlattening.TryGetDirectOptionsParameter(
-            optionalParams,
-            IsCancellationToken,
-            cancellationTokenIsSeparateParameter: false,
-            out directOptionsParam);
-
     private string RenderParameterList(
         List<AtsParameterInfo> requiredParams,
         List<AtsParameterInfo> optionalParams,
@@ -1529,17 +1786,8 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
             {
                 sb.Append(", ");
             }
-            sb.Append("options ...*");
-            // Single optional DTO named "options" is threaded directly as its DTO type instead of
-            // through a generated wrapper struct (see TryGetDirectOptionsParameter).
-            if (TryGetDirectOptionsParameter(optionalParams, out var directOptionsParam))
-            {
-                sb.Append(MapDtoType(directOptionsParam.Type!.TypeId));
-            }
-            else
-            {
-                sb.Append(GetOptionsTypeName(capability));
-            }
+            sb.Append("options ...");
+            sb.Append(GetOptionInterfaceName(capability));
         }
         return sb.ToString();
     }
@@ -1890,28 +2138,11 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
 
         if (optionalParams.Count > 0)
         {
-            // Direct-options: merge the DTO variadic under the original parameter name. Only emit the
-            // key when a non-nil option was applied, matching the wrapper path's ToMap(), which omits
-            // the nilable field when it is nil (e.g. a lone WithFoo(nil) sends no "options" key).
-            if (TryGetDirectOptionsParameter(optionalParams, out var directOptionsParam))
-            {
-                var dtoType = MapDtoType(directOptionsParam.Type!.TypeId);
-                WriteLine($"{indent}if len(options) > 0 {{");
-                WriteLine($"{indent}\tmerged := &{dtoType}{{}}");
-                WriteLine($"{indent}\tapplied := false");
-                WriteLine($"{indent}\tfor _, opt := range options {{");
-                WriteLine($"{indent}\t\tif opt != nil {{ merged = deepUpdate(merged, opt); applied = true }}");
-                WriteLine($"{indent}\t}}");
-                WriteLine($"{indent}\tif applied {{ reqArgs[{GoStringLiteral(directOptionsParam.Name)}] = serializeValue(merged) }}");
-                WriteLine($"{indent}}}");
-                return;
-            }
-
             var optionsType = GetOptionsTypeName(capability);
             WriteLine($"{indent}if len(options) > 0 {{");
             WriteLine($"{indent}\tmerged := &{optionsType}{{}}");
             WriteLine($"{indent}\tfor _, opt := range options {{");
-            WriteLine($"{indent}\t\tif opt != nil {{ merged = deepUpdate(merged, opt) }}");
+            WriteLine($"{indent}\t\tif opt != nil {{ opt.apply(merged) }}");
             WriteLine($"{indent}\t}}");
             WriteLine($"{indent}\tfor k, v := range merged.ToMap() {{ reqArgs[k] = v }}");
             // Callbacks: wrap the typed user function in a positional `any`
@@ -2120,12 +2351,6 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
                 continue;
             }
 
-            // Direct-options capabilities thread the DTO directly, so no wrapper struct is emitted.
-            if (TryGetDirectOptionsParameter(optionalParams, out _))
-            {
-                continue;
-            }
-
             var name = GetOptionsTypeName(capability);
             seenForCapability[capability.CapabilityId] = name;
             if (!emitted.Add(name))
@@ -2166,6 +2391,47 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
             WriteLine("}");
             WriteLine();
 
+            var optionInterfaceName = GetOptionInterfaceName(capability);
+            WriteLine($"// {optionInterfaceName} configures {ToPascalCase(capability.MethodName)}.");
+            WriteLine($"type {optionInterfaceName} interface {{");
+            WriteLine($"\tapply(*{name})");
+            WriteLine("}");
+            WriteLine();
+            WriteLine($"func (option *{name}) apply(options *{name}) {{");
+            WriteLine("\tif option != nil { *options = *deepUpdate(options, option) }");
+            WriteLine("}");
+            WriteLine();
+
+            foreach (var p in optionalParams)
+            {
+                var fieldName = ToPascalCase(p.Name);
+                var optionName = GetOptionFunctionName(capability, p);
+                var parameterType = RenderOptionFunctionParameterType(p);
+                WriteLine($"// {optionName} sets {fieldName} for {ToPascalCase(capability.MethodName)}.");
+                if (CanUseDirectOptionType(p))
+                {
+                    WriteLine($"type {optionName} {parameterType}");
+                    WriteLine();
+                    WriteLine($"func (value {optionName}) apply(options *{name}) {{");
+                    WriteLine($"\toptions.{fieldName} = {RenderDirectOptionAssignment(p)}");
+                    WriteLine("}");
+                }
+                else
+                {
+                    var implementationName = ToCamelCase(optionName);
+                    WriteLine($"type {implementationName} struct {{ value {parameterType} }}");
+                    WriteLine();
+                    WriteLine($"func (option {implementationName}) apply(options *{name}) {{");
+                    WriteLine($"\toptions.{fieldName} = {RenderWrappedOptionAssignment(p)}");
+                    WriteLine("}");
+                    WriteLine();
+                    WriteLine($"func {optionName}(value {parameterType}) {optionInterfaceName} {{");
+                    WriteLine($"\treturn {implementationName}{{value: value}}");
+                    WriteLine("}");
+                }
+                WriteLine();
+            }
+
             WriteLine($"func (o *{name}) ToMap() map[string]any {{");
             WriteLine("\tm := map[string]any{}");
             WriteLine("\tif o == nil { return m }");
@@ -2181,7 +2447,11 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
                 var fieldType = MapTypeRefToGo(p.Type, isOptional: true);
                 if (IsNilableGoType(fieldType))
                 {
-                    WriteLine($"\tif o.{fieldName} != nil {{ m[{GoStringLiteral(p.Name)}] = serializeValue(o.{fieldName}) }}");
+                    var value = p.Type?.Category == AtsTypeCategory.Handle
+                        && !IsNilableGoType(MapInputTypeRefToGo(p.Type, isOptional: false))
+                            ? $"*o.{fieldName}"
+                            : $"o.{fieldName}";
+                    WriteLine($"\tif o.{fieldName} != nil {{ m[{GoStringLiteral(p.Name)}] = serializeValue({value}) }}");
                 }
                 else
                 {
@@ -2192,6 +2462,81 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
             WriteLine("}");
             WriteLine();
         }
+    }
+
+    private void GenerateCreateBuilderOptions(AtsContext context)
+    {
+        if (_createBuilderOptionInterfaceName is null
+            || context.DtoTypes.FirstOrDefault(dto => dto.Name == "CreateBuilderOptions") is not { } dto
+            || !_dtoNames.TryGetValue(dto.TypeId, out var optionsType))
+        {
+            return;
+        }
+
+        WriteLine($"// {_createBuilderOptionInterfaceName} configures CreateBuilder.");
+        WriteLine($"type {_createBuilderOptionInterfaceName} interface {{");
+        WriteLine($"\tapply(*{optionsType})");
+        WriteLine("}");
+        WriteLine();
+        WriteLine($"func (option *{optionsType}) apply(options *{optionsType}) {{");
+        WriteLine("\tif option != nil { *options = *deepUpdate(options, option) }");
+        WriteLine("}");
+        WriteLine();
+
+        foreach (var property in dto.Properties)
+        {
+            var fieldName = ToPascalCase(property.Name);
+            var optionName = _createBuilderOptionValueNames[property.Name];
+            var valueType = RenderCreateBuilderOptionValueType(property);
+            var fieldType = MapDtoPropertyTypeToGo(property.Type, property.IsOptional);
+
+            WriteLine($"// {optionName} sets {fieldName} for CreateBuilder.");
+            if (CanUseDirectOptionType(property.Type))
+            {
+                WriteLine($"type {optionName} {valueType}");
+                WriteLine();
+                WriteLine($"func (value {optionName}) apply(options *{optionsType}) {{");
+                var assignment = fieldType == $"*{valueType}"
+                    ? $"(*{valueType})(&value)"
+                    : $"({fieldType})(value)";
+                WriteLine($"\toptions.{fieldName} = {assignment}");
+                WriteLine("}");
+            }
+            else
+            {
+                var implementationName = ToCamelCase(optionName);
+                WriteLine($"type {implementationName} struct {{ value {valueType} }}");
+                WriteLine();
+                WriteLine($"func (option {implementationName}) apply(options *{optionsType}) {{");
+                WriteLine($"\toptions.{fieldName} = option.value");
+                WriteLine("}");
+                WriteLine();
+                WriteLine($"func {optionName}(value {valueType}) {_createBuilderOptionInterfaceName} {{");
+                WriteLine($"\treturn {implementationName}{{value: value}}");
+                WriteLine("}");
+            }
+            WriteLine();
+        }
+    }
+
+    private string RenderCreateBuilderOptionValueType(AtsDtoPropertyInfo property)
+    {
+        var type = MapDtoPropertyTypeToGo(property.Type, isOptional: false);
+        return property.Type.Category is AtsTypeCategory.Primitive or AtsTypeCategory.Enum
+            && type.StartsWith("*", StringComparison.Ordinal)
+                ? type[1..]
+                : type;
+    }
+
+    private static bool CanUseDirectOptionType(AtsTypeRef type)
+    {
+        return type.Category switch
+        {
+            AtsTypeCategory.Primitive => type.TypeId is not (AtsConstants.Any or AtsConstants.ReferenceExpressionTypeId),
+            AtsTypeCategory.Enum or AtsTypeCategory.Callback or AtsTypeCategory.Array => true,
+            AtsTypeCategory.List or AtsTypeCategory.Dict => type.IsReadOnly,
+            _ => false
+        };
     }
 
     /// <summary>
@@ -2217,6 +2562,83 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
         return _optionsTypeNames.TryGetValue(capability.CapabilityId, out var name)
             ? name
             : $"{ToPascalCase(capability.MethodName)}Options";
+    }
+
+    private string GetOptionInterfaceName(AtsCapabilityInfo capability)
+    {
+        return _optionInterfaceNames.TryGetValue(capability.CapabilityId, out var name)
+            ? name
+            : $"{ToPascalCase(capability.MethodName)}Option";
+    }
+
+    private string GetOptionFunctionName(AtsCapabilityInfo capability, AtsParameterInfo parameter)
+    {
+        return _optionValueNames.TryGetValue((capability.CapabilityId, parameter.Name), out var name)
+            ? name
+            : GetOptionValueNameCandidate(GetOptionsTypeName(capability), ToPascalCase(parameter.Name));
+    }
+
+    private static string GetOptionValueNameCandidate(string optionsTypeName, string fieldName)
+    {
+        var prefix = optionsTypeName;
+        if (prefix.EndsWith("Options", StringComparison.Ordinal))
+        {
+            prefix = prefix[..^"Options".Length];
+        }
+        if (prefix.StartsWith("With", StringComparison.Ordinal)
+            && prefix.Length > "With".Length
+            && char.IsUpper(prefix["With".Length]))
+        {
+            prefix = prefix["With".Length..];
+        }
+
+        return prefix + fieldName;
+    }
+
+    private string RenderOptionFunctionParameterType(AtsParameterInfo parameter)
+    {
+        if (parameter.IsCallback)
+        {
+            return RenderCallbackType(parameter);
+        }
+        if (IsCancellationToken(parameter))
+        {
+            return "*CancellationToken";
+        }
+        var type = MapInputTypeRefToGo(parameter.Type, isOptional: false);
+        return parameter.Type is { Category: AtsTypeCategory.Primitive or AtsTypeCategory.Enum }
+            && type.StartsWith("*", StringComparison.Ordinal)
+                ? type[1..]
+                : type;
+    }
+
+    private static bool CanUseDirectOptionType(AtsParameterInfo parameter)
+    {
+        if (IsCancellationToken(parameter) || parameter.Type is not { } type)
+        {
+            return false;
+        }
+
+        return CanUseDirectOptionType(type);
+    }
+
+    private string RenderDirectOptionAssignment(AtsParameterInfo parameter)
+    {
+        var fieldType = RenderOptionsFieldType(parameter);
+        var parameterType = RenderOptionFunctionParameterType(parameter);
+        if (fieldType == $"*{parameterType}")
+        {
+            return $"(*{parameterType})(&value)";
+        }
+
+        return $"({fieldType})(value)";
+    }
+
+    private string RenderWrappedOptionAssignment(AtsParameterInfo parameter)
+    {
+        return RenderOptionsFieldType(parameter) == RenderOptionFunctionParameterType(parameter)
+            ? "option.value"
+            : "&option.value";
     }
 
     private string GetOptionsQualifiedName(AtsCapabilityInfo capability, string simpleName)
@@ -2321,7 +2743,21 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
         {
             var paramName = GetLocalIdentifier(p.Name);
             var allowed = GetUnionAllowedTypes(p.Type!);
-            WriteLine($"{indent}switch {paramName}.(type) {{");
+            var acceptsNumbers = AllowsGoNumericTypes(GetUnionMemberTypes(p.Type!));
+            WriteLine(acceptsNumbers
+                ? $"{indent}switch value := {paramName}.(type) {{"
+                : $"{indent}switch {paramName}.(type) {{");
+            if (acceptsNumbers)
+            {
+                WriteLine($"{indent}case json.Number:");
+                WriteLine($"{indent}\tif !isValidJSONNumber(value) {{");
+                WriteLine($"{indent}\t\terr := fmt.Errorf(\"aspire: {methodName}: parameter %q must be one of [{allowed}], got invalid json.Number %q\", {GoStringLiteral(p.Name)}, value)");
+                foreach (var line in errorActionLines)
+                {
+                    WriteLine($"{indent}\t\t{line}");
+                }
+                WriteLine($"{indent}\t}}");
+            }
             WriteLine($"{indent}case {GetUnionTypeSwitchCases(p.Type!)}:");
             WriteLine($"{indent}default:");
             WriteLine($"{indent}\terr := fmt.Errorf(\"aspire: {methodName}: parameter %q must be one of [{allowed}], got %T\", {GoStringLiteral(p.Name)}, {paramName})");
@@ -2349,7 +2785,9 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
             .Select(p =>
             {
                 var allowed = GetUnionAllowedTypes(p.Type!);
-                var numericNote = AllowsGoNumericTypes(GetUnionMemberTypes(p.Type!)) ? " (float64 accepts any built-in Go numeric type)" : "";
+                var numericNote = AllowsGoNumericTypes(GetUnionMemberTypes(p.Type!))
+                    ? " (float64 accepts any built-in Go numeric type and json.Number)"
+                    : "";
                 return $"Allowed types for parameter {GetLocalIdentifier(p.Name)}: {allowed}{numericNote}.";
             })
             .ToList();
@@ -2534,9 +2972,9 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
         // CreateBuilder factory.
         var createOptionsType = GetCreateBuilderOptionsType(context);
         WriteLine($"// CreateBuilder establishes a connection to the AppHost and returns a new builder.");
-        if (createOptionsType is not null)
+        if (createOptionsType is not null && _createBuilderOptionInterfaceName is not null)
         {
-            WriteLine($"func CreateBuilder(options ...*{createOptionsType}) ({builderInterface}, error) {{");
+            WriteLine($"func CreateBuilder(options ...{_createBuilderOptionInterfaceName}) ({builderInterface}, error) {{");
         }
         else
         {
@@ -2552,12 +2990,12 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
         WriteLine("\tregisterWrappers(c)");
         WriteLine();
         WriteLine("\tresolved := map[string]any{}");
-        if (createOptionsType is not null)
+        if (createOptionsType is not null && _createBuilderOptionInterfaceName is not null)
         {
             WriteLine("\tif len(options) > 0 {");
             WriteLine($"\t\tmerged := &{createOptionsType}{{}}");
             WriteLine("\t\tfor _, opt := range options {");
-            WriteLine("\t\t\tif opt != nil { merged = deepUpdate(merged, opt) }");
+            WriteLine("\t\t\tif opt != nil { opt.apply(merged) }");
             WriteLine("\t\t}");
             WriteLine("\t\tfor k, v := range merged.ToMap() { resolved[k] = v }");
             WriteLine("\t}");
@@ -2634,7 +3072,7 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
         // therefore stay concrete even for inputs.
         var baseType = typeRef.Category switch
         {
-            AtsTypeCategory.Primitive => MapPrimitiveType(typeRef.TypeId),
+            AtsTypeCategory.Primitive => MapPrimitiveType(typeRef),
             AtsTypeCategory.Enum => MapEnumType(typeRef.TypeId),
             AtsTypeCategory.Handle => MapHandleType(typeRef.TypeId, asInput),
             AtsTypeCategory.Dto => "*" + MapDtoType(typeRef.TypeId),
@@ -2725,10 +3163,10 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
     private string MapEnumType(string typeId) =>
         _enumNames.TryGetValue(typeId, out var name) ? name : "string";
 
-    private static string MapPrimitiveType(string typeId) => typeId switch
+    private static string MapPrimitiveType(AtsTypeRef typeRef) => typeRef.TypeId switch
     {
         AtsConstants.String or AtsConstants.Char => "string",
-        AtsConstants.Number => "float64",
+        AtsConstants.Number => MapNumericType(typeRef.ClrType),
         AtsConstants.Boolean => "bool",
         AtsConstants.Void => "",
         AtsConstants.Any => "any",
@@ -2739,6 +3177,22 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
         AtsConstants.CancellationToken => "*CancellationToken",
         _ => "any"
     };
+
+    private static string MapNumericType(Type? clrType)
+    {
+        clrType = Nullable.GetUnderlyingType(clrType ?? typeof(double)) ?? clrType ?? typeof(double);
+
+        return clrType == typeof(int) ? "int"
+            : clrType == typeof(long) ? "int64"
+            : clrType == typeof(float) ? "float32"
+            : clrType == typeof(short) ? "int16"
+            : clrType == typeof(byte) ? "uint8"
+            : clrType == typeof(ushort) ? "uint16"
+            : clrType == typeof(uint) ? "uint"
+            : clrType == typeof(ulong) ? "uint64"
+            : clrType == typeof(sbyte) ? "int8"
+            : "float64";
+    }
 
     /// <summary>
     /// Capabilities the generator emits with hand-written bodies. They must be

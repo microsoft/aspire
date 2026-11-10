@@ -26,7 +26,7 @@
               "id": "DistributedApplicationBuilder.AddTestRedis",
               "kind": "method",
               "name": "AddTestRedis",
-              "declaration": "AddTestRedis(name string, options ...*AddTestRedisOptions) TestRedisResource",
+              "declaration": "AddTestRedis(name string, options ...AddTestRedisOption) TestRedisResource",
               "capabilityId": "Aspire.Hosting.CodeGeneration.Go.Tests/addTestRedis",
               "targetTypeId": "Aspire.Hosting/Aspire.Hosting.IDistributedApplicationBuilder",
               "capabilityKind": "method",
@@ -45,11 +45,11 @@
                 }
               ],
               "options": {
-                "typeName": "AddTestRedisOptions",
+                "typeName": "AddTestRedisOption",
                 "fields": [
                   {
                     "name": "Port",
-                    "type": "*float64",
+                    "type": "*int",
                     "optional": true,
                     "jsonName": "port"
                   }
