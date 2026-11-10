@@ -302,12 +302,12 @@ public class ExecutableLaunchPlanTests
             .AddInMemoryCollection(configurationValues)
             .Build();
 
-        return ExecutableCreator.ResolveLaunchPlanAsync(
+        return ExecutableLaunchPlanner.ResolveAsync(
             resource,
             executionConfiguration,
             configuration,
             new DistributedApplicationOptions(),
-            new ExecutableLaunchPolicy(configuration),
+            new ExecutableLaunchPolicy(configuration).Decide(resource),
             NullLogger.Instance,
             CancellationToken.None);
     }

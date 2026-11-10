@@ -15,6 +15,14 @@ namespace Aspire.Hosting.Dcp;
 /// </summary>
 internal static class DcpModelUtilities
 {
+    internal static void SetInitialResourceState(IResource resource, IAnnotationHolder annotationHolder)
+    {
+        if (DcpResourceLifecycle.GetInitialResourceState(resource) is { } state)
+        {
+            annotationHolder.Annotate(CustomResource.ResourceStateAnnotation, state);
+        }
+    }
+
     /// <summary>
     /// Determines whether DCP object creation should be deferred until an explicit manual start.
     /// </summary>
@@ -209,56 +217,15 @@ internal static class DcpModelUtilities
     private static bool TryAddLocalhostAllocatedEndpoint(ServiceWithModelResource sp, bool allowPending, int? fallbackPort = null)
     {
         var svc = sp.DcpResource;
-        var allocatedPort = svc.AllocatedPort ?? fallbackPort;
-
-        if (sp.EndpointAnnotation.AllocatedEndpoint is not null)
-        {
-            return true;
-        }
-
-        if (!svc.HasCompleteAddress && sp.EndpointAnnotation.IsProxied)
-        {
-            if (allowPending)
-            {
-                return false;
-            }
-
-            // This should never happen; if it does, we have a bug without a workaround for the user.
-            // We should have waited for the service to have a complete address before getting here.
-            throw new InvalidDataException($"Service {svc.Metadata.Name} should have valid address at this point");
-        }
-
-        if (!sp.EndpointAnnotation.IsProxied && allocatedPort is null)
-        {
-            if (allowPending)
-            {
-                return false;
-            }
-
-            throw new InvalidOperationException($"Service '{svc.Metadata.Name}' needs to specify a port for endpoint '{sp.EndpointAnnotation.Name}' since it isn't using a proxy.");
-        }
-
-        if (allocatedPort is null || string.IsNullOrEmpty(svc.AllocatedAddress))
-        {
-            if (allowPending)
-            {
-                return false;
-            }
-
-            throw new InvalidDataException($"Service {svc.Metadata.Name} should have valid address at this point");
-        }
-
-        var (targetHost, bindingMode) = NormalizeTargetHost(sp.EndpointAnnotation.TargetHost);
-
-        sp.EndpointAnnotation.AllocatedEndpoint = new AllocatedEndpoint(
+        // V1 resolves target-port references with DCP templates; endpoint allocation itself is model-side.
+        return DcpEndpointAllocator.TryAllocateLocalhostEndpoint(
             sp.EndpointAnnotation,
-            targetHost,
-            allocatedPort.Value,
-            bindingMode,
+            svc.Metadata.Name,
+            svc.AllocatedAddress,
+            svc.AllocatedPort ?? fallbackPort,
+            svc.HasCompleteAddress,
             targetPortExpression: $$$"""{{- portForServing "{{{svc.Metadata.Name}}}" -}}""",
-            KnownNetworkIdentifiers.LocalhostNetwork);
-
-        return true;
+            allowPending);
     }
 
     private static void AddContainerNetworkAllocatedEndpoint<TDcpResource>(RenderedModelResource<TDcpResource> resource, ServiceWithModelResource sp)

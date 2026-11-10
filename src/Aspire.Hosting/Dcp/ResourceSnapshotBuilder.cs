@@ -28,7 +28,7 @@ internal class ResourceSnapshotBuilder
         var volumes = GetVolumes(container);
 
         var effectiveArgs = container.Status?.EffectiveArgs;
-        var environment = GetEnvironmentVariables(container.Status?.EffectiveEnv ?? container.Spec.Env, container.Spec.Env);
+        var environment = DcpSnapshotUtilities.GetEnvironmentVariables(container.Status?.EffectiveEnv ?? container.Spec.Env, container.Spec.Env);
         var state = container.Status?.State;
 
         if (container.Spec.Start is false && (state == null || state == ContainerState.Pending))
@@ -102,7 +102,7 @@ internal class ResourceSnapshotBuilder
         _ = executable.AppModelResourceName is not null && _resourceState.ApplicationModel.TryGetValue(executable.AppModelResourceName, out appModelResource);
 
         var state = executable.AppModelInitialState is "Hidden" ? "Hidden" : executable.Status?.State;
-        var environment = GetEnvironmentVariables(executable.Status?.EffectiveEnv, executable.Spec.Env);
+        var environment = DcpSnapshotUtilities.GetEnvironmentVariables(executable.Status?.EffectiveEnv, executable.Spec.Env);
         var effectiveArgs = executable.Status?.EffectiveArgs;
         var launchArguments = GetLaunchArgs(executable, effectiveArgs);
 
@@ -162,7 +162,7 @@ internal class ResourceSnapshotBuilder
         var urls = GetUrls(executable, executable.Status?.State);
 
         var effectiveArgs = executable.Status?.EffectiveArgs;
-        var environment = GetEnvironmentVariables(executable.Status?.EffectiveEnv, executable.Spec.Env);
+        var environment = DcpSnapshotUtilities.GetEnvironmentVariables(executable.Status?.EffectiveEnv, executable.Spec.Env);
 
         var relationships = ImmutableArray<RelationshipSnapshot>.Empty;
         if (appModelResource != null)
@@ -503,39 +503,8 @@ internal class ResourceSnapshotBuilder
 
     private static (ImmutableArray<string> Args, ImmutableArray<int>? ArgsAreSensitive, bool IsSensitive)? GetLaunchArgs(CustomResource resource, IReadOnlyList<string>? effectiveArgs)
     {
-        if (!resource.TryGetAnnotationAsObjectList(CustomResource.ResourceAppArgsAnnotation, out List<AppLaunchArgumentAnnotation>? launchArgumentAnnotations))
-        {
-            return null;
-        }
-
-        var launchArgsBuilder = ImmutableArray.CreateBuilder<string>();
-        var argsAreSensitiveBuilder = ImmutableArray.CreateBuilder<int>();
-
-        var anySensitive = false;
-        foreach (var annotation in launchArgumentAnnotations)
-        {
-            if (annotation.IsSensitive)
-            {
-                anySensitive = true;
-            }
-
-            launchArgsBuilder.Add(GetArgumentValue(annotation, effectiveArgs));
-            argsAreSensitiveBuilder.Add(Convert.ToInt32(annotation.IsSensitive));
-        }
-
-        return (launchArgsBuilder.ToImmutable(), argsAreSensitiveBuilder.ToImmutable(), anySensitive);
-
-        static string GetArgumentValue(AppLaunchArgumentAnnotation annotation, IReadOnlyList<string>? effectiveArgs)
-        {
-            if (annotation.EffectiveArgumentIndex is int index &&
-                effectiveArgs is not null &&
-                (uint)index < (uint)effectiveArgs.Count)
-            {
-                return effectiveArgs[index];
-            }
-
-            return annotation.Argument;
-        }
+        resource.TryGetAnnotationAsObjectList(CustomResource.ResourceAppArgsAnnotation, out List<AppLaunchArgumentAnnotation>? launchArgumentAnnotations);
+        return DcpSnapshotUtilities.GetLaunchArguments(launchArgumentAnnotations, effectiveArgs);
     }
 
     private ImmutableArray<UrlSnapshot> GetUrls(CustomResource resource, string? resourceState)
@@ -639,29 +608,5 @@ internal class ResourceSnapshotBuilder
         }
 
         return [];
-    }
-
-    private static ImmutableArray<EnvironmentVariableSnapshot> GetEnvironmentVariables(List<EnvVar>? effectiveSource, List<EnvVar>? specSource)
-    {
-        if (effectiveSource is null or { Count: 0 })
-        {
-            return [];
-        }
-
-        var environment = ImmutableArray.CreateBuilder<EnvironmentVariableSnapshot>(effectiveSource.Count);
-
-        foreach (var env in effectiveSource)
-        {
-            if (env.Name is not null)
-            {
-                var isFromSpec = specSource?.Any(e => string.Equals(e.Name, env.Name, StringComparison.Ordinal)) is true or null;
-
-                environment.Add(new(env.Name, env.Value ?? "", isFromSpec));
-            }
-        }
-
-        environment.Sort((v1, v2) => string.Compare(v1.Name, v2.Name, StringComparison.Ordinal));
-
-        return environment.ToImmutable();
     }
 }

@@ -6877,7 +6877,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
 
         Assert.Empty(GetCreatedExecutablesForResource(kubernetesService, "CoolProgram"));
 
-        var reference = appExecutor.GetResource(DcpExecutor.GetDcpInstance(resource.Resource, instanceIndex: 0).Name);
+        var reference = appExecutor.GetResource(DcpResourceLifecycle.GetDcpInstance(resource.Resource, instanceIndex: 0).Name);
         await appExecutor.StartResourceAsync(reference, CancellationToken.None);
 
         var exe = Assert.Single(GetCreatedExecutablesForResource(kubernetesService, "CoolProgram"));
@@ -6911,7 +6911,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
 
         await appExecutor.RunApplicationAsync();
 
-        var reference = appExecutor.GetResource(DcpExecutor.GetDcpInstance(resource.Resource, instanceIndex: 0).Name);
+        var reference = appExecutor.GetResource(DcpResourceLifecycle.GetDcpInstance(resource.Resource, instanceIndex: 0).Name);
         var exception = await Assert.ThrowsAsync<FailedToApplyEnvironmentException>(
             () => appExecutor.StartResourceAsync(reference, CancellationToken.None));
 
@@ -10567,7 +10567,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         Assert.Equal(0, envCallCount);
         Assert.Empty(GetCreatedExecutablesForResource(kubernetesService, "anExecutable"));
 
-        var reference = appExecutor.GetResource(DcpExecutor.GetDcpInstance(resource.Resource, instanceIndex: 0).Name);
+        var reference = appExecutor.GetResource(DcpResourceLifecycle.GetDcpInstance(resource.Resource, instanceIndex: 0).Name);
         await appExecutor.StartResourceAsync(reference, CancellationToken.None);
 
         Assert.Equal(1, argsCallCount);
@@ -10612,7 +10612,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         Assert.Equal(0, envCallCount);
         Assert.DoesNotContain(kubernetesService.CreatedResources.OfType<Container>(), c => c.AppModelResourceName == "aContainer");
 
-        var reference = appExecutor.GetResource(DcpExecutor.GetDcpInstance(resource.Resource, instanceIndex: 0).Name);
+        var reference = appExecutor.GetResource(DcpResourceLifecycle.GetDcpInstance(resource.Resource, instanceIndex: 0).Name);
         await appExecutor.StartResourceAsync(reference, CancellationToken.None);
 
         Assert.Equal(1, argsCallCount);
@@ -10669,7 +10669,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         Assert.Contains("--persistent", executable.Spec.Args!);
         Assert.Contains(executable.Spec.Env!, e => e is { Name: "PERSISTENT_ENV", Value: "true" });
 
-        var reference = appExecutor.GetResource(DcpExecutor.GetDcpInstance(resource.Resource, instanceIndex: 0).Name);
+        var reference = appExecutor.GetResource(DcpResourceLifecycle.GetDcpInstance(resource.Resource, instanceIndex: 0).Name);
         await appExecutor.StartResourceAsync(reference, CancellationToken.None);
 
         Assert.Equal(1, argsCallCount);
@@ -10722,7 +10722,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         Assert.Contains("--persistent", container.Spec.Args!);
         Assert.Contains(container.Spec.Env!, e => e is { Name: "PERSISTENT_ENV", Value: "true" });
 
-        var reference = appExecutor.GetResource(DcpExecutor.GetDcpInstance(resource.Resource, instanceIndex: 0).Name);
+        var reference = appExecutor.GetResource(DcpResourceLifecycle.GetDcpInstance(resource.Resource, instanceIndex: 0).Name);
         await appExecutor.StartResourceAsync(reference, CancellationToken.None);
 
         Assert.Equal(1, argsCallCount);
@@ -11199,7 +11199,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         Assert.Single(kubernetesService.CreatedResources.OfType<ContainerNetwork>());
         Assert.Empty(kubernetesService.CreatedResources.OfType<ContainerNetworkTunnelProxy>());
 
-        var reference = appExecutor.GetResource(DcpExecutor.GetDcpInstance(executable.Resource, instanceIndex: 0).Name);
+        var reference = appExecutor.GetResource(DcpResourceLifecycle.GetDcpInstance(executable.Resource, instanceIndex: 0).Name);
         await appExecutor.StartResourceAsync(reference, CancellationToken.None).DefaultTimeout();
 
         Assert.Equal(1, callbackCount);
@@ -11252,7 +11252,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, dcpOptions: dcpOptions);
         await appExecutor.RunApplicationAsync().DefaultTimeout();
 
-        var reference = appExecutor.GetResource(DcpExecutor.GetDcpInstance(executable.Resource, instanceIndex: 0).Name);
+        var reference = appExecutor.GetResource(DcpResourceLifecycle.GetDcpInstance(executable.Resource, instanceIndex: 0).Name);
         var startTask = appExecutor.StartResourceAsync(reference, CancellationToken.None);
         await tunnelServiceCreateStarted.Task.DefaultTimeout();
 
@@ -12142,7 +12142,6 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
             configuration,
             distributedApplicationEventing ?? new Hosting.Eventing.DistributedApplicationEventing(),
             Options.Create(dcpOptions),
-            executionContext,
             resourceLoggerService,
             dcpDependencyCheckService,
             nameGenerator,
@@ -12152,7 +12151,8 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
             containerCreator,
             containerNetworkEndpointProvisioner,
             new ProfilingTelemetry(configuration),
-            persistentPortAllocator);
+            new DcpEndpointAllocator(Options.Create(dcpOptions), persistentPortAllocator, NullLogger<DcpEndpointAllocator>.Instance),
+            new DcpResourceLifecycle(configuration, resourceLoggerService, dcpEvts, executionContext));
     }
 
     private static async Task<string?> GetPlainExecutableSslCertDirAsync(Action<IResourceBuilder<TestExecutableResource>>? configure = null)
