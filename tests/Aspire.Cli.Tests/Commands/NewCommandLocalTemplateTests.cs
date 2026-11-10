@@ -8,6 +8,7 @@ using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using Aspire.Cli.Bundles;
 using Aspire.Cli.Commands;
+using Aspire.Cli.Diagnostics;
 using Aspire.Cli.Git;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Packaging;
@@ -19,6 +20,7 @@ using Aspire.Cli.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.TemplateEngine.Abstractions;
 using RootCommand = Aspire.Cli.Commands.RootCommand;
@@ -600,7 +602,7 @@ public partial class NewCommandLocalTemplateTests(ITestOutputHelper outputHelper
         var github = workspace.CreateDirectory(Path.Combine(templateDirectory, ".github"));
         await File.WriteAllTextAsync(Path.Combine(github.FullName, "content.txt"), "Keep GitHub content");
         var originalSource = ReadOutput(templatePath);
-        using var host = new TemplateEngineHost([]);
+        using var host = new TemplateEngineHost([], NullLoggerFactory.Instance);
         var fileSystem = ((ITemplateEngineHost)host).FileSystem;
         // Engine source defaults can also hide .git; verify the host's absolute-path filtering directly.
         Assert.False(fileSystem.FileExists(Path.Combine(templatePath, ".git")));
@@ -1202,19 +1204,13 @@ public partial class NewCommandLocalTemplateTests(ITestOutputHelper outputHelper
     [Theory]
     [InlineData("missing")]
     [InlineData("empty")]
-    [InlineData("malformed")]
     [InlineData("file")]
     public async Task LocalTemplate_InvalidDirectoryReportsError(string kind)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        if (kind is "empty" or "malformed")
+        if (kind == "empty")
         {
             workspace.CreateDirectory("template");
-        }
-        if (kind == "malformed")
-        {
-            workspace.CreateDirectory("template/.template.config");
-            await File.WriteAllTextAsync(Path.Combine(workspace.Path, "template", ".template.config", "template.json"), "{ not json");
         }
         if (kind == "file")
         {
@@ -1229,6 +1225,87 @@ public partial class NewCommandLocalTemplateTests(ITestOutputHelper outputHelper
         Assert.NotEqual(CliExitCodes.Success, exitCode);
         Assert.NotEmpty(interaction.DisplayedErrors);
         Assert.False(Directory.Exists(Path.Combine(workspace.Path, "out")));
+        if (kind == "empty")
+        {
+            Assert.Equal(string.Format(CultureInfo.CurrentCulture, NewCommandStrings.NoLocalTemplatesFound,
+                Path.Combine(workspace.Path, "template")), Assert.Single(interaction.DisplayedErrors));
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task LocalTemplate_MalformedConfigurationReportsParserDiagnostic(bool appendedGarbage)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        await CreateTemplateAsync(workspace, "template");
+        var configPath = Path.Combine(workspace.Path, "template", ".template.config", "template.json");
+        if (appendedGarbage)
+        {
+            await File.AppendAllTextAsync(configPath, "\n{{{ not valid json");
+        }
+        else
+        {
+            await File.WriteAllTextAsync(configPath, "{ not json");
+        }
+        var expectedLine = (await File.ReadAllTextAsync(configPath)).Count(character => character == '\n');
+        var interaction = new TestInteractionService();
+        string error;
+        string logPath;
+        using (var provider = CreateServices(workspace, interaction, interactive: false).BuildServiceProvider())
+        {
+            var fileLogger = provider.GetRequiredService<FileLoggerProvider>();
+            logPath = fileLogger.LogFilePath;
+            provider.GetRequiredService<ILoggerFactory>().AddProvider(fileLogger);
+
+            var exitCode = await provider.GetRequiredService<RootCommand>()
+                .Parse("new --template-path template --name Demo --output out --suppress-agent-init")
+                .InvokeAsync().DefaultTimeout();
+
+            Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+            Assert.False(Directory.Exists(Path.Combine(workspace.Path, "out")));
+            error = Assert.Single(interaction.DisplayedErrors);
+            Assert.Contains(configPath, error);
+            Assert.Contains($"LineNumber: {expectedLine} | BytePositionInLine: {(appendedGarbage ? 0 : 2)}.", error);
+            Assert.StartsWith(string.Format(CultureInfo.CurrentCulture, NewCommandStrings.LocalTemplateLoadFailed, ""), error);
+        }
+
+        var diagnostic = error[string.Format(CultureInfo.CurrentCulture, NewCommandStrings.LocalTemplateLoadFailed, "").Length..];
+        Assert.Contains(diagnostic, await File.ReadAllTextAsync(logPath));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task LocalTemplate_EngineSupportedJsonSyntaxStillRenders(bool invalidSibling)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var config = workspace.CreateDirectory("template/valid/.template.config");
+        await File.WriteAllTextAsync(Path.Combine(config.FullName, "template.json"), """
+            {
+              // Template engine JSON supports comments and trailing commas.
+              "identity": "Aspire.Local.JsonSyntax",
+              "name": "Supported JSON syntax",
+              "shortName": "json-syntax",
+              "sourceName": "TemplateApp",
+            }
+            """);
+        await File.WriteAllTextAsync(Path.Combine(workspace.Path, "template", "valid", "name.txt"), "TemplateApp");
+        if (invalidSibling)
+        {
+            var invalidConfig = workspace.CreateDirectory("template/invalid/.template.config");
+            await File.WriteAllTextAsync(Path.Combine(invalidConfig.FullName, "template.json"), "{ not json");
+        }
+        var interaction = new TestInteractionService();
+        using var provider = CreateServices(workspace, interaction, interactive: false).BuildServiceProvider();
+
+        var exitCode = await provider.GetRequiredService<RootCommand>()
+            .Parse("new --template-path template --name Demo --output out --suppress-agent-init")
+            .InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Empty(interaction.DisplayedErrors);
+        await Verify(ReadOutput(workspace)).UseParameters(invalidSibling);
     }
 
     [Theory]
