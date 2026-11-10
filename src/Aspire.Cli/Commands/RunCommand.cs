@@ -103,6 +103,8 @@ internal sealed class RunCommand : BaseCommand
 
     protected override TimeSpan GracefulShutdownBudget => s_gracefulShutdownBudget;
 
+    protected override bool RejectsUnknownOptionsBeforeDoubleDash => true;
+
     internal override void PrepareForExecution(ParseResult parseResult)
     {
         // The spawned child runs without --detach, so its environment marker preserves detach-only
@@ -1173,21 +1175,17 @@ internal sealed class RunCommand : BaseCommand
         var noBuild = parseResult.GetValue(s_noBuildOption);
         var waitForDebugger = parseResult.GetValue(RootCommand.WaitForDebuggerOption);
         var globalArgs = RootCommand.GetChildProcessArgs(parseResult);
-        var additionalArgs = parseResult.UnmatchedTokens.Where(t => t != "--detach").ToList();
+        var additionalArgs = parseResult.UnmatchedTokens.Where(t => t != "--detach");
         var captureProfile = parseResult.GetValue(RootCommand.CaptureProfileOption);
         var stopAfterLaunchDelay = captureProfile
             ? TimeSpan.FromSeconds(parseResult.GetValue(RootCommand.CaptureProfileDelayOption))
             : (TimeSpan?)null;
 
-        if (noBuild)
-        {
-            additionalArgs.Add("--no-build");
-        }
-
         return _appHostLauncher.LaunchDetachedAsync(
             passedAppHostProjectFile,
             format,
             isolated,
+            noBuild,
             isExtensionHost,
             waitForDebugger,
             timeoutSeconds,

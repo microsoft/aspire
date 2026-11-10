@@ -85,11 +85,12 @@ internal sealed class AppHostLauncher(
     /// <param name="passedAppHostProjectFile">The project file passed via --project, or null to auto-discover.</param>
     /// <param name="format">The output format (JSON or table).</param>
     /// <param name="isolated">Whether to run in isolated mode.</param>
+    /// <param name="noBuild">Whether to skip building the AppHost.</param>
     /// <param name="isExtensionHost">Whether running inside VS Code extension.</param>
     /// <param name="waitForDebugger">Whether the AppHost is waiting for a debugger to attach.</param>
     /// <param name="timeoutSeconds">The maximum number of seconds to wait for AppHost startup.</param>
     /// <param name="globalArgs">Global CLI args to forward to child process.</param>
-    /// <param name="additionalArgs">Additional unmatched args to forward.</param>
+    /// <param name="additionalArgs">Additional unmatched args to forward to the AppHost.</param>
     /// <param name="stopAfterLaunchDelay">Optional delay after launch before stopping the AppHost.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A <see cref="CommandResult"/> indicating success or failure.</returns>
@@ -97,6 +98,7 @@ internal sealed class AppHostLauncher(
         FileInfo? passedAppHostProjectFile,
         OutputFormat? format,
         bool isolated,
+        bool noBuild,
         bool isExtensionHost,
         bool waitForDebugger,
         int timeoutSeconds,
@@ -140,7 +142,7 @@ internal sealed class AppHostLauncher(
         // Build child process arguments
         var childLogFile = GenerateChildLogFilePath(executionContext.LogsDirectory.FullName, timeProvider);
         executionContext.AppHostCliLogFilePath = childLogFile;
-        var (executablePath, childArgs) = BuildChildProcessArgs(effectiveAppHostFile, childLogFile, isolated, globalArgs, additionalArgs);
+        var (executablePath, childArgs) = BuildChildProcessArgs(effectiveAppHostFile, childLogFile, isolated, noBuild, globalArgs, additionalArgs);
 
         // Compute the expected socket prefix for backchannel detection. The AppHost keys its
         // auxiliary backchannel socket file on the symlink-resolved AppHost path, so the primary
@@ -292,6 +294,7 @@ internal sealed class AppHostLauncher(
         FileInfo effectiveAppHostFile,
         string childLogFile,
         bool isolated,
+        bool noBuild,
         IEnumerable<string> globalArgs,
         IEnumerable<string> additionalArgs)
     {
@@ -312,9 +315,18 @@ internal sealed class AppHostLauncher(
             args.Add(s_isolatedOption.Name);
         }
 
-        foreach (var token in additionalArgs)
+        if (noBuild)
         {
-            args.Add(token);
+            args.Add("--no-build");
+        }
+
+        // The child "aspire run" rejects unknown options before "--", so AppHost args must
+        // follow an explicit "--" to reach the AppHost unchanged (e.g. "-- --custom-arg value").
+        var additionalArgsList = additionalArgs.ToList();
+        if (additionalArgsList.Count > 0)
+        {
+            args.Add("--");
+            args.AddRange(additionalArgsList);
         }
 
         var dotnetPath = Environment.ProcessPath ?? "dotnet";

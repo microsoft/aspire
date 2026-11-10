@@ -187,6 +187,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             harness.AppHostFile,
             format: null,
             isolated: false,
+            noBuild: false,
             isExtensionHost: false,
             waitForDebugger: false,
             timeoutSeconds: 120,
@@ -224,6 +225,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             harness.AppHostFile,
             format: null,
             isolated: false,
+            noBuild: false,
             isExtensionHost: false,
             waitForDebugger: false,
             timeoutSeconds: 120,
@@ -261,6 +263,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             harness.AppHostFile,
             format: null,
             isolated: false,
+            noBuild: false,
             isExtensionHost: false,
             waitForDebugger: false,
             timeoutSeconds: 120,
@@ -304,6 +307,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             harness.AppHostFile,
             format: null,
             isolated: false,
+            noBuild: false,
             isExtensionHost: false,
             waitForDebugger: false,
             timeoutSeconds: 120,
@@ -406,6 +410,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             harness.AppHostFile,
             format: null,
             isolated: false,
+            noBuild: false,
             isExtensionHost: false,
             waitForDebugger: false,
             timeoutSeconds: 120,
@@ -418,6 +423,43 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
         Assert.Empty(harness.InteractionService.DisplayedErrors);
         Assert.False(harness.ProcessFactory.StartedProcess?.HasExited);
         Assert.Equal(1, probeCount);
+    }
+
+    [Fact]
+    public async Task LaunchDetachedAsync_PassesAppHostArgsAfterDoubleDashAndCliOptionsBeforeIt()
+    {
+        using var harness = AppHostLauncherHarness.Create(outputHelper);
+        harness.AddConnection(new TestAppHostAuxiliaryBackchannel
+        {
+            SupportsV3 = false,
+            SupportsV2 = true,
+            DashboardUrlsState = new DashboardUrlsState { BaseUrlWithLoginToken = "https://localhost:18888/login?t=test" },
+            GetResourceSnapshotsHandler = _ => Task.FromResult<List<ResourceSnapshot>>([])
+        });
+        harness.ProcessFactory.Mode = TestDetachedProcessFactory.ChildProcessMode.StayAlive;
+
+        var result = await harness.Launcher.LaunchDetachedAsync(
+            harness.AppHostFile,
+            format: null,
+            isolated: true,
+            noBuild: true,
+            isExtensionHost: false,
+            waitForDebugger: false,
+            timeoutSeconds: 120,
+            globalArgs: [],
+            additionalArgs: ["--custom-arg", "value"],
+            stopAfterLaunchDelay: null,
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, result.ExitCode);
+
+        // The child "aspire run" rejects unknown options before "--", so CLI options must come
+        // first and AppHost args must follow an explicit "--".
+        var args = harness.ProcessFactory.StartedArguments;
+        Assert.NotNull(args);
+        var separatorIndex = args.ToList().IndexOf("--");
+        Assert.Equal(["--isolated", "--no-build"], args.Take(separatorIndex).TakeLast(2));
+        Assert.Equal(["--", "--custom-arg", "value"], args.Skip(separatorIndex));
     }
 
     [Fact]
@@ -442,6 +484,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             harness.AppHostFile,
             format: null,
             isolated: false,
+            noBuild: false,
             isExtensionHost: false,
             waitForDebugger: false,
             timeoutSeconds: 120,
@@ -499,6 +542,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
                 harness.AppHostFile,
                 format: null,
                 isolated: false,
+                noBuild: false,
                 isExtensionHost: false,
                 waitForDebugger: false,
                 timeoutSeconds: 5,
@@ -554,6 +598,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             harness.AppHostFile,
             format: null,
             isolated: false,
+            noBuild: false,
             isExtensionHost: false,
             waitForDebugger: false,
             timeoutSeconds: 120,
@@ -583,6 +628,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             harness.AppHostFile,
             format: null,
             isolated: false,
+            noBuild: false,
             isExtensionHost: false,
             waitForDebugger: false,
             timeoutSeconds: 120,
@@ -606,6 +652,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             harness.AppHostFile,
             format: null,
             isolated: false,
+            noBuild: false,
             isExtensionHost: false,
             waitForDebugger: false,
             timeoutSeconds: 120,
@@ -647,6 +694,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             harness.AppHostFile,
             format: null,
             isolated: false,
+            noBuild: false,
             isExtensionHost: false,
             waitForDebugger: false,
             timeoutSeconds: 1,
@@ -1089,6 +1137,8 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
 
         public int CreatedExecutionDisposeCount => CreatedExecution?.DisposeCount ?? 0;
 
+        public IReadOnlyList<string>? StartedArguments { get; private set; }
+
         public Func<string, IReadOnlyList<string>, string, Func<string, bool>?, IReadOnlyDictionary<string, string>?, CancellationToken, Task<IProcessExecution>>? StartHandler { get; set; }
 
         public void StopStartedProcess()
@@ -1127,6 +1177,8 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             IReadOnlyDictionary<string, string>? additionalEnvironmentVariables,
             CancellationToken cancellationToken)
         {
+            StartedArguments = arguments;
+
             if (StartHandler is not null)
             {
                 return StartHandler(fileName, arguments, workingDirectory, options.EnvironmentVariableFilter, additionalEnvironmentVariables, cancellationToken);

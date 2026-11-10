@@ -137,8 +137,7 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse("start -- --custom-arg value");
 
         Assert.Empty(result.Errors);
-        Assert.Contains("--custom-arg", result.UnmatchedTokens);
-        Assert.Contains("value", result.UnmatchedTokens);
+        Assert.Equal(["--custom-arg", "value"], result.UnmatchedTokens);
     }
 
     [Fact]

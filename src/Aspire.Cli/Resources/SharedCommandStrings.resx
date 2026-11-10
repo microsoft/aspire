@@ -214,4 +214,8 @@
     <value>Unrecognized option '{0}'. Did you mean '{1}'?</value>
     <comment>{0} is the unrecognized option, {1} is the suggested correct option.</comment>
   </data>
+  <data name="UnrecognizedOptionFormat" xml:space="preserve">
+    <value>Unrecognized option '{0}'. To pass it to the AppHost, put it after '--', for example: aspire {1} -- {0}</value>
+    <comment>{0} is the unrecognized option, {1} is the command name. Do not translate '--' or 'aspire'.</comment>
+  </data>
 </root>

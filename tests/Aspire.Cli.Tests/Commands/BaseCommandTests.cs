@@ -605,8 +605,65 @@ public class BaseCommandTests(ITestOutputHelper outputHelper)
         }
     }
 
-    [Fact]
-    public async Task BaseCommand_UnrelatedUnmatchedToken_DoesNotReturnMiscasedError()
+    [Theory]
+    [InlineData("run --isol", "--isol", "--isolated")]
+    [InlineData("run --isol=true", "--isol", "--isolated")]
+    [InlineData("start --isol", "--isol", "--isolated")]
+    [InlineData("run --no-bui", "--no-bui", "--no-build")]
+    public async Task BaseCommand_UnknownOptionPrefixBeforeDoubleDash_ReturnsErrorWithSuggestion(string args, string badOption, string correctOption)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var testInteractionService = new TestInteractionService();
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => testInteractionService;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse(args);
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+        var expectedError = string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.UnrecognizedOptionDidYouMeanFormat, badOption, correctOption);
+        Assert.Single(testInteractionService.DisplayedErrors, expectedError);
+    }
+
+    [Theory]
+    [InlineData("run --totally-bogus-flag", "run")]
+    [InlineData("run --custom-arg value", "run")]
+    [InlineData("run somearg --custom-arg", "run")]
+    [InlineData("run --totally-bogus-flag -- --other-arg", "run")]
+    [InlineData("run -x", "run")]
+    [InlineData("start --totally-bogus-flag", "start")]
+    public async Task BaseCommand_UnknownOptionBeforeDoubleDash_ReturnsError(string args, string commandName)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var testInteractionService = new TestInteractionService();
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => testInteractionService;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse(args);
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+        var badOption = args.Split(' ').First(a => a.StartsWith('-'));
+        var expectedError = string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.UnrecognizedOptionFormat, badOption, commandName);
+        Assert.Single(testInteractionService.DisplayedErrors, expectedError);
+    }
+
+    [Theory]
+    [InlineData("run -- --totally-bogus-flag value", new[] { "--totally-bogus-flag", "value" })]
+    [InlineData("run --isolated -- --isol", new[] { "--isol" })]
+    [InlineData("run somearg other", new[] { "somearg", "other" })]
+    [InlineData("run somearg -- --custom-arg", new[] { "somearg", "--custom-arg" })]
+    public async Task BaseCommand_AppHostArgs_ArePassedThroughWithoutError(string args, string[] expectedUnmatchedTokens)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var testInteractionService = new TestInteractionService();
@@ -623,10 +680,12 @@ public class BaseCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
-        // --custom-arg is a completely unknown option, not a miscased version of a known option
-        var result = command.Parse("run --custom-arg value");
+        var result = command.Parse(args);
 
-        var exitCode = await result.InvokeAsync().DefaultTimeout();
+        Assert.Empty(result.Errors);
+        Assert.Equal(expectedUnmatchedTokens, result.UnmatchedTokens);
+
+        await result.InvokeAsync().DefaultTimeout();
 
         Assert.Empty(testInteractionService.DisplayedErrors);
     }

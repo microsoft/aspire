@@ -17,6 +17,8 @@ internal sealed class StartCommand : BaseCommand
 
     protected override bool UpdateNotificationsEnabled => true;
 
+    protected override bool RejectsUnknownOptionsBeforeDoubleDash => true;
+
     private readonly AppHostLauncher _appHostLauncher;
     private readonly IConfiguration _configuration;
 
@@ -121,11 +123,6 @@ internal sealed class StartCommand : BaseCommand
             return CommandResult.Success();
         }
 
-        if (noBuild)
-        {
-            additionalArgs.Add("--no-build");
-        }
-
         if (!AppHostStartupTimeout.TryGetTimeoutSeconds(_configuration, InteractionService, out var timeoutSeconds))
         {
             return CommandResult.Failure(CliExitCodes.InvalidCommand);
@@ -135,6 +132,7 @@ internal sealed class StartCommand : BaseCommand
             passedAppHostProjectFile,
             format,
             isolated,
+            noBuild,
             isExtensionHost,
             waitForDebugger,
             timeoutSeconds,

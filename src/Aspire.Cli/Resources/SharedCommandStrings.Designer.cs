@@ -233,5 +233,11 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("UnrecognizedOptionDidYouMeanFormat", resourceCulture);
             }
         }
+
+        internal static string UnrecognizedOptionFormat {
+            get {
+                return ResourceManager.GetString("UnrecognizedOptionFormat", resourceCulture);
+            }
+        }
     }
 }

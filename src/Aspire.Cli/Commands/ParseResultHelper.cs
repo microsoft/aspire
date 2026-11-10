@@ -16,8 +16,10 @@ internal static class ParseResultHelper
     /// Checks unmatched tokens for options that differ only by case from a known option,
     /// and returns an error message if found. Returns null when no near-miss is detected.
     /// Only inspects tokens that appear before the "--" double-dash separator.
+    /// When <paramref name="rejectUnknownOptions"/> is true, any other option-like token before "--"
+    /// is also reported, so typos such as "--isol" are not silently forwarded to the AppHost.
     /// </summary>
-    internal static string? CheckForMiscasedOptions(Command command, ParseResult parseResult)
+    internal static string? CheckForUnrecognizedOptions(Command command, ParseResult parseResult, bool rejectUnknownOptions)
     {
         // Only relevant when TreatUnmatchedTokensAsErrors is false; when true,
         // System.CommandLine already rejects unrecognized options during parsing.
@@ -53,7 +55,8 @@ internal static class ParseResultHelper
 
         foreach (var token in unmatchedTokens)
         {
-            if (!token.StartsWith('-'))
+            // A lone "-" is a common "stdin" placeholder, not an option.
+            if (!token.StartsWith('-') || token.Length == 1)
             {
                 continue;
             }
@@ -74,6 +77,21 @@ internal static class ParseResultHelper
                 !string.Equals(optionName, correctName, StringComparison.Ordinal))
             {
                 return string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.UnrecognizedOptionDidYouMeanFormat, optionName, correctName);
+            }
+
+            if (rejectUnknownOptions)
+            {
+                // Suggest an option only when the token is an unambiguous prefix of it,
+                // e.g. "--isol" -> "--isolated". "--no" could mean several options, so no suggestion.
+                var prefixMatches = knownOptions.Values
+                    .Where(name => name.StartsWith("--", StringComparison.Ordinal) && name.StartsWith(optionName, StringComparison.OrdinalIgnoreCase))
+                    .Distinct(StringComparer.Ordinal)
+                    .Take(2)
+                    .ToList();
+
+                return prefixMatches.Count == 1
+                    ? string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.UnrecognizedOptionDidYouMeanFormat, optionName, prefixMatches[0])
+                    : string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.UnrecognizedOptionFormat, token, command.Name);
             }
         }
 
