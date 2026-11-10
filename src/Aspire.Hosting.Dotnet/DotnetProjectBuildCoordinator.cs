@@ -37,52 +37,90 @@ internal static partial class DotnetProjectBuildCoordinator
 
     public static CoordinatorState? Prepare(
         IDistributedApplicationBuilder builder,
-        DotnetProjectMetadata projectMetadata)
+        DotnetProjectMetadata projectMetadata,
+        string externalBuildCapability)
     {
-        if (!builder.ExecutionContext.IsRunMode || !ShouldCoordinateBuild(builder))
+        if (!builder.ExecutionContext.IsRunMode)
+        {
+            return null;
+        }
+
+        var coordinateBuild = ShouldCoordinateBuild(builder, externalBuildCapability);
+        if (!coordinateBuild && externalBuildCapability == KnownLaunchConfigurationTypes.ProjectWithExternalBuild)
         {
             return null;
         }
 
         var state = s_states.GetValue(builder, static builder => new CoordinatorState(builder));
-        if (IsSupportedPath(projectMetadata.ProjectPath))
+        if (coordinateBuild)
         {
-            projectMetadata.SuppressBuild = true;
-            if (IsProjectFile(projectMetadata.ProjectPath))
-            {
-                projectMetadata.SetProjectPath(state.AddProject(projectMetadata.ProjectPath, projectMetadata.BuildConfiguration));
-            }
-            else
-            {
-                // The SDK folds case, but not Unicode normalization, in file-app cache keys:
-                // https://github.com/dotnet/dotnet/blob/820230c386/src/sdk/src/Cli/Microsoft.DotNet.FileBasedPrograms/Sha256Hasher.cs#L27-L28
-                // Keep the direct build, launch, and rebuilder on the same path spelling.
-                projectMetadata.SetProjectPath(DotnetProjectBuildResource.ResolveBuildPathCasing(projectMetadata.ProjectPath));
-                state.EnsureBuildResource(projectMetadata.BuildConfiguration);
-            }
+            PrepareBuild(state, projectMetadata);
         }
 
         return state;
     }
 
+    private static void PrepareBuild(CoordinatorState state, DotnetProjectMetadata projectMetadata)
+    {
+        if (!IsSupportedPath(projectMetadata.ProjectPath))
+        {
+            return;
+        }
+
+        projectMetadata.SuppressBuild = true;
+        if (IsProjectFile(projectMetadata.ProjectPath))
+        {
+            projectMetadata.SetProjectPath(state.AddProject(projectMetadata.ProjectPath, projectMetadata.BuildConfiguration));
+        }
+        else
+        {
+            // The SDK folds case, but not Unicode normalization, in file-app cache keys:
+            // https://github.com/dotnet/dotnet/blob/820230c386/src/sdk/src/Cli/Microsoft.DotNet.FileBasedPrograms/Sha256Hasher.cs#L27-L28
+            // Keep the direct build, launch, and rebuilder on the same path spelling.
+            projectMetadata.SetProjectPath(DotnetProjectBuildResource.ResolveBuildPathCasing(projectMetadata.ProjectPath));
+            state.EnsureBuildResource(projectMetadata.BuildConfiguration);
+        }
+    }
+
     public static void Configure(
         IResourceBuilder<DotnetProjectResource> resourceBuilder,
-        CoordinatorState? state)
+        CoordinatorState? state,
+        string externalBuildCapability)
     {
         if (state is null)
         {
             return;
         }
 
-        state.AddResource(resourceBuilder.Resource);
-        resourceBuilder.WithAnnotation(new DotnetProgramBuildCompletionAnnotation(
-            (services, cancellationToken) =>
-                state.WaitForBuildCompletionAsync(resourceBuilder.Resource, services, cancellationToken)));
+        var metadata = resourceBuilder.Resource.GetProjectMetadata();
+        if (metadata is DotnetProjectMetadata managedMetadata &&
+            !metadata.SuppressBuild &&
+            !resourceBuilder.Resource.SupportsDebugging(resourceBuilder.ApplicationBuilder.Configuration, out _))
+        {
+            // A connected IDE can support ordinary projects without supporting this framework.
+            // Such a resource uses process execution, not an IDE-built fallback.
+            PrepareBuild(state, managedMetadata);
+        }
+
+        state.AddResource(resourceBuilder.Resource, externalBuildCapability);
+        if (resourceBuilder.Resource.GetProjectMetadata().SuppressBuild)
+        {
+            AddBuildCompletionAnnotation(resourceBuilder.Resource, state);
+        }
 
         // Preserve the eagerly visible dependency used by model tests and tooling. BeforeStart replaces
         // the build plan after all resource environment callbacks and SDK roots are known, then adds the
         // final build barrier as an additional dependency.
         state.AddEagerBuildDependencies();
+    }
+
+    private static DotnetProgramBuildCompletionAnnotation AddBuildCompletionAnnotation(DotnetProjectResource resource, CoordinatorState state)
+    {
+        var annotation = new DotnetProgramBuildCompletionAnnotation(
+            (services, cancellationToken) =>
+                state.WaitForBuildCompletionAsync(resource, services, cancellationToken));
+        resource.Annotations.Add(annotation);
+        return annotation;
     }
 
     private static DotnetProjectBuildResource AddBuildResource(
@@ -386,7 +424,7 @@ internal static partial class DotnetProjectBuildCoordinator
     private static bool IsSupportedPath(string path) =>
         IsProjectFile(path) || path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase);
 
-    private static bool ShouldCoordinateBuild(IDistributedApplicationBuilder builder)
+    private static bool ShouldCoordinateBuild(IDistributedApplicationBuilder builder, string externalBuildCapability)
     {
         if (string.IsNullOrEmpty(builder.Configuration[DebugSessionPortConfigurationKey]))
         {
@@ -403,18 +441,19 @@ internal static partial class DotnetProjectBuildCoordinator
         }
 
         // The IDE honors coordinated-build values and build suppression.
-        if (supportedLaunchConfigurations.Contains(KnownLaunchConfigurationTypes.ProjectWithExternalBuild))
+        if (supportedLaunchConfigurations.Contains(externalBuildCapability))
         {
             return true;
         }
 
         // An IDE that advertises an explicit capability list without "project" (for example VS Code without the
-        // C# extension) cannot launch project resources, so DCP runs them as processes exactly as it does outside
+        // C# extension) cannot launch ordinary project resources, so DCP runs them as processes exactly as it does outside
         // an IDE. Without the coordinated build each process runs its own implicit `dotnet run` restore and build,
         // and resources that share a project build it concurrently: one build can fail on files the other holds
         // open in obj/ (for example rjsmrazor.dswa.cache.json), and that resource exits right after starting.
-        // Only an IDE that advertises "project" without the external-build capability owns the build itself.
-        return !supportedLaunchConfigurations.Contains(KnownLaunchConfigurationTypes.Project);
+        // Specialized integrations determine IDE build ownership from their own launch configuration.
+        return externalBuildCapability == KnownLaunchConfigurationTypes.ProjectWithExternalBuild &&
+            !supportedLaunchConfigurations.Contains(KnownLaunchConfigurationTypes.Project);
     }
 
     internal sealed class CoordinatorState : IDisposable
@@ -460,10 +499,10 @@ internal static partial class DotnetProjectBuildCoordinator
             PrimaryBuildResource ??= CreateBuildResource(configuration);
         }
 
-        public void AddResource(DotnetProjectResource resource)
+        public void AddResource(DotnetProjectResource resource, string externalBuildCapability)
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
-            _registrations.Add(new ResourceRegistration(resource));
+            _registrations.Add(new ResourceRegistration(resource, externalBuildCapability));
         }
 
         public async Task WaitForBuildCompletionAsync(
@@ -521,6 +560,7 @@ internal static partial class DotnetProjectBuildCoordinator
                 var resource = registration.Resource;
                 if (_eagerDependencyRollbacks.ContainsKey(resource) ||
                     resource.Annotations.OfType<DotnetProjectMetadata>().SingleOrDefault() is not { } metadata ||
+                    !metadata.SuppressBuild ||
                     !IsSupportedPath(metadata.ProjectPath))
                 {
                     continue;
@@ -614,86 +654,132 @@ internal static partial class DotnetProjectBuildCoordinator
                 return;
             }
 
-            var activeResources = model.Resources.ToHashSet(ReferenceEqualityComparer.Instance);
-            var activeRegistrations = _registrations
-                .Where(registration => activeResources.Contains(registration.Resource))
-                .ToArray();
-            var inactiveResources = _registrations
-                .Where(registration => !activeResources.Contains(registration.Resource))
-                .Select(registration => registration.Resource)
-                .ToArray();
-
-            var resourceEntries = activeRegistrations
-                .Select(registration => new ProjectEntry(
-                    registration,
-                    registration.Resource.Annotations.OfType<DotnetProjectMetadata>().Single()))
-                .ToArray();
-            var unsupportedBuildEnvironmentEntry = resourceEntries
-                .FirstOrDefault(entry =>
-                    !IsProjectFile(entry.Metadata.ProjectPath) &&
-                    GetBuildEnvironmentCallbacks(entry).Any());
-            if (unsupportedBuildEnvironmentEntry is not null)
-            {
-                DotnetProjectHostingExtensions.ValidateBuildEnvironmentSupport(
-                    unsupportedBuildEnvironmentEntry.Registration.Resource,
-                    unsupportedBuildEnvironmentEntry.Metadata);
-            }
-
-            var buildEntries = resourceEntries
-                .Where(entry => IsSupportedPath(entry.Metadata.ProjectPath))
-                .ToArray();
-            var missingBuildEntries = buildEntries
-                .Where(entry => !File.Exists(entry.Metadata.ProjectPath))
-                .ToArray();
-            buildEntries = buildEntries
-                .Where(entry => File.Exists(entry.Metadata.ProjectPath))
-                .ToArray();
-
-            if (buildEntries.Length == 0)
-            {
-                foreach (var missingEntry in missingBuildEntries)
-                {
-                    // Missing paths intentionally remain on the ordinary resource-start path so the
-                    // resulting dotnet error names only that resource instead of failing the shared build.
-                    ConfigureMissingPathFallback(missingEntry);
-                }
-
-                RemoveEagerBuildDependencies(_registrations.Select(registration => registration.Resource));
-                if (PrimaryBuildResource is { } unusedBuildResource)
-                {
-                    _builder.Resources.Remove(unusedBuildResource);
-                    _ownedBuildResources.Remove(unusedBuildResource);
-                    unusedBuildResource.Dispose();
-                    PrimaryBuildResource = null;
-                }
-
-                _materialized = true;
-                return;
-            }
-
-            var restoreProjectsIndividually = _builder.Configuration.GetValue<bool>(RestoreProjectsIndividuallyConfigurationKey);
-            var applicationLifetime = services.GetRequiredService<IHostApplicationLifetime>();
-            var primaryBuildResource = PrimaryBuildResource!;
-            var originalPrimaryProjectPaths = primaryBuildResource.ProjectPaths;
-            var originalPrimaryWorkingDirectory = primaryBuildResource.WorkingDirectory;
-            var originalPrimaryBuildConfiguration = primaryBuildResource.BuildConfiguration;
-            var originalPrimaryRestoreProjectsIndividually = primaryBuildResource.RestoreProjectsIndividually;
             var rollbackActions = new Stack<Action>();
+            var originalPrimaryBuildResource = PrimaryBuildResource;
+            var originalOwnedBuildResources = _ownedBuildResources.ToHashSet(ReferenceEqualityComparer.Instance);
+            if (originalPrimaryBuildResource is { } originalPrimary)
+            {
+                var originalProjectPaths = originalPrimary.ProjectPaths;
+                var originalWorkingDirectory = originalPrimary.WorkingDirectory;
+                var originalBuildConfiguration = originalPrimary.BuildConfiguration;
+                var originalRestoreProjectsIndividually = originalPrimary.RestoreProjectsIndividually;
+                rollbackActions.Push(() =>
+                    originalPrimary.ConfigureTraversalBuild(
+                        originalProjectPaths,
+                        originalWorkingDirectory,
+                        originalBuildConfiguration,
+                        originalRestoreProjectsIndividually));
+            }
+
+            // Late process promotion can create the primary build and change its inputs before plan
+            // validation. Include those mutations in the same transaction as materialization.
+            rollbackActions.Push(() =>
+            {
+                PrimaryBuildResource = originalPrimaryBuildResource;
+                foreach (var buildResource in _ownedBuildResources
+                    .Where(resource => !originalOwnedBuildResources.Contains(resource))
+                    .ToArray())
+                {
+                    _builder.Resources.Remove(buildResource);
+                    _ownedBuildResources.Remove(buildResource);
+                    buildResource.Dispose();
+                }
+            });
 
             try
             {
+                var activeResources = model.Resources.ToHashSet(ReferenceEqualityComparer.Instance);
+                var activeRegistrations = _registrations
+                    .Where(registration => activeResources.Contains(registration.Resource))
+                    .ToArray();
+                var inactiveResources = _registrations
+                    .Where(registration => !activeResources.Contains(registration.Resource))
+                    .Select(registration => registration.Resource)
+                    .ToArray();
+
+                // Fluent lifetime or process-execution configuration can disable IDE launching after
+                // the factory selected an IDE-built fallback. Recheck before freezing build ownership.
+                foreach (var registration in activeRegistrations)
+                {
+                    var resource = registration.Resource;
+                    if (resource.GetProjectMetadata() is DotnetProjectMetadata { SuppressBuild: false } metadata &&
+                        !resource.SupportsDebugging(_builder.Configuration, out _))
+                    {
+                        var originalProjectPath = metadata.ProjectPath;
+                        rollbackActions.Push(() =>
+                        {
+                            metadata.SuppressBuild = false;
+                            metadata.SetProjectPath(originalProjectPath);
+                        });
+                        PrepareBuild(this, metadata);
+                        if (metadata.SuppressBuild)
+                        {
+                            var annotation = AddBuildCompletionAnnotation(resource, this);
+                            rollbackActions.Push(() => resource.Annotations.Remove(annotation));
+                        }
+                    }
+                }
+
+                var resourceEntries = activeRegistrations
+                    // Specialized IDE-built fallbacks consume the final initial-build barrier, but are
+                    // never traversal inputs and must keep the IDE's build suppression flag false.
+                    .Where(registration => registration.Resource.GetProjectMetadata().SuppressBuild)
+                    .Select(registration => new ProjectEntry(
+                        registration,
+                        registration.Resource.Annotations.OfType<DotnetProjectMetadata>().Single()))
+                    .ToArray();
+                var unsupportedBuildEnvironmentEntry = resourceEntries
+                    .FirstOrDefault(entry =>
+                        !IsProjectFile(entry.Metadata.ProjectPath) &&
+                        GetBuildEnvironmentCallbacks(entry).Any());
+                if (unsupportedBuildEnvironmentEntry is not null)
+                {
+                    DotnetProjectHostingExtensions.ValidateBuildEnvironmentSupport(
+                        unsupportedBuildEnvironmentEntry.Registration.Resource,
+                        unsupportedBuildEnvironmentEntry.Metadata);
+                }
+
+                var buildEntries = resourceEntries
+                    .Where(entry => IsSupportedPath(entry.Metadata.ProjectPath))
+                    .ToArray();
+                var missingBuildEntries = buildEntries
+                    .Where(entry => !File.Exists(entry.Metadata.ProjectPath))
+                    .ToArray();
+                buildEntries = buildEntries
+                    .Where(entry => File.Exists(entry.Metadata.ProjectPath))
+                    .ToArray();
+
+                if (buildEntries.Length == 0)
+                {
+                    foreach (var missingEntry in missingBuildEntries)
+                    {
+                        // Missing paths intentionally remain on the ordinary resource-start path so the
+                        // resulting dotnet error names only that resource instead of failing the shared build.
+                        ConfigureMissingPathFallback(missingEntry);
+                    }
+
+                    RemoveEagerBuildDependencies(_registrations.Select(registration => registration.Resource));
+                    if (PrimaryBuildResource is { } unusedBuildResource)
+                    {
+                        _builder.Resources.Remove(unusedBuildResource);
+                        _ownedBuildResources.Remove(unusedBuildResource);
+                        unusedBuildResource.Dispose();
+                        PrimaryBuildResource = null;
+                    }
+
+                    _materialized = true;
+                    return;
+                }
+
                 foreach (var entry in buildEntries)
                 {
                     ReconcileFileAppPath(model, entry, rollbackActions);
                 }
 
                 var buildSteps = CreateBuildSteps(buildEntries);
-                rollbackActions.Push(() =>
-                    primaryBuildResource.ConfigureTraversalBuild(
-                        originalPrimaryProjectPaths,
-                        originalPrimaryWorkingDirectory,
-                        originalPrimaryBuildConfiguration,
-                        originalPrimaryRestoreProjectsIndividually));
+                var restoreProjectsIndividually = _builder.Configuration.GetValue<bool>(RestoreProjectsIndividuallyConfigurationKey);
+                var applicationLifetime = services.GetRequiredService<IHostApplicationLifetime>();
+                var primaryBuildResource = PrimaryBuildResource!;
 
                 var buildResources = new List<DotnetProjectBuildResource>(buildSteps.Count);
                 for (var index = 0; index < buildSteps.Count; index++)
@@ -702,16 +788,6 @@ internal static partial class DotnetProjectBuildCoordinator
                     var buildResource = index == 0
                         ? primaryBuildResource
                         : CreateBuildResource(step.Configuration, index + 1);
-
-                    if (index > 0)
-                    {
-                        rollbackActions.Push(() =>
-                        {
-                            _builder.Resources.Remove(buildResource);
-                            _ownedBuildResources.Remove(buildResource);
-                            buildResource.Dispose();
-                        });
-                    }
 
                     if (step.IsTraversal)
                     {
@@ -961,12 +1037,13 @@ internal static partial class DotnetProjectBuildCoordinator
             foreach (var annotation in entry.Registration.Resource.Annotations
                 .OfType<SupportsDebuggingAnnotation>()
                 .Where(annotation =>
+                    annotation.LaunchConfigurationType == entry.Registration.ExternalBuildCapability ||
                     annotation.LaunchConfigurationType == KnownLaunchConfigurationTypes.ProjectWithExternalBuild)
                 .ToArray())
             {
                 // The external-build debug annotation and launch-tool ownership were selected before file existence
                 // was checked. Removing that capability makes the launch-tool callback emit the complete `dotnet run`
-                // fallback instead of producing a legacy project configuration under the external-build capability.
+                // fallback instead of retaining an IDE contract that promises completed external-build output.
                 entry.Registration.Resource.Annotations.Remove(annotation);
             }
         }
@@ -1573,9 +1650,11 @@ internal static partial class DotnetProjectBuildCoordinator
             ProjectEntry Entry,
             DotnetProjectBuildEnvironmentCallbackAnnotation[] Callbacks);
 
-        private sealed class ResourceRegistration(DotnetProjectResource resource)
+        private sealed class ResourceRegistration(DotnetProjectResource resource, string externalBuildCapability)
         {
             public DotnetProjectResource Resource { get; } = resource;
+
+            public string ExternalBuildCapability { get; } = externalBuildCapability;
 
             public DotnetProjectBuildResource? FinalBuildResource { get; set; }
         }

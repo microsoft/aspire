@@ -37,6 +37,7 @@ export interface AspireResourceState {
     resourceType: string;
     state: string | null;
     projectPath: string | null;
+    launchConfigurationType?: string | null;
     dashboardUrl: string | null;
     urls: readonly AspireResourceUrlState[] | null;
     commands: Record<string, AspireResourceCommandState> | null;

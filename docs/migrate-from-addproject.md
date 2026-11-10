@@ -7,8 +7,9 @@ obsolete. Use `AddDotnetProject` / `addDotnetProject` from `Aspire.Hosting.Dotne
 
 This is a resource-model migration, not just a method rename. Check the real project path,
 launch-profile semantics, returned types, generic definitions and calls, and build ownership
-separately. [Azure Functions and MAUI](#retained-legacy-scenarios) have specialized launch
-behavior and are not converted by this migration.
+separately. [Azure Functions](#azure-functions-projects) uses the specialized
+`AddDotnetAzureFunction` replacement, not ordinary `AddDotnetProject`.
+[MAUI](#retained-legacy-scenarios) retains its specialized legacy launch behavior.
 
 ## Packages and imports
 
@@ -367,6 +368,7 @@ predicate.
 | `ProxyBlazorService`, `ProxyBlazorTelemetry`, `WithBlazorDebuggerBrowser` | Existing type-preserving generic overloads support V2. Blazor's independent `ASPIREBLAZOR001` opt-in remains. |
 | Radius `WithContainerImage` | Use the existing shared-identity overload; keep Radius's experimental opt-in and prebuilt-image requirements. Files requested with `PublishWithContainerFiles` must already be in that externally built final image. |
 | Kubernetes customization/volumes, DevTunnel references, `WithBrowserLogs` | Existing capability-based APIs apply; do not add redundant project-only wrappers or change their return types. |
+| Azure Functions | Use `AddDotnetAzureFunction(name, projectPath)` / `addDotnetAzureFunction`, not ordinary `AddDotnetProject`. See [Azure Functions projects](#azure-functions-projects). |
 
 The Blazor gateway intentionally runs its development tool as a process; its V2 resource
 type is not evidence of watcher support. A retained `AddBlazorWasmProject<Projects.Client>`
@@ -428,6 +430,70 @@ EF waits for known coordinated build completion, not application startup. It sti
 different/stale output or fail for missing output despite API graduation. Preserve the
 warning and review [coordinated builds and custom build inputs](../src/Aspire.Hosting.EntityFrameworkCore/README.md#coordinated-builds-and-custom-build-inputs).
 
+## Azure Functions projects
+
+Replace `AddAzureFunctionsProject<Projects.T>` or its path overload with the specialized
+`AddDotnetAzureFunction` factory. For example, using the AzureFunctionsEndToEnd project layout:
+
+```csharp
+var functions = builder.AddDotnetAzureFunction(
+    "funcapp",
+    "../AzureFunctionsEndToEnd.Functions/AzureFunctionsEndToEnd.Functions.csproj")
+    .WithBuildEnvironment("BUILD_FLAVOR", "local")
+    .WithHostStorage(storage)
+    .WithReference(queue);
+```
+
+The returned builder is `IResourceBuilder<AzureFunctionsResource>`, whose resource derives
+from `DotnetProjectResource`, not `ProjectResource`. Functions-specific fluent methods
+preserve that builder type, including `WithBuildEnvironment` followed by `WithHostStorage`
+or binding-aware `WithReference`. Do not replace the factory with ordinary `AddDotnetProject`:
+Core Tools must remain between the SDK-selected invocation and the isolated worker.
+
+Keep the `Aspire.Hosting.Azure.Functions` integration. Remove generated project-metadata
+references only when they have no other consumer, applying the build/test-selection guidance
+below. Both old factories, `AzureFunctionsProjectResource : ProjectResource`, and their fluent
+APIs retain legacy behavior and polyglot capability IDs, with non-error obsolete warnings.
+Retain them when an existing CLR contract requires the legacy type.
+
+C# isolated-worker projects are the validated workload. The factory retains normal V2
+SDK-style project-file and directory resolution; that does not establish F#/VB Functions
+runtime parity. File-based `.cs` Functions apps are rejected. The separate experimental
+Node/directory API and its behavior are unchanged.
+
+Aspire owns the initial build for CLI runs and IDEs advertising
+`azure-functions-with-external-build.v1`. The supported IDE path receives the build
+configuration, resolved build-only environment, SDK-selection working directory, and
+authoritative build suppression. Build-only environment variables do not become runtime
+settings.
+
+Older IDEs supporting `azure-functions`, and capability-less Visual Studio sessions with
+the Functions project loaded, use **IDE-built fallback**. Aspire leaves Functions out of
+its initial build inputs, waits for the entire other coordinated initial-build batch if
+one exists, and warns once per affected resource at application startup. The IDE may use
+different build settings. An unrelated failed build in that batch also blocks Functions
+startup; arbitrary later IDE or manual builds are not coordinated by this guarantee.
+Upgrade the IDE integration or run outside the IDE for Aspire-owned builds. Ordinary
+`project-with-external-build.v1` support alone does not enable the Functions contract.
+Explicit unrelated IDE capabilities retain a full process fallback.
+
+For local V2 Functions replicas, `WithReplicas(2)` / `withReplicas(2)` treats the selected
+launch profile's `--port` as the public proxy port. Each Functions host receives its own
+allocated listener port, with the remaining profile arguments and environment preserved.
+A final replica count of one retains the direct, fixed-port behavior. Legacy Functions
+resources and the restriction on persistent replicas are unchanged.
+
+SDK container publishing, host-storage references and role assignments, binding settings,
+and Azure Container Apps `functionapp` metadata are preserved. .NET Functions target port
+`8080`; Node Functions retain their own port and image behavior. Functions cannot be
+published as Container App Jobs. This migration does not implement Project V2 watch.
+
+`WithEndpointsInEnvironment` filters automatic publish-time `ASPNETCORE_URLS` configuration.
+C# predicates compose, while the generated `withEndpointsInEnvironment` takes endpoint names
+(an empty list excludes all endpoints). Filtering does not remove endpoints, change ingress or
+Core Tools run arguments, or override explicit environment values. When opting out, configure a
+listening address appropriate for the deployed Functions host. Legacy Functions publishing is unchanged.
+
 ## Build ownership and metadata
 
 Generated legacy metadata normally has `SuppressBuild=true` because the AppHost's project
@@ -468,18 +534,17 @@ public sealed class ServiceGroupAnnotation(string group) : IResourceAnnotation
 }
 ```
 
-There is no public V2 subclass-registration/factory seam. Directly constructing a
-`DotnetProjectResource` subclass and calling `AddResource` does not register it with the
-internal coordinated-build planner. Its type or marker implementation does not supply
-metadata, completed defaults, or SDK publishing. Retain a legacy custom subtype when its
-CLR identity is part of an existing integration contract.
+Directly constructing a `DotnetProjectResource` subclass and calling `AddResource` does
+not register it with the internal coordinated-build planner. Its type or marker
+implementation does not supply metadata, completed defaults, or SDK publishing.
+Integration authors can use the experimental typed `AddDotnetProject` resource-factory
+overload and debug-neutral `WithDotnetBaseDefaults`; specialized integrations explicitly register
+their debug support. `AddDotnetAzureFunction` uses those helpers without
+exposing experimental authoring APIs to normal Functions callers. Retain a legacy custom
+subtype when its CLR identity is part of an existing integration contract.
 
 ## Retained legacy scenarios
 
-* **Azure Functions:** retain `AddAzureFunctionsProject` and
-  `AzureFunctionsProjectResource`; migration is tracked separately in
-  [#21345](https://github.com/microsoft/aspire/issues/21345). Ordinary V2 launch is not a
-  replacement for Functions host/debug behavior.
 * **MAUI:** retain `AddMauiProject` and its Windows, MacCatalyst, Android device/emulator,
   and iOS device/simulator resources. Their specialized build, launch, debug, and OTLP
   behavior migrates separately. Companion backends may migrate independently only when
