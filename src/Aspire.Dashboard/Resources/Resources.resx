@@ -728,9 +728,9 @@
     <value>Dashboard tags</value>
     <comment>Name of the property listing the tags a resource declares in the AppHost.</comment>
   </data>
-  <data name="ResourceTraitDashboardPosition" xml:space="preserve">
-    <value>Dashboard position</value>
-    <comment>Name of the property holding the default position a resource declares in the AppHost.</comment>
+  <data name="ResourceDisplayOrder" xml:space="preserve">
+    <value>Display order</value>
+    <comment>Name of the property holding the default display order a resource declares in the AppHost.</comment>
   </data>
   <data name="ResourceTagsCreate" xml:space="preserve">
     <value>Create tag "{0}"</value>
@@ -773,5 +773,14 @@
   </data>
   <data name="MissingParametersSetValues" xml:space="preserve">
     <value>Set parameter values</value>
+  </data>
+  <data name="HomeActivityHistoricalTitle" xml:space="preserve">
+    <value>Activity</value>
+  </data>
+  <data name="HomeActivityHistoricalCaption" xml:space="preserve">
+    <value>Incoming requests · last 15 min of this run</value>
+  </data>
+  <data name="HomeActivityNoRecordedRequests" xml:space="preserve">
+    <value>No requests were recorded in this run.</value>
   </data>
 </root>
