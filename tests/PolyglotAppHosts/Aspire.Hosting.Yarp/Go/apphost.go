@@ -17,7 +17,9 @@ func main() {
 
 	backend := builder.AddContainer("backend", "nginx")
 	backend.WithHttpEndpoint(&aspire.WithHttpEndpointOptions{Name: aspire.StringPtr("http"), TargetPort: aspire.IntPtr(80)})
-	backendService := builder.AddProject("backend-service", "./src/BackendService", &aspire.AddProjectOptions{LaunchProfileOrOptions: "http"})
+	backendService := builder.AddDotnetProject("backend-service", "./src/BackendService", &aspire.AddDotnetProjectOptions{
+		Options: &aspire.DotnetProjectOptions{LaunchProfileName: aspire.StringPtr("http")},
+	})
 	externalBackend := builder.AddExternalService("external-backend", "https://example.com")
 
 	proxy := builder.AddYarp("proxy").
@@ -205,7 +207,6 @@ func main() {
 		_ = config.AddRoute("/multi/{**catchall}", multiDestinationCluster)
 	})
 
-	proxy.PublishAsConnectionString()
 	if err = proxy.Err(); err != nil {
 		log.Fatal(aspire.FormatError(err))
 	}

@@ -15,7 +15,7 @@ func main() {
 	registry := builder.AddAzureContainerRegistry("containerregistry").
 		WithPurgeTask("0 1 * * *", &aspire.WithPurgeTaskOptions{
 			Filter:   aspire.StringPtr("samples:*"),
-			Ago:      aspire.IntPtr(7),
+			Ago:      aspire.Float64Ptr(7),
 			Keep:     aspire.IntPtr(5),
 			TaskName: aspire.StringPtr("purge-samples"),
 		})
@@ -40,7 +40,7 @@ func main() {
 	registryFromEnvironment := environment.GetAzureContainerRegistry()
 	registryFromEnvironment.WithPurgeTask("0 2 * * *", &aspire.WithPurgeTaskOptions{
 		Filter: aspire.StringPtr("environment:*"),
-		Ago:    aspire.IntPtr(14),
+		Ago:    aspire.Float64Ptr(14),
 		Keep:   aspire.IntPtr(2),
 	})
 	if err = registryFromEnvironment.Err(); err != nil {
