@@ -52,7 +52,7 @@ public class GoStarterTemplateTests
         Assert.DoesNotContain("ConnectionStrings__cache", api, StringComparison.Ordinal);
         Assert.DoesNotContain("parseAspireRedisConnString", api, StringComparison.Ordinal);
         Assert.Contains("redisotel.InstrumentTracing(cache)", api, StringComparison.Ordinal);
-        Assert.Contains("redisotel.InstrumentMetrics(cache)", api, StringComparison.Ordinal);
+        Assert.DoesNotContain("redisotel.InstrumentMetrics", api, StringComparison.Ordinal);
         Assert.Contains("host := os.Getenv(\"ASPIRE_GO_BIND_ADDRESS\")", api, StringComparison.Ordinal);
         Assert.Contains("host = \"localhost\"", api, StringComparison.Ordinal);
     }
@@ -105,6 +105,9 @@ public class GoStarterTemplateTests
         Assert.Contains("log.SetOutput(io.MultiWriter(os.Stderr", telemetry, StringComparison.Ordinal);
         Assert.Contains("res := resource.Default()", telemetry, StringComparison.Ordinal);
         Assert.DoesNotContain("semconv.ServiceName", telemetry, StringComparison.Ordinal);
+        Assert.Contains("sdkmetric.WithInterval(5*time.Second)", telemetry, StringComparison.Ordinal);
+        Assert.DoesNotContain("otlpHeaders", telemetry, StringComparison.Ordinal);
+        Assert.DoesNotContain("instrumentation/runtime", goMod, StringComparison.Ordinal);
     }
 
     private static string GetGoStarterAppHostPath()

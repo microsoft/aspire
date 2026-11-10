@@ -111,10 +111,6 @@ func setupRedis() error {
 		_ = cache.Close()
 		return fmt.Errorf("instrument Redis tracing: %w", err)
 	}
-	if err := redisotel.InstrumentMetrics(cache); err != nil {
-		_ = cache.Close()
-		return fmt.Errorf("instrument Redis metrics: %w", err)
-	}
 	return nil
 }
 
