@@ -1111,6 +1111,47 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
+    [InlineData("13.6.4")]
+    [InlineData("13.6.4-preview.1+abc")]
+    public async Task ResolveAspireCliBundlePathsUsesAppHostPackageVersionForPinnedDnxBundle(string appHostPackageVersion)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var dnxDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "dnx"));
+        await CreateFakeDnxAsync(dnxDirectory.FullName, appHostPackageVersion);
+        var aspireHome = Path.Combine(workspace.Path, "aspire-home");
+        var setupArgumentsPath = Path.Combine(workspace.Path, "setup-arguments.txt");
+        var project = await CreateRunHookProjectAsync(workspace.Path, aspireUseCliBundle: true,
+            $$"""
+              <PropertyGroup>
+                <AspireCliInvocationMode>DnxPinned</AspireCliInvocationMode>
+                <_AspireAppHostPackageVersion>{{appHostPackageVersion}}</_AspireAppHostPackageVersion>
+              </PropertyGroup>
+            """,
+            includeBundlePaths: false);
+        var environment = new Dictionary<string, string>
+        {
+            ["ASPIRE_HOME"] = aspireHome,
+            ["ASPIRE_TEST_CAPTURE_PATH"] = setupArgumentsPath,
+            [GetPathEnvironmentVariableName()] = CreatePathWithoutAspire(dnxDirectory.FullName)
+        };
+
+        var properties = await GetResolveAspireCliBundlePathPropertiesAsync(
+            project,
+            environment,
+            ["-warnaserror"],
+            restore: false);
+        var pinnedLayoutDirectory = GetPinnedDnxLayoutDirectory(aspireHome, appHostPackageVersion);
+        var pinnedBundle = GetFakeCliBundlePaths(pinnedLayoutDirectory);
+        var setupArguments = await File.ReadAllLinesAsync(setupArgumentsPath);
+
+        Assert.Equal(["--yes", $"aspire.cli@{appHostPackageVersion}", "--", "setup", "--install-path", pinnedLayoutDirectory], setupArguments);
+        Assert.Equal(pinnedBundle.DcpDirectory, Path.TrimEndingDirectorySeparator(properties["DcpDir"]));
+        Assert.Equal(pinnedBundle.DashboardDirectory, Path.TrimEndingDirectorySeparator(properties["AspireDashboardDir"]));
+        Assert.Equal(pinnedBundle.DashboardPath, properties["AspireDashboardPath"]);
+        AssertCliBundleExists(pinnedLayoutDirectory, JsonSerializer.Serialize(properties));
+    }
+
+    [Theory]
     [InlineData("13.5.0", "13.5.0")]
     [InlineData("13.5.0-preview.1.25301.1+abc", "13.5.0-preview.1.25301.1+abc")]
     [InlineData("../evil", ".._evil")]
@@ -1810,14 +1851,16 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
     private static async Task<Dictionary<string, string>> GetResolveAspireCliBundlePathPropertiesAsync(
         RunHookProject project,
         IDictionary<string, string> environment,
-        string[]? extraArguments = null)
+        string[]? extraArguments = null,
+        bool restore = true)
     {
         return await GetTargetPropertiesAsync(
             project,
             "ResolveAspireCliBundlePaths",
             "DcpDir,AspireDashboardDir,AspireDashboardPath,_AspireResolvedCliInvocationMode,_AspireResolvedCliPath",
             extraArguments,
-            environment: environment);
+            environment: environment,
+            restore: restore);
     }
 
     private static async Task<Dictionary<string, string>> GetTargetPropertiesAsync(
@@ -1825,17 +1868,23 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
         string target,
         string propertyNames,
         string[]? extraArguments,
-        IDictionary<string, string>? environment)
+        IDictionary<string, string>? environment,
+        bool restore = true)
     {
         var arguments = new List<string>
         {
             "msbuild",
-            "-nologo",
-            "-restore",
-            $"-t:{target}",
-            $"-getProperty:{propertyNames}",
-            project.ProjectFile
+            "-nologo"
         };
+
+        if (restore)
+        {
+            arguments.Add("-restore");
+        }
+
+        arguments.Add($"-t:{target}");
+        arguments.Add($"-getProperty:{propertyNames}");
+        arguments.Add(project.ProjectFile);
 
         if (extraArguments is not null)
         {
@@ -1970,7 +2019,7 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
         return aspirePath;
     }
 
-    private static async Task<string> CreateFakeDnxAsync(string fakeCliDirectory)
+    private static async Task<string> CreateFakeDnxAsync(string fakeCliDirectory, string cliVersion = AspireCliVersion)
     {
         var dnxPath = Path.Combine(fakeCliDirectory, OperatingSystem.IsWindows() ? "dnx.cmd" : "dnx");
         if (OperatingSystem.IsWindows())
@@ -2007,6 +2056,7 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
                 if [ "$1" = "--yes" ] && { [ "$2" = "aspire.cli@13.5.0" ] || [ "$2" = "aspire.cli" ]; } && [ "$3" = "--" ] && [ "$4" = "setup" ] && [ "$5" = "--install-path" ]; then
                     # Like the real CLI, setup validates the extracted layout through layout discovery,
                     # which only probes ASPIRE_LAYOUT_PATH and the Aspire home for a DNX-hosted CLI.
+                    printf '%s\n' "$@" > "$ASPIRE_TEST_CAPTURE_PATH"
                     if [ "$6" != "${ASPIRE_LAYOUT_PATH:-}" ] && [ "$6" != "${ASPIRE_HOME:-$HOME/.aspire}" ]; then
                         echo "Bundle was extracted to $6 but layout validation failed." >&2
                         exit 1
@@ -2019,6 +2069,11 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
                 fi
                 printf '%s\n' "$@" > "$ASPIRE_TEST_CAPTURE_PATH"
                 """).ReplaceLineEndings("\n"));
+        if (!string.Equals(cliVersion, AspireCliVersion, StringComparison.Ordinal))
+        {
+            var script = await File.ReadAllTextAsync(dnxPath);
+            await File.WriteAllTextAsync(dnxPath, script.Replace(AspireCliVersion, cliVersion, StringComparison.Ordinal));
+        }
 
         if (!OperatingSystem.IsWindows())
         {
@@ -2415,8 +2470,8 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
         Assert.Equal(project.ProjectDirectory, properties["RunWorkingDirectory"]);
     }
 
-    private static string GetPinnedDnxLayoutDirectory(string aspireHome)
-        => Path.Combine(aspireHome, "dnx", "aspire.cli", AspireCliVersion);
+    private static string GetPinnedDnxLayoutDirectory(string aspireHome, string version = AspireCliVersion)
+        => Path.Combine(aspireHome, "dnx", "aspire.cli", version);
 
     private static void AssertCliBundleExists(string aspireHome, string output)
     {

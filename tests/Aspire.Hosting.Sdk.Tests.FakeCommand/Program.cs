@@ -36,6 +36,12 @@ var setupInstallPath = forwardedArgs switch
 };
 if (setupInstallPath is not null)
 {
+    var setupCapturePath = Environment.GetEnvironmentVariable("ASPIRE_TEST_CAPTURE_PATH");
+    if (setupCapturePath is not null)
+    {
+        File.WriteAllLines(setupCapturePath, forwardedArgs);
+    }
+
     var setupExitCodePath = Path.Combine(AppContext.BaseDirectory, "setup-exit-code");
     if (File.Exists(setupExitCodePath))
     {
