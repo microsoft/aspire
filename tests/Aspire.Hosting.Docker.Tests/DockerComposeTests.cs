@@ -409,6 +409,7 @@ public class DockerComposeTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData(null, 51324, "Docker", false)]
     [InlineData(23456, 23456, "Docker", true)]
+    [InlineData(18889, 18889, "Docker", false)]
     [InlineData(null, 51324, "Podman", false)]
     [InlineData(null, 51324, "Podman", true)]
     public async Task DeployWithDashboard_PrintsLoginInstructions(int? hostPort, int publishedPort, string runtimeName, bool withEnvFile)
@@ -424,9 +425,9 @@ public class DockerComposeTests(ITestOutputHelper outputHelper)
                     Service = "env-dashboard",
                     Publishers =
                     [
-                        new() { TargetPort = 18888, PublishedPort = publishedPort },
                         new() { TargetPort = 18889, PublishedPort = 51325 },
-                        new() { TargetPort = 18890, PublishedPort = 51326 }
+                        new() { TargetPort = 18890, PublishedPort = 51326 },
+                        new() { TargetPort = 18888, PublishedPort = publishedPort }
                     ]
                 },
                 new() { Service = "api", Publishers = [new() { TargetPort = 80, PublishedPort = 23457 }] }

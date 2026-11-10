@@ -415,8 +415,10 @@ public class DockerComposeServiceResource : Resource, IResourceWithParent<Docker
 
                 // Try to find a matching external endpoint to get the scheme
                 var targetPortStr = publisher.TargetPort?.ToString(CultureInfo.InvariantCulture);
+                // A host port can equal another endpoint's container port, so match the container port first.
                 var endpointMapping = externalEndpointMappings
-                    .FirstOrDefault(m => m.InternalPort == targetPortStr || m.ExposedPort == publisher.TargetPort);
+                    .FirstOrDefault(m => m.InternalPort == targetPortStr,
+                        externalEndpointMappings.FirstOrDefault(m => m.ExposedPort == publisher.TargetPort));
 
                 if (endpointName is not null && !StringComparers.EndpointAnnotationName.Equals(endpointMapping.EndpointName, endpointName))
                 {
