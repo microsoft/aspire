@@ -323,6 +323,25 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
         Assert.Equal(nonObjectRoot, await File.ReadAllTextAsync(settingsPath).DefaultTimeout());
     }
 
+    [Fact]
+    public async Task ConfigureAsync_SkipsDetectedClientsThatWereNotSelected()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var home = workspace.CreateDirectory("home");
+        var configurator = CreateConfigurator(workspace, home);
+        var claude = configurator.Clients.Single(client => client.Id == ClaudeCodeAgentClient.ClientId);
+
+        var result = await configurator.ConfigureAsync(
+            [claude],
+            AgentEnvironment.CopilotCli | AgentEnvironment.ClaudeCode,
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal([ClaudeCodeAgentClient.ClientId], GetClientIds(result.ConfiguredClients));
+        Assert.Empty(result.Skipped);
+        Assert.True(File.Exists(Path.Combine(home.FullName, ".claude", "settings.json")));
+        Assert.False(Directory.Exists(Path.Combine(home.FullName, ".copilot")));
+    }
+
     [Theory]
     [InlineData((int)AgentEnvironment.None)]
     [InlineData((int)AgentEnvironment.OpenCode)]
@@ -395,7 +414,7 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
     private static string[] GetClientIds(IEnumerable<IAgentClient> clients)
         => clients.Select(client => client.Id).ToArray();
 
-    private static TelemetryHookConfigurator CreateConfigurator(
+    private static ConfiguratorHarness CreateConfigurator(
         TemporaryWorkspace workspace,
         DirectoryInfo home,
         IReadOnlyDictionary<string, string?>? environmentVariables = null)
@@ -405,11 +424,26 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
             homeDirectory: home);
         var environment = new TestEnvironment(environmentVariables);
         var installer = new TelemetryHookInstaller(executionContext, NullLogger<TelemetryHookInstaller>.Instance);
-        return new TelemetryHookConfigurator(installer,
+        return new ConfiguratorHarness(new TelemetryHookConfigurator(installer),
         [
             new CopilotAgentClient(executionContext, environment, NullLogger<CopilotAgentClient>.Instance),
             new ClaudeCodeAgentClient(executionContext, environment, NullLogger<ClaudeCodeAgentClient>.Instance),
             new OpenCodeAgentClient(executionContext, environment)
         ]);
+    }
+
+    private sealed class ConfiguratorHarness(TelemetryHookConfigurator configurator, IReadOnlyList<IAgentClient> clients)
+    {
+        public IReadOnlyList<IAgentClient> Clients => clients;
+
+        // Most tests select every client so eligibility depends only on the detected environments.
+        public Task<TelemetryHookConfigurationResult> ConfigureAsync(AgentEnvironment detectedEnvironments, CancellationToken cancellationToken)
+            => configurator.ConfigureAsync(clients, detectedEnvironments, cancellationToken);
+
+        public Task<TelemetryHookConfigurationResult> ConfigureAsync(
+            IReadOnlyList<IAgentClient> selectedClients,
+            AgentEnvironment detectedEnvironments,
+            CancellationToken cancellationToken)
+            => configurator.ConfigureAsync(selectedClients, detectedEnvironments, cancellationToken);
     }
 }
