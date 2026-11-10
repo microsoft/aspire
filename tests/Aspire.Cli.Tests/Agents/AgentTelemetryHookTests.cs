@@ -171,6 +171,61 @@ public class AgentTelemetryHookTests
         Assert.Equal("Agent telemetry hook failed (IOException)." + Environment.NewLine, error.ToString());
     }
 
+    [Theory]
+    [InlineData("skill", true)]
+    [InlineData("Skill", true)]
+    [InlineData("view", false)]
+    [InlineData("Read", false)]
+    [InlineData("read_file", false)]
+    [InlineData("bash", false)]
+    [InlineData("Bash", false)]
+    [InlineData("edit", false)]
+    [InlineData("Edit", false)]
+    [InlineData("grep", false)]
+    [InlineData("powershell", false)]
+    [InlineData("NotebookRead", false)]
+    [InlineData("skills", false)]
+    [InlineData("aspire-", false)]
+    [InlineData("mcp__other__list_resources", false)]
+    public void CopilotToolMatcherSelectsOnlyTrackedTools(string toolName, bool expected)
+    {
+        Assert.Equal(expected, MatchesAsCopilot(toolName));
+    }
+
+    [Theory]
+    [InlineData("Skill", true, false)]
+    [InlineData("Read", false, true)]
+    [InlineData("mcp__aspire__list_resources", true, false)]
+    [InlineData("skill", false, false)]
+    [InlineData("view", false, false)]
+    [InlineData("Bash", false, false)]
+    [InlineData("NotebookRead", false, false)]
+    [InlineData("ReadMe", false, false)]
+    [InlineData("mcp__other__list_resources", false, false)]
+    public void ClaudeMatchersSelectOnlyTrackedTools(string toolName, bool expectedTool, bool expectedRead)
+    {
+        Assert.Equal(expectedTool, MatchesAsClaude(toolName, AgentTelemetryHook.ClaudeToolMatcher));
+        Assert.Equal(expectedRead, MatchesAsClaude(toolName, AgentTelemetryHook.ClaudeReadMatcher));
+    }
+
+    [Fact]
+    public void ToolMatchersSelectEveryCanonicalMcpToolForEveryClientPrefix()
+    {
+        foreach (var prefix in new[] { "aspire-", "mcp__aspire__", "mcp_aspire_" })
+        {
+            foreach (var tool in AgentTelemetryCatalog.Canonical.Tools)
+            {
+                var toolName = prefix + tool;
+                Assert.True(MatchesAsCopilot(toolName), toolName);
+                Assert.True(MatchesAsClaude(toolName, AgentTelemetryHook.ClaudeToolMatcher), toolName);
+                Assert.NotNull(AgentTelemetryHook.Classify(
+                    $$$"""{"toolName":"{{{toolName}}}","toolArgs":{}}""",
+                    new TestEnvironment(),
+                    AgentTelemetryHook.DefaultMaxPayloadCharacters));
+            }
+        }
+    }
+
     [Fact]
     public void CanonicalCatalogCoversKnownMcpTools()
     {
@@ -268,4 +323,14 @@ public class AgentTelemetryHookTests
         Assert.Null(AgentTelemetryHook.Classify(padded, new TestEnvironment(), AgentTelemetryHook.DefaultMaxPayloadCharacters));
         Assert.NotNull(AgentTelemetryHook.Classify(padded, new TestEnvironment(), padded.Length));
     }
+
+    // Both clients evaluate matchers as JavaScript regular expressions. Copilot wraps the pattern as
+    // ^(?:PATTERN)$ and Claude searches unanchored, so emulate both with ECMAScript semantics.
+    // https://docs.github.com/en/copilot/reference/hooks-reference
+    // https://code.claude.com/docs/en/hooks#matcher-patterns
+    private static bool MatchesAsCopilot(string toolName) =>
+        Regex.IsMatch(toolName, $"^(?:{AgentTelemetryHook.CopilotToolMatcher})$", RegexOptions.ECMAScript);
+
+    private static bool MatchesAsClaude(string toolName, string matcher) =>
+        Regex.IsMatch(toolName, matcher, RegexOptions.ECMAScript);
 }
