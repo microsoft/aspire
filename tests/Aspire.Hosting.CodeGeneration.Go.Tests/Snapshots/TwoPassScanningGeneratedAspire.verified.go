@@ -5612,25 +5612,35 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithImageTag(t
 
 // WithLaunchGroup adds a resource to a launch group.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithLaunchGroup(launchGroupName string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
 	reqArgs["launchGroupName"] = serializeValue(launchGroupName)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withLaunchGroup", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withLaunchGroup", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithLaunchGroups adds a resource to multiple launch groups.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithLaunchGroups(launchGroupNames []string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
-	if launchGroupNames != nil { reqArgs["launchGroupNames"] = serializeValue(launchGroupNames) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withLaunchGroups", reqArgs); err != nil { s.setErr(err) }
+	if launchGroupNames != nil {
+		reqArgs["launchGroupNames"] = serializeValue(launchGroupNames)
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withLaunchGroups", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
@@ -9439,25 +9449,35 @@ func (s *cSharpAppResource) WithImagePushOptions(callback func(arg ContainerImag
 
 // WithLaunchGroup adds a resource to a launch group.
 func (s *cSharpAppResource) WithLaunchGroup(launchGroupName string) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
 	reqArgs["launchGroupName"] = serializeValue(launchGroupName)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withLaunchGroup", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withLaunchGroup", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithLaunchGroups adds a resource to multiple launch groups.
 func (s *cSharpAppResource) WithLaunchGroups(launchGroupNames []string) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
-	if launchGroupNames != nil { reqArgs["launchGroupNames"] = serializeValue(launchGroupNames) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withLaunchGroups", reqArgs); err != nil { s.setErr(err) }
+	if launchGroupNames != nil {
+		reqArgs["launchGroupNames"] = serializeValue(launchGroupNames)
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withLaunchGroups", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
@@ -13368,25 +13388,35 @@ func (s *containerRegistryResource) WithIconName(iconName string, options ...Wit
 
 // WithLaunchGroup adds a resource to a launch group.
 func (s *containerRegistryResource) WithLaunchGroup(launchGroupName string) ContainerRegistryResource {
-	if s.err != nil { return s }
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
 	reqArgs["launchGroupName"] = serializeValue(launchGroupName)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withLaunchGroup", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withLaunchGroup", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithLaunchGroups adds a resource to multiple launch groups.
 func (s *containerRegistryResource) WithLaunchGroups(launchGroupNames []string) ContainerRegistryResource {
-	if s.err != nil { return s }
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
-	if launchGroupNames != nil { reqArgs["launchGroupNames"] = serializeValue(launchGroupNames) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withLaunchGroups", reqArgs); err != nil { s.setErr(err) }
+	if launchGroupNames != nil {
+		reqArgs["launchGroupNames"] = serializeValue(launchGroupNames)
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withLaunchGroups", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
@@ -17330,25 +17360,35 @@ func (s *containerResource) WithImageTag(tag string) ContainerResource {
 
 // WithLaunchGroup adds a resource to a launch group.
 func (s *containerResource) WithLaunchGroup(launchGroupName string) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
 	reqArgs["launchGroupName"] = serializeValue(launchGroupName)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withLaunchGroup", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withLaunchGroup", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithLaunchGroups adds a resource to multiple launch groups.
 func (s *containerResource) WithLaunchGroups(launchGroupNames []string) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
-	if launchGroupNames != nil { reqArgs["launchGroupNames"] = serializeValue(launchGroupNames) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withLaunchGroups", reqArgs); err != nil { s.setErr(err) }
+	if launchGroupNames != nil {
+		reqArgs["launchGroupNames"] = serializeValue(launchGroupNames)
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withLaunchGroups", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
@@ -23319,25 +23359,35 @@ func (s *dotnetToolResource) WithImagePushOptions(callback func(arg ContainerIma
 
 // WithLaunchGroup adds a resource to a launch group.
 func (s *dotnetToolResource) WithLaunchGroup(launchGroupName string) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
 	reqArgs["launchGroupName"] = serializeValue(launchGroupName)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withLaunchGroup", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withLaunchGroup", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithLaunchGroups adds a resource to multiple launch groups.
 func (s *dotnetToolResource) WithLaunchGroups(launchGroupNames []string) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
-	if launchGroupNames != nil { reqArgs["launchGroupNames"] = serializeValue(launchGroupNames) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withLaunchGroups", reqArgs); err != nil { s.setErr(err) }
+	if launchGroupNames != nil {
+		reqArgs["launchGroupNames"] = serializeValue(launchGroupNames)
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withLaunchGroups", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
@@ -28488,25 +28538,35 @@ func (s *executableResource) WithImagePushOptions(callback func(arg ContainerIma
 
 // WithLaunchGroup adds a resource to a launch group.
 func (s *executableResource) WithLaunchGroup(launchGroupName string) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
 	reqArgs["launchGroupName"] = serializeValue(launchGroupName)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withLaunchGroup", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withLaunchGroup", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithLaunchGroups adds a resource to multiple launch groups.
 func (s *executableResource) WithLaunchGroups(launchGroupNames []string) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
-	if launchGroupNames != nil { reqArgs["launchGroupNames"] = serializeValue(launchGroupNames) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withLaunchGroups", reqArgs); err != nil { s.setErr(err) }
+	if launchGroupNames != nil {
+		reqArgs["launchGroupNames"] = serializeValue(launchGroupNames)
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withLaunchGroups", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
@@ -31146,25 +31206,35 @@ func (s *externalServiceResource) WithIconName(iconName string, options ...WithI
 
 // WithLaunchGroup adds a resource to a launch group.
 func (s *externalServiceResource) WithLaunchGroup(launchGroupName string) ExternalServiceResource {
-	if s.err != nil { return s }
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
 	reqArgs["launchGroupName"] = serializeValue(launchGroupName)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withLaunchGroup", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withLaunchGroup", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithLaunchGroups adds a resource to multiple launch groups.
 func (s *externalServiceResource) WithLaunchGroups(launchGroupNames []string) ExternalServiceResource {
-	if s.err != nil { return s }
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
-	if launchGroupNames != nil { reqArgs["launchGroupNames"] = serializeValue(launchGroupNames) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withLaunchGroups", reqArgs); err != nil { s.setErr(err) }
+	if launchGroupNames != nil {
+		reqArgs["launchGroupNames"] = serializeValue(launchGroupNames)
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withLaunchGroups", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
@@ -35883,25 +35953,35 @@ func (s *parameterResource) WithIconName(iconName string, options ...WithIconNam
 
 // WithLaunchGroup adds a resource to a launch group.
 func (s *parameterResource) WithLaunchGroup(launchGroupName string) ParameterResource {
-	if s.err != nil { return s }
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
 	reqArgs["launchGroupName"] = serializeValue(launchGroupName)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withLaunchGroup", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withLaunchGroup", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithLaunchGroups adds a resource to multiple launch groups.
 func (s *parameterResource) WithLaunchGroups(launchGroupNames []string) ParameterResource {
-	if s.err != nil { return s }
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
-	if launchGroupNames != nil { reqArgs["launchGroupNames"] = serializeValue(launchGroupNames) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withLaunchGroups", reqArgs); err != nil { s.setErr(err) }
+	if launchGroupNames != nil {
+		reqArgs["launchGroupNames"] = serializeValue(launchGroupNames)
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withLaunchGroups", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
@@ -40284,25 +40364,35 @@ func (s *projectResource) WithImagePushOptions(callback func(arg ContainerImageP
 
 // WithLaunchGroup adds a resource to a launch group.
 func (s *projectResource) WithLaunchGroup(launchGroupName string) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
 	reqArgs["launchGroupName"] = serializeValue(launchGroupName)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withLaunchGroup", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withLaunchGroup", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithLaunchGroups adds a resource to multiple launch groups.
 func (s *projectResource) WithLaunchGroups(launchGroupNames []string) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
-	if launchGroupNames != nil { reqArgs["launchGroupNames"] = serializeValue(launchGroupNames) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withLaunchGroups", reqArgs); err != nil { s.setErr(err) }
+	if launchGroupNames != nil {
+		reqArgs["launchGroupNames"] = serializeValue(launchGroupNames)
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withLaunchGroups", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
@@ -46775,25 +46865,35 @@ func (s *testDatabaseResource) WithImageTag(tag string) TestDatabaseResource {
 
 // WithLaunchGroup adds a resource to a launch group.
 func (s *testDatabaseResource) WithLaunchGroup(launchGroupName string) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
 	reqArgs["launchGroupName"] = serializeValue(launchGroupName)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withLaunchGroup", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withLaunchGroup", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithLaunchGroups adds a resource to multiple launch groups.
 func (s *testDatabaseResource) WithLaunchGroups(launchGroupNames []string) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
-	if launchGroupNames != nil { reqArgs["launchGroupNames"] = serializeValue(launchGroupNames) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withLaunchGroups", reqArgs); err != nil { s.setErr(err) }
+	if launchGroupNames != nil {
+		reqArgs["launchGroupNames"] = serializeValue(launchGroupNames)
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withLaunchGroups", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
@@ -51667,25 +51767,35 @@ func (s *testRedisResource) WithImageTag(tag string) TestRedisResource {
 
 // WithLaunchGroup adds a resource to a launch group.
 func (s *testRedisResource) WithLaunchGroup(launchGroupName string) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
 	reqArgs["launchGroupName"] = serializeValue(launchGroupName)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withLaunchGroup", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withLaunchGroup", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithLaunchGroups adds a resource to multiple launch groups.
 func (s *testRedisResource) WithLaunchGroups(launchGroupNames []string) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
-	if launchGroupNames != nil { reqArgs["launchGroupNames"] = serializeValue(launchGroupNames) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withLaunchGroups", reqArgs); err != nil { s.setErr(err) }
+	if launchGroupNames != nil {
+		reqArgs["launchGroupNames"] = serializeValue(launchGroupNames)
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withLaunchGroups", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
