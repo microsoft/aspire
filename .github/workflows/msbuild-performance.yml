@@ -1,0 +1,116 @@
+name: MSBuild performance experiment
+
+on:
+  workflow_dispatch:
+  # Editing this experiment opts a feature branch into a run before the workflow
+  # exists on main (GitHub requires that for workflow_dispatch).
+  push:
+    branches-ignore:
+      - main
+      - 'release/**'
+    paths:
+      - .github/workflows/msbuild-performance.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: msbuild-performance-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  compare:
+    if: ${{ github.repository == 'microsoft/aspire' }}
+    runs-on: 8-core-ubuntu-latest
+    timeout-minutes: 90
+    env:
+      MSBUILDTERMINALLOGGER: 'false'
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Restore outside the timed region
+        shell: bash
+        run: |
+          ./restore.sh --ci \
+            -p:SkipNativeBuild=true \
+            -p:SkipBundleDeps=true \
+            -p:SkipTestProjects=true \
+            -p:SkipPlaygroundProjects=true \
+            -p:InstallBrowsersForPlaywright=false
+
+      - name: Compare multiprocess and multithreaded builds
+        shell: bash
+        run: |
+          set -euo pipefail
+          results="$PWD/artifacts/msbuild-performance"
+          mkdir -p "$results"
+          {
+            git rev-parse HEAD
+            ./.dotnet/dotnet --info
+            ./.dotnet/dotnet msbuild -version -nologo
+            lscpu
+          } > "$results/environment.txt"
+          printf 'iteration,mode,operation,seconds,max_process_rss_kb\n' > "$results/timings.csv"
+          {
+            echo '## MSBuild performance experiment'
+            echo
+            echo 'Same runner and restored package cache; rebuilds include pack, exclude native, bundled executables, tests, and playground.'
+            echo 'RSS is the maximum for an individual process, not aggregate build memory.'
+            echo
+            echo '| Iteration | Mode | Operation | Seconds | Max process RSS (KiB) |'
+            echo '|---|---|---|---|---|'
+          } >> "$GITHUB_STEP_SUMMARY"
+          common=(
+            --pack --ci
+            -p:SkipNativeBuild=true
+            -p:SkipBundleDeps=true
+            -p:SkipTestProjects=true
+            -p:SkipPlaygroundProjects=true
+            -p:InstallBrowsersForPlaywright=false
+            -nr:false
+          )
+          # Warm both execution modes before measuring. Alternate their order
+          # below to reduce systematic filesystem/compiler-cache ordering bias.
+          for mt in false true; do
+            ./build.sh --rebuild "${common[@]}" "-mt:$mt"
+          done
+          for iteration in 1 2 3; do
+            modes=(false true)
+            if (( iteration % 2 == 0 )); then
+              modes=(true false)
+            fi
+            for mt in "${modes[@]}"; do
+              mode=multiprocess
+              if [[ "$mt" == true ]]; then
+                mode=multithreaded
+              fi
+              for operation in rebuild build; do
+                logdir="$results/$iteration-$mode-$operation"
+                mkdir -p "$logdir"
+                /usr/bin/time \
+                  -f "$iteration,$mode,$operation,%e,%M" \
+                  -o "$logdir/timing.csv" \
+                  ./build.sh "--$operation" "${common[@]}" "-mt:$mt" \
+                    "-bl:$logdir/build.binlog" \
+                  2>&1 | tee "$logdir/console.log"
+                cat "$logdir/timing.csv" >> "$results/timings.csv"
+                awk -F, '{ printf "| %s | %s | %s | %s | %s |\n", $1, $2, $3, $4, $5 }' \
+                  "$logdir/timing.csv" >> "$GITHUB_STEP_SUMMARY"
+              done
+            done
+          done
+
+      - name: Upload measurements and diagnostic logs
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: msbuild-performance
+          path: |
+            artifacts/msbuild-performance
+            artifacts/log
+          if-no-files-found: warn
+          retention-days: 7

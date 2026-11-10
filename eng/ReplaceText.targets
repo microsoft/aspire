@@ -2,23 +2,46 @@
   <UsingTask TaskName="ReplaceText"
       TaskFactory="RoslynCodeTaskFactory"
       AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
-    <ParameterGroup>
-      <Input ParameterType="System.String" Required="true" />
-      <Output ParameterType="System.String" Required="true" />
-      <Replacements ParameterType="Microsoft.Build.Framework.ITaskItem[]" Required="true" />
-    </ParameterGroup>
     <Task>
-      <Using Namespace="System.IO" />
-      <Code Type="Fragment" Language="cs">
+      <Code Type="Class" Language="cs">
         <![CDATA[
-          Directory.CreateDirectory(Path.GetDirectoryName(Output));
-          var sourceText = File.ReadAllText(Input);
-          foreach (var replacement in Replacements) {
-            var oldValue = replacement.ItemSpec;
-            var newValue = replacement.GetMetadata("NewValue");
-            sourceText = sourceText.Replace(oldValue, newValue);
+          using System.IO;
+          using Microsoft.Build.Framework;
+
+          // Repo-only: compiled against the pinned SDK, not shipped to consumers.
+          // In-process routing also requires the RoslynCodeTaskFactory fix in
+          // https://github.com/dotnet/msbuild/pull/15128 (not in the current SDK).
+          [MSBuildMultiThreadableTask]
+          public sealed class ReplaceText : Microsoft.Build.Utilities.Task, IMultiThreadableTask
+          {
+            public TaskEnvironment TaskEnvironment { get; set; } = TaskEnvironment.Fallback;
+
+            [Required]
+            public string Input { get; set; }
+
+            [Required]
+            public string Output { get; set; }
+
+            [Required]
+            public ITaskItem[] Replacements { get; set; }
+
+            public override bool Execute()
+            {
+              var input = TaskEnvironment.GetAbsolutePath(Input);
+              var output = TaskEnvironment.GetAbsolutePath(Output);
+              Directory.CreateDirectory(Path.GetDirectoryName(output));
+              var sourceText = File.ReadAllText(input);
+              foreach (var replacement in Replacements)
+              {
+                var oldValue = replacement.ItemSpec;
+                var newValue = replacement.GetMetadata("NewValue");
+                sourceText = sourceText.Replace(oldValue, newValue);
+              }
+              File.WriteAllText(output, sourceText);
+
+              return true;
+            }
           }
-          File.WriteAllText(Output, sourceText);
         ]]>
       </Code>
     </Task>
@@ -51,7 +74,7 @@
     <ItemGroup>
       <_TextReplacementFile Include="@(None->WithMetadataValue('PerformTextReplacement', 'True'))">
         <Link>%(RelativeDir)$([System.String]::Copy('%(Filename)%(Extension)').Replace('.in.', '.'))</Link>
-        <_TextReplacementIntermediateFile>$(IntermediateOutputPath)TextReplacement\%(RelativeDir)$([System.String]::Copy('%(Filename)%(Extension)').Replace('.in.', '.'))</_TextReplacementIntermediateFile>
+        <_TextReplacementIntermediateFile>$(IntermediateOutputPath)TextReplacement/%(RelativeDir)$([System.String]::Copy('%(Filename)%(Extension)').Replace('.in.', '.'))</_TextReplacementIntermediateFile>
       </_TextReplacementFile>
     </ItemGroup>
   </Target>
