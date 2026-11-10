@@ -159,6 +159,7 @@ public static class GoHostingExtensions
             })
             .WithRequiredCommand("go", "https://go.dev/dl/")
             .WithOtlpExporter()
+            .WithEnvironment("ASPIRE_GO_BIND_ADDRESS", builder.ExecutionContext.IsPublishMode ? "0.0.0.0" : "localhost")
             // Go doesn't support appending to its default trust on macOS and Windows: since Go 1.27 (for
             // modules declaring go 1.27 or later), setting SSL_CERT_FILE or SSL_CERT_DIR there replaces the
             // platform verifier with roots loaded from disk, and those platforms have no default cert files.

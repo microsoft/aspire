@@ -53,8 +53,8 @@ public class GoStarterTemplateTests
         Assert.DoesNotContain("parseAspireRedisConnString", api, StringComparison.Ordinal);
         Assert.Contains("redisotel.InstrumentTracing(cache)", api, StringComparison.Ordinal);
         Assert.Contains("redisotel.InstrumentMetrics(cache)", api, StringComparison.Ordinal);
-        Assert.Contains("runtime.GOOS == \"windows\"", api, StringComparison.Ordinal);
-        Assert.Contains("host = \"127.0.0.1\"", api, StringComparison.Ordinal);
+        Assert.Contains("host := os.Getenv(\"ASPIRE_GO_BIND_ADDRESS\")", api, StringComparison.Ordinal);
+        Assert.Contains("host = \"localhost\"", api, StringComparison.Ordinal);
     }
 
     [Theory]
