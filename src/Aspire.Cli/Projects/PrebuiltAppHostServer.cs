@@ -758,6 +758,7 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
             noRestore,
             new ProcessInvocationOptions
             {
+                NoAutoResponse = true,
                 StandardOutputCallback = buildOutput.AppendOutput,
                 StandardErrorCallback = buildOutput.AppendError
             },

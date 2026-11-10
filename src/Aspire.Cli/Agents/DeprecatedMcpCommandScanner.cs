@@ -41,37 +41,26 @@ internal sealed class DeprecatedMcpCommandScanner : IAgentEnvironmentScanner
     {
         _logger.LogDebug("Scanning for deprecated MCP command usage in agent configurations");
 
-        // Debug: Write scanning info to temp file for diagnostics
-        var debugPath = Path.Combine(Path.GetTempPath(), "aspire-deprecated-scan.log");
-        File.AppendAllText(debugPath, $"[{DateTime.UtcNow:O}] Scanning context.RepositoryRoot: {context.RepositoryRoot.FullName}\n");
-
         foreach (var location in s_configLocations)
         {
             var configPath = Path.Combine(context.RepositoryRoot.FullName, location.RelativePath);
-            File.AppendAllText(debugPath, $"[{DateTime.UtcNow:O}] Checking {location.AgentName}: {configPath}\n");
 
             if (!File.Exists(configPath))
             {
-                File.AppendAllText(debugPath, $"[{DateTime.UtcNow:O}]   -> File does not exist\n");
                 continue;
             }
-
-            File.AppendAllText(debugPath, $"[{DateTime.UtcNow:O}]   -> File EXISTS!\n");
 
             try
             {
                 var content = File.ReadAllText(configPath);
-                File.AppendAllText(debugPath, $"[{DateTime.UtcNow:O}]   -> Content: {content.Substring(0, Math.Min(200, content.Length))}\n");
                 var config = JsonNode.Parse(content)?.AsObject();
 
                 if (config is null)
                 {
-                    File.AppendAllText(debugPath, $"[{DateTime.UtcNow:O}]   -> JSON parse returned null\n");
                     continue;
                 }
 
                 var hasDeprecated = HasDeprecatedMcpCommand(config, location);
-                File.AppendAllText(debugPath, $"[{DateTime.UtcNow:O}]   -> HasDeprecatedMcpCommand: {hasDeprecated}\n");
 
                 if (hasDeprecated)
                 {
@@ -80,17 +69,14 @@ internal sealed class DeprecatedMcpCommandScanner : IAgentEnvironmentScanner
                     // Create an applicator to update this config
                     var applicator = CreateUpdateApplicator(location, configPath, config);
                     context.AddApplicator(applicator);
-                    File.AppendAllText(debugPath, $"[{DateTime.UtcNow:O}]   -> Added applicator\n");
                 }
             }
             catch (JsonException ex)
             {
-                File.AppendAllText(debugPath, $"[{DateTime.UtcNow:O}]   -> JsonException: {ex.Message}\n");
                 _logger.LogDebug(ex, "Failed to parse {AgentName} config at {Path}", location.AgentName, configPath);
             }
             catch (IOException ex)
             {
-                File.AppendAllText(debugPath, $"[{DateTime.UtcNow:O}]   -> IOException: {ex.Message}\n");
                 _logger.LogDebug(ex, "Failed to read {AgentName} config at {Path}", location.AgentName, configPath);
             }
         }

@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Concurrent;
 using Aspire.TestUtilities;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Resources;
@@ -163,6 +164,77 @@ public class BrowserTokenAuthenticationTests : PlaywrightTestsBase<BrowserTokenA
 
             // Assert
             Assert.Equal("submit-token", name);
+        });
+    }
+
+    [Fact]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task BrowserToken_LoginPage_NavigateToMissingRoute_RemainsOnLoginPage()
+    {
+        const string missingPagePath = "/this-page-does-not-exist";
+
+        await RunTestAsync(async page =>
+        {
+            await page.GotoAsync("/login").DefaultTimeout();
+            await Assertions.Expect(SubmitButton(page)).ToBeVisibleAsync().DefaultTimeout();
+
+            await page.EvaluateAsync($"Blazor.navigateTo('{missingPagePath}')").DefaultTimeout();
+
+            await page.WaitForURLAsync(url =>
+            {
+                var uri = new Uri(url);
+                var query = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(uri.Query);
+                return uri.AbsolutePath == "/login" && query["returnUrl"] == missingPagePath;
+            }).DefaultTimeout();
+            await Assertions.Expect(SubmitButton(page)).ToBeVisibleAsync().DefaultTimeout();
+        });
+    }
+
+    [Theory]
+    [InlineData("/login", "/")]
+    [InlineData("/login", "/error/404")]
+    [InlineData("/login", "/terminal-window/apphost/shell")]
+    [InlineData("/error", "/")]
+    [InlineData("/error", "/error/404")]
+    [InlineData("/error", "/terminal-window/apphost/shell")]
+    [InlineData("/error", "/this-page-does-not-exist")]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task BrowserToken_AnonymousPage_NavigateToProtectedRoute_RedirectsWithoutLayoutError(string initialPath, string destination)
+    {
+        await RunTestAsync(async page =>
+        {
+            var errors = new ConcurrentQueue<string>();
+            page.PageError += (_, error) => errors.Enqueue(error);
+            page.Console += (_, message) =>
+            {
+                if (message.Type == "error")
+                {
+                    errors.Enqueue(message.Text);
+                }
+            };
+            await page.GotoAsync(initialPath).DefaultTimeout();
+            if (initialPath == "/login")
+            {
+                await Assertions.Expect(SubmitButton(page)).ToBeVisibleAsync().DefaultTimeout();
+            }
+            else
+            {
+                await Assertions.Expect(page.GetByRole(AriaRole.Heading, new() { Name = "Error", Exact = true }))
+                    .ToBeVisibleAsync().DefaultTimeout();
+            }
+
+            await page.EvaluateAsync("destination => Blazor.navigateTo(destination)", destination).DefaultTimeout();
+
+            await page.WaitForURLAsync(url =>
+            {
+                var uri = new Uri(url);
+                var query = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(uri.Query);
+                return uri.AbsolutePath == "/login" && query["returnUrl"] == destination;
+            }).DefaultTimeout();
+            await Assertions.Expect(SubmitButton(page)).ToBeVisibleAsync().DefaultTimeout();
+            await Assertions.Expect(page.Locator(".layout, #dashboard-settings-button, .terminal-window"))
+                .ToHaveCountAsync(0).DefaultTimeout();
+            Assert.Equal([], errors);
         });
     }
 

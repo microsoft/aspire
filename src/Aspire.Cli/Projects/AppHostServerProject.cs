@@ -18,6 +18,7 @@ internal interface IAppHostServerProjectFactory
 {
     Task<IAppHostServerProject> CreateAsync(string appPath, CancellationToken cancellationToken = default);
     Task<IAppHostServerProject> CreateAsync(string appPath, string? restoreRootConfigDirectory, CancellationToken cancellationToken);
+    Task<IAppHostServerProject> CreateForSdkCommandsAsync(string appPath, string? restoreRootConfigDirectory, CancellationToken cancellationToken);
 }
 
 /// <summary>
@@ -39,6 +40,20 @@ internal sealed class AppHostServerProjectFactory(
         => CreateAsync(appPath, restoreRootConfigDirectory: null, cancellationToken);
 
     public async Task<IAppHostServerProject> CreateAsync(string appPath, string? restoreRootConfigDirectory, CancellationToken cancellationToken)
+        => await CreateAsync(
+            appPath,
+            restoreRootConfigDirectory,
+            temporary: false,
+            cancellationToken).ConfigureAwait(false);
+
+    public Task<IAppHostServerProject> CreateForSdkCommandsAsync(string appPath, string? restoreRootConfigDirectory, CancellationToken cancellationToken)
+        => CreateAsync(appPath, restoreRootConfigDirectory, temporary: true, cancellationToken);
+
+    private async Task<IAppHostServerProject> CreateAsync(
+        string appPath,
+        string? restoreRootConfigDirectory,
+        bool temporary,
+        CancellationToken cancellationToken)
     {
         var socketPath = CliPathHelper.CreateGuestAppHostSocketPath("apphost.sock");
 
@@ -55,6 +70,9 @@ internal sealed class AppHostServerProjectFactory(
                 processExecutionFactory,
                 environment,
                 loggerFactory.CreateLogger<DotNetBasedAppHostServerProject>(),
+                // SDK commands do not reuse these server builds. Put the build files in
+                // the temporary folder so they are deleted when the command finishes.
+                projectModelPath: temporary ? Path.Combine(appPath, "server") : null,
                 logFilePath: executionContext.LogFilePath,
                 restoreRootConfigDirectory: restoreRootConfigDirectory);
         }

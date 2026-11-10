@@ -7,6 +7,8 @@ namespace Aspire.Dashboard.Components.Tests.Shared;
 
 internal sealed class TestNavigationManager : NavigationManager
 {
+    public NavigationOptions? LastNavigationOptions { get; private set; }
+
     public TestNavigationManager(string baseUri)
     {
         Initialize(baseUri, baseUri);
@@ -16,5 +18,11 @@ internal sealed class TestNavigationManager : NavigationManager
     {
         Uri = ToAbsoluteUri(uri).AbsoluteUri;
         NotifyLocationChanged(isInterceptedLink: false);
+    }
+
+    protected override void NavigateToCore(string uri, NavigationOptions options)
+    {
+        LastNavigationOptions = options;
+        NavigateToCore(uri, options.ForceLoad);
     }
 }

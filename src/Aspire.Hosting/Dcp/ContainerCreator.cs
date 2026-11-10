@@ -345,7 +345,58 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerNetw
             }
         }
 
+        if (_options.Value.EnableAspireContainerTunnel)
+        {
+            var dashboardIndex = hostDependencies.FindIndex(dependency =>
+                StringComparers.ResourceName.Equals(dependency.Resource.Name, KnownResourceNames.AspireDashboard));
+            if (dashboardIndex >= 0)
+            {
+                // Telemetry must not implicitly expose the dashboard frontend. Preserve explicit endpoint
+                // references without narrowing the endpoints exposed for ordinary host dependencies.
+                var dashboard = hostDependencies[dashboardIndex];
+                var endpoints = await GetDashboardTunnelEndpointsAsync(resource, dashboard, cancellationToken).ConfigureAwait(false);
+                hostDependencies.RemoveAll(dependency =>
+                    StringComparers.ResourceName.Equals(dependency.Resource.Name, KnownResourceNames.AspireDashboard));
+                if (endpoints.Length > 0)
+                {
+                    hostDependencies.Add(new HostResourceWithEndpoints(dashboard.Resource, endpoints));
+                }
+            }
+        }
+
         return hostDependencies;
+    }
+
+    private async Task<EndpointAnnotation[]> GetDashboardTunnelEndpointsAsync(
+        IResource resource,
+        HostResourceWithEndpoints dashboard,
+        CancellationToken cancellationToken)
+    {
+        // Reuse discovery's cached callbacks without resolving values: the container-network
+        // services needed to resolve endpoint references have not been provisioned yet.
+        var context = new ExecutionConfigurationGathererContext();
+        var resourceLogger = _loggerService.GetLogger(resource);
+        await new EnvironmentVariablesExecutionConfigurationGatherer()
+            .GatherAsync(context, resource, resourceLogger, _executionContext, cancellationToken).ConfigureAwait(false);
+        await new ArgumentsExecutionConfigurationGatherer()
+            .GatherAsync(context, resource, resourceLogger, _executionContext, cancellationToken).ConfigureAwait(false);
+
+        var endpointNames = new HashSet<string>(StringComparers.EndpointAnnotationName)
+        {
+            KnownEndpointNames.OtlpGrpcEndpointName,
+            KnownEndpointNames.OtlpHttpEndpointName
+        };
+        var callerNetwork = resource.GetDefaultResourceNetwork();
+        foreach (var endpoint in context.GetEndpointReferences(_model, callerNetwork))
+        {
+            if (StringComparers.ResourceName.Equals(endpoint.Resource.Name, dashboard.Resource.Name) &&
+                (endpoint.ContextNetworkID ?? callerNetwork) == KnownNetworkIdentifiers.DefaultAspireContainerNetwork)
+            {
+                endpointNames.Add(endpoint.EndpointName);
+            }
+        }
+
+        return dashboard.Endpoints.Where(endpoint => endpointNames.Contains(endpoint.Name)).ToArray();
     }
 
     internal async Task CreateHostDependentContainerAsync(RenderedModelResource<Container> cr, ImmutableArray<HostResourceWithEndpoints> hostDependencies, ContainerNetworkEndpointContext context, IDcpObjectFactory factory, CancellationToken cToken)

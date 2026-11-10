@@ -30,6 +30,18 @@ public partial class MainLayoutTests : DashboardTestContext
     private IRenderedComponent<FluentMessageBarProvider>? _messageBarProvider;
 
     [Fact]
+    public void OnInitialize_SecuredModeUnauthenticatedUser_Throws()
+    {
+        var authorizationContext = this.AddAuthorization();
+        authorizationContext.SetNotAuthorized();
+        SetupMainLayoutServices(configureOptions: options => options.Frontend.AuthMode = FrontendAuthMode.BrowserToken);
+
+        var exception = Assert.Throws<InvalidOperationException>(() => Render<MainLayout>(builder => builder
+            .Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false))));
+        Assert.Equal("Dashboard authentication is required, but the current user is not authenticated.", exception.Message);
+    }
+
+    [Fact]
     public async Task OnInitialize_UnsecuredOtlp_NotDismissed_DisplayMessageBar()
     {
         // Arrange

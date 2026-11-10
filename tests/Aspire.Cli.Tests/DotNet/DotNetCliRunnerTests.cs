@@ -16,6 +16,7 @@ using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using System.Net.Sockets;
 
 namespace Aspire.Cli.Tests.DotNet;
@@ -405,8 +406,10 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         Assert.True(DotNetCliRunner.ShouldForwardProcessPathAsAspireCliPath(cliPath));
     }
 
-    [Fact]
-    public async Task RestoreAsyncRunsDotnetRestoreCommand()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RestoreAsyncRunsDotnetRestoreCommand(bool noAutoResponse)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
@@ -415,7 +418,10 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
-        var options = new ProcessInvocationOptions();
+        var options = new ProcessInvocationOptions
+        {
+            NoAutoResponse = noAutoResponse
+        };
 
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
         var runner = DotNetCliRunnerTestHelper.Create(
@@ -423,14 +429,61 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
             executionContext,
             (args, _, _, _) =>
             {
-                Assert.Equal("restore", args[0]);
-                Assert.Equal(projectFile.FullName, args[1]);
+                var expected = new List<string> { "restore", projectFile.FullName };
+                if (noAutoResponse)
+                {
+                    expected.Add("-noAutoResponse");
+                }
+                Assert.Equal(expected, args);
             },
             0);
 
         var exitCode = await runner.RestoreAsync(projectFile, options, CancellationToken.None).DefaultTimeout();
 
         Assert.Equal(0, exitCode);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task BuildAndRestoreAsync_ControlAutomaticResponseFiles(bool build, bool noAutoResponse)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var projectDirectory = workspace.CreateDirectory("generated");
+        var projectFile = new FileInfo(Path.Combine(projectDirectory.FullName, "Generated.csproj"));
+        var resultPath = Path.Combine(projectDirectory.FullName, "result.txt");
+        await File.WriteAllTextAsync(Path.Combine(workspace.WorkspaceRoot.FullName, "Directory.Build.rsp"),
+            "-property:ResponseFileValue=from-response-file");
+        // No SDK or packages are needed: both commands execute a target that records the
+        // property supplied by the parent response file, or its project-defined default.
+        await File.WriteAllTextAsync(projectFile.FullName, """
+            <Project>
+              <PropertyGroup>
+                <ResponseFileValue>from-project</ResponseFileValue>
+              </PropertyGroup>
+              <Target Name="Restore">
+                <WriteLinesToFile File="$(MSBuildProjectDirectory)/result.txt" Lines="$(ResponseFileValue)" Overwrite="true" />
+              </Target>
+              <Target Name="Build" DependsOnTargets="Restore" />
+            </Project>
+            """);
+        using var provider = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.DotNetCliExecutionFactoryFactory = _ =>
+                new ProcessExecutionFactory(new TestEnvironment(), NullLogger<ProcessExecutionFactory>.Instance);
+        }).BuildServiceProvider();
+        var runner = provider.GetRequiredService<IDotNetCliRunner>();
+        var options = new ProcessInvocationOptions { NoAutoResponse = noAutoResponse };
+
+        var exitCode = build
+            ? await runner.BuildAsync(projectFile, noRestore: false, options, TestContext.Current.CancellationToken).DefaultTimeout()
+            : await runner.RestoreAsync(projectFile, options, TestContext.Current.CancellationToken).DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+        Assert.Equal(noAutoResponse ? "from-project" : "from-response-file",
+            (await File.ReadAllTextAsync(resultPath)).Trim());
     }
 
     [Fact]
@@ -470,8 +523,12 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         Assert.Equal(0, exitCode);
     }
 
-    [Fact]
-    public async Task BuildAsyncIncludesNoRestoreFlagWhenNoRestoreIsTrue()
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task BuildAsyncRunsDotnetBuildCommand(bool noRestore, bool noAutoResponse)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
@@ -480,7 +537,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
-        var options = new ProcessInvocationOptions();
+        var options = new ProcessInvocationOptions { NoAutoResponse = noAutoResponse };
 
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
         var runner = DotNetCliRunnerTestHelper.Create(
@@ -488,13 +545,21 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
             executionContext,
             (args, env, _, _) =>
             {
-                // Verify that --no-restore is included when noRestore is true
-                Assert.Contains("build", args);
-                Assert.Contains("--no-restore", args);
+                var expected = new List<string> { "build" };
+                if (noRestore)
+                {
+                    expected.Add("--no-restore");
+                }
+                expected.Add(projectFile.FullName);
+                if (noAutoResponse)
+                {
+                    expected.Add("-noAutoResponse");
+                }
+                Assert.Equal(expected, args);
             },
             0);
 
-        var exitCode = await runner.BuildAsync(projectFile, noRestore: true, options, CancellationToken.None).DefaultTimeout();
+        var exitCode = await runner.BuildAsync(projectFile, noRestore, options, CancellationToken.None).DefaultTimeout();
 
         Assert.Equal(0, exitCode);
     }

@@ -4,8 +4,10 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Net;
+using Aspire.Dashboard.Authentication;
 using Aspire.Dashboard.Components.Dialogs;
 using Aspire.Dashboard.Components.Pages;
+using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Interaction;
 using Aspire.Dashboard.Model.Markdown;
@@ -13,7 +15,9 @@ using Aspire.Dashboard.Telemetry;
 using Aspire.Dashboard.Utils;
 using Aspire.DashboardService.Proto.V1;
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.Extensions.Localization;
+using Microsoft.Extensions.Options;
 using Microsoft.FluentUI.AspNetCore.Components;
 using MessageIntentDto = Aspire.DashboardService.Proto.V1.MessageIntent;
 using MessageIntentUI = Microsoft.FluentUI.AspNetCore.Components.MessageBarIntent;
@@ -87,11 +91,19 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
     [Inject]
     public required ComponentTelemetryContextProvider TelemetryContextProvider { get; init; }
 
+    [Inject]
+    public required IOptions<DashboardOptions> DashboardOptions { get; init; }
+
     [CascadingParameter]
     public required ViewportInformation ViewportInformation { get; set; }
 
-    protected override void OnInitialized()
+    [CascadingParameter]
+    public Task<AuthenticationState>? AuthenticationState { get; set; }
+
+    protected override async Task OnInitializedAsync()
     {
+        await DashboardAuthenticationState.EnsureAuthenticatedAsync(DashboardOptions.Value, AuthenticationState);
+
         // Exit quickly if the dashboard client is not enabled. For example, the dashboard is running in the standalone container.
         if (!DashboardClient.IsEnabled)
         {
