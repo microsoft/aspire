@@ -30,7 +30,7 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
 
         var manifest = await ManifestUtils.GetManifest(app.Resource);
 
-        Assert.Contains($"\"ASPIRE_GO_BIND_ADDRESS\":\"{expectedAddress}\"", manifest.ToJsonString(), StringComparison.Ordinal);
+        Assert.Contains($"\"HOST\":\"{expectedAddress}\"", manifest.ToJsonString(), StringComparison.Ordinal);
     }
 
     // ---- Manifest: go run . (baseline) ------------------------------------
@@ -55,7 +55,7 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
                 "."
               ],
               "env": {
-                "ASPIRE_GO_BIND_ADDRESS": "localhost",
+                "HOST": "localhost",
                 "PORT": "{api.bindings.http.targetPort}"
               },
               "bindings": {
@@ -93,7 +93,7 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
                 "./cmd/server"
               ],
               "env": {
-                "ASPIRE_GO_BIND_ADDRESS": "localhost"
+                "HOST": "localhost"
               }
             }
             """;
@@ -141,7 +141,7 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
                 "."
               ],
               "env": {
-                "ASPIRE_GO_BIND_ADDRESS": "localhost"
+                "HOST": "localhost"
               }
             }
             """;
@@ -168,7 +168,7 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
                 "."
               ],
               "env": {
-                "ASPIRE_GO_BIND_ADDRESS": "localhost"
+                "HOST": "localhost"
               }
             }
             """;
@@ -195,7 +195,7 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
                 "."
               ],
               "env": {
-                "ASPIRE_GO_BIND_ADDRESS": "localhost"
+                "HOST": "localhost"
               }
             }
             """;
@@ -222,7 +222,7 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
                 "."
               ],
               "env": {
-                "ASPIRE_GO_BIND_ADDRESS": "localhost"
+                "HOST": "localhost"
               }
             }
             """;
@@ -256,7 +256,7 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
                 "."
               ],
               "env": {
-                "ASPIRE_GO_BIND_ADDRESS": "localhost"
+                "HOST": "localhost"
               }
             }
             """;
@@ -287,7 +287,7 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
                 "prod.yaml"
               ],
               "env": {
-                "ASPIRE_GO_BIND_ADDRESS": "localhost"
+                "HOST": "localhost"
               }
             }
             """;
@@ -316,7 +316,7 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
                 "."
               ],
               "env": {
-                "ASPIRE_GO_BIND_ADDRESS": "localhost"
+                "HOST": "localhost"
               }
             }
             """;
@@ -344,7 +344,7 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
                 "."
               ],
               "env": {
-                "ASPIRE_GO_BIND_ADDRESS": "localhost"
+                "HOST": "localhost"
               }
             }
             """;
@@ -372,7 +372,7 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
                 "."
               ],
               "env": {
-                "ASPIRE_GO_BIND_ADDRESS": "localhost"
+                "HOST": "localhost"
               }
             }
             """;
@@ -404,7 +404,7 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
                 "."
               ],
               "env": {
-                "ASPIRE_GO_BIND_ADDRESS": "localhost"
+                "HOST": "localhost"
               }
             }
             """;
@@ -435,7 +435,7 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
                 "."
               ],
               "env": {
-                "ASPIRE_GO_BIND_ADDRESS": "localhost"
+                "HOST": "localhost"
               }
             }
             """;
@@ -466,7 +466,7 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
                 "."
               ],
               "env": {
-                "ASPIRE_GO_BIND_ADDRESS": "localhost"
+                "HOST": "localhost"
               }
             }
             """;
@@ -497,7 +497,7 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
                 "."
               ],
               "env": {
-                "ASPIRE_GO_BIND_ADDRESS": "localhost"
+                "HOST": "localhost"
               }
             }
             """;
@@ -533,7 +533,7 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
                 "."
               ],
               "env": {
-                "ASPIRE_GO_BIND_ADDRESS": "localhost"
+                "HOST": "localhost"
               }
             }
             """;
@@ -796,7 +796,7 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
                 "."
               ],
               "env": {
-                "ASPIRE_GO_BIND_ADDRESS": "localhost"
+                "HOST": "localhost"
               }
             }
             """;
@@ -829,7 +829,7 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
                 "."
               ],
               "env": {
-                "ASPIRE_GO_BIND_ADDRESS": "localhost"
+                "HOST": "localhost"
               }
             }
             """;
@@ -862,7 +862,7 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
                 "."
               ],
               "env": {
-                "ASPIRE_GO_BIND_ADDRESS": "localhost"
+                "HOST": "localhost"
               }
             }
             """;
@@ -898,7 +898,7 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
                 "9090"
               ],
               "env": {
-                "ASPIRE_GO_BIND_ADDRESS": "localhost"
+                "HOST": "localhost"
               }
             }
             """;

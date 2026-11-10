@@ -15,6 +15,22 @@ namespace Aspire.Cli.EndToEnd.Tests;
 /// </summary>
 public sealed class GoStarterTemplateTests(ITestOutputHelper output)
 {
+    [Theory]
+    [InlineData("app")]
+    [InlineData("application")]
+    public void InsertBeforeBuildSupportsGoAppHostShapes(string applicationVariable)
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.go");
+        File.WriteAllText(appHostPath, $"func main() {{\n\t{applicationVariable}, err := builder.Build()\n}}\n");
+
+        GoAppHostTestHelpers.InsertBeforeBuild(appHostPath, "builder.AddContainer(\"example\", \"nginx\")");
+
+        Assert.Equal(
+            $"func main() {{\nbuilder.AddContainer(\"example\", \"nginx\")\n\n\t{applicationVariable}, err := builder.Build()\n}}\n",
+            File.ReadAllText(appHostPath));
+    }
+
     [CaptureWorkspaceOnFailure]
     [Fact]
     public Task CreateAndRunGoStarterProject() => CreateRestoreAndBuildGoStarterAsync(emulateStableRelease: false);
@@ -129,7 +145,7 @@ public sealed class GoStarterTemplateTests(ITestOutputHelper output)
             await auto.AspireStartAsync(counter, startTimeout: TimeSpan.FromMinutes(4));
             try
             {
-                await auto.AssertResourcesExistAsync(counter, "cache", "api");
+                await auto.AssertResourcesExistAsync(counter, "cache", "app");
             }
             finally
             {

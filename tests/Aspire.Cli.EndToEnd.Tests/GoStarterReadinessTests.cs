@@ -56,7 +56,7 @@ public sealed class GoStarterReadinessTests(ITestOutputHelper output)
         try
         {
             await auto.AspireStartAsync(counter, startTimeout: TimeSpan.FromMinutes(4));
-            await auto.RunCommandAsync("aspire wait api --status up --timeout 120", counter, TimeSpan.FromMinutes(3));
+            await auto.RunCommandAsync("aspire wait app --status up --timeout 120", counter, TimeSpan.FromMinutes(3));
             await auto.RunCommandAsync("aspire wait frontend --status up --timeout 120", counter, TimeSpan.FromMinutes(3));
             if (useRedisCache)
             {
@@ -70,13 +70,13 @@ public sealed class GoStarterReadinessTests(ITestOutputHelper output)
                 counter,
                 TimeSpan.FromMinutes(2));
             await auto.RunCommandAsync(
-                """found=0; for i in $(seq 1 20); do aspire otel spans --format json --limit 100 > spans.json && aspire otel logs --format json --limit 100 > otel-logs.json && node -e 'const assert = require("node:assert/strict"); const spans = require("./spans.json"); const logs = require("./otel-logs.json"); assert.ok(spans.some(span => span.source === "api" && span.attributes?.["url.path"] === "/api/weatherforecast")); assert.ok(logs.some(log => log.resourceName === "api" && log.message.includes("api listening")));' && found=1 && break; sleep 1; done; test "$found" = 1""",
+                """found=0; for i in $(seq 1 20); do aspire otel spans --format json --limit 100 > spans.json && aspire otel logs --format json --limit 100 > otel-logs.json && node -e 'const assert = require("node:assert/strict"); const spans = require("./spans.json"); const logs = require("./otel-logs.json"); assert.ok(spans.some(span => span.source === "app" && span.attributes?.["url.path"] === "/api/weatherforecast")); assert.ok(logs.some(log => log.resourceName === "app" && log.message.includes("api listening")));' && found=1 && break; sleep 1; done; test "$found" = 1""",
                 counter,
                 TimeSpan.FromMinutes(2));
             if (useRedisCache)
             {
                 await auto.RunCommandAsync(
-                    """found=0; for i in $(seq 1 20); do aspire otel spans --format json --limit 100 > spans.json && node -e 'const assert = require("node:assert/strict"); const spans = require("./spans.json"); assert.ok(spans.some(span => span.source === "api" && span.attributes?.["db.system"] === "redis"));' && found=1 && break; sleep 1; done; test "$found" = 1""",
+                    """found=0; for i in $(seq 1 20); do aspire otel spans --format json --limit 100 > spans.json && node -e 'const assert = require("node:assert/strict"); const spans = require("./spans.json"); assert.ok(spans.some(span => span.source === "app" && span.attributes?.["db.system"] === "redis"));' && found=1 && break; sleep 1; done; test "$found" = 1""",
                     counter,
                     TimeSpan.FromMinutes(2));
             }

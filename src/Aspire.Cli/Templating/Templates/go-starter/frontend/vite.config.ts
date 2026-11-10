@@ -6,10 +6,10 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
-      // API_HTTP is injected by frontend.WithReference(api) in apphost.go, which
+      // APP_HTTP is injected by frontend.WithReference(app) in apphost.go, which
       // names the variable after the resource and its endpoint.
       '/api': {
-        target: process.env.API_HTTPS || process.env.API_HTTP,
+        target: process.env.APP_HTTPS || process.env.APP_HTTP,
         changeOrigin: true
       }
     }

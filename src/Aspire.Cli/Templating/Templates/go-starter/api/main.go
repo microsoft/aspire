@@ -10,10 +10,10 @@ import (
 	// {{/redis}}
 	"log"
 	"math/rand/v2"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
@@ -74,24 +74,17 @@ func main() {
 	_ = srv.Shutdown(shutdownCtx)
 }
 
-// listenAddress uses Aspire's endpoint, or loopback:8080 for standalone runs.
+// listenAddress uses HOST and PORT, defaulting to loopback:8080 for standalone runs.
 func listenAddress() string {
-	host := os.Getenv("ASPIRE_GO_BIND_ADDRESS")
+	host := os.Getenv("HOST")
 	if host == "" {
 		host = "localhost"
 	}
 
 	if port := os.Getenv("PORT"); port != "" {
-		return host + ":" + port
+		return net.JoinHostPort(host, port)
 	}
-	if urls := os.Getenv("ASPNETCORE_URLS"); urls != "" {
-		// "http://localhost:5000;https://localhost:5001" → "localhost:5000"
-		first := strings.Split(urls, ";")[0]
-		if i := strings.LastIndex(first, ":"); i != -1 {
-			return host + first[i:]
-		}
-	}
-	return host + ":8080"
+	return net.JoinHostPort(host, "8080")
 }
 
 // {{#redis}}
@@ -110,6 +103,10 @@ func setupRedis() error {
 	if err := redisotel.InstrumentTracing(cache); err != nil {
 		_ = cache.Close()
 		return fmt.Errorf("instrument Redis tracing: %w", err)
+	}
+	if err := redisotel.InstrumentMetrics(cache); err != nil {
+		_ = cache.Close()
+		return fmt.Errorf("instrument Redis metrics: %w", err)
 	}
 	return nil
 }

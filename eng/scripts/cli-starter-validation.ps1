@@ -257,7 +257,7 @@ $templates = @(
         ProjectName = 'AspireCliGoStarterSmoke'
         # Hosted macOS/Windows runners have no Linux container runtime. Keep full Redis
         # readiness on Linux; the other runners exercise the supported cache-free starter.
-        ExpectedResources = $(if ($IsLinux) { @('api', 'cache') } else { @('api') })
+        ExpectedResources = $(if ($IsLinux) { @('app', 'cache') } else { @('app') })
     }
 )
 

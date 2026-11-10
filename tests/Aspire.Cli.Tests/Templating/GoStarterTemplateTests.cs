@@ -31,20 +31,20 @@ public class GoStarterTemplateTests
     }
 
     [Fact]
-    public void GoStarterTemplate_FrontendReferencesAndWaitsForTheApi()
+    public void GoStarterTemplate_FrontendReferencesAndWaitsForTheApp()
     {
         var appHost = File.ReadAllText(GetGoStarterAppHostPath());
-        Assert.Contains("builder.AddGoApp(\"api\", \"./api\")", appHost, StringComparison.Ordinal);
+        Assert.Contains("builder.AddGoApp(\"app\", \"./api\")", appHost, StringComparison.Ordinal);
         Assert.Contains("builder.AddViteApp(\"frontend\", \"./frontend\", nil)", appHost, StringComparison.Ordinal);
-        Assert.Contains("WithReference(api).", appHost, StringComparison.Ordinal);
-        Assert.Contains("WaitFor(api)", appHost, StringComparison.Ordinal);
+        Assert.Contains("WithReference(app).", appHost, StringComparison.Ordinal);
+        Assert.Contains("WaitFor(app)", appHost, StringComparison.Ordinal);
         Assert.Contains("WithHttpEndpoint(aspire.HttpEndpointEnv(\"PORT\"))", appHost, StringComparison.Ordinal);
         Assert.Contains("WithHttpHealthCheck(aspire.HttpHealthCheckPath(\"/health\"))", appHost, StringComparison.Ordinal);
         Assert.DoesNotContain(".Err()", appHost, StringComparison.Ordinal);
-        Assert.Contains("api.PublishWithContainerFiles(frontend, \"./static\")", appHost, StringComparison.Ordinal);
+        Assert.Contains("app.PublishWithContainerFiles(frontend, \"./static\")", appHost, StringComparison.Ordinal);
 
         var viteConfig = File.ReadAllText(Path.Combine(GetGoStarterDirectory(), "frontend", "vite.config.ts"));
-        Assert.Contains("process.env.API_HTTPS || process.env.API_HTTP", viteConfig, StringComparison.Ordinal);
+        Assert.Contains("process.env.APP_HTTPS || process.env.APP_HTTP", viteConfig, StringComparison.Ordinal);
 
         var api = File.ReadAllText(Path.Combine(GetGoStarterDirectory(), "api", "main.go"));
         Assert.Contains("mux.Handle(\"/\", http.FileServer(http.Dir(\"./static\")))", api, StringComparison.Ordinal);
@@ -52,9 +52,10 @@ public class GoStarterTemplateTests
         Assert.DoesNotContain("ConnectionStrings__cache", api, StringComparison.Ordinal);
         Assert.DoesNotContain("parseAspireRedisConnString", api, StringComparison.Ordinal);
         Assert.Contains("redisotel.InstrumentTracing(cache)", api, StringComparison.Ordinal);
-        Assert.DoesNotContain("redisotel.InstrumentMetrics", api, StringComparison.Ordinal);
-        Assert.Contains("host := os.Getenv(\"ASPIRE_GO_BIND_ADDRESS\")", api, StringComparison.Ordinal);
+        Assert.Contains("redisotel.InstrumentMetrics(cache)", api, StringComparison.Ordinal);
+        Assert.Contains("host := os.Getenv(\"HOST\")", api, StringComparison.Ordinal);
         Assert.Contains("host = \"localhost\"", api, StringComparison.Ordinal);
+        Assert.DoesNotContain("ASPNETCORE_URLS", api, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -73,6 +74,7 @@ public class GoStarterTemplateTests
         var goSum = ConditionalBlockProcessor.Process(File.ReadAllText(Path.Combine(apiDirectory, "go.sum")), conditions);
 
         Assert.Equal(useRedis, main.Contains("redisotel.InstrumentTracing(cache)", StringComparison.Ordinal));
+        Assert.Equal(useRedis, main.Contains("redisotel.InstrumentMetrics(cache)", StringComparison.Ordinal));
         Assert.Equal(useRedis, main.Contains("os.Getenv(\"CACHE_URI\")", StringComparison.Ordinal));
         Assert.Equal(useRedis, goMod.Contains("github.com/redis/go-redis/extra/redisotel/v9", StringComparison.Ordinal));
         Assert.Equal(useRedis, goSum.Contains("github.com/redis/go-redis/extra/redisotel/v9", StringComparison.Ordinal));

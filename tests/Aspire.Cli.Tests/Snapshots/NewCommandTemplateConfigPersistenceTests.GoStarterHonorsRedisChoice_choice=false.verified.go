@@ -13,26 +13,26 @@ func main() {
 	}
 
 	// Keep Go modules current and send traces, metrics, and logs to the dashboard.
-	api := builder.AddGoApp("api", "./api").
+	app := builder.AddGoApp("app", "./api").
 		WithModTidy().
 		WithHttpEndpoint(aspire.HttpEndpointEnv("PORT")).
 		WithHttpHealthCheck(aspire.HttpHealthCheckPath("/health")).
 		WithExternalHttpEndpoints().
 		WithOtlpExporter()
 
-	// Reference the API for Vite proxying and wait until it is healthy.
+	// Reference the app for Vite proxying and wait until it is healthy.
 	frontend := builder.AddViteApp("frontend", "./frontend", nil).
-		WithReference(api).
-		WaitFor(api)
+		WithReference(app).
+		WaitFor(app)
 
-	// Bundle the frontend into the API container for same-origin production serving.
-	api.PublishWithContainerFiles(frontend, "./static")
+	// Bundle the frontend into the app container for same-origin production serving.
+	app.PublishWithContainerFiles(frontend, "./static")
 
-	app, err := builder.Build()
+	application, err := builder.Build()
 	if err != nil {
 		log.Fatal(aspire.FormatError(err))
 	}
-	if err := app.Run(); err != nil {
+	if err := application.Run(); err != nil {
 		log.Fatal(aspire.FormatError(err))
 	}
 }

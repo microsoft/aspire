@@ -111,7 +111,7 @@ public sealed class GoKubernetesDeployTests(ITestOutputHelper output)
             // Selecting by that label makes a chart without the workload fail the test: "kubectl wait" exits 1 with
             // "no matching resources found" when nothing matches, whereas "kubectl get pods" succeeds on an empty
             // namespace and Helm's --wait only waits for workloads that are in the chart.
-            foreach (var resourceName in new[] { "api", "cache" })
+            foreach (var resourceName in new[] { "app", "cache" })
             {
                 await auto.RunCommandAsync(
                     $"kubectl wait --for=condition=Ready pod -n {k8sNamespace} -l app.kubernetes.io/component={resourceName} --timeout=180s",
@@ -130,8 +130,8 @@ public sealed class GoKubernetesDeployTests(ITestOutputHelper output)
             //   <script type="module" crossorigin src="/assets/index-<hash>.js"></script>
             await auto.RunCommandAsync(
                 $$"""
-                (service_port=$(kubectl get service api-service -n {{k8sNamespace}} -o jsonpath='{.spec.ports[0].port}'); \
-                kubectl port-forward -n {{k8sNamespace}} service/api-service 18081:$service_port > port-forward.log 2>&1 & \
+                (service_port=$(kubectl get service app-service -n {{k8sNamespace}} -o jsonpath='{.spec.ports[0].port}'); \
+                kubectl port-forward -n {{k8sNamespace}} service/app-service 18081:$service_port > port-forward.log 2>&1 & \
                 forward_pid=$!; trap 'kill "$forward_pid" 2>/dev/null || true' EXIT; \
                 found=0; for i in $(seq 1 30); do \
                 if curl --connect-timeout 2 --max-time 5 -fsS http://localhost:18081/ -o index.html && \
