@@ -693,7 +693,10 @@ internal sealed class AgentInitCommand : BaseCommand
         // eligible. Whether telemetry is actually transmitted stays gated by the single
         // ASPIRE_CLI_TELEMETRY_OPTOUT opt-out, which both the hook scripts and the
         // `aspire agent telemetry` command path re-check at runtime.
-        if (scope is AgentConfigurationScope.Global)
+        // The hooks only classify Aspire skill and Aspire MCP tool usage, so they are installed only
+        // when this run configures the Aspire skills or the Aspire MCP server. Third-party skills
+        // (playwright-cli, dotnet-inspect) alone produce no events the hooks would report.
+        if (scope is AgentConfigurationScope.Global && (configureAspire || configureMcp))
         {
             await ConfigureTelemetryHooksAsync(selectedClients, detectedEnvironments.GetValueOrDefault(), cancellationToken);
         }

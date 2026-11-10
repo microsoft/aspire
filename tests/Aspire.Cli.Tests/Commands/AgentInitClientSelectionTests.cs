@@ -1378,6 +1378,36 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
         Assert.Equal(scope == "global" ? AgentEnvironment.ClaudeCode : AgentEnvironment.None, hooks.ConfiguredEnvironments);
     }
 
+    [Theory]
+    [InlineData("aspire", false, true)]
+    [InlineData("none", true, true)]
+    [InlineData("playwright-cli", false, false)]
+    public async Task AgentInit_Hooks_RequireAspireSkillsOrMcp(string skills, bool mcp, bool expectHooks)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var hooks = new TestTelemetryHookConfigurator();
+        var playwrightVersion = SemVersion.Parse("0.1.3", SemVersionStyles.Strict);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.AgentEnvironmentDetectorFactory = _ => new TestAgentEnvironmentDetector
+            {
+                DetectedEnvironments = AgentEnvironment.ClaudeCode
+            };
+            options.TelemetryHookConfiguratorFactory = _ => hooks;
+            options.NpmRunnerFactory = _ => new FakeNpmRunner
+            {
+                ResolvePackageAsyncCallback = (_, _, _) => Task.FromResult<NpmPackageInfo?>(new NpmPackageInfo { Version = playwrightVersion })
+            };
+            options.PlaywrightCliRunnerFactory = _ => new FakePlaywrightCliRunner { InstalledVersion = playwrightVersion };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var result = provider.GetRequiredService<RootCommand>().Parse(
+            $"agent init --agents claude --scope global --skills {skills} --mcp={mcp.ToString().ToLowerInvariant()}");
+        Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
+        Assert.Equal(expectHooks ? AgentEnvironment.ClaudeCode : AgentEnvironment.None, hooks.ConfiguredEnvironments);
+    }
+
     [Fact]
     public async Task McpInit_LegacyDelegation_UsesClientScopeAndRemoteSkillOptions()
     {
