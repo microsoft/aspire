@@ -22,6 +22,6 @@ internal sealed class TestTelemetryHookConfigurator : ITelemetryHookConfigurator
         }
 
         ConfiguredEnvironments = detectedEnvironments;
-        return Task.FromResult(new TelemetryHookConfigurationResult(ConfiguredEnvironments, []));
+        return Task.FromResult(TelemetryHookConfigurationResult.None);
     }
 }

@@ -735,56 +735,28 @@ internal sealed class AgentInitCommand : BaseCommand
             return;
         }
 
-        if (result.ConfiguredEnvironments != AgentEnvironment.None)
+        if (result.ConfiguredClients.Count > 0)
         {
-            var environmentNames = GetEnvironmentDisplayName(result.ConfiguredEnvironments);
+            var clientNames = string.Join(", ", result.ConfiguredClients.Select(client => client.DisplayName));
             InteractionService.DisplayMessage(
                 KnownEmojis.BarChart,
-                string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_TelemetryHooksInstalled, environmentNames));
+                string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_TelemetryHooksInstalled, clientNames));
         }
 
         foreach (var skip in result.Skipped)
         {
-            var environmentName = GetEnvironmentDisplayName(skip.Environment);
+            var clientName = skip.Client.DisplayName;
             var message = skip.Reason switch
             {
-                TelemetryHookSkipReason.MalformedConfig => string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_TelemetryHookSkippedMalformedConfig, environmentName),
-                TelemetryHookSkipReason.UnexpectedConfigShape => string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_TelemetryHookSkippedUnexpectedShape, environmentName),
-                _ => string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_TelemetryHookWriteFailed, environmentName),
+                TelemetryHookSkipReason.MalformedConfig => string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_TelemetryHookSkippedMalformedConfig, clientName),
+                TelemetryHookSkipReason.UnexpectedConfigShape => string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_TelemetryHookSkippedUnexpectedShape, clientName),
+                _ => string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_TelemetryHookWriteFailed, clientName),
             };
 
             // Skips are surfaced to the user but never treated as command failures: a user-owned
             // config we can't safely modify must not break `agent init`.
             InteractionService.DisplaySubtleMessage(message);
         }
-    }
-
-    private static string GetEnvironmentDisplayName(AgentEnvironment environments)
-    {
-        const AgentEnvironment copilot = AgentEnvironment.CopilotApp | AgentEnvironment.CopilotCli;
-        var names = new List<string>();
-
-        // The Copilot App and CLI share one hook, so name them together rather than listing the
-        // App and CLI as if they were separate installations.
-        if ((environments & copilot) == copilot)
-        {
-            names.Add("GitHub Copilot App and CLI");
-            environments &= ~copilot;
-        }
-
-        names.AddRange(Enum.GetValues<AgentEnvironment>()
-            .Where(environment => environment != AgentEnvironment.None && environments.HasFlag(environment))
-            .Select(environment => environment switch
-            {
-                AgentEnvironment.CopilotCli => "GitHub Copilot CLI",
-                AgentEnvironment.CopilotApp => "GitHub Copilot App",
-                AgentEnvironment.ClaudeCode => "Claude Code",
-                AgentEnvironment.VsCode => "VS Code",
-                AgentEnvironment.OpenCode => "OpenCode",
-                _ => environment.ToString(),
-            }));
-
-        return string.Join(", ", names);
     }
 
     /// <summary>

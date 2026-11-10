@@ -82,14 +82,13 @@ internal sealed class ClaudeCodeAgentClient(
     {
         if (!detectedEnvironments.HasFlag(AgentEnvironment.ClaudeCode))
         {
-            return new TelemetryHookConfigurationResult(AgentEnvironment.None, []);
+            return TelemetryHookConfigurationResult.None;
         }
         var reason = await ConfigureTelemetryHookAsync(cancellationToken);
 
         return reason is { } skipReason
-            ? new TelemetryHookConfigurationResult(AgentEnvironment.None,
-                [new TelemetryHookSkip(AgentEnvironment.ClaudeCode, skipReason)])
-            : new TelemetryHookConfigurationResult(AgentEnvironment.ClaudeCode, []);
+            ? new TelemetryHookConfigurationResult([], [new TelemetryHookSkip(this, skipReason)])
+            : new TelemetryHookConfigurationResult([this], []);
     }
 
     public override string ToString() => Id;
