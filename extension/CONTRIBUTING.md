@@ -54,7 +54,7 @@ Candidate discovery and default selection are separate. Successful `aspire ls` r
 
 ### Background CLI lifecycle
 
-Status and resource watchers run while the Aspire panel or an AppHost editor is visible, a run/debug session is active, or an explicit consumer needs data. Background tabs alone do not keep polling alive. Active watchers keep the configured polling interval and refresh when monitoring resumes.
+Status and resource watchers run while the Aspire panel or an AppHost editor is visible, an AppHost run/debug session or attached resource debugger is active, or an explicit consumer needs data. Background tabs alone do not keep polling alive. Active watchers keep the configured polling interval and refresh when monitoring resumes.
 
 ## Building the full repository (extension + CLI)
 
@@ -125,7 +125,7 @@ The CLI's shared resource-wait budget is covered by `ResourceWaitServiceTests` a
 
 UI end-to-end tests live under `src/test-e2e`. They run a packaged VSIX in a real VS Code instance through ExTester, using a real Aspire CLI and a generated AppHost workspace.
 
-The `apphost-tree` group checks native follower ownership through panel visibility, background AppHost tabs, view switches, polling restarts, and window reload. A hidden panel retains a follower only while an AppHost editor is visible, a run/debug session is active, or an explicit consumer holds a data lease; background tabs and passive debugger-install hints do not keep it alive. Assert live process ownership, not just spawn counts. Restore settings through orderly reload/shutdown, never by signalling historical PIDs, and confirm follow mode resumes when monitoring is needed again.
+The `apphost-tree` group checks native follower ownership through panel visibility, background AppHost tabs, view switches, polling restarts, and window reload. A hidden panel retains a follower only while an AppHost editor is visible, an AppHost run/debug session or attached resource debugger is active, or an explicit consumer holds a data lease; background tabs and passive debugger-install hints do not keep it alive. Assert live process ownership, not just spawn counts. Restore settings through orderly reload/shutdown, never by signalling historical PIDs, and confirm follow mode resumes when monitoring is needed again.
 
 For read-only AppHosts tree assertions, use `waitForAppHostsTreePath` with exact labels (for example, `[appHostLabel, 'Run AppHost']`). It captures visible labels and parent/child relationships together; a `TreeItem` returned by a lookup can refer to a recycled row by the time a later `getLabel()` or child lookup runs. Repository readiness alone does not prevent this UI race. Keep handle-returning helpers for interactions, and do not wait for discovery completion when asserting streamed candidates.
 

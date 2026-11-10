@@ -328,6 +328,11 @@ export class AppHostDataRepository {
         this._syncPolling(resumedFromInactive);
     }
 
+    /**
+     * Keeps the running AppHost data sources active while an AppHost run/debug session or an attached
+     * resource debugger is active. Run and Debug can hide the Aspire panel and the AppHost editor while
+     * a debugger is stopped at a breakpoint, so neither UI signal can be relied on during debugging.
+     */
     setAppHostDebugSessionActive(active: boolean): void {
         if (this._hasActiveAppHostDebugSession === active) {
             return;

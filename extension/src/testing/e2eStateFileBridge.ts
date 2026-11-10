@@ -1601,6 +1601,11 @@ async function proveAttachedResourceDebugging(
         return body;
       },
       detach: async () => {
+        // Stopping at the breakpoint opened Run and Debug and hid the Aspire view, so the attach session is
+        // the only thing keeping resource state live. Show the Aspire view before detaching, as a user
+        // checking on the resource afterwards would, so the post-detach response check and later attaches
+        // still read live resource state.
+        await vscode.commands.executeCommand('workbench.view.extension.aspire-panel');
         await vscode.debug.stopDebugging(attachedSessionForDetach);
         await waitForE2eValue(
           `${expectedDebugType} attach session termination`,
