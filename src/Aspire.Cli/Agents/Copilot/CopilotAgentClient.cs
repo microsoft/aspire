@@ -100,10 +100,10 @@ internal sealed class CopilotAgentClient(
         return (repaired, added);
     }
 
-    // The App and CLI share one user hook, so detecting either one makes Copilot eligible. VS Code does
-    // not yet have a verified hook schema. Canonical scripts still attribute App events to copilot-cli:
-    // https://github.com/microsoft/aspire-skills/issues/71.
-    public AgentEnvironment TelemetryHookEnvironments => AgentEnvironment.CopilotApp | AgentEnvironment.CopilotCli;
+    // VS Code, the Copilot App, and the Copilot CLI share the Copilot harness, which reads user hooks from
+    // ~/.copilot/hooks, so detecting any of them makes Copilot eligible:
+    // https://code.visualstudio.com/docs/agent-customization/hooks#_choose-a-hook-source
+    public AgentEnvironment TelemetryHookEnvironments => Environments;
 
     public async Task<TelemetryHookConfigurationResult> ConfigureTelemetryHookAsync(CancellationToken cancellationToken)
     {
