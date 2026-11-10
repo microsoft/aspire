@@ -1,5 +1,6 @@
 import * as assert from 'assert';
 import { AsyncResource } from 'node:async_hooks';
+import { promisify } from 'node:util';
 import { withScopedFakeTimers } from './helpers/scopedFakeTimers';
 
 suite('withScopedFakeTimers', () => {
@@ -190,5 +191,28 @@ suite('withScopedFakeTimers', () => {
         }
 
         assert.deepStrictEqual(captureGlobals(), originals, 'Globals were not restored after the scopes settled out of order.');
+    });
+
+    test('keeps util.promisify working for timers inside and outside an active scope', async () => {
+        let release = () => { };
+        const released = new Promise<void>(resolve => { release = resolve; });
+        let insideResults: unknown[] = [];
+        const run = withScopedFakeTimers(async clock => {
+            await released;
+            const waits = Promise.all([promisify(setTimeout)(1000, 'timeout'), promisify(setImmediate)('immediate')]);
+            assert.strictEqual(clock.countTimers(), 2);
+            await clock.tickAsync(1000);
+            insideResults = await waits;
+        });
+
+        // Unrelated code running while the scope is active must get the real promisified timers.
+        const outsideResults = await Promise.all([promisify(setTimeout)(1, 'timeout'), promisify(setImmediate)('immediate')])
+            .catch((error: unknown) => error);
+        release();
+        const scopeError = await run.then(() => undefined, (error: unknown) => error);
+
+        assert.deepStrictEqual(outsideResults, ['timeout', 'immediate']);
+        assert.strictEqual(scopeError, undefined);
+        assert.deepStrictEqual(insideResults, ['timeout', 'immediate']);
     });
 });

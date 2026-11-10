@@ -1,4 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
+import { promisify } from 'node:util';
 import * as sinon from 'sinon';
 
 type ScopedTimerMethod = 'setTimeout' | 'clearTimeout' | 'setInterval' | 'clearInterval' | 'setImmediate' | 'clearImmediate' | 'queueMicrotask';
@@ -9,6 +10,9 @@ const scopedTimerMethods: readonly ScopedTimerMethod[] = [
 ];
 
 const clearMethods: ReadonlySet<ScopedTimerMethod> = new Set(['clearTimeout', 'clearInterval', 'clearImmediate']);
+
+/** Timers with a custom `util.promisify` form (`timers/promises`) that the routers must keep. */
+const promisifiedMethods: ReadonlySet<ScopedTimerMethod> = new Set(['setTimeout', 'setImmediate']);
 
 const fakeTimerScope = new AsyncLocalStorage<object>();
 
@@ -136,6 +140,17 @@ function installRouters(): InstalledRouters {
                 return handle;
             };
         Object.defineProperty(router, 'name', { value: name });
+        if (promisifiedMethods.has(name)) {
+            // `util.promisify(setTimeout)` returns this property; route each call so code outside every scope
+            // keeps the real promisified timer and a scope's own code waits on its fake clock.
+            Object.defineProperty(router, promisify.custom, {
+                value: (...args: unknown[]) => {
+                    const target = (activeFakeGlobal() as unknown as Record<ScopedTimerMethod, TimerFunction> | undefined)?.[name] ?? realGlobals[name];
+                    return (promisify(target) as TimerFunction)(...args);
+                },
+                configurable: true,
+            });
+        }
         routers[name] = router;
     }
 
