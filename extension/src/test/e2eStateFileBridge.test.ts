@@ -949,9 +949,11 @@ suite('E2E state file bridge', () => {
     }
 
     test('does not count extension host timers scheduled while the natural-close connection times out', async () => {
-        // The extension host runs other callbacks while clock.tickAsync() yields. On Windows CI one of them
-        // scheduled a timer that was still pending when the wait ended, and countTimers() reported it as
-        // the proof's own leaked timer. Model that with a host timer due after the ticked window.
+        // Bridge-level repro of the original flake in the natural-close connection test above; the helper's
+        // own isolation guarantees are covered in scopedFakeTimers.test.ts. The extension host runs other
+        // callbacks while clock.tickAsync() yields. On Windows CI one of them scheduled a timer that was
+        // still pending when the wait ended, and countTimers() reported it as the proof's own leaked timer.
+        // Model that with a host timer due after the ticked window.
         let hostTimer: NodeJS.Timeout | undefined;
         const hostCallbackRan = new Promise<void>(resolve => setImmediate(() => {
             hostTimer = setTimeout(() => undefined, 5000);
