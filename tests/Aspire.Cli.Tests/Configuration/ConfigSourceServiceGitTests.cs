@@ -24,7 +24,7 @@ public class ConfigSourceServiceGitTests(ITestOutputHelper outputHelper) : IDisp
     public void Dispose() => _loggerFactory.Dispose();
 
     private GitCommandRunner CreateRunner(ICliHostEnvironment hostEnvironment) =>
-        new(hostEnvironment, _loggerFactory.CreateLogger<GitCommandRunner>());
+        new(hostEnvironment, new TestInteractionService(), _loggerFactory.CreateLogger<GitCommandRunner>());
 
     private IGitClient CreateClient(ICliHostEnvironment hostEnvironment) =>
         new GitClient(CreateRunner(hostEnvironment));
@@ -706,7 +706,8 @@ public class ConfigSourceServiceGitTests(ITestOutputHelper outputHelper) : IDisp
         Assert.Equal(selector == "commit" ? "original" : "updated", refreshed.Configuration["custom"]!.GetValue<string>());
         Assert.Equal((expectedCommit, expectedVersion), updatedCheck);
         Assert.Equal(Enumerable.Repeat($"--object-format={objectFormat}", 4),
-            commands.Commands.Where(command => command.Arguments[0] == "init").Select(command => command.Arguments[2]));
+            commands.Commands.Where(command => command.Arguments[0] == "init")
+                .Select(command => Assert.Single(command.Arguments, argument => argument.StartsWith("--object-format=", StringComparison.Ordinal))));
         GitCommandMode[] expectedResolutionModes = selector == "commit" ? []
             : [GitCommandMode.Interactive, GitCommandMode.Unattended, GitCommandMode.Interactive, GitCommandMode.Unattended];
         Assert.Equal(expectedResolutionModes,

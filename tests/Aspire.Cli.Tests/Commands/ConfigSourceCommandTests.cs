@@ -34,6 +34,102 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
     [InlineData("ps --format json", false, false)]
     [InlineData("stop", true, true)]
     [InlineData("ps --format json", false, true)]
+    public async Task CompletedCheck_RealGitDiagnosticsAreDeferredUnlessMachineReadable(string commandLine, bool notify, bool fetch)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var source = new ConfigSource
+        {
+            Repository = Path.Combine(workspace.Path, "missing-repository"),
+            Path = AspireConfigFile.FileName,
+            Ref = fetch ? TestGitCommandRunner.DefaultCommitSha : null,
+            AppliedVersion = "version-1"
+        };
+        await TestConfigSourceServices.SaveBindingAsync(source, workspace.WorkspaceRoot, TestContext.Current.CancellationToken);
+        var interaction = new TestInteractionService();
+        var cliNoticeShown = false;
+        using var provider = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interaction;
+            options.GitClientFactory = services => new GitClient(services.GetRequiredService<IGitCommandRunner>());
+            options.CliUpdateNotifierFactory = _ => new TestCliUpdateNotifier
+            {
+                NotifyIfUpdateAvailableCallback = () =>
+                {
+                    Assert.Empty(interaction.DisplayedRawText);
+                    cliNoticeShown = true;
+                }
+            };
+        }).BuildServiceProvider();
+        var service = provider.GetRequiredService<ConfigSourceService>();
+        service.CheckForConfigSourceUpdates(workspace.WorkspaceRoot, TestContext.Current.CancellationToken);
+        await service.WaitForChecksAsync().DefaultTimeout();
+
+        Assert.Empty(interaction.DisplayedMessages);
+        Assert.Empty(interaction.DisplayedRawText);
+
+        await provider.GetRequiredService<RootCommand>().Parse(commandLine).InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(notify, cliNoticeShown);
+        var failure = string.Format(System.Globalization.CultureInfo.CurrentCulture,
+            ConfigSourceStrings.CheckFailed, ConfigSourceStrings.RepositoryUnavailable);
+        Assert.Equal(notify ? 1 : 0, interaction.DisplayedMessages.Count(message => message.Message == failure));
+        if (notify)
+        {
+            var diagnostic = Assert.Single(interaction.DisplayedRawText);
+            Assert.Equal(ConsoleOutput.Error, diagnostic.ConsoleOverride);
+            Assert.StartsWith("fatal: ", diagnostic.Text);
+            Assert.Contains(source.Repository, diagnostic.Text);
+            service.NotifyIfUpdateAvailable();
+            Assert.Single(interaction.DisplayedRawText);
+        }
+        else
+        {
+            Assert.Equal(("[]", (ConsoleOutput?)ConsoleOutput.Standard), Assert.Single(interaction.DisplayedRawText));
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ExplicitAcquisition_AfterBackgroundCheckStillDisplaysGitDiagnosticsImmediately(bool fetch)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var source = new ConfigSource
+        {
+            Repository = Path.Combine(workspace.Path, "missing-repository"),
+            Path = AspireConfigFile.FileName,
+            Ref = fetch ? TestGitCommandRunner.DefaultCommitSha : null,
+            AppliedVersion = "version-1"
+        };
+        await TestConfigSourceServices.SaveBindingAsync(source, workspace.WorkspaceRoot, TestContext.Current.CancellationToken);
+        var interaction = new TestInteractionService();
+        using var provider = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interaction;
+            options.GitClientFactory = services => new GitClient(services.GetRequiredService<IGitCommandRunner>());
+        }).BuildServiceProvider();
+        var service = provider.GetRequiredService<ConfigSourceService>();
+        service.CheckForConfigSourceUpdates(workspace.WorkspaceRoot, TestContext.Current.CancellationToken);
+        await service.WaitForChecksAsync().DefaultTimeout();
+        Assert.Empty(interaction.DisplayedRawText);
+
+        var exception = await Assert.ThrowsAsync<ConfigSourceException>(() =>
+            service.CheckProjectAsync(workspace.WorkspaceRoot, force: true, TestContext.Current.CancellationToken));
+
+        Assert.Equal(ConfigSourceStrings.RepositoryUnavailable, exception.Message);
+        var diagnostic = Assert.Single(interaction.DisplayedRawText);
+        Assert.Equal(ConsoleOutput.Error, diagnostic.ConsoleOverride);
+        Assert.StartsWith("fatal: ", diagnostic.Text);
+        Assert.Contains(source.Repository, diagnostic.Text);
+        service.NotifyIfUpdateAvailable();
+        Assert.Equal([diagnostic, diagnostic], interaction.DisplayedRawText);
+    }
+
+    [Theory]
+    [InlineData("stop", true, false)]
+    [InlineData("ps --format json", false, false)]
+    [InlineData("stop", true, true)]
+    [InlineData("ps --format json", false, true)]
     public async Task CompletedCheck_NotifiesAtExitAfterCliUpdateUnlessMachineReadable(string commandLine, bool notify, bool timeout)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -608,11 +704,11 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
         var prompts = 0;
         var interaction = new TestInteractionService
         {
-            PromptForSelectionCallback = (prompt, _, _, _) =>
+            ConfirmCallback = (prompt, _) =>
             {
                 Assert.Equal(ConfigSourceStrings.UseSourcePrompt, prompt);
                 prompts++;
-                return accepted ? ConfigSourceStrings.Accept : ConfigSourceStrings.Decline;
+                return accepted;
             }
         };
         for (var attempt = 0; attempt < 2; attempt++)
@@ -698,7 +794,7 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
         await File.WriteAllTextAsync(configPath, configuration);
         var interaction = new TestInteractionService
         {
-            PromptForSelectionCallback = (_, _, _, _) => throw new InvalidOperationException("Unexpected source prompt.")
+            ConfirmCallback = (_, _) => throw new InvalidOperationException("Unexpected source prompt.")
         };
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {

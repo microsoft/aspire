@@ -50,13 +50,13 @@ public partial class NewCommandLocalTemplateTests
         var prompts = 0;
         var interaction = new TestInteractionService
         {
-            PromptForSelectionCallback = (prompt, choices, _, _) =>
+            ConfirmCallback = (prompt, defaultValue) =>
             {
                 prompts++;
                 Assert.False(json);
                 Assert.Equal(ConfigSourceStrings.UseSourcePrompt, prompt);
-                Assert.Equal([ConfigSourceStrings.Accept, ConfigSourceStrings.Decline], choices.Cast<string>());
-                return accept ? ConfigSourceStrings.Accept : ConfigSourceStrings.Decline;
+                Assert.True(defaultValue);
+                return accept;
             }
         };
 
@@ -118,7 +118,7 @@ public partial class NewCommandLocalTemplateTests
         Assert.Equal(shouldPrompt ? 1 : 0, prompts);
         Assert.Empty(interaction.DisplayedErrors);
         Assert.Empty(interaction.StringPromptCalls);
-        Assert.Empty(interaction.BooleanPromptCalls);
+        Assert.Equal(prompts, interaction.BooleanPromptCalls.Count);
         Assert.Empty(interaction.DisplayedLines);
         Assert.Empty(interaction.DisplayedPlainText);
         Assert.Empty(interaction.DisplayedSuccess);
@@ -164,7 +164,7 @@ public partial class NewCommandLocalTemplateTests
 
         if (json)
         {
-            Assert.Empty(interaction.DisplayedRenderables);
+            Assert.Equal(useSource is true ? 1 : 0, interaction.DisplayedRenderables.Count);
             Assert.Equal(ConsoleOutput.Error, interaction.Console);
             Assert.All(interaction.DisplayedMessages,
                 message => Assert.Equal(ConsoleOutput.Error, message.ConsoleOverride ?? interaction.Console));
@@ -181,7 +181,10 @@ public partial class NewCommandLocalTemplateTests
             var console = AnsiConsole.Create(new AnsiConsoleSettings { Out = new AnsiConsoleOutput(writer), Ansi = AnsiSupport.No });
             console.Profile.Capabilities.Ansi = false;
             console.Profile.Width = 160;
-            console.Write(Assert.Single(interaction.DisplayedRenderables));
+            Assert.Collection(interaction.DisplayedRenderables,
+                details => Assert.IsType<Padder>(details),
+                sources => Assert.IsType<Table>(sources));
+            console.Write(interaction.DisplayedRenderables[^1]);
             await Verify(writer.ToString()).UseParameters(json, useSource, accept, priorCache);
         }
     }
@@ -219,17 +222,17 @@ public partial class NewCommandLocalTemplateTests
         var interaction = new TestInteractionService();
         interaction.SetupStringPromptResponse("Hello");
         var selections = 0;
-        interaction.PromptForSelectionCallback = (prompt, choices, formatter, _) =>
+        interaction.ConfirmCallback = (prompt, _) =>
         {
-            if (prompt == ConfigSourceStrings.UseSourcePrompt)
-            {
-                Assert.Null(consent);
-                Assert.Empty(git.Commands);
-                Assert.Single(interaction.DisplayedMessages,
-                    message => message.Message == $"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]");
-                return accept ? ConfigSourceStrings.Accept : ConfigSourceStrings.Decline;
-            }
-
+            Assert.Equal(ConfigSourceStrings.UseSourcePrompt, prompt);
+            Assert.Null(consent);
+            Assert.Empty(git.Commands);
+            Assert.Single(interaction.DisplayedMessages,
+                message => message.Message == $"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]");
+            return accept;
+        };
+        interaction.PromptForSelectionCallback = (_, choices, formatter, _) =>
+        {
             selections++;
             var options = choices.Cast<object>().ToArray();
             Assert.Equal(usesInheritedSource
@@ -264,9 +267,10 @@ public partial class NewCommandLocalTemplateTests
         Assert.Equal(CliExitCodes.Success, result);
         Assert.Equal(1, selections);
         Assert.Empty(interaction.DisplayedErrors);
-        var warning = Assert.Single(interaction.DisplayedMessages,
-            message => message.Message == $"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]");
-        Assert.Equal(ConsoleOutput.Error, warning.ConsoleOverride);
+        var warnings = interaction.DisplayedMessages.Where(
+            message => message.Message == $"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]").ToArray();
+        Assert.Equal(2, warnings.Length);
+        Assert.All(warnings, warning => Assert.Equal(ConsoleOutput.Error, warning.ConsoleOverride));
         Assert.Equal(originalGlobal, await File.ReadAllTextAsync(globalPath));
         Assert.Equal(usesInheritedSource ? "Inherited: Hello" : "Personal: Hello",
             await File.ReadAllTextAsync(Path.Combine(workspace.Path, "out", "Demo.txt")));
@@ -321,7 +325,7 @@ public partial class NewCommandLocalTemplateTests
         await File.WriteAllTextAsync(path, RealGitTemplateSourceConfiguration);
         await GitTestHelper.RunGitAsync(repository.FullName, outputHelper, "commit", "-am", "Add proof template sources");
         await GitTestHelper.RunGitAsync(repository.FullName, outputHelper, "checkout", "main");
-        var runner = new GitCommandRunner(TestHelpers.CreateNonInteractiveHostEnvironment(), NullLogger<GitCommandRunner>.Instance);
+        var runner = new GitCommandRunner(TestHelpers.CreateNonInteractiveHostEnvironment(), new TestInteractionService(), NullLogger<GitCommandRunner>.Instance);
         var commit = await runner.RunAsync(repository, ["rev-parse", source.Ref!], GitCommandMode.Captured, TestContext.Current.CancellationToken);
         var version = await runner.RunAsync(repository, ["rev-parse", $"{source.Ref}:{source.Path}"], GitCommandMode.Captured, TestContext.Current.CancellationToken);
 

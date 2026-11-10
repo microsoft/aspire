@@ -1,4 +1,4 @@
-// Licensed to the .NET Foundation under one or more agreements.
+﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Concurrent;
@@ -42,7 +42,7 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
     private readonly CancellationTokenSource _cts = new();
     private readonly SemaphoreSlim _semaphore = new SemaphoreSlim(1, 1);
     private readonly KeyedInteractionCollection _pendingInteractions = new();
-    private readonly ConcurrentDictionary<int, byte> _releasedInteractionIds = new();
+    internal readonly ConcurrentDictionary<int, byte> _releasedInteractionIds = new();
     private readonly KeyedMessageCollection _openMessageBars = new();
     private MarkdownProcessor _markdownProcessor = default!;
     private Task? _dialogDisplayTask;
@@ -366,37 +366,55 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
 
     private void OnParameterInteractionReleased(InteractionsInputsDialogViewModel interaction)
     {
-        // The inline form that showed the prompt is gone, for example because the user navigated away. Queue the
-        // prompt again so it's shown as a dialog. This handler runs on the renderer and can't wait on the semaphore,
-        // so the prompt is queued in the background. The AppHost can complete the interaction meanwhile: the watcher
-        // removes the id from _releasedInteractionIds when it does, and the prompt isn't queued.
+        // The inline form that showed the prompt is gone, for example because the user navigated away without entering
+        // the values. Leaving is a choice to do it later, so the prompt is cancelled rather than moved to a dialog that
+        // interrupts whatever the user went to. The AppHost then shows its "Unresolved parameters" notification again,
+        // whose "Enter values" opens the form, and a form that shows every parameter accepts it on its own, so moving
+        // between two such forms keeps the prompt (see ParameterProcessor's unresolved parameters loop).
+        //
+        // This handler runs on the renderer and can't wait on the semaphore, so the prompt is cancelled in the
+        // background. The AppHost can complete the interaction meanwhile: the watcher removes the id from
+        // _releasedInteractionIds when it does, and nothing is sent.
         var interactionId = interaction.Interaction.InteractionId;
         _releasedInteractionIds.TryAdd(interactionId, 0);
         _ = Task.Run(async () =>
         {
             try
             {
+                bool cancel;
                 await _semaphore.WaitAsync(_cts.Token).ConfigureAwait(false);
                 try
                 {
+                    // The prompt can be back on screen by now: a replacement form mounted and an AppHost update or a
+                    // reconnection replayed the prompt into it before this task got the semaphore. The display loop
+                    // sets ParameterInteractionState.Current while it holds the semaphore, so reading it here, on the
+                    // renderer, sees that. Cancelling would close the form the user is now filling in.
+                    var shownInline = false;
+                    await InvokeAsync(() => shownInline = ParameterInteractionState.Current?.Interaction.InteractionId == interactionId).ConfigureAwait(false);
+
                     // A newer version of the prompt is already queued or shown when the AppHost updated it meanwhile.
-                    var item = interaction.Interaction;
-                    if (_releasedInteractionIds.TryRemove(interactionId, out _) &&
+                    cancel = _releasedInteractionIds.TryRemove(interactionId, out _) &&
+                        !shownInline &&
                         !_pendingInteractions.Contains(interactionId) &&
-                        _interactionDialogReference?.InteractionId != interactionId)
-                    {
-                        _pendingInteractions.Insert(0, item);
-                        NotifyInteractionAvailable();
-                    }
+                        _interactionDialogReference?.InteractionId != interactionId;
                 }
                 finally
                 {
                     _semaphore.Release();
                 }
+
+                if (cancel)
+                {
+                    await DashboardClient.SendInteractionRequestAsync(CreateCompletionRequest(interactionId), _cts.Token).ConfigureAwait(false);
+                }
             }
             catch (OperationCanceledException) when (_cts.IsCancellationRequested)
             {
                 // The provider is being disposed.
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "Unexpected error while cancelling parameter interaction {InteractionId}.", interactionId);
             }
         });
     }

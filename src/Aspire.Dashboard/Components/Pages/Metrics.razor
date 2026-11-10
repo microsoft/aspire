@@ -115,7 +115,8 @@
                                             ShowChangePerIntervalOption="true"
                                             BackLabel="@GetBackLabel()"
                                             OnBackAsync="@NavigateBackAsync"
-                                            Resources="@_resources" />
+                                            Resources="@_resources"
+                                            PinResourceNames="@GetPinResourceNames()" />
                                     }
                                     else if (PageViewModel.ShowPinned && (PageViewModel.SelectedResource.Id is not null || IsAggregate))
                                     {
@@ -252,7 +253,8 @@
                                Duration="@PageViewModel.SelectedDuration.Id"
                                ShowMeterName="@showMeterName"
                                MaxCount="@maxCount"
-                               GetInstrumentUrl="@GetInstrumentUrl" />
+                               GetInstrumentUrl="@GetInstrumentUrl"
+                               PinResourceNames="@GetPinResourceNames()" />
             }
         </section>
     };

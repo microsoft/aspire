@@ -44,12 +44,12 @@ public class ApplicationSummaryTests : DashboardTestContext
 
         cut.WaitForAssertion(() => Assert.Equal("1 of 2 resources need attention", cut.Find(".home-hero-headline").TextContent));
         Assert.Single(cut.FindAll(".home-activity"));
-        Assert.Single(cut.FindAll(".home-insights"));
+        Assert.Empty(cut.FindAll(".home-insights"));
         Assert.Single(cut.FindAll(".home-problems"));
         Assert.Empty(cut.FindAll(".resource-card, .home-resource-table"));
         Assert.Equal(graphEnabled ? ["Summary", "Graph"] : ["Summary"],
             outlet.FindAll(".icon-toggle").Select(e => e.GetAttribute("aria-label")));
-        Assert.IsType<Icons.Regular.Size20.DataBarVertical>(
+        Assert.IsType<Icons.Regular.Size20.DataUsage>(
             outlet.FindComponent<IconToggleGroup<GroupOverview>>().Instance.Options.Single(option => option.Value == GroupOverview.Summary).Icon);
     }
 
@@ -62,7 +62,7 @@ public class ApplicationSummaryTests : DashboardTestContext
         await cut.InvokeAsync(() => cut.Render(builder => builder.Add(p => p.ResourceNames, ["api"])));
         cut.WaitForAssertion(() => Assert.Equal("1 resource is running", cut.Find(".home-hero-headline").TextContent));
         Assert.Single(cut.FindAll(".home-activity"));
-        Assert.Single(cut.FindAll(".home-insights"));
+        Assert.Empty(cut.FindAll(".home-insights"));
         Assert.Single(cut.FindAll(".home-problems"));
 
         await cut.InvokeAsync(() => cut.Render(builder => builder.Add(p => p.ResourceNames, ["broken"])));
@@ -91,6 +91,46 @@ public class ApplicationSummaryTests : DashboardTestContext
     }
 
     [Fact]
+    public void Render_MissingParameters_HeadlineSaysSo()
+    {
+        // Missing values keep resources from starting, so "no resources need attention" would be wrong.
+        var cut = RenderSummary(missingParameters: true, resources:
+        [
+            ModelTestHelpers.CreateResource("api", state: KnownResourceState.Running),
+            ModelTestHelpers.CreateResource("parameter", resourceType: KnownResourceTypes.Parameter, state: KnownResourceState.ValueMissing)
+        ]);
+        cut.WaitForAssertion(() => Assert.Equal("1 parameter needs a value", cut.Find(".home-hero-headline").TextContent));
+        Assert.Contains("state-warning", cut.Find(".home-hero").ClassList);
+    }
+
+    [Fact]
+    public void Render_MissingParametersAndBrokenResource_AttentionComesFirst()
+    {
+        var cut = RenderSummary(missingParameters: true);
+        cut.WaitForAssertion(() => Assert.Equal("1 of 2 resources need attention", cut.Find(".home-hero-headline").TextContent));
+        Assert.Contains("state-error", cut.Find(".home-hero").ClassList);
+    }
+
+    [Fact]
+    public void Render_StoppedResources_LegendNamesFinishedNotStartedAndUnknown()
+    {
+        var cut = RenderSummary(resources:
+        [
+            ModelTestHelpers.CreateResource("api", state: KnownResourceState.Running),
+            ModelTestHelpers.CreateResource("job", state: KnownResourceState.Finished),
+            ModelTestHelpers.CreateResource("migrator", state: KnownResourceState.Exited),
+            ModelTestHelpers.CreateResource("worker", state: KnownResourceState.NotStarted),
+            ModelTestHelpers.CreateResource("mystery", state: KnownResourceState.Unknown)
+        ]);
+
+        cut.WaitForAssertion(() => Assert.Equal(
+            [("1", "Running"), ("2", "Finished"), ("1", "Not started"), ("1", "Unknown")],
+            cut.FindAll(".home-legend-item").Select(item => (
+                item.QuerySelector(".home-legend-value")!.TextContent,
+                item.QuerySelector(".home-legend-value + span")!.TextContent))));
+    }
+
+    [Fact]
     public async Task Render_ActivityAndInsights_UseLocalizedText()
     {
         var loc = new TestStringLocalizer<ResourceStrings>();
@@ -113,19 +153,7 @@ public class ApplicationSummaryTests : DashboardTestContext
         Assert.Equal(
             new[] { nameof(ResourceStrings.HomeActivityWindowStart), nameof(ResourceStrings.HomeActivityWindowEnd) }.Select(key => loc[key].Value),
             cut.FindAll(".home-chart-axis span").Select(element => element.TextContent));
-        Assert.Equal(loc[nameof(ResourceStrings.HomeInsightsLabel)], cut.Find(".home-insights").GetAttribute("aria-label"));
-        Assert.Equal(
-            new[] { nameof(ResourceStrings.HomeSlowestEndpoints), nameof(ResourceStrings.HomeBusiestResources), nameof(ResourceStrings.HomeErrorHotspots) }
-                .Select(key => loc[key].Value),
-            cut.FindAll(".home-insight h2").Select(element => element.TextContent));
-        Assert.Equal(
-            new[] { nameof(ResourceStrings.HomeP95Label), nameof(ResourceStrings.HomeRequestsPerMinute), nameof(ResourceStrings.HomeErrorHotspotsHint) }
-                .Select(key => loc[key].Value),
-            cut.FindAll(".home-insight-hint").Select(element => element.TextContent));
-        Assert.Equal(
-            new[] { nameof(ResourceStrings.HomeNoRecentRequests), nameof(ResourceStrings.HomeNoRecentRequests), nameof(ResourceStrings.HomeNoRecentActivityErrors) }
-                .Select(key => loc[key].Value),
-            cut.FindAll(".home-insight .home-empty").Select(element => element.TextContent.Trim()));
+        Assert.Empty(cut.FindAll(".home-insights"));
 
         var now = Services.GetRequiredService<BrowserTimeProvider>().GetUtcNow().UtcDateTime.AddSeconds(-1);
         await Services.GetRequiredService<SqliteTelemetryRepository>().AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
@@ -147,6 +175,15 @@ public class ApplicationSummaryTests : DashboardTestContext
 
         cut.WaitForAssertion(() =>
         {
+            Assert.Equal(loc[nameof(ResourceStrings.HomeInsightsLabel)], cut.Find(".home-insights").GetAttribute("aria-label"));
+            Assert.Equal(
+                new[] { nameof(ResourceStrings.HomeSlowestEndpoints), nameof(ResourceStrings.HomeBusiestResources), nameof(ResourceStrings.HomeErrorHotspots) }
+                    .Select(key => loc[key].Value),
+                cut.FindAll(".home-insight h2").Select(element => element.TextContent));
+            Assert.Equal(
+                new[] { nameof(ResourceStrings.HomeP95Label), nameof(ResourceStrings.HomeRequestsPerMinute), nameof(ResourceStrings.HomeErrorHotspotsHint) }
+                    .Select(key => loc[key].Value),
+                cut.FindAll(".home-insight-hint").Select(element => element.TextContent));
             var insights = cut.FindAll(".home-insight");
             Assert.Equal(loc[nameof(ResourceStrings.HomeRequestCountShort), "1"], insights[0].QuerySelector(".home-event-meta > span:last-child")!.TextContent);
             Assert.Equal(loc[nameof(ResourceStrings.HomeEndpointTooltip), "api", "Test span. Id: span", "1"],

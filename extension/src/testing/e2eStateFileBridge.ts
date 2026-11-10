@@ -20,6 +20,7 @@ import { AspireTerminalCommandEvent, AspireTerminalProvider } from '../utils/Asp
 import { delay } from '../utils/async';
 import { dashboardDefaultChangedNotificationKey } from '../utils/dashboardNotificationState';
 import { extensionLogOutputChannel } from '../utils/logging';
+import { certificateBase64ToPem } from '../utils/security';
 import { isCommandCancellation, onDidInvokeCommand } from '../utils/telemetry';
 import { AspireAppHostTreeProvider } from '../views/AspireAppHostTreeProvider';
 import { ResourceItem } from '../views/treeItems/resourceItems';
@@ -675,6 +676,10 @@ export async function executeE2eControlCommand(
       markStarted();
       await vscode.commands.executeCommand('workbench.action.closeAllEditors');
       return getActiveEditorInfo();
+    }
+    case 'clearAllNotifications': {
+      markStarted();
+      return await vscode.commands.executeCommand('notifications.clearAll');
     }
     case 'getRegisteredAspireCommands': {
       markStarted();
@@ -1597,6 +1602,11 @@ async function proveAttachedResourceDebugging(
         return body;
       },
       detach: async () => {
+        // Stopping at the breakpoint opened Run and Debug and hid the Aspire view, so the attach session is
+        // the only thing keeping resource state live. Show the Aspire view before detaching, as a user
+        // checking on the resource afterwards would, so the post-detach response check and later attaches
+        // still read live resource state.
+        await vscode.commands.executeCommand('workbench.view.extension.aspire-panel');
         await vscode.debug.stopDebugging(attachedSessionForDetach);
         await waitForE2eValue(
           `${expectedDebugType} attach session termination`,
@@ -3042,6 +3052,13 @@ async function stopDebuggingForE2E(
   appHostLaunchService: AppHostLaunchService,
   appHostTreeProvider: AspireAppHostTreeProvider
 ): Promise<void> {
+  // Earlier test steps can leave the Aspire view hidden: opening the workspace folder or reloading the
+  // window restarts VS Code with Explorer showing, and some tests switch to Explorer on purpose. Once the
+  // last debug session ends with the view hidden, nothing is watching the AppHost list, so it stops
+  // refreshing and the stopped AppHost never leaves the snapshot. Show the Aspire view, as a user
+  // watching the AppHost stop would.
+  await vscode.commands.executeCommand('workbench.view.extension.aspire-panel');
+
   const trackedSessions = aspireContext.aspireDebugSessions;
   if (trackedSessions.length > 0) {
     const stoppedDebugSessionIds = new Set(trackedSessions.map(debugSession => debugSession.debugSessionId));
@@ -3405,16 +3422,16 @@ function getE2eBreakpoints(): Array<{ filePath: string; line: number; enabled: b
 
 // Verify the packaged extension's externally visible DCP /info response, rather
 // than only calling the in-process capability helper.
-async function getDcpRunSessionInfoForE2E({ address, token }: DcpServerConnectionInfo): Promise<unknown> {
+async function getDcpRunSessionInfoForE2E({ address, token, certificate }: DcpServerConnectionInfo): Promise<unknown> {
   return await new Promise((resolve, reject) => {
     const request = https.get(`https://${address}/info`, {
       headers: {
         Authorization: `Bearer ${token}`,
         'microsoft-developer-dcp-instance-id': 'aspire-extension-e2e',
       },
-      // The opt-in E2E bridge calls the extension's loopback-only DCP server,
-      // which uses a per-session self-signed certificate.
-      rejectUnauthorized: false,
+      // The opt-in E2E bridge calls the extension's loopback-only DCP server, which uses a
+      // per-session self-signed certificate. Trust exactly that certificate instead of disabling validation.
+      ca: certificateBase64ToPem(certificate),
     }, response => {
       const chunks: Buffer[] = [];
       response.on('data', chunk => chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)));

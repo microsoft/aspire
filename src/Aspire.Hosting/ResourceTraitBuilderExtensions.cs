@@ -22,10 +22,10 @@ public static class ResourceTraitBuilderExtensions
         var annotation = new TraitAnnotation(name, value);
 
         // WithTags adds its tags through here, and a reserved tag added directly is still a tag.
-        if (name == KnownResourceTraits.DashboardTag &&
+        if (name == KnownResourceTraits.Tag &&
             (value.Length > 50 || value != string.Join(' ', value.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))))
         {
-            throw new ArgumentException("Dashboard tags must be at most 50 characters and use single spaces between words, without leading or trailing whitespace.", nameof(value));
+            throw new ArgumentException("Tags must be at most 50 characters and use single spaces between words, without leading or trailing whitespace.", nameof(value));
         }
 
         return builder.WithAnnotation(annotation);
@@ -43,7 +43,7 @@ public static class ResourceTraitBuilderExtensions
 
         foreach (var tag in tags)
         {
-            builder.WithTrait(KnownResourceTraits.DashboardTag, tag);
+            builder.WithTrait(KnownResourceTraits.Tag, tag);
         }
 
         return builder;

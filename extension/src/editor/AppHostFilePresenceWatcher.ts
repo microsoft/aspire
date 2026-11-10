@@ -10,9 +10,8 @@ import { projectContentsReferencesRunnableAspireAppHost } from '../utils/appHost
  * This is what makes code-lens decorations on a freshly-created AppHost file see live
  * resource state without the user first opening the Aspire side panel.
  *
- * The watcher reports every open AppHost tab (focused or backgrounded). The set of open AppHost tabs
- * drives both which running hosts surface in the workspace panel and whether the data sources stay
- * alive.
+ * Open tabs determine workspace scope; visible AppHost editors determine whether live data is needed.
+ * Editor transitions are debounced so a quick tab switch does not restart the CLI watchers.
  *
  * The watcher reacts to:
  *  - tab open/close/activate (`onDidChangeTabs`),
@@ -30,15 +29,16 @@ export class AppHostFilePresenceWatcher implements vscode.Disposable {
 
     private readonly _disposables: vscode.Disposable[] = [];
     private _lastReportedOpenPaths: readonly string[] = [];
+    private _lastReportedVisible = false;
     private _changeTimer: NodeJS.Timeout | undefined;
     private _updateVersion = 0;
     private _updateTask: Promise<void> = Promise.resolve();
 
     constructor(private readonly _repository: AppHostDataRepository) {
         this._disposables.push(
-            vscode.window.tabGroups.onDidChangeTabs(() => this._queueUpdate()),
-            vscode.window.onDidChangeVisibleTextEditors(() => this._queueUpdate()),
-            vscode.window.onDidChangeActiveTextEditor(() => this._queueUpdate()),
+            vscode.window.tabGroups.onDidChangeTabs(() => this._scheduleUpdate()),
+            vscode.window.onDidChangeVisibleTextEditors(() => this._scheduleUpdate()),
+            vscode.window.onDidChangeActiveTextEditor(() => this._scheduleUpdate()),
             vscode.workspace.onDidChangeTextDocument(e => this._onTextDocumentChanged(e)),
         );
         this._queueUpdate();
@@ -71,6 +71,7 @@ export class AppHostFilePresenceWatcher implements vscode.Disposable {
     }
 
     private _scheduleUpdate(): void {
+        this._updateVersion++;
         if (this._changeTimer) {
             clearTimeout(this._changeTimer);
         }
@@ -91,11 +92,14 @@ export class AppHostFilePresenceWatcher implements vscode.Disposable {
             return;
         }
 
-        if (openPathsEqual(this._lastReportedOpenPaths, openPaths)) {
+        const hasVisibleAppHostEditor = vscode.window.visibleTextEditors.some(
+            editor => openPaths.includes(editor.document.uri.fsPath));
+        if (openPathsEqual(this._lastReportedOpenPaths, openPaths) && hasVisibleAppHostEditor === this._lastReportedVisible) {
             return;
         }
         this._lastReportedOpenPaths = openPaths;
-        this._repository.setAppHostFilesOpen(openPaths);
+        this._lastReportedVisible = hasVisibleAppHostEditor;
+        this._repository.setAppHostFilesOpen(openPaths, hasVisibleAppHostEditor);
     }
 
     private async _openAppHostPaths(): Promise<string[]> {
@@ -156,11 +160,17 @@ export class AppHostFilePresenceWatcher implements vscode.Disposable {
     }
 
     dispose(): void {
+        this._updateVersion++;
         if (this._changeTimer) {
             clearTimeout(this._changeTimer);
             this._changeTimer = undefined;
         }
         this._disposables.forEach(d => d.dispose());
+        if (this._lastReportedOpenPaths.length > 0) {
+            this._repository.setAppHostFilesOpen([], false);
+            this._lastReportedOpenPaths = [];
+            this._lastReportedVisible = false;
+        }
     }
 }
 

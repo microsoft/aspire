@@ -112,6 +112,11 @@
         <target state="new">{0} failed requests</target>
         <note>{0} is the failed request count.</note>
       </trans-unit>
+      <trans-unit id="HomeFinishedLabel">
+        <source>Finished</source>
+        <target state="new">Finished</target>
+        <note>Legend label on the overview's health bar for resources that finished or exited without an error</note>
+      </trans-unit>
       <trans-unit id="HomeHeadlineAllRunning">
         <source>All {0} resources are running</source>
         <target state="new">All {0} resources are running</target>
@@ -147,11 +152,6 @@
         <target state="new">1 resource is running</target>
         <note />
       </trans-unit>
-      <trans-unit id="HomeInactiveLabel">
-        <source>Inactive</source>
-        <target state="new">Inactive</target>
-        <note />
-      </trans-unit>
       <trans-unit id="HomeInsightsLabel">
         <source>Insights</source>
         <target state="new">Insights</target>
@@ -182,20 +182,15 @@
         <target state="new">No failed traces</target>
         <note />
       </trans-unit>
-      <trans-unit id="HomeNoRecentActivityErrors">
-        <source>No errors in the last 15 minutes</source>
-        <target state="new">No errors in the last 15 minutes</target>
-        <note />
-      </trans-unit>
       <trans-unit id="HomeNoRecentErrors">
         <source>No errors logged</source>
         <target state="new">No errors logged</target>
         <note />
       </trans-unit>
-      <trans-unit id="HomeNoRecentRequests">
-        <source>No requests in the last 15 minutes</source>
-        <target state="new">No requests in the last 15 minutes</target>
-        <note />
+      <trans-unit id="HomeNotStartedLabel">
+        <source>Not started</source>
+        <target state="new">Not started</target>
+        <note>Legend label on the overview's health bar for resources that haven't been started</note>
       </trans-unit>
       <trans-unit id="HomeP95Label">
         <source>p95</source>
@@ -281,6 +276,11 @@
         <source>traces</source>
         <target state="new">traces</target>
         <note />
+      </trans-unit>
+      <trans-unit id="HomeUnknownLabel">
+        <source>Unknown</source>
+        <target state="new">Unknown</target>
+        <note>Legend label on the overview's health bar for resources whose state the dashboard can't tell</note>
       </trans-unit>
       <trans-unit id="HomeUnviewedErrors">
         <source>{0} unviewed error logs</source>
@@ -511,6 +511,11 @@
         <source>{0} of {1}</source>
         <target state="new">{0} of {1}</target>
         <note />
+      </trans-unit>
+      <trans-unit id="ResourceOverviewEndpointAlsoAt">
+        <source>{0}, also at {1}</source>
+        <target state="new">{0}, also at {1}</target>
+        <note>Tooltip of an endpoint's address on the resource overview. {0} is the address, {1} is the same endpoint's other address, such as its localhost address</note>
       </trans-unit>
       <trans-unit id="ResourceOverviewEndpointsTitle">
         <source>Endpoints</source>

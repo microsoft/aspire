@@ -96,6 +96,7 @@ suite('E2E state file bridge', () => {
                 }, 10);
             });
             sandbox.stub(vscode.debug, 'addBreakpoints');
+            const executeCommand = sandbox.stub(vscode.commands, 'executeCommand').resolves(undefined);
             const session = createDebugSession('attach-proof', debugType, 'Attached worker', { request: 'attach' });
             let continueAccepted = false;
             let targetResponded = false;
@@ -114,6 +115,10 @@ suite('E2E state file bridge', () => {
                 assert.strictEqual(stopped, session);
                 assert.strictEqual(removeBreakpoints.called, true);
                 assert.strictEqual(targetResponded, true, 'An accepted continue request is not proof of target progress.');
+                assert.deepStrictEqual(
+                    executeCommand.getCalls().map(call => call.args),
+                    [['workbench.view.extension.aspire-panel']],
+                    'The Aspire view must be shown before detaching.');
                 detached = true;
                 terminateListener?.(session);
             });
@@ -417,6 +422,28 @@ suite('E2E state file bridge', () => {
         assert.deepStrictEqual(launchStub.firstCall.args, [appHostPath, 'publish', true]);
         assert.strictEqual(markStarted.callCount, 2);
         provider.dispose();
+    });
+
+    test('clears notifications with the VS Code clear-all command', async () => {
+        const repository = createRepository([]);
+        const terminalProvider = {} as AspireTerminalProvider;
+        const launchService = createLaunchService();
+        const provider = {} as AspireAppHostTreeProvider;
+        const executeCommandStub = sandbox.stub(vscode.commands, 'executeCommand').resolves();
+        const markStarted = sandbox.spy();
+
+        await dispatchControlCommand(
+            { name: 'clearAllNotifications' },
+            repository,
+            launchService,
+            provider,
+            terminalProvider,
+            markStarted);
+
+        assert.deepStrictEqual(executeCommandStub.getCalls().map(call => call.args), [
+            ['notifications.clearAll'],
+        ]);
+        assert.strictEqual(markStarted.callCount, 1);
     });
 
     test('scopes missing and exact C# extension version overrides to resource configuration creation', async () => {

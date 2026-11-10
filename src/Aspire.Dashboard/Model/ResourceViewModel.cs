@@ -60,7 +60,7 @@ public sealed class ResourceViewModel
             ? property.Value.ListValue.Values.Where(v => v.HasStringValue).Select(v => v.StringValue).ToArray()
             : [];
 
-    internal IReadOnlyList<string> AppHostTags => GetTraitValues(KnownResourceTraits.DashboardTag);
+    internal IReadOnlyList<string> AppHostTags => GetTraitValues(KnownResourceTraits.Tag);
 
     internal int? DisplayOrder =>
         Properties.TryGetValue(KnownProperties.Resource.DisplayOrder, out var property) &&
@@ -402,11 +402,11 @@ public sealed class DisplayedResourcePropertyViewModel : IPropertyGridItem
     public int SortOrder => _propertyViewModel.SortOrder;
     public bool IsTrait => _propertyViewModel.IsTrait;
 
-    // The AppHost sends the raw trait name as the display name, e.g. "Aspire_Dashboard_Tag". Reserved dashboard
+    // The AppHost sends the raw trait name as the display name, e.g. "Aspire_Tag". Reserved Aspire
     // properties get a readable, localized name instead.
     public string DisplayName => _propertyViewModel.Name switch
     {
-        KnownProperties.Resource.TraitPrefix + KnownResourceTraits.DashboardTag => _loc[nameof(Resources.Resources.ResourceTraitDashboardTags)],
+        KnownProperties.Resource.TraitPrefix + KnownResourceTraits.Tag => _loc[nameof(Resources.Resources.ResourceTraitDashboardTags)],
         KnownProperties.Resource.DisplayOrder => _loc[nameof(Resources.Resources.ResourceDisplayOrder)],
         _ => _propertyViewModel.DisplayName ?? _propertyViewModel.KnownProperty?.GetDisplayName(_loc) ?? _propertyViewModel.Name
     };

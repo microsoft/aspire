@@ -41,7 +41,7 @@ public sealed class ResourcePaneFilterTests : PlaywrightTestsBase<ResourcePaneFi
             var project = filter.GetByRole(AriaRole.Checkbox, new() { Name = KnownResourceTypes.Project, Exact = true });
             await project.UncheckAsync();
             await Assertions.Expect(project).Not.ToBeCheckedAsync();
-            await Assertions.Expect(page.Locator(".resource-pane .resource-row")).ToHaveCountAsync(0);
+            await Assertions.Expect(page.Locator(".resource-pane .resource-row:not(.resource-row-all)")).ToHaveCountAsync(0);
             var reset = filter.GetByRole(AriaRole.Button, new() { Name = Resources.Layout.ResourcePaneFilterReset, Exact = true });
             var done = filter.GetByRole(AriaRole.Button, new() { Name = Resources.Layout.ResourcePaneFilterDone, Exact = true });
             await Assertions.Expect(reset).ToBeEnabledAsync();
@@ -52,7 +52,7 @@ public sealed class ResourcePaneFilterTests : PlaywrightTestsBase<ResourcePaneFi
             await trigger.ClickAsync();
             await Assertions.Expect(project).Not.ToBeCheckedAsync();
             await reset.ClickAsync();
-            await Assertions.Expect(page.Locator(".resource-pane .resource-row")).ToHaveCountAsync(1);
+            await Assertions.Expect(page.Locator(".resource-pane .resource-row:not(.resource-row-all)")).ToHaveCountAsync(1);
             await Assertions.Expect(reset).ToBeDisabledAsync();
 
             foreach (var header in new[] { Resources.Resources.ResourcesResourceTypesHeader, Resources.Resources.ResourcesResourceStatesHeader })
@@ -115,9 +115,9 @@ public sealed class ResourcePaneFilterTests : PlaywrightTestsBase<ResourcePaneFi
             await Assertions.Expect(filter).ToBeVisibleAsync();
             await AssertContainedAsync(page, filter);
             await filter.GetByRole(AriaRole.Checkbox, new() { Name = KnownResourceTypes.Project, Exact = true }).UncheckAsync();
-            await Assertions.Expect(page.Locator(".resource-pane .resource-row")).ToHaveCountAsync(0);
+            await Assertions.Expect(page.Locator(".resource-pane .resource-row:not(.resource-row-all)")).ToHaveCountAsync(0);
             await filter.GetByRole(AriaRole.Button, new() { Name = Resources.Layout.ResourcePaneFilterReset, Exact = true }).ClickAsync();
-            await Assertions.Expect(page.Locator(".resource-pane .resource-row")).ToHaveCountAsync(1);
+            await Assertions.Expect(page.Locator(".resource-pane .resource-row:not(.resource-row-all)")).ToHaveCountAsync(1);
             await filter.GetByRole(AriaRole.Button, new() { Name = Resources.Layout.ResourcePaneFilterDone, Exact = true }).ClickAsync();
             await Assertions.Expect(filter).ToBeHiddenAsync();
         });
@@ -199,10 +199,10 @@ public sealed class ResourcePaneLongFilterTests : PlaywrightTestsBase<ResourcePa
             var lastType = filter.GetByRole(AriaRole.Checkbox, new() { Name = "Type 23", Exact = true });
             await lastType.UncheckAsync();
             await Assertions.Expect(lastType).Not.ToBeCheckedAsync();
-            await Assertions.Expect(page.Locator(".resource-pane .resource-row")).ToHaveCountAsync(23);
+            await Assertions.Expect(page.Locator(".resource-pane .resource-row:not(.resource-row-all)")).ToHaveCountAsync(23);
             await ResourcePaneFilterTests.AssertContainedAsync(page, filter);
             await filter.GetByRole(AriaRole.Button, new() { Name = Resources.Layout.ResourcePaneFilterReset, Exact = true }).ClickAsync();
-            await Assertions.Expect(page.Locator(".resource-pane .resource-row")).ToHaveCountAsync(24);
+            await Assertions.Expect(page.Locator(".resource-pane .resource-row:not(.resource-row-all)")).ToHaveCountAsync(24);
             await Assertions.Expect(filter.GetByRole(AriaRole.Button, new() { Name = Resources.Layout.ResourcePaneFilterReset, Exact = true })).ToBeDisabledAsync();
 
             foreach (var viewport in new[] { (Width: 1440, Height: 900), (Width: 768, Height: 1024), (Width: 390, Height: 844) })

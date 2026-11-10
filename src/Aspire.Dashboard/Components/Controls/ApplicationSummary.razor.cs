@@ -1,4 +1,4 @@
-// Licensed to the .NET Foundation under one or more agreements.
+﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Concurrent;
@@ -121,8 +121,8 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
     private IReadOnlyList<IconToggleOption<GroupOverview>> OverviewOptions =>
         new IconToggleOption<GroupOverview>[]
         {
-            new(GroupOverview.Summary, new Icons.Regular.Size20.DataBarVertical(), DialogsLoc[nameof(Dashboard.Resources.Dialogs.SettingsDialogGroupOverviewSummary)]),
-            new(GroupOverview.Graph, new Icons.Regular.Size20.ShareAndroid(), Loc[nameof(Dashboard.Resources.Resources.GraphPageTitle)])
+            new(GroupOverview.Summary, new Icons.Regular.Size20.DataUsage(), DialogsLoc[nameof(Dashboard.Resources.Dialogs.SettingsDialogGroupOverviewSummary)]),
+            new(GroupOverview.Graph, new Icons.Regular.Size20.Flow(), Loc[nameof(Dashboard.Resources.Resources.GraphPageTitle)])
         }
         .Where(option => option.Value != GroupOverview.Graph || ViewPreferences.IsGraphEnabled)
         .ToList();
@@ -720,7 +720,14 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
         {
             "state-success" => HealthBucket.Running,
             "state-pending" => HealthBucket.Pending,
-            _ => HealthBucket.Inactive
+            // "Inactive" hid real differences: a job that finished, a resource that was never started, and one the
+            // dashboard can't tell. They're counted apart so the legend says which.
+            _ => resource.KnownState switch
+            {
+                KnownResourceState.Finished or KnownResourceState.Exited => HealthBucket.Finished,
+                KnownResourceState.NotStarted => HealthBucket.NotStarted,
+                _ => HealthBucket.Unknown
+            }
         };
 
     private bool NeedsAttention(ResourceViewModel resource)
@@ -742,7 +749,7 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
     /// </summary>
     private HealthSummary GetHealthSummary(List<ResourceViewModel> resources)
     {
-        int running = 0, pending = 0, attention = 0, inactive = 0;
+        int running = 0, pending = 0, attention = 0, finished = 0, notStarted = 0, unknown = 0;
         DateTime? startedAt = null;
         foreach (var resource in resources)
         {
@@ -757,8 +764,14 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
                 case HealthBucket.Pending:
                     pending++;
                     break;
+                case HealthBucket.Finished:
+                    finished++;
+                    break;
+                case HealthBucket.NotStarted:
+                    notStarted++;
+                    break;
                 default:
-                    inactive++;
+                    unknown++;
                     break;
             }
 
@@ -768,7 +781,7 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
             }
         }
 
-        return new HealthSummary(resources.Count, running, pending, attention, inactive, startedAt);
+        return new HealthSummary(resources.Count, running, pending, attention, finished, notStarted, unknown, startedAt, GetMissingParameterCount());
     }
 
     private string GetHeadline(HealthSummary summary)
@@ -783,6 +796,15 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
             return summary.Total == 1
                 ? Loc[nameof(Dashboard.Resources.Resources.HomeHeadlineSingleAttention)]
                 : Loc[nameof(Dashboard.Resources.Resources.HomeHeadlineAttention), summary.Attention, summary.Total];
+        }
+
+        // Missing parameter values keep resources from starting, so the headline says so rather than reporting that
+        // nothing needs attention. Parameters aren't counted as resources, so they have their own headline.
+        if (summary.MissingParameters > 0)
+        {
+            return Loc[summary.MissingParameters == 1
+                ? nameof(Dashboard.Resources.Resources.MissingParameterCount)
+                : nameof(Dashboard.Resources.Resources.MissingParametersCount), summary.MissingParameters];
         }
 
         if (summary.Pending > 0)
@@ -805,6 +827,7 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
     private static string GetHeroStateClass(HealthSummary summary) => summary switch
     {
         { Attention: > 0 } => "state-error",
+        { MissingParameters: > 0 } => "state-warning",
         { Pending: > 0 } => "state-pending",
         { Total: > 0 } => "state-success",
         _ => "state-neutral"
@@ -899,10 +922,12 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
         Attention,
         Pending,
         Running,
-        Inactive
+        Finished,
+        NotStarted,
+        Unknown
     }
 
-    private readonly record struct HealthSummary(int Total, int Running, int Pending, int Attention, int Inactive, DateTime? StartedAt);
+    private readonly record struct HealthSummary(int Total, int Running, int Pending, int Attention, int Finished, int NotStarted, int Unknown, DateTime? StartedAt, int MissingParameters);
 
     private sealed class HomeActivity
     {
