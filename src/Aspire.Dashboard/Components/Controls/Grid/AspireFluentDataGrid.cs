@@ -12,6 +12,9 @@ namespace Aspire.Dashboard.Components.Controls.Grid;
 [CascadingTypeParameter(nameof(TGridItem))]
 public class AspireFluentDataGrid<TGridItem> : FluentDataGrid<TGridItem>
 {
+    // Fluent UI's own disposal flag (IFluentComponentBase.IsDisposed) is internal. See OnAfterRenderAsync.
+    private bool _disposalStarted;
+
     public AspireFluentDataGrid(LibraryConfiguration configuration) : base(configuration)
     {
         LoadingContent = RenderLoadingContent;
@@ -27,6 +30,39 @@ public class AspireFluentDataGrid<TGridItem> : FluentDataGrid<TGridItem>
         builder.AddAttribute(2, "grid", Id);
         builder.AddAttribute(3, "hidden", true);
         builder.CloseElement();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        try
+        {
+            await base.OnAfterRenderAsync(firstRender);
+        }
+        catch (ObjectDisposedException) when (_disposalStarted)
+        {
+            // Workaround for https://github.com/microsoft/fluentui-blazor/issues/5580. Once the Fluent UI version used
+            // here includes the fix, remove this override, the DisposeAsync override and _disposalStarted, and
+            // AspireFluentDataGridTests.FluentDataGrid_StillCallsIntoItsDisposedModuleWhenRemovedWhileInitializing,
+            // which fails when the fix arrives.
+            //
+            // FluentDataGrid.OnAfterRenderAsync awaits JavaScript calls, such as initializing the grid. A grid removed
+            // during one of them, for example by a layout change right after it rendered, resumes after disposal and
+            // calls into the JavaScript module that disposal released: FluentJSModule.Imported stays true after the
+            // module is disposed, so the grid's own check doesn't catch it. The ObjectDisposedException then escapes
+            // OnAfterRenderAsync, and Blazor Server ends the circuit, which stops every view in the browser tab.
+            //
+            // The grid is gone, so the calls it skips here (column resizing and reordering, auto-fit, popup position)
+            // have nothing left to set up. Only that case is ignored: the same exception while the grid is still in
+            // use is a real error and still surfaces.
+        }
+    }
+
+    public override ValueTask DisposeAsync()
+    {
+        // Set before Fluent UI releases the grid's JavaScript module, so OnAfterRenderAsync can tell that a rejected
+        // call came from a grid that's being removed.
+        _disposalStarted = true;
+        return base.DisposeAsync();
     }
 
     /// <summary>
