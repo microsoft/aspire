@@ -1265,7 +1265,8 @@ public partial class NewCommandLocalTemplateTests(ITestOutputHelper outputHelper
             Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
             Assert.False(Directory.Exists(Path.Combine(workspace.Path, "out")));
             error = Assert.Single(interaction.DisplayedErrors);
-            Assert.Contains(configPath, error);
+            // Engine mount paths can mix directory separators on Windows.
+            Assert.Contains(configPath.Replace('\\', '/'), error.Replace('\\', '/'));
             Assert.Contains($"LineNumber: {expectedLine} | BytePositionInLine: {(appendedGarbage ? 0 : 2)}.", error);
             Assert.StartsWith(string.Format(CultureInfo.CurrentCulture, NewCommandStrings.LocalTemplateLoadFailed, ""), error);
         }
