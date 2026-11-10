@@ -112,7 +112,9 @@ type distributedApplication struct{ *resourceBuilderBase }
 // Err returns an error combining every failure recorded by this builder or by
 // any handle created from it.
 func (b *distributedApplicationBuilder) Err() error {
-	if err := b.client.combinedError(); err != nil { return err }
+	if err := b.client.combinedError(); err != nil {
+		return err
+	}
 	return b.resourceBuilderBase.Err()
 }
 

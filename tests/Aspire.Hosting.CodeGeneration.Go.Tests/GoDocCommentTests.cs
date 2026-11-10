@@ -236,7 +236,7 @@ public class GoDocCommentTests
                     resource.WithPersistence(&WithPersistenceOptions{})
                 }
                 """, timeout.Token);
-            await File.WriteAllTextAsync(Path.Combine(directory.FullName, "handle_options_test.go"), """
+            await File.WriteAllTextAsync(Path.Combine(directory.FullName, "functional_options_test.go"), """
                 package aspire
 
                 import (
@@ -250,7 +250,8 @@ public class GoDocCommentTests
                         HandleID: "password",
                         TypeID:   "Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource",
                     }, c)
-                    options := &WithHttpsDeveloperCertificateOptions{Password: &password}
+                    options := &WithHttpsDeveloperCertificateOptions{}
+                    HttpsDeveloperCertificatePassword(password).apply(options)
                     got := options.ToMap()["password"]
                     want := map[string]any{
                         "$handle": "password",
@@ -258,6 +259,59 @@ public class GoDocCommentTests
                     }
                     if !reflect.DeepEqual(got, want) {
                         t.Fatalf("got %#v, want %#v", got, want)
+                    }
+                }
+
+                func TestFunctionalOptionsPreserveZeroFalseAndOrder(t *testing.T) {
+                    options := &WithHttpEndpointOptions{}
+                    for _, option := range []WithHttpEndpointOption{
+                        HttpEndpointPort(8080),
+                        HttpEndpointPort(0),
+                        HttpEndpointIsProxied(false),
+                    } {
+                        option.apply(options)
+                    }
+
+                    request := options.ToMap()
+                    if port := request["port"].(*int); port == nil || *port != 0 {
+                        t.Fatalf("port = %#v, want pointer to zero", port)
+                    }
+                    if proxied := request["isProxied"].(*bool); proxied == nil || *proxied {
+                        t.Fatalf("isProxied = %#v, want pointer to false", proxied)
+                    }
+                }
+
+                func TestDtoOptionAppliesToRequestMap(t *testing.T) {
+                    dialog := &InteractionInputsDialogOptions{PrimaryButtonText: StringPtr("Save")}
+                    options := &PromptInputOptions{}
+                    PromptInputOptionsValue(dialog).apply(options)
+
+                    request := options.ToMap()
+                    serialized := request["options"].(map[string]any)
+                    if text := serialized["primaryButtonText"].(*string); text == nil || *text != "Save" {
+                        t.Fatalf("primaryButtonText = %#v, want Save", text)
+                    }
+                }
+
+                func TestCreateBuilderOptionsMergeIntoResolvedMap(t *testing.T) {
+                    options := &CreateBuilderOptions{}
+                    for _, option := range []CreateBuilderOption{
+                        CreateBuilderProjectDirectory("first"),
+                        CreateBuilderDisableDashboard(false),
+                        CreateBuilderProjectDirectory("second"),
+                    } {
+                        option.apply(options)
+                    }
+
+                    resolved := map[string]any{}
+                    for key, value := range options.ToMap() {
+                        resolved[key] = value
+                    }
+                    if directory := resolved["projectDirectory"].(*string); directory == nil || *directory != "second" {
+                        t.Fatalf("projectDirectory = %#v, want second", directory)
+                    }
+                    if disabled := resolved["disableDashboard"].(bool); disabled {
+                        t.Fatal("disableDashboard = true, want false")
                     }
                 }
                 """, timeout.Token);
@@ -268,7 +322,7 @@ public class GoDocCommentTests
             var vet = await RunAsync("go", directory.FullName, timeout.Token, "vet", "./...");
             Assert.True(vet.ExitCode == 0, $"go vet failed:{Environment.NewLine}{vet.Output}");
 
-            var test = await RunAsync("go", directory.FullName, timeout.Token, "test", "-run", "^TestOptionalHandleOptionsSerializeTheHandle$", ".");
+            var test = await RunAsync("go", directory.FullName, timeout.Token, "test", "-run", "^Test(OptionalHandleOptionsSerializeTheHandle|FunctionalOptionsPreserveZeroFalseAndOrder|DtoOptionAppliesToRequestMap|CreateBuilderOptionsMergeIntoResolvedMap)$", ".");
             Assert.True(test.ExitCode == 0, $"go test failed:{Environment.NewLine}{test.Output}");
 
             // gofmt rewrites a doc comment that is not in canonical form, so an unchanged comment line proves the
