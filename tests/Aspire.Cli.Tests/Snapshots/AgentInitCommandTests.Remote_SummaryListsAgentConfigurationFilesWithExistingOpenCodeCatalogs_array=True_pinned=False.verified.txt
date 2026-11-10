@@ -1,0 +1,1 @@
+﻿Configured sources in .github/copilot/settings.json (GitHub Copilot), .claude/settings.json (Claude Code), opencode.jsonc (OpenCode)
