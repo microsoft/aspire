@@ -646,7 +646,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerNetw
     // constants. The publishing type is fully qualified so the DCP layer doesn't carry a
     // `using Aspire.Hosting.Publishing` directive.
 #pragma warning disable ASPIREPIPELINES003 // ContainerTargetPlatform is experimental.
-    private static string ToDcpPlatformString(Publishing.ContainerTargetPlatform platform)
+    internal static string ToDcpPlatformString(Publishing.ContainerTargetPlatform platform)
     {
         var parts = new List<string>();
         if (platform.HasFlag(Publishing.ContainerTargetPlatform.LinuxAmd64)) { parts.Add(ContainerPlatform.LinuxAmd64); }

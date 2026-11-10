@@ -13,6 +13,7 @@ using System.Text.Json.Nodes;
 using System.Text;
 using k8s.Models;
 using k8s.Autorest;
+using V2 = Aspire.Hosting.Dcp.Model.V2;
 
 namespace Aspire.Hosting.Tests.Dcp;
 
@@ -30,6 +31,10 @@ internal sealed class TestKubernetesService : IKubernetesService
 
     public ConcurrentQueue<CustomResource> CreatedResources { get; } = [];
     public ConcurrentQueue<string> DeletedResources { get; } = [];
+    public bool EmulateV2Controllers { get; set; }
+    public bool ActivateV2Namespaces { get; set; } = true;
+    public Type? UnsupportedResourceType { get; set; }
+    public int StopServerCalls { get; private set; }
 
     // The state reported after a stop patch. DCP reports FailedToStart when a stop arrives before the
     // workload was launched, so tests can override these to simulate that.
@@ -136,9 +141,21 @@ internal sealed class TestKubernetesService : IKubernetesService
         lock (CreatedResources)
         {
             var modifiedResources = AllocateProxylessContainerServicePorts(res);
+            if (EmulateV2Controllers && res is V2.Namespace &&
+                _resources.ContainsKey((typeof(T), namespaceParameter ?? "", res.Metadata.Name)))
+            {
+                throw new HttpOperationException("Namespace already exists")
+                {
+                    Response = new HttpResponseMessageWrapper(new HttpResponseMessage { StatusCode = System.Net.HttpStatusCode.Conflict }, "Namespace already exists")
+                };
+            }
             StampResourceUid(res);
             StampResourceVersion(res);
             _resources[(typeof(T), namespaceParameter ?? "", res.Metadata.Name)] = res;
+            if (EmulateV2Controllers)
+            {
+                modifiedResources.AddRange(ReconcileV2Resource(res));
+            }
             CreatedResources.Enqueue(res);
             foreach (var c in _watchChannels)
             {
@@ -303,10 +320,33 @@ internal sealed class TestKubernetesService : IKubernetesService
             _resources.Remove((resource.GetType(), resource.Namespace() ?? "", resource.Metadata.Name));
             DeletedResources.Enqueue(resource.Metadata.Name);
         }
+
+    }
+
+    public async Task<T> DeleteAsync<T>(T resource, CancellationToken cancellationToken)
+        where T : CustomResource, IKubernetesStaticMetadata
+    {
+        var existing = await GetAsync<T>(resource.Metadata.Name, resource.Namespace(), cancellationToken);
+        if (existing.Metadata.Uid != resource.Metadata.Uid)
+        {
+            throw new HttpOperationException("UID precondition failed")
+            {
+                Response = new HttpResponseMessageWrapper(new HttpResponseMessage { StatusCode = System.Net.HttpStatusCode.Conflict }, "UID precondition failed")
+            };
+        }
+        return await DeleteAsync<T>(resource.Metadata.Name, resource.Namespace(), cancellationToken);
     }
 
     public Task<List<T>> ListAsync<T>(string? namespaceParameter = null, CancellationToken cancellationToken = default) where T : CustomResource, IKubernetesStaticMetadata
     {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (UnsupportedResourceType == typeof(T))
+        {
+            throw new HttpOperationException("API not found")
+            {
+                Response = new HttpResponseMessageWrapper(new HttpResponseMessage { StatusCode = System.Net.HttpStatusCode.NotFound }, "API not found")
+            };
+        }
         namespaceParameter = KubernetesService.GetMetadataFor<T>().GetNamespace(namespaceParameter);
         lock (CreatedResources)
         {
@@ -472,8 +512,22 @@ internal sealed class TestKubernetesService : IKubernetesService
             {
                 lock (CreatedResources)
                 {
+                    if (EmulateV2Controllers)
+                    {
+                        if (result is V2.LogicalProcess { Spec.Stop: true } process)
+                        {
+                            process.Status ??= new();
+                            process.Status.Phase = V2.LogicalProcessPhase.Exited;
+                        }
+                        if (result is V2.LogicalContainer { Spec.Stop: true } container)
+                        {
+                            container.Status ??= new();
+                            container.Status.Phase = V2.LogicalContainerPhase.Exited;
+                        }
+                    }
                     StampResourceVersion(result);
                     _resources[(typeof(T), obj.Namespace() ?? "", obj.Metadata.Name)] = result;
+                    PushResourceModified(result);
                 }
 
                 return result;
@@ -489,6 +543,7 @@ internal sealed class TestKubernetesService : IKubernetesService
     public Task StopServerAsync(string resourceCleanup = "Full", CancellationToken cancellation = default)
     {
         cancellation.ThrowIfCancellationRequested();
+        StopServerCalls++;
 
         lock (CreatedResources)
         {
@@ -504,6 +559,82 @@ internal sealed class TestKubernetesService : IKubernetesService
     public Task CleanupResourcesAsync(CancellationToken cancellationToken = default)
     {
         return StopServerAsync("Full", cancellationToken);
+    }
+
+    private List<CustomResource> ReconcileV2Resource(CustomResource resource)
+    {
+        var updates = new List<CustomResource>();
+        switch (resource)
+        {
+            case V2.Namespace ns when ActivateV2Namespaces:
+                ns.Status ??= new() { Phase = V2.NamespacePhase.Active };
+                break;
+            case V2.LogicalService service when _allocateServiceAddresses &&
+                service.Spec.AddressAllocationMode != V2.ServiceAddressAllocationMode.Proxyless:
+                // Proxies allocate listeners before they have endpoints, so they are not yet Ready.
+                service.Status ??= new()
+                {
+                    Phase = V2.LogicalServicePhase.Pending,
+                    EffectiveAddresses = [new()
+                    {
+                        Address = service.Spec.Address ?? "127.0.0.1",
+                        Port = service.Spec.Port == 0 ? Interlocked.Increment(ref _nextPort) : service.Spec.Port
+                    }]
+                };
+                break;
+            case V2.LogicalContainerNetwork network:
+                network.Status ??= new() { Phase = V2.LogicalContainerNetworkPhase.Ready };
+                break;
+            case V2.PhysicalContainerVolume volume:
+                volume.Status ??= new() { Phase = V2.PhysicalContainerVolumePhase.Ready };
+                break;
+            case V2.LogicalProcess process:
+                process.Status ??= new() { Phase = V2.LogicalProcessPhase.Running };
+                foreach (var port in process.Spec.Ports ?? [])
+                {
+                    PublishEndpoint(port.ServiceRef!, port.Name, port.Address ?? "localhost", port.Port);
+                }
+                break;
+            case V2.LogicalContainer container:
+                container.Status ??= new()
+                {
+                    Phase = container.Spec.Mode == V2.LogicalContainerMode.Existing ? V2.LogicalContainerPhase.Pending : V2.LogicalContainerPhase.Running
+                };
+                if (container.Spec.Mode != V2.LogicalContainerMode.Existing)
+                {
+                    foreach (var port in container.Spec.Ports ?? [])
+                    {
+                        PublishEndpoint(port.ServiceRef!, port.Name, "127.0.0.1",
+                            port.HostPort == 0 ? Interlocked.Increment(ref _nextPort) : port.HostPort);
+                    }
+                }
+                break;
+            case V2.LogicalContainerExec exec:
+                exec.Status ??= new() { Phase = V2.ContainerExecPhase.Running };
+                break;
+        }
+        return updates;
+
+        void PublishEndpoint(string serviceName, string portName, string address, int port)
+        {
+            var service = (V2.LogicalService)_resources[(typeof(V2.LogicalService), resource.Namespace()!, serviceName)];
+            var endpoint = V2.ServiceEndpoint.Create($"{resource.Metadata.Name}-{portName}", resource.Namespace()!, serviceName);
+            endpoint.Metadata.OwnerReferences = [new()
+            {
+                ApiVersion = resource.ApiVersion, Kind = resource.Kind, Name = resource.Metadata.Name,
+                Uid = resource.Metadata.Uid, Controller = true
+            }];
+            endpoint.Spec.Addresses = [new() { Address = address, Port = port }];
+            StampResourceUid(endpoint);
+            StampResourceVersion(endpoint);
+            _resources[(typeof(V2.ServiceEndpoint), resource.Namespace()!, endpoint.Metadata.Name)] = endpoint;
+            updates.Add(endpoint);
+            service.Status ??= new();
+            service.Status.Phase = V2.LogicalServicePhase.Ready;
+            service.Status.EffectiveAddresses ??= endpoint.Spec.Addresses;
+            StampResourceVersion(service);
+            updates.Add(service);
+        }
     }
 
     private static List<TunnelStatus>? CreateReadyTunnelStatuses(List<TunnelConfiguration>? tunnels)

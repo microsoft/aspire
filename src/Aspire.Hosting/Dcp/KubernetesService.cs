@@ -50,6 +50,8 @@ internal interface IKubernetesService
         where T : CustomResource, IKubernetesStaticMetadata;
     Task<T> DeleteAsync<T>(string name, string? namespaceParameter = null, CancellationToken cancellationToken = default)
         where T : CustomResource, IKubernetesStaticMetadata;
+    Task<T> DeleteAsync<T>(T resource, CancellationToken cancellationToken)
+        where T : CustomResource, IKubernetesStaticMetadata;
     IAsyncEnumerable<(WatchEventType, T)> WatchAsync<T>(
         string? namespaceParameter = null,
         CancellationToken cancellationToken = default)
@@ -274,6 +276,17 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
 
     public Task<T> DeleteAsync<T>(string name, string? namespaceParameter = null, CancellationToken cancellationToken = default)
         where T : CustomResource, IKubernetesStaticMetadata
+        => DeleteCoreAsync<T>(name, namespaceParameter, expectedUid: null, cancellationToken);
+
+    public Task<T> DeleteAsync<T>(T resource, CancellationToken cancellationToken)
+        where T : CustomResource, IKubernetesStaticMetadata
+    {
+        ArgumentException.ThrowIfNullOrEmpty(resource.Metadata.Uid);
+        return DeleteCoreAsync<T>(resource.Metadata.Name, resource.Namespace(), resource.Metadata.Uid, cancellationToken);
+    }
+
+    private Task<T> DeleteCoreAsync<T>(string name, string? namespaceParameter, string? expectedUid, CancellationToken cancellationToken)
+        where T : CustomResource, IKubernetesStaticMetadata
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         var metadata = GetMetadataFor<T>();
@@ -292,6 +305,7 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
                     groupVersion.Version,
                     resourceType,
                     name,
+                    body: expectedUid is null ? null : new V1DeleteOptions { Preconditions = new V1Preconditions { Uid = expectedUid } },
                     cancellationToken: operationCancellationToken).ConfigureAwait(false)
                 : await kubernetes.CustomObjects.DeleteNamespacedCustomObjectWithHttpMessagesAsync(
                     groupVersion.Group,
@@ -299,11 +313,12 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
                     namespaceParameter,
                     resourceType,
                     name,
+                    body: expectedUid is null ? null : new V1DeleteOptions { Preconditions = new V1Preconditions { Uid = expectedUid } },
                     cancellationToken: operationCancellationToken).ConfigureAwait(false);
 
                 return KubernetesJson.Deserialize<T>(response.Body.ToString());
             },
-            RetryOnConnectivityAndConflictErrors,
+            expectedUid is null ? RetryOnConnectivityAndConflictErrors : RetryOnConnectivityErrors,
             cancellationToken);
     }
 

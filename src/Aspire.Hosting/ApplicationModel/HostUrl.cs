@@ -57,10 +57,10 @@ public record HostUrl(string Url) : IExpressionValue, IValueProvider, IManifestE
                     var model = context.ExecutionContext.Services.GetService<DistributedApplicationModel>();
                     EndpointReference? targetEndpoint = null;
 
-                    if (options.Value.EnableAspireContainerTunnel && model is { })
+                    if ((options.Value.EnableAspireContainerTunnel || options.Value.UseV2) && model is { })
                     {
-                        // If we're running with the container tunnel enabled, we need to lookup the port on the tunnel that corresponds to the
-                        // target port on the host machine.
+                        // Tunnels and V2's host-access proxies can expose a different port from the
+                        // host-facing endpoint, so translate both the address and port.
 
                         targetEndpoint = model.Resources.Where(r => !r.IsContainer())
                             .OfType<IResourceWithEndpoints>()
@@ -80,7 +80,7 @@ public record HostUrl(string Url) : IExpressionValue, IValueProvider, IManifestE
 
                     if (targetEndpoint is { })
                     {
-                        uri.Host = KnownHostNames.DefaultContainerTunnelHostName;
+                        uri.Host = options.Value.UseV2 ? containerHostName : KnownHostNames.DefaultContainerTunnelHostName;
                         var port = await targetEndpoint.Property(EndpointProperty.Port).GetValueAsync(context, cancellationToken).ConfigureAwait(false);
                         uri.Port = int.Parse(port!, CultureInfo.InvariantCulture);
                     }
@@ -112,7 +112,7 @@ public record HostUrl(string Url) : IExpressionValue, IValueProvider, IManifestE
                 var infoService = context.ExecutionContext.Services.GetRequiredService<IDcpDependencyCheckService>();
                 var dcpInfo = await infoService.GetDcpInfoAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
 
-                replacementHost = options.Value.EnableAspireContainerTunnel ? KnownHostNames.DefaultContainerTunnelHostName : dcpInfo?.Containers?.ContainerHostName ?? KnownHostNames.DockerDesktopHostBridge;
+                replacementHost = options.Value.EnableAspireContainerTunnel && !options.Value.UseV2 ? KnownHostNames.DefaultContainerTunnelHostName : dcpInfo?.Containers?.ContainerHostName ?? KnownHostNames.DockerDesktopHostBridge;
             }
 
             // HostUrl was meant to only be used with valid URLs. However, this was not
