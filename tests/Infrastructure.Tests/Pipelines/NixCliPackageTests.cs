@@ -30,20 +30,15 @@ public sealed class NixCliPackageTests(ITestOutputHelper outputHelper) : IDispos
         Directory.CreateDirectory(fakeBinPath);
 
         var curlPath = Path.Combine(fakeBinPath, "curl");
-        await File.WriteAllTextAsync(curlPath, """
+        await ExecutableFile.WriteAsync(curlPath, """
             #!/usr/bin/env bash
             set -euo pipefail
             url="${@: -1}"
             printf '%s  %s\n' 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' "${url##*/}"
-            """);
-
-        if (!OperatingSystem.IsWindows())
-        {
-            File.SetUnixFileMode(curlPath,
-                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute |
-                UnixFileMode.GroupRead | UnixFileMode.GroupExecute |
-                UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
-        }
+            """,
+            UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute |
+            UnixFileMode.GroupRead | UnixFileMode.GroupExecute |
+            UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
 
         var result = await RunBashAsync(
             Path.Combine(RepoRoot.Path, "eng", "nix", "update-versions.sh"),
@@ -77,19 +72,14 @@ public sealed class NixCliPackageTests(ITestOutputHelper outputHelper) : IDispos
         // A curl stub that always fails. Offline mode (--sha512 supplied) must
         // never invoke curl, so its presence here proves no network read happens.
         var curlPath = Path.Combine(fakeBinPath, "curl");
-        await File.WriteAllTextAsync(curlPath, """
+        await ExecutableFile.WriteAsync(curlPath, """
             #!/usr/bin/env bash
             echo 'curl should not be called in offline mode' >&2
             exit 1
-            """);
-
-        if (!OperatingSystem.IsWindows())
-        {
-            File.SetUnixFileMode(curlPath,
-                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute |
-                UnixFileMode.GroupRead | UnixFileMode.GroupExecute |
-                UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
-        }
+            """,
+            UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute |
+            UnixFileMode.GroupRead | UnixFileMode.GroupExecute |
+            UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
 
         // Distinct digest per RID so a mismapped override would fail the assert.
         var hexByRid = new Dictionary<string, string>(StringComparer.Ordinal)

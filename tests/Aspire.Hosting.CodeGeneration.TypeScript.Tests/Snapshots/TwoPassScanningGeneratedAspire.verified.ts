@@ -326,7 +326,12 @@ type ResourceCommandServiceHandle = Handle<'Aspire.Hosting/Aspire.Hosting.Applic
 /**
  * This event is raised by orchestrators to signal to resources that their endpoints have been allocated.
  *
- * Any resources that customize their URLs via a `ResourceUrlsCallbackAnnotation` will have their callbacks invoked during this event.
+ * Resources that customize their URLs via a `ResourceUrlsCallbackAnnotation` have their callbacks
+ * invoked before event handlers run. Browser URL references contain the finalized values at that point.
+ * Endpoint and URL configuration must be registered before this event is published.
+ * Browser-facing resource allocators should complete allocation through
+ * `PublishResourceEndpointsAllocatedAsync`
+ * so URL customization completes before the notification is dispatched.
  */
 type ResourceEndpointsAllocatedEventHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceEndpointsAllocatedEvent'>;
 
@@ -613,6 +618,10 @@ export enum EndpointProperty {
     HostAndPort = "HostAndPort",
     /** Whether TLS is enabled on the endpoint. Returns `TrueString` or `FalseString`. */
     TlsEnabled = "TlsEnabled",
+    /** Comma-separated browser-facing origins for this endpoint. */
+    BrowserOrigins = "BrowserOrigins",
+    /** The primary browser-facing origin for this endpoint. */
+    PrimaryBrowserOrigin = "PrimaryBrowserOrigin",
 }
 
 /** Enum type for HealthStatus */
@@ -1937,6 +1946,15 @@ export interface WithOptionalStringOptions {
 
 export interface WithOtlpExporterOptions {
     protocol?: OtlpProtocol | null;
+}
+
+export interface WithOutputDiffingOptions {
+    /** The step whose completed output is compared. Defaults to `publish`. */
+    targetStep?: string;
+    /** The comparison target name. When null, uses the target name followed by `-and-diff`. */
+    diffStepName?: string;
+    /** An optional description of the comparison target. */
+    description?: string;
 }
 
 export interface WithPersistenceOptions {
@@ -4334,6 +4352,24 @@ export interface EndpointReference {
     resource(): ResourceWithEndpointsPromise;
     /** Gets the name of the endpoint associated with the endpoint reference. */
     endpointName(): Promise<string>;
+    /**
+     * Gets a deferred comma-separated list of browser-facing origins associated with this endpoint.
+     *
+     * Origins use finalized URL customization and are independent of this reference's service-discovery
+     * network context. Origins are distinct and ordered by display preference. The allocated
+     * HTTP(S) endpoint origin is included after display origins, even if its display links are removed.
+     * An endpoint without HTTP(S) origins resolves to an empty string.
+     */
+    browserOrigins(): EndpointReferenceExpressionPromise;
+    /**
+     * Gets the deferred primary browser-facing origin associated with this endpoint.
+     *
+     * Returns the first origin in `BrowserOrigins`, following finalized URL display ordering.
+     * The allocated HTTP(S) endpoint origin is used when no display origins remain.
+     * An endpoint without HTTP(S) origins resolves to an empty string. This value is independent
+     * of this reference's service-discovery network context.
+     */
+    primaryBrowserOrigin(): EndpointReferenceExpressionPromise;
     /** Gets or sets a custom error message to be thrown when the endpoint annotation is not found. */
     errorMessage(): Promise<string | null>;
     /** Gets a value indicating whether the endpoint is allocated. */
@@ -4401,6 +4437,24 @@ export interface EndpointReferencePromise extends PromiseLike<EndpointReference>
     resource(): ResourceWithEndpointsPromise;
     /** Gets the name of the endpoint associated with the endpoint reference. */
     endpointName(): Promise<string>;
+    /**
+     * Gets a deferred comma-separated list of browser-facing origins associated with this endpoint.
+     *
+     * Origins use finalized URL customization and are independent of this reference's service-discovery
+     * network context. Origins are distinct and ordered by display preference. The allocated
+     * HTTP(S) endpoint origin is included after display origins, even if its display links are removed.
+     * An endpoint without HTTP(S) origins resolves to an empty string.
+     */
+    browserOrigins(): EndpointReferenceExpressionPromise;
+    /**
+     * Gets the deferred primary browser-facing origin associated with this endpoint.
+     *
+     * Returns the first origin in `BrowserOrigins`, following finalized URL display ordering.
+     * The allocated HTTP(S) endpoint origin is used when no display origins remain.
+     * An endpoint without HTTP(S) origins resolves to an empty string. This value is independent
+     * of this reference's service-discovery network context.
+     */
+    primaryBrowserOrigin(): EndpointReferenceExpressionPromise;
     /** Gets or sets a custom error message to be thrown when the endpoint annotation is not found. */
     errorMessage(): Promise<string | null>;
     /** Gets a value indicating whether the endpoint is allocated. */
@@ -4490,6 +4544,28 @@ class EndpointReferenceImpl implements EndpointReference {
             'Aspire.Hosting.ApplicationModel/EndpointReference.endpointName',
             { context: this._handle }
         );
+    }
+
+    browserOrigins(): EndpointReferenceExpressionPromise {
+        const promise = (async () => {
+            const handle = await this._client.invokeCapability<EndpointReferenceExpressionHandle>(
+                'Aspire.Hosting.ApplicationModel/EndpointReference.browserOrigins',
+                { context: this._handle }
+            );
+            return new EndpointReferenceExpressionImpl(handle, this._client);
+        })();
+        return new EndpointReferenceExpressionPromiseImpl(promise, this._client, false);
+    }
+
+    primaryBrowserOrigin(): EndpointReferenceExpressionPromise {
+        const promise = (async () => {
+            const handle = await this._client.invokeCapability<EndpointReferenceExpressionHandle>(
+                'Aspire.Hosting.ApplicationModel/EndpointReference.primaryBrowserOrigin',
+                { context: this._handle }
+            );
+            return new EndpointReferenceExpressionImpl(handle, this._client);
+        })();
+        return new EndpointReferenceExpressionPromiseImpl(promise, this._client, false);
     }
 
     async errorMessage(): Promise<string | null> {
@@ -4642,6 +4718,8 @@ class EndpointReferenceImpl implements EndpointReference {
 const EndpointReferencePromiseImpl = $aspireCreateFluentPromiseClass<EndpointReference, EndpointReferencePromise>((): $aspireFluentPromiseTransitions => ({
     ["resource"]: [() => ResourceWithEndpointsPromiseImpl, false] as const,
     ["endpointName"]: null,
+    ["browserOrigins"]: [() => EndpointReferenceExpressionPromiseImpl, false] as const,
+    ["primaryBrowserOrigin"]: [() => EndpointReferenceExpressionPromiseImpl, false] as const,
     ["errorMessage"]: null,
     ["isAllocated"]: null,
     ["exists"]: null,
@@ -8102,7 +8180,12 @@ const ResourceCommandServicePromiseImpl = $aspireCreateFluentPromiseClass<Resour
 /**
  * This event is raised by orchestrators to signal to resources that their endpoints have been allocated.
  *
- * Any resources that customize their URLs via a `ResourceUrlsCallbackAnnotation` will have their callbacks invoked during this event.
+ * Resources that customize their URLs via a `ResourceUrlsCallbackAnnotation` have their callbacks
+ * invoked before event handlers run. Browser URL references contain the finalized values at that point.
+ * Endpoint and URL configuration must be registered before this event is published.
+ * Browser-facing resource allocators should complete allocation through
+ * `PublishResourceEndpointsAllocatedAsync`
+ * so URL customization completes before the notification is dispatched.
  */
 export interface ResourceEndpointsAllocatedEvent {
     toJSON(): MarshalledHandle;
@@ -8126,7 +8209,12 @@ export interface ResourceEndpointsAllocatedEventPromise extends PromiseLike<Reso
 /**
  * This event is raised by orchestrators to signal to resources that their endpoints have been allocated.
  *
- * Any resources that customize their URLs via a `ResourceUrlsCallbackAnnotation` will have their callbacks invoked during this event.
+ * Resources that customize their URLs via a `ResourceUrlsCallbackAnnotation` have their callbacks
+ * invoked before event handlers run. Browser URL references contain the finalized values at that point.
+ * Endpoint and URL configuration must be registered before this event is published.
+ * Browser-facing resource allocators should complete allocation through
+ * `PublishResourceEndpointsAllocatedAsync`
+ * so URL customization completes before the notification is dispatched.
  */
 class ResourceEndpointsAllocatedEventImpl implements ResourceEndpointsAllocatedEvent {
     constructor(private _handle: ResourceEndpointsAllocatedEventHandle, private _client: AspireClientRpc) {}
@@ -9872,8 +9960,16 @@ export interface DistributedApplicationBuilder {
      */
     addConnectionString(name: string, options?: AddConnectionStringOptions): ResourceWithConnectionStringPromise;
     /**
+     * Adds an opt-in target that checks for stale generated pipeline output.
+     * @param options Additional options.
+     * @returns The `IDistributedApplicationBuilder` for chaining.
+     * @experimental
+     */
+    withOutputDiffing(options?: WithOutputDiffingOptions): DistributedApplicationBuilderPromise;
+    /**
      * Adds a .NET project resource
      * @param options Additional options.
+     * @deprecated Use addDotnetProject from the Aspire.Hosting.Dotnet package instead.
      */
     addProject(name: string, projectPath: string, options?: AddProjectOptions): ProjectResourcePromise;
     /**
@@ -10088,8 +10184,16 @@ export interface DistributedApplicationBuilderPromise extends PromiseLike<Distri
      */
     addConnectionString(name: string, options?: AddConnectionStringOptions): ResourceWithConnectionStringPromise;
     /**
+     * Adds an opt-in target that checks for stale generated pipeline output.
+     * @param options Additional options.
+     * @returns The `IDistributedApplicationBuilder` for chaining.
+     * @experimental
+     */
+    withOutputDiffing(options?: WithOutputDiffingOptions): DistributedApplicationBuilderPromise;
+    /**
      * Adds a .NET project resource
      * @param options Additional options.
+     * @deprecated Use addDotnetProject from the Aspire.Hosting.Dotnet package instead.
      */
     addProject(name: string, projectPath: string, options?: AddProjectOptions): ProjectResourcePromise;
     /**
@@ -10556,6 +10660,32 @@ class DistributedApplicationBuilderImpl implements DistributedApplicationBuilder
     }
 
     /** @internal */
+    async _withOutputDiffingInternal(targetStep?: string, diffStepName?: string, description?: string): Promise<DistributedApplicationBuilder> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        if (targetStep !== undefined) rpcArgs.targetStep = targetStep;
+        if (diffStepName !== undefined) rpcArgs.diffStepName = diffStepName;
+        if (description !== undefined) rpcArgs.description = description;
+        const result = await this._client.invokeCapability<IDistributedApplicationBuilderHandle>(
+            'Aspire.Hosting/withOutputDiffing',
+            rpcArgs
+        );
+        return new DistributedApplicationBuilderImpl(result, this._client);
+    }
+
+    /**
+     * Adds an opt-in target that checks for stale generated pipeline output.
+     * @param options Additional options.
+     * @returns The `IDistributedApplicationBuilder` for chaining.
+     * @experimental
+     */
+    withOutputDiffing(options?: WithOutputDiffingOptions): DistributedApplicationBuilderPromise {
+        const targetStep = options?.targetStep;
+        const diffStepName = options?.diffStepName;
+        const description = options?.description;
+        return new DistributedApplicationBuilderPromiseImpl(this._withOutputDiffingInternal(targetStep, diffStepName, description), this._client);
+    }
+
+    /** @internal */
     async _addProjectInternal(name: string, projectPath: string, launchProfileOrOptions?: string | ProjectResourceOptions | Awaitable<ProjectResourceOptions>): Promise<ProjectResource> {
         launchProfileOrOptions = isPromiseLike(launchProfileOrOptions) ? await launchProfileOrOptions : launchProfileOrOptions;
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, projectPath };
@@ -10570,6 +10700,7 @@ class DistributedApplicationBuilderImpl implements DistributedApplicationBuilder
     /**
      * Adds a .NET project resource
      * @param options Additional options.
+     * @deprecated Use addDotnetProject from the Aspire.Hosting.Dotnet package instead.
      */
     addProject(name: string, projectPath: string, options?: AddProjectOptions): ProjectResourcePromise {
         let launchProfileOrOptions = options?.launchProfileOrOptions;
@@ -10847,6 +10978,7 @@ const DistributedApplicationBuilderPromiseImpl = $aspireCreateFluentPromiseClass
     ["addParameterFromConfiguration"]: () => ParameterResourcePromiseImpl,
     ["addParameterWithGeneratedValue"]: () => ParameterResourcePromiseImpl,
     ["addConnectionString"]: () => ResourceWithConnectionStringPromiseImpl,
+    ["withOutputDiffing"]: () => DistributedApplicationBuilderPromiseImpl,
     ["addProject"]: () => ProjectResourcePromiseImpl,
     ["addCSharpApp"]: () => CSharpAppResourcePromiseImpl,
     ["getConfiguration"]: () => ConfigurationPromiseImpl,
@@ -13185,6 +13317,16 @@ export interface ContainerRegistryResource {
      */
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ContainerRegistryResourcePromise;
     /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): ContainerRegistryResourcePromise;
+    /**
      * Specifies the icon to use when displaying the resource in the dashboard.
      * @param iconName The name of the FluentUI icon to use. See https://aka.ms/fluentui-system-icons for available icons.
      * @param options Additional options.
@@ -13214,6 +13356,25 @@ export interface ContainerRegistryResource {
      * @returns The resource builder.
      */
     withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ContainerRegistryResourcePromise;
+    /**
+     * Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+     * @param name The case-sensitive trait name.
+     * @param value The trait value. Do not include secrets.
+     * @returns The resource builder.
+     */
+    withTrait(name: string, value: string): ContainerRegistryResourcePromise;
+    /**
+     * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+     * @param tags The tags, each up to 50 characters with single spaces between words.
+     * @returns The resource builder.
+     */
+    withTags(tags: string[]): ContainerRegistryResourcePromise;
+    /**
+     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+     * @param position The default position. Lower values appear first.
+     * @returns The resource builder.
+     */
+    withDashboardPosition(position: number): ContainerRegistryResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -13528,6 +13689,16 @@ export interface ContainerRegistryResourcePromise extends PromiseLike<ContainerR
      */
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ContainerRegistryResourcePromise;
     /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): ContainerRegistryResourcePromise;
+    /**
      * Specifies the icon to use when displaying the resource in the dashboard.
      * @param iconName The name of the FluentUI icon to use. See https://aka.ms/fluentui-system-icons for available icons.
      * @param options Additional options.
@@ -13557,6 +13728,25 @@ export interface ContainerRegistryResourcePromise extends PromiseLike<ContainerR
      * @returns The resource builder.
      */
     withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ContainerRegistryResourcePromise;
+    /**
+     * Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+     * @param name The case-sensitive trait name.
+     * @param value The trait value. Do not include secrets.
+     * @returns The resource builder.
+     */
+    withTrait(name: string, value: string): ContainerRegistryResourcePromise;
+    /**
+     * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+     * @param tags The tags, each up to 50 characters with single spaces between words.
+     * @returns The resource builder.
+     */
+    withTags(tags: string[]): ContainerRegistryResourcePromise;
+    /**
+     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+     * @param position The default position. Lower values appear first.
+     * @returns The resource builder.
+     */
+    withDashboardPosition(position: number): ContainerRegistryResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -14311,6 +14501,29 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
     }
 
     /** @internal */
+    private async _withResourceTypeDisplayNameInternal(resourceTypeDisplayName: string): Promise<ContainerRegistryResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, resourceTypeDisplayName };
+        const result = await this._client.invokeCapability<ContainerRegistryResourceHandle>(
+            'Aspire.Hosting/withResourceTypeDisplayName',
+            rpcArgs
+        );
+        return new ContainerRegistryResourceImpl(result, this._client);
+    }
+
+    /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): ContainerRegistryResourcePromise {
+        return new ContainerRegistryResourcePromiseImpl(this._withResourceTypeDisplayNameInternal(resourceTypeDisplayName), this._client);
+    }
+
+    /** @internal */
     private async _withIconNameInternal(iconName: string, iconVariant?: IconVariant): Promise<ContainerRegistryResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, iconName };
         if (iconVariant !== undefined) rpcArgs.iconVariant = iconVariant;
@@ -14396,6 +14609,64 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
         const exitCode = options?.exitCode;
         const exitCodes = options?.exitCodes;
         return new ContainerRegistryResourcePromiseImpl(this._withHiddenOnCompletionInternal(exitCode, exitCodes), this._client);
+    }
+
+    /** @internal */
+    private async _withTraitInternal(name: string, value: string): Promise<ContainerRegistryResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
+        const result = await this._client.invokeCapability<ContainerRegistryResourceHandle>(
+            'Aspire.Hosting/withTrait',
+            rpcArgs
+        );
+        return new ContainerRegistryResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+     * @param name The case-sensitive trait name.
+     * @param value The trait value. Do not include secrets.
+     * @returns The resource builder.
+     */
+    withTrait(name: string, value: string): ContainerRegistryResourcePromise {
+        return new ContainerRegistryResourcePromiseImpl(this._withTraitInternal(name, value), this._client);
+    }
+
+    /** @internal */
+    private async _withTagsInternal(tags: string[]): Promise<ContainerRegistryResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, tags };
+        const result = await this._client.invokeCapability<ContainerRegistryResourceHandle>(
+            'Aspire.Hosting/withTags',
+            rpcArgs
+        );
+        return new ContainerRegistryResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+     * @param tags The tags, each up to 50 characters with single spaces between words.
+     * @returns The resource builder.
+     */
+    withTags(tags: string[]): ContainerRegistryResourcePromise {
+        return new ContainerRegistryResourcePromiseImpl(this._withTagsInternal(tags), this._client);
+    }
+
+    /** @internal */
+    private async _withDashboardPositionInternal(position: number): Promise<ContainerRegistryResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, position };
+        const result = await this._client.invokeCapability<ContainerRegistryResourceHandle>(
+            'Aspire.Hosting/withDashboardPosition',
+            rpcArgs
+        );
+        return new ContainerRegistryResourceImpl(result, this._client);
+    }
+
+    /**
+     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+     * @param position The default position. Lower values appear first.
+     * @returns The resource builder.
+     */
+    withDashboardPosition(position: number): ContainerRegistryResourcePromise {
+        return new ContainerRegistryResourcePromiseImpl(this._withDashboardPositionInternal(position), this._client);
     }
 
     /** @internal */
@@ -15035,10 +15306,14 @@ const ContainerRegistryResourcePromiseImpl = $aspireCreateFluentPromiseClass<Con
     ["withRelationship"]: () => ContainerRegistryResourcePromiseImpl,
     ["withParentRelationship"]: () => ContainerRegistryResourcePromiseImpl,
     ["withChildRelationship"]: () => ContainerRegistryResourcePromiseImpl,
+    ["withResourceTypeDisplayName"]: () => ContainerRegistryResourcePromiseImpl,
     ["withIconName"]: () => ContainerRegistryResourcePromiseImpl,
     ["excludeFromMcp"]: () => ContainerRegistryResourcePromiseImpl,
     ["withHidden"]: () => ContainerRegistryResourcePromiseImpl,
     ["withHiddenOnCompletion"]: () => ContainerRegistryResourcePromiseImpl,
+    ["withTrait"]: () => ContainerRegistryResourcePromiseImpl,
+    ["withTags"]: () => ContainerRegistryResourcePromiseImpl,
+    ["withDashboardPosition"]: () => ContainerRegistryResourcePromiseImpl,
     ["withTerminal"]: () => ContainerRegistryResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => ContainerRegistryResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => ContainerRegistryResourcePromiseImpl,
@@ -15581,7 +15856,7 @@ export interface ContainerResource {
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddProject<MyService>("my-service")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -15698,6 +15973,16 @@ export interface ContainerResource {
      */
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ContainerResourcePromise;
     /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): ContainerResourcePromise;
+    /**
      * Specifies the icon to use when displaying the resource in the dashboard.
      * @param iconName The name of the FluentUI icon to use. See https://aka.ms/fluentui-system-icons for available icons.
      * @param options Additional options.
@@ -15771,6 +16056,25 @@ export interface ContainerResource {
      * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): ContainerResourcePromise;
+    /**
+     * Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+     * @param name The case-sensitive trait name.
+     * @param value The trait value. Do not include secrets.
+     * @returns The resource builder.
+     */
+    withTrait(name: string, value: string): ContainerResourcePromise;
+    /**
+     * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+     * @param tags The tags, each up to 50 characters with single spaces between words.
+     * @returns The resource builder.
+     */
+    withTags(tags: string[]): ContainerResourcePromise;
+    /**
+     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+     * @param position The default position. Lower values appear first.
+     * @returns The resource builder.
+     */
+    withDashboardPosition(position: number): ContainerResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -16420,7 +16724,7 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddProject<MyService>("my-service")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -16537,6 +16841,16 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      */
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ContainerResourcePromise;
     /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): ContainerResourcePromise;
+    /**
      * Specifies the icon to use when displaying the resource in the dashboard.
      * @param iconName The name of the FluentUI icon to use. See https://aka.ms/fluentui-system-icons for available icons.
      * @param options Additional options.
@@ -16610,6 +16924,25 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): ContainerResourcePromise;
+    /**
+     * Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+     * @param name The case-sensitive trait name.
+     * @param value The trait value. Do not include secrets.
+     * @returns The resource builder.
+     */
+    withTrait(name: string, value: string): ContainerResourcePromise;
+    /**
+     * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+     * @param tags The tags, each up to 50 characters with single spaces between words.
+     * @returns The resource builder.
+     */
+    withTags(tags: string[]): ContainerResourcePromise;
+    /**
+     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+     * @param position The default position. Lower values appear first.
+     * @returns The resource builder.
+     */
+    withDashboardPosition(position: number): ContainerResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -18409,7 +18742,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddProject<MyService>("my-service")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -18664,6 +18997,29 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     }
 
     /** @internal */
+    private async _withResourceTypeDisplayNameInternal(resourceTypeDisplayName: string): Promise<ContainerResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, resourceTypeDisplayName };
+        const result = await this._client.invokeCapability<ContainerResourceHandle>(
+            'Aspire.Hosting/withResourceTypeDisplayName',
+            rpcArgs
+        );
+        return new ContainerResourceImpl(result, this._client);
+    }
+
+    /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._withResourceTypeDisplayNameInternal(resourceTypeDisplayName), this._client);
+    }
+
+    /** @internal */
     private async _withIconNameInternal(iconName: string, iconVariant?: IconVariant): Promise<ContainerResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, iconName };
         if (iconVariant !== undefined) rpcArgs.iconVariant = iconVariant;
@@ -18878,6 +19234,64 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
      */
     withRemoteImageTag(remoteImageTag: string): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._withRemoteImageTagInternal(remoteImageTag), this._client);
+    }
+
+    /** @internal */
+    private async _withTraitInternal(name: string, value: string): Promise<ContainerResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
+        const result = await this._client.invokeCapability<ContainerResourceHandle>(
+            'Aspire.Hosting/withTrait',
+            rpcArgs
+        );
+        return new ContainerResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+     * @param name The case-sensitive trait name.
+     * @param value The trait value. Do not include secrets.
+     * @returns The resource builder.
+     */
+    withTrait(name: string, value: string): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._withTraitInternal(name, value), this._client);
+    }
+
+    /** @internal */
+    private async _withTagsInternal(tags: string[]): Promise<ContainerResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, tags };
+        const result = await this._client.invokeCapability<ContainerResourceHandle>(
+            'Aspire.Hosting/withTags',
+            rpcArgs
+        );
+        return new ContainerResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+     * @param tags The tags, each up to 50 characters with single spaces between words.
+     * @returns The resource builder.
+     */
+    withTags(tags: string[]): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._withTagsInternal(tags), this._client);
+    }
+
+    /** @internal */
+    private async _withDashboardPositionInternal(position: number): Promise<ContainerResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, position };
+        const result = await this._client.invokeCapability<ContainerResourceHandle>(
+            'Aspire.Hosting/withDashboardPosition',
+            rpcArgs
+        );
+        return new ContainerResourceImpl(result, this._client);
+    }
+
+    /**
+     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+     * @param position The default position. Lower values appear first.
+     * @returns The resource builder.
+     */
+    withDashboardPosition(position: number): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._withDashboardPositionInternal(position), this._client);
     }
 
     /** @internal */
@@ -19658,6 +20072,7 @@ const ContainerResourcePromiseImpl = $aspireCreateFluentPromiseClass<ContainerRe
     ["withRelationship"]: () => ContainerResourcePromiseImpl,
     ["withParentRelationship"]: () => ContainerResourcePromiseImpl,
     ["withChildRelationship"]: () => ContainerResourcePromiseImpl,
+    ["withResourceTypeDisplayName"]: () => ContainerResourcePromiseImpl,
     ["withIconName"]: () => ContainerResourcePromiseImpl,
     ["withComputeEnvironment"]: () => ContainerResourcePromiseImpl,
     ["withHttpProbe"]: () => ContainerResourcePromiseImpl,
@@ -19667,6 +20082,9 @@ const ContainerResourcePromiseImpl = $aspireCreateFluentPromiseClass<ContainerRe
     ["withImagePushOptions"]: () => ContainerResourcePromiseImpl,
     ["withRemoteImageName"]: () => ContainerResourcePromiseImpl,
     ["withRemoteImageTag"]: () => ContainerResourcePromiseImpl,
+    ["withTrait"]: () => ContainerResourcePromiseImpl,
+    ["withTags"]: () => ContainerResourcePromiseImpl,
+    ["withDashboardPosition"]: () => ContainerResourcePromiseImpl,
     ["withTerminal"]: () => ContainerResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => ContainerResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => ContainerResourcePromiseImpl,
@@ -20051,7 +20469,7 @@ export interface CSharpAppResource {
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddProject<MyService>("my-service")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -20168,6 +20586,16 @@ export interface CSharpAppResource {
      */
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): CSharpAppResourcePromise;
     /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): CSharpAppResourcePromise;
+    /**
      * Specifies the icon to use when displaying the resource in the dashboard.
      * @param iconName The name of the FluentUI icon to use. See https://aka.ms/fluentui-system-icons for available icons.
      * @param options Additional options.
@@ -20241,6 +20669,25 @@ export interface CSharpAppResource {
      * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): CSharpAppResourcePromise;
+    /**
+     * Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+     * @param name The case-sensitive trait name.
+     * @param value The trait value. Do not include secrets.
+     * @returns The resource builder.
+     */
+    withTrait(name: string, value: string): CSharpAppResourcePromise;
+    /**
+     * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+     * @param tags The tags, each up to 50 characters with single spaces between words.
+     * @returns The resource builder.
+     */
+    withTags(tags: string[]): CSharpAppResourcePromise;
+    /**
+     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+     * @param position The default position. Lower values appear first.
+     * @returns The resource builder.
+     */
+    withDashboardPosition(position: number): CSharpAppResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -20730,7 +21177,7 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddProject<MyService>("my-service")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -20847,6 +21294,16 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      */
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): CSharpAppResourcePromise;
     /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): CSharpAppResourcePromise;
+    /**
      * Specifies the icon to use when displaying the resource in the dashboard.
      * @param iconName The name of the FluentUI icon to use. See https://aka.ms/fluentui-system-icons for available icons.
      * @param options Additional options.
@@ -20920,6 +21377,25 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): CSharpAppResourcePromise;
+    /**
+     * Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+     * @param name The case-sensitive trait name.
+     * @param value The trait value. Do not include secrets.
+     * @returns The resource builder.
+     */
+    withTrait(name: string, value: string): CSharpAppResourcePromise;
+    /**
+     * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+     * @param tags The tags, each up to 50 characters with single spaces between words.
+     * @returns The resource builder.
+     */
+    withTags(tags: string[]): CSharpAppResourcePromise;
+    /**
+     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+     * @param position The default position. Lower values appear first.
+     * @returns The resource builder.
+     */
+    withDashboardPosition(position: number): CSharpAppResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -22307,7 +22783,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddProject<MyService>("my-service")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -22562,6 +23038,29 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     }
 
     /** @internal */
+    private async _withResourceTypeDisplayNameInternal(resourceTypeDisplayName: string): Promise<CSharpAppResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, resourceTypeDisplayName };
+        const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
+            'Aspire.Hosting/withResourceTypeDisplayName',
+            rpcArgs
+        );
+        return new CSharpAppResourceImpl(result, this._client);
+    }
+
+    /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromiseImpl(this._withResourceTypeDisplayNameInternal(resourceTypeDisplayName), this._client);
+    }
+
+    /** @internal */
     private async _withIconNameInternal(iconName: string, iconVariant?: IconVariant): Promise<CSharpAppResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, iconName };
         if (iconVariant !== undefined) rpcArgs.iconVariant = iconVariant;
@@ -22776,6 +23275,64 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
      */
     withRemoteImageTag(remoteImageTag: string): CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._withRemoteImageTagInternal(remoteImageTag), this._client);
+    }
+
+    /** @internal */
+    private async _withTraitInternal(name: string, value: string): Promise<CSharpAppResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
+        const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
+            'Aspire.Hosting/withTrait',
+            rpcArgs
+        );
+        return new CSharpAppResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+     * @param name The case-sensitive trait name.
+     * @param value The trait value. Do not include secrets.
+     * @returns The resource builder.
+     */
+    withTrait(name: string, value: string): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromiseImpl(this._withTraitInternal(name, value), this._client);
+    }
+
+    /** @internal */
+    private async _withTagsInternal(tags: string[]): Promise<CSharpAppResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, tags };
+        const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
+            'Aspire.Hosting/withTags',
+            rpcArgs
+        );
+        return new CSharpAppResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+     * @param tags The tags, each up to 50 characters with single spaces between words.
+     * @returns The resource builder.
+     */
+    withTags(tags: string[]): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromiseImpl(this._withTagsInternal(tags), this._client);
+    }
+
+    /** @internal */
+    private async _withDashboardPositionInternal(position: number): Promise<CSharpAppResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, position };
+        const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
+            'Aspire.Hosting/withDashboardPosition',
+            rpcArgs
+        );
+        return new CSharpAppResourceImpl(result, this._client);
+    }
+
+    /**
+     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+     * @param position The default position. Lower values appear first.
+     * @returns The resource builder.
+     */
+    withDashboardPosition(position: number): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromiseImpl(this._withDashboardPositionInternal(position), this._client);
     }
 
     /** @internal */
@@ -23551,6 +24108,7 @@ const CSharpAppResourcePromiseImpl = $aspireCreateFluentPromiseClass<CSharpAppRe
     ["withRelationship"]: () => CSharpAppResourcePromiseImpl,
     ["withParentRelationship"]: () => CSharpAppResourcePromiseImpl,
     ["withChildRelationship"]: () => CSharpAppResourcePromiseImpl,
+    ["withResourceTypeDisplayName"]: () => CSharpAppResourcePromiseImpl,
     ["withIconName"]: () => CSharpAppResourcePromiseImpl,
     ["withComputeEnvironment"]: () => CSharpAppResourcePromiseImpl,
     ["withHttpProbe"]: () => CSharpAppResourcePromiseImpl,
@@ -23560,6 +24118,9 @@ const CSharpAppResourcePromiseImpl = $aspireCreateFluentPromiseClass<CSharpAppRe
     ["withImagePushOptions"]: () => CSharpAppResourcePromiseImpl,
     ["withRemoteImageName"]: () => CSharpAppResourcePromiseImpl,
     ["withRemoteImageTag"]: () => CSharpAppResourcePromiseImpl,
+    ["withTrait"]: () => CSharpAppResourcePromiseImpl,
+    ["withTags"]: () => CSharpAppResourcePromiseImpl,
+    ["withDashboardPosition"]: () => CSharpAppResourcePromiseImpl,
     ["withTerminal"]: () => CSharpAppResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => CSharpAppResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => CSharpAppResourcePromiseImpl,
@@ -23979,7 +24540,7 @@ export interface DotnetToolResource {
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddProject<MyService>("my-service")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -24096,6 +24657,16 @@ export interface DotnetToolResource {
      */
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): DotnetToolResourcePromise;
     /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): DotnetToolResourcePromise;
+    /**
      * Specifies the icon to use when displaying the resource in the dashboard.
      * @param iconName The name of the FluentUI icon to use. See https://aka.ms/fluentui-system-icons for available icons.
      * @param options Additional options.
@@ -24177,6 +24748,25 @@ export interface DotnetToolResource {
      * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): DotnetToolResourcePromise;
+    /**
+     * Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+     * @param name The case-sensitive trait name.
+     * @param value The trait value. Do not include secrets.
+     * @returns The resource builder.
+     */
+    withTrait(name: string, value: string): DotnetToolResourcePromise;
+    /**
+     * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+     * @param tags The tags, each up to 50 characters with single spaces between words.
+     * @returns The resource builder.
+     */
+    withTags(tags: string[]): DotnetToolResourcePromise;
+    /**
+     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+     * @param position The default position. Lower values appear first.
+     * @returns The resource builder.
+     */
+    withDashboardPosition(position: number): DotnetToolResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -24694,7 +25284,7 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddProject<MyService>("my-service")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -24811,6 +25401,16 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      */
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): DotnetToolResourcePromise;
     /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): DotnetToolResourcePromise;
+    /**
      * Specifies the icon to use when displaying the resource in the dashboard.
      * @param iconName The name of the FluentUI icon to use. See https://aka.ms/fluentui-system-icons for available icons.
      * @param options Additional options.
@@ -24892,6 +25492,25 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): DotnetToolResourcePromise;
+    /**
+     * Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+     * @param name The case-sensitive trait name.
+     * @param value The trait value. Do not include secrets.
+     * @returns The resource builder.
+     */
+    withTrait(name: string, value: string): DotnetToolResourcePromise;
+    /**
+     * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+     * @param tags The tags, each up to 50 characters with single spaces between words.
+     * @returns The resource builder.
+     */
+    withTags(tags: string[]): DotnetToolResourcePromise;
+    /**
+     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+     * @param position The default position. Lower values appear first.
+     * @returns The resource builder.
+     */
+    withDashboardPosition(position: number): DotnetToolResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -26369,7 +26988,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddProject<MyService>("my-service")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -26624,6 +27243,29 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     }
 
     /** @internal */
+    private async _withResourceTypeDisplayNameInternal(resourceTypeDisplayName: string): Promise<DotnetToolResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, resourceTypeDisplayName };
+        const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
+            'Aspire.Hosting/withResourceTypeDisplayName',
+            rpcArgs
+        );
+        return new DotnetToolResourceImpl(result, this._client);
+    }
+
+    /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromiseImpl(this._withResourceTypeDisplayNameInternal(resourceTypeDisplayName), this._client);
+    }
+
+    /** @internal */
     private async _withIconNameInternal(iconName: string, iconVariant?: IconVariant): Promise<DotnetToolResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, iconName };
         if (iconVariant !== undefined) rpcArgs.iconVariant = iconVariant;
@@ -26863,6 +27505,64 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
      */
     withRemoteImageTag(remoteImageTag: string): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._withRemoteImageTagInternal(remoteImageTag), this._client);
+    }
+
+    /** @internal */
+    private async _withTraitInternal(name: string, value: string): Promise<DotnetToolResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
+        const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
+            'Aspire.Hosting/withTrait',
+            rpcArgs
+        );
+        return new DotnetToolResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+     * @param name The case-sensitive trait name.
+     * @param value The trait value. Do not include secrets.
+     * @returns The resource builder.
+     */
+    withTrait(name: string, value: string): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromiseImpl(this._withTraitInternal(name, value), this._client);
+    }
+
+    /** @internal */
+    private async _withTagsInternal(tags: string[]): Promise<DotnetToolResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, tags };
+        const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
+            'Aspire.Hosting/withTags',
+            rpcArgs
+        );
+        return new DotnetToolResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+     * @param tags The tags, each up to 50 characters with single spaces between words.
+     * @returns The resource builder.
+     */
+    withTags(tags: string[]): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromiseImpl(this._withTagsInternal(tags), this._client);
+    }
+
+    /** @internal */
+    private async _withDashboardPositionInternal(position: number): Promise<DotnetToolResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, position };
+        const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
+            'Aspire.Hosting/withDashboardPosition',
+            rpcArgs
+        );
+        return new DotnetToolResourceImpl(result, this._client);
+    }
+
+    /**
+     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+     * @param position The default position. Lower values appear first.
+     * @returns The resource builder.
+     */
+    withDashboardPosition(position: number): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromiseImpl(this._withDashboardPositionInternal(position), this._client);
     }
 
     /** @internal */
@@ -27624,6 +28324,7 @@ const DotnetToolResourcePromiseImpl = $aspireCreateFluentPromiseClass<DotnetTool
     ["withRelationship"]: () => DotnetToolResourcePromiseImpl,
     ["withParentRelationship"]: () => DotnetToolResourcePromiseImpl,
     ["withChildRelationship"]: () => DotnetToolResourcePromiseImpl,
+    ["withResourceTypeDisplayName"]: () => DotnetToolResourcePromiseImpl,
     ["withIconName"]: () => DotnetToolResourcePromiseImpl,
     ["withComputeEnvironment"]: () => DotnetToolResourcePromiseImpl,
     ["withExecutableDebugSupport"]: () => DotnetToolResourcePromiseImpl,
@@ -27634,6 +28335,9 @@ const DotnetToolResourcePromiseImpl = $aspireCreateFluentPromiseClass<DotnetTool
     ["withImagePushOptions"]: () => DotnetToolResourcePromiseImpl,
     ["withRemoteImageName"]: () => DotnetToolResourcePromiseImpl,
     ["withRemoteImageTag"]: () => DotnetToolResourcePromiseImpl,
+    ["withTrait"]: () => DotnetToolResourcePromiseImpl,
+    ["withTags"]: () => DotnetToolResourcePromiseImpl,
+    ["withDashboardPosition"]: () => DotnetToolResourcePromiseImpl,
     ["withTerminal"]: () => DotnetToolResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => DotnetToolResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => DotnetToolResourcePromiseImpl,
@@ -28020,7 +28724,7 @@ export interface ExecutableResource {
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddProject<MyService>("my-service")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -28137,6 +28841,16 @@ export interface ExecutableResource {
      */
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ExecutableResourcePromise;
     /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): ExecutableResourcePromise;
+    /**
      * Specifies the icon to use when displaying the resource in the dashboard.
      * @param iconName The name of the FluentUI icon to use. See https://aka.ms/fluentui-system-icons for available icons.
      * @param options Additional options.
@@ -28218,6 +28932,25 @@ export interface ExecutableResource {
      * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): ExecutableResourcePromise;
+    /**
+     * Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+     * @param name The case-sensitive trait name.
+     * @param value The trait value. Do not include secrets.
+     * @returns The resource builder.
+     */
+    withTrait(name: string, value: string): ExecutableResourcePromise;
+    /**
+     * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+     * @param tags The tags, each up to 50 characters with single spaces between words.
+     * @returns The resource builder.
+     */
+    withTags(tags: string[]): ExecutableResourcePromise;
+    /**
+     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+     * @param position The default position. Lower values appear first.
+     * @returns The resource builder.
+     */
+    withDashboardPosition(position: number): ExecutableResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -28696,7 +29429,7 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddProject<MyService>("my-service")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -28813,6 +29546,16 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      */
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ExecutableResourcePromise;
     /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): ExecutableResourcePromise;
+    /**
      * Specifies the icon to use when displaying the resource in the dashboard.
      * @param iconName The name of the FluentUI icon to use. See https://aka.ms/fluentui-system-icons for available icons.
      * @param options Additional options.
@@ -28894,6 +29637,25 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): ExecutableResourcePromise;
+    /**
+     * Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+     * @param name The case-sensitive trait name.
+     * @param value The trait value. Do not include secrets.
+     * @returns The resource builder.
+     */
+    withTrait(name: string, value: string): ExecutableResourcePromise;
+    /**
+     * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+     * @param tags The tags, each up to 50 characters with single spaces between words.
+     * @returns The resource builder.
+     */
+    withTags(tags: string[]): ExecutableResourcePromise;
+    /**
+     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+     * @param position The default position. Lower values appear first.
+     * @returns The resource builder.
+     */
+    withDashboardPosition(position: number): ExecutableResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -30261,7 +31023,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddProject<MyService>("my-service")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -30516,6 +31278,29 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     }
 
     /** @internal */
+    private async _withResourceTypeDisplayNameInternal(resourceTypeDisplayName: string): Promise<ExecutableResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, resourceTypeDisplayName };
+        const result = await this._client.invokeCapability<ExecutableResourceHandle>(
+            'Aspire.Hosting/withResourceTypeDisplayName',
+            rpcArgs
+        );
+        return new ExecutableResourceImpl(result, this._client);
+    }
+
+    /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): ExecutableResourcePromise {
+        return new ExecutableResourcePromiseImpl(this._withResourceTypeDisplayNameInternal(resourceTypeDisplayName), this._client);
+    }
+
+    /** @internal */
     private async _withIconNameInternal(iconName: string, iconVariant?: IconVariant): Promise<ExecutableResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, iconName };
         if (iconVariant !== undefined) rpcArgs.iconVariant = iconVariant;
@@ -30755,6 +31540,64 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
      */
     withRemoteImageTag(remoteImageTag: string): ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._withRemoteImageTagInternal(remoteImageTag), this._client);
+    }
+
+    /** @internal */
+    private async _withTraitInternal(name: string, value: string): Promise<ExecutableResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
+        const result = await this._client.invokeCapability<ExecutableResourceHandle>(
+            'Aspire.Hosting/withTrait',
+            rpcArgs
+        );
+        return new ExecutableResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+     * @param name The case-sensitive trait name.
+     * @param value The trait value. Do not include secrets.
+     * @returns The resource builder.
+     */
+    withTrait(name: string, value: string): ExecutableResourcePromise {
+        return new ExecutableResourcePromiseImpl(this._withTraitInternal(name, value), this._client);
+    }
+
+    /** @internal */
+    private async _withTagsInternal(tags: string[]): Promise<ExecutableResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, tags };
+        const result = await this._client.invokeCapability<ExecutableResourceHandle>(
+            'Aspire.Hosting/withTags',
+            rpcArgs
+        );
+        return new ExecutableResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+     * @param tags The tags, each up to 50 characters with single spaces between words.
+     * @returns The resource builder.
+     */
+    withTags(tags: string[]): ExecutableResourcePromise {
+        return new ExecutableResourcePromiseImpl(this._withTagsInternal(tags), this._client);
+    }
+
+    /** @internal */
+    private async _withDashboardPositionInternal(position: number): Promise<ExecutableResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, position };
+        const result = await this._client.invokeCapability<ExecutableResourceHandle>(
+            'Aspire.Hosting/withDashboardPosition',
+            rpcArgs
+        );
+        return new ExecutableResourceImpl(result, this._client);
+    }
+
+    /**
+     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+     * @param position The default position. Lower values appear first.
+     * @returns The resource builder.
+     */
+    withDashboardPosition(position: number): ExecutableResourcePromise {
+        return new ExecutableResourcePromiseImpl(this._withDashboardPositionInternal(position), this._client);
     }
 
     /** @internal */
@@ -31510,6 +32353,7 @@ const ExecutableResourcePromiseImpl = $aspireCreateFluentPromiseClass<Executable
     ["withRelationship"]: () => ExecutableResourcePromiseImpl,
     ["withParentRelationship"]: () => ExecutableResourcePromiseImpl,
     ["withChildRelationship"]: () => ExecutableResourcePromiseImpl,
+    ["withResourceTypeDisplayName"]: () => ExecutableResourcePromiseImpl,
     ["withIconName"]: () => ExecutableResourcePromiseImpl,
     ["withComputeEnvironment"]: () => ExecutableResourcePromiseImpl,
     ["withExecutableDebugSupport"]: () => ExecutableResourcePromiseImpl,
@@ -31520,6 +32364,9 @@ const ExecutableResourcePromiseImpl = $aspireCreateFluentPromiseClass<Executable
     ["withImagePushOptions"]: () => ExecutableResourcePromiseImpl,
     ["withRemoteImageName"]: () => ExecutableResourcePromiseImpl,
     ["withRemoteImageTag"]: () => ExecutableResourcePromiseImpl,
+    ["withTrait"]: () => ExecutableResourcePromiseImpl,
+    ["withTags"]: () => ExecutableResourcePromiseImpl,
+    ["withDashboardPosition"]: () => ExecutableResourcePromiseImpl,
     ["withTerminal"]: () => ExecutableResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => ExecutableResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => ExecutableResourcePromiseImpl,
@@ -31759,6 +32606,16 @@ export interface ExternalServiceResource {
      */
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ExternalServiceResourcePromise;
     /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): ExternalServiceResourcePromise;
+    /**
      * Specifies the icon to use when displaying the resource in the dashboard.
      * @param iconName The name of the FluentUI icon to use. See https://aka.ms/fluentui-system-icons for available icons.
      * @param options Additional options.
@@ -31788,6 +32645,25 @@ export interface ExternalServiceResource {
      * @returns The resource builder.
      */
     withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ExternalServiceResourcePromise;
+    /**
+     * Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+     * @param name The case-sensitive trait name.
+     * @param value The trait value. Do not include secrets.
+     * @returns The resource builder.
+     */
+    withTrait(name: string, value: string): ExternalServiceResourcePromise;
+    /**
+     * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+     * @param tags The tags, each up to 50 characters with single spaces between words.
+     * @returns The resource builder.
+     */
+    withTags(tags: string[]): ExternalServiceResourcePromise;
+    /**
+     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+     * @param position The default position. Lower values appear first.
+     * @returns The resource builder.
+     */
+    withDashboardPosition(position: number): ExternalServiceResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -32107,6 +32983,16 @@ export interface ExternalServiceResourcePromise extends PromiseLike<ExternalServ
      */
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ExternalServiceResourcePromise;
     /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): ExternalServiceResourcePromise;
+    /**
      * Specifies the icon to use when displaying the resource in the dashboard.
      * @param iconName The name of the FluentUI icon to use. See https://aka.ms/fluentui-system-icons for available icons.
      * @param options Additional options.
@@ -32136,6 +33022,25 @@ export interface ExternalServiceResourcePromise extends PromiseLike<ExternalServ
      * @returns The resource builder.
      */
     withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ExternalServiceResourcePromise;
+    /**
+     * Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+     * @param name The case-sensitive trait name.
+     * @param value The trait value. Do not include secrets.
+     * @returns The resource builder.
+     */
+    withTrait(name: string, value: string): ExternalServiceResourcePromise;
+    /**
+     * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+     * @param tags The tags, each up to 50 characters with single spaces between words.
+     * @returns The resource builder.
+     */
+    withTags(tags: string[]): ExternalServiceResourcePromise;
+    /**
+     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+     * @param position The default position. Lower values appear first.
+     * @returns The resource builder.
+     */
+    withDashboardPosition(position: number): ExternalServiceResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -32914,6 +33819,29 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
     }
 
     /** @internal */
+    private async _withResourceTypeDisplayNameInternal(resourceTypeDisplayName: string): Promise<ExternalServiceResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, resourceTypeDisplayName };
+        const result = await this._client.invokeCapability<ExternalServiceResourceHandle>(
+            'Aspire.Hosting/withResourceTypeDisplayName',
+            rpcArgs
+        );
+        return new ExternalServiceResourceImpl(result, this._client);
+    }
+
+    /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): ExternalServiceResourcePromise {
+        return new ExternalServiceResourcePromiseImpl(this._withResourceTypeDisplayNameInternal(resourceTypeDisplayName), this._client);
+    }
+
+    /** @internal */
     private async _withIconNameInternal(iconName: string, iconVariant?: IconVariant): Promise<ExternalServiceResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, iconName };
         if (iconVariant !== undefined) rpcArgs.iconVariant = iconVariant;
@@ -32999,6 +33927,64 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
         const exitCode = options?.exitCode;
         const exitCodes = options?.exitCodes;
         return new ExternalServiceResourcePromiseImpl(this._withHiddenOnCompletionInternal(exitCode, exitCodes), this._client);
+    }
+
+    /** @internal */
+    private async _withTraitInternal(name: string, value: string): Promise<ExternalServiceResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
+        const result = await this._client.invokeCapability<ExternalServiceResourceHandle>(
+            'Aspire.Hosting/withTrait',
+            rpcArgs
+        );
+        return new ExternalServiceResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+     * @param name The case-sensitive trait name.
+     * @param value The trait value. Do not include secrets.
+     * @returns The resource builder.
+     */
+    withTrait(name: string, value: string): ExternalServiceResourcePromise {
+        return new ExternalServiceResourcePromiseImpl(this._withTraitInternal(name, value), this._client);
+    }
+
+    /** @internal */
+    private async _withTagsInternal(tags: string[]): Promise<ExternalServiceResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, tags };
+        const result = await this._client.invokeCapability<ExternalServiceResourceHandle>(
+            'Aspire.Hosting/withTags',
+            rpcArgs
+        );
+        return new ExternalServiceResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+     * @param tags The tags, each up to 50 characters with single spaces between words.
+     * @returns The resource builder.
+     */
+    withTags(tags: string[]): ExternalServiceResourcePromise {
+        return new ExternalServiceResourcePromiseImpl(this._withTagsInternal(tags), this._client);
+    }
+
+    /** @internal */
+    private async _withDashboardPositionInternal(position: number): Promise<ExternalServiceResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, position };
+        const result = await this._client.invokeCapability<ExternalServiceResourceHandle>(
+            'Aspire.Hosting/withDashboardPosition',
+            rpcArgs
+        );
+        return new ExternalServiceResourceImpl(result, this._client);
+    }
+
+    /**
+     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+     * @param position The default position. Lower values appear first.
+     * @returns The resource builder.
+     */
+    withDashboardPosition(position: number): ExternalServiceResourcePromise {
+        return new ExternalServiceResourcePromiseImpl(this._withDashboardPositionInternal(position), this._client);
     }
 
     /** @internal */
@@ -33639,10 +34625,14 @@ const ExternalServiceResourcePromiseImpl = $aspireCreateFluentPromiseClass<Exter
     ["withRelationship"]: () => ExternalServiceResourcePromiseImpl,
     ["withParentRelationship"]: () => ExternalServiceResourcePromiseImpl,
     ["withChildRelationship"]: () => ExternalServiceResourcePromiseImpl,
+    ["withResourceTypeDisplayName"]: () => ExternalServiceResourcePromiseImpl,
     ["withIconName"]: () => ExternalServiceResourcePromiseImpl,
     ["excludeFromMcp"]: () => ExternalServiceResourcePromiseImpl,
     ["withHidden"]: () => ExternalServiceResourcePromiseImpl,
     ["withHiddenOnCompletion"]: () => ExternalServiceResourcePromiseImpl,
+    ["withTrait"]: () => ExternalServiceResourcePromiseImpl,
+    ["withTags"]: () => ExternalServiceResourcePromiseImpl,
+    ["withDashboardPosition"]: () => ExternalServiceResourcePromiseImpl,
     ["withTerminal"]: () => ExternalServiceResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => ExternalServiceResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => ExternalServiceResourcePromiseImpl,
@@ -33902,6 +34892,16 @@ export interface ParameterResource {
      */
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ParameterResourcePromise;
     /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): ParameterResourcePromise;
+    /**
      * Specifies the icon to use when displaying the resource in the dashboard.
      * @param iconName The name of the FluentUI icon to use. See https://aka.ms/fluentui-system-icons for available icons.
      * @param options Additional options.
@@ -33931,6 +34931,25 @@ export interface ParameterResource {
      * @returns The resource builder.
      */
     withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ParameterResourcePromise;
+    /**
+     * Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+     * @param name The case-sensitive trait name.
+     * @param value The trait value. Do not include secrets.
+     * @returns The resource builder.
+     */
+    withTrait(name: string, value: string): ParameterResourcePromise;
+    /**
+     * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+     * @param tags The tags, each up to 50 characters with single spaces between words.
+     * @returns The resource builder.
+     */
+    withTags(tags: string[]): ParameterResourcePromise;
+    /**
+     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+     * @param position The default position. Lower values appear first.
+     * @returns The resource builder.
+     */
+    withDashboardPosition(position: number): ParameterResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -34292,6 +35311,16 @@ export interface ParameterResourcePromise extends PromiseLike<ParameterResource>
      */
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ParameterResourcePromise;
     /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): ParameterResourcePromise;
+    /**
      * Specifies the icon to use when displaying the resource in the dashboard.
      * @param iconName The name of the FluentUI icon to use. See https://aka.ms/fluentui-system-icons for available icons.
      * @param options Additional options.
@@ -34321,6 +35350,25 @@ export interface ParameterResourcePromise extends PromiseLike<ParameterResource>
      * @returns The resource builder.
      */
     withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ParameterResourcePromise;
+    /**
+     * Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+     * @param name The case-sensitive trait name.
+     * @param value The trait value. Do not include secrets.
+     * @returns The resource builder.
+     */
+    withTrait(name: string, value: string): ParameterResourcePromise;
+    /**
+     * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+     * @param tags The tags, each up to 50 characters with single spaces between words.
+     * @returns The resource builder.
+     */
+    withTags(tags: string[]): ParameterResourcePromise;
+    /**
+     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+     * @param position The default position. Lower values appear first.
+     * @returns The resource builder.
+     */
+    withDashboardPosition(position: number): ParameterResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -35179,6 +36227,29 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
     }
 
     /** @internal */
+    private async _withResourceTypeDisplayNameInternal(resourceTypeDisplayName: string): Promise<ParameterResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, resourceTypeDisplayName };
+        const result = await this._client.invokeCapability<ParameterResourceHandle>(
+            'Aspire.Hosting/withResourceTypeDisplayName',
+            rpcArgs
+        );
+        return new ParameterResourceImpl(result, this._client);
+    }
+
+    /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): ParameterResourcePromise {
+        return new ParameterResourcePromiseImpl(this._withResourceTypeDisplayNameInternal(resourceTypeDisplayName), this._client);
+    }
+
+    /** @internal */
     private async _withIconNameInternal(iconName: string, iconVariant?: IconVariant): Promise<ParameterResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, iconName };
         if (iconVariant !== undefined) rpcArgs.iconVariant = iconVariant;
@@ -35264,6 +36335,64 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
         const exitCode = options?.exitCode;
         const exitCodes = options?.exitCodes;
         return new ParameterResourcePromiseImpl(this._withHiddenOnCompletionInternal(exitCode, exitCodes), this._client);
+    }
+
+    /** @internal */
+    private async _withTraitInternal(name: string, value: string): Promise<ParameterResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
+        const result = await this._client.invokeCapability<ParameterResourceHandle>(
+            'Aspire.Hosting/withTrait',
+            rpcArgs
+        );
+        return new ParameterResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+     * @param name The case-sensitive trait name.
+     * @param value The trait value. Do not include secrets.
+     * @returns The resource builder.
+     */
+    withTrait(name: string, value: string): ParameterResourcePromise {
+        return new ParameterResourcePromiseImpl(this._withTraitInternal(name, value), this._client);
+    }
+
+    /** @internal */
+    private async _withTagsInternal(tags: string[]): Promise<ParameterResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, tags };
+        const result = await this._client.invokeCapability<ParameterResourceHandle>(
+            'Aspire.Hosting/withTags',
+            rpcArgs
+        );
+        return new ParameterResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+     * @param tags The tags, each up to 50 characters with single spaces between words.
+     * @returns The resource builder.
+     */
+    withTags(tags: string[]): ParameterResourcePromise {
+        return new ParameterResourcePromiseImpl(this._withTagsInternal(tags), this._client);
+    }
+
+    /** @internal */
+    private async _withDashboardPositionInternal(position: number): Promise<ParameterResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, position };
+        const result = await this._client.invokeCapability<ParameterResourceHandle>(
+            'Aspire.Hosting/withDashboardPosition',
+            rpcArgs
+        );
+        return new ParameterResourceImpl(result, this._client);
+    }
+
+    /**
+     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+     * @param position The default position. Lower values appear first.
+     * @returns The resource builder.
+     */
+    withDashboardPosition(position: number): ParameterResourcePromise {
+        return new ParameterResourcePromiseImpl(this._withDashboardPositionInternal(position), this._client);
     }
 
     /** @internal */
@@ -35944,10 +37073,14 @@ const ParameterResourcePromiseImpl = $aspireCreateFluentPromiseClass<ParameterRe
     ["withRelationship"]: () => ParameterResourcePromiseImpl,
     ["withParentRelationship"]: () => ParameterResourcePromiseImpl,
     ["withChildRelationship"]: () => ParameterResourcePromiseImpl,
+    ["withResourceTypeDisplayName"]: () => ParameterResourcePromiseImpl,
     ["withIconName"]: () => ParameterResourcePromiseImpl,
     ["excludeFromMcp"]: () => ParameterResourcePromiseImpl,
     ["withHidden"]: () => ParameterResourcePromiseImpl,
     ["withHiddenOnCompletion"]: () => ParameterResourcePromiseImpl,
+    ["withTrait"]: () => ParameterResourcePromiseImpl,
+    ["withTags"]: () => ParameterResourcePromiseImpl,
+    ["withDashboardPosition"]: () => ParameterResourcePromiseImpl,
     ["withTerminal"]: () => ParameterResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => ParameterResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => ParameterResourcePromiseImpl,
@@ -36331,7 +37464,7 @@ export interface ProjectResource {
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddProject<MyService>("my-service")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -36448,6 +37581,16 @@ export interface ProjectResource {
      */
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ProjectResourcePromise;
     /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): ProjectResourcePromise;
+    /**
      * Specifies the icon to use when displaying the resource in the dashboard.
      * @param iconName The name of the FluentUI icon to use. See https://aka.ms/fluentui-system-icons for available icons.
      * @param options Additional options.
@@ -36521,6 +37664,25 @@ export interface ProjectResource {
      * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): ProjectResourcePromise;
+    /**
+     * Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+     * @param name The case-sensitive trait name.
+     * @param value The trait value. Do not include secrets.
+     * @returns The resource builder.
+     */
+    withTrait(name: string, value: string): ProjectResourcePromise;
+    /**
+     * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+     * @param tags The tags, each up to 50 characters with single spaces between words.
+     * @returns The resource builder.
+     */
+    withTags(tags: string[]): ProjectResourcePromise;
+    /**
+     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+     * @param position The default position. Lower values appear first.
+     * @returns The resource builder.
+     */
+    withDashboardPosition(position: number): ProjectResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -37010,7 +38172,7 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddProject<MyService>("my-service")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -37127,6 +38289,16 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      */
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ProjectResourcePromise;
     /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): ProjectResourcePromise;
+    /**
      * Specifies the icon to use when displaying the resource in the dashboard.
      * @param iconName The name of the FluentUI icon to use. See https://aka.ms/fluentui-system-icons for available icons.
      * @param options Additional options.
@@ -37200,6 +38372,25 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): ProjectResourcePromise;
+    /**
+     * Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+     * @param name The case-sensitive trait name.
+     * @param value The trait value. Do not include secrets.
+     * @returns The resource builder.
+     */
+    withTrait(name: string, value: string): ProjectResourcePromise;
+    /**
+     * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+     * @param tags The tags, each up to 50 characters with single spaces between words.
+     * @returns The resource builder.
+     */
+    withTags(tags: string[]): ProjectResourcePromise;
+    /**
+     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+     * @param position The default position. Lower values appear first.
+     * @returns The resource builder.
+     */
+    withDashboardPosition(position: number): ProjectResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -38588,7 +39779,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddProject<MyService>("my-service")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -38843,6 +40034,29 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     }
 
     /** @internal */
+    private async _withResourceTypeDisplayNameInternal(resourceTypeDisplayName: string): Promise<ProjectResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, resourceTypeDisplayName };
+        const result = await this._client.invokeCapability<ProjectResourceHandle>(
+            'Aspire.Hosting/withResourceTypeDisplayName',
+            rpcArgs
+        );
+        return new ProjectResourceImpl(result, this._client);
+    }
+
+    /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): ProjectResourcePromise {
+        return new ProjectResourcePromiseImpl(this._withResourceTypeDisplayNameInternal(resourceTypeDisplayName), this._client);
+    }
+
+    /** @internal */
     private async _withIconNameInternal(iconName: string, iconVariant?: IconVariant): Promise<ProjectResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, iconName };
         if (iconVariant !== undefined) rpcArgs.iconVariant = iconVariant;
@@ -39057,6 +40271,64 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
      */
     withRemoteImageTag(remoteImageTag: string): ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._withRemoteImageTagInternal(remoteImageTag), this._client);
+    }
+
+    /** @internal */
+    private async _withTraitInternal(name: string, value: string): Promise<ProjectResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
+        const result = await this._client.invokeCapability<ProjectResourceHandle>(
+            'Aspire.Hosting/withTrait',
+            rpcArgs
+        );
+        return new ProjectResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+     * @param name The case-sensitive trait name.
+     * @param value The trait value. Do not include secrets.
+     * @returns The resource builder.
+     */
+    withTrait(name: string, value: string): ProjectResourcePromise {
+        return new ProjectResourcePromiseImpl(this._withTraitInternal(name, value), this._client);
+    }
+
+    /** @internal */
+    private async _withTagsInternal(tags: string[]): Promise<ProjectResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, tags };
+        const result = await this._client.invokeCapability<ProjectResourceHandle>(
+            'Aspire.Hosting/withTags',
+            rpcArgs
+        );
+        return new ProjectResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+     * @param tags The tags, each up to 50 characters with single spaces between words.
+     * @returns The resource builder.
+     */
+    withTags(tags: string[]): ProjectResourcePromise {
+        return new ProjectResourcePromiseImpl(this._withTagsInternal(tags), this._client);
+    }
+
+    /** @internal */
+    private async _withDashboardPositionInternal(position: number): Promise<ProjectResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, position };
+        const result = await this._client.invokeCapability<ProjectResourceHandle>(
+            'Aspire.Hosting/withDashboardPosition',
+            rpcArgs
+        );
+        return new ProjectResourceImpl(result, this._client);
+    }
+
+    /**
+     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+     * @param position The default position. Lower values appear first.
+     * @returns The resource builder.
+     */
+    withDashboardPosition(position: number): ProjectResourcePromise {
+        return new ProjectResourcePromiseImpl(this._withDashboardPositionInternal(position), this._client);
     }
 
     /** @internal */
@@ -39832,6 +41104,7 @@ const ProjectResourcePromiseImpl = $aspireCreateFluentPromiseClass<ProjectResour
     ["withRelationship"]: () => ProjectResourcePromiseImpl,
     ["withParentRelationship"]: () => ProjectResourcePromiseImpl,
     ["withChildRelationship"]: () => ProjectResourcePromiseImpl,
+    ["withResourceTypeDisplayName"]: () => ProjectResourcePromiseImpl,
     ["withIconName"]: () => ProjectResourcePromiseImpl,
     ["withComputeEnvironment"]: () => ProjectResourcePromiseImpl,
     ["withHttpProbe"]: () => ProjectResourcePromiseImpl,
@@ -39841,6 +41114,9 @@ const ProjectResourcePromiseImpl = $aspireCreateFluentPromiseClass<ProjectResour
     ["withImagePushOptions"]: () => ProjectResourcePromiseImpl,
     ["withRemoteImageName"]: () => ProjectResourcePromiseImpl,
     ["withRemoteImageTag"]: () => ProjectResourcePromiseImpl,
+    ["withTrait"]: () => ProjectResourcePromiseImpl,
+    ["withTags"]: () => ProjectResourcePromiseImpl,
+    ["withDashboardPosition"]: () => ProjectResourcePromiseImpl,
     ["withTerminal"]: () => ProjectResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => ProjectResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => ProjectResourcePromiseImpl,
@@ -40387,7 +41663,7 @@ export interface TestDatabaseResource {
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddProject<MyService>("my-service")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -40504,6 +41780,16 @@ export interface TestDatabaseResource {
      */
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestDatabaseResourcePromise;
     /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): TestDatabaseResourcePromise;
+    /**
      * Specifies the icon to use when displaying the resource in the dashboard.
      * @param iconName The name of the FluentUI icon to use. See https://aka.ms/fluentui-system-icons for available icons.
      * @param options Additional options.
@@ -40577,6 +41863,25 @@ export interface TestDatabaseResource {
      * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): TestDatabaseResourcePromise;
+    /**
+     * Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+     * @param name The case-sensitive trait name.
+     * @param value The trait value. Do not include secrets.
+     * @returns The resource builder.
+     */
+    withTrait(name: string, value: string): TestDatabaseResourcePromise;
+    /**
+     * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+     * @param tags The tags, each up to 50 characters with single spaces between words.
+     * @returns The resource builder.
+     */
+    withTags(tags: string[]): TestDatabaseResourcePromise;
+    /**
+     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+     * @param position The default position. Lower values appear first.
+     * @returns The resource builder.
+     */
+    withDashboardPosition(position: number): TestDatabaseResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -41226,7 +42531,7 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddProject<MyService>("my-service")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -41343,6 +42648,16 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      */
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestDatabaseResourcePromise;
     /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): TestDatabaseResourcePromise;
+    /**
      * Specifies the icon to use when displaying the resource in the dashboard.
      * @param iconName The name of the FluentUI icon to use. See https://aka.ms/fluentui-system-icons for available icons.
      * @param options Additional options.
@@ -41416,6 +42731,25 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): TestDatabaseResourcePromise;
+    /**
+     * Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+     * @param name The case-sensitive trait name.
+     * @param value The trait value. Do not include secrets.
+     * @returns The resource builder.
+     */
+    withTrait(name: string, value: string): TestDatabaseResourcePromise;
+    /**
+     * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+     * @param tags The tags, each up to 50 characters with single spaces between words.
+     * @returns The resource builder.
+     */
+    withTags(tags: string[]): TestDatabaseResourcePromise;
+    /**
+     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+     * @param position The default position. Lower values appear first.
+     * @returns The resource builder.
+     */
+    withDashboardPosition(position: number): TestDatabaseResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -43214,7 +44548,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddProject<MyService>("my-service")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -43469,6 +44803,29 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /** @internal */
+    private async _withResourceTypeDisplayNameInternal(resourceTypeDisplayName: string): Promise<TestDatabaseResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, resourceTypeDisplayName };
+        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
+            'Aspire.Hosting/withResourceTypeDisplayName',
+            rpcArgs
+        );
+        return new TestDatabaseResourceImpl(result, this._client);
+    }
+
+    /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromiseImpl(this._withResourceTypeDisplayNameInternal(resourceTypeDisplayName), this._client);
+    }
+
+    /** @internal */
     private async _withIconNameInternal(iconName: string, iconVariant?: IconVariant): Promise<TestDatabaseResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, iconName };
         if (iconVariant !== undefined) rpcArgs.iconVariant = iconVariant;
@@ -43683,6 +45040,64 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
      */
     withRemoteImageTag(remoteImageTag: string): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._withRemoteImageTagInternal(remoteImageTag), this._client);
+    }
+
+    /** @internal */
+    private async _withTraitInternal(name: string, value: string): Promise<TestDatabaseResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
+        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
+            'Aspire.Hosting/withTrait',
+            rpcArgs
+        );
+        return new TestDatabaseResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+     * @param name The case-sensitive trait name.
+     * @param value The trait value. Do not include secrets.
+     * @returns The resource builder.
+     */
+    withTrait(name: string, value: string): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromiseImpl(this._withTraitInternal(name, value), this._client);
+    }
+
+    /** @internal */
+    private async _withTagsInternal(tags: string[]): Promise<TestDatabaseResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, tags };
+        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
+            'Aspire.Hosting/withTags',
+            rpcArgs
+        );
+        return new TestDatabaseResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+     * @param tags The tags, each up to 50 characters with single spaces between words.
+     * @returns The resource builder.
+     */
+    withTags(tags: string[]): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromiseImpl(this._withTagsInternal(tags), this._client);
+    }
+
+    /** @internal */
+    private async _withDashboardPositionInternal(position: number): Promise<TestDatabaseResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, position };
+        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
+            'Aspire.Hosting/withDashboardPosition',
+            rpcArgs
+        );
+        return new TestDatabaseResourceImpl(result, this._client);
+    }
+
+    /**
+     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+     * @param position The default position. Lower values appear first.
+     * @returns The resource builder.
+     */
+    withDashboardPosition(position: number): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromiseImpl(this._withDashboardPositionInternal(position), this._client);
     }
 
     /** @internal */
@@ -44463,6 +45878,7 @@ const TestDatabaseResourcePromiseImpl = $aspireCreateFluentPromiseClass<TestData
     ["withRelationship"]: () => TestDatabaseResourcePromiseImpl,
     ["withParentRelationship"]: () => TestDatabaseResourcePromiseImpl,
     ["withChildRelationship"]: () => TestDatabaseResourcePromiseImpl,
+    ["withResourceTypeDisplayName"]: () => TestDatabaseResourcePromiseImpl,
     ["withIconName"]: () => TestDatabaseResourcePromiseImpl,
     ["withComputeEnvironment"]: () => TestDatabaseResourcePromiseImpl,
     ["withHttpProbe"]: () => TestDatabaseResourcePromiseImpl,
@@ -44472,6 +45888,9 @@ const TestDatabaseResourcePromiseImpl = $aspireCreateFluentPromiseClass<TestData
     ["withImagePushOptions"]: () => TestDatabaseResourcePromiseImpl,
     ["withRemoteImageName"]: () => TestDatabaseResourcePromiseImpl,
     ["withRemoteImageTag"]: () => TestDatabaseResourcePromiseImpl,
+    ["withTrait"]: () => TestDatabaseResourcePromiseImpl,
+    ["withTags"]: () => TestDatabaseResourcePromiseImpl,
+    ["withDashboardPosition"]: () => TestDatabaseResourcePromiseImpl,
     ["withTerminal"]: () => TestDatabaseResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => TestDatabaseResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => TestDatabaseResourcePromiseImpl,
@@ -45033,7 +46452,7 @@ export interface TestRedisResource {
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddProject<MyService>("my-service")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -45150,6 +46569,16 @@ export interface TestRedisResource {
      */
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestRedisResourcePromise;
     /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): TestRedisResourcePromise;
+    /**
      * Specifies the icon to use when displaying the resource in the dashboard.
      * @param iconName The name of the FluentUI icon to use. See https://aka.ms/fluentui-system-icons for available icons.
      * @param options Additional options.
@@ -45223,6 +46652,25 @@ export interface TestRedisResource {
      * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): TestRedisResourcePromise;
+    /**
+     * Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+     * @param name The case-sensitive trait name.
+     * @param value The trait value. Do not include secrets.
+     * @returns The resource builder.
+     */
+    withTrait(name: string, value: string): TestRedisResourcePromise;
+    /**
+     * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+     * @param tags The tags, each up to 50 characters with single spaces between words.
+     * @returns The resource builder.
+     */
+    withTags(tags: string[]): TestRedisResourcePromise;
+    /**
+     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+     * @param position The default position. Lower values appear first.
+     * @returns The resource builder.
+     */
+    withDashboardPosition(position: number): TestRedisResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -45956,7 +47404,7 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddProject<MyService>("my-service")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -46073,6 +47521,16 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      */
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestRedisResourcePromise;
     /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): TestRedisResourcePromise;
+    /**
      * Specifies the icon to use when displaying the resource in the dashboard.
      * @param iconName The name of the FluentUI icon to use. See https://aka.ms/fluentui-system-icons for available icons.
      * @param options Additional options.
@@ -46146,6 +47604,25 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): TestRedisResourcePromise;
+    /**
+     * Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+     * @param name The case-sensitive trait name.
+     * @param value The trait value. Do not include secrets.
+     * @returns The resource builder.
+     */
+    withTrait(name: string, value: string): TestRedisResourcePromise;
+    /**
+     * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+     * @param tags The tags, each up to 50 characters with single spaces between words.
+     * @returns The resource builder.
+     */
+    withTags(tags: string[]): TestRedisResourcePromise;
+    /**
+     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+     * @param position The default position. Lower values appear first.
+     * @returns The resource builder.
+     */
+    withDashboardPosition(position: number): TestRedisResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -48048,7 +49525,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddProject<MyService>("my-service")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -48303,6 +49780,29 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** @internal */
+    private async _withResourceTypeDisplayNameInternal(resourceTypeDisplayName: string): Promise<TestRedisResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, resourceTypeDisplayName };
+        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
+            'Aspire.Hosting/withResourceTypeDisplayName',
+            rpcArgs
+        );
+        return new TestRedisResourceImpl(result, this._client);
+    }
+
+    /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._withResourceTypeDisplayNameInternal(resourceTypeDisplayName), this._client);
+    }
+
+    /** @internal */
     private async _withIconNameInternal(iconName: string, iconVariant?: IconVariant): Promise<TestRedisResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, iconName };
         if (iconVariant !== undefined) rpcArgs.iconVariant = iconVariant;
@@ -48517,6 +50017,64 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
      */
     withRemoteImageTag(remoteImageTag: string): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._withRemoteImageTagInternal(remoteImageTag), this._client);
+    }
+
+    /** @internal */
+    private async _withTraitInternal(name: string, value: string): Promise<TestRedisResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
+        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
+            'Aspire.Hosting/withTrait',
+            rpcArgs
+        );
+        return new TestRedisResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+     * @param name The case-sensitive trait name.
+     * @param value The trait value. Do not include secrets.
+     * @returns The resource builder.
+     */
+    withTrait(name: string, value: string): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._withTraitInternal(name, value), this._client);
+    }
+
+    /** @internal */
+    private async _withTagsInternal(tags: string[]): Promise<TestRedisResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, tags };
+        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
+            'Aspire.Hosting/withTags',
+            rpcArgs
+        );
+        return new TestRedisResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+     * @param tags The tags, each up to 50 characters with single spaces between words.
+     * @returns The resource builder.
+     */
+    withTags(tags: string[]): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._withTagsInternal(tags), this._client);
+    }
+
+    /** @internal */
+    private async _withDashboardPositionInternal(position: number): Promise<TestRedisResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, position };
+        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
+            'Aspire.Hosting/withDashboardPosition',
+            rpcArgs
+        );
+        return new TestRedisResourceImpl(result, this._client);
+    }
+
+    /**
+     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+     * @param position The default position. Lower values appear first.
+     * @returns The resource builder.
+     */
+    withDashboardPosition(position: number): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._withDashboardPositionInternal(position), this._client);
     }
 
     /** @internal */
@@ -49574,6 +51132,7 @@ const TestRedisResourcePromiseImpl = $aspireCreateFluentPromiseClass<TestRedisRe
     ["withRelationship"]: () => TestRedisResourcePromiseImpl,
     ["withParentRelationship"]: () => TestRedisResourcePromiseImpl,
     ["withChildRelationship"]: () => TestRedisResourcePromiseImpl,
+    ["withResourceTypeDisplayName"]: () => TestRedisResourcePromiseImpl,
     ["withIconName"]: () => TestRedisResourcePromiseImpl,
     ["withComputeEnvironment"]: () => TestRedisResourcePromiseImpl,
     ["withHttpProbe"]: () => TestRedisResourcePromiseImpl,
@@ -49583,6 +51142,9 @@ const TestRedisResourcePromiseImpl = $aspireCreateFluentPromiseClass<TestRedisRe
     ["withImagePushOptions"]: () => TestRedisResourcePromiseImpl,
     ["withRemoteImageName"]: () => TestRedisResourcePromiseImpl,
     ["withRemoteImageTag"]: () => TestRedisResourcePromiseImpl,
+    ["withTrait"]: () => TestRedisResourcePromiseImpl,
+    ["withTags"]: () => TestRedisResourcePromiseImpl,
+    ["withDashboardPosition"]: () => TestRedisResourcePromiseImpl,
     ["withTerminal"]: () => TestRedisResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => TestRedisResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => TestRedisResourcePromiseImpl,
@@ -50144,7 +51706,7 @@ export interface TestVaultResource {
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddProject<MyService>("my-service")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -50261,6 +51823,16 @@ export interface TestVaultResource {
      */
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestVaultResourcePromise;
     /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): TestVaultResourcePromise;
+    /**
      * Specifies the icon to use when displaying the resource in the dashboard.
      * @param iconName The name of the FluentUI icon to use. See https://aka.ms/fluentui-system-icons for available icons.
      * @param options Additional options.
@@ -50334,6 +51906,25 @@ export interface TestVaultResource {
      * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): TestVaultResourcePromise;
+    /**
+     * Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+     * @param name The case-sensitive trait name.
+     * @param value The trait value. Do not include secrets.
+     * @returns The resource builder.
+     */
+    withTrait(name: string, value: string): TestVaultResourcePromise;
+    /**
+     * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+     * @param tags The tags, each up to 50 characters with single spaces between words.
+     * @returns The resource builder.
+     */
+    withTags(tags: string[]): TestVaultResourcePromise;
+    /**
+     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+     * @param position The default position. Lower values appear first.
+     * @returns The resource builder.
+     */
+    withDashboardPosition(position: number): TestVaultResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -50985,7 +52576,7 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddProject<MyService>("my-service")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -51102,6 +52693,16 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      */
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestVaultResourcePromise;
     /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): TestVaultResourcePromise;
+    /**
      * Specifies the icon to use when displaying the resource in the dashboard.
      * @param iconName The name of the FluentUI icon to use. See https://aka.ms/fluentui-system-icons for available icons.
      * @param options Additional options.
@@ -51175,6 +52776,25 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): TestVaultResourcePromise;
+    /**
+     * Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+     * @param name The case-sensitive trait name.
+     * @param value The trait value. Do not include secrets.
+     * @returns The resource builder.
+     */
+    withTrait(name: string, value: string): TestVaultResourcePromise;
+    /**
+     * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+     * @param tags The tags, each up to 50 characters with single spaces between words.
+     * @returns The resource builder.
+     */
+    withTags(tags: string[]): TestVaultResourcePromise;
+    /**
+     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+     * @param position The default position. Lower values appear first.
+     * @returns The resource builder.
+     */
+    withDashboardPosition(position: number): TestVaultResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -52975,7 +54595,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddProject<MyService>("my-service")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -53230,6 +54850,29 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /** @internal */
+    private async _withResourceTypeDisplayNameInternal(resourceTypeDisplayName: string): Promise<TestVaultResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, resourceTypeDisplayName };
+        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
+            'Aspire.Hosting/withResourceTypeDisplayName',
+            rpcArgs
+        );
+        return new TestVaultResourceImpl(result, this._client);
+    }
+
+    /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): TestVaultResourcePromise {
+        return new TestVaultResourcePromiseImpl(this._withResourceTypeDisplayNameInternal(resourceTypeDisplayName), this._client);
+    }
+
+    /** @internal */
     private async _withIconNameInternal(iconName: string, iconVariant?: IconVariant): Promise<TestVaultResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, iconName };
         if (iconVariant !== undefined) rpcArgs.iconVariant = iconVariant;
@@ -53444,6 +55087,64 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
      */
     withRemoteImageTag(remoteImageTag: string): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._withRemoteImageTagInternal(remoteImageTag), this._client);
+    }
+
+    /** @internal */
+    private async _withTraitInternal(name: string, value: string): Promise<TestVaultResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
+        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
+            'Aspire.Hosting/withTrait',
+            rpcArgs
+        );
+        return new TestVaultResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+     * @param name The case-sensitive trait name.
+     * @param value The trait value. Do not include secrets.
+     * @returns The resource builder.
+     */
+    withTrait(name: string, value: string): TestVaultResourcePromise {
+        return new TestVaultResourcePromiseImpl(this._withTraitInternal(name, value), this._client);
+    }
+
+    /** @internal */
+    private async _withTagsInternal(tags: string[]): Promise<TestVaultResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, tags };
+        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
+            'Aspire.Hosting/withTags',
+            rpcArgs
+        );
+        return new TestVaultResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+     * @param tags The tags, each up to 50 characters with single spaces between words.
+     * @returns The resource builder.
+     */
+    withTags(tags: string[]): TestVaultResourcePromise {
+        return new TestVaultResourcePromiseImpl(this._withTagsInternal(tags), this._client);
+    }
+
+    /** @internal */
+    private async _withDashboardPositionInternal(position: number): Promise<TestVaultResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, position };
+        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
+            'Aspire.Hosting/withDashboardPosition',
+            rpcArgs
+        );
+        return new TestVaultResourceImpl(result, this._client);
+    }
+
+    /**
+     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+     * @param position The default position. Lower values appear first.
+     * @returns The resource builder.
+     */
+    withDashboardPosition(position: number): TestVaultResourcePromise {
+        return new TestVaultResourcePromiseImpl(this._withDashboardPositionInternal(position), this._client);
     }
 
     /** @internal */
@@ -54239,6 +55940,7 @@ const TestVaultResourcePromiseImpl = $aspireCreateFluentPromiseClass<TestVaultRe
     ["withRelationship"]: () => TestVaultResourcePromiseImpl,
     ["withParentRelationship"]: () => TestVaultResourcePromiseImpl,
     ["withChildRelationship"]: () => TestVaultResourcePromiseImpl,
+    ["withResourceTypeDisplayName"]: () => TestVaultResourcePromiseImpl,
     ["withIconName"]: () => TestVaultResourcePromiseImpl,
     ["withComputeEnvironment"]: () => TestVaultResourcePromiseImpl,
     ["withHttpProbe"]: () => TestVaultResourcePromiseImpl,
@@ -54248,6 +55950,9 @@ const TestVaultResourcePromiseImpl = $aspireCreateFluentPromiseClass<TestVaultRe
     ["withImagePushOptions"]: () => TestVaultResourcePromiseImpl,
     ["withRemoteImageName"]: () => TestVaultResourcePromiseImpl,
     ["withRemoteImageTag"]: () => TestVaultResourcePromiseImpl,
+    ["withTrait"]: () => TestVaultResourcePromiseImpl,
+    ["withTags"]: () => TestVaultResourcePromiseImpl,
+    ["withDashboardPosition"]: () => TestVaultResourcePromiseImpl,
     ["withTerminal"]: () => TestVaultResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => TestVaultResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => TestVaultResourcePromiseImpl,
@@ -54767,6 +56472,16 @@ export interface Resource {
      */
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ResourcePromise;
     /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): ResourcePromise;
+    /**
      * Specifies the icon to use when displaying the resource in the dashboard.
      * @param iconName The name of the FluentUI icon to use. See https://aka.ms/fluentui-system-icons for available icons.
      * @param options Additional options.
@@ -54796,6 +56511,25 @@ export interface Resource {
      * @returns The resource builder.
      */
     withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ResourcePromise;
+    /**
+     * Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+     * @param name The case-sensitive trait name.
+     * @param value The trait value. Do not include secrets.
+     * @returns The resource builder.
+     */
+    withTrait(name: string, value: string): ResourcePromise;
+    /**
+     * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+     * @param tags The tags, each up to 50 characters with single spaces between words.
+     * @returns The resource builder.
+     */
+    withTags(tags: string[]): ResourcePromise;
+    /**
+     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+     * @param position The default position. Lower values appear first.
+     * @returns The resource builder.
+     */
+    withDashboardPosition(position: number): ResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -55110,6 +56844,16 @@ export interface ResourcePromise extends PromiseLike<Resource> {
      */
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ResourcePromise;
     /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): ResourcePromise;
+    /**
      * Specifies the icon to use when displaying the resource in the dashboard.
      * @param iconName The name of the FluentUI icon to use. See https://aka.ms/fluentui-system-icons for available icons.
      * @param options Additional options.
@@ -55139,6 +56883,25 @@ export interface ResourcePromise extends PromiseLike<Resource> {
      * @returns The resource builder.
      */
     withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ResourcePromise;
+    /**
+     * Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+     * @param name The case-sensitive trait name.
+     * @param value The trait value. Do not include secrets.
+     * @returns The resource builder.
+     */
+    withTrait(name: string, value: string): ResourcePromise;
+    /**
+     * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+     * @param tags The tags, each up to 50 characters with single spaces between words.
+     * @returns The resource builder.
+     */
+    withTags(tags: string[]): ResourcePromise;
+    /**
+     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+     * @param position The default position. Lower values appear first.
+     * @returns The resource builder.
+     */
+    withDashboardPosition(position: number): ResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -55894,6 +57657,29 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
     }
 
     /** @internal */
+    private async _withResourceTypeDisplayNameInternal(resourceTypeDisplayName: string): Promise<Resource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, resourceTypeDisplayName };
+        const result = await this._client.invokeCapability<IResourceHandle>(
+            'Aspire.Hosting/withResourceTypeDisplayName',
+            rpcArgs
+        );
+        return new ResourceImpl(result, this._client);
+    }
+
+    /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): ResourcePromise {
+        return new ResourcePromiseImpl(this._withResourceTypeDisplayNameInternal(resourceTypeDisplayName), this._client);
+    }
+
+    /** @internal */
     private async _withIconNameInternal(iconName: string, iconVariant?: IconVariant): Promise<Resource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, iconName };
         if (iconVariant !== undefined) rpcArgs.iconVariant = iconVariant;
@@ -55979,6 +57765,64 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
         const exitCode = options?.exitCode;
         const exitCodes = options?.exitCodes;
         return new ResourcePromiseImpl(this._withHiddenOnCompletionInternal(exitCode, exitCodes), this._client);
+    }
+
+    /** @internal */
+    private async _withTraitInternal(name: string, value: string): Promise<Resource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
+        const result = await this._client.invokeCapability<IResourceHandle>(
+            'Aspire.Hosting/withTrait',
+            rpcArgs
+        );
+        return new ResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+     * @param name The case-sensitive trait name.
+     * @param value The trait value. Do not include secrets.
+     * @returns The resource builder.
+     */
+    withTrait(name: string, value: string): ResourcePromise {
+        return new ResourcePromiseImpl(this._withTraitInternal(name, value), this._client);
+    }
+
+    /** @internal */
+    private async _withTagsInternal(tags: string[]): Promise<Resource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, tags };
+        const result = await this._client.invokeCapability<IResourceHandle>(
+            'Aspire.Hosting/withTags',
+            rpcArgs
+        );
+        return new ResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+     * @param tags The tags, each up to 50 characters with single spaces between words.
+     * @returns The resource builder.
+     */
+    withTags(tags: string[]): ResourcePromise {
+        return new ResourcePromiseImpl(this._withTagsInternal(tags), this._client);
+    }
+
+    /** @internal */
+    private async _withDashboardPositionInternal(position: number): Promise<Resource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, position };
+        const result = await this._client.invokeCapability<IResourceHandle>(
+            'Aspire.Hosting/withDashboardPosition',
+            rpcArgs
+        );
+        return new ResourceImpl(result, this._client);
+    }
+
+    /**
+     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+     * @param position The default position. Lower values appear first.
+     * @returns The resource builder.
+     */
+    withDashboardPosition(position: number): ResourcePromise {
+        return new ResourcePromiseImpl(this._withDashboardPositionInternal(position), this._client);
     }
 
     /** @internal */
@@ -56618,10 +58462,14 @@ const ResourcePromiseImpl = $aspireCreateFluentPromiseClass<Resource, ResourcePr
     ["withRelationship"]: () => ResourcePromiseImpl,
     ["withParentRelationship"]: () => ResourcePromiseImpl,
     ["withChildRelationship"]: () => ResourcePromiseImpl,
+    ["withResourceTypeDisplayName"]: () => ResourcePromiseImpl,
     ["withIconName"]: () => ResourcePromiseImpl,
     ["excludeFromMcp"]: () => ResourcePromiseImpl,
     ["withHidden"]: () => ResourcePromiseImpl,
     ["withHiddenOnCompletion"]: () => ResourcePromiseImpl,
+    ["withTrait"]: () => ResourcePromiseImpl,
+    ["withTags"]: () => ResourcePromiseImpl,
+    ["withDashboardPosition"]: () => ResourcePromiseImpl,
     ["withTerminal"]: () => ResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => ResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => ResourcePromiseImpl,
@@ -57788,7 +59636,7 @@ export interface ResourceWithEnvironment {
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddProject<MyService>("my-service")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -57906,7 +59754,7 @@ export interface ResourceWithEnvironmentPromise extends PromiseLike<ResourceWith
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddProject<MyService>("my-service")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -58123,7 +59971,7 @@ class ResourceWithEnvironmentImpl extends ResourceBuilderBase<IResourceWithEnvir
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddProject<MyService>("my-service")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.

@@ -3,16 +3,20 @@
 
 using System.Globalization;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
+using Aspire.Cli.Utils;
 
 namespace Aspire.Cli.Templating;
 
 internal sealed class ConfiguredTemplateSourceService(
     IConfigurationService configurationService,
     ITemplateProvider templateProvider,
-    IInteractionService interactionService)
+    IInteractionService interactionService,
+    CliExecutionContext executionContext,
+    ConfigSourceService configSources)
 {
     internal async Task<IReadOnlyList<KeyValuePair<string, ConfiguredTemplateSource>>> GetSourcesAsync(CancellationToken cancellationToken)
     {
@@ -25,20 +29,27 @@ internal sealed class ConfiguredTemplateSourceService(
         }
         catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
         {
-            return [];
+            settings = null;
         }
 
+        var inherited = await configSources.GetTemplateSourcesAsync(cancellationToken);
+        var inheritedSettings = new JsonObject
+        {
+            [AspireConfigFile.TemplateSourcesSectionName] = inherited
+        }.Deserialize(JsonSourceGenerationContext.Default.AspireConfigFile);
+        var definitions = TemplateSourceConfiguration.MergeSources(
+            inheritedSettings?.TemplateSources ?? [], settings?.TemplateSources ?? []);
         List<KeyValuePair<string, ConfiguredTemplateSource>> sources = [];
-        foreach (var (name, definition) in settings?.TemplateSources ?? [])
+        foreach (var (name, definition) in definitions)
         {
             cancellationToken.ThrowIfCancellationRequested();
             TemplateSourceConfiguration.ValidateName(name);
             if (definition is null)
             {
-                throw new TemplateSourceConfigurationException($"templateSources.{name}", NewCommandStrings.InvalidConfiguredTemplateSource);
+                throw new TemplateSourceConfigurationException($"{AspireConfigFile.TemplateSourcesSectionName}.{name}", NewCommandStrings.InvalidConfiguredTemplateSource);
             }
             var source = TemplateSourceConfiguration.Parse(
-                definition.Path, definition.Repository, definition.Ref, $"templateSources.{name}", requireComplete: true);
+                definition.Path, definition.Repository, definition.Ref, definition.DisplayName, $"{AspireConfigFile.TemplateSourcesSectionName}.{name}", requireComplete: true);
             sources.Add(new(name, source));
         }
 
@@ -54,6 +65,11 @@ internal sealed class ConfiguredTemplateSourceService(
             return [];
         }
 
+        interactionService.DisplayTemplateSources(sources.Select(source =>
+            (source.Value.DisplayName ?? source.Key,
+                source.Value.Template ?? throw new InvalidOperationException("A complete template source must have a location."))),
+            executionContext);
+
         List<ConfiguredTemplate> results = [];
         // The template engine owns mutable mount/resource state. Discover sequentially rather
         // than sharing a factory across concurrent source installations.
@@ -62,27 +78,15 @@ internal sealed class ConfiguredTemplateSourceService(
             cancellationToken.ThrowIfCancellationRequested();
             try
             {
-                var status = string.Format(CultureInfo.CurrentCulture, NewCommandStrings.SearchingTemplateSource, name);
                 var source = configuredSource.Template
                     ?? throw new InvalidOperationException("A complete template source must have a location.");
-                IEnumerable<ITemplate> templates;
-                if (source.Repository is null)
-                {
-                    templates = await interactionService.ShowStatusAsync(status,
-                        () => templateProvider.GetTemplatesAsync(source, cancellationToken));
-                }
-                else
-                {
-                    // Git owns its resolve/clone spinners; an enclosing status hides them.
-                    interactionService.DisplaySubtleMessage(status);
-                    templates = await templateProvider.GetTemplatesAsync(source, cancellationToken);
-                }
+                var templates = await templateProvider.GetTemplatesAsync(source, cancellationToken);
 
                 results.AddRange(templates
                     .Where(template => template.Name.Contains(query, StringComparison.OrdinalIgnoreCase) ||
                         template.Description.Contains(query, StringComparison.OrdinalIgnoreCase) ||
                         template.SearchDescription?.Contains(query, StringComparison.OrdinalIgnoreCase) is true)
-                    .Select(template => new ConfiguredTemplate(name, template)));
+                    .Select(template => new ConfiguredTemplate(name, template, configuredSource.DisplayName, source)));
             }
             catch (Exception ex) when (ex is TemplateDiscoveryException or IOException or UnauthorizedAccessException or ArgumentException)
             {
@@ -97,8 +101,8 @@ internal sealed class ConfiguredTemplateSourceService(
     }
 
     private void Warn(string source, string message) =>
-        interactionService.DisplayMessage(KnownEmojis.Warning, string.Format(
+        interactionService.DisplayMessage(KnownEmojis.PoliceCarLight, string.Format(
             CultureInfo.CurrentCulture, NewCommandStrings.TemplateSourceSearchFailed, source, message));
 }
 
-internal sealed record ConfiguredTemplate(string SourceName, ITemplate Template);
+internal sealed record ConfiguredTemplate(string SourceName, ITemplate Template, string? SourceDisplayName, TemplateSource Source);

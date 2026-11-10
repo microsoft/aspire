@@ -102,7 +102,8 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
     [RequiresTools(["python"])]
     public async Task PythonResourceFinishesSuccessfully()
     {
-        var (projectDirectory, _, scriptName) = CreateTempPythonProject(outputHelper);
+        // Starting the app runs the pip installer resource, which uses the venv's pip.
+        var (projectDirectory, _, scriptName) = CreateTempPythonProject(outputHelper, withPip: true);
 
         using var builder = TestDistributedApplicationBuilder.Create().WithTestAndResourceLogging(outputHelper);
         builder.AddPythonApp("pyproj", projectDirectory, scriptName);
@@ -263,17 +264,35 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
         Directory.Delete(projectDirectory, true);
     }
 
-    private static (string projectDirectory, string pythonExecutable, string scriptName) CreateTempPythonProject(ITestOutputHelper outputHelper, bool instrument = false)
+    [Fact]
+    [RequiresTools(["python"])]
+    public void CreateTempPythonProject_ForModelOnlyTests_CreatesVirtualEnvironmentWithoutBootstrappingPip()
+    {
+        var (projectDirectory, pythonExecutable, _) = CreateTempPythonProject(outputHelper);
+
+        Assert.True(File.Exists(pythonExecutable), $"Expected virtual environment interpreter at '{pythonExecutable}'.");
+
+        var pipPath = Path.Combine(projectDirectory, ".venv", OperatingSystem.IsWindows() ? "Scripts" : "bin", OperatingSystem.IsWindows() ? "pip.exe" : "pip");
+        Assert.False(File.Exists(pipPath), $"Model-only test projects should not bootstrap pip, but found '{pipPath}'.");
+
+        // If we don't throw, clean up the directories.
+        Directory.Delete(projectDirectory, true);
+    }
+
+    // Most tests only build the app model, which needs the .venv directory to exist but never runs pip.
+    // Bootstrapping pip (ensurepip) is by far the slowest part of venv creation, so only do it when the
+    // test actually runs pip (installing requirements or starting the app, whose installer runs .venv pip).
+    private static (string projectDirectory, string pythonExecutable, string scriptName) CreateTempPythonProject(ITestOutputHelper outputHelper, bool instrument = false, bool withPip = false)
     {
         var projectDirectory = Directory.CreateTempSubdirectory().FullName;
 
         if (instrument)
         {
-            PreparePythonProject(outputHelper, projectDirectory, PythonApp, InstrumentedPythonAppRequirements);
+            PreparePythonProject(outputHelper, projectDirectory, PythonApp, InstrumentedPythonAppRequirements, withPip: true);
         }
         else
         {
-            PreparePythonProject(outputHelper, projectDirectory, PythonApp);
+            PreparePythonProject(outputHelper, projectDirectory, PythonApp, withPip: withPip);
         }
 
         var pythonExecutable = Path.Combine(projectDirectory,
@@ -285,7 +304,7 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
         return (projectDirectory, pythonExecutable, "main.py");
     }
 
-    private static void PreparePythonProject(ITestOutputHelper outputHelper, string projectDirectory, string scriptContent, string? requirementsContent = null)
+    private static void PreparePythonProject(ITestOutputHelper outputHelper, string projectDirectory, string scriptContent, string? requirementsContent = null, bool withPip = true)
     {
         var scriptPath = Path.Combine(projectDirectory, "main.py");
         File.WriteAllText(scriptPath, scriptContent);
@@ -308,7 +327,7 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
         var prepareVirtualEnvironmentStartInfo = new ProcessStartInfo()
         {
             FileName = "python",
-            Arguments = $"-m venv .venv",
+            Arguments = withPip ? "-m venv .venv" : "-m venv --without-pip .venv",
             WorkingDirectory = projectDirectory,
             RedirectStandardOutput = true,
             RedirectStandardError = true
@@ -317,15 +336,25 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
         var createVirtualEnvironmentProcess = Process.Start(prepareVirtualEnvironmentStartInfo);
         var createVirtualEnvironmentProcessResult = createVirtualEnvironmentProcess!.WaitForExit(TimeSpan.FromMinutes(2));
 
-        outputHelper.WriteLine("Create Virtual Environment Standard Output:");
-
-        CopyStreamToTestOutput("python -m venv .venv (Standard Output)", createVirtualEnvironmentProcess.StandardOutput, outputHelper);
-        CopyStreamToTestOutput("python -m venv .venv (Standard Error)", createVirtualEnvironmentProcess.StandardError, outputHelper);
-
+        // Kill before draining the redirected streams; reading them to the end would otherwise block until a hung process exits.
         if (!createVirtualEnvironmentProcessResult)
         {
             createVirtualEnvironmentProcess.Kill(true);
+        }
+
+        outputHelper.WriteLine("Create Virtual Environment Standard Output:");
+
+        CopyStreamToTestOutput($"python {prepareVirtualEnvironmentStartInfo.Arguments} (Standard Output)", createVirtualEnvironmentProcess.StandardOutput, outputHelper);
+        CopyStreamToTestOutput($"python {prepareVirtualEnvironmentStartInfo.Arguments} (Standard Error)", createVirtualEnvironmentProcess.StandardError, outputHelper);
+
+        if (!createVirtualEnvironmentProcessResult)
+        {
             throw new InvalidOperationException("Failed to create virtual environment.");
+        }
+
+        if (!withPip)
+        {
+            return;
         }
 
         var relativePipPath = Path.Combine(
@@ -347,12 +376,16 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
         var installRequirementsProcess = Process.Start(installRequirementsStartInfo);
         var installRequirementsProcessResult = installRequirementsProcess!.WaitForExit(TimeSpan.FromMinutes(2));
 
+        if (!installRequirementsProcessResult)
+        {
+            installRequirementsProcess.Kill(true);
+        }
+
         CopyStreamToTestOutput("pip install -r requirements.txt (Standard Output)", installRequirementsProcess.StandardOutput, outputHelper);
         CopyStreamToTestOutput("pip install -r requirements.txt (Standard Error)", installRequirementsProcess.StandardError, outputHelper);
 
         if (!installRequirementsProcessResult)
         {
-            installRequirementsProcess.Kill(true);
             throw new InvalidOperationException("Failed to install requirements.");
         }
     }

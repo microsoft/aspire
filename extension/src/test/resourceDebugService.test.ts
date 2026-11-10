@@ -3,7 +3,7 @@ import * as path from 'path';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 import type { AppHostDisplayInfo, ResourceJson } from '../data/AppHostDataRepository';
-import { createProjectResourceAttachProvider, projectDebuggerExtension, projectResourceAttachProvider } from '../debugger/languages/dotnet';
+import { createProjectResourceAttachProvider, DotNetService, projectDebuggerExtension, projectResourceAttachProvider } from '../debugger/languages/dotnet';
 import { createGoResourceAttachProvider } from '../debugger/languages/go';
 import { ResourceAttachProviderRegistry } from '../debugger/resourceAttachProviders';
 import { ResourceDebugAppHostIdentityComparer, ResourceDebugAppHostRepository, ResourceDebugService, ResourceDebugServiceDependencies } from '../debugger/resourceDebugService';
@@ -260,6 +260,61 @@ suite('Resource debug service', () => {
             },
         }))?.id, 'dotnet');
     });
+
+    for (const state of ['Running', 'Exited']) {
+        test(`recognizes a ${state} coordinated project from a CLI-started resource snapshot`, async () => {
+            const dotNetService = new DotNetService(undefined);
+            const getDotNetAttachTargetInfo = sinon.stub(dotNetService, 'getDotNetAttachTargetInfo').resolves({
+                targetPath: '/repo/api/bin/Release/net10.0/Api.dll',
+                useAppHost: true,
+            });
+            const resolveProcessId = sinon.stub().resolves(1234);
+            const startDebugging = sinon.stub().resolves(true);
+            const resource = createResource({
+                state,
+                properties: {
+                    'project.path': '/repo/api/Api.csproj',
+                    'project.configuration': 'Release',
+                    'project.launchCommand': 'direct',
+                    'project.targetPath': '/repo/api/bin/Release/net10.0/Api.dll',
+                    'project.useAppHost': 'true',
+                    'resource.launchConfigurationType': 'project-with-external-build.v1',
+                    'executable.path': '/repo/api/bin/Release/net10.0/Api',
+                    'executable.pid': '1234',
+                    'executable.args': null,
+                },
+            });
+            const { service, sessions } = createService({
+                appHosts: [createAppHost({ resources: [resource] })],
+                provider: createProjectResourceAttachProvider(
+                    () => dotNetService,
+                    { resolveProcessId },
+                    { realpath: async value => value }),
+                startDebugging,
+            });
+
+            try {
+                assert.strictEqual(service.canAttachToResource(resource), state === 'Running');
+                assert.deepStrictEqual(await service.debug(createRequest({ source: 'languageModelTool' })),
+                    state === 'Running'
+                        ? { outcome: 'started', providerId: 'dotnet' }
+                        : { outcome: 'resourceNotRunning' });
+                assert.strictEqual(resolveProcessId.callCount, state === 'Running' ? 1 : 0);
+                assert.strictEqual(startDebugging.callCount, state === 'Running' ? 1 : 0);
+                if (state === 'Running') {
+                    assert.strictEqual(resolveProcessId.firstCall.args[0], 1234);
+                    assert.strictEqual(resolveProcessId.firstCall.args[1].targetsLauncher, true);
+                    assert.strictEqual(startDebugging.firstCall.args[1].type, 'coreclr');
+                    assert.strictEqual(startDebugging.firstCall.args[1].request, 'attach');
+                    assert.strictEqual(startDebugging.firstCall.args[1].processId, 1234);
+                    assert.strictEqual(getDotNetAttachTargetInfo.called, false);
+                }
+            }
+            finally {
+                sessions.dispose();
+            }
+        });
+    }
 
     test('uses the first recognized provider for readiness and configuration', async () => {
         const firstProvider = createProvider({
@@ -1512,6 +1567,46 @@ suite('Resource debug service', () => {
             assert.strictEqual(sessions.hasActiveSession(secondTarget, 'api'), false);
         }
         finally {
+            sessions.dispose();
+        }
+    });
+
+    test('reports whether any accepted or started attach session is active', () => {
+        const events = new TestDebugSessionEvents();
+        const sessions = new ResourceDebugSessionRegistry(events);
+        let changeCount = 0;
+        const subscription = sessions.onDidChangeSessions(() => changeCount++);
+        const attempt = sessions.createAttempt(target, 'api', {
+            type: 'coreclr',
+            request: 'attach',
+            name: 'Attach debugger: API',
+        }, {
+            source: 'tree',
+            provider: 'dotnet',
+            resource_type: 'project',
+            requested_strategy: 'attach',
+            effective_strategy: 'attach',
+        });
+
+        try {
+            assert.strictEqual(sessions.hasActiveSessions(), false);
+
+            attempt.markStarted();
+
+            assert.strictEqual(sessions.hasActiveSessions(), true);
+            assert.strictEqual(changeCount, 1);
+
+            events.start(attempt.configuration);
+
+            assert.strictEqual(sessions.hasActiveSessions(), true);
+
+            events.terminate(attempt.configuration);
+
+            assert.strictEqual(sessions.hasActiveSessions(), false);
+            assert.strictEqual(changeCount, 2);
+        }
+        finally {
+            subscription.dispose();
             sessions.dispose();
         }
     });

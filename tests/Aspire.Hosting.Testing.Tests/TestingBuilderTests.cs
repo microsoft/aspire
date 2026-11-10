@@ -4,6 +4,7 @@
 using System.Net.Http.Json;
 using System.Reflection;
 using Aspire.Hosting.Dashboard;
+using Aspire.Hosting.Dotnet;
 using Aspire.Hosting.Tests;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
@@ -145,6 +146,21 @@ public class TestingBuilderTests(ITestOutputHelper output)
         Assert.Equal(Environments.Development, builder.Environment.EnvironmentName);
     }
 
+    [Fact]
+    public async Task AppHostFixtureUsesDotnetProjectResources()
+    {
+        await using var builder = await DistributedApplicationTestingBuilder.CreateAsync<Projects.TestingAppHost1_AppHost>();
+
+        var web = builder.CreateResourceBuilder<DotnetProjectResource>("mywebapp1");
+        var worker = builder.CreateResourceBuilder<DotnetProjectResource>("myworker1");
+
+        Assert.Equal(new Projects.TestingAppHost1_MyWebApp().ProjectPath, web.Resource.GetProjectMetadata().ProjectPath);
+        Assert.Equal(new Projects.TestingAppHost1_MyWorker().ProjectPath, worker.Resource.GetProjectMetadata().ProjectPath);
+        Assert.Equal(
+            ["mywebapp1", "myworker1"],
+            builder.Resources.OfType<DotnetProjectResource>().Select(resource => resource.Name).Order(StringComparer.Ordinal));
+    }
+
     [Theory]
     [RequiresFeature(TestFeature.ContainerRuntime)]
     [InlineData(false)]
@@ -184,7 +200,7 @@ public class TestingBuilderTests(ITestOutputHelper output)
 
         // Ensure that the resource which we added is present in the model.
         var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
-        Assert.Contains(appModel.GetProjectResources(), p => p.Name == "myworker1");
+        Assert.Contains(appModel.Resources.OfType<DotnetProjectResource>(), p => p.Name == "myworker1");
     }
 
     [Theory]
@@ -293,7 +309,9 @@ public class TestingBuilderTests(ITestOutputHelper output)
         }
 
         builder.WithTestAndResourceLogging(output);
+#pragma warning disable CS0618 // Keep ad hoc legacy-builder coverage separately from the migrated V2 AppHost fixtures.
         builder.AddProject<Projects.TestingAppHost1_MyWebApp>("mywebapp1")
+#pragma warning restore CS0618
             .WithEnvironment("APP_HOST_ARG", builder.Configuration["APP_HOST_ARG"])
             .WithEnvironment("LAUNCH_PROFILE_VAR_FROM_APP_HOST", builder.Configuration["LAUNCH_PROFILE_VAR_FROM_APP_HOST"]);
         await using var app = await builder.BuildAsync();
@@ -389,7 +407,9 @@ public class TestingBuilderTests(ITestOutputHelper output)
 
         var builder = DistributedApplicationTestingBuilder.Create(args, configureBuilder);
         builder.WithTestAndResourceLogging(output);
+#pragma warning disable CS0618 // Keep ad hoc legacy-builder coverage separately from the migrated V2 AppHost fixtures.
         builder.AddProject<Projects.TestingAppHost1_MyWebApp>("mywebapp1")
+#pragma warning restore CS0618
             .WithEnvironment("LAUNCH_PROFILE_VAR_FROM_APP_HOST", builder.Configuration["LAUNCH_PROFILE_VAR_FROM_APP_HOST"]);
         await using var app = await builder.BuildAsync();
         await app.StartAsync();
@@ -554,7 +574,7 @@ public class TestingBuilderTests(ITestOutputHelper output)
             redis1.WithEntrypoint("tail");
             redis1.WithArgs(a => { a.Args.Clear(); a.Args.AddRange(["-f", "/dev/null"]); });
 
-            var project = builder.CreateResourceBuilder<ProjectResource>("mywebapp1");
+            var project = builder.CreateResourceBuilder<DotnetProjectResource>("mywebapp1");
             project.WaitFor(redis1);
 
             cts.CancelAfter(timeout);

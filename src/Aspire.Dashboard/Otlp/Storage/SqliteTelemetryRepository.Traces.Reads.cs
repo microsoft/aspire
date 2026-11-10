@@ -388,7 +388,12 @@ public sealed partial class SqliteTelemetryRepository
 
         var attributePredicate = BuildStringPredicate("a.attribute_value", condition, parameterName);
         parameters.Add($"TraceField{filterIndex}", filter.Field);
-        return $"EXISTS (SELECT 1 FROM telemetry_span_attributes a WHERE a.trace_id = s.trace_id AND a.span_id = s.span_id AND a.attribute_key = @TraceField{filterIndex} COLLATE NOCASE AND {attributePredicate})";
+        // Unary + prevents SQLite from using attribute_key to choose an index, so this
+        // correlated subquery looks up attributes by (trace_id, span_id) instead.
+        // Otherwise, LIKE '%...%' can scan all attributes with the same key for every
+        // span, making filtering quadratic in the span count.
+        // See https://www.sqlite.org/optoverview.html#disqualifying_where_clause_terms_using_unary_
+        return $"EXISTS (SELECT 1 FROM telemetry_span_attributes a WHERE a.trace_id = s.trace_id AND a.span_id = s.span_id AND +a.attribute_key = @TraceField{filterIndex} COLLATE NOCASE AND {attributePredicate})";
     }
 
     private GetSpansResponse GetSpansFromDatabase(GetSpansRequest context, CancellationToken cancellationToken)
@@ -418,6 +423,89 @@ public sealed partial class SqliteTelemetryRepository
                 TotalItemCount = totalCount,
                 IsFull = connection.QuerySingle<int>("SELECT COUNT(*) FROM telemetry_traces;", transaction: transaction) >= _otlpContext.Options.MaxTraceCount
             }
+        };
+    }
+
+    private GetRequestSpansResponse GetRequestSpansFromDatabase(GetRequestSpansRequest request, CancellationToken cancellationToken)
+    {
+        using var connection = _database.OpenConnection();
+        using var interrupt = connection.RegisterInterrupt(cancellationToken);
+
+        // Reuse the span query's resource matching, which also matches uninstrumented peers, so these spans are the
+        // ones GetSpansAsync returns for the same resources.
+        var query = BuildSpanQuery(new GetSpansRequest
+        {
+            ResourceKeys = request.ResourceKeys,
+            StartIndex = 0,
+            Count = 0,
+            Filters = []
+        });
+        query.Parameters.Add("RequestServerKind", (int)OtlpSpanKind.Server);
+        query.Parameters.Add("RequestConsumerKind", (int)OtlpSpanKind.Consumer);
+        query.Parameters.Add("RequestStartTicks", request.StartTime.Ticks);
+        query.Parameters.Add("RequestEndTicks", request.EndTime.Ticks);
+        query.Parameters.Add("RequestCount", Math.Max(request.MaxCount, 0));
+
+        // Read the summary columns and only the attributes that label an endpoint. Unlike GetSpansAsync, this doesn't
+        // materialize each span's trace, which made activity summaries over thousands of spans expensive to refresh.
+        // The aggregate row is always returned, so the count is known even when no span is in the window.
+        var records = connection.Query<RequestSpanRecord>($"""
+            WITH
+            request_spans AS (
+                SELECT s.trace_id, s.span_id, s.resource_id, s.name, s.start_time_ticks, s.end_time_ticks, s.status
+                {query.FromAndWhere}
+                    AND s.kind IN (@RequestServerKind, @RequestConsumerKind)
+                    AND s.start_time_ticks >= @RequestStartTicks
+                    AND s.start_time_ticks < @RequestEndTicks
+            ),
+            request_aggregate AS (
+                SELECT COUNT(*) AS TotalItemCount
+                FROM request_spans
+            ),
+            paged_spans AS (
+                SELECT *
+                FROM request_spans
+                ORDER BY start_time_ticks DESC
+                LIMIT @RequestCount
+            )
+            SELECT
+                a.TotalItemCount,
+                p.resource_id AS ResourceId,
+                p.name AS Name,
+                p.start_time_ticks AS StartTimeTicks,
+                p.end_time_ticks AS EndTimeTicks,
+                p.status AS Status,
+                (SELECT sa.attribute_value FROM telemetry_span_attributes sa
+                    WHERE sa.trace_id = p.trace_id AND sa.span_id = p.span_id AND sa.attribute_key = 'http.route'
+                    LIMIT 1) AS HttpRoute,
+                COALESCE(
+                    (SELECT sa.attribute_value FROM telemetry_span_attributes sa
+                        WHERE sa.trace_id = p.trace_id AND sa.span_id = p.span_id AND sa.attribute_key = 'http.request.method'
+                        LIMIT 1),
+                    (SELECT sa.attribute_value FROM telemetry_span_attributes sa
+                        WHERE sa.trace_id = p.trace_id AND sa.span_id = p.span_id AND sa.attribute_key = 'http.method'
+                        LIMIT 1)) AS HttpMethod
+            FROM request_aggregate a
+            LEFT JOIN paged_spans p ON 1 = 1
+            ORDER BY p.start_time_ticks DESC;
+            """, query.Parameters).AsList();
+
+        return new GetRequestSpansResponse
+        {
+            TotalItemCount = records[0].TotalItemCount,
+            Items = records
+                .Where(record => record.ResourceId is not null)
+                .Select(record => new RequestSpanSummary
+                {
+                    Resource = GetCachedResource(record.ResourceId!.Value)!,
+                    Name = record.Name!,
+                    StartTime = new DateTime(record.StartTimeTicks!.Value, DateTimeKind.Utc),
+                    Duration = TimeSpan.FromTicks(record.EndTimeTicks!.Value - record.StartTimeTicks.Value),
+                    Status = (OtlpSpanStatusCode)record.Status!.Value,
+                    HttpRoute = record.HttpRoute,
+                    HttpMethod = record.HttpMethod
+                })
+                .ToList()
         };
     }
 
@@ -884,6 +972,18 @@ public sealed partial class SqliteTelemetryRepository
         public bool? UninstrumentedPeer { get; init; }
         public int? TotalSpans { get; init; }
         public int? ErroredSpans { get; init; }
+    }
+
+    internal sealed class RequestSpanRecord
+    {
+        public required int TotalItemCount { get; init; }
+        public long? ResourceId { get; init; }
+        public string? Name { get; init; }
+        public long? StartTimeTicks { get; init; }
+        public long? EndTimeTicks { get; init; }
+        public int? Status { get; init; }
+        public string? HttpRoute { get; init; }
+        public string? HttpMethod { get; init; }
     }
 
     internal sealed class SpanIdentityRecord

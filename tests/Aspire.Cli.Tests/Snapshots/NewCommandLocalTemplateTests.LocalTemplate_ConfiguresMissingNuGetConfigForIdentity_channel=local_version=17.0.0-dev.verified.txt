@@ -6,14 +6,5 @@
   <packageSources>
     <add key="aspire-apphost-source" value="{workspace}/.aspire/hives/local/packages" />
   </packageSources>
-  <packageSourceMapping>
-    <clear />
-    <packageSource key="default">
-      <package pattern="*" />
-    </packageSource>
-    <packageSource key="aspire-apphost-source">
-      <package pattern="Aspire*" />
-    </packageSource>
-  </packageSourceMapping>
 </configuration>
 }

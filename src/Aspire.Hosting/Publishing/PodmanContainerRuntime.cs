@@ -153,12 +153,12 @@ internal sealed class PodmanContainerRuntime : ContainerRuntimeBase<PodmanContai
             throw new ArgumentException("OutputPath must be provided when ImageFormat is Oci.", nameof(options));
         }
 
-        var arguments = $"build --file \"{dockerfilePath}\" --tag \"{imageName}\"";
+        var arguments = new List<string> { "build", "--file", dockerfilePath, "--tag", imageName };
 
         // Add platform support if specified
         if (options?.TargetPlatform is not null)
         {
-            arguments += $" --platform \"{options.TargetPlatform.Value.ToRuntimePlatformString()}\"";
+            arguments.AddRange(["--platform", options.TargetPlatform.Value.ToRuntimePlatformString()]);
         }
 
         // Add format support if specified
@@ -170,7 +170,7 @@ internal sealed class PodmanContainerRuntime : ContainerRuntimeBase<PodmanContai
                 ContainerImageFormat.Docker => "docker",
                 _ => throw new ArgumentOutOfRangeException(nameof(options), options.ImageFormat, "Invalid container image format")
             };
-            arguments += $" --format \"{format}\"";
+            arguments.AddRange(["--format", format]);
         }
 
         // Archive output is deliberately NOT handled here.
@@ -186,15 +186,15 @@ internal sealed class PodmanContainerRuntime : ContainerRuntimeBase<PodmanContai
         // https://docs.podman.io/en/latest/markdown/podman-save.1.html
 
         // Add build arguments if specified
-        arguments += BuildArgumentsString(buildArguments);
+        arguments.AddRange(BuildArguments(buildArguments));
 
         // Add build secrets if specified
-        arguments += BuildSecretsString(buildSecrets, requireValue: true);
+        arguments.AddRange(BuildSecrets(buildSecrets, useCsv: false, requireValue: true));
 
         // Add stage if specified
-        arguments += BuildStageString(stage);
+        arguments.AddRange(BuildStage(stage));
 
-        arguments += $" \"{contextPath}\"";
+        arguments.Add(contextPath);
 
         // Prepare environment variables for build secrets (only for environment-type secrets)
         var environmentVariables = new Dictionary<string, string>();

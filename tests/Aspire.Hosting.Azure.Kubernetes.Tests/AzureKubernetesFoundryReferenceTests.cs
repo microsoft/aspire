@@ -11,8 +11,12 @@ namespace Aspire.Hosting.Azure.Tests;
 
 public class AzureKubernetesFoundryReferenceTests(ITestOutputHelper outputHelper)
 {
-    [Fact]
-    public async Task EndpointReferenceToFoundryHostedAgentIsResolvedAcrossComputeEnvironments()
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task EndpointReferenceToFoundryHostedAgentIsResolvedAcrossComputeEnvironments(bool useDotnetAgent, bool useDotnetWeb)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
@@ -23,10 +27,25 @@ public class AzureKubernetesFoundryReferenceTests(ITestOutputHelper outputHelper
             .AddProject("project");
 
         // The agent app is deployed to the Foundry project compute environment via AsHostedAgent.
-        var agent = builder.AddProject<Project>("agent", launchProfileName: null)
-            .WithHttpEndpoint()
-            .WithExternalHttpEndpoints();
-        agent.AsHostedAgent(project, HostedAgentProtocol.Responses, "2.0.0");
+#pragma warning disable CS0618 // Cover both project factories and both cross-environment reference directions.
+        IResourceBuilder<IResourceWithServiceDiscovery> agent;
+        if (useDotnetAgent)
+        {
+            var dotnetAgent = builder.AddDotnetProject("agent", "agent.csproj", options => options.ExcludeLaunchProfile = true)
+                .WithHttpEndpoint()
+                .WithExternalHttpEndpoints();
+            dotnetAgent.AsHostedAgent(project, HostedAgentProtocol.Responses, "2.0.0");
+            agent = dotnetAgent;
+        }
+        else
+        {
+            var legacyAgent = builder.AddProject<Project>("agent", launchProfileName: null)
+                .WithHttpEndpoint()
+                .WithExternalHttpEndpoints();
+            legacyAgent.AsHostedAgent(project, HostedAgentProtocol.Responses, "2.0.0");
+            agent = legacyAgent;
+        }
+#pragma warning restore CS0618
 
         // The web app is deployed to Azure Kubernetes and references the Foundry hosted agent.
         // The Kubernetes publisher must delegate endpoint resolution to the Foundry compute
@@ -34,11 +53,18 @@ public class AzureKubernetesFoundryReferenceTests(ITestOutputHelper outputHelper
         // does not contain the cross-environment agent. See issue #17749.
         // WithReference(agent) exercises the bare EndpointReference branch; the explicit
         // Property(Url) environment variable exercises the EndpointReferenceExpression branch.
-        builder.AddProject<Project>("web", launchProfileName: null)
-            .WithHttpEndpoint()
-            .WithExternalHttpEndpoints()
-            .WithComputeEnvironment(aks)
-            .WithReference(agent)
+#pragma warning disable CS0618 // Keep the shared endpoint-resolution contract for legacy and modern consumers.
+        IResourceBuilder<IResourceWithEnvironment> web = useDotnetWeb
+            ? builder.AddDotnetProject("web", "web.csproj", options => options.ExcludeLaunchProfile = true)
+                .WithHttpEndpoint()
+                .WithExternalHttpEndpoints()
+                .WithComputeEnvironment(aks)
+            : builder.AddProject<Project>("web", launchProfileName: null)
+                .WithHttpEndpoint()
+                .WithExternalHttpEndpoints()
+                .WithComputeEnvironment(aks);
+#pragma warning restore CS0618
+        web.WithReference(agent)
             .WithEnvironment("AGENT_URL", agent.GetEndpoint("http").Property(EndpointProperty.Url));
 
         await using var app = builder.Build();

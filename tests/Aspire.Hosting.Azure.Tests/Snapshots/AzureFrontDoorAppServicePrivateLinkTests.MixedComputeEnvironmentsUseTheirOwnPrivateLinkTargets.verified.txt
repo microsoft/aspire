@@ -1,0 +1,313 @@
+﻿{
+  frontDoorBicep:
+@description('The location for the resource(s) to be deployed.')
+param location string = resourceGroup().location
+
+param web_host string
+
+param web_website_environment_id string
+
+param web_website_location string
+
+param api_host string
+
+param apps_environment_id string
+
+param apps_location string
+
+param public_app_host string
+
+resource frontdoor 'Microsoft.Cdn/profiles@2025-06-01' = {
+  name: take('frontdoor-${uniqueString(resourceGroup().id)}', 260)
+  tags: {
+    'aspire-resource-name': 'frontdoor'
+  }
+  location: 'Global'
+  sku: {
+    name: 'Premium_AzureFrontDoor'
+  }
+}
+
+resource webEndpoint 'Microsoft.Cdn/profiles/afdEndpoints@2025-06-01' = {
+  name: take('webEndpoint-${uniqueString(resourceGroup().id)}', 46)
+  location: 'Global'
+  parent: frontdoor
+}
+
+resource webOriginGroup 'Microsoft.Cdn/profiles/originGroups@2025-06-01' = {
+  name: take('webOriginGroup-${uniqueString(resourceGroup().id)}', 90)
+  properties: {
+    loadBalancingSettings: {
+      sampleSize: 4
+      successfulSamplesRequired: 3
+      additionalLatencyInMilliseconds: 50
+    }
+    healthProbeSettings: {
+      probePath: '/'
+      probeProtocol: 'Https'
+    }
+  }
+  parent: frontdoor
+}
+
+resource webOrigin 'Microsoft.Cdn/profiles/originGroups/origins@2025-06-01' = {
+  name: take('webOrigin-${uniqueString(resourceGroup().id, web_host)}', 90)
+  properties: {
+    hostName: web_host
+    originHostHeader: web_host
+    sharedPrivateLinkResource: {
+      privateLink: {
+        id: web_website_environment_id
+      }
+      privateLinkLocation: (privateLinkRegions[?web_website_location] ?? web_website_location)
+      groupId: 'sites'
+      requestMessage: 'Azure Front Door frontdoor requests access to sites.'
+    }
+    enforceCertificateNameCheck: true
+  }
+  parent: webOriginGroup
+}
+
+var privateLinkRegions = {
+  australiacentral: 'australiaeast'
+  australiacentral2: 'australiaeast'
+  australiasoutheast: 'australiaeast'
+  brazilsoutheast: 'brazilsouth'
+  canadaeast: 'canadacentral'
+  centraluseuap: 'centralus'
+  chinaeast: 'chinaeast3'
+  chinaeast2: 'chinaeast3'
+  chinanorth: 'chinanorth3'
+  chinanorth2: 'chinanorth3'
+  eastus2euap: 'eastus2'
+  eastusstg: 'eastus'
+  francesouth: 'francecentral'
+  germanynorth: 'germanywestcentral'
+  japanwest: 'japaneast'
+  jioindiacentral: 'centralindia'
+  jioindiawest: 'centralindia'
+  koreasouth: 'koreacentral'
+  northcentralus: 'centralus'
+  norwaywest: 'norwayeast'
+  southafricawest: 'southafricanorth'
+  southcentralusstg: 'southcentralus'
+  southindia: 'centralindia'
+  swedensouth: 'swedencentral'
+  uaecentral: 'uaenorth'
+  ukwest: 'uksouth'
+  westcentralus: 'centralus'
+  westindia: 'centralindia'
+  westus: 'westus2'
+}
+
+resource webRoute 'Microsoft.Cdn/profiles/afdEndpoints/routes@2025-06-01' = {
+  name: take('webRoute-${uniqueString(resourceGroup().id)}', 90)
+  properties: {
+    originGroup: {
+      id: webOriginGroup.id
+    }
+    patternsToMatch: [
+      '/*'
+    ]
+    forwardingProtocol: 'HttpsOnly'
+    linkToDefaultDomain: 'Enabled'
+    httpsRedirect: 'Enabled'
+  }
+  parent: webEndpoint
+  dependsOn: [
+    webOrigin
+  ]
+}
+
+resource apiEndpoint 'Microsoft.Cdn/profiles/afdEndpoints@2025-06-01' = {
+  name: take('apiEndpoint-${uniqueString(resourceGroup().id)}', 46)
+  location: 'Global'
+  parent: frontdoor
+}
+
+resource apiOriginGroup 'Microsoft.Cdn/profiles/originGroups@2025-06-01' = {
+  name: take('apiOriginGroup-${uniqueString(resourceGroup().id)}', 90)
+  properties: {
+    loadBalancingSettings: {
+      sampleSize: 4
+      successfulSamplesRequired: 3
+      additionalLatencyInMilliseconds: 50
+    }
+    healthProbeSettings: {
+      probePath: '/'
+      probeProtocol: 'Https'
+    }
+  }
+  parent: frontdoor
+}
+
+resource apiOrigin 'Microsoft.Cdn/profiles/originGroups/origins@2025-06-01' = {
+  name: take('apiOrigin-${uniqueString(resourceGroup().id, api_host)}', 90)
+  properties: {
+    hostName: api_host
+    originHostHeader: api_host
+    sharedPrivateLinkResource: {
+      privateLink: {
+        id: apps_environment_id
+      }
+      privateLinkLocation: (privateLinkRegions[?apps_location] ?? apps_location)
+      groupId: 'managedEnvironments'
+      requestMessage: 'Azure Front Door frontdoor requests access to apps.'
+    }
+    enforceCertificateNameCheck: true
+  }
+  parent: apiOriginGroup
+}
+
+resource apiRoute 'Microsoft.Cdn/profiles/afdEndpoints/routes@2025-06-01' = {
+  name: take('apiRoute-${uniqueString(resourceGroup().id)}', 90)
+  properties: {
+    originGroup: {
+      id: apiOriginGroup.id
+    }
+    patternsToMatch: [
+      '/*'
+    ]
+    forwardingProtocol: 'HttpsOnly'
+    linkToDefaultDomain: 'Enabled'
+    httpsRedirect: 'Enabled'
+  }
+  parent: apiEndpoint
+  dependsOn: [
+    apiOrigin
+  ]
+}
+
+resource public_appEndpoint 'Microsoft.Cdn/profiles/afdEndpoints@2025-06-01' = {
+  name: take('publicappEndpoint-${uniqueString(resourceGroup().id)}', 46)
+  location: 'Global'
+  parent: frontdoor
+}
+
+resource public_appOriginGroup 'Microsoft.Cdn/profiles/originGroups@2025-06-01' = {
+  name: take('publicappOriginGroup-${uniqueString(resourceGroup().id)}', 90)
+  properties: {
+    loadBalancingSettings: {
+      sampleSize: 4
+      successfulSamplesRequired: 3
+      additionalLatencyInMilliseconds: 50
+    }
+    healthProbeSettings: {
+      probePath: '/'
+      probeProtocol: 'Https'
+    }
+  }
+  parent: frontdoor
+}
+
+resource public_appOrigin 'Microsoft.Cdn/profiles/originGroups/origins@2025-06-01' = {
+  name: take('public-appOrigin-${uniqueString(resourceGroup().id, public_app_host)}', 90)
+  properties: {
+    hostName: public_app_host
+    originHostHeader: public_app_host
+  }
+  parent: public_appOriginGroup
+}
+
+resource public_appRoute 'Microsoft.Cdn/profiles/afdEndpoints/routes@2025-06-01' = {
+  name: take('publicappRoute-${uniqueString(resourceGroup().id)}', 90)
+  properties: {
+    originGroup: {
+      id: public_appOriginGroup.id
+    }
+    patternsToMatch: [
+      '/*'
+    ]
+    forwardingProtocol: 'HttpsOnly'
+    linkToDefaultDomain: 'Enabled'
+    httpsRedirect: 'Enabled'
+  }
+  parent: public_appEndpoint
+  dependsOn: [
+    public_appOrigin
+  ]
+}
+
+output web_endpointUrl string = 'https://${webEndpoint.properties.hostName}'
+
+output web_endpointId string = webEndpoint.id
+
+output api_endpointUrl string = 'https://${apiEndpoint.properties.hostName}'
+
+output api_endpointId string = apiEndpoint.id
+
+output public_app_endpointUrl string = 'https://${public_appEndpoint.properties.hostName}'
+
+output public_app_endpointId string = public_appEndpoint.id,
+  publicWebsiteBicep:
+@description('The location for the resource(s) to be deployed.')
+param location string = resourceGroup().location
+
+param public_env_outputs_azure_container_registry_endpoint string
+
+param public_env_outputs_planid string
+
+param public_env_outputs_azure_container_registry_managed_identity_id string
+
+param public_env_outputs_azure_container_registry_managed_identity_client_id string
+
+param public_app_containerimage string
+
+resource mainContainer 'Microsoft.Web/sites/sitecontainers@2025-03-01' = {
+  name: 'main'
+  properties: {
+    authType: 'UserAssigned'
+    image: public_app_containerimage
+    isMain: true
+    targetPort: '8080'
+    userManagedIdentityClientId: public_env_outputs_azure_container_registry_managed_identity_client_id
+  }
+  parent: webapp
+}
+
+resource webapp 'Microsoft.Web/sites@2025-03-01' = {
+  name: take('${toLower('public-app')}-${uniqueString(resourceGroup().id)}', 60)
+  location: location
+  properties: {
+    serverFarmId: public_env_outputs_planid
+    siteConfig: {
+      numberOfWorkers: 30
+      linuxFxVersion: 'SITECONTAINERS'
+      acrUseManagedIdentityCreds: true
+      acrUserManagedIdentityID: public_env_outputs_azure_container_registry_managed_identity_client_id
+      appSettings: [
+        {
+          name: 'WEBSITES_PORT'
+          value: '8080'
+        }
+        {
+          name: 'OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY'
+          value: 'in_memory'
+        }
+        {
+          name: 'ASPNETCORE_FORWARDEDHEADERS_ENABLED'
+          value: 'true'
+        }
+        {
+          name: 'HTTP_PORTS'
+          value: '8080'
+        }
+        {
+          name: 'ASPIRE_ENVIRONMENT_NAME'
+          value: 'public-env'
+        }
+      ]
+    }
+  }
+  identity: {
+    type: 'UserAssigned'
+    userAssignedIdentities: {
+      '${public_env_outputs_azure_container_registry_managed_identity_id}': { }
+    }
+  }
+}
+
+output resourceId string = webapp.id
+
+output resourceLocation string = toLower(replace(webapp.location, ' ', ''))
+}

@@ -464,14 +464,14 @@ public sealed class ExtensionReleaseWorkflowTests(ITestOutputHelper testOutput)
         return new CommandResult(process.ExitCode, output);
     }
 
-    private async Task<FakeGhFixture> CreateFakeGhAsync(string rootDirectory)
+    private static async Task<FakeGhFixture> CreateFakeGhAsync(string rootDirectory)
     {
         var binDirectory = Path.Combine(rootDirectory, "bin");
         Directory.CreateDirectory(binDirectory);
 
         var callLogPath = Path.Combine(rootDirectory, "gh-call-log.txt");
         var fakeGhPath = Path.Combine(binDirectory, "gh");
-        await File.WriteAllTextAsync(
+        await ExecutableFile.WriteAsync(
             fakeGhPath,
             """
             #!/usr/bin/env bash
@@ -495,39 +495,12 @@ public sealed class ExtensionReleaseWorkflowTests(ITestOutputHelper testOutput)
             fi
 
             exit 0
-            """);
-
-        var chmodResult = await RunBashCommandAsync($"chmod +x \"{fakeGhPath}\"");
-        Assert.Equal(0, chmodResult.ExitCode);
+            """,
+            UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute |
+            UnixFileMode.GroupRead | UnixFileMode.GroupExecute |
+            UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
 
         return new FakeGhFixture(callLogPath, $"{binDirectory}{Path.PathSeparator}{Environment.GetEnvironmentVariable("PATH")}");
-    }
-
-    private async Task<CommandResult> RunBashCommandAsync(string command)
-    {
-        using var process = new Process();
-        process.StartInfo = new ProcessStartInfo("bash")
-        {
-            WorkingDirectory = RepoRoot.Path,
-            RedirectStandardError = true,
-            RedirectStandardOutput = true,
-            UseShellExecute = false,
-        };
-        process.StartInfo.ArgumentList.Add("-c");
-        process.StartInfo.ArgumentList.Add(command);
-
-        process.Start();
-
-        // Read both streams concurrently to avoid deadlock when bash emits diagnostics.
-        var stdoutTask = process.StandardOutput.ReadToEndAsync();
-        var stderrTask = process.StandardError.ReadToEndAsync();
-        using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(1));
-        await process.WaitForExitAsync(timeout.Token);
-
-        var output = await stdoutTask + await stderrTask;
-        testOutput.WriteLine(output);
-
-        return new CommandResult(process.ExitCode, output);
     }
 
     private sealed record FakeGhFixture(string CallLogPath, string PathEnvironment);

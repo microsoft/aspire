@@ -3,13 +3,11 @@
     "path": "apphost.go",
     "language": "go"
   },
-  "features": {
-    "experimentalPolyglotGo": true
-  },
   "packages": {
     "Aspire.Hosting.Azure.Kubernetes": "",
     "Aspire.Hosting.Azure.Provisioning.ContainerService": "",
     "Aspire.Hosting": "",
+    "Aspire.Hosting.Dotnet": "",
     "Aspire.Hosting.Redis": ""
   }
 }

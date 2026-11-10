@@ -6,7 +6,9 @@
 using System.Collections.Immutable;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
+using Azure.Provisioning.KeyVault;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -40,7 +42,7 @@ public static class EntraIdResourceExtensions
     ///
     /// var entraApi = builder.AddEntraIdApplication("entra-api");
     ///
-    /// builder.AddProject&lt;Projects.Api&gt;("api")
+    /// builder.AddDotnetProject("api", "../Api/Api.csproj")
     ///     .WithReference(entraApi);
     /// </code>
     /// </example>
@@ -361,7 +363,7 @@ public static class EntraIdResourceExtensions
     /// var tenantId = builder.AddParameter("EntraTenantId");
     /// var clientId = builder.AddParameter("EntraClientId");
     /// var identity = builder.AddExistingEntraApplication("identity", tenantId, clientId);
-    /// builder.AddProject&lt;Projects.Api&gt;("api").WithReference(identity);
+    /// builder.AddDotnetProject("api", "../Api/Api.csproj").WithReference(identity);
     /// </code>
     /// </example>
     /// </remarks>
@@ -423,7 +425,7 @@ public static class EntraIdResourceExtensions
     ///     "identity",
     ///     tenantId: "aaaabbbb-0000-cccc-1111-dddd2222eeee",
     ///     clientId: "00001111-aaaa-2222-bbbb-3333cccc4444");
-    /// builder.AddProject&lt;Projects.Api&gt;("api").WithReference(identity);
+    /// builder.AddDotnetProject("api", "../Api/Api.csproj").WithReference(identity);
     /// </code>
     /// </example>
     /// </remarks>
@@ -507,6 +509,7 @@ public static class EntraIdResourceExtensions
     /// <param name="tenantId">A parameter containing the registration's home tenant ID.</param>
     /// <param name="clientId">A parameter containing the registration's application (client) ID.</param>
     /// <returns>The resource builder for chaining.</returns>
+    /// <exception cref="InvalidOperationException">Registration-only configuration is already applied to this resource.</exception>
     /// <remarks>
     /// <para>
     /// Parameter values are validated when the application starts. The tenant ID must be a GUID or a domain such as
@@ -535,9 +538,10 @@ public static class EntraIdResourceExtensions
         ArgumentNullException.ThrowIfNull(tenantId);
         ArgumentNullException.ThrowIfNull(clientId);
 
+        ConfigureExistingApplication(builder);
         builder.Resource.TenantIdParameter = tenantId.Resource;
         builder.Resource.ClientIdParameter = clientId.Resource;
-        return ConfigureExistingApplication(builder);
+        return builder;
     }
 
     /// <summary>
@@ -548,6 +552,7 @@ public static class EntraIdResourceExtensions
     /// <param name="clientId">The registration's application (client) ID.</param>
     /// <returns>The resource builder for chaining.</returns>
     /// <exception cref="ArgumentException">A tenant ID or client ID is empty or invalid.</exception>
+    /// <exception cref="InvalidOperationException">Registration-only configuration is already applied to this resource.</exception>
     /// <remarks>
     /// <para>
     /// Pass the home tenant ID, not a sign-in keyword such as <c>organizations</c>.
@@ -577,9 +582,10 @@ public static class EntraIdResourceExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ValidateExistingApplicationIds(tenantId, clientId);
 
+        ConfigureExistingApplication(builder);
         builder.Resource.TenantId = tenantId;
         builder.Resource.ClientId = clientId;
-        return ConfigureExistingApplication(builder);
+        return builder;
     }
 
     /// <summary>
@@ -592,6 +598,7 @@ public static class EntraIdResourceExtensions
     /// <remarks>
     /// The registration itself is not provisioned or queried. Deployment can still require Azure authentication and configuration.
     /// Use addExistingEntraApplication instead for a configuration-only AppHost without Azure setup.
+    /// Throws before changing the resource if registration-only configuration was already applied.
     /// </remarks>
     [AspireExport("asExistingApplication")]
     internal static IResourceBuilder<EntraIdApplicationResource> AsExistingApplicationForExport(
@@ -600,6 +607,8 @@ public static class EntraIdResourceExtensions
         [AspireUnion(typeof(string), typeof(IResourceBuilder<ParameterResource>))] object clientId)
     {
         ArgumentNullException.ThrowIfNull(builder);
+        // Reject incompatible registrations before touching any state, so a failed conversion leaves the IDs unchanged.
+        builder.Resource.EnsureCanBeExistingApplication();
         SetExistingApplicationIds(builder.Resource, tenantId, clientId);
         return ConfigureExistingApplication(builder);
     }
@@ -632,6 +641,63 @@ public static class EntraIdResourceExtensions
     {
         builder.Resource.SetExistingApplication();
         return builder.ExcludeFromManifest();
+    }
+
+    /// <summary>
+    /// Creates and provisions a short-lived certificate credential for local development.
+    /// </summary>
+    /// <param name="builder">The resource builder.</param>
+    /// <returns>The resource builder for chaining.</returns>
+    /// <exception cref="InvalidOperationException">The registration is an existing application, which Aspire never modifies.</exception>
+    /// <remarks>
+    /// <para>
+    /// Each application gets a dedicated certificate in the AppHost's local store. Certificates last two days;
+    /// on a subsequent run, a certificate with one day or less remaining is replaced by overwriting its PFX file.
+    /// Only the public certificate is provisioned in Entra. Referencing applications receive the private
+    /// credential as a secret <c>Base64EncodedValue</c> in Microsoft.Identity.Web's <c>ClientCredentials</c> configuration.
+    /// Aspire replaces the registration's entire <c>keyCredentials</c> collection with the selected certificate.
+    /// Existing certificate credentials are not retained, so older sessions must restart after renewal.
+    /// </para>
+    /// <para>
+    /// Development and production must use separate Entra registrations. Never register developer certificates
+    /// on a production application. Different resource groups do not isolate tenant-scoped registrations:
+    /// use distinct registration names or tenant-resource suffixes. This method does not provision or emit a credential when publishing;
+    /// omitting a credential from publish does not revoke a key previously registered against the same application.
+    /// In either mode, this configuration prevents conversion to an existing registration with <c>AsExistingApplication</c>.
+    /// </para>
+    /// <para>
+    /// Renewal is checked at AppHost startup, not in the background. Restart long-running development sessions
+    /// before the certificate expires. Use <c>PublishWithFederatedManagedIdentityCredential</c> for deployed workloads.
+    /// </para>
+    /// </remarks>
+    /// <example>
+    /// <code lang="csharp">
+    /// // Use different Azure:TenantResourceSuffix values for development and production.
+    /// var entra = builder.AddEntraIdApplication("entra-web")
+    ///     .RunWithLocalDeveloperCertificateCredential()
+    ///     .PublishWithFederatedManagedIdentityCredential();
+    ///
+    /// builder.AddDotnetProject("web", "../Web/Web.csproj").WithReference(entra);
+    /// </code>
+    /// </example>
+    [AspireExport]
+    public static IResourceBuilder<EntraIdApplicationResource> RunWithLocalDeveloperCertificateCredential(
+        this IResourceBuilder<EntraIdApplicationResource> builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        builder.Resource.ThrowIfExistingApplication("Configure a certificate on the registration yourself and select it with a consumer certificate credential API.");
+        builder.Resource.HasLocalDeveloperCertificateConfiguration = true;
+
+        if (builder.ApplicationBuilder.ExecutionContext.IsPublishMode ||
+            builder.Resource.ClientCredentials.OfType<EntraIdLocalDeveloperCertificateCredential>().Any())
+        {
+            return builder;
+        }
+
+        builder.ApplicationBuilder.Services.TryAddSingleton(TimeProvider.System);
+        builder.ApplicationBuilder.Services.TryAddSingleton<LocalDeveloperCertificateStore>();
+        builder.Resource.ClientCredentials.Add(new EntraIdLocalDeveloperCertificateCredential(builder.Resource, builder.ApplicationBuilder.ExecutionContext));
+        return builder;
     }
 
     /// <summary>
@@ -791,7 +857,7 @@ public static class EntraIdResourceExtensions
     /// var entra = builder.AddEntraIdApplication("entra-web")
     ///     .PublishWithFederatedManagedIdentityCredential();
     ///
-    /// builder.AddProject&lt;Projects.Web&gt;("web")
+    /// builder.AddDotnetProject("web", "../Web/Web.csproj")
     ///     .WithReference(entra);
     /// </code>
     /// </example>
@@ -801,6 +867,7 @@ public static class EntraIdResourceExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
         ThrowIfExistingApplication(builder);
+        builder.Resource.HasPublishFederationConfiguration = true;
 
         // Managed identities exist only in Azure, and the identity may not be part of the model when running, so the trust is
         // a publish-time concern. Adding it when running would make the registration's Bicep reference an identity that
@@ -832,7 +899,7 @@ public static class EntraIdResourceExtensions
     /// </param>
     /// <returns>The resource builder for chaining.</returns>
     /// <exception cref="InvalidOperationException">
-    /// Thrown when <paramref name="computeResource"/> does not reference this application.
+    /// Thrown when the registration is existing or <paramref name="computeResource"/> does not reference this application.
     /// </exception>
     /// <remarks>
     /// Only <paramref name="computeResource"/>'s identity is trusted, and only it receives the managed identity credential.
@@ -842,7 +909,7 @@ public static class EntraIdResourceExtensions
     /// <example>
     /// <code lang="csharp">
     /// var entra = builder.AddEntraIdApplication("entra-web");
-    /// var web = builder.AddProject&lt;Projects.Web&gt;("web")
+    /// var web = builder.AddDotnetProject("web", "../Web/Web.csproj")
     ///     .WithReference(entra);
     ///
     /// entra.PublishWithFederatedManagedIdentityCredential(web);
@@ -857,6 +924,7 @@ public static class EntraIdResourceExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(computeResource);
         ThrowIfExistingApplication(builder);
+        builder.Resource.HasPublishFederationConfiguration = true;
 
         // Managed identities exist only in Azure, and the identity may not be part of the model when running, so the trust is
         // a publish-time concern. Adding it when running would make the registration's Bicep reference an identity that
@@ -896,7 +964,7 @@ public static class EntraIdResourceExtensions
     /// var entra = builder.AddEntraIdApplication("entra-web")
     ///     .PublishWithFederatedManagedIdentityCredential(identity);
     ///
-    /// builder.AddProject&lt;Projects.Web&gt;("web")
+    /// builder.AddDotnetProject("web", "../Web/Web.csproj")
     ///     .WithAzureUserAssignedIdentity(identity)
     ///     .WithReference(entra);
     /// </code>
@@ -909,6 +977,7 @@ public static class EntraIdResourceExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(identity);
         ThrowIfExistingApplication(builder);
+        builder.Resource.HasPublishFederationConfiguration = true;
 
         // Managed identities exist only in Azure, and the identity may not be part of the model when running, so the trust is
         // a publish-time concern. Adding it when running would make the registration's Bicep reference an identity that
@@ -955,13 +1024,9 @@ public static class EntraIdResourceExtensions
     // registration trust a managed identity. Fail here rather than let the app deploy and then fail to get a token.
     private static void ThrowIfExistingApplication(IResourceBuilder<EntraIdApplicationResource> builder)
     {
-        if (builder.Resource.IsExistingApplication)
-        {
-            throw new InvalidOperationException(
-                $"Entra ID application '{builder.Resource.Name}' is an existing registration, and Aspire does not modify existing registrations, " +
-                "so it cannot add the federated credential that makes the registration trust a managed identity. " +
-                "Add that credential to the registration yourself, then call WithFederatedManagedIdentityCredential with the identity's client ID.");
-        }
+        builder.Resource.ThrowIfExistingApplication(
+            "Add the federated credential that makes the registration trust a managed identity yourself, " +
+            "then call WithFederatedManagedIdentityCredential with the identity's client ID.");
     }
 
     // Referencing the application needs an identity the way referencing an Azure resource needs a role assignment,
@@ -981,7 +1046,7 @@ public static class EntraIdResourceExtensions
     /// <param name="keyVaultUrl">The URL of the Key Vault (e.g., <c>"https://myvault.vault.azure.net"</c>).</param>
     /// <param name="certificateName">The name of the certificate in Key Vault.</param>
     /// <returns>The resource builder for chaining.</returns>
-    [AspireExport]
+    [AspireExportIgnore(Reason = "The withCertificateFromKeyVault export accepts a URL or a Key Vault resource using a union.")]
     public static IResourceBuilder<EntraIdApplicationResource> WithCertificateFromKeyVault(
         this IResourceBuilder<EntraIdApplicationResource> builder,
         string keyVaultUrl,
@@ -998,6 +1063,71 @@ public static class EntraIdResourceExtensions
         });
 
         return builder;
+    }
+
+    /// <summary>
+    /// Adds a certificate credential from an Azure Key Vault resource to this Entra ID application.
+    /// </summary>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="keyVault">The Key Vault containing the certificate.</param>
+    /// <param name="certificateName">The name of the certificate in Key Vault.</param>
+    /// <returns>The resource builder for chaining.</returns>
+    /// <remarks>
+    /// The vault URI remains a resource reference during run and publish. The Key Vault Certificate User role is added to the
+    /// vault's default roles when running, and assigned to each resource referencing this application when publishing, which
+    /// requires an environment that supports role assignments. The certificate must already exist, and its public key must
+    /// be registered with the Entra application. Microsoft.Identity.Web loads the latest certificate version.
+    /// </remarks>
+    /// <example>
+    /// <code lang="csharp">
+    /// var vault = builder.AddAzureKeyVault("vault");
+    /// var entra = builder.AddExistingEntraApplication("entra", tenantId, clientId)
+    ///     .WithCertificateFromKeyVault(vault, "web-certificate");
+    /// builder.AddProject&lt;Projects.Web&gt;("web").WithReference(entra);
+    /// </code>
+    /// </example>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> or <paramref name="keyVault"/> is null.</exception>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="certificateName"/> is null or empty.</exception>
+    [AspireExportIgnore(Reason = "The withCertificateFromKeyVault export accepts a URL or a Key Vault resource using a union.")]
+    public static IResourceBuilder<EntraIdApplicationResource> WithCertificateFromKeyVault(
+        this IResourceBuilder<EntraIdApplicationResource> builder,
+        IResourceBuilder<AzureKeyVaultResource> keyVault,
+        string certificateName)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(keyVault);
+        ArgumentException.ThrowIfNullOrEmpty(certificateName);
+
+        return builder.WithCredential(new EntraIdKeyVaultCertificateCredential
+        {
+            KeyVault = keyVault.Resource,
+            CertificateNameInKeyVault = certificateName
+        });
+    }
+
+    /// <summary>
+    /// Adds a certificate credential using a vault URL or Key Vault resource.
+    /// </summary>
+    /// <param name="builder">The registration builder.</param>
+    /// <param name="keyVaultUrl">The vault URL or Key Vault resource containing the certificate.</param>
+    /// <param name="certificateName">The name of the certificate in Key Vault.</param>
+    /// <returns>The registration builder.</returns>
+    /// <remarks>The latest certificate version is used. Resource-backed vaults grant consumers the Key Vault Certificate User role by default.</remarks>
+    [AspireExport("withCertificateFromKeyVault")]
+    internal static IResourceBuilder<EntraIdApplicationResource> WithCertificateFromKeyVaultForExport(
+        this IResourceBuilder<EntraIdApplicationResource> builder,
+        [AspireUnion(typeof(string), typeof(IResourceBuilder<AzureKeyVaultResource>))] object keyVaultUrl,
+        string certificateName)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(keyVaultUrl);
+
+        return keyVaultUrl switch
+        {
+            string url => builder.WithCertificateFromKeyVault(url, certificateName),
+            IResourceBuilder<AzureKeyVaultResource> vault => builder.WithCertificateFromKeyVault(vault, certificateName),
+            _ => throw new ArgumentException("Expected a vault URL or a Key Vault resource.", nameof(keyVaultUrl))
+        };
     }
 
     /// <summary>
@@ -1109,8 +1239,53 @@ public static class EntraIdResourceExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(credential);
 
+        if (credential is EntraIdKeyVaultCertificateCredential { KeyVault: { } keyVault })
+        {
+            GrantKeyVaultCertificateAccess(builder, keyVault);
+        }
+
         builder.Resource.ClientCredentials.Add(credential);
         return builder;
+    }
+
+    private static readonly RoleDefinition s_keyVaultCertificateUserRole =
+        new(KeyVaultBuiltInRole.KeyVaultCertificateUser.ToString(), nameof(KeyVaultBuiltInRole.KeyVaultCertificateUser));
+
+    private static void GrantKeyVaultCertificateAccess(IResourceBuilder<EntraIdApplicationResource> builder, AzureKeyVaultResource keyVault)
+    {
+        // Microsoft.Identity.Web reads the certificate with its private key, which the vault's default
+        // Secrets User role does not allow, so the certificate role has to be in place before the Azure
+        // resource preparer decides role assignments.
+        if (builder.ApplicationBuilder.ExecutionContext.IsRunMode)
+        {
+            // Run-mode roles are global to the vault and granted to the developer, and the preparer ignores consumers that
+            // are not compute resources (executables, resources excluded from the manifest), so extend the vault's defaults.
+            // Without a default annotation the defaults were cleared, which means the roles are managed explicitly.
+            if (keyVault.TryGetLastAnnotation<DefaultRoleAssignmentsAnnotation>(out var defaults) &&
+                !defaults.Roles.Contains(s_keyVaultCertificateUserRole))
+            {
+                keyVault.Annotations.Remove(defaults);
+                keyVault.Annotations.Add(new DefaultRoleAssignmentsAnnotation(
+                    new HashSet<RoleDefinition>(defaults.Roles) { s_keyVaultCertificateUserRole }));
+            }
+
+            return;
+        }
+
+        // Publish-mode roles are assigned per consumer. A consumer that is added later is handled when it references this application.
+        foreach (var consumer in builder.Resource.Consumers)
+        {
+            AddKeyVaultCertificateAccess(consumer, keyVault);
+        }
+    }
+
+    private static void AddKeyVaultCertificateAccess(IResource consumer, AzureKeyVaultResource keyVault)
+    {
+        // Explicit roles on the consumer replace the default, including an empty set that opts out.
+        if (!consumer.Annotations.OfType<RoleAssignmentAnnotation>().Any(a => a.Target == keyVault))
+        {
+            consumer.Annotations.Add(new RoleAssignmentAnnotation(keyVault, new HashSet<RoleDefinition> { s_keyVaultCertificateUserRole }));
+        }
     }
 
     /// <summary>
@@ -1161,6 +1336,10 @@ public static class EntraIdResourceExtensions
     /// as <c>AppHomeTenantId</c>, which Microsoft.Identity.Web uses when the app acquires tokens as itself.
     /// </para>
     /// <para>
+    /// For registrations created by Aspire, this also sets the registration's supported account types.
+    /// Existing registrations are not modified; configure their supported account types to match manually.
+    /// </para>
+    /// <para>
     /// Users from any tenant that the audience allows can then sign in, so check the tenant ID (<c>tid</c>) claim of
     /// incoming tokens before giving access to tenant-specific data. For more information, see
     /// <a href="https://learn.microsoft.com/entra/identity-platform/claims-validation">Secure applications and APIs by validating claims</a>.
@@ -1176,6 +1355,7 @@ public static class EntraIdResourceExtensions
     /// <ats-remarks>
     /// The audience must match the registration's supported account types. The default uses the home tenant as TenantId.
     /// Other audiences use organizations, common, or consumers as TenantId and also emit AppHomeTenantId.
+    /// Also configures supported account types on registrations created by Aspire. For existing registrations, configures consumers only.
     /// Validate the tenant ID (tid) claim before allowing access to tenant-specific data.
     /// See https://learn.microsoft.com/entra/identity-platform/claims-validation.
     /// </ats-remarks>
@@ -1198,6 +1378,7 @@ public static class EntraIdResourceExtensions
     /// <summary>
     /// Adds web redirect URIs to a registration created by Aspire.
     /// </summary>
+    /// <exception cref="InvalidOperationException">The registration is existing. Configure its redirect URIs manually.</exception>
     /// <param name="builder">The resource builder.</param>
     /// <param name="redirectUris">The redirect URIs to register for browser sign-in and sign-out callbacks.</param>
     /// <returns>The resource builder for chaining.</returns>
@@ -1205,7 +1386,7 @@ public static class EntraIdResourceExtensions
     /// <exception cref="ArgumentException">Thrown when a redirect URI is empty.</exception>
     /// <remarks>
     /// URIs are written directly into the generated infrastructure; endpoints are not discovered automatically.
-    /// Existing registrations are not modified.
+    /// Throws for existing registrations. Configure their redirect URIs in the Microsoft Entra admin center instead.
     /// </remarks>
     /// <example>
     /// <code lang="csharp">
@@ -1220,6 +1401,7 @@ public static class EntraIdResourceExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(redirectUris);
+        builder.Resource.ThrowIfExistingApplication("Configure web redirect URIs in the registration's Authentication settings in the Microsoft Entra admin center.");
         foreach (var redirectUri in redirectUris)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(redirectUri, nameof(redirectUris));
@@ -1236,6 +1418,7 @@ public static class EntraIdResourceExtensions
     /// <summary>
     /// Adds parameters whose values supply web redirect URIs to a registration created by Aspire.
     /// </summary>
+    /// <exception cref="InvalidOperationException">The registration is existing. Configure its redirect URIs manually.</exception>
     /// <param name="builder">The resource builder.</param>
     /// <param name="redirectUris">Parameters whose values are the redirect URIs. Each value may contain several URIs separated by commas.</param>
     /// <returns>The resource builder for chaining.</returns>
@@ -1249,7 +1432,7 @@ public static class EntraIdResourceExtensions
     /// <see cref="WithRedirectUris(IResourceBuilder{EntraIdApplicationResource}, string[])"/>; URIs are registered in call order.
     /// </para>
     /// <para>
-    /// Endpoints are not discovered automatically. Existing registrations are not modified.
+    /// Endpoints are not discovered automatically. Throws for existing registrations; configure their redirect URIs manually.
     /// </para>
     /// </remarks>
     /// <example>
@@ -1267,6 +1450,7 @@ public static class EntraIdResourceExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(redirectUris);
+        builder.Resource.ThrowIfExistingApplication("Configure web redirect URIs in the registration's Authentication settings in the Microsoft Entra admin center.");
         foreach (var redirectUri in redirectUris)
         {
             ArgumentNullException.ThrowIfNull(redirectUri, nameof(redirectUris));
@@ -1283,6 +1467,7 @@ public static class EntraIdResourceExtensions
     /// <summary>
     /// Adds redirect URIs for a resource's endpoint to a registration created by Aspire.
     /// </summary>
+    /// <exception cref="InvalidOperationException">The registration is existing, or infrastructure generation detects that TLS is disabled for the deployed endpoint.</exception>
     /// <param name="builder">The resource builder.</param>
     /// <param name="endpoint">The endpoint that serves the callbacks.</param>
     /// <param name="callbackPaths">The callback paths on that endpoint, such as <c>/signin-oidc</c>.</param>
@@ -1291,26 +1476,27 @@ public static class EntraIdResourceExtensions
     /// <exception cref="ArgumentException">Thrown when no path is provided or a path doesn't start with <c>/</c>.</exception>
     /// <remarks>
     /// <para>
-    /// The scheme, host, and port come from the endpoint so they follow local endpoint allocation. When running locally the
-    /// allocated URL is used. When publishing or deploying, the host name comes from the resource's compute environment and
-    /// the scheme is <c>https</c>.
+    /// In run mode the origin comes from the endpoint's finalized browser URLs, including vanity hostnames and URL
+    /// customization. When publishing or deploying, the origin comes from the resource's compute environment,
+    /// and the deployed endpoint must have TLS enabled.
+    /// After endpoint allocation, resolution waits up to 30 seconds for finalized browser URLs. If they are not ready,
+    /// the allocated origin is used with a warning. Supply explicit redirect URIs if that address differs from the browser URL.
     /// </para>
     /// <para>
     /// The callback path can't be discovered from the endpoint: it's configured by the consuming application, so it is
     /// supplied here and must match that configuration. When the externally visible URL differs from the endpoint
     /// (gateway, reverse proxy, or custom domain), supply the full URL with <c>WithRedirectUris</c> instead.
-    /// Existing registrations are not modified.
+    /// Throws for existing registrations; configure their redirect URIs manually.
     /// </para>
     /// <para>
-    /// When running locally, the URL shown as the endpoint's primary URL is used, so a friendly <c>*.dev.localhost</c> name
-    /// is registered when the dashboard uses one. That URL is read when this registration's URL callback runs, so a
-    /// <c>WithUrlForEndpoint</c> or <c>WithUrls</c> callback added after this call that changes the endpoint's host isn't
-    /// reflected. Add such callbacks before calling this method.
+    /// Run-mode resolution waits for all URL customization callbacks to complete and uses the shared browser-origin
+    /// preference order. Navigation paths are excluded before appending the supplied callback path.
+    /// If URL customization removes all browser URLs for the endpoint, resolution reports a missing origin.
     /// </para>
     /// </remarks>
     /// <example>
     /// <code lang="csharp">
-    /// var web = builder.AddProject&lt;Projects.Web&gt;("web").WithExternalHttpEndpoints();
+    /// var web = builder.AddDotnetProject("web", "../Web/Web.csproj").WithExternalHttpEndpoints();
     /// var entraWeb = builder.AddEntraIdApplication("entra-web")
     ///     .WithRedirectUris(web.GetEndpoint("https"), "/signin-oidc", "/signout-callback-oidc");
     /// </code>
@@ -1324,6 +1510,7 @@ public static class EntraIdResourceExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(endpoint);
         ArgumentNullException.ThrowIfNull(callbackPaths);
+        builder.Resource.ThrowIfExistingApplication("Configure web redirect URIs in the registration's Authentication settings in the Microsoft Entra admin center.");
 
         if (callbackPaths.Length == 0)
         {
@@ -1341,15 +1528,47 @@ public static class EntraIdResourceExtensions
 
         foreach (var path in callbackPaths)
         {
-            builder.Resource.AddRedirectUri(new EntraIdEndpointRedirectUri(endpoint, path, builder.ApplicationBuilder.ExecutionContext.IsPublishMode));
+            builder.Resource.AddRedirectUri(new EntraIdEndpointRedirectUri(CreateExpression, path));
         }
 
         return builder;
+
+        ReferenceExpression CreateExpression()
+        {
+            if (!builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
+            {
+                return ReferenceExpression.Create($"{new EntraIdRunModeBrowserOrigin(endpoint, builder.ApplicationBuilder.ExecutionContext)}");
+            }
+
+            // Delay environment lookup until infrastructure generation, so compute-environment
+            // configuration can follow WithRedirectUris. Keep the primary origin symbolic for Bicep.
+            if (!ComputeEnvironmentEndpointResolver.TryGetEffectiveComputeEnvironment(endpoint.Resource, out var computeEnvironment))
+            {
+                throw new InvalidOperationException(
+                    $"Resource '{endpoint.Resource.Name}' does not have a compute environment. " +
+                    "Ensure a compute environment (for example, Azure Container Apps or Azure App Service) is configured in the application model " +
+                    "or register the redirect URI with an explicit URL.");
+            }
+
+#pragma warning disable ASPIRECOMPUTE002 // Resolve deployment properties without allocating the endpoint.
+            var origin = computeEnvironment.GetEndpointPropertyExpression(endpoint.PrimaryBrowserOrigin);
+            var tlsEnabled = computeEnvironment.GetEndpointPropertyExpression(endpoint.Property(EndpointProperty.TlsEnabled));
+#pragma warning restore ASPIRECOMPUTE002
+            if (string.Equals(tlsEnabled.ValueExpression, bool.FalseString, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    $"Endpoint '{endpoint.EndpointName}' on resource '{endpoint.Resource.Name}' cannot be used for an Entra redirect URI because TLS is disabled in compute environment '{computeEnvironment.Name}'. " +
+                    "Use an HTTPS endpoint, enable HTTPS upgrade, or supply an explicit HTTPS redirect URI.");
+            }
+
+            return origin;
+        }
     }
 
     /// <summary>
     /// Adds redirect URIs for a host supplied by a parameter to a registration created by Aspire.
     /// </summary>
+    /// <exception cref="InvalidOperationException">The registration is existing. Configure its redirect URIs manually.</exception>
     /// <param name="builder">The resource builder.</param>
     /// <param name="host">A parameter whose value is the host name (optionally with a port) that serves the callbacks, such as <c>app.contoso.com</c>. Don't include a scheme or path.</param>
     /// <param name="callbackPath">The first callback path on that host, such as <c>/signin-oidc</c>.</param>
@@ -1366,7 +1585,7 @@ public static class EntraIdResourceExtensions
     /// <para>
     /// The first path is a separate parameter so that a call with only a parameter still binds to
     /// <see cref="WithRedirectUris(IResourceBuilder{EntraIdApplicationResource}, IResourceBuilder{ParameterResource}[])"/>.
-    /// Existing registrations are not modified.
+    /// Throws for existing registrations; configure their redirect URIs manually.
     /// </para>
     /// </remarks>
     /// <example>
@@ -1386,6 +1605,7 @@ public static class EntraIdResourceExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(host);
         ArgumentNullException.ThrowIfNull(additionalCallbackPaths);
+        builder.Resource.ThrowIfExistingApplication("Configure web redirect URIs in the registration's Authentication settings in the Microsoft Entra admin center.");
 
         string[] callbackPaths = [callbackPath, .. additionalCallbackPaths];
         foreach (var path in callbackPaths)
@@ -1399,7 +1619,7 @@ public static class EntraIdResourceExtensions
 
         foreach (var path in callbackPaths)
         {
-            builder.Resource.AddRedirectUri(new EntraIdHostRedirectUri(host.Resource, path));
+            builder.Resource.AddRedirectUri(ReferenceExpression.Create($"https://{host}{path}"));
         }
 
         return builder;
@@ -1415,7 +1635,7 @@ public static class EntraIdResourceExtensions
     /// <remarks>
     /// Call repeatedly to append values in order. Endpoint URLs remain deferred: run uses the allocated primary URL;
     /// publish/deploy uses the compute environment host. Parameter URI lists are split on commas without trimming.
-    /// Existing registrations are not modified.
+    /// Throws for existing registrations; configure their redirect URIs manually.
     /// </remarks>
     [AspireExport("withRedirectUris")]
     internal static IResourceBuilder<EntraIdApplicationResource> WithRedirectUrisForExport(
@@ -1441,6 +1661,7 @@ public static class EntraIdResourceExtensions
     /// <summary>
     /// Adds explicit owners to the application registration created by Aspire.
     /// </summary>
+    /// <exception cref="InvalidOperationException">The registration is existing. Configure its owners manually.</exception>
     /// <param name="builder">The resource builder.</param>
     /// <param name="ownerObjectIds">The object IDs (GUIDs) of the Microsoft Entra users or service principals to add as owners.</param>
     /// <returns>The resource builder for chaining.</returns>
@@ -1458,7 +1679,7 @@ public static class EntraIdResourceExtensions
     /// </para>
     /// <para>
     /// Application and service principal ownership are separate; use <see cref="WithServicePrincipalOwners(IResourceBuilder{EntraIdApplicationResource}, string[])"/>
-    /// for the enterprise application. This setting only affects registrations created by Aspire; existing registrations are not modified.
+    /// for the enterprise application. Throws for existing registrations; configure their owners manually in the Microsoft Entra admin center.
     /// </para>
     /// </remarks>
     /// <example>
@@ -1473,6 +1694,7 @@ public static class EntraIdResourceExtensions
         params string[] ownerObjectIds)
     {
         ArgumentNullException.ThrowIfNull(builder);
+        builder.Resource.ThrowIfExistingApplication("Configure application owners on the registration yourself in the Microsoft Entra admin center.");
         AddOwners(builder.Resource.ApplicationOwners, ownerObjectIds, nameof(ownerObjectIds));
         return builder;
     }
@@ -1480,6 +1702,7 @@ public static class EntraIdResourceExtensions
     /// <summary>
     /// Adds explicit owners, supplied by parameters, to the application registration created by Aspire.
     /// </summary>
+    /// <exception cref="InvalidOperationException">The registration is existing. Configure its owners manually.</exception>
     /// <param name="builder">The resource builder.</param>
     /// <param name="ownerObjectIds">Parameters whose values are the object IDs of the users or service principals to add as owners.</param>
     /// <returns>The resource builder for chaining.</returns>
@@ -1494,6 +1717,7 @@ public static class EntraIdResourceExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(ownerObjectIds);
+        builder.Resource.ThrowIfExistingApplication("Configure application owners on the registration yourself in the Microsoft Entra admin center.");
         builder.Resource.ApplicationOwners.AddRange(ownerObjectIds.Select(p => (object)p.Resource));
         return builder;
     }
@@ -1504,7 +1728,7 @@ public static class EntraIdResourceExtensions
     /// <param name="builder">The registration builder.</param>
     /// <param name="ownerObjectId">The directory object ID of a user or service principal.</param>
     /// <returns>The registration builder.</returns>
-    /// <remarks>Call repeatedly for multiple owners. Existing owners are not removed and existing registrations are not modified.</remarks>
+    /// <remarks>Call repeatedly for multiple owners. Existing owners are not removed. Throws for existing registrations; configure their owners manually.</remarks>
     [AspireExport("withApplicationOwners")]
     internal static IResourceBuilder<EntraIdApplicationResource> WithApplicationOwnersForExport(
         this IResourceBuilder<EntraIdApplicationResource> builder,
@@ -1523,6 +1747,7 @@ public static class EntraIdResourceExtensions
     /// <summary>
     /// Adds explicit owners to the service principal (enterprise application) created by Aspire.
     /// </summary>
+    /// <exception cref="InvalidOperationException">The registration is existing. Configure its service principal owners manually.</exception>
     /// <param name="builder">The resource builder.</param>
     /// <param name="ownerObjectIds">The object IDs (GUIDs) of the Microsoft Entra users or service principals to add as owners.</param>
     /// <returns>The resource builder for chaining.</returns>
@@ -1531,7 +1756,7 @@ public static class EntraIdResourceExtensions
     /// <remarks>
     /// Service principal ownership is independent of application registration ownership and has the same
     /// append semantics and permission requirements as <see cref="WithApplicationOwners(IResourceBuilder{EntraIdApplicationResource}, string[])"/>.
-    /// This setting only affects registrations created by Aspire.
+    /// Throws for existing registrations; configure service principal owners manually in the Microsoft Entra admin center.
     /// </remarks>
     [AspireExportIgnore(Reason = "The withServicePrincipalOwners export accepts literal or parameter owner IDs.")]
     public static IResourceBuilder<EntraIdApplicationResource> WithServicePrincipalOwners(
@@ -1539,6 +1764,7 @@ public static class EntraIdResourceExtensions
         params string[] ownerObjectIds)
     {
         ArgumentNullException.ThrowIfNull(builder);
+        builder.Resource.ThrowIfExistingApplication("Configure service principal owners on the enterprise application yourself in the Microsoft Entra admin center.");
         AddOwners(builder.Resource.ServicePrincipalOwners, ownerObjectIds, nameof(ownerObjectIds));
         return builder;
     }
@@ -1546,6 +1772,7 @@ public static class EntraIdResourceExtensions
     /// <summary>
     /// Adds explicit owners, supplied by parameters, to the service principal (enterprise application) created by Aspire.
     /// </summary>
+    /// <exception cref="InvalidOperationException">The registration is existing. Configure its service principal owners manually.</exception>
     /// <param name="builder">The resource builder.</param>
     /// <param name="ownerObjectIds">Parameters whose values are the object IDs of the users or service principals to add as owners.</param>
     /// <returns>The resource builder for chaining.</returns>
@@ -1557,6 +1784,7 @@ public static class EntraIdResourceExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(ownerObjectIds);
+        builder.Resource.ThrowIfExistingApplication("Configure service principal owners on the enterprise application yourself in the Microsoft Entra admin center.");
         builder.Resource.ServicePrincipalOwners.AddRange(ownerObjectIds.Select(p => (object)p.Resource));
         return builder;
     }
@@ -1567,7 +1795,7 @@ public static class EntraIdResourceExtensions
     /// <param name="builder">The registration builder.</param>
     /// <param name="ownerObjectId">The directory object ID of a user or service principal.</param>
     /// <returns>The registration builder.</returns>
-    /// <remarks>Service principal ownership is independent of application ownership. Existing registrations are not modified.</remarks>
+    /// <remarks>Service principal ownership is independent of application ownership. Throws for existing registrations; configure their owners manually.</remarks>
     [AspireExport("withServicePrincipalOwners")]
     internal static IResourceBuilder<EntraIdApplicationResource> WithServicePrincipalOwnersForExport(
         this IResourceBuilder<EntraIdApplicationResource> builder,
@@ -1586,6 +1814,7 @@ public static class EntraIdResourceExtensions
     /// <summary>
     /// Adds explicit owners to both the application registration and the service principal created by Aspire.
     /// </summary>
+    /// <exception cref="InvalidOperationException">The registration is existing. Configure its owners manually.</exception>
     /// <param name="builder">The resource builder.</param>
     /// <param name="ownerObjectIds">The object IDs (GUIDs) of the Microsoft Entra users or service principals to add as owners.</param>
     /// <returns>The resource builder for chaining.</returns>
@@ -1604,6 +1833,7 @@ public static class EntraIdResourceExtensions
     /// <summary>
     /// Adds explicit owners, supplied by parameters, to both the application registration and the service principal created by Aspire.
     /// </summary>
+    /// <exception cref="InvalidOperationException">The registration is existing. Configure its owners manually.</exception>
     /// <param name="builder">The resource builder.</param>
     /// <param name="ownerObjectIds">Parameters whose values are the object IDs of the users or service principals to add as owners.</param>
     /// <returns>The resource builder for chaining.</returns>
@@ -1621,7 +1851,7 @@ public static class EntraIdResourceExtensions
     /// <param name="builder">The registration builder.</param>
     /// <param name="ownerObjectId">The directory object GUID of a user or service principal, as a literal or parameter.</param>
     /// <returns>The registration builder.</returns>
-    /// <remarks>Owners can manage the registration. Call repeatedly for multiple owners. Existing registrations are not modified.</remarks>
+    /// <remarks>Owners can manage the registration. Call repeatedly for multiple owners. Throws for existing registrations; configure their owners manually.</remarks>
     [AspireExport("withOwners")]
     internal static IResourceBuilder<EntraIdApplicationResource> WithOwnersForExport(
         this IResourceBuilder<EntraIdApplicationResource> builder,
@@ -1699,10 +1929,7 @@ public static class EntraIdResourceExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(role);
 
-        if (builder.Resource.IsExistingApplication)
-        {
-            throw new InvalidOperationException("Application roles can only be declared on registrations created by Aspire. Existing registrations are not modified.");
-        }
+        builder.Resource.ThrowIfExistingApplication("Configure application roles on the registration yourself in the Microsoft Entra admin center.");
 
         var roles = builder.Resource.AppRoles;
         if (roles.Any(r => string.Equals(r.Value, role.Value, StringComparison.Ordinal)))
@@ -1761,8 +1988,163 @@ public static class EntraIdResourceExtensions
     }
 
     /// <summary>
+    /// When published, assigns application roles of this API to a user-assigned managed identity.
+    /// </summary>
+    /// <param name="builder">The API registration builder.</param>
+    /// <param name="identity">The managed identity receiving the roles. Workloads attach it with <c>WithAzureUserAssignedIdentity</c>.</param>
+    /// <param name="roleValues">The values of enabled roles declared with <c>WithAppRole</c> that allow <c>Application</c> members.</param>
+    /// <returns>The API registration builder for chaining.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when an argument is null.</exception>
+    /// <exception cref="ArgumentException">Thrown when no roles are supplied or a role is unknown, disabled, or does not allow application members.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when the API references an existing registration.</exception>
+    /// <remarks>
+    /// <para>
+    /// This explicitly grants access to the identity's service-principal object ID, not its client ID. The caller authenticates
+    /// directly as its managed identity; no caller registration or federated credential is created. This does not attach the
+    /// identity to a workload or configure its token acquisition. The API must validate tokens and enforce the required role.
+    /// </para>
+    /// <para>
+    /// Assignments are published only; this has no effect during local run. Removing this call does not revoke a deployed
+    /// assignment: remove it explicitly with Microsoft Graph or the Entra admin center. Already-issued tokens remain valid
+    /// until expiration, and managed-identity token caches can delay revocation.
+    /// </para>
+    /// <para>
+    /// Deployment requires the Microsoft Graph permissions <c>AppRoleAssignment.ReadWrite.All</c> and <c>Application.Read.All</c>
+    /// (or a higher permission covering application reads), with administrator consent. Delegated deployments also need a
+    /// supported Entra directory role. Azure RBAC permissions alone do not authorize directory assignments.
+    /// See <see href="https://learn.microsoft.com/graph/api/serviceprincipal-post-approleassignedto"/>.
+    /// </para>
+    /// </remarks>
+    /// <example>
+    /// <code lang="csharp">
+    /// var identity = builder.AddAzureUserAssignedIdentity("worker-identity");
+    /// var apiRegistration = builder.AddEntraIdApplication("orders-api")
+    ///     .WithApplicationIdUri()
+    ///     .WithAppRole(new EntraIdAppRole("Orders.Read", "Read orders", "Read orders.", ["Application"]))
+    ///     .PublishWithAppRoleAssignment(identity, "Orders.Read");
+    /// var api = builder.AddDotnetProject("api", "../Api/Api.csproj")
+    ///     .WithReference(apiRegistration);
+    /// </code>
+    /// </example>
+    [AspireExportIgnore(Reason = "The publishWithAppRoleAssignment export accepts an identity or compute resource using a union.")]
+    public static IResourceBuilder<EntraIdApplicationResource> PublishWithAppRoleAssignment(
+        this IResourceBuilder<EntraIdApplicationResource> builder,
+        IResourceBuilder<AzureUserAssignedIdentityResource> identity,
+        params string[] roleValues)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(identity);
+        return PublishWithAppRoleAssignmentCore(builder, identity.Resource, roleValues);
+    }
+
+    /// <summary>
+    /// When published, assigns application roles of this API to a compute resource's user-assigned managed identity.
+    /// </summary>
+    /// <typeparam name="T">The type of the compute resource.</typeparam>
+    /// <param name="builder">The API registration builder.</param>
+    /// <param name="computeResource">The compute resource whose managed identity receives the roles.</param>
+    /// <param name="roleValues">The values of enabled roles declared with <c>WithAppRole</c> that allow <c>Application</c> members.</param>
+    /// <returns>The API registration builder for chaining.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when an argument is null.</exception>
+    /// <exception cref="ArgumentException">Thrown when no roles are supplied or a role is unknown, disabled, or does not allow application members.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when the API references an existing registration or the published compute resource has no user-assigned managed identity.</exception>
+    /// <remarks>
+    /// The Azure environment reuses the compute resource's attached identity or creates one during deployment preparation.
+    /// The identity is resolved after preparation; the compute resource need not reference this registration.
+    /// An excluded compute resource receives no assignment. This does not configure federation or token acquisition.
+    /// Like the explicit-identity overload, this is publish-only, requires directory assignment privileges, and does not
+    /// revoke assignments when a call is removed.
+    /// </remarks>
+    /// <example>
+    /// <code lang="csharp">
+    /// var worker = builder.AddDotnetProject("worker", "../Worker/Worker.csproj");
+    /// var apiRegistration = builder.AddEntraIdApplication("orders-api")
+    ///     .WithApplicationIdUri()
+    ///     .WithAppRole(new EntraIdAppRole("Orders.Read", "Read orders", "Read orders.", ["Application"]));
+    /// var api = builder.AddDotnetProject("api", "../Api/Api.csproj")
+    ///     .WithReference(apiRegistration);
+    ///
+    /// apiRegistration.PublishWithAppRoleAssignment(worker, "Orders.Read");
+    /// </code>
+    /// </example>
+    [AspireExportIgnore(Reason = "The publishWithAppRoleAssignment export accepts an identity or compute resource using a union.")]
+    public static IResourceBuilder<EntraIdApplicationResource> PublishWithAppRoleAssignment<T>(
+        this IResourceBuilder<EntraIdApplicationResource> builder,
+        IResourceBuilder<T> computeResource,
+        params string[] roleValues)
+        where T : IComputeResource
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(computeResource);
+        return PublishWithAppRoleAssignmentCore(builder, computeResource.Resource, roleValues);
+    }
+
+    /// <summary>
+    /// Publishes explicit application-role assignments to a managed identity or a compute resource's managed identity.
+    /// </summary>
+    /// <param name="builder">The API registration builder.</param>
+    /// <param name="identity">The user-assigned identity or compute resource receiving the roles.</param>
+    /// <param name="roleValues">Enabled role values declared on this API that allow Application members.</param>
+    /// <returns>The API registration builder.</returns>
+    /// <remarks>
+    /// Has no effect during local run. Existing registrations are not modified. No caller registration or federation is created.
+    /// Requires Graph AppRoleAssignment.ReadWrite.All and Application.Read.All (or higher application-read permission), administrator
+    /// consent and, for delegated deployment, a supported Entra directory role. Removing a call does not revoke a deployed grant.
+    /// </remarks>
+    [AspireExport("publishWithAppRoleAssignment")]
+    internal static IResourceBuilder<EntraIdApplicationResource> PublishWithAppRoleAssignmentForExport(
+        this IResourceBuilder<EntraIdApplicationResource> builder,
+        [AspireUnion(typeof(IResourceBuilder<AzureUserAssignedIdentityResource>), typeof(IResourceBuilder<IComputeResource>))] object identity,
+        string[] roleValues)
+    {
+        ArgumentNullException.ThrowIfNull(identity);
+        return identity switch
+        {
+            IResourceBuilder<AzureUserAssignedIdentityResource> managedIdentity => builder.PublishWithAppRoleAssignment(managedIdentity, roleValues),
+            IResourceBuilder<IComputeResource> compute => builder.PublishWithAppRoleAssignment(compute, roleValues),
+            _ => throw new ArgumentException("Expected a user-assigned managed identity or a compute resource.", nameof(identity))
+        };
+    }
+
+    private static IResourceBuilder<EntraIdApplicationResource> PublishWithAppRoleAssignmentCore(
+        IResourceBuilder<EntraIdApplicationResource> builder,
+        IResource target,
+        string[] roleValues)
+    {
+        ArgumentNullException.ThrowIfNull(roleValues);
+        if (builder.Resource.IsExistingApplication)
+        {
+            throw new InvalidOperationException(
+                $"Entra ID application '{builder.Resource.Name}' is an existing registration. Application role assignments can only be published for registrations created by Aspire.");
+        }
+
+        if (roleValues.Length == 0)
+        {
+            throw new ArgumentException("At least one application role value is required.", nameof(roleValues));
+        }
+
+        foreach (var value in roleValues)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(value, nameof(roleValues));
+            _ = builder.Resource.GetAssignableAppRole(value);
+        }
+
+        if (builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
+        {
+            builder.Resource.AppRoleAssignments.Add(new EntraIdAppRoleAssignment(target, [.. roleValues.Distinct(StringComparer.Ordinal)]));
+            if (target is IComputeResource)
+            {
+                EnsureManagedIdentityRequired(target);
+            }
+        }
+
+        return builder;
+    }
+
+    /// <summary>
     /// Enables ID-token issuance through implicit and hybrid flows for a registration created by Aspire.
     /// </summary>
+    /// <exception cref="InvalidOperationException">The registration is existing. Configure its ID-token issuance manually.</exception>
     /// <param name="builder">The resource builder.</param>
     /// <returns>The resource builder for chaining.</returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> is null.</exception>
@@ -1774,7 +2156,7 @@ public static class EntraIdResourceExtensions
     /// For new production applications, prefer authorization code flow with PKCE.
     /// </para>
     /// <para>
-    /// This setting only affects registrations created by Aspire. Existing registrations are not modified;
+    /// Throws for existing registrations, which Aspire does not modify;
     /// enable "ID tokens (used for implicit and hybrid flows)" in their Authentication settings instead.
     /// </para>
     /// <example>
@@ -1788,13 +2170,14 @@ public static class EntraIdResourceExtensions
     /// <ats-remarks>
     /// Enables ID-token issuance only, not implicit access-token issuance. Not needed for authorization-code-only flows;
     /// prefer authorization code flow with PKCE for new production applications.
-    /// Only affects registrations created by Aspire. Existing registrations must be configured separately.
+    /// Throws for existing registrations. Configure their Authentication settings separately.
     /// </ats-remarks>
     [AspireExport]
     public static IResourceBuilder<EntraIdApplicationResource> WithIdTokenIssuance(
         this IResourceBuilder<EntraIdApplicationResource> builder)
     {
         ArgumentNullException.ThrowIfNull(builder);
+        builder.Resource.ThrowIfExistingApplication("Enable 'ID tokens (used for implicit and hybrid flows)' in the registration's Authentication settings in the Microsoft Entra admin center.");
 
         builder.Resource.EnableIdTokenIssuance = true;
         return builder;
@@ -1879,6 +2262,7 @@ public static class EntraIdResourceExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="audience">The audience value (e.g., <c>api://&lt;client-id&gt;</c>).</param>
     /// <returns>The resource builder for chaining.</returns>
+    /// <remarks>Configures consumer token validation only. It does not change application ID URIs on created or existing registrations.</remarks>
     [AspireExport]
     public static IResourceBuilder<EntraIdApplicationResource> WithAudience(
         this IResourceBuilder<EntraIdApplicationResource> builder,
@@ -1894,6 +2278,7 @@ public static class EntraIdResourceExtensions
     /// <summary>
     /// Exposes the registration as an API identified by the default application ID URI, <c>api://{clientId}</c>.
     /// </summary>
+    /// <exception cref="InvalidOperationException">The registration is existing. Supply its registered URI explicitly instead.</exception>
     /// <param name="builder">The resource builder.</param>
     /// <returns>The resource builder for chaining.</returns>
     /// <remarks>
@@ -1913,14 +2298,10 @@ public static class EntraIdResourceExtensions
         this IResourceBuilder<EntraIdApplicationResource> builder)
     {
         ArgumentNullException.ThrowIfNull(builder);
+        builder.Resource.ThrowIfExistingApplication("Call WithApplicationIdUri with the URI that the registration already defines; Aspire does not infer an existing API's URI.");
 
         builder.Resource.UsesDefaultApplicationIdUri = true;
-
-        // A custom URI would take precedence over the default. For an existing registration the URI is configuration only and stays.
-        if (!builder.Resource.IsExistingApplication)
-        {
-            builder.Resource.ApplicationIdUri = null;
-        }
+        builder.Resource.ApplicationIdUri = null;
 
         return builder;
     }
@@ -1973,7 +2354,8 @@ public static class EntraIdResourceExtensions
     /// For a registration created by Aspire, the URI is written to the registration and must be unique in the tenant. The default api://{clientId}
     /// form is set by a second update of the registration, after Microsoft Graph creates it, and is accepted by the tenant's default policy.
     /// A custom URI fails deployment if the tenant's policy rejects it. For an existing registration, the URI is configuration only: Aspire does not
-    /// modify the registration, and getScopeUri uses the URI to build scope names for callers.
+    /// modify the registration, and getScopeUri uses the URI to build scope names for callers. Existing registrations require an explicit URI;
+    /// omitting it throws instead of inferring the registration's URI.
     /// </remarks>
     [AspireExport("withApplicationIdUri")]
     internal static IResourceBuilder<EntraIdApplicationResource> WithApplicationIdUriForExport(
@@ -2128,7 +2510,7 @@ public static class EntraIdResourceExtensions
     /// <returns>The resource builder for chaining.</returns>
     /// <exception cref="ArgumentException">A scope is not exposed or is disabled, or no scope was given.</exception>
     /// <exception cref="InvalidOperationException">
-    /// <paramref name="client"/> already declares permissions for this registration, or depends on it in another way. Pre-authorization needs the client's ID
+    /// The receiving registration is existing, or <paramref name="client"/> already declares permissions for this registration, or depends on it in another way. Pre-authorization needs the client's ID
     /// and a declaration needs this registration's ID, so each registration would wait for the other.
     /// </exception>
     /// <remarks>
@@ -2140,7 +2522,8 @@ public static class EntraIdResourceExtensions
     /// <para>
     /// Aspire deploys each registration as its own module. Pre-authorization makes this registration wait for the client's ID, while
     /// the client's declaration waits for this registration's ID, so two registrations cannot use both. Use a declaration with
-    /// <c>WithAdminConsent</c> on the client, or pre-authorization alone. This setting only affects registrations created by Aspire.
+    /// <c>WithAdminConsent</c> on the client, or pre-authorization alone. Throws if this API registration is existing;
+    /// configure its pre-authorized clients manually. An existing client can still be pre-authorized by a registration Aspire creates.
     /// </para>
     /// </remarks>
     [AspireExport]
@@ -2152,6 +2535,7 @@ public static class EntraIdResourceExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(client);
         ArgumentNullException.ThrowIfNull(scopeNames);
+        builder.Resource.ThrowIfExistingApplication("Configure pre-authorized client applications on the registration yourself in the Microsoft Entra admin center.");
 
         var scopes = FindScopes(builder.Resource, scopeNames, nameof(scopeNames));
         EnsureNoDependencyCycle(builder.Resource, client.Resource);
@@ -2170,7 +2554,7 @@ public static class EntraIdResourceExtensions
     /// <summary>
     /// Declares that this registration requires delegated permissions to scopes of another registration in the AppHost.
     /// </summary>
-    /// <param name="builder">The calling registration, which must be created by Aspire.</param>
+    /// <param name="builder">The calling registration.</param>
     /// <param name="api">The registration that exposes the scopes.</param>
     /// <param name="scopeNames">The names of the scopes, added with <see cref="WithScope"/> to <paramref name="api"/>.</param>
     /// <returns>The resource builder for chaining.</returns>
@@ -2188,6 +2572,7 @@ public static class EntraIdResourceExtensions
     /// </para>
     /// <para>
     /// A token request can cover the scopes of only one API. Request the scopes of each API in a separate token request.
+    /// For an existing caller, only consumer DownstreamApis configuration is emitted; configure its API permissions manually.
     /// </para>
     /// <example>
     /// <code lang="csharp">
@@ -2231,7 +2616,7 @@ public static class EntraIdResourceExtensions
     /// <summary>
     /// Declares that this registration requires permissions to an API that is not an Aspire resource, such as Microsoft Graph.
     /// </summary>
-    /// <param name="builder">The calling registration, which must be created by Aspire.</param>
+    /// <param name="builder">The calling registration.</param>
     /// <param name="api">The API, for example <see cref="EntraIdApi.MicrosoftGraph"/>.</param>
     /// <param name="permissions">The permissions to require.</param>
     /// <returns>The resource builder for chaining.</returns>
@@ -2241,6 +2626,7 @@ public static class EntraIdResourceExtensions
     /// This adds the permissions to the registration's <em>API permissions</em>, the list shown in the portal. It grants nothing, and it does
     /// not grant tenant-wide consent as a side effect. Use
     /// <see cref="WithAdminConsent(IResourceBuilder{EntraIdApplicationResource}, EntraIdApi, EntraIdApiPermission[])"/> to opt in to consent.
+    /// For an existing caller, only consumer DownstreamApis configuration is emitted; configure its API permissions manually.
     /// </para>
     /// <para>
     /// Delegated permissions (<see cref="EntraIdApiPermission.Delegated(string)"/>) let the application act for a signed-in user.
@@ -2312,7 +2698,7 @@ public static class EntraIdResourceExtensions
     /// <param name="scopeNames">The names of scopes already declared with <see cref="WithApiPermissions(IResourceBuilder{EntraIdApplicationResource}, IResourceBuilder{EntraIdApplicationResource}, string[])"/>.</param>
     /// <returns>The resource builder for chaining.</returns>
     /// <exception cref="ArgumentException">A scope is not exposed or is disabled, or no scope was given.</exception>
-    /// <exception cref="InvalidOperationException">A scope was not declared first.</exception>
+    /// <exception cref="InvalidOperationException">The calling registration is existing, or a scope was not declared first.</exception>
     /// <remarks>
     /// <para>
     /// This creates a delegated permission grant for all users (<c>consentType: AllPrincipals</c>) from this registration to
@@ -2322,7 +2708,8 @@ public static class EntraIdResourceExtensions
     /// See <see href="https://learn.microsoft.com/entra/identity/enterprise-apps/grant-admin-consent#prerequisites"/>.
     /// </para>
     /// <para>
-    /// A grant is neither a declaration nor a pre-authorization. This only affects registrations created by Aspire.
+    /// A grant is neither a declaration nor a pre-authorization. Throws for an existing caller; grant its consent manually
+    /// in the Microsoft Entra admin center. A created caller may consent to an existing API.
     /// </para>
     /// <para>
     /// The grant is declared in full: it is set to exactly the scopes passed to <c>WithAdminConsent</c> for this registration and
@@ -2339,6 +2726,7 @@ public static class EntraIdResourceExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(api);
         ArgumentNullException.ThrowIfNull(scopeNames);
+        builder.Resource.ThrowIfExistingApplication("Grant admin consent for the registration's API permissions yourself in the Microsoft Entra admin center.");
 
         var apiResource = api.Resource;
         var scopes = FindScopes(apiResource, scopeNames, nameof(scopeNames));
@@ -2358,7 +2746,7 @@ public static class EntraIdResourceExtensions
     /// <param name="api">The API, for example <see cref="EntraIdApi.MicrosoftGraph"/>.</param>
     /// <param name="permissions">Permissions already declared with <see cref="WithApiPermissions(IResourceBuilder{EntraIdApplicationResource}, EntraIdApi, EntraIdApiPermission[])"/>.</param>
     /// <returns>The resource builder for chaining.</returns>
-    /// <exception cref="InvalidOperationException">A permission was not declared first.</exception>
+    /// <exception cref="InvalidOperationException">The calling registration is existing, or a permission was not declared first.</exception>
     /// <remarks>
     /// <para>
     /// A delegated permission becomes a delegated permission grant for all users (<c>consentType: AllPrincipals</c>).
@@ -2380,7 +2768,7 @@ public static class EntraIdResourceExtensions
     /// <c>AppRoleAssignment.ReadWrite.All</c> Microsoft Graph permission when deploying as an application. See
     /// <see href="https://learn.microsoft.com/entra/identity/enterprise-apps/grant-admin-consent#prerequisites"/>. Application permissions to broad
     /// scopes such as <c>Directory.Read.All</c> give the application access to the whole tenant, so grant only what the application needs.
-    /// This only affects registrations created by Aspire.
+    /// Throws for an existing caller; grant its consent manually in the Microsoft Entra admin center.
     /// </para>
     /// <example>
     /// <code lang="csharp">
@@ -2399,6 +2787,7 @@ public static class EntraIdResourceExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(api);
         ArgumentNullException.ThrowIfNull(permissions);
+        builder.Resource.ThrowIfExistingApplication("Grant admin consent for the registration's API permissions yourself in the Microsoft Entra admin center.");
 
         if (permissions.Length == 0)
         {
@@ -2426,7 +2815,7 @@ public static class EntraIdResourceExtensions
     /// A delegated permission becomes a delegated permission grant for all users. An application permission becomes an app role assignment
     /// to this registration's service principal. The deploying identity needs a directory role or Microsoft Graph permission that allows consent, and deployment fails without it.
     /// Application permissions to broad scopes such as Directory.Read.All give the application access to the whole tenant, so grant only what the application needs.
-    /// Throws when a permission was not declared first. This only affects registrations created by Aspire; consent is not deployed for an existing registration.
+    /// Throws when a permission was not declared first or the caller is an existing registration. Grant consent for existing registrations manually.
     /// Consent is not additive. The delegated grant is declared in full: it is set to exactly the delegated permissions passed to withExternalApiAdminConsent
     /// for this registration and API, so a permission granted to the pair outside Aspire, or removed from the calls while others remain, is revoked by the next deployment.
     /// When no delegated call remains for the pair, nothing is sent and the existing grant stays. Each application permission is a separate app role assignment:
@@ -2634,7 +3023,7 @@ public static class EntraIdResourceExtensions
     ///         tenantId: tenantId,
     ///         clientId: clientId);
     ///
-    /// builder.AddProject&lt;Projects.Api&gt;("api")
+    /// builder.AddDotnetProject("api", "../Api/Api.csproj")
     ///     .WithReference(entraApi);
     /// </code>
     /// </example>
@@ -2706,6 +3095,17 @@ public static class EntraIdResourceExtensions
         // Create a reference relationship so the dashboard shows the connection
         builder.WithReferenceRelationship(entra);
         entra.Consumers.Add(builder.Resource);
+
+        if (builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
+        {
+            foreach (var credential in entra.ClientCredentials.OfType<EntraIdKeyVaultCertificateCredential>())
+            {
+                if (credential.KeyVault is { } keyVault)
+                {
+                    AddKeyVaultCertificateAccess(builder.Resource, keyVault);
+                }
+            }
+        }
 
         // That section is a sibling of AzureAd, not part of it, so a .NET program's entries ignore the connection name.
         var environmentVariablePrefix = isDotnetProgram ? $"{downstreamApisPrefix}__" : $"{keyPrefix}{downstreamApisPrefix}_";
@@ -2841,7 +3241,7 @@ public static class EntraIdResourceExtensions
 }
 
 /// <summary>
-/// Optional settings for a scope exposed by a registration created by Aspire.
+/// Optional settings for a scope exposed by a created registration or described by an existing reference.
 /// </summary>
 [AspireDto]
 internal sealed class EntraIdScopeOptions

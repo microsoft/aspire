@@ -51,7 +51,7 @@ public class EmojiWidthTests
     [InlineData(false, true)]
     [InlineData(true, false)]
     [InlineData(true, true)]
-    public void FormatEmojiPrefix_WarningReservesAVisibleGap(bool replaceEmoji, bool suppressColor)
+    public void FormatEmojiPrefix_PoliceCarLightUsesSingleSpace(bool replaceEmoji, bool suppressColor)
     {
         var console = AnsiConsole.Create(new AnsiConsoleSettings
         {
@@ -59,18 +59,18 @@ public class EmojiWidthTests
             ColorSystem = ColorSystemSupport.NoColors,
             Out = new AnsiConsoleOutput(new StringWriter())
         });
-        var expectedEmoji = replaceEmoji ? Emoji.Replace(":warning:")
-            : suppressColor ? ":warning:" : "[yellow]:warning:[/]";
+        var expectedEmoji = replaceEmoji ? "\U0001F6A8"
+            : suppressColor ? ":police_car_light:" : "[red]:police_car_light:[/]";
 
-        var prefix = ConsoleHelpers.FormatEmojiPrefix(KnownEmojis.Warning, console, replaceEmoji, suppressColor);
+        var prefix = ConsoleHelpers.FormatEmojiPrefix(KnownEmojis.PoliceCarLight, console, replaceEmoji, suppressColor);
 
-        Assert.Equal($"{expectedEmoji}  ", prefix);
+        Assert.Equal($"{expectedEmoji} ", prefix);
     }
 
     [Theory]
-    [InlineData(40, "Use the Aspire plugin at your own\n    risk.\n    Review the source before enabling\n    it.")]
-    [InlineData(100, "Use the Aspire plugin at your own risk.\n    Review the source before enabling it.")]
-    public void CreateEmojiGrid_WarningKeepsAGutterAroundWrappedText(int width, string expectedMessage)
+    [InlineData(40, "Use the Aspire plugin at your own\n   risk.\n   Review the source before enabling it.")]
+    [InlineData(100, "Use the Aspire plugin at your own risk.\n   Review the source before enabling it.")]
+    public void CreateEmojiGrid_PoliceCarLightKeepsWrappedTextAligned(int width, string expectedMessage)
     {
         var output = new StringBuilder();
         var console = AnsiConsole.Create(new AnsiConsoleSettings
@@ -81,11 +81,11 @@ public class EmojiWidthTests
         });
         console.Profile.Width = width;
 
-        console.Write(ConsoleHelpers.CreateEmojiGrid(KnownEmojis.Warning, console,
+        console.Write(ConsoleHelpers.CreateEmojiGrid(KnownEmojis.PoliceCarLight, console,
             new Text("Use the Aspire plugin at your own risk.\nReview the source before enabling it.")));
 
         var lines = output.ToString().Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
-        Assert.Equal($"{Emoji.Replace(":warning:")}  {expectedMessage}",
+        Assert.Equal($"\U0001F6A8 {expectedMessage}",
             string.Join('\n', lines.Select(line => line.TrimEnd())));
     }
 }

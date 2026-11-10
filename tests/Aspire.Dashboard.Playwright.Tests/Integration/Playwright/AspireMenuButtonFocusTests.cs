@@ -34,7 +34,7 @@ public class AspireMenuButtonFocusTests : PlaywrightTestsBase<DashboardServerFix
             //
             // Keep the host for focus restoration. Expanded-state behavior is covered by
             // ResourcesTests.ViewOptionsMenu_ReportsExpandedState.
-            var clearButton = page.Locator($"fluent-button[title='{ControlsStrings.ClearSignalsButtonTitle}'][aria-haspopup='menu']").First;
+            var clearButton = page.GetByRole(AriaRole.Button, new() { Name = ControlsStrings.ClearSignalsButtonTitle, Exact = true });
             var clearButtonId = await clearButton.GetAttributeAsync("id");
             Assert.False(string.IsNullOrEmpty(clearButtonId));
 

@@ -17,6 +17,7 @@ namespace Aspire.Hosting.CodeGeneration.Go.Tests;
 /// generator emits for parameters typed with such a base handle type, which lets a builder of any derived
 /// type be passed wherever the AppHost API takes the base type.
 /// </summary>
+[RequiresTools(["gofmt"])]
 public class AtsGoDerivedBuilderTests
 {
     private readonly AtsGoCodeGenerator _generator = new();
@@ -132,7 +133,7 @@ public class AtsGoDerivedBuilderTests
             [
                 "WithAksPool(pool AnyAksPoolResource) WorkloadResource",
                 "WithGpuSpotPool(pool GpuSpotPoolResource) WorkloadResource",
-                "WithOptionalPool(name string, options ...*WithOptionalPoolOptions) WorkloadResource",
+                "WithOptionalPool(name string, options ...WithOptionalPoolOption) WorkloadResource",
                 "WithPool(pool AnyPoolResource) WorkloadResource",
                 "WithPoolCallback(configure func(pool PoolResource)) WorkloadResource",
                 "WithPoolList(pools *List[PoolResource]) WorkloadResource",
@@ -147,12 +148,31 @@ public class AtsGoDerivedBuilderTests
 
         // DTO fields and options struct fields are parameter-like positions too. An optional handle parameter
         // is a pointer field in its options struct.
-        Assert.Matches(@"type PoolSettings struct \{\r?\n\tPool AnyPoolResource `json:""pool,omitempty""`", generated);
-        Assert.Matches(@"type WithOptionalPoolOptions struct \{\r?\n\tPool \*AnyPoolResource `json:""pool,omitempty""`", generated);
+        Assert.Matches(@"type PoolSettings struct \{\r?\n\tPool\s+AnyPoolResource `json:""pool,omitempty""`", generated);
+        Assert.Matches(@"type WithOptionalPoolOptions struct \{\r?\n\tPool\s+\*AnyPoolResource `json:""pool,omitempty""`", generated);
 
         // The runtime guard for a union parameter must accept derived builders as well.
         Assert.Contains("// Allowed types for parameter pool: AnyPoolResource, string.", generated, StringComparison.Ordinal);
         Assert.Contains("case AnyPoolResource, string:", generated, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ApiExport_UnionAllowedTypesListTheAcceptingInterfaceOfABaseHandle()
+    {
+        var model = new AtsGoCodeGenerator().BuildApiModel(
+            DerivedBuilderFixture.CreateContext(),
+            "Tests.Derived",
+            "1.0.0",
+            ["Tests.Derived"],
+            CancellationToken.None);
+
+        var workload = Assert.Single(model.Modules.Single().Items, item => item.Id == "interface:WorkloadResource");
+        var pool = Assert.Single(Assert.Single(workload.Members, member => member.Name == "WithPoolOrName").Parameters);
+
+        // The union holds the base handle type, so the guard accepts derived builders through its accepting
+        // interface and the reference has to list that interface, not the concrete handle type.
+        Assert.Equal<string>(["AnyPoolResource", "string"], pool.AllowedTypes);
+        Assert.Contains($"case {string.Join(", ", pool.AllowedTypes)}:", GenerateFixtureSdk(), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -446,7 +466,7 @@ public class AtsGoDerivedBuilderTests
             .ToArray();
 
     private static string[] GetImplMarkers(string generated) =>
-        Regex.Matches(generated, @"^func \(\*(\w+)\) (is\w+)\(\) \{\}", RegexOptions.Multiline)
+        Regex.Matches(generated, @"func\s+\(\*(\w+)\)\s+(is\w+)\(\)\s+\{\}")
             .Select(match => $"{match.Groups[1].Value}.{match.Groups[2].Value}")
             .Order(StringComparer.Ordinal)
             .ToArray();

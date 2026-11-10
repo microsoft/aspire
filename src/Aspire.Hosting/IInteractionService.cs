@@ -20,6 +20,11 @@ public interface IInteractionService
     /// this service is not available to interact with the user and service methods will throw
     /// an exception.
     /// </summary>
+    /// <remarks>
+    /// The service is not available until the app host has completed its before-start hooks, such as
+    /// <see cref="ApplicationModel.BeforeStartEvent"/> subscribers, because the dashboard and CLI that respond
+    /// to interactions haven't started yet.
+    /// </remarks>
     bool IsAvailable { get; }
 
     /// <summary>
@@ -970,6 +975,10 @@ public class NotificationInteractionOptions : InteractionOptions
     /// Gets or sets the URL for the link in the notification.
     /// </summary>
     public string? LinkUrl { get; set; }
+
+    // Identifies the unresolved parameters notification to the dashboard through the protocol, so the dashboard
+    // doesn't have to recognize it from its text or link. Internal because only the parameter processor sends it.
+    internal IReadOnlyList<string>? UnresolvedParameterNames { get; init; }
 }
 
 /// <summary>

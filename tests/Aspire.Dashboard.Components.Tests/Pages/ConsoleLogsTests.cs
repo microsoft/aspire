@@ -170,6 +170,53 @@ public partial class ConsoleLogsTests : DashboardTestContext
     }
 
     [Fact]
+    public void ResourceName_ChangedToMissingResource_StopsShowingPreviousLogsAndNamesDownloadAfterIt()
+    {
+        var consoleLogsChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
+        var resourceChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        var testResource = ModelTestHelpers.CreateResource(resourceName: "test-resource", state: KnownResourceState.Running);
+        var dashboardClient = new TestDashboardClient(
+            isEnabled: true,
+            consoleLogsChannelProvider: name => consoleLogsChannel,
+            resourceChannelProvider: () => resourceChannel,
+            initialResources: [testResource]);
+
+        SetupConsoleLogsServices(dashboardClient);
+
+        var navigationManager = Services.GetRequiredService<NavigationManager>();
+        navigationManager.NavigateTo(DashboardUrls.ConsoleLogsUrl(resource: "test-resource"));
+
+        var dimensionManager = Services.GetRequiredService<DimensionManager>();
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        dimensionManager.InvokeOnViewportInformationChanged(viewport);
+
+        var cut = Render<Components.Pages.ConsoleLogs>(builder =>
+        {
+            builder.Add(p => p.ResourceName, "test-resource");
+            builder.Add(p => p.ViewportInformation, viewport);
+        });
+        var instance = cut.Instance;
+
+        cut.WaitForState(() => instance.PageViewModel.SelectedResource.Id?.InstanceId == testResource.Name);
+        consoleLogsChannel.Writer.TryWrite([new ResourceLogLine(1, "Test content", IsErrorMessage: false)]);
+        cut.WaitForState(() => instance._logEntries.GetEntries().Count == 1);
+
+        // A link to a resource that doesn't exist, such as a replica that was replaced. The previous resource's logs
+        // must not keep showing, or streaming, under the missing resource's header.
+        navigationManager.NavigateTo(DashboardUrls.ConsoleLogsUrl(resource: "missing"));
+        cut.Render(builder => builder.Add(p => p.ResourceName, "missing"));
+
+        cut.WaitForState(() => instance.PageViewModel.SelectedResource is { Id: null, Name: "missing" });
+        cut.WaitForState(() => instance._logEntries.GetEntries().Count == 0);
+        consoleLogsChannel.Writer.TryWrite([new ResourceLogLine(2, "Late content", IsErrorMessage: false)]);
+        consoleLogsChannel.Writer.Complete();
+        Assert.Empty(instance._logEntries.GetEntries());
+
+        // The placeholder has no ID; downloading uses the requested name.
+        Assert.StartsWith("missing-", instance.GetFileName());
+    }
+
+    [Fact]
     public async Task ToggleHiddenResources_HiddenResourceVisibilityAndSelection_WorksCorrectly()
     {
         // Arrange
@@ -217,7 +264,7 @@ public partial class ConsoleLogsTests : DashboardTestContext
             resource => Assert.Equal("regular-resource2", resource.Name));
 
         // Act & Assert 2: Click the settings menu button to show the menu, then click "Show hidden resources"
-        var settingsMenuButton = cut.Find("fluent-button[title='" + Resources.ConsoleLogs.ConsoleLogsSettings + "']");
+        var settingsMenuButton = cut.Find("fluent-button[data-tooltip='" + Resources.ConsoleLogs.ConsoleLogsSettings + "']");
         Assert.NotNull(settingsMenuButton);
         settingsMenuButton.Click();
 
@@ -293,7 +340,7 @@ public partial class ConsoleLogsTests : DashboardTestContext
         cut.WaitForState(() => instance.PageViewModel.SelectedResource?.Id?.InstanceId == "test-resource");
 
         // Act: Click the settings menu button
-        var settingsMenuButton = cut.Find("fluent-button[title='" + Resources.ConsoleLogs.ConsoleLogsSettings + "']");
+        var settingsMenuButton = cut.Find("fluent-button[data-tooltip='" + Resources.ConsoleLogs.ConsoleLogsSettings + "']");
         Assert.NotNull(settingsMenuButton);
         settingsMenuButton.Click();
 
@@ -1104,7 +1151,7 @@ public partial class ConsoleLogsTests : DashboardTestContext
         FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
         FluentUISetupHelpers.SetupFluentToolbar(this);
 
-        JSInterop.SetupVoid("focusElement", _ => true);
+        JSInterop.SetupVoid("focusElement", _ => true).SetVoidResult();
 
         FluentUISetupHelpers.AddCommonDashboardServices(this, browserTimeProvider: timeProvider);
 

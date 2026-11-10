@@ -133,6 +133,15 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Cannot modify &apos;{0}&apos; because channel source &apos;{1}&apos; is disabled, or the source or its package mappings are inherited or user-owned. Update the NuGet configuration manually instead..
+        /// </summary>
+        internal static string ChannelFeedAlreadyConfiguredFormat {
+            get {
+                return ResourceManager.GetString("ChannelFeedAlreadyConfiguredFormat", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to (none).
         /// </summary>
         internal static string ChannelNonePlaceholder {

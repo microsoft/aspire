@@ -92,6 +92,7 @@
     <Project Path="src/Aspire.TypeSystem/Aspire.TypeSystem.csproj" />
   </Folder>
   <Folder Name="/Hosting/Azure/">
+    <Project Path="src/Aspire.Hosting.Azure.ApiManagement/Aspire.Hosting.Azure.ApiManagement.csproj" />
     <Project Path="src/Aspire.Hosting.Azure.AppConfiguration/Aspire.Hosting.Azure.AppConfiguration.csproj" />
     <Project Path="src/Aspire.Hosting.Azure.AppContainers/Aspire.Hosting.Azure.AppContainers.csproj" />
     <Project Path="src/Aspire.Hosting.Azure.ApplicationInsights/Aspire.Hosting.Azure.ApplicationInsights.csproj" />
@@ -121,6 +122,7 @@
     <Project Path="src/Aspire.Hosting.Azure.Provisioning.ContainerRegistry/Aspire.Hosting.Azure.Provisioning.ContainerRegistry.csproj" />
     <Project Path="src/Aspire.Hosting.Azure.Provisioning.ContainerService/Aspire.Hosting.Azure.Provisioning.ContainerService.csproj" />
     <Project Path="src/Aspire.Hosting.Azure.Provisioning.CosmosDB/Aspire.Hosting.Azure.Provisioning.CosmosDB.csproj" />
+    <Project Path="src/Aspire.Hosting.Azure.Provisioning.EntraId/Aspire.Hosting.Azure.Provisioning.EntraId.csproj" />
     <Project Path="src/Aspire.Hosting.Azure.Provisioning.EventHubs/Aspire.Hosting.Azure.Provisioning.EventHubs.csproj" />
     <Project Path="src/Aspire.Hosting.Azure.Provisioning.KeyVault/Aspire.Hosting.Azure.Provisioning.KeyVault.csproj" />
     <Project Path="src/Aspire.Hosting.Azure.Provisioning.Kusto/Aspire.Hosting.Azure.Provisioning.Kusto.csproj" />
@@ -196,6 +198,13 @@
   <Folder Name="/playground/AzureAppService/">
     <Project Path="playground/AzureAppService/AzureAppService.ApiService/AzureAppService.ApiService.csproj" />
     <Project Path="playground/AzureAppService/AzureAppService.AppHost/AzureAppService.AppHost.csproj" />
+  </Folder>
+  <Folder Name="/playground/AzureApiManagement/">
+    <Project Path="playground/AzureApiManagement/AzureApiManagement.ApiService/AzureApiManagement.ApiService.csproj" />
+    <Project Path="playground/AzureApiManagement/AzureApiManagement.AppHost/AzureApiManagement.AppHost.csproj" />
+  </Folder>
+  <Folder Name="/playground/AzureApiManagementOpenAI/">
+    <Project Path="playground/AzureApiManagementOpenAI/AzureApiManagementOpenAI.AppHost/AzureApiManagementOpenAI.AppHost.csproj" />
   </Folder>
   <Folder Name="/playground/AzureContainerApps/">
     <Project Path="playground/AzureContainerApps/AzureContainerApps.ApiService/AzureContainerApps.ApiService.csproj" />
@@ -457,6 +466,7 @@
     <Project Path="playground/Testing/Testing.Tests/Testing.Tests.csproj" />
   </Folder>
   <Folder Name="/playground/TestShop/">
+    <Project Path="playground/TestShop/ActivityGenerator/ActivityGenerator.csproj" />
     <Project Path="playground/TestShop/BasketService/BasketService.csproj" />
     <Project Path="playground/TestShop/CatalogDb/CatalogDb.csproj" />
     <Project Path="playground/TestShop/CatalogModel/CatalogModel.csproj" />
@@ -500,6 +510,7 @@
     <Project Path="src/Aspire.Hosting.CodeGeneration.TypeScript/Aspire.Hosting.CodeGeneration.TypeScript.csproj" />
     <Project Path="src/Aspire.Hosting.RemoteHost/Aspire.Hosting.RemoteHost.csproj" />
     <Project Path="src/Aspire.Managed/Aspire.Managed.csproj" />
+    <Project Path="src/Aspire.Tray/Linux/Aspire.Tray.Linux.csproj" />
     <Project Path="src/Aspire.Tray/Mac/Aspire.Tray.Mac.csproj" />
     <Project Path="src/Aspire.Tray/Windows/Aspire.Tray.Windows.csproj" />
   </Folder>
@@ -516,6 +527,7 @@
     <Project Path="tests/Aspire.Templates.Tests/Aspire.Templates.Tests.csproj" />
     <Project Path="tests/Aspire.TestUtilities/Aspire.TestUtilities.csproj" />
     <Project Path="tests/ConfigurationSchemaGenerator.Tests/ConfigurationSchemaGenerator.Tests.csproj" />
+    <Project Path="tests/AnalyzeCiFailure.Tests/AnalyzeCiFailure.Tests.csproj" />
     <Project Path="tests/Infrastructure.Tests/Infrastructure.Tests.csproj" />
     <Project Path="tests/QuarantineTools.Tests/QuarantineTools.Tests.csproj" />
   </Folder>
@@ -639,6 +651,7 @@
     <Project Path="tests/testproject/TestProject.WorkerA/TestProject.WorkerA.csproj" />
   </Folder>
   <Folder Name="/Tools/">
+    <Project Path="tools/AnalyzeCiFailure/AnalyzeCiFailure.csproj" />
     <Project Path="src/Tools/ConfigurationSchemaGenerator/ConfigurationSchemaGenerator.csproj" />
     <Project Path="tools/Aspire.TestTools/Aspire.TestTools.csproj" />
     <Project Path="tools/AspireMcpTools/AspireMcpTools.csproj" />

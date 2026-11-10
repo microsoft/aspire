@@ -17,4 +17,8 @@
     <ProjectReference Include="..\Aspire.Components.Common.TestUtilities\Aspire.Components.Common.TestUtilities.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Include="$(TestsSharedDir)UnavailableTokenCredential.cs" Link="Shared\UnavailableTokenCredential.cs" />
+  </ItemGroup>
+
 </Project>

@@ -78,6 +78,7 @@ In your AppHost project, install the `Aspire.Hosting.Milvus` library with [NuGet
 
 ```dotnetcli
 dotnet add package Aspire.Hosting.Milvus
+dotnet add package Aspire.Hosting.Dotnet
 ```
 
 Then, in the _AppHost.cs_ file of `AppHost`, register a Milvus server and consume the connection using the following methods:
@@ -85,7 +86,7 @@ Then, in the _AppHost.cs_ file of `AppHost`, register a Milvus server and consum
 ```csharp
 var milvus = builder.AddMilvus("milvus");
 
-var myService = builder.AddProject<Projects.MyService>()
+var myService = builder.AddDotnetProject("myservice", "../MyService/MyService.csproj")
                        .WithReference(milvus);
 ```
 

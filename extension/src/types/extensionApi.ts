@@ -1,5 +1,5 @@
 import type * as vscode from 'vscode';
-import type { DebugLaunchSettings, EnvVar, ExecutableLaunchConfiguration } from '../dcp/types';
+import type { DebugLaunchSettings, EnvVar, ExecutableLaunchConfiguration, ProjectLaunchConfiguration } from '../dcp/types';
 import type { ViewMode } from '../data/AppHostDataRepository';
 import type { CommandInvocationEvent } from '../utils/telemetry';
 import type { AspireTerminalCommandEvent } from '../utils/AspireTerminalProvider';
@@ -235,6 +235,7 @@ export type AspireExtensionE2EControlCommand =
     | { name: 'startDebugging'; configurationName: string }
     | { name: 'stopDebugging' }
     | { name: 'closeAllEditors' }
+    | { name: 'clearAllNotifications' }
     | { name: 'getRegisteredAspireCommands' }
     | { name: 'getRegisteredLanguageModelTools' }
     | { name: 'prepareLanguageModelToolInvocation'; toolName: string; input: Record<string, unknown> }
@@ -267,6 +268,7 @@ export type AspireExtensionE2EControlCommand =
     | { name: 'getSupportedCapabilities' }
     | { name: 'getVisibleExtensionIds' }
     | { name: 'waitForJavaLanguageServer'; timeoutMs?: number }
+    | { name: 'waitForCSharpProjectInitialization'; timeoutMs?: number }
     | {
         name: 'createResourceDebugConfiguration';
         launchConfig: ExecutableLaunchConfiguration;
@@ -291,6 +293,17 @@ export type AspireExtensionE2EControlCommand =
         timeoutMs?: number;
     }
     | { name: 'proveAppHostAndResourceDebugging'; appHostPath: string; resourceName: string; appHostSourcePath: string; appHostBreakpointLine: number; resourceSourcePath: string; resourceBreakpointLine: number; resourceRequestPath?: string; continueExceptionStops?: boolean; timeoutMs?: number }
+    | {
+        name: 'proveDotnetResourceLaunch';
+        launchConfig: ProjectLaunchConfiguration;
+        sourcePath: string;
+        breakpointLine: number;
+        readyFilePath: string;
+        debug: boolean;
+        args?: readonly string[];
+        env?: readonly EnvVar[];
+        timeoutMs?: number;
+    }
     | { name: 'prepareBlazorWasmDebugger' }
     | {
         name: 'proveBlazorWasmDebugging';

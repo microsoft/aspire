@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
 using System.IO.Compression;
 using System.Xml.Linq;
 using Aspire.Cli.Configuration;
@@ -59,12 +60,13 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
     public string Name { get; } = name;
     public PackageChannelQuality Quality { get; } = quality;
     public PackageMapping[]? Mappings { get; } = mappings;
-    public PackageChannelType Type { get; } = mappings is null ? PackageChannelType.Implicit : PackageChannelType.Explicit;
+    public PackageChannelType Type { get; private init; } = mappings is null ? PackageChannelType.Implicit : PackageChannelType.Explicit;
     public bool ConfigureGlobalPackagesFolder { get; } = configureGlobalPackagesFolder;
     public string? CliDownloadBaseUrl { get; } = cliDownloadBaseUrl;
     public string? PinnedVersion { get; } = pinnedVersion;
+    public IntegrationSourceConfiguration? IntegrationSource { get; init; }
 
-    public string SourceDetails { get; } = ComputeSourceDetails(mappings);
+    public string SourceDetails => IntegrationSource?.Source ?? ComputeSourceDetails(Mappings);
 
     public bool ShouldPersistChannelName() =>
         Type is PackageChannelType.Explicit && !string.Equals(Name, PackageChannelNames.Stable, StringComparisons.ChannelName);
@@ -242,7 +244,7 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
         return filteredPackages;
     }
 
-    public Task<IEnumerable<NuGetPackage>> GetIntegrationPackagesAsync(DirectoryInfo workingDirectory, CancellationToken cancellationToken)
+    public Task<PackageSearchResult<NuGetPackage>> GetIntegrationPackagesAsync(DirectoryInfo workingDirectory, CancellationToken cancellationToken)
     {
         return GetIntegrationPackagesAsync(
             workingDirectory,
@@ -252,7 +254,7 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
             cancellationToken);
     }
 
-    public Task<IEnumerable<NuGetPackage>> GetIntegrationPackagesAsync(
+    public Task<PackageSearchResult<NuGetPackage>> GetIntegrationPackagesAsync(
         DirectoryInfo workingDirectory,
         PackageMapping[] mappings,
         CancellationToken cancellationToken)
@@ -267,23 +269,34 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
             cancellationToken);
     }
 
-    private async Task<IEnumerable<NuGetPackage>> GetIntegrationPackagesAsync(
+    private async Task<PackageSearchResult<NuGetPackage>> GetIntegrationPackagesAsync(
         DirectoryInfo workingDirectory,
         PackageMapping[]? mappings,
         bool applyPinnedVersion,
         bool hasExplicitSourceOverride,
         CancellationToken cancellationToken)
     {
-        if (GetLocalAspirePackageSource(mappings) is { } localPackageSource)
+        var startTimestamp = Stopwatch.GetTimestamp();
+        var channelName = PackageSourceRedactor.RedactForDisplay(Name);
+        var sourceDetails = PackageSourceRedactor.RedactForDisplay(IntegrationSource?.Source ?? ComputeSourceDetails(mappings));
+        var patterns = IntegrationSource?.Patterns ?? mappings?.Select(mapping => mapping.PackageFilter).ToArray();
+        logger.LogDebug(
+            "Starting integration discovery for channel '{ChannelName}' from '{Source}'. Patterns: {Patterns}.",
+            channelName, sourceDetails, patterns is null ? "(built-in)" : string.Join(", ", patterns));
+
+        if (GetLocalIntegrationPackageSource(mappings) is { } localPackageSource)
         {
-            return GetIntegrationPackagesFromLocalPackageSource(
-                localPackageSource.Source,
-                localPackageSource.PackageSource,
-                applyPinnedVersion ? GetLocalPackageVersion(workingDirectory) : null,
-                cancellationToken);
+            var packageVersion = applyPinnedVersion ? GetLocalPackageVersion(workingDirectory) : null;
+            var result = SearchLocalSourceSafely(() => GetIntegrationPackagesFromLocalPackageSource(
+                localPackageSource.Source, localPackageSource.PackageSource, packageVersion, cancellationToken), cancellationToken);
+            logger.LogDebug(
+                "Local integration discovery for channel '{ChannelName}' from '{Source}' found {PackageCount} packages in {ElapsedMilliseconds} ms.",
+                channelName, sourceDetails, result.Packages.Count, Stopwatch.GetElapsedTime(startTimestamp).TotalMilliseconds);
+
+            return result;
         }
 
-        var tasks = new List<Task<IEnumerable<NuGetPackage>>>();
+        var tasks = new List<Task<PackageSearchResult<NuGetPackage>>>();
 
         using var searchConfiguration = await CreatePackageOperationConfigurationAsync(
             workingDirectory,
@@ -291,21 +304,38 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
             hasExplicitSourceOverride,
             cancellationToken);
 
-        if (Quality is PackageChannelQuality.Stable || Quality is PackageChannelQuality.Both)
+        if (IntegrationSource is { } integrationSource)
         {
-            tasks.Add(nuGetPackageCache.GetIntegrationPackagesAsync(searchConfiguration, false, cancellationToken));
-        }
+            var searchTerms = integrationSource.SearchTerms.ToArray();
+            logger.LogDebug(
+                "Searching integration source '{SourceName}' with queries: {Queries}.",
+                integrationSource.Name, string.Join(", ", searchTerms.Select(term => $"'{term}'")));
 
-        if (Quality is PackageChannelQuality.Prerelease || Quality is PackageChannelQuality.Both)
+            // NuGet feeds do not consistently support OR queries. Search each prefix or exact ID
+            // separately so disjoint patterns cannot broaden discovery to the entire feed.
+            foreach (var searchTerm in searchTerms)
+            {
+                tasks.Add(SearchIntegrationPackagesAsync(searchConfiguration, integrationSource, searchTerm, cancellationToken));
+            }
+        }
+        else
         {
-            tasks.Add(nuGetPackageCache.GetIntegrationPackagesAsync(searchConfiguration, true, cancellationToken));
+            if (Quality is PackageChannelQuality.Stable || Quality is PackageChannelQuality.Both)
+            {
+                tasks.Add(nuGetPackageCache.GetIntegrationPackagesAsync(searchConfiguration, false, cancellationToken));
+            }
+
+            if (Quality is PackageChannelQuality.Prerelease || Quality is PackageChannelQuality.Both)
+            {
+                tasks.Add(nuGetPackageCache.GetIntegrationPackagesAsync(searchConfiguration, true, cancellationToken));
+            }
         }
 
         var packageResults = await Task.WhenAll(tasks);
 
         var packages = packageResults
-            .SelectMany(p => p)
-            .DistinctBy(p => $"{p.Id}-{p.Version}");
+            .SelectMany(result => result.Packages)
+            .DistinctBy(p => (Id: p.Id.ToUpperInvariant(), Version: p.Version.ToUpperInvariant(), Source: PackageSourceIdentity.Normalize(p.Source)));
 
         // When doing a `dotnet package search` the results may include stable packages even when searching for
         // prerelease packages. This filters out this noise.
@@ -315,16 +345,69 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
             { Quality: PackageChannelQuality.Stable, SemVer: { IsPrerelease: false } } => true,
             { Quality: PackageChannelQuality.Prerelease, SemVer: { IsPrerelease: true } } => true,
             _ => false
-        });
+        }).ToArray();
+
+        logger.LogDebug(
+            "Integration discovery for channel '{ChannelName}' from '{Source}' found {PackageCount} distinct packages in {ElapsedMilliseconds} ms.",
+            channelName, sourceDetails, filteredPackages.Length, Stopwatch.GetElapsedTime(startTimestamp).TotalMilliseconds);
 
         // When pinned to a specific version, override the version on each discovered package
         // so the correct version gets installed regardless of what the feed reports as latest.
         if (applyPinnedVersion && PinnedVersion is not null)
         {
-            return filteredPackages.Select(p => new NuGetPackage { Id = p.Id, Version = PinnedVersion, Source = p.Source });
+            filteredPackages = filteredPackages.Select(p => new NuGetPackage { Id = p.Id, Version = PinnedVersion, Source = p.Source }).ToArray();
         }
 
-        return filteredPackages;
+        return new(
+            filteredPackages,
+            packageResults.Any(result => result.LimitReached),
+            packageResults.SelectMany(result => result.FailedSources).Distinct(StringComparer.OrdinalIgnoreCase).ToArray());
+    }
+
+    private async Task<PackageSearchResult<NuGetPackage>> SearchIntegrationPackagesAsync(
+        NuGetPackageOperationConfiguration configuration,
+        IntegrationSourceConfiguration source,
+        string query,
+        CancellationToken cancellationToken)
+    {
+        var startTimestamp = Stopwatch.GetTimestamp();
+        var sourceDetails = PackageSourceRedactor.RedactForDisplay(source.Source!);
+        logger.LogDebug(
+            "Searching integration source '{SourceName}' ({Source}) for query '{Query}'.",
+            source.Name, sourceDetails, query);
+
+        var result = await nuGetPackageCache.GetPackagesAsync(configuration, query,
+            id => source.AllowsPackage(id) &&
+                (_features.IsFeatureEnabled(KnownFeatures.ShowDeprecatedPackages, defaultValue: false) || !DeprecatedPackages.IsDeprecated(id)),
+            prerelease: true, useCache: true, cancellationToken);
+
+        logger.LogDebug(
+            "Integration query '{Query}' from source '{SourceName}' ({Source}) matched {PackageCount} packages in {ElapsedMilliseconds} ms.",
+            query, source.Name, sourceDetails, result.Packages.Count, Stopwatch.GetElapsedTime(startTimestamp).TotalMilliseconds);
+
+        return result;
+    }
+
+    private (string Source, DirectoryInfo PackageSource)? GetLocalIntegrationPackageSource(PackageMapping[]? mappings)
+        => IntegrationSource?.Source is { } source && PackageSourceOverrideMappings.GetNormalizedLocalDirectory(source) is { } directory
+            ? (source, new DirectoryInfo(directory))
+            : GetLocalAspirePackageSource(mappings);
+
+    private PackageSearchResult<T> SearchLocalSourceSafely<T>(Func<IEnumerable<T>> search, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        try
+        {
+            return new(search().ToArray(), LimitReached: false, FailedSources: []);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            // Folder feeds bypass NuGet's per-source error handling, including during polyglot tag scans.
+            var sourceName = PackageSourceRedactor.RedactForDisplay(IntegrationSource?.Name ?? Name);
+            logger.LogWarning("Failed to search local NuGet source '{Source}': {ExceptionType}.", sourceName, ex.GetType().Name);
+            return new([], LimitReached: false, FailedSources: [sourceName]);
+        }
     }
 
     private static (string Source, DirectoryInfo PackageSource)? GetLocalAspirePackageSource(PackageMapping[]? mappings)
@@ -403,7 +486,7 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
         var packageMetadata = EnumerateLocalPackageFiles(packageSource, cancellationToken)
             .Select(file => GetPackageFileMetadata(file.FullName))
             .OfType<PackageFileMetadata>()
-            .Where(metadata => PackageIdFilters.IsIntegrationPackageId(metadata.PackageId))
+            .Where(metadata => IntegrationSource is { } source ? source.AllowsPackage(metadata.PackageId) : PackageIdFilters.IsIntegrationPackageId(metadata.PackageId))
             .Where(metadata => showDeprecatedPackages || !DeprecatedPackages.IsDeprecated(metadata.PackageId))
             .Where(IsAllowedByQuality);
 
@@ -444,7 +527,7 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
     /// <item>Remote feeds: a secondary <c>tags:polyglot</c> search is issued.</item>
     /// </list>
     /// </remarks>
-    public Task<IReadOnlySet<string>> GetPolyglotCompatiblePackageIdsAsync(
+    public Task<PackageSearchResult<string>> GetPolyglotCompatiblePackageIdsAsync(
         DirectoryInfo workingDirectory,
         CancellationToken cancellationToken)
     {
@@ -456,7 +539,7 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
             cancellationToken);
     }
 
-    public Task<IReadOnlySet<string>> GetPolyglotCompatiblePackageIdsAsync(
+    public Task<PackageSearchResult<string>> GetPolyglotCompatiblePackageIdsAsync(
         DirectoryInfo workingDirectory,
         PackageMapping[] mappings,
         CancellationToken cancellationToken)
@@ -471,19 +554,18 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
             cancellationToken);
     }
 
-    private async Task<IReadOnlySet<string>> GetPolyglotCompatiblePackageIdsAsync(
+    private async Task<PackageSearchResult<string>> GetPolyglotCompatiblePackageIdsAsync(
         DirectoryInfo workingDirectory,
         PackageMapping[]? mappings,
         bool applyPinnedVersion,
         bool hasExplicitSourceOverride,
         CancellationToken cancellationToken)
     {
-        if (GetLocalAspirePackageSource(mappings) is { } localPackageSource)
+        if (GetLocalIntegrationPackageSource(mappings) is { } localPackageSource)
         {
-            return GetPolyglotCompatiblePackageIdsFromLocalPackageSource(
-                localPackageSource.PackageSource,
-                applyPinnedVersion ? GetLocalPackageVersion(workingDirectory) : null,
-                cancellationToken);
+            var packageVersion = applyPinnedVersion ? GetLocalPackageVersion(workingDirectory) : null;
+            return SearchLocalSourceSafely(() => GetPolyglotCompatiblePackageIdsFromLocalPackageSource(
+                localPackageSource.PackageSource, packageVersion, cancellationToken), cancellationToken);
         }
 
         using var searchConfiguration = await CreatePackageOperationConfigurationAsync(
@@ -492,24 +574,30 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
             hasExplicitSourceOverride,
             cancellationToken);
 
-        var tasks = new List<Task<IEnumerable<NuGetPackage>>>();
+        var tasks = new List<Task<PackageSearchResult<NuGetPackage>>>();
 
         if (Quality is PackageChannelQuality.Stable or PackageChannelQuality.Both)
         {
-            tasks.Add(nuGetPackageCache.GetPackagesAsync(searchConfiguration, PolyglotTagSearchTerm, filter: null, prerelease: false, useCache: true, cancellationToken));
+            tasks.Add(nuGetPackageCache.GetPackagesAsync(searchConfiguration, PolyglotTagSearchTerm, filter: IntegrationSource is { } source ? source.AllowsPackage : null, prerelease: false, useCache: true, cancellationToken));
         }
 
         if (Quality is PackageChannelQuality.Prerelease or PackageChannelQuality.Both)
         {
-            tasks.Add(nuGetPackageCache.GetPackagesAsync(searchConfiguration, PolyglotTagSearchTerm, filter: null, prerelease: true, useCache: true, cancellationToken));
+            tasks.Add(nuGetPackageCache.GetPackagesAsync(searchConfiguration, PolyglotTagSearchTerm, filter: IntegrationSource is { } source ? source.AllowsPackage : null, prerelease: true, useCache: true, cancellationToken));
         }
 
         var results = await Task.WhenAll(tasks);
 
-        return results
-            .SelectMany(r => r)
+        var packageIds = results
+            .SelectMany(result => result.Packages)
             .Select(p => p.Id)
-            .ToHashSet(StringComparers.NuGetPackageId);
+            .Distinct(StringComparers.NuGetPackageId)
+            .ToArray();
+
+        return new(
+            packageIds,
+            results.Any(result => result.LimitReached),
+            results.SelectMany(result => result.FailedSources).Distinct(StringComparer.OrdinalIgnoreCase).ToArray());
     }
 
     private IReadOnlySet<string> GetPolyglotCompatiblePackageIdsFromLocalPackageSource(
@@ -522,7 +610,7 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
         foreach (var file in EnumerateLocalPackageFiles(packageSource, cancellationToken))
         {
             if (GetPackageFileMetadata(file.FullName) is not { } metadata ||
-                !PackageIdFilters.IsIntegrationPackageId(metadata.PackageId) ||
+                !(IntegrationSource is { } source ? source.AllowsPackage(metadata.PackageId) : PackageIdFilters.IsIntegrationPackageId(metadata.PackageId)) ||
                 packageVersion is not null &&
                 !string.Equals(metadata.Version.ToString(), packageVersion, StringComparison.OrdinalIgnoreCase))
             {
@@ -618,7 +706,7 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
             return [new NuGetPackage { Id = packageId, Version = PinnedVersion, Source = SourceDetails }];
         }
 
-        var tasks = new List<Task<IEnumerable<NuGetPackage>>>();
+        var tasks = new List<Task<PackageSearchResult<NuGetPackage>>>();
 
         if (Quality is PackageChannelQuality.Stable || Quality is PackageChannelQuality.Both)
         {
@@ -645,7 +733,7 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
         var packageResults = await Task.WhenAll(tasks);
 
         var packages = packageResults
-            .SelectMany(p => p)
+            .SelectMany(result => result.Packages)
             .DistinctBy(p => $"{p.Id}-{p.Version}");
 
         // In the event that we have no stable packages we fallback to
@@ -653,13 +741,13 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
         // in preview (Aspire.Hosting.Docker circa 9.4).
         if (Quality is PackageChannelQuality.Stable && !packages.Any())
         {
-            packages = await nuGetPackageCache.GetPackagesAsync(
+            packages = (await nuGetPackageCache.GetPackagesAsync(
                 configuration: searchConfiguration,
                 packageId: packageId,
                 filter: id => id.Equals(packageId, StringComparisons.NuGetPackageId),
                 prerelease: true,
                 useCache: true, // Enable caching for package channel resolution
-                cancellationToken: cancellationToken);
+                cancellationToken: cancellationToken)).Packages;
 
             return packages;
         }
@@ -722,7 +810,11 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
         bool hasExplicitSourceOverride,
         CancellationToken cancellationToken)
     {
-        if (GetLocalAspirePackageSource(mappings) is { } localPackageSource)
+        if (IntegrationSource is { } source && !source.AllowsPackage(packageId))
+        {
+            return [];
+        }
+        if (GetLocalIntegrationPackageSource(mappings) is { } localPackageSource)
         {
             return GetPackageVersionsFromLocalPackageSource(
                 localPackageSource.Source,
@@ -826,7 +918,7 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
         bool hasExplicitSourceOverride,
         CancellationToken cancellationToken)
     {
-        return hasExplicitSourceOverride
+        return hasExplicitSourceOverride || IntegrationSource is not null
             ? nuGetPackageCache.CreateSourceRestrictedConfigurationAsync(
                 workingDirectory,
                 mappings ?? [],
@@ -1037,7 +1129,11 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
 
     public static PackageChannel CreateExplicitChannel(string name, PackageChannelQuality quality, PackageMapping[]? mappings, INuGetPackageCache nuGetPackageCache, IFeatures features, ILogger logger, bool configureGlobalPackagesFolder = false, string? cliDownloadBaseUrl = null, string? pinnedVersion = null, string? currentCliVersion = null, Action? validateTemplatePackageMetadataPrefetching = null)
     {
-        return new PackageChannel(name, quality, mappings, nuGetPackageCache, features, logger, configureGlobalPackagesFolder, cliDownloadBaseUrl, pinnedVersion, currentCliVersion, validateTemplatePackageMetadataPrefetching);
+        // An explicitly selected stable channel can use ambient sources without mappings.
+        return new PackageChannel(name, quality, mappings, nuGetPackageCache, features, logger, configureGlobalPackagesFolder, cliDownloadBaseUrl, pinnedVersion, currentCliVersion, validateTemplatePackageMetadataPrefetching)
+        {
+            Type = PackageChannelType.Explicit
+        };
     }
 
     public static PackageChannel CreateImplicitChannel(INuGetPackageCache nuGetPackageCache, IFeatures features, ILogger logger, string? currentCliVersion = null, Action? validateTemplatePackageMetadataPrefetching = null)

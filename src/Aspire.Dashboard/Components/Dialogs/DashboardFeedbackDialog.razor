@@ -1,0 +1,156 @@
+@using Aspire.Dashboard.Model
+@using Aspire.Dashboard.Resources
+
+<FluentDialogBody Class="dashboard-feedback-dialog">
+    <ChildContent>
+        <div class="dashboard-feedback-progress">
+            <span>@string.Format(CultureInfo.CurrentCulture, Loc[nameof(Dialogs.DashboardFeedbackStepProgress)], _step)</span>
+            <span class="dashboard-feedback-progress-track" aria-hidden="true">
+                <span style="@($"transform: scaleX({(_step / 2.0).ToString(CultureInfo.InvariantCulture)})")"></span>
+            </span>
+        </div>
+
+        @if (_step == 1)
+        {
+            <div class="dashboard-feedback-step">
+                <div class="dashboard-feedback-step-header">
+                    <span class="card-header-icon" aria-hidden="true">
+                        <FluentIcon Value="@(new Icons.Regular.Size16.ChatHelp())" Width="16px" Color="Color.Custom" CustomColor="currentColor" />
+                    </span>
+                    <div>
+                        <h2>@Loc[nameof(Dialogs.DashboardFeedbackStepOneTitle)]</h2>
+                        <p>@Loc[nameof(Dialogs.DashboardFeedbackDescription)]</p>
+                    </div>
+                </div>
+
+                <section class="dashboard-feedback-section">
+                    <label class="aspire-field-label" for="dashboard-feedback-duration">
+                        @Loc[nameof(Dialogs.DashboardFeedbackDurationLabel)]
+                    </label>
+                    <FluentSelect TOption="DashboardFeedbackUsageDuration"
+                                  TValue="DashboardFeedbackUsageDuration"
+                                  Id="dashboard-feedback-duration"
+                                  Class="dashboard-feedback-select"
+                                  Items="@s_usageDurationOptions"
+                                  OptionText="@GetUsageDurationText"
+                                  Position="SelectPosition.Below"
+                                  Width="100%"
+                                  AriaLabel="@Loc[nameof(Dialogs.DashboardFeedbackDurationLabel)]"
+                                  @bind-Value="Content.UsageDuration" />
+                </section>
+
+                <fieldset class="dashboard-feedback-section dashboard-feedback-reasons">
+                    <legend class="aspire-field-label">@Loc[nameof(Dialogs.DashboardFeedbackReasonsLabel)]</legend>
+                    <div class="dashboard-feedback-reason-grid">
+                        @foreach (var reason in Enum.GetValues<DashboardFeedbackReason>())
+                        {
+                            var isSelected = Content.Reasons.Contains(reason);
+                            <label class="dashboard-feedback-reason @(isSelected ? "selected" : null)">
+                                <input type="checkbox"
+                                       checked="@isSelected"
+                                       @onchange="@(e => SetReason(reason, (bool)e.Value!))" />
+                                <span>@GetReasonText(reason)</span>
+                            </label>
+                        }
+                    </div>
+                    @if (Content.Reasons.Contains(DashboardFeedbackReason.Other))
+                    {
+                        <input class="dashboard-feedback-input"
+                               aria-label="@Loc[nameof(Dialogs.DashboardFeedbackReasonOther)]"
+                               placeholder="@Loc[nameof(Dialogs.DashboardFeedbackOtherPlaceholder)]"
+                               @bind="Content.OtherReason"
+                               @bind:event="oninput" />
+                    }
+                </fieldset>
+            </div>
+        }
+        else
+        {
+            <div class="dashboard-feedback-step">
+                <div class="dashboard-feedback-step-header">
+                    <span class="card-header-icon" aria-hidden="true">
+                        <FluentIcon Value="@(new Icons.Regular.Size16.CommentEdit())" Width="16px" Color="Color.Custom" CustomColor="currentColor" />
+                    </span>
+                    <div>
+                        <h2>@Loc[nameof(Dialogs.DashboardFeedbackStepTwoTitle)]</h2>
+                        <p>@Loc[nameof(Dialogs.DashboardFeedbackStepTwoDescription)]</p>
+                    </div>
+                </div>
+
+                <section class="dashboard-feedback-section">
+                    <label class="aspire-field-label" for="dashboard-feedback-missing">
+                        @Loc[nameof(Dialogs.DashboardFeedbackMissingLabel)]
+                    </label>
+                    <textarea id="dashboard-feedback-missing"
+                              class="dashboard-feedback-textarea"
+                              rows="3"
+                              @bind="Content.MissingCapabilities"
+                              @bind:event="oninput"></textarea>
+                </section>
+
+                <section class="dashboard-feedback-section">
+                    <label class="aspire-field-label" for="dashboard-feedback-difficulties">
+                        @Loc[nameof(Dialogs.DashboardFeedbackDifficultiesLabel)]
+                    </label>
+                    <textarea id="dashboard-feedback-difficulties"
+                              class="dashboard-feedback-textarea"
+                              rows="3"
+                              @bind="Content.Difficulties"
+                              @bind:event="oninput"></textarea>
+                </section>
+
+                <details class="dashboard-feedback-preview-disclosure">
+                    <summary>@Loc[nameof(Dialogs.DashboardFeedbackPreviewDisclosure)]</summary>
+                    <div class="dashboard-feedback-preview-header">
+                        <span>@Loc[Content.IsAppHost
+                            ? nameof(Dialogs.DashboardFeedbackModeAppHost)
+                            : nameof(Dialogs.DashboardFeedbackModeStandalone)]</span>
+                    </div>
+                    <pre class="dashboard-feedback-preview" tabindex="0">@Markdown</pre>
+                </details>
+
+                @if (!string.IsNullOrEmpty(_status))
+                {
+                    <p class="dashboard-feedback-status" role="status">@_status</p>
+                }
+            </div>
+        }
+    </ChildContent>
+
+    <ActionTemplate>
+        <footer class="interaction-dialog-actions dashboard-feedback-actions">
+            @if (Content.SwitchToLegacyAsync is not null)
+            {
+                @* Feedback is optional when switching, so the switch never depends on filling in the form. *@
+                <FluentButton Appearance="ButtonAppearance.Transparent"
+                              Class="aspire-button dashboard-feedback-skip"
+                              OnClick="SkipAndSwitchAsync">
+                    @Loc[nameof(Dialogs.DashboardFeedbackSkipAndSwitch)]
+                </FluentButton>
+            }
+            @if (_step == 1)
+            {
+                <FluentButton Appearance="ButtonAppearance.Primary"
+                              Class="aspire-button"
+                              OnClick="Continue">
+                    @Loc[nameof(Dialogs.DashboardFeedbackContinue)]
+                </FluentButton>
+            }
+            else
+            {
+                <FluentButton Appearance="ButtonAppearance.Default"
+                              Class="aspire-button"
+                              OnClick="Back">
+                    @Loc[nameof(Dialogs.DashboardFeedbackBack)]
+                </FluentButton>
+                <FluentButton Appearance="ButtonAppearance.Primary"
+                              Class="aspire-button"
+                              OnClick="CompleteAsync">
+                    @Loc[Content.SwitchToLegacyAsync is null
+                        ? nameof(Dialogs.DashboardFeedbackCopyAndOpen)
+                        : nameof(Dialogs.DashboardFeedbackCopyOpenAndSwitch)]
+                </FluentButton>
+            }
+        </footer>
+    </ActionTemplate>
+</FluentDialogBody>

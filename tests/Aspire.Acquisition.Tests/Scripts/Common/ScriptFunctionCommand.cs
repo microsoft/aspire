@@ -116,10 +116,8 @@ public class ScriptFunctionCommand : ToolCommand
 
             {{_functionExpression}}
             """;
+        // Passed to bash as an argument rather than exec'd, so it needs no execute bit.
         File.WriteAllText(tempScript, wrapperContent.ReplaceLineEndings("\n"));
-
-        // Make executable on Unix
-        FileHelper.MakeExecutable(tempScript);
 
         return $"\"{tempScript}\"";
     }

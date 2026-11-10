@@ -62,13 +62,11 @@ public class BrowserTokenAuthenticationTests : PlaywrightTestsBase<BrowserTokenA
             var submitButton = SubmitButton(page);
             await submitButton.ClickAsync().DefaultTimeout();
 
-            // Wait for navigation to complete after successful login.
-            // The page redirects from /login to / (resources page).
-            await page.WaitForURLAsync(url => new Uri(url).AbsolutePath == "/").DefaultTimeout();
+            await page.WaitForURLAsync(url => new Uri(url).AbsolutePath == "/resources").DefaultTimeout();
 
             // Assert
             await Assertions
-                .Expect(page.GetByText(MockDashboardClient.TestResource1.DisplayName))
+                .Expect(page.GetByRole(AriaRole.Link, new() { Name = MockDashboardClient.TestResource1.DisplayName, Exact = true }).First)
                 .ToBeVisibleAsync()
                 .DefaultTimeout();
         });
@@ -93,11 +91,11 @@ public class BrowserTokenAuthenticationTests : PlaywrightTestsBase<BrowserTokenA
             var submitButton = SubmitButton(page);
             await submitButton.ClickAsync().DefaultTimeout();
 
-            await page.WaitForURLAsync(url => new Uri(url).AbsolutePath == "/").DefaultTimeout();
+            await page.WaitForURLAsync(url => new Uri(url).AbsolutePath == "/resources").DefaultTimeout();
 
             // Assert
             await Assertions
-                .Expect(page.GetByText(MockDashboardClient.TestResource1.DisplayName))
+                .Expect(page.GetByRole(AriaRole.Link, new() { Name = MockDashboardClient.TestResource1.DisplayName, Exact = true }).First)
                 .ToBeVisibleAsync()
                 .DefaultTimeout();
         });
@@ -142,7 +140,7 @@ public class BrowserTokenAuthenticationTests : PlaywrightTestsBase<BrowserTokenA
 
             // Assert
             await Assertions
-                .Expect(page.GetByText(MockDashboardClient.TestResource1.DisplayName))
+                .Expect(page.GetByRole(AriaRole.Link, new() { Name = MockDashboardClient.TestResource1.DisplayName, Exact = true }).First)
                 .ToBeVisibleAsync()
                 .DefaultTimeout();
         });

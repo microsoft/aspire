@@ -63,14 +63,47 @@ public sealed class CustomTemplateTests(ITestOutputHelper output)
 
         if (configured)
         {
-            await auto.RunCommandAsync("aspire template source add company --path \"$PWD/template\" --nologo", counter);
-            await auto.RunCommandAsync("aspire template source add git-example --repository https://example.test/templates --ref main --path templates --nologo", counter);
+            await auto.RunCommandAsync("aspire template source add git-example --repository https://example.test/templates --ref main --path templates --yes --nologo", counter);
+            await auto.RunCommandAsync("cp \"$HOME/.aspire/aspire.config.json\" before.json", counter);
+            await auto.RunCommandAsync(
+                "aspire template source add company --path \"$PWD/template\" --nologo < /dev/null; " +
+                $"test $? -eq {CliExitCodes.InvalidCommand}", counter, timeout: TimeSpan.FromSeconds(30));
+            await auto.RunCommandAsync("cmp before.json \"$HOME/.aspire/aspire.config.json\"", counter);
+
+            var sourceLocation = CliE2ETestHelpers.ToContainerPath(Path.Combine(workspace.WorkspaceRoot.FullName, "template"), workspace);
+            foreach (var response in new string?[] { null, "n", "y" })
+            {
+                // Clear answered prompts so each wait observes this invocation rather than stale terminal output.
+                await auto.ClearScreenAsync(counter);
+                var expectedExitCode = response == "y" ? CliExitCodes.Success : CliExitCodes.Cancelled;
+                await auto.TypeAsync(
+                    $"aspire template source add company --path \"$PWD/template\" --nologo; test $? -eq {expectedExitCode}");
+                await auto.EnterAsync();
+                await auto.WaitUntilTextAsync("Only use sources you trust.", timeout: TimeSpan.FromSeconds(30));
+                await auto.WaitUntilTextAsync("Do you trust template source 'company'", timeout: TimeSpan.FromSeconds(30));
+                await auto.WaitUntilTextAsync(sourceLocation, timeout: TimeSpan.FromSeconds(30));
+                await auto.WaitUntilTextAsync("[y/N]:", timeout: TimeSpan.FromSeconds(30));
+                if (response is null)
+                {
+                    await auto.EnterAsync();
+                }
+                else
+                {
+                    // Confirmation consumes a single key; a trailing Enter would become an extra shell command.
+                    await auto.TypeAsync(response);
+                }
+                await auto.WaitForSuccessPromptAsync(counter, timeout: TimeSpan.FromSeconds(30));
+                if (response != "y")
+                {
+                    await auto.RunCommandAsync("cmp before.json \"$HOME/.aspire/aspire.config.json\"", counter);
+                }
+            }
+
             // Do not suppress the banner explicitly: JSON mode must keep redirected stdout parseable.
             await auto.RunCommandAsync("aspire template source list --format json > sources.json", counter);
             var listed = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(workspace.WorkspaceRoot.FullName, "sources.json")))!.AsObject();
             Assert.Equal(["company", "git-example"], listed.Select(source => source.Key));
-            Assert.Equal(CliE2ETestHelpers.ToContainerPath(Path.Combine(workspace.WorkspaceRoot.FullName, "template"), workspace),
-                listed["company"]!["path"]!.GetValue<string>());
+            Assert.Equal(sourceLocation, listed["company"]!["path"]!.GetValue<string>());
             Assert.Equal("https://example.test/templates", listed["git-example"]!["repository"]!.GetValue<string>());
             Assert.Equal("main", listed["git-example"]!["ref"]!.GetValue<string>());
             Assert.Equal("templates", listed["git-example"]!["path"]!.GetValue<string>());
@@ -79,7 +112,7 @@ public sealed class CustomTemplateTests(ITestOutputHelper output)
             Assert.Contains("company", table);
             Assert.Contains("git-example", table);
             await auto.RunCommandAsync("cp \"$HOME/.aspire/aspire.config.json\" before.json", counter);
-            await auto.RunCommandAsync($"aspire template source add COMPANY --repository https://example.test/replacement --nologo; test $? -eq {CliExitCodes.InvalidCommand}", counter);
+            await auto.RunCommandAsync($"aspire template source add COMPANY --repository https://example.test/replacement --yes --nologo; test $? -eq {CliExitCodes.InvalidCommand}", counter);
             await auto.RunCommandAsync("cmp before.json \"$HOME/.aspire/aspire.config.json\"", counter);
             await auto.RunCommandAsync($"aspire config set templateSources.company.path ../escape --global --nologo; test $? -eq {CliExitCodes.InvalidCommand}", counter);
             await auto.RunCommandAsync("cmp before.json \"$HOME/.aspire/aspire.config.json\"", counter);
@@ -107,29 +140,12 @@ public sealed class CustomTemplateTests(ITestOutputHelper output)
 
         if (configured)
         {
-            await auto.WaitUntilTextAsync("Search for more templates", timeout: TimeSpan.FromSeconds(60));
-            await auto.KeyAsync(Hex1bKey.End);
-            await auto.EnterAsync();
-            await auto.WaitUntilTextAsync("Search templates (leave empty to list all)", timeout: TimeSpan.FromSeconds(30));
-            await auto.EnterAsync();
-            await auto.WaitUntilTextAsync("custom-template-fixture", timeout: TimeSpan.FromSeconds(30));
-            await auto.WaitUntilTextAsync("Search again", timeout: TimeSpan.FromSeconds(30));
-            await auto.DownAsync();
-            await auto.EnterAsync();
-            await auto.WaitUntilTextAsync("Search templates (leave empty to list all)", timeout: TimeSpan.FromSeconds(30));
-            await auto.TypeAsync("no-matching-template");
-            await auto.EnterAsync();
-            await auto.WaitUntilTextAsync("Back to default templates", timeout: TimeSpan.FromSeconds(30));
-            await auto.KeyAsync(Hex1bKey.End);
-            await auto.EnterAsync();
-            await auto.WaitUntilTextAsync("Search for more templates", timeout: TimeSpan.FromSeconds(30));
-            await auto.KeyAsync(Hex1bKey.End);
-            await auto.EnterAsync();
-            await auto.WaitUntilTextAsync("Search templates (leave empty to list all)", timeout: TimeSpan.FromSeconds(30));
-            await auto.TypeAsync("DESCRIPTION METADATA");
-            await auto.EnterAsync();
-            await auto.WaitUntilTextAsync("custom-template-fixture", timeout: TimeSpan.FromSeconds(30));
+            await auto.WaitUntilTextAsync("Custom template E2E fixture", timeout: TimeSpan.FromSeconds(60));
             await auto.WaitUntilTextAsync("company", timeout: TimeSpan.FromSeconds(30));
+            await auto.KeyAsync(Hex1bKey.Home);
+            await auto.TypeAsync("DESCRIPTION METADATA");
+            await auto.WaitUntilTextAsync("DESCRIPTION METADATA", timeout: TimeSpan.FromSeconds(30));
+            await auto.WaitUntilTextAsync("> Custom template E2E fixture", timeout: TimeSpan.FromSeconds(30));
             await auto.EnterAsync();
         }
 

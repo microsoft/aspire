@@ -1,12 +1,16 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.RegularExpressions;
 using System.Threading.Channels;
+using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Terminal;
 using Aspire.Dashboard.Tests.Integration.Playwright.Infrastructure;
 using Aspire.Dashboard.Tests.Shared;
 using Aspire.DashboardService.Proto.V1;
 using Aspire.TestUtilities;
+using Aspire.Tests.Shared.DashboardModel;
+using Google.Protobuf.WellKnownTypes;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Playwright;
@@ -107,6 +111,8 @@ public sealed class TerminalDockTests(TerminalDockTests.TerminalDockDashboardSer
             var (updates, _) = await fixture.StartSessionAsync();
             await page.SetViewportSizeAsync(1280, 900);
             await page.GotoAsync("/").DefaultTimeout();
+            await page.GetByRole(AriaRole.Button, new() { Name = "Toggle terminal (`)", Exact = true }).ClickAsync();
+            await Assertions.Expect(page.Locator(".terminal-dock")).ToHaveClassAsync(new Regex("visible"));
             await updates.Writer.WriteAsync(new WatchTerminalsUpdate
             {
                 Snapshot = new TerminalDescriptorList { ActivatedTerminalId = "missing" }
@@ -423,6 +429,8 @@ public sealed class TerminalDockTests(TerminalDockTests.TerminalDockDashboardSer
     {
         var channels = await fixture.StartSessionAsync();
         await page.GotoAsync("/").DefaultTimeout();
+        await page.GetByRole(AriaRole.Button, new() { Name = "Toggle terminal (`)", Exact = true }).ClickAsync();
+        await Assertions.Expect(page.Locator(".terminal-dock")).ToHaveClassAsync(new Regex("visible"));
         foreach (var id in new[] { "first", "second", "third" })
         {
             await channels.Updates.Writer.WriteAsync(Change(TerminalChangeType.Added, id));
@@ -457,6 +465,7 @@ public sealed class TerminalDockTests(TerminalDockTests.TerminalDockDashboardSer
     {
         private Channel<WatchTerminalsUpdate> _updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();
         private Channel<string> _closes = Channel.CreateUnbounded<string>();
+        private readonly Channel<IReadOnlyList<ResourceViewModelChange>> _resourceUpdates = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
         internal TestTerminalConnectionResolver TerminalResolver { get; } = new();
 
         public TestDashboardClient Client { get; }
@@ -465,10 +474,28 @@ public sealed class TerminalDockTests(TerminalDockTests.TerminalDockDashboardSer
         {
             Client = new TestDashboardClient(
                 isEnabled: true,
+                resourceChannelProvider: () => _resourceUpdates,
+                initialResources: [CreateTerminalResource()],
                 terminalChannelProvider: () => Volatile.Read(ref _updates),
                 attachTerminal: async (id, token) => (await TerminalResolver.ConnectAsync(id, token))!,
                 closeTerminal: (id, token) => Volatile.Read(ref _closes).Writer.WriteAsync(id, token).AsTask());
         }
+
+        private static ResourceViewModel CreateTerminalResource() =>
+            ModelTestHelpers.CreateResource(
+                resourceName: "terminal-resource",
+                state: KnownResourceState.Running,
+                properties: new Dictionary<string, ResourcePropertyViewModel>
+                {
+                    [KnownProperties.Terminal.Enabled] = new(
+                        KnownProperties.Terminal.Enabled,
+                        new Value { StringValue = "true" },
+                        isValueSensitive: false,
+                        knownProperty: null,
+                        sortOrder: 0,
+                        displayName: null,
+                        isHighlighted: false)
+                });
 
         public async Task<(Channel<WatchTerminalsUpdate> Updates, Channel<string> Closes)> StartSessionAsync()
         {

@@ -57,7 +57,7 @@ suite('Aspire Azure Functions E2E', function () {
         assert.ok(taskStarted.processId && taskStarted.processId > 0, 'Expected VS Code to report the Functions host task process ID.');
 
         const stopInvocationBefore = getCommandInvocationCount('aspire-vscode.stopResource');
-        await executeE2eControlCommand({ name: 'stopResource', appHostPath, resourceName: functionsResource.name });
+        await executeE2eControlCommand({ name: 'stopResource', appHostPath, resourceName: functionsResource.name }, { waitFor: 'started' });
         await waitForCommandOutcome('aspire-vscode.stopResource', 'success', 60000, stopInvocationBefore);
         await waitForResourceState(functionsResource.name, ['Exited', 'Finished', 'Stopped'], 120000);
 

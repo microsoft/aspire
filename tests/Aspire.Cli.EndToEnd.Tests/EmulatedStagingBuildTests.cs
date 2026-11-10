@@ -13,16 +13,17 @@ namespace Aspire.Cli.EndToEnd.Tests;
 /// End-to-end tests that install the real CLI build and then use the <c>ASPIRE_CLI_*</c> identity
 /// override environment variables to make the locally built CLI <em>emulate the latest staging
 /// ("rc/daily") build</em>. They are the counterpart to <see cref="EmulatedReleasedBuildTests"/> and
-/// prove the stable-vs-staging differentiation: whereas a stable build resolves <c>Aspire.*</c> from
-/// nuget.org and drops no feed pin, a staging build resolves them from its SHA-specific darc feed.
+/// prove the stable-vs-staging differentiation: whereas a stable build uses ambient feeds and drops
+/// no feed configuration, a staging build registers its SHA-specific darc feed.
 ///
 /// This class is the <b>staging</b> row of the AppHost-language × channel-emulation matrix, with one
 /// test per AppHost language. The two languages behave <em>differently</em> here, which is exactly why
 /// each is exercised independently:
 /// <list type="bullet">
 /// <item><b>C#</b>: the AppHost is a real csproj restored by MSBuild, which needs the feed configured
-/// locally, so <c>aspire new</c> <b>must</b> drop a <c>NuGet.config</c> mapping <c>Aspire*</c> to
-/// <c>darc-pub-microsoft-aspire-&lt;sha8&gt;</c>.</item>
+/// locally, so <c>aspire new</c> <b>must</b> drop a <c>NuGet.config</c> registering
+/// <c>darc-pub-microsoft-aspire-&lt;sha8&gt;</c>. It adds an <c>Aspire*</c> mapping only when
+/// ambient package-source mapping is already enabled.</item>
 /// <item><b>TypeScript</b>: the AppHost is scaffolded by the CLI itself (which resolves
 /// <c>Aspire.*</c> from the channel feed when it generates <c>.aspire/modules</c>), so <b>no</b>
 /// <c>NuGet.config</c> is dropped — the same as the stable case. This asymmetry has bitten us before,
@@ -41,18 +42,21 @@ public sealed class EmulatedStagingBuildTests(ITestOutputHelper output)
     ///
     /// A staging build resolves <c>Aspire.*</c> packages from its commit-specific darc feed
     /// (<c>darc-pub-microsoft-aspire-&lt;sha8&gt;</c>) — those packages are not yet on nuget.org — so it
-    /// <b>must</b> drop a per-project <c>NuGet.config</c> that maps the <c>Aspire*</c> pattern to that
-    /// feed. This is the exact inverse of the stable scenario in
+    /// <b>must</b> drop a per-project <c>NuGet.config</c> registering that feed while preserving
+    /// whether package-source mapping is enabled. This is the inverse of the stable scenario in
     /// <see cref="EmulatedReleasedBuildTests"/>, and the pair together pins the stable-vs-staging
     /// differentiation. This test discovers the latest real staging build (version + source commit),
-    /// emulates it, scaffolds the C# starter, and asserts: (1) a <c>NuGet.config</c> is dropped mapping
-    /// <c>Aspire*</c> to the commit-derived darc feed, (2) the AppHost SDK is pinned to the emulated
+    /// emulates it, scaffolds the C# starter, and asserts: (1) a <c>NuGet.config</c> registers the
+    /// commit-derived darc feed and adds an <c>Aspire*</c> mapping only when already enabled,
+    /// (2) the AppHost SDK is pinned to the emulated
     /// staging version, and (3) <c>aspire add</c> actually restores from that darc feed (proving the
-    /// pin is functional, not just well-formed).
+    /// feed configuration is functional, not just well-formed).
     /// </summary>
     [CaptureWorkspaceOnFailure]
-    [Fact]
-    public async Task EmulatedStagingIdentityScaffoldsCSharpStarterWithDarcFeedNuGetConfig()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task EmulatedStagingIdentityScaffoldsCSharpStarterWithDarcFeedNuGetConfig(bool mappingEnabled)
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var strategy = CliInstallStrategy.Detect(output.WriteLine);
@@ -74,15 +78,26 @@ public sealed class EmulatedStagingBuildTests(ITestOutputHelper output)
 
         await ApplyEmulatedStagingIdentityAsync(auto, counter, staging);
 
+        // Control the inherited mapping mode independently of the installed CLI's user config.
+        await File.WriteAllTextAsync(Path.Combine(workspace.WorkspaceRoot.FullName, "NuGet.Config"), $$"""
+            <configuration>
+              <packageSources>
+                <clear />
+                <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
+              </packageSources>
+              <packageSourceMapping>
+                <clear />
+                {{(mappingEnabled ? """<packageSource key="nuget.org"><package pattern="*" /></packageSource>""" : "")}}
+              </packageSourceMapping>
+            </configuration>
+            """);
+
         const string projectName = "EmulatedStagingStarter";
         await auto.AspireNewAsync(projectName, counter, template: AspireTemplate.Starter, useRedisCache: false);
 
         var projectDir = new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, projectName));
 
-        // A staging build's Aspire packages live on its SHA-specific darc feed, not nuget.org, so the
-        // CLI MUST pin that feed via a dropped NuGet.config (the opposite of the stable case). This is
-        // the stable-vs-staging behavioral difference the identity sidecar must preserve.
-        AssertNuGetConfigPinsStagingFeed(projectDir, staging.ShortCommit);
+        AssertNuGetConfigRegistersStagingFeed(projectDir, staging.ShortCommit, mappingEnabled);
 
         // The exact-version match against the emulated identity pins the AppHost to that version.
         var appHostCsproj = Path.Combine(projectDir.FullName, $"{projectName}.AppHost", $"{projectName}.AppHost.csproj");
@@ -90,10 +105,15 @@ public sealed class EmulatedStagingBuildTests(ITestOutputHelper output)
         output.WriteLine($"Generated AppHost version: {appHostVersion}");
         Assert.Equal(staging.Version, appHostVersion);
 
-        // `aspire add` must resolve and restore from the pinned darc feed and complete successfully,
-        // proving the dropped feed pin is functional (not just well-formed).
+        // `aspire add` must complete using the registered darc feed in both mapping modes.
         await auto.RunCommandAsync($"cd {projectName}/{projectName}.AppHost", counter);
-        await AddIntegrationInteractivelyAsync(auto, counter, "redis");
+        // C# projects use NuGet.config rather than a pinned CLI channel. Specify the staging
+        // version directly so the test doesn't depend on a version picker appearing.
+        await auto.RunCommandAsync($"aspire add Aspire.Hosting.Redis --version {staging.Version}", counter,
+            timeout: TimeSpan.FromMinutes(2));
+        var redisReference = Assert.Single(XDocument.Load(appHostCsproj).Descendants("PackageReference"),
+            reference => (string?)reference.Attribute("Include") == "Aspire.Hosting.Redis");
+        Assert.Equal(staging.Version, (string?)redisReference.Attribute("Version"));
     }
 
     /// <summary>
@@ -155,12 +175,8 @@ public sealed class EmulatedStagingBuildTests(ITestOutputHelper output)
 
         // `aspire add` must resolve the integration from the staging darc feed and complete, proving
         // the CLI's internal channel-feed resolution works for TS without a project-local NuGet.config.
-        // Use `valkey` rather than `redis`: the interactive picker filters by substring and selects the
-        // first match, and "redis" matches `azure-redis` (Aspire.Hosting.Azure.Redis) ahead of
-        // `redis` — whereas "valkey" uniquely matches Aspire.Hosting.Valkey, so the assertion below
-        // targets a deterministic package id.
         await auto.RunCommandAsync($"cd {projectName}", counter);
-        await AddIntegrationInteractivelyAsync(auto, counter, "valkey");
+        await AddIntegrationInteractivelyAsync(auto, counter, "Aspire.Hosting.Valkey");
 
         // REGRESSION GUARD: "added successfully" alone is insufficient here — the stable Valkey package
         // (13.4.3) also resolves fine from nuget.org, so a regression that ignored the pinned staging
@@ -207,16 +223,18 @@ public sealed class EmulatedStagingBuildTests(ITestOutputHelper output)
     }
 
     /// <summary>
-    /// Runs <c>aspire add</c> interactively, filters the integration list by <paramref name="filter"/>,
+    /// Runs <c>aspire add</c> interactively, searches for <paramref name="packageId"/>,
     /// accepts the default version if a version picker appears, and waits for the success message.
     /// Mirrors the proven interactive add flow used elsewhere in the E2E suite.
     /// </summary>
-    private static async Task AddIntegrationInteractivelyAsync(Hex1bTerminalAutomator auto, SequenceCounter counter, string filter)
+    private static async Task AddIntegrationInteractivelyAsync(Hex1bTerminalAutomator auto, SequenceCounter counter, string packageId)
     {
         await auto.TypeAsync("aspire add");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync(AddCommandStrings.SelectAnIntegrationToAdd, timeout: TimeSpan.FromMinutes(1));
-        await auto.TypeAsync(filter);
+        // Match the complete "(Aspire.Hosting.Redis)" label, not a friendly-name substring
+        // that can select a different package when choices are grouped by feed.
+        await auto.TypeAsync($"({packageId})");
         await auto.EnterAsync();
 
         var waitingForVersionSelection = false;
@@ -236,12 +254,11 @@ public sealed class EmulatedStagingBuildTests(ITestOutputHelper output)
     }
 
     /// <summary>
-    /// Asserts that <c>aspire new</c> dropped exactly one <c>NuGet.config</c> and that it pins the
-    /// staging build's SHA-specific darc feed: a <c>packageSource</c> whose URL contains
-    /// <c>darc-pub-microsoft-aspire-&lt;sha8&gt;</c> and a <c>packageSourceMapping</c> routing the
-    /// <c>Aspire*</c> pattern to that source.
+    /// Asserts that <c>aspire new</c> dropped exactly one <c>NuGet.config</c> registering the
+    /// staging build's SHA-specific darc feed. An <c>Aspire*</c> mapping is required only when
+    /// ambient mapping was already enabled.
     /// </summary>
-    private static void AssertNuGetConfigPinsStagingFeed(DirectoryInfo projectDir, string shortCommit)
+    private static void AssertNuGetConfigRegistersStagingFeed(DirectoryInfo projectDir, string shortCommit, bool mappingEnabled)
     {
         // Match by file name with a case-insensitive comparison rather than relying on the glob
         // matcher, whose case sensitivity differs across host operating systems (the workspace is read
@@ -253,7 +270,7 @@ public sealed class EmulatedStagingBuildTests(ITestOutputHelper output)
 
         Assert.True(
             nuGetConfigs.Count == 1,
-            $"Emulating a staging build, 'aspire new' must drop exactly one NuGet.config pinning the darc feed. Found: {nuGetConfigs.Count} ({string.Join(", ", nuGetConfigs.Select(f => f.FullName))}).");
+            $"Emulating a staging build, 'aspire new' must drop exactly one NuGet.config registering the darc feed. Found: {nuGetConfigs.Count} ({string.Join(", ", nuGetConfigs.Select(f => f.FullName))}).");
 
         var configPath = nuGetConfigs[0].FullName;
         var doc = XDocument.Load(configPath);
@@ -270,6 +287,12 @@ public sealed class EmulatedStagingBuildTests(ITestOutputHelper output)
         Assert.True(
             stagingSourceKey is not null,
             $"Dropped NuGet.config ({configPath}) does not contain a package source for the staging feed '{feedFragment}'. Content:\n{File.ReadAllText(configPath)}");
+
+        if (!mappingEnabled)
+        {
+            Assert.Null(doc.Root!.Element("packageSourceMapping"));
+            return;
+        }
 
         // <packageSourceMapping><packageSource key="<source-key>"><package pattern="Aspire*" /></packageSource>
         var aspireMappedToStagingFeed = doc

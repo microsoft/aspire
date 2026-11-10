@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource Azure publishing/provisioning contracts with synthetic metadata.
 #pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 using Aspire.Hosting.ApplicationModel;
@@ -153,7 +154,7 @@ public class AzureResourcePreparerTests(ITestOutputHelper testOutputHelper)
         builder.AddProject<Project>("api", launchProfileName: null)
             .WithRoleAssignments(storage, StorageBuiltInRole.StorageBlobDataReader);
 
-        var app = builder.Build();
+        using var app = builder.Build();
 
         if (operation == DistributedApplicationOperation.Publish)
         {
@@ -162,7 +163,8 @@ public class AzureResourcePreparerTests(ITestOutputHelper testOutputHelper)
         }
         else
         {
-            await app.StartAsync();
+            // Run the Azure before-start hooks directly: app.StartAsync() would also launch DCP, which this test doesn't need.
+            await ExecuteBeforeStartHooksAsync(app, default);
             // no exception is thrown in Run mode
         }
     }
@@ -407,7 +409,35 @@ public class AzureResourcePreparerTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    public async Task RoleAssignmentsAreNotDuplicatedWhenBeforeStartRunsBeforePublishPipeline()
+    public async Task PrepareResourcesStepRunsAfterComputeEnvironmentValidation()
+    {
+        // Regression test for https://github.com/microsoft/aspire/issues/19308.
+        // Preparing Azure resources adds role assignment resources to the model, which must not happen
+        // while compute environment validation is enumerating the model's resources.
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper, step: WellKnownPipelineSteps.BeforeStart);
+        builder.AddAzureContainerAppEnvironment("env1").WithUniqueResourceNaming();
+        builder.AddAzureContainerAppEnvironment("env2").WithUniqueResourceNaming();
+
+        var keyVault = builder.AddAzureKeyVault("keyvault");
+
+        // Not bound to either compute environment, so validation fails.
+        builder.AddProject<Project>("api", launchProfileName: null)
+            .WithRoleAssignments(keyVault, KeyVaultBuiltInRole.KeyVaultSecretsUser);
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => ExecutePipelineAsync(app));
+        Assert.Contains($"Step '{WellKnownPipelineSteps.ValidateComputeEnvironments}' failed", ex.Message);
+
+        // The prepare step depends on validation, so it never ran and never mutated the model.
+        Assert.Empty(model.Resources.OfType<AzureRoleAssignmentResource>());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RoleAssignmentsAreNotDuplicatedWhenBeforeStartRunsBeforePublishPipeline(bool useDotnetProject)
     {
         const string inspectRoleAssignmentsStepName = "inspect-signalr-role-assignments";
 
@@ -416,11 +446,17 @@ public class AzureResourcePreparerTests(ITestOutputHelper testOutputHelper)
 
         var signalR = builder.AddAzureSignalR("signalr");
 
-        var serviceA = builder.AddProject<Project>("service-a", launchProfileName: null)
+        IResourceBuilder<IResourceWithEnvironment> serviceA = useDotnetProject
+            ? builder.AddDotnetProject("service-a", "service-a.csproj", options => options.ExcludeLaunchProfile = true)
+            : builder.AddProject<Project>("service-a", launchProfileName: null);
+        serviceA
             .WithReference(signalR)
             .WithRoleAssignments(signalR, SignalRBuiltInRole.SignalRContributor);
 
-        var serviceB = builder.AddProject<Project>("service-b", launchProfileName: null)
+        IResourceBuilder<IResourceWithEnvironment> serviceB = useDotnetProject
+            ? builder.AddDotnetProject("service-b", "service-b.csproj", options => options.ExcludeLaunchProfile = true)
+            : builder.AddProject<Project>("service-b", launchProfileName: null);
+        serviceB
             .WithReference(signalR)
             .WithRoleAssignments(signalR, SignalRBuiltInRole.SignalRContributor);
 
@@ -460,7 +496,7 @@ public class AzureResourcePreparerTests(ITestOutputHelper testOutputHelper)
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
         Assert.Collection(
             model.Resources
-                .OfType<ProjectResource>()
+                .Where(resource => resource is IDotnetProgramResource)
                 .OrderBy(resource => resource.Name, StringComparer.Ordinal),
             resource => Assert.Single(resource.Annotations.OfType<DeploymentPrerequisitesAnnotation>()),
             resource => Assert.Single(resource.Annotations.OfType<DeploymentPrerequisitesAnnotation>()));
@@ -860,3 +896,4 @@ public class AzureResourcePreparerTests(ITestOutputHelper testOutputHelper)
         return pipeline.ExecuteAsync(context);
     }
 }
+#pragma warning restore CS0618

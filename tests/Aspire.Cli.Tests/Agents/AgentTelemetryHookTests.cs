@@ -3,6 +3,7 @@
 
 using System.Text.RegularExpressions;
 using Aspire.Cli.Agents.Hooks;
+using Aspire.Cli.Mcp;
 using Aspire.Cli.Tests.Utils;
 
 namespace Aspire.Cli.Tests.Agents;
@@ -21,14 +22,33 @@ public class AgentTelemetryHookTests
     }
 
     [Theory]
-    [InlineData("toolName", "toolArgs", "skill", """{"skill":"aspire"}""")]
-    [InlineData("tool_name", "tool_input", "Skill", """{"skill":"aspire:aspire"}""")]
-    public void SkillEventsPreserveArguments(string nameProperty, string inputProperty, string tool, string input)
+    [InlineData("toolName", "toolArgs", "skill", """{"skill":"aspire"}""", "aspire")]
+    [InlineData("tool_name", "tool_input", "Skill", """{"skill":"aspire:aspire"}""", "aspire")]
+    [InlineData("toolName", "toolArgs", "skill", """{"skill":"aspire-terminals"}""", "aspire-terminals")]
+    [InlineData("tool_name", "tool_input", "Skill", """{"skill":"aspire:aspire-terminals"}""", "aspire-terminals")]
+    public void SkillEventsPreserveArguments(string nameProperty, string inputProperty, string tool, string input, string expectedSkill)
     {
         var args = AgentTelemetryHook.Classify($$"""{"{{nameProperty}}":"{{tool}}","{{inputProperty}}":{{input}}}""", new TestEnvironment(), AgentTelemetryHook.DefaultMaxPayloadCharacters);
         Assert.NotNull(args);
-        Assert.Equal("aspire", args[Array.IndexOf(args, "--skill-name") + 1]);
+        Assert.Equal(expectedSkill, args[Array.IndexOf(args, "--skill-name") + 1]);
         Assert.Equal("skill_invocation", args[Array.IndexOf(args, "--event-type") + 1]);
+    }
+
+    [Theory]
+    [InlineData("aspire-terminals/references/apphost-terminals.md")]
+    [InlineData("aspire-terminals/references/automation-and-cli.md")]
+    [InlineData("aspire-terminals/references/resource-terminals.md")]
+    [InlineData("aspire-terminals/references/tapes.md")]
+    public void ReferenceFileEventsForwardRelativePath(string referencePath)
+    {
+        var args = AgentTelemetryHook.Classify(
+            $$$"""{"tool_name":"Read","tool_input":{"file_path":"workspace/.agents/skills/{{{referencePath}}}"}}""",
+            new TestEnvironment(),
+            AgentTelemetryHook.DefaultMaxPayloadCharacters);
+
+        Assert.NotNull(args);
+        Assert.Equal("reference_file_read", args[Array.IndexOf(args, "--event-type") + 1]);
+        Assert.Equal(referencePath, args[Array.IndexOf(args, "--file-reference") + 1]);
     }
 
     [Theory]
@@ -152,6 +172,12 @@ public class AgentTelemetryHookTests
     }
 
     [Fact]
+    public void CanonicalCatalogCoversKnownMcpTools()
+    {
+        Assert.Equal(KnownMcpTools.All.Order(), AgentTelemetryCatalog.Canonical.Tools.Order());
+    }
+
+    [Fact]
     public void AllowlistsMatchCanonicalPowerShellHook()
     {
         using var stream = typeof(AgentTelemetryHook).Assembly.GetManifestResourceStream("track-telemetry.ps1")!;
@@ -163,9 +189,9 @@ public class AgentTelemetryHookTests
             var body = Regex.Match(script, $@"\${name} = @\((.*?)\)", RegexOptions.Singleline).Groups[1].Value;
             return Regex.Matches(body, "'([^']+)'").Select(match => match.Groups[1].Value).Order().ToArray();
         }
-        Assert.Equal(Values(script, "AspireSkills"), AgentTelemetryCatalog.Bundled.Skills.Order());
-        Assert.Equal(Values(script, "AspireMcpTools"), AgentTelemetryCatalog.Bundled.Tools.Order());
-        Assert.Equal(Values(script, "AspireReferenceFiles"), AgentTelemetryCatalog.Bundled.References.Order());
+        Assert.Equal(Values(script, "AspireSkills"), AgentTelemetryCatalog.Canonical.Skills.Order());
+        Assert.Equal(Values(script, "AspireMcpTools"), AgentTelemetryCatalog.Canonical.Tools.Order());
+        Assert.Equal(Values(script, "AspireReferenceFiles"), AgentTelemetryCatalog.Canonical.References.Order());
     }
 
     [Theory]

@@ -7,6 +7,11 @@ import { once } from 'node:events';
 import { createInterface } from 'node:readline';
 import { chromium, type Browser, type Page } from 'playwright';
 
+/** Waits for the resource pane, the landmark every dashboard page shows once resources load. */
+function waitForResourcePane(page: Page): Promise<void> {
+    return page.getByRole('complementary', { name: 'Resources', exact: true }).waitFor();
+}
+
 /** Runs the actual Dashboard against the published native resource-service endpoint. */
 export class NativeDashboardSmoke {
     private constructor(
@@ -21,7 +26,7 @@ export class NativeDashboardSmoke {
             const page = await browser.newPage();
             await page.goto(address);
             try {
-                await page.getByRole('heading', { name: 'Resources', exact: true }).waitFor();
+                await waitForResourcePane(page);
             } catch (error) {
                 console.error(await page.locator('body').innerText());
                 throw error;
@@ -67,7 +72,7 @@ export class NativeDashboardSmoke {
             const page = await browser.newPage();
             page.on('pageerror', error => console.error(`Dashboard browser: ${error.message}`));
             await page.goto(address);
-            await page.getByRole('heading', { name: 'Resources', exact: true }).waitFor();
+            await waitForResourcePane(page);
             clearTimeout(startupTimeout);
             return new NativeDashboardSmoke(dashboard, browser, page);
         } catch (error) {
@@ -109,10 +114,14 @@ export class NativeDashboardSmoke {
 
     async verifyResources(): Promise<void> {
         for (const name of ['cache', 'database', 'tunnel']) {
-            const row = this.page.getByRole('row').filter({ hasText: name });
+            // Each resource is a row of the resource pane. A compact row, the default, shows its state as a colored dot
+            // without its name, so read the state from the row link's accessible description, which every density
+            // starts with it: "Running; Container; ...".
+            const row = this.page.locator(`.resource-row[data-resource-name="${name}"]`);
             await row.waitFor({ timeout: 30_000 });
-            await row.getByText('Running', { exact: true }).waitFor({ timeout: 30_000 });
-            assert.match(await row.innerText(), /Running/);
+            const link = row.locator('.resource-row-link[aria-description^="Running;"]');
+            await link.waitFor({ timeout: 30_000 });
+            assert.match(await link.getAttribute('aria-description') ?? '', /^Running;/);
         }
         await this.page.screenshot({ path: 'artifacts/native-hosting/native-dashboard.png', fullPage: true });
     }

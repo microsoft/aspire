@@ -59,6 +59,39 @@ Restart the container with the same volume, application name, data directory, an
 
 The AppHost console-log protocol does not identify the AppHost generation that produced a line. Resume prioritizes preserving logs from later AppHost generations, whose line numbers restart at 1. If the Dashboard restarts while the same AppHost remains running, console logs replayed by that AppHost can therefore be persisted again.
 
+### AppHost resource traits and dashboard customizations
+
+Resources can declare non-sensitive metadata as immutable name/value traits. Repeated
+names add multiple values:
+
+```csharp
+builder.AddProject<Projects.Api>("api")
+    .WithTags("Backend", "API")
+    .WithTrait("Owner", "Finance")
+    .WithTrait("Owner", "Platform")
+    .WithDashboardPosition(-10);
+```
+
+`WithTags` accepts a single tag or multiple tags using `params ReadOnlySpan<string>`,
+avoiding a temporary argument array in C#. Polyglot SDKs accept an array of tags.
+It uses the reserved trait `Aspire_Tag`, which is not dashboard-specific: it also
+appears as the `resource.trait.Aspire_Tag` property in `aspire describe --format json`.
+These tags participate in dashboard tag grouping but cannot be removed in the
+dashboard. User-added tags are stored separately in browser local storage, so
+restarting an AppHost does not lose customizations or copy declared tags from a
+different run.
+
+`WithDashboardPosition` uses `Aspire_Dashboard_Position`; repeated calls replace the
+previous value. Lower positions appear first; defaults can change between runs until
+the user reorders resources. Existing saved dashboard ordering takes precedence. Drag-and-drop ordering is saved
+per application, independently of the run database.
+
+Traits are transported as list-valued resource properties named `resource.trait.<name>`,
+including in recorded snapshots. Trait names are case-sensitive; dashboard tags are
+deduplicated case-insensitively. Tags must have at most 50 characters and use single
+spaces between words. Trait values are visible to dashboard and tooling consumers
+and must not contain secrets.
+
 ## Goals
 
 - Preserve resources, console logs, structured logs, traces, spans, and metrics after an application run ends.
@@ -125,7 +158,7 @@ The Dashboard creates the directory with `Directory.CreateTempSubdirectory`, rem
         └── run.json
 ```
 
-All applications store run directories directly beneath the shared `runs` directory. Run IDs use the UTC start time in `yyyyMMddTHHmmssfffZ` format. Each run directory contains an empty file named with the application storage key. Discovery checks for this marker before opening `run.json`, avoiding metadata reads for other applications. `run.json` contains:
+All applications store run directories directly beneath the shared `runs` directory. Run IDs use the UTC start time in `yyyyMMddTHHmmssfffZ` format. A Dashboard claims a run ID by taking its run lock and then creating a new run directory. If another Dashboard holds that lock or the directory already exists, such as when two AppHosts start in the same millisecond, the start time advances by one millisecond and the claim is retried. Each run directory contains an empty file named with the application storage key. Discovery checks for this marker before opening `run.json`, avoiding metadata reads for other applications. `run.json` contains:
 
 - schema version
 - run ID
@@ -355,7 +388,8 @@ SQL values are parameterized. Schema SQL is compiled into the Dashboard assembly
 
 ## Failure behavior
 
-- A lock collision fails startup instead of allowing two writers to share a run database.
+- A run ID collision advances the run ID to the next millisecond instead of allowing two writers to share a run database.
+- A resume-mode lock collision fails startup instead of allowing two writers to share an application database.
 - An invalid persistence mode fails Dashboard option validation and lists the accepted values.
 - Incomplete or unreadable historical metadata is ignored during discovery.
 - A historical run that disappears between discovery and selection leaves the previous run selected.

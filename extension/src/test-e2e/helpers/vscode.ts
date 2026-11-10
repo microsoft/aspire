@@ -1,3 +1,5 @@
+import type { AspireExtensionE2EControlCommand } from '../../types/extensionApi';
+import { applyE2eControl } from './assertions';
 import { BottomBarPanel, By, EditorView, InputBox, ModalDialog, Notification, SideBarView, TreeItem, TreeSection, VSBrowser, WebView, Workbench } from './extester';
 import { error as webDriverError } from 'selenium-webdriver';
 
@@ -326,6 +328,46 @@ export async function answerActiveInput(value: string, expectedPlaceholder: stri
     await input.confirm();
 }
 
+// VS Code's simple file dialog (files.simpleDialog.enable) navigates asynchronously as the path is typed. If Enter
+// arrives while that navigation is still pending, the dialog consumes Enter to refresh its listing instead of
+// resolving, leaving the prompt open. Only confirm once the dialog has settled on the typed path's parent folder.
+export async function answerActiveSimpleFileDialog(folderPath: string, timeoutMs = 30000): Promise<void> {
+    const input = await waitForActiveInput('Folder path', undefined, timeoutMs);
+    const expectedLabel = folderPath.split(/[\\/]/).filter(segment => segment.length > 0).pop() ?? folderPath;
+    let lastState = '<none>';
+    const readDialogState = async (): Promise<{ value: string; labels: string[] }> => {
+        const value = await input.getText();
+        const picks = await input.getQuickPicks();
+        const labels = await Promise.all(picks.map(pick => pick.getLabel()));
+        lastState = `value '${value}', visible labels: ${labels.join(', ') || '<none>'}`;
+        return { value, labels };
+    };
+
+    // Typing before the initial listing has loaded lets the dialog's first navigation overwrite the typed path.
+    await VSBrowser.instance.driver.wait(async () => {
+        try {
+            return (await readDialogState()).labels.length > 0;
+        }
+        catch (error) {
+            throwIfWebDriverSessionFailure(error);
+            return false;
+        }
+    }, timeoutMs, `Timed out waiting for the folder dialog listing to load. Last state: ${lastState}.`);
+
+    await input.setText(folderPath);
+    await VSBrowser.instance.driver.wait(async () => {
+        try {
+            const { value, labels } = await readDialogState();
+            return value === folderPath && labels.includes(expectedLabel);
+        }
+        catch (error) {
+            throwIfWebDriverSessionFailure(error);
+            return false;
+        }
+    }, timeoutMs, `Timed out waiting for the folder dialog to navigate to '${folderPath}'. Last state: ${lastState}.`);
+    await input.confirm();
+}
+
 export async function waitForActiveInput(expectedPlaceholder: string, expectedTitle?: string, timeoutMs = 30000): Promise<InputBox> {
     let lastPrompt = '<none>';
     return await VSBrowser.instance.driver.wait(async () => {
@@ -528,16 +570,41 @@ export async function captureScreenshot(name: string): Promise<void> {
     await VSBrowser.instance.takeScreenshot(name).catch(() => undefined);
 }
 
-export async function interactWithModalDialog(buttonTitle: string, timeoutMs = 120000, screenshotName?: string): Promise<ModalDialogInteraction> {
+async function getMatchingModalDialog(expectedText: string | undefined): Promise<{ dialog: ModalDialog; message: string; details: string } | undefined> {
+    const dialogs = await VSBrowser.instance.driver.findElements(By.css('.monaco-dialog-box'));
+    if (dialogs.length === 0) {
+        return undefined;
+    }
+
+    const dialog = new ModalDialog();
+    const message = await dialog.getMessage();
+    const details = await dialog.getDetails().catch(error => {
+        if (error instanceof webDriverError.NoSuchElementError) {
+            return '';
+        }
+
+        throw error;
+    });
+    // Debug launch errors can have an empty heading with the entire
+    // "Unable to launch browser: ..." message in the details element.
+    if ((!message && !details) || (expectedText && !`${message}\n${details}`.includes(expectedText))) {
+        return undefined;
+    }
+
+    return { dialog, message, details };
+}
+
+export async function interactWithModalDialog(
+    buttonTitle: string,
+    timeoutMs = 120000,
+    screenshotName?: string,
+    expectedText?: string): Promise<ModalDialogInteraction> {
     let lastError: unknown;
+    const expectedTextDescription = expectedText ? ` containing '${expectedText}'` : '';
     const interaction = await VSBrowser.instance.driver.wait(async () => {
         try {
-            const dialog = new ModalDialog();
-            const message = await dialog.getMessage();
-            const details = await dialog.getDetails().catch(() => '');
-            // Debug launch errors can have an empty heading with the entire
-            // "Unable to launch browser: ..." message in the details element.
-            if (!message && !details) {
+            const match = await getMatchingModalDialog(expectedText);
+            if (!match) {
                 return false;
             }
 
@@ -545,6 +612,7 @@ export async function interactWithModalDialog(buttonTitle: string, timeoutMs = 1
                 await VSBrowser.instance.takeScreenshot(screenshotName).catch(() => undefined);
             }
 
+            const { dialog, message, details } = match;
             await dialog.pushButton(buttonTitle);
             return { message, details };
         }
@@ -552,13 +620,49 @@ export async function interactWithModalDialog(buttonTitle: string, timeoutMs = 1
             lastError = error;
             return false;
         }
-    }, timeoutMs, `Timed out waiting for a modal dialog with a '${buttonTitle}' button. Last error: ${lastError}`);
+    }, timeoutMs, `Timed out waiting for a modal dialog${expectedTextDescription} with a '${buttonTitle}' button. Last error: ${lastError}`);
 
     return interaction as ModalDialogInteraction;
 }
 
 export type AcceptedModalDialog = ModalDialogInteraction;
 export const acceptModalDialog = interactWithModalDialog;
+
+export async function dismissModalDialogIfPresent(
+    buttonTitle: string,
+    timeoutMs: number,
+    screenshotName: string,
+    expectedText: string): Promise<void> {
+    let match: Awaited<ReturnType<typeof getMatchingModalDialog>>;
+    try {
+        match = await VSBrowser.instance.driver.wait(
+            async () => {
+                try {
+                    return await getMatchingModalDialog(expectedText) ?? false;
+                }
+                catch (error) {
+                    if (error instanceof webDriverError.NoSuchElementError
+                        || error instanceof webDriverError.StaleElementReferenceError) {
+                        return false;
+                    }
+
+                    throw error;
+                }
+            },
+            timeoutMs);
+    }
+    catch (error) {
+        if (error instanceof webDriverError.TimeoutError) {
+            return;
+        }
+
+        throw error;
+    }
+
+    // Absence is expected during successful teardown; an interaction failure is not.
+    await VSBrowser.instance.takeScreenshot(screenshotName).catch(() => undefined);
+    await match.dialog.pushButton(buttonTitle);
+}
 
 export async function getOpenEditorTitles(): Promise<string[]> {
     return await new EditorView().getOpenEditorTitles();
@@ -604,7 +708,9 @@ export async function dismissAllNotifications(timeoutMs = 30000): Promise<void> 
                 return true;
             }
 
-            await notifications[0].dismiss();
+            // Clicking a toast's clear action needs the toast hovered, and toasts re-layout as others
+            // arrive or expire. VS Code's own command clears every notification without the DOM.
+            await applyE2eControl({ command: { name: 'clearAllNotifications' } satisfies AspireExtensionE2EControlCommand });
             return false;
         }
         catch (error) {

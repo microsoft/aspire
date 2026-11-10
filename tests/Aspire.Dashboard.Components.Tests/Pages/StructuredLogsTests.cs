@@ -340,8 +340,9 @@ public partial class StructuredLogsTests : DashboardTestContext
             builder.Add(p => p.ViewportInformation, viewport);
         });
 
-        var search = Assert.Single(cut.FindComponents<FluentTextInput>());
-        Assert.Equal("off", search.Instance.AutoComplete);
+        var searches = cut.FindComponents<FluentTextInput>();
+        Assert.NotEmpty(searches);
+        Assert.All(searches, search => Assert.Equal("off", search.Instance.AutoComplete));
     }
 
     [Fact]
@@ -416,7 +417,7 @@ public partial class StructuredLogsTests : DashboardTestContext
         FluentUISetupHelpers.SetupFluentToolbar(this);
         FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
 
-        JSInterop.SetupVoid("focusElement", _ => true);
+        JSInterop.SetupVoid("focusElement", _ => true).SetVoidResult();
 
         FluentUISetupHelpers.AddCommonDashboardServices(this);
         Services.AddSingleton<ILogger<StructuredLogs>>(NullLogger<StructuredLogs>.Instance);

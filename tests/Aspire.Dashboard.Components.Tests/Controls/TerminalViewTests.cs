@@ -44,7 +44,7 @@ public class TerminalViewTests : DashboardTestContext
 
         var button = cut.Find("div[hidden] .terminal-selection-copy");
         Assert.Equal(controlsLoc[nameof(Resources.ControlsStrings.GridValueCopyToClipboard)].Value, button.GetAttribute("aria-label"));
-        Assert.Equal(controlsLoc[nameof(Resources.ControlsStrings.GridValueCopyToClipboard)].Value, button.GetAttribute("title"));
+        Assert.Equal(controlsLoc[nameof(Resources.ControlsStrings.GridValueCopyToClipboard)].Value, button.GetAttribute("data-tooltip"));
         Assert.Single(button.QuerySelectorAll("svg"));
         var invocation = Assert.Single(initialization.Invocations);
         Assert.IsType<DotNetObjectReference<TerminalView>>(invocation.Arguments[2]);
@@ -125,7 +125,7 @@ public class TerminalViewTests : DashboardTestContext
         {
             Assert.Single(button.QuerySelectorAll("svg"));
             Assert.False(string.IsNullOrEmpty(button.GetAttribute("aria-label")));
-            Assert.Equal(button.GetAttribute("aria-label"), button.GetAttribute("title"));
+            Assert.Equal(button.GetAttribute("aria-label"), button.GetAttribute("data-tooltip"));
         }
     }
 
@@ -149,7 +149,7 @@ public class TerminalViewTests : DashboardTestContext
         Assert.False(select.Instance.Disabled);
         Assert.Equal(Resources.TerminalStrings.TerminalPalette, select.Instance.AriaLabel);
         Assert.Equal(["Light", "Dark"], select.Instance.Items!.Select(select.Instance.OptionText!));
-        Assert.Equal("terminal-palette-select aspire-input", cut.Find(".terminal-controls").LastElementChild!.ClassName);
+        Assert.Equal("terminal-palette-select aspire-input", cut.Find(".terminal-palette-controls").LastElementChild!.ClassName);
 
         await cut.InvokeAsync(() => select.Instance.ValueChanged.InvokeAsync("light"));
         Assert.Single(save.Invocations);
@@ -179,22 +179,27 @@ public class TerminalViewTests : DashboardTestContext
         Assert.Collection(cut.FindAll(".terminal-controls fluent-button"),
             button =>
             {
-                Assert.Equal(loc[nameof(Resources.TerminalStrings.TerminalToolbarDecreaseFontSize)].Value, button.GetAttribute("title"));
+                Assert.Equal(loc[nameof(Resources.TerminalStrings.TerminalToolbarDecreaseFontSize)].Value, button.GetAttribute("data-tooltip"));
                 Assert.Equal(loc[nameof(Resources.TerminalStrings.TerminalToolbarDecreaseFontSize)].Value, button.GetAttribute("aria-label"));
             },
             button =>
             {
-                Assert.Equal(loc[nameof(Resources.TerminalStrings.TerminalToolbarIncreaseFontSize)].Value, button.GetAttribute("title"));
+                Assert.Equal(loc[nameof(Resources.TerminalStrings.TerminalToolbarIncreaseFontSize)].Value, button.GetAttribute("data-tooltip"));
                 Assert.Equal(loc[nameof(Resources.TerminalStrings.TerminalToolbarIncreaseFontSize)].Value, button.GetAttribute("aria-label"));
             },
             button =>
             {
-                Assert.Equal(loc[nameof(Resources.TerminalStrings.TerminalToolbarGridSizeAuto)].Value, button.GetAttribute("title"));
+                Assert.Equal(loc[nameof(Resources.TerminalStrings.TerminalToolbarGridSizeAuto)].Value, button.GetAttribute("data-tooltip"));
                 Assert.Equal(loc[nameof(Resources.TerminalStrings.TerminalToolbarGridSizeAuto)].Value, button.GetAttribute("aria-label"));
             });
         var dimensionsSelect = cut.FindComponent<FluentSelect<TerminalSizePreset, string>>();
         Assert.Null(dimensionsSelect.Instance.Placeholder);
         Assert.Equal(loc[nameof(Resources.TerminalStrings.TerminalToolbarGridSize)].Value, dimensionsSelect.Instance.AriaLabel);
+        Assert.Equal(dimensionsSelect.Instance.Id, cut.Find("label.terminal-select-label").GetAttribute("for"));
+        var paletteSelect = cut.FindComponent<FluentSelect<string, string>>();
+        Assert.Equal(loc[nameof(Resources.TerminalStrings.TerminalPalette)].Value, paletteSelect.Instance.AriaLabel);
+        Assert.Equal(loc[nameof(Resources.TerminalStrings.TerminalPalette)].Value, paletteSelect.Find("fluent-dropdown").GetAttribute("title"));
+        Assert.Equal(paletteSelect.Instance.Id, cut.FindAll("label.terminal-select-label")[1].GetAttribute("for"));
     }
 
     [Theory]
@@ -265,6 +270,28 @@ public class TerminalViewTests : DashboardTestContext
     }
 
     [Fact]
+    public async Task NewWindowAction_UsesConfiguredRoutePrefix()
+    {
+        TerminalSetupHelpers.SetupTerminalView(this);
+        TerminalSetupHelpers.SetupTerminalWindows(this);
+        var cut = Render<TerminalView>(builder => builder
+            .Add(p => p.ResourceName, "shell")
+            .Add(p => p.ShowOpenInWindow, true)
+            .Add(p => p.TerminalWindowPathPrefix, "legacy/terminal-window"));
+        await cut.InvokeAsync(() => cut.Instance.OnTerminalStateChanged(new TerminalToolbarState
+        {
+            TerminalId = 1,
+            Generation = 1,
+            Connected = true,
+            FontPx = 13
+        }));
+
+        Assert.Equal(
+            "http://localhost/legacy/terminal-window/resource/shell?fontSize=13",
+            cut.Find(".terminal-open-window").GetAttribute("data-terminal-window-url"));
+    }
+
+    [Fact]
     public async Task Titlebar_UsesWorkloadMetadataAndHidesDisconnectedProgress()
     {
         var module = TerminalSetupHelpers.SetupTerminalViewModule(this, "/Components/Controls/TerminalView.razor.js");
@@ -323,7 +350,7 @@ public class TerminalViewTests : DashboardTestContext
             Cols = 97, Rows = 38, SizeKey = "97x38", SizeSelectEnabled = true
         }));
         Assert.False(cut.Find(".terminal-fit").HasAttribute("disabled"));
-        Assert.Equal(Resources.TerminalStrings.TerminalToolbarGridSizeAuto, cut.Find(".terminal-fit").GetAttribute("title"));
+        Assert.Equal(Resources.TerminalStrings.TerminalToolbarGridSizeAuto, cut.Find(".terminal-fit").GetAttribute("data-tooltip"));
         var items = cut.FindComponent<FluentSelect<TerminalSizePreset, string>>().Instance.Items;
         Assert.NotNull(items);
         Assert.Equal([new("97x38", "97\u00d738", 97, 38), new TerminalSizePreset("80x24", "80\u00d724", 80, 24)], items);

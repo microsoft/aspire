@@ -5,10 +5,13 @@ using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Aspire.Cli.Agents;
+using Aspire.Cli.Agents.AspireSkills;
 using Aspire.Cli.Agents.ClaudeCode;
 using Aspire.Cli.Agents.Copilot;
 using Aspire.Cli.Agents.OpenCode;
+using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -45,6 +48,8 @@ internal sealed class AgentConfigurationTestContext : IDisposable
     public DirectoryInfo Home { get; }
     public TestEnvironment Environment { get; }
     public CliExecutionContext ExecutionContext { get; }
+    public ConfigurationManager Configuration { get; } = new();
+    public IReadOnlyList<SkillSource> Sources => SkillSource.Resolve(Configuration);
     public IReadOnlyList<IAgentClient> Clients { get; }
     public IAgentClient Copilot { get; }
     public IAgentClient ClaudeCode { get; }
@@ -62,6 +67,7 @@ internal sealed class AgentConfigurationTestContext : IDisposable
         var services = CliTestHelper.CreateServiceCollection(Workspace, output, options =>
         {
             options.CliExecutionContextFactory = _ => ExecutionContext;
+            options.ProjectLocatorFactory = _ => new TestProjectLocator();
             configure?.Invoke(options);
         });
         services.AddSingleton<IEnvironment>(Environment);
@@ -71,7 +77,7 @@ internal sealed class AgentConfigurationTestContext : IDisposable
 
     public Task<IReadOnlyList<AgentTargetResult>> ConfigureIntegrationAsync(
         AgentConfigurationScope scope, IReadOnlyList<IAgentClient> clients, CancellationToken cancellationToken = default)
-        => AgentConfiguration.ApplyRemoteAsync(clients, Project, scope, cancellationToken);
+        => AgentConfiguration.ApplyRemoteAsync(clients, Project, scope, Sources, cancellationToken);
 
     public async Task<(string Path, bool Repaired, bool Added)> ConfigureMcpAsync(
         IAgentClient client, AgentConfigurationScope scope, CancellationToken cancellationToken = default)
@@ -94,7 +100,11 @@ internal sealed class AgentConfigurationTestContext : IDisposable
         await File.WriteAllTextAsync(path, content);
     }
 
-    public void Dispose() => Workspace.Dispose();
+    public void Dispose()
+    {
+        ((IDisposable)Configuration).Dispose();
+        Workspace.Dispose();
+    }
 }
 
 internal sealed class InterceptingStringJsonConverter(Action onWrite) : JsonConverter<string>

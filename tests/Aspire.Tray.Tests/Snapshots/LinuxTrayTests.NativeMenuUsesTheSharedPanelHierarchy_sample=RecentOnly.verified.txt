@@ -1,0 +1,29 @@
+﻿Aspire · No AppHosts running [disabled]
+---
+Recently opened · 2
+  Todo · Stopped
+    Start
+    ---
+    Show in file manager
+    Copy path
+    Pin
+    Remove from recent
+    ---
+    Stopped [disabled]
+    todo/Todo.AppHost [disabled]
+  eShop · Stopped
+    Start
+    ---
+    Show in file manager
+    Copy path
+    Pin
+    Remove from recent
+    ---
+    Stopped [disabled]
+    src/eShop.AppHost [disabled]
+  ---
+  Clear recent AppHosts...
+---
+Settings...
+Documentation
+Quit

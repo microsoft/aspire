@@ -3,7 +3,7 @@
   nuget.config:
 <configuration>
   <packageSources>
-    <add key="aspire" value="https://api.nuget.org/v3/index.json" />
+    <add key="aspire" value="https://stale.example/v3/index.json" />
   </packageSources>
   <packageSourceMapping>
     <packageSource key="aspire">

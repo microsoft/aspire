@@ -31,7 +31,7 @@
         <div class="terminal-dock-tabstrip">
             @* FluentTabs resets selection when closing an inactive tab (https://github.com/microsoft/fluentui-blazor/issues/3392).
                Keep selection and removal driven by AppHost updates, with separate tab/close buttons and mounted panes. *@
-            @if (_terminals.Count > 0)
+            @if (_terminals.Count > 0 || ActiveResourceTerminal is not null)
             {
                 <div class="terminal-dock-tabs">
                     <div class="terminal-dock-tablist aspire-tab-list" role="tablist" aria-label="@Loc[nameof(Resources.TerminalStrings.TerminalDockTabs)]">
@@ -56,12 +56,24 @@
                                 <FluentButton Appearance="ButtonAppearance.Transparent"
                                               IconOnly="true"
                                               Class="aspire-icon-button terminal-dock-tab-close"
-                                              Title="@Loc[nameof(Resources.TerminalStrings.TerminalDockCloseTab), terminal.Title]"
+                                              data-tooltip="@Loc[nameof(Resources.TerminalStrings.TerminalDockCloseTab), terminal.Title]"
                                               aria-label="@Loc[nameof(Resources.TerminalStrings.TerminalDockCloseTab), terminal.Title]"
                                               tabindex="@(IsPaneActive(terminal.TerminalId) ? 0 : -1)"
                                               OnClick="@(() => CloseTerminalAsync(terminal.TerminalId, terminal.Title))">
                                     <FluentIcon Value="@(new Icons.Regular.Size12.Dismiss())" Color="Color.Default" />
                                 </FluentButton>
+                            </div>
+                        }
+                        @if (ActiveResourceTerminal is { } tabResourceTerminal)
+                        {
+                            <div class="terminal-dock-tab aspire-tab active">
+                                <button type="button"
+                                        role="tab"
+                                        class="terminal-dock-tab-select"
+                                        aria-selected="true"
+                                        tabindex="0">
+                                    <span class="terminal-dock-tab-title">@tabResourceTerminal.DisplayName</span>
+                                </button>
                             </div>
                         }
                     </div>
@@ -80,7 +92,7 @@
                               Disabled="true"
                               aria-disabled="true"
                               data-tab-scroll="-1"
-                              Title="@Loc[nameof(Resources.TerminalStrings.TerminalDockScrollLeft)]"
+                              data-tooltip="@Loc[nameof(Resources.TerminalStrings.TerminalDockScrollLeft)]"
                               aria-label="@Loc[nameof(Resources.TerminalStrings.TerminalDockScrollLeft)]">
                     <FluentIcon Value="@(new Icons.Regular.Size16.ChevronLeft())" Color="Color.Default" />
                 </FluentButton>
@@ -90,7 +102,7 @@
                               Disabled="true"
                               aria-disabled="true"
                               data-tab-scroll="1"
-                              Title="@Loc[nameof(Resources.TerminalStrings.TerminalDockScrollRight)]"
+                              data-tooltip="@Loc[nameof(Resources.TerminalStrings.TerminalDockScrollRight)]"
                               aria-label="@Loc[nameof(Resources.TerminalStrings.TerminalDockScrollRight)]">
                     <FluentIcon Value="@(new Icons.Regular.Size16.ChevronRight())" Color="Color.Default" />
                 </FluentButton>
@@ -102,7 +114,7 @@
                                   Url="@ActiveTerminalWindowUrl"
                                   FontSize="@ActiveTerminalFontSize"
                                   FocusGroup="@_elementIdPrefix"
-                                  Disabled="@(!_isVisible || IsPanelVisible || _activeTerminalId is null || _detachedTerminalIds.Contains(_activeTerminalId))"
+                                  Disabled="@(!_isVisible || IsPanelVisible || _activeTerminalId is null || ActiveResourceTerminal is not null || _detachedTerminalIds.Contains(_activeTerminalId))"
                                   WindowKeysToAdopt="@(_terminals.Select(t => t.TerminalId).ToArray())"
                                   OnWindowsAdopted="@OnWindowsAdopted"
                                   OnWindowTrackingFailed="@OnWindowTrackingFailed"
@@ -111,7 +123,7 @@
             <FluentButton Appearance="ButtonAppearance.Transparent"
                           IconOnly="true"
                           Class="aspire-icon-button terminal-dock-collapse"
-                          Title="@Loc[nameof(Resources.TerminalStrings.TerminalDockHide)]"
+                          data-tooltip="@Loc[nameof(Resources.TerminalStrings.TerminalDockHide)]"
                           aria-label="@Loc[nameof(Resources.TerminalStrings.TerminalDockHide)]"
                           OnClick="@Hide">
                 <FluentIcon Value="@(new Icons.Regular.Size16.ChevronDown())" Color="Color.Default" />
@@ -160,12 +172,25 @@
                         <TerminalView @ref="_terminalViews[terminal.TerminalId]"
                                       EndpointPathAndQuery="@BuildEndpoint(terminal.TerminalId)"
                                       Chromeless="true"
+                                      Embedded="true"
                                       ShowDimensionsPicker="false"
                                       AutoFit="@(_isVisible && IsPaneActive(terminal.TerminalId))"
                                       OnToolbarStateChanged="@OnTerminalToolbarStateChanged"
                                       OnClose="@(() => CloseTerminalAsync(terminal.TerminalId, terminal.Title))"
                                       SizeMemoryKey="@($"dock:{terminal.TerminalId}")" />
                     }
+                </div>
+            }
+            @if (ActiveResourceTerminal is { } resourceTerminal)
+            {
+                <div class="terminal-dock-pane active" role="tabpanel">
+                    <TerminalView @ref="_resourceTerminalView"
+                                  ResourceName="@resourceTerminal.Name"
+                                  Chromeless="true"
+                                  Embedded="true"
+                                  ShowDimensionsPicker="false"
+                                  AutoFit="@_isVisible"
+                                  SizeMemoryKey="@($"dock:resource:{resourceTerminal.Name}")" />
                 </div>
             }
             @if (IsPanelVisible)

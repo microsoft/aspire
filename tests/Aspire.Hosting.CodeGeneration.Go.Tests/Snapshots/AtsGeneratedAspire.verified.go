@@ -8,15 +8,17 @@
 package aspire
 
 import (
-    "context"
-    "fmt"
-    "os"
-    "strings"
-    "time"
+	"context"
+	"encoding/json"
+	"fmt"
+	"os"
+	"strings"
+	"time"
 )
 
 // Compile-time references to keep imports used in minimal SDKs.
 var _ = context.Background
+var _ = json.Number("")
 var _ = fmt.Errorf
 var _ = os.Getenv
 var _ = strings.EqualFold
@@ -26,34 +28,50 @@ var _ = time.Second
 // Enums
 // ============================================================================
 
-// TestPersistenceMode represents TestPersistenceMode.
+// TestPersistenceMode - Test persistence mode enum.
 type TestPersistenceMode string
 
 const (
-	TestPersistenceModeNone TestPersistenceMode = "None"
+	TestPersistenceModeNone   TestPersistenceMode = "None"
 	TestPersistenceModeVolume TestPersistenceMode = "Volume"
-	TestPersistenceModeBind TestPersistenceMode = "Bind"
+	TestPersistenceModeBind   TestPersistenceMode = "Bind"
 )
 
-// TestResourceStatus represents TestResourceStatus.
+// TestResourceStatus - Test enum for type generation verification.
 type TestResourceStatus string
 
 const (
+	// TestResourceStatusPending - The resource is pending.
 	TestResourceStatusPending TestResourceStatus = "Pending"
+	// TestResourceStatusRunning - The resource is running.
 	TestResourceStatusRunning TestResourceStatus = "Running"
+	// TestResourceStatusStopped - The resource is stopped.
 	TestResourceStatusStopped TestResourceStatus = "Stopped"
+	// TestResourceStatusFailed is the resource failed.
 	TestResourceStatusFailed TestResourceStatus = "Failed"
+)
+
+// GoObsoleteEnum represents GoObsoleteEnum.
+type GoObsoleteEnum string
+
+const (
+	GoObsoleteEnumCurrent GoObsoleteEnum = "Current"
 )
 
 // ============================================================================
 // DTOs
 // ============================================================================
 
-// TestConfigDto represents TestConfigDto.
+// TestConfigDto - Test DTO to verify [AspireDto] generates TypeScript
+// interfaces.
 type TestConfigDto struct {
+	// Name is the name of the test config.
 	Name string `json:"name,omitempty"`
-	Port float64 `json:"port,omitempty"`
+	// Port is the port used by the test config.
+	Port int `json:"port,omitempty"`
+	// Enabled is a value indicating whether the test config is enabled.
 	Enabled bool `json:"enabled,omitempty"`
+	// OptionalField is an optional test config field.
 	OptionalField *string `json:"optionalField,omitempty"`
 }
 
@@ -63,39 +81,77 @@ func (d *TestConfigDto) ToMap() map[string]any {
 	m["name"] = serializeValue(d.Name)
 	m["port"] = serializeValue(d.Port)
 	m["enabled"] = serializeValue(d.Enabled)
-	if d.OptionalField != nil { m["optionalField"] = serializeValue(d.OptionalField) }
+	if d.OptionalField != nil {
+		m["optionalField"] = serializeValue(d.OptionalField)
+	}
 	return m
 }
 
-// TestNestedDto represents TestNestedDto.
+// TestNestedDto - Test DTO with complex nested types.
 type TestNestedDto struct {
-	Id string `json:"id,omitempty"`
+	Id     string         `json:"id,omitempty"`
 	Config *TestConfigDto `json:"config,omitempty"`
-	Tags []string `json:"tags,omitempty"`
-	Counts map[string]float64 `json:"counts,omitempty"`
+	Tags   []string       `json:"tags,omitempty"`
+	Counts map[string]int `json:"counts,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.
 func (d *TestNestedDto) ToMap() map[string]any {
 	m := map[string]any{}
 	m["id"] = serializeValue(d.Id)
-	if d.Config != nil { m["config"] = serializeValue(d.Config) }
-	if d.Tags != nil { m["tags"] = serializeValue(d.Tags) }
-	if d.Counts != nil { m["counts"] = serializeValue(d.Counts) }
+	if d.Config != nil {
+		m["config"] = serializeValue(d.Config)
+	}
+	if d.Tags != nil {
+		m["tags"] = serializeValue(d.Tags)
+	}
+	if d.Counts != nil {
+		m["counts"] = serializeValue(d.Counts)
+	}
 	return m
 }
 
-// TestDeeplyNestedDto represents TestDeeplyNestedDto.
+// TestDeeplyNestedDto - Test DTO with deeply nested generic types.
 type TestDeeplyNestedDto struct {
+	// NestedData - Deeply nested generic: Dictionary containing List of DTOs.
 	NestedData map[string][]*TestConfigDto `json:"nestedData,omitempty"`
+	// MetadataArray - Array of dictionaries.
 	MetadataArray []map[string]string `json:"metadataArray,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.
 func (d *TestDeeplyNestedDto) ToMap() map[string]any {
 	m := map[string]any{}
-	if d.NestedData != nil { m["nestedData"] = serializeValue(d.NestedData) }
-	if d.MetadataArray != nil { m["metadataArray"] = serializeValue(d.MetadataArray) }
+	if d.NestedData != nil {
+		m["nestedData"] = serializeValue(d.NestedData)
+	}
+	if d.MetadataArray != nil {
+		m["metadataArray"] = serializeValue(d.MetadataArray)
+	}
+	return m
+}
+
+// GoObsoleteDto represents GoObsoleteDto.
+type GoObsoleteDto struct {
+	Current string `json:"current,omitempty"`
+}
+
+// ToMap converts the DTO to a map for JSON serialization.
+func (d *GoObsoleteDto) ToMap() map[string]any {
+	m := map[string]any{}
+	m["current"] = serializeValue(d.Current)
+	return m
+}
+
+// GoObsoleteWireDto represents GoObsoleteWireDto.
+type GoObsoleteWireDto struct {
+	Value string `json:"value,omitempty"`
+}
+
+// ToMap converts the DTO to a map for JSON serialization.
+func (d *GoObsoleteWireDto) ToMap() map[string]any {
+	m := map[string]any{}
+	m["value"] = serializeValue(d.Value)
 	return m
 }
 
@@ -103,12 +159,21 @@ func (d *TestDeeplyNestedDto) ToMap() map[string]any {
 // Exported Values
 // ============================================================================
 
+// GoObsoleteValues groups related exported values.
+var GoObsoleteValues = struct {
+	CurrentValue string
+}{
+	CurrentValue: "current",
+}
+
+// TestConfigs groups related exported values.
 var TestConfigs = struct {
-	Default *TestConfigDto
+	// Default is the default test configuration.
+	Default  *TestConfigDto
 	Profiles struct {
 		Development *TestConfigDto
 	}
-	Secure *TestConfigDto
+	Secure          *TestConfigDto
 	UnicodeGreeting string
 }{
 	Default: &TestConfigDto{Name: "default", Port: 6379, Enabled: true, OptionalField: func(value string) *string { return &value }("cache")},
@@ -117,7 +182,7 @@ var TestConfigs = struct {
 	}{
 		Development: &TestConfigDto{Name: "development", Port: 5001, Enabled: false, OptionalField: nil},
 	},
-	Secure: &TestConfigDto{Name: "secure", Port: 6380, Enabled: true, OptionalField: nil},
+	Secure:          &TestConfigDto{Name: "secure", Port: 6380, Enabled: true, OptionalField: nil},
 	UnicodeGreeting: "你好こんにちは",
 }
 
@@ -126,37 +191,44 @@ var TestConfigs = struct {
 // ============================================================================
 
 // Resource marks types implementing IResource.
-// Methods are emitted on concrete impls; this interface is a marker for type assertions.
+//
+// Methods are emitted on concrete impls; this interface is a marker for type
+// assertions.
 type Resource interface {
 	handleReference
 }
 
-// ResourceWithConnectionString marks types implementing IResourceWithConnectionString.
-// Methods are emitted on concrete impls; this interface is a marker for type assertions.
+// ResourceWithConnectionString marks types implementing
+// IResourceWithConnectionString.
+//
+// Methods are emitted on concrete impls; this interface is a marker for type
+// assertions.
 type ResourceWithConnectionString interface {
 	handleReference
 }
 
-// TestMutablePromiseCollisionResourcePromise marks types implementing ITestMutablePromiseCollisionResourcePromise.
-// Marker interface.
+// TestMutablePromiseCollisionResourcePromise marks types implementing
+// ITestMutablePromiseCollisionResourcePromise.
 type TestMutablePromiseCollisionResourcePromise interface {
 	handleReference
 }
 
-// TestPromiseCollisionResource marks types implementing ITestPromiseCollisionResource.
-// Marker interface.
+// TestPromiseCollisionResource marks types implementing
+// ITestPromiseCollisionResource.
 type TestPromiseCollisionResource interface {
 	handleReference
 }
 
-// TestPromiseCollisionResourcePromise marks types implementing ITestPromiseCollisionResourcePromise.
-// Marker interface.
+// TestPromiseCollisionResourcePromise marks types implementing
+// ITestPromiseCollisionResourcePromise.
 type TestPromiseCollisionResourcePromise interface {
 	handleReference
 }
 
 // TestVaultResource marks types implementing ITestVaultResource.
-// Methods are emitted on concrete impls; this interface is a marker for type assertions.
+//
+// Methods are emitted on concrete impls; this interface is a marker for type
+// assertions.
 type TestVaultResource interface {
 	handleReference
 }
@@ -165,34 +237,104 @@ type TestVaultResource interface {
 // Handle wrappers
 // ============================================================================
 
-// Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource is the public interface for handle type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource.
+// Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource is the public
+// interface for handle type
+// Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource.
 type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	handleReference
+
+	// TestWaitFor waits for another resource (test version)
 	TestWaitFor(dependency Resource) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+
+	// TestWithEnvironmentCallback configures environment with callback (test
+	// version)
 	TestWithEnvironmentCallback(callback func(arg TestEnvironmentContext)) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+
+	// WithCancellableOperation performs a cancellable operation
 	WithCancellableOperation(operation func(arg *CancellationToken)) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+
+	// WithConfig configures the resource with a DTO
 	WithConfig(config *TestConfigDto) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+
+	// WithCorrelationId sets the correlation ID
 	WithCorrelationId(correlationId string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+
+	// WithCreatedAt sets the created timestamp
 	WithCreatedAt(createdAt string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+
+	// WithDependency adds a dependency on another resource
 	WithDependency(dependency ResourceWithConnectionString) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+
+	// WithEndpoints sets the endpoints
 	WithEndpoints(endpoints []string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+
+	// WithEnvironmentVariables sets environment variables
 	WithEnvironmentVariables(variables map[string]string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
-	WithMergeEndpoint(endpointName string, port float64) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
-	WithMergeEndpointScheme(endpointName string, port float64, scheme string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+
+	// WithMergeEndpoint configures a named endpoint
+	WithMergeEndpoint(endpointName string, port int) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+
+	// WithMergeEndpointScheme configures a named endpoint with scheme
+	WithMergeEndpointScheme(endpointName string, port int, scheme string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+
+	// WithMergeLabel adds a label to the resource
 	WithMergeLabel(label string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+
+	// WithMergeLabelCategorized adds a categorized label to the resource
 	WithMergeLabelCategorized(label string, category string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
-	WithMergeLogging(logLevel string, options ...*WithMergeLoggingOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
-	WithMergeLoggingPath(logLevel string, logPath string, options ...*WithMergeLoggingPathOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
-	WithMergeRoute(path string, method string, handler string, priority float64) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
-	WithMergeRouteMiddleware(path string, method string, handler string, priority float64, middleware string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+
+	// WithMergeLogging configures resource logging
+	//
+	// Parameters:
+	//   - options: Optional parameters; see [WithMergeLoggingOption].
+	WithMergeLogging(logLevel string, options ...WithMergeLoggingOption) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+
+	// WithMergeLoggingPath configures resource logging with file path
+	//
+	// Parameters:
+	//   - options: Optional parameters; see [WithMergeLoggingPathOption].
+	WithMergeLoggingPath(logLevel string, logPath string, options ...WithMergeLoggingPathOption) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+
+	// WithMergeRoute configures a route
+	WithMergeRoute(path string, method string, handler string, priority int) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+
+	// WithMergeRouteMiddleware configures a route with middleware
+	WithMergeRouteMiddleware(path string, method string, handler string, priority int, middleware string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+
+	// WithModifiedAt sets the modified timestamp
 	WithModifiedAt(modifiedAt string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+
+	// WithNestedConfig configures with nested DTO
 	WithNestedConfig(config *TestNestedDto) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
-	WithOptionalCallback(options ...*WithOptionalCallbackOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
-	WithOptionalString(options ...*WithOptionalStringOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+
+	// WithOptionalCallback configures with optional callback
+	//
+	// Parameters:
+	//   - options: Optional parameters; see [WithOptionalCallbackOption].
+	WithOptionalCallback(options ...WithOptionalCallbackOption) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+
+	// WithOptionalString adds an optional string parameter
+	//
+	// Parameters:
+	//   - options: Optional parameters; see [WithOptionalStringOption].
+	WithOptionalString(options ...WithOptionalStringOption) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+
+	// WithStatus sets the resource status
 	WithStatus(status TestResourceStatus) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+
+	// WithUnionDependency adds a dependency from a string or another resource
+	//
+	// Allowed types for parameter dependency: string, ResourceWithConnectionString.
 	WithUnionDependency(dependency any) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+
+	// WithValidator adds validation callback
 	WithValidator(validator func(arg TestResourceContext) bool) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+
+	// WithVaultDirect configures vault using direct interface target
 	WithVaultDirect(option string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+
+	// Err returns the first error recorded on this wrapper, or nil if the wrapper
+	// resolved successfully and no chained operation has failed.
 	Err() error
 }
 
@@ -208,20 +350,32 @@ func newAspire_Hosting_CodeGeneration_Go_TestsTestVaultResourceFromHandle(h *han
 
 // TestWaitFor waits for another resource (test version)
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) TestWaitFor(dependency Resource) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
-	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
+	if s.Err() != nil {
+		return s
+	}
+	if dependency != nil {
+		if err := dependency.Err(); err != nil {
+			s.setPropagatedErr(err)
+			return s
+		}
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
 	reqArgs["dependency"] = serializeValue(dependency)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/testWaitFor", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/testWaitFor", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
-// TestWithEnvironmentCallback configures environment with callback (test version)
+// TestWithEnvironmentCallback configures environment with callback (test
+// version)
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) TestWithEnvironmentCallback(callback func(arg TestEnvironmentContext)) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -234,13 +388,17 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) TestWithEnviro
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
 	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/testWithEnvironmentCallback", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/testWithEnvironmentCallback", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithCancellableOperation performs a cancellable operation
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithCancellableOperation(operation func(arg *CancellationToken)) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -248,104 +406,147 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithCancellabl
 	if operation != nil {
 		cb := operation
 		shim := func(args ...any) any {
-			cb(callbackArg[*CancellationToken](args, 0))
+			cb(callbackCancellationTokenArg(s.client, args, 0))
 			return nil
 		}
 		reqArgs["operation"] = s.client.registerCallback(shim)
 	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withCancellableOperation", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withCancellableOperation", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithConfig configures the resource with a DTO
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithConfig(config *TestConfigDto) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
-	if config != nil { reqArgs["config"] = serializeValue(config) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withConfig", reqArgs); err != nil { s.setErr(err) }
+	if config != nil {
+		reqArgs["config"] = serializeValue(config)
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withConfig", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithCorrelationId sets the correlation ID
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithCorrelationId(correlationId string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
 	reqArgs["correlationId"] = serializeValue(correlationId)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withCorrelationId", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withCorrelationId", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithCreatedAt sets the created timestamp
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithCreatedAt(createdAt string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
 	reqArgs["createdAt"] = serializeValue(createdAt)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withCreatedAt", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withCreatedAt", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithDependency adds a dependency on another resource
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithDependency(dependency ResourceWithConnectionString) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
-	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
+	if s.Err() != nil {
+		return s
+	}
+	if dependency != nil {
+		if err := dependency.Err(); err != nil {
+			s.setPropagatedErr(err)
+			return s
+		}
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
 	reqArgs["dependency"] = serializeValue(dependency)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withDependency", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withDependency", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithEndpoints sets the endpoints
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithEndpoints(endpoints []string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
-	if endpoints != nil { reqArgs["endpoints"] = serializeValue(endpoints) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withEndpoints", reqArgs); err != nil { s.setErr(err) }
+	if endpoints != nil {
+		reqArgs["endpoints"] = serializeValue(endpoints)
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withEndpoints", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithEnvironmentVariables sets environment variables
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithEnvironmentVariables(variables map[string]string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
-	if variables != nil { reqArgs["variables"] = serializeValue(variables) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withEnvironmentVariables", reqArgs); err != nil { s.setErr(err) }
+	if variables != nil {
+		reqArgs["variables"] = serializeValue(variables)
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withEnvironmentVariables", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithMergeEndpoint configures a named endpoint
-func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithMergeEndpoint(endpointName string, port float64) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithMergeEndpoint(endpointName string, port int) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
 	reqArgs["endpointName"] = serializeValue(endpointName)
 	reqArgs["port"] = serializeValue(port)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withMergeEndpoint", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withMergeEndpoint", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithMergeEndpointScheme configures a named endpoint with scheme
-func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithMergeEndpointScheme(endpointName string, port float64, scheme string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithMergeEndpointScheme(endpointName string, port int, scheme string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -353,38 +554,50 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithMergeEndpo
 	reqArgs["endpointName"] = serializeValue(endpointName)
 	reqArgs["port"] = serializeValue(port)
 	reqArgs["scheme"] = serializeValue(scheme)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withMergeEndpointScheme", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withMergeEndpointScheme", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithMergeLabel adds a label to the resource
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithMergeLabel(label string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
 	reqArgs["label"] = serializeValue(label)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withMergeLabel", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withMergeLabel", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithMergeLabelCategorized adds a categorized label to the resource
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithMergeLabelCategorized(label string, category string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
 	reqArgs["label"] = serializeValue(label)
 	reqArgs["category"] = serializeValue(category)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withMergeLabelCategorized", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withMergeLabelCategorized", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithMergeLogging configures resource logging
-func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithMergeLogging(logLevel string, options ...*WithMergeLoggingOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithMergeLogging(logLevel string, options ...WithMergeLoggingOption) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -393,17 +606,25 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithMergeLoggi
 	if len(options) > 0 {
 		merged := &WithMergeLoggingOptions{}
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil {
+				opt.apply(merged)
+			}
 		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		for k, v := range merged.ToMap() {
+			reqArgs[k] = v
+		}
 	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withMergeLogging", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withMergeLogging", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithMergeLoggingPath configures resource logging with file path
-func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithMergeLoggingPath(logLevel string, logPath string, options ...*WithMergeLoggingPathOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithMergeLoggingPath(logLevel string, logPath string, options ...WithMergeLoggingPathOption) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -413,17 +634,25 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithMergeLoggi
 	if len(options) > 0 {
 		merged := &WithMergeLoggingPathOptions{}
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil {
+				opt.apply(merged)
+			}
 		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		for k, v := range merged.ToMap() {
+			reqArgs[k] = v
+		}
 	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withMergeLoggingPath", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withMergeLoggingPath", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithMergeRoute configures a route
-func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithMergeRoute(path string, method string, handler string, priority float64) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithMergeRoute(path string, method string, handler string, priority int) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -432,13 +661,17 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithMergeRoute
 	reqArgs["method"] = serializeValue(method)
 	reqArgs["handler"] = serializeValue(handler)
 	reqArgs["priority"] = serializeValue(priority)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withMergeRoute", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withMergeRoute", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithMergeRouteMiddleware configures a route with middleware
-func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithMergeRouteMiddleware(path string, method string, handler string, priority float64, middleware string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithMergeRouteMiddleware(path string, method string, handler string, priority int, middleware string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -448,37 +681,51 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithMergeRoute
 	reqArgs["handler"] = serializeValue(handler)
 	reqArgs["priority"] = serializeValue(priority)
 	reqArgs["middleware"] = serializeValue(middleware)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withMergeRouteMiddleware", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withMergeRouteMiddleware", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithModifiedAt sets the modified timestamp
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithModifiedAt(modifiedAt string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
 	reqArgs["modifiedAt"] = serializeValue(modifiedAt)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withModifiedAt", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withModifiedAt", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithNestedConfig configures with nested DTO
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithNestedConfig(config *TestNestedDto) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
-	if config != nil { reqArgs["config"] = serializeValue(config) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withNestedConfig", reqArgs); err != nil { s.setErr(err) }
+	if config != nil {
+		reqArgs["config"] = serializeValue(config)
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withNestedConfig", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithOptionalCallback configures with optional callback
-func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithOptionalCallback(options ...*WithOptionalCallbackOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithOptionalCallback(options ...WithOptionalCallbackOption) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -486,9 +733,13 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithOptionalCa
 	if len(options) > 0 {
 		merged := &WithOptionalCallbackOptions{}
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil {
+				opt.apply(merged)
+			}
 		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		for k, v := range merged.ToMap() {
+			reqArgs[k] = v
+		}
 		if merged.Callback != nil {
 			cb := merged.Callback
 			shim := func(args ...any) any {
@@ -498,13 +749,17 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithOptionalCa
 			reqArgs["callback"] = s.client.registerCallback(shim)
 		}
 	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withOptionalCallback", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withOptionalCallback", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithOptionalString adds an optional string parameter
-func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithOptionalString(options ...*WithOptionalStringOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithOptionalString(options ...WithOptionalStringOption) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -512,48 +767,67 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithOptionalSt
 	if len(options) > 0 {
 		merged := &WithOptionalStringOptions{}
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil {
+				opt.apply(merged)
+			}
 		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		for k, v := range merged.ToMap() {
+			reqArgs[k] = v
+		}
 	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withOptionalString", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withOptionalString", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithStatus sets the resource status
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithStatus(status TestResourceStatus) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
 	reqArgs["status"] = serializeValue(status)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withStatus", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withStatus", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithUnionDependency adds a dependency from a string or another resource
 // Allowed types for parameter dependency: string, ResourceWithConnectionString.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithUnionDependency(dependency any) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil {
+		return s
+	}
 	switch dependency.(type) {
 	case string, ResourceWithConnectionString:
 	default:
 		err := fmt.Errorf("aspire: WithUnionDependency: parameter %q must be one of [string, ResourceWithConnectionString], got %T", "dependency", dependency)
-		s.setErr(err); return s
+		s.setErr(err)
+		return s
 	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
-	if !isNil(dependency) { reqArgs["dependency"] = serializeValue(dependency) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withUnionDependency", reqArgs); err != nil { s.setErr(err) }
+	if !isNil(dependency) {
+		reqArgs["dependency"] = serializeValue(dependency)
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withUnionDependency", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithValidator adds validation callback
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithValidator(validator func(arg TestResourceContext) bool) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -565,28 +839,221 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithValidator(
 		}
 		reqArgs["validator"] = s.client.registerCallback(shim)
 	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withValidator", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withValidator", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithVaultDirect configures vault using direct interface target
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithVaultDirect(option string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
 	reqArgs["option"] = serializeValue(option)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withVaultDirect", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withVaultDirect", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
-// IDistributedApplicationBuilder is the public interface for handle type IDistributedApplicationBuilder.
+// GoObsoleteContext is the public interface for handle type GoObsoleteContext.
+type GoObsoleteContext interface {
+	handleReference
+
+	// Current gets the Current property
+	Current() (string, error)
+
+	// GetDto invokes the GetDto method
+	GetDto() (*GoObsoleteDto, error)
+
+	// GetEnum invokes the GetEnum method
+	GetEnum() (GoObsoleteEnum, error)
+
+	// GetObsoleteWireDto invokes the GetObsoleteWireDto method
+	GetObsoleteWireDto() (*GoObsoleteWireDto, error)
+
+	// GetObsoleteWireHandle invokes the GetObsoleteWireHandle method
+	GetObsoleteWireHandle() GoObsoleteWireHandle
+
+	// SetCurrent sets the Current property
+	SetCurrent(value string) GoObsoleteContext
+
+	// Err returns the first error recorded on this wrapper, or nil if the wrapper
+	// resolved successfully and no chained operation has failed.
+	Err() error
+}
+
+// goObsoleteContext is the unexported impl of GoObsoleteContext.
+type goObsoleteContext struct {
+	*resourceBuilderBase
+}
+
+// newGoObsoleteContextFromHandle wraps an existing handle as GoObsoleteContext.
+func newGoObsoleteContextFromHandle(h *handle, c *client) GoObsoleteContext {
+	return &goObsoleteContext{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// Current gets the Current property
+func (s *goObsoleteContext) Current() (string, error) {
+	if err := s.Err(); err != nil {
+		var zero string
+		return zero, err
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/GoObsoleteContext.current", reqArgs)
+	if err != nil {
+		var zero string
+		return zero, err
+	}
+	return decodeAs[string](result)
+}
+
+// GetDto invokes the GetDto method
+func (s *goObsoleteContext) GetDto() (*GoObsoleteDto, error) {
+	if err := s.Err(); err != nil {
+		var zero *GoObsoleteDto
+		return zero, err
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/GoObsoleteContext.getDto", reqArgs)
+	if err != nil {
+		var zero *GoObsoleteDto
+		return zero, err
+	}
+	return decodeAs[*GoObsoleteDto](result)
+}
+
+// GetEnum invokes the GetEnum method
+func (s *goObsoleteContext) GetEnum() (GoObsoleteEnum, error) {
+	if err := s.Err(); err != nil {
+		var zero GoObsoleteEnum
+		return zero, err
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/GoObsoleteContext.getEnum", reqArgs)
+	if err != nil {
+		var zero GoObsoleteEnum
+		return zero, err
+	}
+	return decodeAs[GoObsoleteEnum](result)
+}
+
+// GetObsoleteWireDto invokes the GetObsoleteWireDto method
+func (s *goObsoleteContext) GetObsoleteWireDto() (*GoObsoleteWireDto, error) {
+	if err := s.Err(); err != nil {
+		var zero *GoObsoleteWireDto
+		return zero, err
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/GoObsoleteContext.getObsoleteWireDto", reqArgs)
+	if err != nil {
+		var zero *GoObsoleteWireDto
+		return zero, err
+	}
+	return decodeAs[*GoObsoleteWireDto](result)
+}
+
+// GetObsoleteWireHandle invokes the GetObsoleteWireHandle method
+func (s *goObsoleteContext) GetObsoleteWireHandle() GoObsoleteWireHandle {
+	if err := s.Err(); err != nil {
+		return &goObsoleteWireHandle{resourceBuilderBase: newPropagatedErroredResourceBuilder(err, s.client)}
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/GoObsoleteContext.getObsoleteWireHandle", reqArgs)
+	if err != nil {
+		return &goObsoleteWireHandle{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting.CodeGeneration.Go.Tests/GoObsoleteContext.getObsoleteWireHandle returned unexpected type %T", result)
+		return &goObsoleteWireHandle{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &goObsoleteWireHandle{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
+// SetCurrent sets the Current property
+func (s *goObsoleteContext) SetCurrent(value string) GoObsoleteContext {
+	if s.Err() != nil {
+		return s
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	reqArgs["value"] = serializeValue(value)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/GoObsoleteContext.setCurrent", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
+}
+
+// GoObsoleteWireHandle is the public interface for handle type
+// GoObsoleteWireHandle.
+type GoObsoleteWireHandle interface {
+	handleReference
+
+	// Err returns the first error recorded on this wrapper, or nil if the wrapper
+	// resolved successfully and no chained operation has failed.
+	Err() error
+}
+
+// goObsoleteWireHandle is the unexported impl of GoObsoleteWireHandle.
+type goObsoleteWireHandle struct {
+	*resourceBuilderBase
+}
+
+// newGoObsoleteWireHandleFromHandle wraps an existing handle as GoObsoleteWireHandle.
+func newGoObsoleteWireHandleFromHandle(h *handle, c *client) GoObsoleteWireHandle {
+	return &goObsoleteWireHandle{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// IDistributedApplicationBuilder is the public interface for handle type
+// IDistributedApplicationBuilder.
 type IDistributedApplicationBuilder interface {
 	handleReference
-	AddTestRedis(name string, options ...*AddTestRedisOptions) TestRedisResource
+
+	// AddTestRedis adds a test Redis resource from ATS documentation.
+	//
+	// Parameters:
+	//   - name: The ATS resource name.
+	//   - options: Optional parameters; see [AddTestRedisOption].
+	//
+	// Returns: The ATS test Redis resource builder.
+	AddTestRedis(name string, options ...AddTestRedisOption) TestRedisResource
+
+	// AddTestVault adds a test vault resource
+	//
+	// Parameters:
+	//   - name: The resource name.
+	//
+	// Returns: The interface vault resource builder.
 	AddTestVault(name string) TestVaultResource
+
+	// Build invokes the build capability and returns the running application.
 	Build() (DistributedApplication, error)
+
+	// Err returns an error combining every failure recorded by this builder or by
+	// any handle created from it.
 	Err() error
 }
 
@@ -601,8 +1068,10 @@ func newIDistributedApplicationBuilderFromHandle(h *handle, c *client) IDistribu
 }
 
 // AddTestRedis adds a test Redis resource from ATS documentation.
-func (s *iDistributedApplicationBuilder) AddTestRedis(name string, options ...*AddTestRedisOptions) TestRedisResource {
-	if s.err != nil { return &testRedisResource{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+func (s *iDistributedApplicationBuilder) AddTestRedis(name string, options ...AddTestRedisOption) TestRedisResource {
+	if err := s.resourceBuilderBase.Err(); err != nil {
+		return &testRedisResource{resourceBuilderBase: newPropagatedErroredResourceBuilder(err, s.client)}
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -611,9 +1080,13 @@ func (s *iDistributedApplicationBuilder) AddTestRedis(name string, options ...*A
 	if len(options) > 0 {
 		merged := &AddTestRedisOptions{}
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil {
+				opt.apply(merged)
+			}
 		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		for k, v := range merged.ToMap() {
+			reqArgs[k] = v
+		}
 	}
 	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/addTestRedis", reqArgs)
 	if err != nil {
@@ -629,14 +1102,19 @@ func (s *iDistributedApplicationBuilder) AddTestRedis(name string, options ...*A
 
 // AddTestVault adds a test vault resource
 func (s *iDistributedApplicationBuilder) AddTestVault(name string) TestVaultResource {
-	if s.err != nil { return nil }
+	if s.resourceBuilderBase.Err() != nil {
+		return nil
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
 	reqArgs["name"] = serializeValue(name)
 	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/addTestVault", reqArgs)
-	if err != nil { s.setErr(err); return nil }
+	if err != nil {
+		s.setErr(err)
+		return nil
+	}
 	typed, ok := result.(TestVaultResource)
 	if !ok {
 		s.setErr(fmt.Errorf("aspire: Aspire.Hosting.CodeGeneration.Go.Tests/addTestVault returned unexpected type %T", result))
@@ -645,9 +1123,13 @@ func (s *iDistributedApplicationBuilder) AddTestVault(name string) TestVaultReso
 	return typed
 }
 
-// IResourceWithEnvironment is the public interface for handle type IResourceWithEnvironment.
+// IResourceWithEnvironment is the public interface for handle type
+// IResourceWithEnvironment.
 type IResourceWithEnvironment interface {
 	handleReference
+
+	// Err returns the first error recorded on this wrapper, or nil if the wrapper
+	// resolved successfully and no chained operation has failed.
 	Err() error
 }
 
@@ -661,15 +1143,36 @@ func newIResourceWithEnvironmentFromHandle(h *handle, c *client) IResourceWithEn
 	return &iResourceWithEnvironment{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// TestCallbackContext is the public interface for handle type TestCallbackContext.
+// TestCallbackContext - Test callback context for WithCustomCallback. Also used
+// to verify [AspireExport(ExposeProperties = true)] scanning.
 type TestCallbackContext interface {
 	handleReference
+
+	// CancellationToken is supported by ATS.
 	CancellationToken() (*CancellationToken, error)
+
+	// Name gets the Name property
 	Name() (*string, error)
-	SetCancellationToken(options ...*SetCancellationTokenOptions) TestCallbackContext
+
+	// SetCancellationToken sets the CancellationToken property
+	//
+	// CancellationToken is supported by ATS.
+	//
+	// Parameters:
+	//   - options: Optional parameters; see [SetCancellationTokenOption].
+	SetCancellationToken(options ...SetCancellationTokenOption) TestCallbackContext
+
+	// SetName sets the Name property
 	SetName(value *string) TestCallbackContext
-	SetValue(value float64) TestCallbackContext
-	Value() (float64, error)
+
+	// SetValue sets the Value property
+	SetValue(value int) TestCallbackContext
+
+	// Value gets the Value property
+	Value() (int, error)
+
+	// Err returns the first error recorded on this wrapper, or nil if the wrapper
+	// resolved successfully and no chained operation has failed.
 	Err() error
 }
 
@@ -683,9 +1186,12 @@ func newTestCallbackContextFromHandle(h *handle, c *client) TestCallbackContext 
 	return &testCallbackContext{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// CancellationToken cancellationToken is supported by ATS.
+// CancellationToken is supported by ATS.
 func (s *testCallbackContext) CancellationToken() (*CancellationToken, error) {
-	if s.err != nil { var zero *CancellationToken; return zero, s.err }
+	if err := s.Err(); err != nil {
+		var zero *CancellationToken
+		return zero, err
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -700,7 +1206,10 @@ func (s *testCallbackContext) CancellationToken() (*CancellationToken, error) {
 
 // Name gets the Name property
 func (s *testCallbackContext) Name() (*string, error) {
-	if s.err != nil { var zero *string; return zero, s.err }
+	if err := s.Err(); err != nil {
+		var zero *string
+		return zero, err
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -714,8 +1223,12 @@ func (s *testCallbackContext) Name() (*string, error) {
 }
 
 // SetCancellationToken sets the CancellationToken property
-func (s *testCallbackContext) SetCancellationToken(options ...*SetCancellationTokenOptions) TestCallbackContext {
-	if s.err != nil { return s }
+//
+// CancellationToken is supported by ATS.
+func (s *testCallbackContext) SetCancellationToken(options ...SetCancellationTokenOption) TestCallbackContext {
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -723,9 +1236,13 @@ func (s *testCallbackContext) SetCancellationToken(options ...*SetCancellationTo
 	if len(options) > 0 {
 		merged := &SetCancellationTokenOptions{}
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil {
+				opt.apply(merged)
+			}
 		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		for k, v := range merged.ToMap() {
+			reqArgs[k] = v
+		}
 		if merged.Value != nil {
 			ctx = merged.Value.Context()
 			if id := s.client.registerCancellation(merged.Value); id != "" {
@@ -733,61 +1250,84 @@ func (s *testCallbackContext) SetCancellationToken(options ...*SetCancellationTo
 			}
 		}
 	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCallbackContext.setCancellationToken", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCallbackContext.setCancellationToken", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // SetName sets the Name property
 func (s *testCallbackContext) SetName(value *string) TestCallbackContext {
-	if s.err != nil { return s }
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
 	}
 	reqArgs["value"] = serializeValue(value)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCallbackContext.setName", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCallbackContext.setName", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // SetValue sets the Value property
-func (s *testCallbackContext) SetValue(value float64) TestCallbackContext {
-	if s.err != nil { return s }
+func (s *testCallbackContext) SetValue(value int) TestCallbackContext {
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
 	}
 	reqArgs["value"] = serializeValue(value)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCallbackContext.setValue", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCallbackContext.setValue", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // Value gets the Value property
-func (s *testCallbackContext) Value() (float64, error) {
-	if s.err != nil { var zero float64; return zero, s.err }
+func (s *testCallbackContext) Value() (int, error) {
+	if err := s.Err(); err != nil {
+		var zero int
+		return zero, err
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
 	}
 	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCallbackContext.value", reqArgs)
 	if err != nil {
-		var zero float64
+		var zero int
 		return zero, err
 	}
-	return decodeAs[float64](result)
+	return decodeAs[int](result)
 }
 
-// TestCollectionContext is the public interface for handle type TestCollectionContext.
+// TestCollectionContext - Test context with collection properties to verify
+// consistent code generation. Verifies both List and Dictionary properties
+// generate proper getter patterns.
 type TestCollectionContext interface {
 	handleReference
+
+	// Items - List property - should generate AspireList getter like Dictionary
+	// properties.
 	Items() *List[string]
+
+	// Metadata - Dictionary property - already works with AspireDict getter.
 	Metadata() *Dict[string, string]
+
+	// Err returns the first error recorded on this wrapper, or nil if the wrapper
+	// resolved successfully and no chained operation has failed.
 	Err() error
 }
 
 // testCollectionContext is the unexported impl of TestCollectionContext.
 type testCollectionContext struct {
 	*resourceBuilderBase
-	items *List[string]
+	items    *List[string]
 	metadata *Dict[string, string]
 }
 
@@ -796,50 +1336,128 @@ func newTestCollectionContextFromHandle(h *handle, c *client) TestCollectionCont
 	return &testCollectionContext{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// Items list property - should generate AspireList getter like Dictionary properties.
+// Items - List property - should generate AspireList getter like Dictionary
+// properties.
 func (s *testCollectionContext) Items() *List[string] {
+	s.collectionMu.Lock()
+	defer s.collectionMu.Unlock()
 	if s.items == nil {
 		s.items = newListWithGetter[string](s.handleWrapperBase, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCollectionContext.items")
 	}
 	return s.items
 }
 
-// Metadata dictionary property - already works with AspireDict getter.
+// Metadata - Dictionary property - already works with AspireDict getter.
 func (s *testCollectionContext) Metadata() *Dict[string, string] {
+	s.collectionMu.Lock()
+	defer s.collectionMu.Unlock()
 	if s.metadata == nil {
 		s.metadata = newDictWithGetter[string, string](s.handleWrapperBase, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCollectionContext.metadata")
 	}
 	return s.metadata
 }
 
-// TestDatabaseResource is the public interface for handle type TestDatabaseResource.
+// TestDatabaseResource is the public interface for handle type
+// TestDatabaseResource.
 type TestDatabaseResource interface {
 	handleReference
+
+	// TestWaitFor waits for another resource (test version)
 	TestWaitFor(dependency Resource) TestDatabaseResource
+
+	// TestWithEnvironmentCallback configures environment with callback (test
+	// version)
 	TestWithEnvironmentCallback(callback func(arg TestEnvironmentContext)) TestDatabaseResource
+
+	// WithCancellableOperation performs a cancellable operation
 	WithCancellableOperation(operation func(arg *CancellationToken)) TestDatabaseResource
+
+	// WithConfig configures the resource with a DTO
 	WithConfig(config *TestConfigDto) TestDatabaseResource
+
+	// WithCorrelationId sets the correlation ID
 	WithCorrelationId(correlationId string) TestDatabaseResource
+
+	// WithCreatedAt sets the created timestamp
 	WithCreatedAt(createdAt string) TestDatabaseResource
-	WithDataVolume(options ...*TestDatabaseResourceWithDataVolumeOptions) TestDatabaseResource
+
+	// WithDataVolume adds a data volume
+	//
+	// Parameters:
+	//   - options: Optional parameters; see
+	//     [TestDatabaseResourceWithDataVolumeOption].
+	WithDataVolume(options ...TestDatabaseResourceWithDataVolumeOption) TestDatabaseResource
+
+	// WithDependency adds a dependency on another resource
 	WithDependency(dependency ResourceWithConnectionString) TestDatabaseResource
+
+	// WithEndpoints sets the endpoints
 	WithEndpoints(endpoints []string) TestDatabaseResource
+
+	// WithEnvironmentVariables sets environment variables
 	WithEnvironmentVariables(variables map[string]string) TestDatabaseResource
-	WithMergeEndpoint(endpointName string, port float64) TestDatabaseResource
-	WithMergeEndpointScheme(endpointName string, port float64, scheme string) TestDatabaseResource
+
+	// WithMergeEndpoint configures a named endpoint
+	WithMergeEndpoint(endpointName string, port int) TestDatabaseResource
+
+	// WithMergeEndpointScheme configures a named endpoint with scheme
+	WithMergeEndpointScheme(endpointName string, port int, scheme string) TestDatabaseResource
+
+	// WithMergeLabel adds a label to the resource
 	WithMergeLabel(label string) TestDatabaseResource
+
+	// WithMergeLabelCategorized adds a categorized label to the resource
 	WithMergeLabelCategorized(label string, category string) TestDatabaseResource
-	WithMergeLogging(logLevel string, options ...*WithMergeLoggingOptions) TestDatabaseResource
-	WithMergeLoggingPath(logLevel string, logPath string, options ...*WithMergeLoggingPathOptions) TestDatabaseResource
-	WithMergeRoute(path string, method string, handler string, priority float64) TestDatabaseResource
-	WithMergeRouteMiddleware(path string, method string, handler string, priority float64, middleware string) TestDatabaseResource
+
+	// WithMergeLogging configures resource logging
+	//
+	// Parameters:
+	//   - options: Optional parameters; see [WithMergeLoggingOption].
+	WithMergeLogging(logLevel string, options ...WithMergeLoggingOption) TestDatabaseResource
+
+	// WithMergeLoggingPath configures resource logging with file path
+	//
+	// Parameters:
+	//   - options: Optional parameters; see [WithMergeLoggingPathOption].
+	WithMergeLoggingPath(logLevel string, logPath string, options ...WithMergeLoggingPathOption) TestDatabaseResource
+
+	// WithMergeRoute configures a route
+	WithMergeRoute(path string, method string, handler string, priority int) TestDatabaseResource
+
+	// WithMergeRouteMiddleware configures a route with middleware
+	WithMergeRouteMiddleware(path string, method string, handler string, priority int, middleware string) TestDatabaseResource
+
+	// WithModifiedAt sets the modified timestamp
 	WithModifiedAt(modifiedAt string) TestDatabaseResource
+
+	// WithNestedConfig configures with nested DTO
 	WithNestedConfig(config *TestNestedDto) TestDatabaseResource
-	WithOptionalCallback(options ...*WithOptionalCallbackOptions) TestDatabaseResource
-	WithOptionalString(options ...*WithOptionalStringOptions) TestDatabaseResource
+
+	// WithOptionalCallback configures with optional callback
+	//
+	// Parameters:
+	//   - options: Optional parameters; see [WithOptionalCallbackOption].
+	WithOptionalCallback(options ...WithOptionalCallbackOption) TestDatabaseResource
+
+	// WithOptionalString adds an optional string parameter
+	//
+	// Parameters:
+	//   - options: Optional parameters; see [WithOptionalStringOption].
+	WithOptionalString(options ...WithOptionalStringOption) TestDatabaseResource
+
+	// WithStatus sets the resource status
 	WithStatus(status TestResourceStatus) TestDatabaseResource
+
+	// WithUnionDependency adds a dependency from a string or another resource
+	//
+	// Allowed types for parameter dependency: string, ResourceWithConnectionString.
 	WithUnionDependency(dependency any) TestDatabaseResource
+
+	// WithValidator adds validation callback
 	WithValidator(validator func(arg TestResourceContext) bool) TestDatabaseResource
+
+	// Err returns the first error recorded on this wrapper, or nil if the wrapper
+	// resolved successfully and no chained operation has failed.
 	Err() error
 }
 
@@ -855,20 +1473,32 @@ func newTestDatabaseResourceFromHandle(h *handle, c *client) TestDatabaseResourc
 
 // TestWaitFor waits for another resource (test version)
 func (s *testDatabaseResource) TestWaitFor(dependency Resource) TestDatabaseResource {
-	if s.err != nil { return s }
-	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
+	if s.Err() != nil {
+		return s
+	}
+	if dependency != nil {
+		if err := dependency.Err(); err != nil {
+			s.setPropagatedErr(err)
+			return s
+		}
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
 	reqArgs["dependency"] = serializeValue(dependency)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/testWaitFor", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/testWaitFor", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
-// TestWithEnvironmentCallback configures environment with callback (test version)
+// TestWithEnvironmentCallback configures environment with callback (test
+// version)
 func (s *testDatabaseResource) TestWithEnvironmentCallback(callback func(arg TestEnvironmentContext)) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -881,13 +1511,17 @@ func (s *testDatabaseResource) TestWithEnvironmentCallback(callback func(arg Tes
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
 	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/testWithEnvironmentCallback", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/testWithEnvironmentCallback", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithCancellableOperation performs a cancellable operation
 func (s *testDatabaseResource) WithCancellableOperation(operation func(arg *CancellationToken)) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -895,54 +1529,72 @@ func (s *testDatabaseResource) WithCancellableOperation(operation func(arg *Canc
 	if operation != nil {
 		cb := operation
 		shim := func(args ...any) any {
-			cb(callbackArg[*CancellationToken](args, 0))
+			cb(callbackCancellationTokenArg(s.client, args, 0))
 			return nil
 		}
 		reqArgs["operation"] = s.client.registerCallback(shim)
 	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withCancellableOperation", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withCancellableOperation", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithConfig configures the resource with a DTO
 func (s *testDatabaseResource) WithConfig(config *TestConfigDto) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
-	if config != nil { reqArgs["config"] = serializeValue(config) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withConfig", reqArgs); err != nil { s.setErr(err) }
+	if config != nil {
+		reqArgs["config"] = serializeValue(config)
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withConfig", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithCorrelationId sets the correlation ID
 func (s *testDatabaseResource) WithCorrelationId(correlationId string) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
 	reqArgs["correlationId"] = serializeValue(correlationId)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withCorrelationId", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withCorrelationId", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithCreatedAt sets the created timestamp
 func (s *testDatabaseResource) WithCreatedAt(createdAt string) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
 	reqArgs["createdAt"] = serializeValue(createdAt)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withCreatedAt", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withCreatedAt", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithDataVolume adds a data volume
-func (s *testDatabaseResource) WithDataVolume(options ...*TestDatabaseResourceWithDataVolumeOptions) TestDatabaseResource {
-	if s.err != nil { return s }
+func (s *testDatabaseResource) WithDataVolume(options ...TestDatabaseResourceWithDataVolumeOption) TestDatabaseResource {
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -950,67 +1602,100 @@ func (s *testDatabaseResource) WithDataVolume(options ...*TestDatabaseResourceWi
 	if len(options) > 0 {
 		merged := &TestDatabaseResourceWithDataVolumeOptions{}
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil {
+				opt.apply(merged)
+			}
 		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		for k, v := range merged.ToMap() {
+			reqArgs[k] = v
+		}
 	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withDataVolume", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withDataVolume", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithDependency adds a dependency on another resource
 func (s *testDatabaseResource) WithDependency(dependency ResourceWithConnectionString) TestDatabaseResource {
-	if s.err != nil { return s }
-	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
+	if s.Err() != nil {
+		return s
+	}
+	if dependency != nil {
+		if err := dependency.Err(); err != nil {
+			s.setPropagatedErr(err)
+			return s
+		}
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
 	reqArgs["dependency"] = serializeValue(dependency)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withDependency", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withDependency", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithEndpoints sets the endpoints
 func (s *testDatabaseResource) WithEndpoints(endpoints []string) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
-	if endpoints != nil { reqArgs["endpoints"] = serializeValue(endpoints) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withEndpoints", reqArgs); err != nil { s.setErr(err) }
+	if endpoints != nil {
+		reqArgs["endpoints"] = serializeValue(endpoints)
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withEndpoints", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithEnvironmentVariables sets environment variables
 func (s *testDatabaseResource) WithEnvironmentVariables(variables map[string]string) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
-	if variables != nil { reqArgs["variables"] = serializeValue(variables) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withEnvironmentVariables", reqArgs); err != nil { s.setErr(err) }
+	if variables != nil {
+		reqArgs["variables"] = serializeValue(variables)
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withEnvironmentVariables", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithMergeEndpoint configures a named endpoint
-func (s *testDatabaseResource) WithMergeEndpoint(endpointName string, port float64) TestDatabaseResource {
-	if s.err != nil { return s }
+func (s *testDatabaseResource) WithMergeEndpoint(endpointName string, port int) TestDatabaseResource {
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
 	reqArgs["endpointName"] = serializeValue(endpointName)
 	reqArgs["port"] = serializeValue(port)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withMergeEndpoint", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withMergeEndpoint", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithMergeEndpointScheme configures a named endpoint with scheme
-func (s *testDatabaseResource) WithMergeEndpointScheme(endpointName string, port float64, scheme string) TestDatabaseResource {
-	if s.err != nil { return s }
+func (s *testDatabaseResource) WithMergeEndpointScheme(endpointName string, port int, scheme string) TestDatabaseResource {
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -1018,38 +1703,50 @@ func (s *testDatabaseResource) WithMergeEndpointScheme(endpointName string, port
 	reqArgs["endpointName"] = serializeValue(endpointName)
 	reqArgs["port"] = serializeValue(port)
 	reqArgs["scheme"] = serializeValue(scheme)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withMergeEndpointScheme", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withMergeEndpointScheme", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithMergeLabel adds a label to the resource
 func (s *testDatabaseResource) WithMergeLabel(label string) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
 	reqArgs["label"] = serializeValue(label)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withMergeLabel", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withMergeLabel", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithMergeLabelCategorized adds a categorized label to the resource
 func (s *testDatabaseResource) WithMergeLabelCategorized(label string, category string) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
 	reqArgs["label"] = serializeValue(label)
 	reqArgs["category"] = serializeValue(category)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withMergeLabelCategorized", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withMergeLabelCategorized", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithMergeLogging configures resource logging
-func (s *testDatabaseResource) WithMergeLogging(logLevel string, options ...*WithMergeLoggingOptions) TestDatabaseResource {
-	if s.err != nil { return s }
+func (s *testDatabaseResource) WithMergeLogging(logLevel string, options ...WithMergeLoggingOption) TestDatabaseResource {
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -1058,17 +1755,25 @@ func (s *testDatabaseResource) WithMergeLogging(logLevel string, options ...*Wit
 	if len(options) > 0 {
 		merged := &WithMergeLoggingOptions{}
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil {
+				opt.apply(merged)
+			}
 		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		for k, v := range merged.ToMap() {
+			reqArgs[k] = v
+		}
 	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withMergeLogging", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withMergeLogging", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithMergeLoggingPath configures resource logging with file path
-func (s *testDatabaseResource) WithMergeLoggingPath(logLevel string, logPath string, options ...*WithMergeLoggingPathOptions) TestDatabaseResource {
-	if s.err != nil { return s }
+func (s *testDatabaseResource) WithMergeLoggingPath(logLevel string, logPath string, options ...WithMergeLoggingPathOption) TestDatabaseResource {
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -1078,17 +1783,25 @@ func (s *testDatabaseResource) WithMergeLoggingPath(logLevel string, logPath str
 	if len(options) > 0 {
 		merged := &WithMergeLoggingPathOptions{}
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil {
+				opt.apply(merged)
+			}
 		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		for k, v := range merged.ToMap() {
+			reqArgs[k] = v
+		}
 	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withMergeLoggingPath", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withMergeLoggingPath", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithMergeRoute configures a route
-func (s *testDatabaseResource) WithMergeRoute(path string, method string, handler string, priority float64) TestDatabaseResource {
-	if s.err != nil { return s }
+func (s *testDatabaseResource) WithMergeRoute(path string, method string, handler string, priority int) TestDatabaseResource {
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -1097,13 +1810,17 @@ func (s *testDatabaseResource) WithMergeRoute(path string, method string, handle
 	reqArgs["method"] = serializeValue(method)
 	reqArgs["handler"] = serializeValue(handler)
 	reqArgs["priority"] = serializeValue(priority)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withMergeRoute", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withMergeRoute", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithMergeRouteMiddleware configures a route with middleware
-func (s *testDatabaseResource) WithMergeRouteMiddleware(path string, method string, handler string, priority float64, middleware string) TestDatabaseResource {
-	if s.err != nil { return s }
+func (s *testDatabaseResource) WithMergeRouteMiddleware(path string, method string, handler string, priority int, middleware string) TestDatabaseResource {
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -1113,37 +1830,51 @@ func (s *testDatabaseResource) WithMergeRouteMiddleware(path string, method stri
 	reqArgs["handler"] = serializeValue(handler)
 	reqArgs["priority"] = serializeValue(priority)
 	reqArgs["middleware"] = serializeValue(middleware)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withMergeRouteMiddleware", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withMergeRouteMiddleware", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithModifiedAt sets the modified timestamp
 func (s *testDatabaseResource) WithModifiedAt(modifiedAt string) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
 	reqArgs["modifiedAt"] = serializeValue(modifiedAt)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withModifiedAt", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withModifiedAt", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithNestedConfig configures with nested DTO
 func (s *testDatabaseResource) WithNestedConfig(config *TestNestedDto) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
-	if config != nil { reqArgs["config"] = serializeValue(config) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withNestedConfig", reqArgs); err != nil { s.setErr(err) }
+	if config != nil {
+		reqArgs["config"] = serializeValue(config)
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withNestedConfig", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithOptionalCallback configures with optional callback
-func (s *testDatabaseResource) WithOptionalCallback(options ...*WithOptionalCallbackOptions) TestDatabaseResource {
-	if s.err != nil { return s }
+func (s *testDatabaseResource) WithOptionalCallback(options ...WithOptionalCallbackOption) TestDatabaseResource {
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -1151,9 +1882,13 @@ func (s *testDatabaseResource) WithOptionalCallback(options ...*WithOptionalCall
 	if len(options) > 0 {
 		merged := &WithOptionalCallbackOptions{}
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil {
+				opt.apply(merged)
+			}
 		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		for k, v := range merged.ToMap() {
+			reqArgs[k] = v
+		}
 		if merged.Callback != nil {
 			cb := merged.Callback
 			shim := func(args ...any) any {
@@ -1163,13 +1898,17 @@ func (s *testDatabaseResource) WithOptionalCallback(options ...*WithOptionalCall
 			reqArgs["callback"] = s.client.registerCallback(shim)
 		}
 	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withOptionalCallback", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withOptionalCallback", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithOptionalString adds an optional string parameter
-func (s *testDatabaseResource) WithOptionalString(options ...*WithOptionalStringOptions) TestDatabaseResource {
-	if s.err != nil { return s }
+func (s *testDatabaseResource) WithOptionalString(options ...WithOptionalStringOption) TestDatabaseResource {
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -1177,48 +1916,67 @@ func (s *testDatabaseResource) WithOptionalString(options ...*WithOptionalString
 	if len(options) > 0 {
 		merged := &WithOptionalStringOptions{}
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil {
+				opt.apply(merged)
+			}
 		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		for k, v := range merged.ToMap() {
+			reqArgs[k] = v
+		}
 	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withOptionalString", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withOptionalString", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithStatus sets the resource status
 func (s *testDatabaseResource) WithStatus(status TestResourceStatus) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
 	reqArgs["status"] = serializeValue(status)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withStatus", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withStatus", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithUnionDependency adds a dependency from a string or another resource
 // Allowed types for parameter dependency: string, ResourceWithConnectionString.
 func (s *testDatabaseResource) WithUnionDependency(dependency any) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil {
+		return s
+	}
 	switch dependency.(type) {
 	case string, ResourceWithConnectionString:
 	default:
 		err := fmt.Errorf("aspire: WithUnionDependency: parameter %q must be one of [string, ResourceWithConnectionString], got %T", "dependency", dependency)
-		s.setErr(err); return s
+		s.setErr(err)
+		return s
 	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
-	if !isNil(dependency) { reqArgs["dependency"] = serializeValue(dependency) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withUnionDependency", reqArgs); err != nil { s.setErr(err) }
+	if !isNil(dependency) {
+		reqArgs["dependency"] = serializeValue(dependency)
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withUnionDependency", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithValidator adds validation callback
 func (s *testDatabaseResource) WithValidator(validator func(arg TestResourceContext) bool) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -1230,19 +1988,37 @@ func (s *testDatabaseResource) WithValidator(validator func(arg TestResourceCont
 		}
 		reqArgs["validator"] = s.client.registerCallback(shim)
 	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withValidator", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withValidator", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
-// TestEnvironmentContext is the public interface for handle type TestEnvironmentContext.
+// TestEnvironmentContext - Test environment context used in callbacks. Verifies
+// property-like object pattern (ctx.name.get(), ctx.name.set()).
 type TestEnvironmentContext interface {
 	handleReference
+
+	// Description gets the Description property
 	Description() (*string, error)
+
+	// Name gets the Name property
 	Name() (string, error)
-	Priority() (float64, error)
+
+	// Priority gets the Priority property
+	Priority() (int, error)
+
+	// SetDescription sets the Description property
 	SetDescription(value *string) TestEnvironmentContext
+
+	// SetName sets the Name property
 	SetName(value string) TestEnvironmentContext
-	SetPriority(value float64) TestEnvironmentContext
+
+	// SetPriority sets the Priority property
+	SetPriority(value int) TestEnvironmentContext
+
+	// Err returns the first error recorded on this wrapper, or nil if the wrapper
+	// resolved successfully and no chained operation has failed.
 	Err() error
 }
 
@@ -1258,7 +2034,10 @@ func newTestEnvironmentContextFromHandle(h *handle, c *client) TestEnvironmentCo
 
 // Description gets the Description property
 func (s *testEnvironmentContext) Description() (*string, error) {
-	if s.err != nil { var zero *string; return zero, s.err }
+	if err := s.Err(); err != nil {
+		var zero *string
+		return zero, err
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -1273,7 +2052,10 @@ func (s *testEnvironmentContext) Description() (*string, error) {
 
 // Name gets the Name property
 func (s *testEnvironmentContext) Name() (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+	if err := s.Err(); err != nil {
+		var zero string
+		return zero, err
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -1287,71 +2069,98 @@ func (s *testEnvironmentContext) Name() (string, error) {
 }
 
 // Priority gets the Priority property
-func (s *testEnvironmentContext) Priority() (float64, error) {
-	if s.err != nil { var zero float64; return zero, s.err }
+func (s *testEnvironmentContext) Priority() (int, error) {
+	if err := s.Err(); err != nil {
+		var zero int
+		return zero, err
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
 	}
 	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestEnvironmentContext.priority", reqArgs)
 	if err != nil {
-		var zero float64
+		var zero int
 		return zero, err
 	}
-	return decodeAs[float64](result)
+	return decodeAs[int](result)
 }
 
 // SetDescription sets the Description property
 func (s *testEnvironmentContext) SetDescription(value *string) TestEnvironmentContext {
-	if s.err != nil { return s }
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
 	}
 	reqArgs["value"] = serializeValue(value)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestEnvironmentContext.setDescription", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestEnvironmentContext.setDescription", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // SetName sets the Name property
 func (s *testEnvironmentContext) SetName(value string) TestEnvironmentContext {
-	if s.err != nil { return s }
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
 	}
 	reqArgs["value"] = serializeValue(value)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestEnvironmentContext.setName", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestEnvironmentContext.setName", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // SetPriority sets the Priority property
-func (s *testEnvironmentContext) SetPriority(value float64) TestEnvironmentContext {
-	if s.err != nil { return s }
+func (s *testEnvironmentContext) SetPriority(value int) TestEnvironmentContext {
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
 	}
 	reqArgs["value"] = serializeValue(value)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestEnvironmentContext.setPriority", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestEnvironmentContext.setPriority", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
-// TestMutableCollectionContext is the public interface for handle type TestMutableCollectionContext.
+// TestMutableCollectionContext is the public interface for handle type
+// TestMutableCollectionContext.
 type TestMutableCollectionContext interface {
 	handleReference
-	SetCounts(value *Dict[string, float64]) TestMutableCollectionContext
+
+	// SetCounts sets the Counts property
+	SetCounts(value *Dict[string, int]) TestMutableCollectionContext
+
+	// SetTags sets the Tags property
 	SetTags(value *List[string]) TestMutableCollectionContext
-	Counts() *Dict[string, float64]
+
+	// Counts gets the Counts property
+	Counts() *Dict[string, int]
+
+	// Tags gets the Tags property
 	Tags() *List[string]
+
+	// Err returns the first error recorded on this wrapper, or nil if the wrapper
+	// resolved successfully and no chained operation has failed.
 	Err() error
 }
 
 // testMutableCollectionContext is the unexported impl of TestMutableCollectionContext.
 type testMutableCollectionContext struct {
 	*resourceBuilderBase
-	counts *Dict[string, float64]
-	tags *List[string]
+	counts *Dict[string, int]
+	tags   *List[string]
 }
 
 // newTestMutableCollectionContextFromHandle wraps an existing handle as TestMutableCollectionContext.
@@ -1360,50 +2169,74 @@ func newTestMutableCollectionContextFromHandle(h *handle, c *client) TestMutable
 }
 
 // Counts gets the Counts property
-func (s *testMutableCollectionContext) Counts() *Dict[string, float64] {
+func (s *testMutableCollectionContext) Counts() *Dict[string, int] {
+	s.collectionMu.Lock()
+	defer s.collectionMu.Unlock()
 	if s.counts == nil {
-		s.counts = newDictWithGetter[string, float64](s.handleWrapperBase, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestMutableCollectionContext.counts")
+		s.counts = newDictWithGetter[string, int](s.handleWrapperBase, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestMutableCollectionContext.counts")
 	}
 	return s.counts
 }
 
 // SetCounts sets the Counts property
-func (s *testMutableCollectionContext) SetCounts(value *Dict[string, float64]) TestMutableCollectionContext {
-	if s.err != nil { return s }
+func (s *testMutableCollectionContext) SetCounts(value *Dict[string, int]) TestMutableCollectionContext {
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
 	}
-	if value != nil { reqArgs["value"] = serializeValue(value) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestMutableCollectionContext.setCounts", reqArgs); err != nil { s.setErr(err) }
+	if value != nil {
+		reqArgs["value"] = serializeValue(value)
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestMutableCollectionContext.setCounts", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // SetTags sets the Tags property
 func (s *testMutableCollectionContext) SetTags(value *List[string]) TestMutableCollectionContext {
-	if s.err != nil { return s }
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
 	}
-	if value != nil { reqArgs["value"] = serializeValue(value) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestMutableCollectionContext.setTags", reqArgs); err != nil { s.setErr(err) }
+	if value != nil {
+		reqArgs["value"] = serializeValue(value)
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestMutableCollectionContext.setTags", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // Tags gets the Tags property
 func (s *testMutableCollectionContext) Tags() *List[string] {
+	s.collectionMu.Lock()
+	defer s.collectionMu.Unlock()
 	if s.tags == nil {
 		s.tags = newListWithGetter[string](s.handleWrapperBase, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestMutableCollectionContext.tags")
 	}
 	return s.tags
 }
 
-// TestMutablePromiseCollisionResource is the public interface for handle type TestMutablePromiseCollisionResource.
+// TestMutablePromiseCollisionResource is a mutable-property-only resource used
+// to verify that property setters do not require Promise wrappers.
 type TestMutablePromiseCollisionResource interface {
 	handleReference
+
+	// SetValue sets the test value.
 	SetValue(value string) TestMutablePromiseCollisionResource
+
+	// Value gets the test value.
 	Value() (string, error)
+
+	// Err returns the first error recorded on this wrapper, or nil if the wrapper
+	// resolved successfully and no chained operation has failed.
 	Err() error
 }
 
@@ -1417,21 +2250,28 @@ func newTestMutablePromiseCollisionResourceFromHandle(h *handle, c *client) Test
 	return &testMutablePromiseCollisionResource{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// SetValue sets the Value property
+// SetValue sets the test value.
 func (s *testMutablePromiseCollisionResource) SetValue(value string) TestMutablePromiseCollisionResource {
-	if s.err != nil { return s }
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
 	}
 	reqArgs["value"] = serializeValue(value)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/ITestMutablePromiseCollisionResource.setValue", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/ITestMutablePromiseCollisionResource.setValue", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
-// Value gets or sets the test value.
+// Value gets the test value.
 func (s *testMutablePromiseCollisionResource) Value() (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+	if err := s.Err(); err != nil {
+		var zero string
+		return zero, err
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -1447,46 +2287,191 @@ func (s *testMutablePromiseCollisionResource) Value() (string, error) {
 // TestRedisResource is the public interface for handle type TestRedisResource.
 type TestRedisResource interface {
 	handleReference
-	AddTestChildDatabase(name string, options ...*AddTestChildDatabaseOptions) TestDatabaseResource
+
+	// AddTestChildDatabase adds a child database to a test Redis resource
+	//
+	// This method tests the factory method codegen pattern where a method on
+	// builder type A returns builder type B (e.g.,
+	// SqlServerServerResource.AddDatabase returning SqlServerDatabaseResource).
+	//
+	// Parameters:
+	//   - options: Optional parameters; see [AddTestChildDatabaseOption].
+	AddTestChildDatabase(name string, options ...AddTestChildDatabaseOption) TestDatabaseResource
+
+	// GetEndpoints gets the endpoints
 	GetEndpoints() ([]string, error)
-	GetStatusAsync(options ...*GetStatusAsyncOptions) (string, error)
+
+	// GetStatusAsync gets the status of the resource asynchronously
+	//
+	// Parameters:
+	//   - options: Optional parameters; see [GetStatusAsyncOption].
+	GetStatusAsync(options ...GetStatusAsyncOption) (string, error)
+
+	// TestWaitFor waits for another resource (test version)
 	TestWaitFor(dependency Resource) TestRedisResource
+
+	// TestWithEnvironmentCallback configures environment with callback (test
+	// version)
 	TestWithEnvironmentCallback(callback func(arg TestEnvironmentContext)) TestRedisResource
-	WaitForReadyAsync(timeout float64, options ...*WaitForReadyAsyncOptions) (bool, error)
+
+	// WaitForReadyAsync waits for the resource to be ready
+	//
+	// Parameters:
+	//   - options: Optional parameters; see [WaitForReadyAsyncOption].
+	WaitForReadyAsync(timeout float64, options ...WaitForReadyAsyncOption) (bool, error)
+
+	// WithCancellableOperation performs a cancellable operation
 	WithCancellableOperation(operation func(arg *CancellationToken)) TestRedisResource
+
+	// WithConcreteVaultResource configures a Redis resource with the concrete vault
+	// resource as a parameter.
+	//
+	// Parameters:
+	//   - resource: The parameter-only concrete vault resource.
+	//
+	// Returns: The Redis resource builder.
 	WithConcreteVaultResource(resource Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) TestRedisResource
+
+	// WithConfig configures the resource with a DTO
 	WithConfig(config *TestConfigDto) TestRedisResource
+
+	// WithConnectionString sets the connection string using a reference expression
 	WithConnectionString(connectionString *ReferenceExpression) TestRedisResource
+
+	// WithConnectionStringDirect sets connection string using direct interface
+	// target
 	WithConnectionStringDirect(connectionString string) TestRedisResource
+
+	// WithCorrelationId sets the correlation ID
 	WithCorrelationId(correlationId string) TestRedisResource
+
+	// WithCreatedAt sets the created timestamp
 	WithCreatedAt(createdAt string) TestRedisResource
-	WithDataVolume(options ...*TestDatabaseResourceWithDataVolumeOptions) TestRedisResource
+
+	// WithDataVolume adds a data volume with persistence
+	//
+	// Parameters:
+	//   - options: Optional parameters; see
+	//     [TestDatabaseResourceWithDataVolumeOption].
+	WithDataVolume(options ...TestDatabaseResourceWithDataVolumeOption) TestRedisResource
+
+	// WithDependency adds a dependency on another resource
 	WithDependency(dependency ResourceWithConnectionString) TestRedisResource
+
+	// WithEndpoints sets the endpoints
 	WithEndpoints(endpoints []string) TestRedisResource
+
+	// WithEnvironmentVariables sets environment variables
 	WithEnvironmentVariables(variables map[string]string) TestRedisResource
-	WithMergeEndpoint(endpointName string, port float64) TestRedisResource
-	WithMergeEndpointScheme(endpointName string, port float64, scheme string) TestRedisResource
+
+	// WithMergeEndpoint configures a named endpoint
+	WithMergeEndpoint(endpointName string, port int) TestRedisResource
+
+	// WithMergeEndpointScheme configures a named endpoint with scheme
+	WithMergeEndpointScheme(endpointName string, port int, scheme string) TestRedisResource
+
+	// WithMergeLabel adds a label to the resource
 	WithMergeLabel(label string) TestRedisResource
+
+	// WithMergeLabelCategorized adds a categorized label to the resource
 	WithMergeLabelCategorized(label string, category string) TestRedisResource
-	WithMergeLogging(logLevel string, options ...*WithMergeLoggingOptions) TestRedisResource
-	WithMergeLoggingPath(logLevel string, logPath string, options ...*WithMergeLoggingPathOptions) TestRedisResource
-	WithMergeRoute(path string, method string, handler string, priority float64) TestRedisResource
-	WithMergeRouteMiddleware(path string, method string, handler string, priority float64, middleware string) TestRedisResource
+
+	// WithMergeLogging configures resource logging
+	//
+	// Parameters:
+	//   - options: Optional parameters; see [WithMergeLoggingOption].
+	WithMergeLogging(logLevel string, options ...WithMergeLoggingOption) TestRedisResource
+
+	// WithMergeLoggingPath configures resource logging with file path
+	//
+	// Parameters:
+	//   - options: Optional parameters; see [WithMergeLoggingPathOption].
+	WithMergeLoggingPath(logLevel string, logPath string, options ...WithMergeLoggingPathOption) TestRedisResource
+
+	// WithMergeRoute configures a route
+	WithMergeRoute(path string, method string, handler string, priority int) TestRedisResource
+
+	// WithMergeRouteMiddleware configures a route with middleware
+	WithMergeRouteMiddleware(path string, method string, handler string, priority int, middleware string) TestRedisResource
+
+	// WithModifiedAt sets the modified timestamp
 	WithModifiedAt(modifiedAt string) TestRedisResource
+
+	// WithMultiParamHandleCallback - Tests multi-param callback destructuring
 	WithMultiParamHandleCallback(callback func(arg1 TestCallbackContext, arg2 TestEnvironmentContext)) TestRedisResource
+
+	// WithMutablePromiseCollisionResources configures a Redis resource with
+	// mutable-property and parameter-only resources whose generated names collide.
+	//
+	// Parameters:
+	//   - resource: The mutable-property-only resource whose unused Promise wrapper
+	//     would collide.
+	//   - resourcePromise: The parameter-only resource whose generated name matches
+	//     that Promise wrapper.
+	//
+	// Returns: The Redis resource builder.
 	WithMutablePromiseCollisionResources(resource TestMutablePromiseCollisionResource, resourcePromise TestMutablePromiseCollisionResourcePromise) TestRedisResource
+
+	// WithNestedConfig configures with nested DTO
 	WithNestedConfig(config *TestNestedDto) TestRedisResource
-	WithOptionalCallback(options ...*WithOptionalCallbackOptions) TestRedisResource
-	WithOptionalString(options ...*WithOptionalStringOptions) TestRedisResource
-	WithPersistence(options ...*WithPersistenceOptions) TestRedisResource
+
+	// WithOptionalCallback configures with optional callback
+	//
+	// Parameters:
+	//   - options: Optional parameters; see [WithOptionalCallbackOption].
+	WithOptionalCallback(options ...WithOptionalCallbackOption) TestRedisResource
+
+	// WithOptionalString adds an optional string parameter
+	//
+	// Parameters:
+	//   - options: Optional parameters; see [WithOptionalStringOption].
+	WithOptionalString(options ...WithOptionalStringOption) TestRedisResource
+
+	// WithPersistence configures the Redis resource with persistence
+	//
+	// Parameters:
+	//   - options: Optional parameters; see [WithPersistenceOption].
+	WithPersistence(options ...WithPersistenceOption) TestRedisResource
+
+	// WithPromiseCollisionResources configures a Redis resource with parameter-only
+	// resources whose generated names collide.
+	//
+	// Parameters:
+	//   - resource: The resource whose unused Promise wrapper would collide.
+	//   - resourcePromise: The resource whose generated name matches that Promise
+	//     wrapper.
+	//
+	// Returns: The Redis resource builder.
 	WithPromiseCollisionResources(resource TestPromiseCollisionResource, resourcePromise TestPromiseCollisionResourcePromise) TestRedisResource
+
+	// WithRedisSpecific - Redis-specific configuration
 	WithRedisSpecific(option string) TestRedisResource
+
+	// WithScalarField sets a scalar field value
+	//
+	// Allowed types for parameter value: string, float64, bool (float64 accepts any
+	// built-in Go numeric type and json.Number).
 	WithScalarField(path string, value any) TestRedisResource
+
+	// WithStatus sets the resource status
 	WithStatus(status TestResourceStatus) TestRedisResource
+
+	// WithUnionDependency adds a dependency from a string or another resource
+	//
+	// Allowed types for parameter dependency: string, ResourceWithConnectionString.
 	WithUnionDependency(dependency any) TestRedisResource
+
+	// WithValidator adds validation callback
 	WithValidator(validator func(arg TestResourceContext) bool) TestRedisResource
+
+	// GetMetadata gets the metadata for the resource
 	GetMetadata() *Dict[string, string]
+
+	// GetTags gets the tags for the resource
 	GetTags() *List[string]
+
+	// Err returns the first error recorded on this wrapper, or nil if the wrapper
+	// resolved successfully and no chained operation has failed.
 	Err() error
 }
 
@@ -1494,7 +2479,7 @@ type TestRedisResource interface {
 type testRedisResource struct {
 	*resourceBuilderBase
 	getMetadata *Dict[string, string]
-	getTags *List[string]
+	getTags     *List[string]
 }
 
 // newTestRedisResourceFromHandle wraps an existing handle as TestRedisResource.
@@ -1503,8 +2488,10 @@ func newTestRedisResourceFromHandle(h *handle, c *client) TestRedisResource {
 }
 
 // AddTestChildDatabase adds a child database to a test Redis resource
-func (s *testRedisResource) AddTestChildDatabase(name string, options ...*AddTestChildDatabaseOptions) TestDatabaseResource {
-	if s.err != nil { return &testDatabaseResource{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+func (s *testRedisResource) AddTestChildDatabase(name string, options ...AddTestChildDatabaseOption) TestDatabaseResource {
+	if err := s.Err(); err != nil {
+		return &testDatabaseResource{resourceBuilderBase: newPropagatedErroredResourceBuilder(err, s.client)}
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -1513,9 +2500,13 @@ func (s *testRedisResource) AddTestChildDatabase(name string, options ...*AddTes
 	if len(options) > 0 {
 		merged := &AddTestChildDatabaseOptions{}
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil {
+				opt.apply(merged)
+			}
 		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		for k, v := range merged.ToMap() {
+			reqArgs[k] = v
+		}
 	}
 	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/addTestChildDatabase", reqArgs)
 	if err != nil {
@@ -1531,7 +2522,10 @@ func (s *testRedisResource) AddTestChildDatabase(name string, options ...*AddTes
 
 // GetEndpoints gets the endpoints
 func (s *testRedisResource) GetEndpoints() ([]string, error) {
-	if s.err != nil { var zero []string; return zero, s.err }
+	if err := s.Err(); err != nil {
+		var zero []string
+		return zero, err
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -1546,6 +2540,8 @@ func (s *testRedisResource) GetEndpoints() ([]string, error) {
 
 // GetMetadata gets the metadata for the resource
 func (s *testRedisResource) GetMetadata() *Dict[string, string] {
+	s.collectionMu.Lock()
+	defer s.collectionMu.Unlock()
 	if s.getMetadata == nil {
 		s.getMetadata = newDictWithGetter[string, string](s.handleWrapperBase, "Aspire.Hosting.CodeGeneration.Go.Tests/getMetadata")
 	}
@@ -1553,8 +2549,11 @@ func (s *testRedisResource) GetMetadata() *Dict[string, string] {
 }
 
 // GetStatusAsync gets the status of the resource asynchronously
-func (s *testRedisResource) GetStatusAsync(options ...*GetStatusAsyncOptions) (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+func (s *testRedisResource) GetStatusAsync(options ...GetStatusAsyncOption) (string, error) {
+	if err := s.Err(); err != nil {
+		var zero string
+		return zero, err
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -1562,9 +2561,13 @@ func (s *testRedisResource) GetStatusAsync(options ...*GetStatusAsyncOptions) (s
 	if len(options) > 0 {
 		merged := &GetStatusAsyncOptions{}
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil {
+				opt.apply(merged)
+			}
 		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		for k, v := range merged.ToMap() {
+			reqArgs[k] = v
+		}
 		if merged.CancellationToken != nil {
 			ctx = merged.CancellationToken.Context()
 			if id := s.client.registerCancellation(merged.CancellationToken); id != "" {
@@ -1582,6 +2585,8 @@ func (s *testRedisResource) GetStatusAsync(options ...*GetStatusAsyncOptions) (s
 
 // GetTags gets the tags for the resource
 func (s *testRedisResource) GetTags() *List[string] {
+	s.collectionMu.Lock()
+	defer s.collectionMu.Unlock()
 	if s.getTags == nil {
 		s.getTags = newListWithGetter[string](s.handleWrapperBase, "Aspire.Hosting.CodeGeneration.Go.Tests/getTags")
 	}
@@ -1590,20 +2595,32 @@ func (s *testRedisResource) GetTags() *List[string] {
 
 // TestWaitFor waits for another resource (test version)
 func (s *testRedisResource) TestWaitFor(dependency Resource) TestRedisResource {
-	if s.err != nil { return s }
-	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
+	if s.Err() != nil {
+		return s
+	}
+	if dependency != nil {
+		if err := dependency.Err(); err != nil {
+			s.setPropagatedErr(err)
+			return s
+		}
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
 	reqArgs["dependency"] = serializeValue(dependency)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/testWaitFor", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/testWaitFor", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
-// TestWithEnvironmentCallback configures environment with callback (test version)
+// TestWithEnvironmentCallback configures environment with callback (test
+// version)
 func (s *testRedisResource) TestWithEnvironmentCallback(callback func(arg TestEnvironmentContext)) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -1616,13 +2633,18 @@ func (s *testRedisResource) TestWithEnvironmentCallback(callback func(arg TestEn
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
 	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/testWithEnvironmentCallback", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/testWithEnvironmentCallback", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WaitForReadyAsync waits for the resource to be ready
-func (s *testRedisResource) WaitForReadyAsync(timeout float64, options ...*WaitForReadyAsyncOptions) (bool, error) {
-	if s.err != nil { var zero bool; return zero, s.err }
+func (s *testRedisResource) WaitForReadyAsync(timeout float64, options ...WaitForReadyAsyncOption) (bool, error) {
+	if err := s.Err(); err != nil {
+		var zero bool
+		return zero, err
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -1631,9 +2653,13 @@ func (s *testRedisResource) WaitForReadyAsync(timeout float64, options ...*WaitF
 	if len(options) > 0 {
 		merged := &WaitForReadyAsyncOptions{}
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil {
+				opt.apply(merged)
+			}
 		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		for k, v := range merged.ToMap() {
+			reqArgs[k] = v
+		}
 		if merged.CancellationToken != nil {
 			ctx = merged.CancellationToken.Context()
 			if id := s.client.registerCancellation(merged.CancellationToken); id != "" {
@@ -1651,7 +2677,9 @@ func (s *testRedisResource) WaitForReadyAsync(timeout float64, options ...*WaitF
 
 // WithCancellableOperation performs a cancellable operation
 func (s *testRedisResource) WithCancellableOperation(operation func(arg *CancellationToken)) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -1659,92 +2687,136 @@ func (s *testRedisResource) WithCancellableOperation(operation func(arg *Cancell
 	if operation != nil {
 		cb := operation
 		shim := func(args ...any) any {
-			cb(callbackArg[*CancellationToken](args, 0))
+			cb(callbackCancellationTokenArg(s.client, args, 0))
 			return nil
 		}
 		reqArgs["operation"] = s.client.registerCallback(shim)
 	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withCancellableOperation", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withCancellableOperation", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
-// WithConcreteVaultResource configures a Redis resource with the concrete vault resource as a parameter.
+// WithConcreteVaultResource configures a Redis resource with the concrete vault
+// resource as a parameter.
 func (s *testRedisResource) WithConcreteVaultResource(resource Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) TestRedisResource {
-	if s.err != nil { return s }
-	if resource != nil { if err := resource.Err(); err != nil { s.setErr(err); return s } }
+	if s.Err() != nil {
+		return s
+	}
+	if resource != nil {
+		if err := resource.Err(); err != nil {
+			s.setPropagatedErr(err)
+			return s
+		}
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
 	reqArgs["resource"] = serializeValue(resource)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withConcreteVaultResource", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withConcreteVaultResource", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithConfig configures the resource with a DTO
 func (s *testRedisResource) WithConfig(config *TestConfigDto) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
-	if config != nil { reqArgs["config"] = serializeValue(config) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withConfig", reqArgs); err != nil { s.setErr(err) }
+	if config != nil {
+		reqArgs["config"] = serializeValue(config)
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withConfig", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithConnectionString sets the connection string using a reference expression
 func (s *testRedisResource) WithConnectionString(connectionString *ReferenceExpression) TestRedisResource {
-	if s.err != nil { return s }
-	if connectionString != nil { if err := connectionString.Err(); err != nil { s.setErr(err); return s } }
+	if s.Err() != nil {
+		return s
+	}
+	if connectionString != nil {
+		if err := connectionString.Err(); err != nil {
+			s.setPropagatedErr(err)
+			return s
+		}
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
-	if connectionString != nil { reqArgs["connectionString"] = serializeValue(connectionString) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withConnectionString", reqArgs); err != nil { s.setErr(err) }
+	if connectionString != nil {
+		reqArgs["connectionString"] = serializeValue(connectionString)
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withConnectionString", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
-// WithConnectionStringDirect sets connection string using direct interface target
+// WithConnectionStringDirect sets connection string using direct interface
+// target
 func (s *testRedisResource) WithConnectionStringDirect(connectionString string) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
 	reqArgs["connectionString"] = serializeValue(connectionString)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withConnectionStringDirect", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withConnectionStringDirect", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithCorrelationId sets the correlation ID
 func (s *testRedisResource) WithCorrelationId(correlationId string) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
 	reqArgs["correlationId"] = serializeValue(correlationId)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withCorrelationId", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withCorrelationId", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithCreatedAt sets the created timestamp
 func (s *testRedisResource) WithCreatedAt(createdAt string) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
 	reqArgs["createdAt"] = serializeValue(createdAt)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withCreatedAt", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withCreatedAt", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithDataVolume adds a data volume with persistence
-func (s *testRedisResource) WithDataVolume(options ...*TestDatabaseResourceWithDataVolumeOptions) TestRedisResource {
-	if s.err != nil { return s }
+func (s *testRedisResource) WithDataVolume(options ...TestDatabaseResourceWithDataVolumeOption) TestRedisResource {
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -1752,67 +2824,100 @@ func (s *testRedisResource) WithDataVolume(options ...*TestDatabaseResourceWithD
 	if len(options) > 0 {
 		merged := &TestDatabaseResourceWithDataVolumeOptions{}
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil {
+				opt.apply(merged)
+			}
 		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		for k, v := range merged.ToMap() {
+			reqArgs[k] = v
+		}
 	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withDataVolume", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withDataVolume", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithDependency adds a dependency on another resource
 func (s *testRedisResource) WithDependency(dependency ResourceWithConnectionString) TestRedisResource {
-	if s.err != nil { return s }
-	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
+	if s.Err() != nil {
+		return s
+	}
+	if dependency != nil {
+		if err := dependency.Err(); err != nil {
+			s.setPropagatedErr(err)
+			return s
+		}
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
 	reqArgs["dependency"] = serializeValue(dependency)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withDependency", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withDependency", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithEndpoints sets the endpoints
 func (s *testRedisResource) WithEndpoints(endpoints []string) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
-	if endpoints != nil { reqArgs["endpoints"] = serializeValue(endpoints) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withEndpoints", reqArgs); err != nil { s.setErr(err) }
+	if endpoints != nil {
+		reqArgs["endpoints"] = serializeValue(endpoints)
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withEndpoints", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithEnvironmentVariables sets environment variables
 func (s *testRedisResource) WithEnvironmentVariables(variables map[string]string) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
-	if variables != nil { reqArgs["variables"] = serializeValue(variables) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withEnvironmentVariables", reqArgs); err != nil { s.setErr(err) }
+	if variables != nil {
+		reqArgs["variables"] = serializeValue(variables)
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withEnvironmentVariables", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithMergeEndpoint configures a named endpoint
-func (s *testRedisResource) WithMergeEndpoint(endpointName string, port float64) TestRedisResource {
-	if s.err != nil { return s }
+func (s *testRedisResource) WithMergeEndpoint(endpointName string, port int) TestRedisResource {
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
 	reqArgs["endpointName"] = serializeValue(endpointName)
 	reqArgs["port"] = serializeValue(port)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withMergeEndpoint", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withMergeEndpoint", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithMergeEndpointScheme configures a named endpoint with scheme
-func (s *testRedisResource) WithMergeEndpointScheme(endpointName string, port float64, scheme string) TestRedisResource {
-	if s.err != nil { return s }
+func (s *testRedisResource) WithMergeEndpointScheme(endpointName string, port int, scheme string) TestRedisResource {
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -1820,38 +2925,50 @@ func (s *testRedisResource) WithMergeEndpointScheme(endpointName string, port fl
 	reqArgs["endpointName"] = serializeValue(endpointName)
 	reqArgs["port"] = serializeValue(port)
 	reqArgs["scheme"] = serializeValue(scheme)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withMergeEndpointScheme", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withMergeEndpointScheme", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithMergeLabel adds a label to the resource
 func (s *testRedisResource) WithMergeLabel(label string) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
 	reqArgs["label"] = serializeValue(label)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withMergeLabel", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withMergeLabel", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithMergeLabelCategorized adds a categorized label to the resource
 func (s *testRedisResource) WithMergeLabelCategorized(label string, category string) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
 	reqArgs["label"] = serializeValue(label)
 	reqArgs["category"] = serializeValue(category)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withMergeLabelCategorized", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withMergeLabelCategorized", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithMergeLogging configures resource logging
-func (s *testRedisResource) WithMergeLogging(logLevel string, options ...*WithMergeLoggingOptions) TestRedisResource {
-	if s.err != nil { return s }
+func (s *testRedisResource) WithMergeLogging(logLevel string, options ...WithMergeLoggingOption) TestRedisResource {
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -1860,17 +2977,25 @@ func (s *testRedisResource) WithMergeLogging(logLevel string, options ...*WithMe
 	if len(options) > 0 {
 		merged := &WithMergeLoggingOptions{}
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil {
+				opt.apply(merged)
+			}
 		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		for k, v := range merged.ToMap() {
+			reqArgs[k] = v
+		}
 	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withMergeLogging", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withMergeLogging", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithMergeLoggingPath configures resource logging with file path
-func (s *testRedisResource) WithMergeLoggingPath(logLevel string, logPath string, options ...*WithMergeLoggingPathOptions) TestRedisResource {
-	if s.err != nil { return s }
+func (s *testRedisResource) WithMergeLoggingPath(logLevel string, logPath string, options ...WithMergeLoggingPathOption) TestRedisResource {
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -1880,17 +3005,25 @@ func (s *testRedisResource) WithMergeLoggingPath(logLevel string, logPath string
 	if len(options) > 0 {
 		merged := &WithMergeLoggingPathOptions{}
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil {
+				opt.apply(merged)
+			}
 		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		for k, v := range merged.ToMap() {
+			reqArgs[k] = v
+		}
 	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withMergeLoggingPath", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withMergeLoggingPath", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithMergeRoute configures a route
-func (s *testRedisResource) WithMergeRoute(path string, method string, handler string, priority float64) TestRedisResource {
-	if s.err != nil { return s }
+func (s *testRedisResource) WithMergeRoute(path string, method string, handler string, priority int) TestRedisResource {
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -1899,13 +3032,17 @@ func (s *testRedisResource) WithMergeRoute(path string, method string, handler s
 	reqArgs["method"] = serializeValue(method)
 	reqArgs["handler"] = serializeValue(handler)
 	reqArgs["priority"] = serializeValue(priority)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withMergeRoute", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withMergeRoute", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithMergeRouteMiddleware configures a route with middleware
-func (s *testRedisResource) WithMergeRouteMiddleware(path string, method string, handler string, priority float64, middleware string) TestRedisResource {
-	if s.err != nil { return s }
+func (s *testRedisResource) WithMergeRouteMiddleware(path string, method string, handler string, priority int, middleware string) TestRedisResource {
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -1915,25 +3052,33 @@ func (s *testRedisResource) WithMergeRouteMiddleware(path string, method string,
 	reqArgs["handler"] = serializeValue(handler)
 	reqArgs["priority"] = serializeValue(priority)
 	reqArgs["middleware"] = serializeValue(middleware)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withMergeRouteMiddleware", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withMergeRouteMiddleware", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithModifiedAt sets the modified timestamp
 func (s *testRedisResource) WithModifiedAt(modifiedAt string) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
 	reqArgs["modifiedAt"] = serializeValue(modifiedAt)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withModifiedAt", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withModifiedAt", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
-// WithMultiParamHandleCallback tests multi-param callback destructuring
+// WithMultiParamHandleCallback - Tests multi-param callback destructuring
 func (s *testRedisResource) WithMultiParamHandleCallback(callback func(arg1 TestCallbackContext, arg2 TestEnvironmentContext)) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -1946,40 +3091,65 @@ func (s *testRedisResource) WithMultiParamHandleCallback(callback func(arg1 Test
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
 	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withMultiParamHandleCallback", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withMultiParamHandleCallback", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
-// WithMutablePromiseCollisionResources configures a Redis resource with mutable-property and parameter-only resources whose generated names collide.
+// WithMutablePromiseCollisionResources configures a Redis resource with
+// mutable-property and parameter-only resources whose generated names collide.
 func (s *testRedisResource) WithMutablePromiseCollisionResources(resource TestMutablePromiseCollisionResource, resourcePromise TestMutablePromiseCollisionResourcePromise) TestRedisResource {
-	if s.err != nil { return s }
-	if resource != nil { if err := resource.Err(); err != nil { s.setErr(err); return s } }
-	if resourcePromise != nil { if err := resourcePromise.Err(); err != nil { s.setErr(err); return s } }
+	if s.Err() != nil {
+		return s
+	}
+	if resource != nil {
+		if err := resource.Err(); err != nil {
+			s.setPropagatedErr(err)
+			return s
+		}
+	}
+	if resourcePromise != nil {
+		if err := resourcePromise.Err(); err != nil {
+			s.setPropagatedErr(err)
+			return s
+		}
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
 	reqArgs["resource"] = serializeValue(resource)
 	reqArgs["resourcePromise"] = serializeValue(resourcePromise)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withMutablePromiseCollisionResources", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withMutablePromiseCollisionResources", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithNestedConfig configures with nested DTO
 func (s *testRedisResource) WithNestedConfig(config *TestNestedDto) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
-	if config != nil { reqArgs["config"] = serializeValue(config) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withNestedConfig", reqArgs); err != nil { s.setErr(err) }
+	if config != nil {
+		reqArgs["config"] = serializeValue(config)
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withNestedConfig", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithOptionalCallback configures with optional callback
-func (s *testRedisResource) WithOptionalCallback(options ...*WithOptionalCallbackOptions) TestRedisResource {
-	if s.err != nil { return s }
+func (s *testRedisResource) WithOptionalCallback(options ...WithOptionalCallbackOption) TestRedisResource {
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -1987,9 +3157,13 @@ func (s *testRedisResource) WithOptionalCallback(options ...*WithOptionalCallbac
 	if len(options) > 0 {
 		merged := &WithOptionalCallbackOptions{}
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil {
+				opt.apply(merged)
+			}
 		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		for k, v := range merged.ToMap() {
+			reqArgs[k] = v
+		}
 		if merged.Callback != nil {
 			cb := merged.Callback
 			shim := func(args ...any) any {
@@ -1999,13 +3173,17 @@ func (s *testRedisResource) WithOptionalCallback(options ...*WithOptionalCallbac
 			reqArgs["callback"] = s.client.registerCallback(shim)
 		}
 	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withOptionalCallback", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withOptionalCallback", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithOptionalString adds an optional string parameter
-func (s *testRedisResource) WithOptionalString(options ...*WithOptionalStringOptions) TestRedisResource {
-	if s.err != nil { return s }
+func (s *testRedisResource) WithOptionalString(options ...WithOptionalStringOption) TestRedisResource {
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -2013,17 +3191,25 @@ func (s *testRedisResource) WithOptionalString(options ...*WithOptionalStringOpt
 	if len(options) > 0 {
 		merged := &WithOptionalStringOptions{}
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil {
+				opt.apply(merged)
+			}
 		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		for k, v := range merged.ToMap() {
+			reqArgs[k] = v
+		}
 	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withOptionalString", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withOptionalString", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithPersistence configures the Redis resource with persistence
-func (s *testRedisResource) WithPersistence(options ...*WithPersistenceOptions) TestRedisResource {
-	if s.err != nil { return s }
+func (s *testRedisResource) WithPersistence(options ...WithPersistenceOption) TestRedisResource {
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -2031,95 +3217,146 @@ func (s *testRedisResource) WithPersistence(options ...*WithPersistenceOptions) 
 	if len(options) > 0 {
 		merged := &WithPersistenceOptions{}
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil {
+				opt.apply(merged)
+			}
 		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		for k, v := range merged.ToMap() {
+			reqArgs[k] = v
+		}
 	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withPersistence", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withPersistence", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
-// WithPromiseCollisionResources configures a Redis resource with parameter-only resources whose generated names collide.
+// WithPromiseCollisionResources configures a Redis resource with parameter-only
+// resources whose generated names collide.
 func (s *testRedisResource) WithPromiseCollisionResources(resource TestPromiseCollisionResource, resourcePromise TestPromiseCollisionResourcePromise) TestRedisResource {
-	if s.err != nil { return s }
-	if resource != nil { if err := resource.Err(); err != nil { s.setErr(err); return s } }
-	if resourcePromise != nil { if err := resourcePromise.Err(); err != nil { s.setErr(err); return s } }
+	if s.Err() != nil {
+		return s
+	}
+	if resource != nil {
+		if err := resource.Err(); err != nil {
+			s.setPropagatedErr(err)
+			return s
+		}
+	}
+	if resourcePromise != nil {
+		if err := resourcePromise.Err(); err != nil {
+			s.setPropagatedErr(err)
+			return s
+		}
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
 	reqArgs["resource"] = serializeValue(resource)
 	reqArgs["resourcePromise"] = serializeValue(resourcePromise)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withPromiseCollisionResources", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withPromiseCollisionResources", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
-// WithRedisSpecific redis-specific configuration
+// WithRedisSpecific - Redis-specific configuration
 func (s *testRedisResource) WithRedisSpecific(option string) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
 	reqArgs["option"] = serializeValue(option)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withRedisSpecific", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withRedisSpecific", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithScalarField sets a scalar field value
-// Allowed types for parameter value: string, float64, bool (float64 accepts any built-in Go numeric type).
+// Allowed types for parameter value: string, float64, bool (float64 accepts any built-in Go numeric type and json.Number).
 func (s *testRedisResource) WithScalarField(path string, value any) TestRedisResource {
-	if s.err != nil { return s }
-	switch value.(type) {
+	if s.Err() != nil {
+		return s
+	}
+	switch value := value.(type) {
+	case json.Number:
+		if !isValidJSONNumber(value) {
+			err := fmt.Errorf("aspire: WithScalarField: parameter %q must be one of [string, float64, bool], got invalid json.Number %q", "value", value)
+			s.setErr(err)
+			return s
+		}
 	case string, float64, bool, int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, float32:
 	default:
 		err := fmt.Errorf("aspire: WithScalarField: parameter %q must be one of [string, float64, bool], got %T", "value", value)
-		s.setErr(err); return s
+		s.setErr(err)
+		return s
 	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
 	reqArgs["path"] = serializeValue(path)
-	if !isNil(value) { reqArgs["value"] = serializeValue(value) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withScalarField", reqArgs); err != nil { s.setErr(err) }
+	if !isNil(value) {
+		reqArgs["value"] = serializeValue(value)
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withScalarField", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithStatus sets the resource status
 func (s *testRedisResource) WithStatus(status TestResourceStatus) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
 	reqArgs["status"] = serializeValue(status)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withStatus", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withStatus", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithUnionDependency adds a dependency from a string or another resource
 // Allowed types for parameter dependency: string, ResourceWithConnectionString.
 func (s *testRedisResource) WithUnionDependency(dependency any) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil {
+		return s
+	}
 	switch dependency.(type) {
 	case string, ResourceWithConnectionString:
 	default:
 		err := fmt.Errorf("aspire: WithUnionDependency: parameter %q must be one of [string, ResourceWithConnectionString], got %T", "dependency", dependency)
-		s.setErr(err); return s
+		s.setErr(err)
+		return s
 	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
-	if !isNil(dependency) { reqArgs["dependency"] = serializeValue(dependency) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withUnionDependency", reqArgs); err != nil { s.setErr(err) }
+	if !isNil(dependency) {
+		reqArgs["dependency"] = serializeValue(dependency)
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withUnionDependency", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // WithValidator adds validation callback
 func (s *testRedisResource) WithValidator(validator func(arg TestResourceContext) bool) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -2131,20 +3368,40 @@ func (s *testRedisResource) WithValidator(validator func(arg TestResourceContext
 		}
 		reqArgs["validator"] = s.client.registerCallback(shim)
 	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withValidator", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withValidator", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
-// TestResourceContext is the public interface for handle type TestResourceContext.
+// TestResourceContext - Test context type with exposed instance methods.
+// Verifies [AspireExport(ExposeMethods=true)] generates async methods.
 type TestResourceContext interface {
 	handleReference
+
+	// GetValueAsync - Instance method that should be exposed as async method.
 	GetValueAsync() (string, error)
+
+	// Name gets the Name property
 	Name() (string, error)
+
+	// SetName sets the Name property
 	SetName(value string) TestResourceContext
-	SetValue(value float64) TestResourceContext
+
+	// SetValue sets the Value property
+	SetValue(value int) TestResourceContext
+
+	// SetValueAsync - Instance method with parameter.
 	SetValueAsync(value string) error
+
+	// ValidateAsync - Instance method with return type.
 	ValidateAsync() (bool, error)
-	Value() (float64, error)
+
+	// Value gets the Value property
+	Value() (int, error)
+
+	// Err returns the first error recorded on this wrapper, or nil if the wrapper
+	// resolved successfully and no chained operation has failed.
 	Err() error
 }
 
@@ -2158,9 +3415,12 @@ func newTestResourceContextFromHandle(h *handle, c *client) TestResourceContext 
 	return &testResourceContext{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// GetValueAsync instance method that should be exposed as async method.
+// GetValueAsync - Instance method that should be exposed as async method.
 func (s *testResourceContext) GetValueAsync() (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+	if err := s.Err(); err != nil {
+		var zero string
+		return zero, err
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -2175,7 +3435,10 @@ func (s *testResourceContext) GetValueAsync() (string, error) {
 
 // Name gets the Name property
 func (s *testResourceContext) Name() (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+	if err := s.Err(); err != nil {
+		var zero string
+		return zero, err
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -2190,31 +3453,41 @@ func (s *testResourceContext) Name() (string, error) {
 
 // SetName sets the Name property
 func (s *testResourceContext) SetName(value string) TestResourceContext {
-	if s.err != nil { return s }
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
 	}
 	reqArgs["value"] = serializeValue(value)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestResourceContext.setName", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestResourceContext.setName", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
 // SetValue sets the Value property
-func (s *testResourceContext) SetValue(value float64) TestResourceContext {
-	if s.err != nil { return s }
+func (s *testResourceContext) SetValue(value int) TestResourceContext {
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
 	}
 	reqArgs["value"] = serializeValue(value)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestResourceContext.setValue", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestResourceContext.setValue", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
-// SetValueAsync instance method with parameter.
+// SetValueAsync - Instance method with parameter.
 func (s *testResourceContext) SetValueAsync(value string) error {
-	if s.err != nil { return s.err }
+	if err := s.Err(); err != nil {
+		return err
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -2224,9 +3497,12 @@ func (s *testResourceContext) SetValueAsync(value string) error {
 	return err
 }
 
-// ValidateAsync instance method with return type.
+// ValidateAsync - Instance method with return type.
 func (s *testResourceContext) ValidateAsync() (bool, error) {
-	if s.err != nil { var zero bool; return zero, s.err }
+	if err := s.Err(); err != nil {
+		var zero bool
+		return zero, err
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -2240,35 +3516,67 @@ func (s *testResourceContext) ValidateAsync() (bool, error) {
 }
 
 // Value gets the Value property
-func (s *testResourceContext) Value() (float64, error) {
-	if s.err != nil { var zero float64; return zero, s.err }
+func (s *testResourceContext) Value() (int, error) {
+	if err := s.Err(); err != nil {
+		var zero int
+		return zero, err
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
 	}
 	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestResourceContext.value", reqArgs)
 	if err != nil {
-		var zero float64
+		var zero int
 		return zero, err
 	}
-	return decodeAs[float64](result)
+	return decodeAs[int](result)
 }
 
-// TestReturnValueContext is the public interface for handle type TestReturnValueContext.
+// TestReturnValueContext is the public interface for handle type
+// TestReturnValueContext.
 type TestReturnValueContext interface {
 	handleReference
-	GetInt() (float64, error)
-	GetIntTaskAsync() (float64, error)
-	GetIntValueTaskAsync() (float64, error)
-	GetNullableInt() (*float64, error)
-	GetNullableIntTaskAsync() (*float64, error)
-	GetNullableIntValueTaskAsync() (*float64, error)
+
+	// GetInt invokes the GetInt method
+	GetInt() (int, error)
+
+	// GetIntTaskAsync invokes the GetIntTaskAsync method
+	GetIntTaskAsync() (int, error)
+
+	// GetIntValueTaskAsync invokes the GetIntValueTaskAsync method
+	GetIntValueTaskAsync() (int, error)
+
+	// GetNullableInt invokes the GetNullableInt method
+	GetNullableInt() (*int, error)
+
+	// GetNullableIntTaskAsync invokes the GetNullableIntTaskAsync method
+	GetNullableIntTaskAsync() (*int, error)
+
+	// GetNullableIntValueTaskAsync invokes the GetNullableIntValueTaskAsync method
+	GetNullableIntValueTaskAsync() (*int, error)
+
+	// GetNullableString invokes the GetNullableString method
 	GetNullableString() (*string, error)
+
+	// GetNullableStringTaskAsync invokes the GetNullableStringTaskAsync method
 	GetNullableStringTaskAsync() (*string, error)
+
+	// GetNullableStringValueTaskAsync invokes the GetNullableStringValueTaskAsync
+	// method
 	GetNullableStringValueTaskAsync() (*string, error)
+
+	// GetString invokes the GetString method
 	GetString() (string, error)
+
+	// GetStringTaskAsync invokes the GetStringTaskAsync method
 	GetStringTaskAsync() (string, error)
+
+	// GetStringValueTaskAsync invokes the GetStringValueTaskAsync method
 	GetStringValueTaskAsync() (string, error)
+
+	// Err returns the first error recorded on this wrapper, or nil if the wrapper
+	// resolved successfully and no chained operation has failed.
 	Err() error
 }
 
@@ -2283,98 +3591,119 @@ func newTestReturnValueContextFromHandle(h *handle, c *client) TestReturnValueCo
 }
 
 // GetInt invokes the GetInt method
-func (s *testReturnValueContext) GetInt() (float64, error) {
-	if s.err != nil { var zero float64; return zero, s.err }
+func (s *testReturnValueContext) GetInt() (int, error) {
+	if err := s.Err(); err != nil {
+		var zero int
+		return zero, err
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
 	}
 	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getInt", reqArgs)
 	if err != nil {
-		var zero float64
+		var zero int
 		return zero, err
 	}
-	return decodeAs[float64](result)
+	return decodeAs[int](result)
 }
 
 // GetIntTaskAsync invokes the GetIntTaskAsync method
-func (s *testReturnValueContext) GetIntTaskAsync() (float64, error) {
-	if s.err != nil { var zero float64; return zero, s.err }
+func (s *testReturnValueContext) GetIntTaskAsync() (int, error) {
+	if err := s.Err(); err != nil {
+		var zero int
+		return zero, err
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
 	}
 	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getIntTaskAsync", reqArgs)
 	if err != nil {
-		var zero float64
+		var zero int
 		return zero, err
 	}
-	return decodeAs[float64](result)
+	return decodeAs[int](result)
 }
 
 // GetIntValueTaskAsync invokes the GetIntValueTaskAsync method
-func (s *testReturnValueContext) GetIntValueTaskAsync() (float64, error) {
-	if s.err != nil { var zero float64; return zero, s.err }
+func (s *testReturnValueContext) GetIntValueTaskAsync() (int, error) {
+	if err := s.Err(); err != nil {
+		var zero int
+		return zero, err
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
 	}
 	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getIntValueTaskAsync", reqArgs)
 	if err != nil {
-		var zero float64
+		var zero int
 		return zero, err
 	}
-	return decodeAs[float64](result)
+	return decodeAs[int](result)
 }
 
 // GetNullableInt invokes the GetNullableInt method
-func (s *testReturnValueContext) GetNullableInt() (*float64, error) {
-	if s.err != nil { var zero *float64; return zero, s.err }
+func (s *testReturnValueContext) GetNullableInt() (*int, error) {
+	if err := s.Err(); err != nil {
+		var zero *int
+		return zero, err
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
 	}
 	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getNullableInt", reqArgs)
 	if err != nil {
-		var zero *float64
+		var zero *int
 		return zero, err
 	}
-	return decodeAs[*float64](result)
+	return decodeAs[*int](result)
 }
 
 // GetNullableIntTaskAsync invokes the GetNullableIntTaskAsync method
-func (s *testReturnValueContext) GetNullableIntTaskAsync() (*float64, error) {
-	if s.err != nil { var zero *float64; return zero, s.err }
+func (s *testReturnValueContext) GetNullableIntTaskAsync() (*int, error) {
+	if err := s.Err(); err != nil {
+		var zero *int
+		return zero, err
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
 	}
 	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getNullableIntTaskAsync", reqArgs)
 	if err != nil {
-		var zero *float64
+		var zero *int
 		return zero, err
 	}
-	return decodeAs[*float64](result)
+	return decodeAs[*int](result)
 }
 
 // GetNullableIntValueTaskAsync invokes the GetNullableIntValueTaskAsync method
-func (s *testReturnValueContext) GetNullableIntValueTaskAsync() (*float64, error) {
-	if s.err != nil { var zero *float64; return zero, s.err }
+func (s *testReturnValueContext) GetNullableIntValueTaskAsync() (*int, error) {
+	if err := s.Err(); err != nil {
+		var zero *int
+		return zero, err
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
 	}
 	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getNullableIntValueTaskAsync", reqArgs)
 	if err != nil {
-		var zero *float64
+		var zero *int
 		return zero, err
 	}
-	return decodeAs[*float64](result)
+	return decodeAs[*int](result)
 }
 
 // GetNullableString invokes the GetNullableString method
 func (s *testReturnValueContext) GetNullableString() (*string, error) {
-	if s.err != nil { var zero *string; return zero, s.err }
+	if err := s.Err(); err != nil {
+		var zero *string
+		return zero, err
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -2389,7 +3718,10 @@ func (s *testReturnValueContext) GetNullableString() (*string, error) {
 
 // GetNullableStringTaskAsync invokes the GetNullableStringTaskAsync method
 func (s *testReturnValueContext) GetNullableStringTaskAsync() (*string, error) {
-	if s.err != nil { var zero *string; return zero, s.err }
+	if err := s.Err(); err != nil {
+		var zero *string
+		return zero, err
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -2402,9 +3734,13 @@ func (s *testReturnValueContext) GetNullableStringTaskAsync() (*string, error) {
 	return decodeAs[*string](result)
 }
 
-// GetNullableStringValueTaskAsync invokes the GetNullableStringValueTaskAsync method
+// GetNullableStringValueTaskAsync invokes the GetNullableStringValueTaskAsync
+// method
 func (s *testReturnValueContext) GetNullableStringValueTaskAsync() (*string, error) {
-	if s.err != nil { var zero *string; return zero, s.err }
+	if err := s.Err(); err != nil {
+		var zero *string
+		return zero, err
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -2419,7 +3755,10 @@ func (s *testReturnValueContext) GetNullableStringValueTaskAsync() (*string, err
 
 // GetString invokes the GetString method
 func (s *testReturnValueContext) GetString() (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+	if err := s.Err(); err != nil {
+		var zero string
+		return zero, err
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -2434,7 +3773,10 @@ func (s *testReturnValueContext) GetString() (string, error) {
 
 // GetStringTaskAsync invokes the GetStringTaskAsync method
 func (s *testReturnValueContext) GetStringTaskAsync() (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+	if err := s.Err(); err != nil {
+		var zero string
+		return zero, err
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -2449,7 +3791,10 @@ func (s *testReturnValueContext) GetStringTaskAsync() (string, error) {
 
 // GetStringValueTaskAsync invokes the GetStringValueTaskAsync method
 func (s *testReturnValueContext) GetStringValueTaskAsync() (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+	if err := s.Err(); err != nil {
+		var zero string
+		return zero, err
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -2468,13 +3813,35 @@ func (s *testReturnValueContext) GetStringValueTaskAsync() (string, error) {
 
 // AddTestRedisOptions carries optional parameters for AddTestRedis.
 type AddTestRedisOptions struct {
-	Port *float64 `json:"port,omitempty"`
+	Port *int `json:"port,omitempty"`
+}
+
+// AddTestRedisOption configures AddTestRedis.
+type AddTestRedisOption interface {
+	apply(*AddTestRedisOptions)
+}
+
+func (option *AddTestRedisOptions) apply(options *AddTestRedisOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// AddTestRedisPort sets Port for AddTestRedis.
+type AddTestRedisPort int
+
+func (value AddTestRedisPort) apply(options *AddTestRedisOptions) {
+	options.Port = (*int)(&value)
 }
 
 func (o *AddTestRedisOptions) ToMap() map[string]any {
 	m := map[string]any{}
-	if o == nil { return m }
-	if o.Port != nil { m["port"] = serializeValue(o.Port) }
+	if o == nil {
+		return m
+	}
+	if o.Port != nil {
+		m["port"] = serializeValue(o.Port)
+	}
 	return m
 }
 
@@ -2483,10 +3850,32 @@ type AddTestChildDatabaseOptions struct {
 	DatabaseName *string `json:"databaseName,omitempty"`
 }
 
+// AddTestChildDatabaseOption configures AddTestChildDatabase.
+type AddTestChildDatabaseOption interface {
+	apply(*AddTestChildDatabaseOptions)
+}
+
+func (option *AddTestChildDatabaseOptions) apply(options *AddTestChildDatabaseOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// AddTestChildDatabaseDatabaseName sets DatabaseName for AddTestChildDatabase.
+type AddTestChildDatabaseDatabaseName string
+
+func (value AddTestChildDatabaseDatabaseName) apply(options *AddTestChildDatabaseOptions) {
+	options.DatabaseName = (*string)(&value)
+}
+
 func (o *AddTestChildDatabaseOptions) ToMap() map[string]any {
 	m := map[string]any{}
-	if o == nil { return m }
-	if o.DatabaseName != nil { m["databaseName"] = serializeValue(o.DatabaseName) }
+	if o == nil {
+		return m
+	}
+	if o.DatabaseName != nil {
+		m["databaseName"] = serializeValue(o.DatabaseName)
+	}
 	return m
 }
 
@@ -2495,24 +3884,77 @@ type WithPersistenceOptions struct {
 	Mode *TestPersistenceMode `json:"mode,omitempty"`
 }
 
+// WithPersistenceOption configures WithPersistence.
+type WithPersistenceOption interface {
+	apply(*WithPersistenceOptions)
+}
+
+func (option *WithPersistenceOptions) apply(options *WithPersistenceOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// PersistenceMode sets Mode for WithPersistence.
+type PersistenceMode TestPersistenceMode
+
+func (value PersistenceMode) apply(options *WithPersistenceOptions) {
+	options.Mode = (*TestPersistenceMode)(&value)
+}
+
 func (o *WithPersistenceOptions) ToMap() map[string]any {
 	m := map[string]any{}
-	if o == nil { return m }
-	if o.Mode != nil { m["mode"] = serializeValue(o.Mode) }
+	if o == nil {
+		return m
+	}
+	if o.Mode != nil {
+		m["mode"] = serializeValue(o.Mode)
+	}
 	return m
 }
 
 // WithOptionalStringOptions carries optional parameters for WithOptionalString.
 type WithOptionalStringOptions struct {
-	Value *string `json:"value,omitempty"`
-	Enabled *bool `json:"enabled,omitempty"`
+	Value   *string `json:"value,omitempty"`
+	Enabled *bool   `json:"enabled,omitempty"`
+}
+
+// WithOptionalStringOption configures WithOptionalString.
+type WithOptionalStringOption interface {
+	apply(*WithOptionalStringOptions)
+}
+
+func (option *WithOptionalStringOptions) apply(options *WithOptionalStringOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// OptionalStringValue sets Value for WithOptionalString.
+type OptionalStringValue string
+
+func (value OptionalStringValue) apply(options *WithOptionalStringOptions) {
+	options.Value = (*string)(&value)
+}
+
+// OptionalStringEnabled sets Enabled for WithOptionalString.
+type OptionalStringEnabled bool
+
+func (value OptionalStringEnabled) apply(options *WithOptionalStringOptions) {
+	options.Enabled = (*bool)(&value)
 }
 
 func (o *WithOptionalStringOptions) ToMap() map[string]any {
 	m := map[string]any{}
-	if o == nil { return m }
-	if o.Value != nil { m["value"] = serializeValue(o.Value) }
-	if o.Enabled != nil { m["enabled"] = serializeValue(o.Enabled) }
+	if o == nil {
+		return m
+	}
+	if o.Value != nil {
+		m["value"] = serializeValue(o.Value)
+	}
+	if o.Enabled != nil {
+		m["enabled"] = serializeValue(o.Enabled)
+	}
 	return m
 }
 
@@ -2521,9 +3963,29 @@ type WithOptionalCallbackOptions struct {
 	Callback func(arg TestCallbackContext) `json:"-"`
 }
 
+// WithOptionalCallbackOption configures WithOptionalCallback.
+type WithOptionalCallbackOption interface {
+	apply(*WithOptionalCallbackOptions)
+}
+
+func (option *WithOptionalCallbackOptions) apply(options *WithOptionalCallbackOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// OptionalCallbackCallback sets Callback for WithOptionalCallback.
+type OptionalCallbackCallback func(arg TestCallbackContext)
+
+func (value OptionalCallbackCallback) apply(options *WithOptionalCallbackOptions) {
+	options.Callback = (func(arg TestCallbackContext))(value)
+}
+
 func (o *WithOptionalCallbackOptions) ToMap() map[string]any {
 	m := map[string]any{}
-	if o == nil { return m }
+	if o == nil {
+		return m
+	}
 	return m
 }
 
@@ -2532,9 +3994,33 @@ type GetStatusAsyncOptions struct {
 	CancellationToken *CancellationToken `json:"-"`
 }
 
+// GetStatusAsyncOption configures GetStatusAsync.
+type GetStatusAsyncOption interface {
+	apply(*GetStatusAsyncOptions)
+}
+
+func (option *GetStatusAsyncOptions) apply(options *GetStatusAsyncOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// GetStatusAsyncCancellationToken sets CancellationToken for GetStatusAsync.
+type getStatusAsyncCancellationToken struct{ value *CancellationToken }
+
+func (option getStatusAsyncCancellationToken) apply(options *GetStatusAsyncOptions) {
+	options.CancellationToken = option.value
+}
+
+func GetStatusAsyncCancellationToken(value *CancellationToken) GetStatusAsyncOption {
+	return getStatusAsyncCancellationToken{value: value}
+}
+
 func (o *GetStatusAsyncOptions) ToMap() map[string]any {
 	m := map[string]any{}
-	if o == nil { return m }
+	if o == nil {
+		return m
+	}
 	return m
 }
 
@@ -2543,51 +4029,168 @@ type WaitForReadyAsyncOptions struct {
 	CancellationToken *CancellationToken `json:"-"`
 }
 
+// WaitForReadyAsyncOption configures WaitForReadyAsync.
+type WaitForReadyAsyncOption interface {
+	apply(*WaitForReadyAsyncOptions)
+}
+
+func (option *WaitForReadyAsyncOptions) apply(options *WaitForReadyAsyncOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// WaitForReadyAsyncCancellationToken sets CancellationToken for WaitForReadyAsync.
+type waitForReadyAsyncCancellationToken struct{ value *CancellationToken }
+
+func (option waitForReadyAsyncCancellationToken) apply(options *WaitForReadyAsyncOptions) {
+	options.CancellationToken = option.value
+}
+
+func WaitForReadyAsyncCancellationToken(value *CancellationToken) WaitForReadyAsyncOption {
+	return waitForReadyAsyncCancellationToken{value: value}
+}
+
 func (o *WaitForReadyAsyncOptions) ToMap() map[string]any {
 	m := map[string]any{}
-	if o == nil { return m }
+	if o == nil {
+		return m
+	}
 	return m
 }
 
 // TestDatabaseResourceWithDataVolumeOptions carries optional parameters for WithDataVolume.
 type TestDatabaseResourceWithDataVolumeOptions struct {
-	Name *string `json:"name,omitempty"`
-	IsReadOnly *bool `json:"isReadOnly,omitempty"`
+	Name       *string `json:"name,omitempty"`
+	IsReadOnly *bool   `json:"isReadOnly,omitempty"`
+}
+
+// TestDatabaseResourceWithDataVolumeOption configures WithDataVolume.
+type TestDatabaseResourceWithDataVolumeOption interface {
+	apply(*TestDatabaseResourceWithDataVolumeOptions)
+}
+
+func (option *TestDatabaseResourceWithDataVolumeOptions) apply(options *TestDatabaseResourceWithDataVolumeOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// TestDatabaseResourceWithDataVolumeName sets Name for WithDataVolume.
+type TestDatabaseResourceWithDataVolumeName string
+
+func (value TestDatabaseResourceWithDataVolumeName) apply(options *TestDatabaseResourceWithDataVolumeOptions) {
+	options.Name = (*string)(&value)
+}
+
+// TestDatabaseResourceWithDataVolumeIsReadOnly sets IsReadOnly for WithDataVolume.
+type TestDatabaseResourceWithDataVolumeIsReadOnly bool
+
+func (value TestDatabaseResourceWithDataVolumeIsReadOnly) apply(options *TestDatabaseResourceWithDataVolumeOptions) {
+	options.IsReadOnly = (*bool)(&value)
 }
 
 func (o *TestDatabaseResourceWithDataVolumeOptions) ToMap() map[string]any {
 	m := map[string]any{}
-	if o == nil { return m }
-	if o.Name != nil { m["name"] = serializeValue(o.Name) }
-	if o.IsReadOnly != nil { m["isReadOnly"] = serializeValue(o.IsReadOnly) }
+	if o == nil {
+		return m
+	}
+	if o.Name != nil {
+		m["name"] = serializeValue(o.Name)
+	}
+	if o.IsReadOnly != nil {
+		m["isReadOnly"] = serializeValue(o.IsReadOnly)
+	}
 	return m
 }
 
 // WithMergeLoggingOptions carries optional parameters for WithMergeLogging.
 type WithMergeLoggingOptions struct {
 	EnableConsole *bool `json:"enableConsole,omitempty"`
-	MaxFiles *float64 `json:"maxFiles,omitempty"`
+	MaxFiles      *int  `json:"maxFiles,omitempty"`
+}
+
+// WithMergeLoggingOption configures WithMergeLogging.
+type WithMergeLoggingOption interface {
+	apply(*WithMergeLoggingOptions)
+}
+
+func (option *WithMergeLoggingOptions) apply(options *WithMergeLoggingOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// MergeLoggingEnableConsole sets EnableConsole for WithMergeLogging.
+type MergeLoggingEnableConsole bool
+
+func (value MergeLoggingEnableConsole) apply(options *WithMergeLoggingOptions) {
+	options.EnableConsole = (*bool)(&value)
+}
+
+// MergeLoggingMaxFiles sets MaxFiles for WithMergeLogging.
+type MergeLoggingMaxFiles int
+
+func (value MergeLoggingMaxFiles) apply(options *WithMergeLoggingOptions) {
+	options.MaxFiles = (*int)(&value)
 }
 
 func (o *WithMergeLoggingOptions) ToMap() map[string]any {
 	m := map[string]any{}
-	if o == nil { return m }
-	if o.EnableConsole != nil { m["enableConsole"] = serializeValue(o.EnableConsole) }
-	if o.MaxFiles != nil { m["maxFiles"] = serializeValue(o.MaxFiles) }
+	if o == nil {
+		return m
+	}
+	if o.EnableConsole != nil {
+		m["enableConsole"] = serializeValue(o.EnableConsole)
+	}
+	if o.MaxFiles != nil {
+		m["maxFiles"] = serializeValue(o.MaxFiles)
+	}
 	return m
 }
 
 // WithMergeLoggingPathOptions carries optional parameters for WithMergeLoggingPath.
 type WithMergeLoggingPathOptions struct {
 	EnableConsole *bool `json:"enableConsole,omitempty"`
-	MaxFiles *float64 `json:"maxFiles,omitempty"`
+	MaxFiles      *int  `json:"maxFiles,omitempty"`
+}
+
+// WithMergeLoggingPathOption configures WithMergeLoggingPath.
+type WithMergeLoggingPathOption interface {
+	apply(*WithMergeLoggingPathOptions)
+}
+
+func (option *WithMergeLoggingPathOptions) apply(options *WithMergeLoggingPathOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// MergeLoggingPathEnableConsole sets EnableConsole for WithMergeLoggingPath.
+type MergeLoggingPathEnableConsole bool
+
+func (value MergeLoggingPathEnableConsole) apply(options *WithMergeLoggingPathOptions) {
+	options.EnableConsole = (*bool)(&value)
+}
+
+// MergeLoggingPathMaxFiles sets MaxFiles for WithMergeLoggingPath.
+type MergeLoggingPathMaxFiles int
+
+func (value MergeLoggingPathMaxFiles) apply(options *WithMergeLoggingPathOptions) {
+	options.MaxFiles = (*int)(&value)
 }
 
 func (o *WithMergeLoggingPathOptions) ToMap() map[string]any {
 	m := map[string]any{}
-	if o == nil { return m }
-	if o.EnableConsole != nil { m["enableConsole"] = serializeValue(o.EnableConsole) }
-	if o.MaxFiles != nil { m["maxFiles"] = serializeValue(o.MaxFiles) }
+	if o == nil {
+		return m
+	}
+	if o.EnableConsole != nil {
+		m["enableConsole"] = serializeValue(o.EnableConsole)
+	}
+	if o.MaxFiles != nil {
+		m["maxFiles"] = serializeValue(o.MaxFiles)
+	}
 	return m
 }
 
@@ -2596,9 +4199,33 @@ type SetCancellationTokenOptions struct {
 	Value *CancellationToken `json:"-"`
 }
 
+// SetCancellationTokenOption configures SetCancellationToken.
+type SetCancellationTokenOption interface {
+	apply(*SetCancellationTokenOptions)
+}
+
+func (option *SetCancellationTokenOptions) apply(options *SetCancellationTokenOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// SetCancellationTokenValue sets Value for SetCancellationToken.
+type setCancellationTokenValue struct{ value *CancellationToken }
+
+func (option setCancellationTokenValue) apply(options *SetCancellationTokenOptions) {
+	options.Value = option.value
+}
+
+func SetCancellationTokenValue(value *CancellationToken) SetCancellationTokenOption {
+	return setCancellationTokenValue{value: value}
+}
+
 func (o *SetCancellationTokenOptions) ToMap() map[string]any {
 	m := map[string]any{}
-	if o == nil { return m }
+	if o == nil {
+		return m
+	}
 	return m
 }
 
@@ -2612,6 +4239,12 @@ func registerWrappers(c *client) {
 	})
 	c.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Go.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestVaultResource", func(h *handle, c *client) any {
 		return newAspire_Hosting_CodeGeneration_Go_TestsTestVaultResourceFromHandle(h, c)
+	})
+	c.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Go.Tests/Aspire.Hosting.CodeGeneration.Go.Tests.GoObsoleteContext", func(h *handle, c *client) any {
+		return newGoObsoleteContextFromHandle(h, c)
+	})
+	c.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Go.Tests/Aspire.Hosting.CodeGeneration.Go.Tests.GoObsoleteWireHandle", func(h *handle, c *client) any {
+		return newGoObsoleteWireHandleFromHandle(h, c)
 	})
 	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.IDistributedApplicationBuilder", func(h *handle, c *client) any {
 		return newIDistributedApplicationBuilderFromHandle(h, c)
@@ -2671,19 +4304,34 @@ func registerWrappers(c *client) {
 // ============================================================================
 
 // DistributedApplication is returned by Build(); it represents the running application.
-type DistributedApplication interface { handleReference }
+type DistributedApplication interface{ handleReference }
 
-type distributedApplication struct { *resourceBuilderBase }
+type distributedApplication struct{ *resourceBuilderBase }
+
+// Err returns an error combining every failure recorded by this builder or by
+// any handle created from it.
+func (b *iDistributedApplicationBuilder) Err() error {
+	if err := b.client.combinedError(); err != nil {
+		return err
+	}
+	return b.resourceBuilderBase.Err()
+}
 
 // Build invokes the build capability and returns the running application.
 func (b *iDistributedApplicationBuilder) Build() (DistributedApplication, error) {
-	if b.err != nil { return nil, b.err }
+	if err := b.Err(); err != nil {
+		return nil, err
+	}
 	result, err := b.client.invokeCapability(context.Background(), "Aspire.Hosting/build", map[string]any{
 		"context": b.handle.ToJSON(),
 	})
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 	app, ok := result.(DistributedApplication)
-	if !ok { return nil, fmt.Errorf("aspire: build returned unexpected type %T", result) }
+	if !ok {
+		return nil, fmt.Errorf("aspire: build returned unexpected type %T", result)
+	}
 	return app, nil
 }
 
@@ -2694,12 +4342,16 @@ func CreateBuilder() (IDistributedApplicationBuilder, error) {
 		return nil, fmt.Errorf("REMOTE_APP_HOST_SOCKET_PATH environment variable not set. Run this application using `aspire run`")
 	}
 	c := newClient(socketPath)
-	if err := c.connect(context.Background(), 5*time.Second); err != nil { return nil, err }
+	if err := c.connect(context.Background(), 5*time.Second); err != nil {
+		return nil, err
+	}
 	c.onDisconnect(func() { os.Exit(1) })
 	registerWrappers(c)
 
 	resolved := map[string]any{}
-	if _, ok := resolved["args"]; !ok { resolved["args"] = os.Args[1:] }
+	if _, ok := resolved["args"]; !ok {
+		resolved["args"] = os.Args[1:]
+	}
 	if projectDirectory, ok := resolved["projectDirectory"].(string); !ok || projectDirectory == "" {
 		if projectDirectory := os.Getenv("ASPIRE_PROJECT_DIRECTORY"); projectDirectory != "" {
 			resolved["projectDirectory"] = projectDirectory
@@ -2708,19 +4360,24 @@ func CreateBuilder() (IDistributedApplicationBuilder, error) {
 		}
 	}
 	if appHostFilePath, ok := resolved["appHostFilePath"].(string); !ok || appHostFilePath == "" {
-		if appHostFilePath := os.Getenv("ASPIRE_APPHOST_FILEPATH"); appHostFilePath != "" { resolved["appHostFilePath"] = appHostFilePath }
+		if appHostFilePath := os.Getenv("ASPIRE_APPHOST_FILEPATH"); appHostFilePath != "" {
+			resolved["appHostFilePath"] = appHostFilePath
+		}
 	}
 	if dashboardApplicationName, ok := resolved["dashboardApplicationName"].(string); ok && dashboardApplicationName == "" {
 		delete(resolved, "dashboardApplicationName")
 	}
 
 	result, err := c.invokeCapability(context.Background(), "Aspire.Hosting/createBuilder", map[string]any{"argsOrOptions": resolved})
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 	href, ok := result.(handleReference)
-	if !ok { return nil, fmt.Errorf("aspire: createBuilder returned unexpected type %T", result) }
+	if !ok {
+		return nil, fmt.Errorf("aspire: createBuilder returned unexpected type %T", result)
+	}
 	return &iDistributedApplicationBuilder{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), c)}, nil
 }
-
 
 // ===== base.go =====
 // Package aspire provides base types and utilities for Aspire Go SDK.
@@ -2751,17 +4408,20 @@ import (
 //
 // Callers retrieve the chain's error with Err() at any logical boundary
 // (typically once at the end of a builder chain or before using the result of
-// a value-returning method).
+// a value-returning method). Every wrapper also reports the error it owns to
+// the client, and the builder's Err() and Build() combine the errors from all
+// failed handles, so failed children that were never checked still stop Build().
 //
-// Wrappers are not synchronized: err is read and written without a lock. The
-// AppHost runs each callback on its own goroutine, so a callback should use the
-// wrappers it receives as arguments, not a wrapper that the goroutine running
-// the builder chain (or another callback) uses at the same time.
+// Callbacks run on separate goroutines and can capture a wrapper also used by
+// the builder chain. The sticky error and lazy collection accessors are
+// synchronized; concurrent capability calls still run independently.
 
 type handleWrapperBase struct {
-	handle *handle
-	err    error
-	client *client
+	handle       *handle
+	errMu        sync.RWMutex
+	err          error
+	client       *client
+	collectionMu sync.Mutex
 }
 
 func newHandleWrapperBase(h *handle, c *client) *handleWrapperBase {
@@ -2769,6 +4429,11 @@ func newHandleWrapperBase(h *handle, c *client) *handleWrapperBase {
 }
 
 func newErroredHandleWrapperBase(err error, c *client) *handleWrapperBase {
+	c.recordErr(err)
+	return &handleWrapperBase{err: err, client: c}
+}
+
+func newPropagatedErroredHandleWrapperBase(err error, c *client) *handleWrapperBase {
 	return &handleWrapperBase{err: err, client: c}
 }
 
@@ -2782,14 +4447,40 @@ func (h *handleWrapperBase) getClient() *client { return h.client }
 
 // Err returns the first error recorded on this wrapper. Returns nil if the
 // wrapper resolved successfully and no chained operation has failed.
-func (h *handleWrapperBase) Err() error { return h.err }
+func (h *handleWrapperBase) Err() error {
+	h.errMu.RLock()
+	defer h.errMu.RUnlock()
+	return h.err
+}
 
-// setErr records an error on this wrapper. The first non-nil error wins;
-// later errors are dropped to keep failure causality clear in chains.
+// setErr records an error owned by this wrapper and reports it to the client.
+// The first non-nil error wins; later errors are dropped to keep failure
+// causality clear in chains.
 func (h *handleWrapperBase) setErr(err error) {
+	if err == nil {
+		return
+	}
+	h.errMu.Lock()
+	if h.err != nil {
+		h.errMu.Unlock()
+		return
+	}
+	h.err = err
+	h.errMu.Unlock()
+	h.client.recordErr(err)
+}
+
+// setPropagatedErr short-circuits this wrapper with an error already owned by
+// another handle without reporting the same failure to the client again.
+func (h *handleWrapperBase) setPropagatedErr(err error) {
+	if err == nil {
+		return
+	}
+	h.errMu.Lock()
 	if h.err == nil {
 		h.err = err
 	}
+	h.errMu.Unlock()
 }
 
 // ── resourceBuilderBase ───────────────────────────────────────────────────────
@@ -2804,6 +4495,10 @@ func newResourceBuilderBase(h *handle, c *client) *resourceBuilderBase {
 
 func newErroredResourceBuilder(err error, c *client) *resourceBuilderBase {
 	return &resourceBuilderBase{handleWrapperBase: newErroredHandleWrapperBase(err, c)}
+}
+
+func newPropagatedErroredResourceBuilder(err error, c *client) *resourceBuilderBase {
+	return &resourceBuilderBase{handleWrapperBase: newPropagatedErroredHandleWrapperBase(err, c)}
 }
 
 // ── ReferenceExpression ───────────────────────────────────────────────────────
@@ -2980,8 +4675,8 @@ func newListWithGetter[T any](parent *handleWrapperBase, getterCapabilityID stri
 }
 
 func (l *List[T]) resolveListHandle(ctx context.Context) (*handle, error) {
-	if l.parent.err != nil {
-		return nil, l.parent.err
+	if err := l.parent.Err(); err != nil {
+		return nil, err
 	}
 	l.handleMu.Lock()
 	cached := l.resolvedHandle
@@ -3009,10 +4704,20 @@ func (l *List[T]) resolveListHandle(ctx context.Context) (*handle, error) {
 	return listHandle, nil
 }
 
-// ToJSON returns the list handle as a JSON-serializable map.
+// Err returns the first error on the list's parent, including handle resolution
+// failures recorded by ToJSON.
+func (l *List[T]) Err() error { return l.parent.Err() }
+
+// ToJSON returns the list handle as a JSON-serializable map, or nil on failure.
+// Consult Err before using the result.
 func (l *List[T]) ToJSON() map[string]any {
 	h, err := l.resolveListHandle(context.Background())
-	if err != nil || h == nil {
+	if err != nil {
+		l.parent.setErr(err)
+		return nil
+	}
+	if h == nil {
+		l.parent.setErr(errors.New("aspire: list getter returned a nil handle"))
 		return nil
 	}
 	out := h.ToJSON()
@@ -3031,10 +4736,7 @@ func (l *List[T]) Count() (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	if n, ok := result.(float64); ok {
-		return int(n), nil
-	}
-	return 0, nil
+	return decodeAs[int](result)
 }
 
 func (l *List[T]) Get(index int) (T, error) {
@@ -3141,8 +4843,8 @@ func newDictWithGetter[K comparable, V any](parent *handleWrapperBase, getterCap
 }
 
 func (d *Dict[K, V]) resolveDictHandle(ctx context.Context) (*handle, error) {
-	if d.parent.err != nil {
-		return nil, d.parent.err
+	if err := d.parent.Err(); err != nil {
+		return nil, err
 	}
 	d.handleMu.Lock()
 	cached := d.resolvedHandle
@@ -3170,9 +4872,20 @@ func (d *Dict[K, V]) resolveDictHandle(ctx context.Context) (*handle, error) {
 	return dictHandle, nil
 }
 
+// Err returns the first error on the dictionary's parent, including handle
+// resolution failures recorded by ToJSON.
+func (d *Dict[K, V]) Err() error { return d.parent.Err() }
+
+// ToJSON returns the dictionary handle as a JSON-serializable map, or nil on
+// failure. Consult Err before using the result.
 func (d *Dict[K, V]) ToJSON() map[string]any {
 	h, err := d.resolveDictHandle(context.Background())
-	if err != nil || h == nil {
+	if err != nil {
+		d.parent.setErr(err)
+		return nil
+	}
+	if h == nil {
+		d.parent.setErr(errors.New("aspire: dictionary getter returned a nil handle"))
 		return nil
 	}
 	out := h.ToJSON()
@@ -3191,10 +4904,7 @@ func (d *Dict[K, V]) Count() (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	if n, ok := result.(float64); ok {
-		return int(n), nil
-	}
-	return 0, nil
+	return decodeAs[int](result)
 }
 
 func (d *Dict[K, V]) Get(key K) (V, error) {
@@ -3357,6 +5067,7 @@ func (d *Dict[K, V]) Clear() error {
 
 func StringPtr(s string) *string    { return &s }
 func IntPtr(i int) *int             { return &i }
+func Int64Ptr(i int64) *int64       { return &i }
 func BoolPtr(b bool) *bool          { return &b }
 func Float64Ptr(f float64) *float64 { return &f }
 
@@ -3379,6 +5090,8 @@ func serializeValue(value any) any {
 	}
 
 	switch v := value.(type) {
+	case json.Number:
+		return v
 	case *handle:
 		return v.ToJSON()
 	case *ReferenceExpression:
@@ -3431,6 +5144,11 @@ func isNil(value any) bool {
 	}
 }
 
+func isValidJSONNumber(value json.Number) bool {
+	_, err := json.Marshal(value)
+	return err == nil
+}
+
 func serializeReflectedCollection(value any) (any, bool) {
 	reflectedValue := reflect.ValueOf(value)
 	switch reflectedValue.Kind() {
@@ -3464,21 +5182,38 @@ func serializeReflectedCollection(value any) (any, bool) {
 }
 
 // callbackArg fetches a positional argument from the slice and decodes it
-// to T. Returns the zero value if the index is out of range or the value
-// cannot be decoded. Used by generated callback shim wrappers that adapt
-// the transport's positional `[]any` invocation back to the user's typed
-// callback signature.
+// to T. Invalid arguments panic with a private error that the callback
+// dispatcher translates into a JSON-RPC invalid-params response, before the
+// user's typed callback can run with a silently substituted zero value.
 func callbackArg[T any](args []any, idx int) T {
-	var zero T
-	if idx >= len(args) {
-		return zero
+	if idx < 0 || idx >= len(args) {
+		panic(&callbackArgumentError{fmt.Errorf("aspire: callback argument %d is missing", idx)})
 	}
 	v, err := decodeAs[T](args[idx])
 	if err != nil {
-		return zero
+		panic(&callbackArgumentError{fmt.Errorf("aspire: callback argument %d: %w", idx, err)})
 	}
+
 	return v
 }
+
+// callbackCancellationTokenArg handles the callback wire representation for
+// CancellationToken. The host sends a token ID for cancellable tokens and omits
+// the positional argument for CancellationToken.None.
+func callbackCancellationTokenArg(c *client, args []any, idx int) *CancellationToken {
+	if idx < 0 || idx >= len(args) || args[idx] == nil {
+		return nil
+	}
+	if token, ok := args[idx].(*CancellationToken); ok {
+		return token
+	}
+	if id, ok := args[idx].(string); ok && id != "" {
+		return newRemoteCancellationToken(c, id)
+	}
+	panic(&callbackArgumentError{fmt.Errorf("aspire: callback argument %d: expected a cancellation token ID", idx)})
+}
+
+type callbackArgumentError struct{ error }
 
 // decodeAs converts an arbitrary RPC result into a typed value via JSON
 // round-trip. Used by typed read methods on List/Dict and by value-returning
@@ -3599,13 +5334,13 @@ func decodeStructFields[T any](raw any) (T, bool) {
 		if !ok {
 			continue
 		}
-
-		bytes, err := json.Marshal(rawFieldValue)
-		if err != nil {
+		// Callback IDs cannot become Go func values. Other fields must decode
+		// successfully; a malformed DTO must not reach user code as zero values.
+		if fieldValue.Kind() == reflect.Func {
 			continue
 		}
-		if err := json.Unmarshal(bytes, fieldValue.Addr().Interface()); err != nil {
-			continue
+		if err := decodeInto(fieldValue, rawFieldValue); err != nil {
+			return zero, false
 		}
 	}
 
@@ -3751,6 +5486,7 @@ package aspire
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -3847,44 +5583,60 @@ func FormatError(err error) string {
 		return ""
 	}
 	var capErr *CapabilityError
-	if errors.As(err, &capErr) {
+	if !errors.As(err, &capErr) {
+		return err.Error()
+	}
+	if joined, ok := err.(interface{ Unwrap() []error }); ok {
 		var b strings.Builder
-		b.WriteString("Capability Error: ")
-		b.WriteString(capErr.Message())
-		if code := capErr.Code(); code != "" {
-			b.WriteString("\n  Code: ")
-			b.WriteString(code)
-		}
-		if cap := capErr.Capability(); cap != "" {
-			b.WriteString("\n  Capability: ")
-			b.WriteString(cap)
-		}
-		if capErr.err.Details != nil {
-			d := capErr.err.Details
-			if d.Parameter != nil {
-				b.WriteString("\n  Parameter: ")
-				b.WriteString(*d.Parameter)
+		for _, child := range joined.Unwrap() {
+			formatted := FormatError(child)
+			if formatted == "" {
+				continue
 			}
-			if d.Expected != nil {
-				b.WriteString("\n  Expected: ")
-				b.WriteString(*d.Expected)
+			if b.Len() > 0 {
+				b.WriteByte('\n')
 			}
-			if d.Actual != nil {
-				b.WriteString("\n  Actual: ")
-				b.WriteString(*d.Actual)
-			}
+			b.WriteString(formatted)
 		}
 		return b.String()
 	}
-	return err.Error()
+	var b strings.Builder
+	b.WriteString("Capability Error: ")
+	b.WriteString(capErr.Message())
+	if code := capErr.Code(); code != "" {
+		b.WriteString("\n  Code: ")
+		b.WriteString(code)
+	}
+	if cap := capErr.Capability(); cap != "" {
+		b.WriteString("\n  Capability: ")
+		b.WriteString(cap)
+	}
+	if capErr.err.Details != nil {
+		d := capErr.err.Details
+		if d.Parameter != nil {
+			b.WriteString("\n  Parameter: ")
+			b.WriteString(*d.Parameter)
+		}
+		if d.Expected != nil {
+			b.WriteString("\n  Expected: ")
+			b.WriteString(*d.Expected)
+		}
+		if d.Actual != nil {
+			b.WriteString("\n  Actual: ")
+			b.WriteString(*d.Actual)
+		}
+	}
+	return b.String()
 }
 
 // CancellationToken wraps a context.Context to provide cooperative cancellation.
 // Use NewCancellationToken to create one; call Cancel() to cancel it.
 // Pass token.Context() to any standard Go library that accepts a context.
 type CancellationToken struct {
-	ctx    context.Context
-	cancel context.CancelFunc
+	ctx        context.Context
+	cancel     context.CancelFunc
+	cancelOnce sync.Once
+	notify     func()
 }
 
 // NewCancellationToken creates a new cancellation token backed by a cancellable
@@ -3900,12 +5652,25 @@ func newCancellationTokenFrom(parent context.Context) *CancellationToken {
 	return &CancellationToken{ctx: ctx, cancel: cancel}
 }
 
+func newRemoteCancellationToken(c *client, id string) *CancellationToken {
+	token := newCancellationTokenFrom(context.Background())
+	token.notify = func() {
+		go c.cancelToken(id)
+	}
+	return token
+}
+
 // Cancel cancels the token and propagates cancellation to the underlying context.
 func (ct *CancellationToken) Cancel() {
 	if ct == nil {
 		return
 	}
-	ct.cancel()
+	ct.cancelOnce.Do(func() {
+		ct.cancel()
+		if ct.notify != nil {
+			ct.notify()
+		}
+	})
 }
 
 // IsCancelled returns true if the token has been canceled.
@@ -4028,7 +5793,7 @@ type connection struct {
 	reader  *bufio.Reader
 	client  *client
 
-	writeQueue chan map[string]any
+	writeQueue chan []byte
 	done       chan struct{}
 
 	mu      sync.Mutex
@@ -4044,7 +5809,7 @@ func newConnection(rawConn io.ReadWriteCloser, c *client, onClose func(error)) *
 		rawConn:    rawConn,
 		reader:     bufio.NewReader(rawConn),
 		client:     c,
-		writeQueue: make(chan map[string]any, 64),
+		writeQueue: make(chan []byte, 64),
 		done:       make(chan struct{}),
 		pending:    make(map[int64]chan map[string]any),
 		onClose:    onClose,
@@ -4093,7 +5858,7 @@ func (c *connection) writeLoop() {
 	for {
 		select {
 		case msg := <-c.writeQueue:
-			if err := writeMessage(c.rawConn, msg); err != nil {
+			if err := writeMessageBody(c.rawConn, msg); err != nil {
 				c.close(err)
 				return
 			}
@@ -4133,8 +5898,22 @@ func (c *connection) dispatch(msg map[string]any) {
 }
 
 func (c *connection) enqueue(msg map[string]any) {
+	body, err := json.Marshal(msg)
+	if err != nil {
+		// A user callback can return an unencodable value. Fail that callback,
+		// not every unrelated pending call on the connection.
+		body, err = json.Marshal(map[string]any{
+			"jsonrpc": "2.0",
+			"id":      msg["id"],
+			"error":   map[string]any{"code": -32603, "message": fmt.Sprintf("Callback result encoding failed: %v", err)},
+		})
+		if err != nil {
+			c.close(err)
+			return
+		}
+	}
 	select {
-	case c.writeQueue <- msg:
+	case c.writeQueue <- body:
 	case <-c.done:
 	}
 }
@@ -4159,12 +5938,26 @@ func (c *connection) handleCallbackRequest(message map[string]any) {
 	// the other runtimes send for a throwing callback (-32603, "Callback
 	// execution failed: <message>"). Only the panic value is reported; the stack
 	// stays inside the process.
+	completed := false
 	defer func() {
 		if r := recover(); r != nil {
+			code := -32603
+			message := fmt.Sprintf("Callback execution failed: %v", r)
+			if err, ok := r.(*callbackArgumentError); ok {
+				code = -32602
+				message = err.Error()
+			}
 			c.enqueue(map[string]any{
 				"jsonrpc": "2.0",
 				"id":      requestID,
-				"error":   map[string]any{"code": -32603, "message": fmt.Sprintf("Callback execution failed: %v", r)},
+				"error":   map[string]any{"code": code, "message": message},
+			})
+		} else if !completed {
+			// runtime.Goexit runs defers without a recoverable panic value.
+			c.enqueue(map[string]any{
+				"jsonrpc": "2.0",
+				"id":      requestID,
+				"error":   map[string]any{"code": -32603, "message": "Callback execution failed: goroutine exited without returning"},
 			})
 		}
 	}()
@@ -4193,6 +5986,7 @@ func (c *connection) handleCallbackRequest(message map[string]any) {
 			"result":  result,
 		})
 	}
+	completed = true
 }
 
 // sendRequest sends a JSON-RPC request over the write queue and blocks until
@@ -4203,6 +5997,10 @@ func (c *connection) handleCallbackRequest(message map[string]any) {
 // also notifies the AppHost, but this method does not need to wait for that
 // round-trip — it returns ctx.Err() as soon as ctx is done.
 func (c *connection) sendRequest(ctx context.Context, method string, params []any) (any, error) {
+	return c.sendRequestQueued(ctx, method, params, nil)
+}
+
+func (c *connection) sendRequestQueued(ctx context.Context, method string, params []any, onQueued func()) (any, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -4218,6 +6016,10 @@ func (c *connection) sendRequest(ctx context.Context, method string, params []an
 		"method":  method,
 		"params":  params,
 	}
+	body, err := json.Marshal(msg)
+	if err != nil {
+		return nil, fmt.Errorf("aspire: encode %s request: %w", method, err)
+	}
 
 	c.mu.Lock()
 	if c.closed {
@@ -4228,7 +6030,10 @@ func (c *connection) sendRequest(ctx context.Context, method string, params []an
 	c.mu.Unlock()
 
 	select {
-	case c.writeQueue <- msg:
+	case c.writeQueue <- body:
+		if onQueued != nil {
+			onQueued()
+		}
 	case <-ctx.Done():
 		c.mu.Lock()
 		delete(c.pending, id)
@@ -4289,8 +6094,17 @@ type client struct {
 	// each cancellation ID handed to the AppHost to the function that detaches
 	// its watcher from the token's context.
 	cancellationsMu     sync.Mutex
-	cancellations       map[string]func() bool
+	cancellations       map[string]*cancellationRegistration
 	cancellationCounter atomic.Int64
+
+	// errMu guards errs.
+	errMu sync.Mutex
+	errs  []error
+}
+
+type cancellationRegistration struct {
+	token *CancellationToken
+	stop  func() bool
 }
 
 // newClient constructs a client; callers must invoke connect before using it.
@@ -4299,8 +6113,30 @@ func newClient(socketPath string) *client {
 		socketPath:    socketPath,
 		wrappers:      make(map[string]handleWrapperFactory),
 		callbacks:     make(map[string]func(...any) any),
-		cancellations: make(map[string]func() bool),
+		cancellations: make(map[string]*cancellationRegistration),
 	}
+}
+
+// recordErr remembers an error owned by a handle of this client, so the builder
+// can surface failures that only ever reached child handles.
+// It is safe to call concurrently and on a nil client.
+func (c *client) recordErr(err error) {
+	if c == nil || err == nil {
+		return
+	}
+	c.errMu.Lock()
+	defer c.errMu.Unlock()
+	c.errs = append(c.errs, err)
+}
+
+// combinedError returns every error passed to recordErr.
+func (c *client) combinedError() error {
+	if c == nil {
+		return nil
+	}
+	c.errMu.Lock()
+	defer c.errMu.Unlock()
+	return errors.Join(c.errs...)
 }
 
 // registerHandleWrapper registers a factory for wrapping handles of a specific
@@ -4398,17 +6234,25 @@ func (c *client) registerCancellation(token *CancellationToken) string {
 		return ""
 	}
 	id := fmt.Sprintf("ct_%d_%d", c.cancellationCounter.Add(1), time.Now().UnixMilli())
-	// AfterFunc starts a goroutine only once the context is done, so a token
-	// that is never canceled does not park one goroutine per registration.
-	stop := context.AfterFunc(token.ctx, func() { c.cancelToken(id) })
 	c.cancellationsMu.Lock()
-	// Canceling a context closes its Done channel before it starts the AfterFunc
-	// goroutine, so a call that returns because of this very cancel can get here
-	// first. Stopping the watcher then would drop the cancelToken request, so
-	// only a token that is still live is stopped.
-	c.cancellations[id] = func() bool { return token.ctx.Err() == nil && stop() }
+	c.cancellations[id] = &cancellationRegistration{token: token}
 	c.cancellationsMu.Unlock()
 	return id
+}
+
+// Arm watchers only after the request carrying their IDs is on the FIFO write
+// queue. Otherwise an already canceled token can reach the host before the
+// invocation that registers it, and the host ignores unknown cancellation IDs.
+func (c *client) startCancellations(args map[string]any) {
+	c.cancellationsMu.Lock()
+	defer c.cancellationsMu.Unlock()
+	for _, v := range args {
+		if id, ok := v.(string); ok {
+			if registration := c.cancellations[id]; registration != nil && registration.stop == nil {
+				registration.stop = context.AfterFunc(registration.token.ctx, func() { c.cancelToken(id) })
+			}
+		}
+	}
 }
 
 // releaseCancellations detaches the watchers of the cancellation IDs carried
@@ -4423,8 +6267,12 @@ func (c *client) releaseCancellations(args map[string]any) {
 		if !ok {
 			continue
 		}
-		if stop, found := c.cancellations[id]; found {
-			stop()
+		if registration, found := c.cancellations[id]; found {
+			// Cancellation closes Done before running AfterFunc. Do not stop a
+			// canceled token's notification when its local call returns first.
+			if registration.stop != nil && registration.token.ctx.Err() == nil {
+				registration.stop()
+			}
 			delete(c.cancellations, id)
 		}
 	}
@@ -4492,7 +6340,15 @@ func (c *client) invokeCapability(ctx context.Context, capabilityID string, args
 		return nil, err
 	}
 
-	result, err := c.sendRequest(ctx, "invokeCapability", []any{capabilityID, c.marshalTransportValue(args)})
+	c.mu.Lock()
+	conn := c.conn
+	c.mu.Unlock()
+	if conn == nil {
+		return nil, errors.New("not connected to AppHost")
+	}
+	result, err := conn.sendRequestQueued(ctx, "invokeCapability", []any{capabilityID, c.marshalTransportValue(args)}, func() {
+		c.startCancellations(args)
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -4541,7 +6397,9 @@ func (c *client) authenticate(ctx context.Context, token string) error {
 }
 
 func (c *client) cancelToken(tokenID string) bool {
-	result, err := c.sendRequest(context.Background(), "cancelToken", []any{tokenID})
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	result, err := c.sendRequest(ctx, "cancelToken", []any{tokenID})
 	if err != nil {
 		return false
 	}
@@ -4613,9 +6471,13 @@ func extractResult(response map[string]any) (any, error) {
 	if errObj, hasErr := response["error"]; hasErr {
 		errMap, _ := errObj.(map[string]any)
 		rpcErr := &rpcError{message: getString(errMap, "message"), data: errMap["data"]}
-		// A decoded response carries the code as float64; the error that
+		// A decoded response carries the code as json.Number; the error that
 		// connection.close synthesizes for pending requests carries an int.
 		switch code := errMap["code"].(type) {
+		case json.Number:
+			if parsed, err := code.Int64(); err == nil {
+				rpcErr.code = int(parsed)
+			}
 		case float64:
 			rpcErr.code = int(code)
 		case int:
@@ -4634,11 +6496,15 @@ func writeMessage(w io.Writer, msg map[string]any) error {
 	if err != nil {
 		return err
 	}
+	return writeMessageBody(w, body)
+}
+
+func writeMessageBody(w io.Writer, body []byte) error {
 	header := fmt.Sprintf("Content-Length: %d\r\n\r\n", len(body))
-	if _, err = w.Write([]byte(header)); err != nil {
+	if _, err := w.Write([]byte(header)); err != nil {
 		return err
 	}
-	_, err = w.Write(body)
+	_, err := w.Write(body)
 	return err
 }
 
@@ -4646,17 +6512,39 @@ func writeMessage(w io.Writer, msg map[string]any) error {
 // or hostile stream cannot make readMessage allocate an arbitrarily large body.
 // It matches the cap in the Python runtime.
 const maxMessageSize = 64 * 1024 * 1024
+const maxHeaderSize = 8 * 1024
+const maxHeaderCount = 16
 
 func readMessage(reader *bufio.Reader) (map[string]any, error) {
 	headers := make(map[string]string)
+	headerSize := 0
+	headerCount := 0
 	for {
-		line, err := reader.ReadString('\n')
-		if err != nil {
-			return nil, err
+		// Accumulate fragments only within the total budget, including a line
+		// with no newline. Example: "Content-Length: 42\r\n\r\n{...}".
+		var lineBytes []byte
+		for {
+			fragment, err := reader.ReadSlice('\n')
+			headerSize += len(fragment)
+			if headerSize > maxHeaderSize {
+				return nil, errors.New("AppHost message headers exceed 8192 bytes")
+			}
+			lineBytes = append(lineBytes, fragment...)
+			if err == bufio.ErrBufferFull {
+				continue
+			}
+			if err != nil {
+				return nil, err
+			}
+			break
 		}
-		line = strings.TrimSpace(line)
+		line := strings.TrimSpace(string(lineBytes))
 		if line == "" {
 			break
+		}
+		headerCount++
+		if headerCount > maxHeaderCount {
+			return nil, errors.New("AppHost message has more than 16 headers")
 		}
 		parts := strings.SplitN(line, ":", 2)
 		if len(parts) == 2 {
@@ -4679,8 +6567,19 @@ func readMessage(reader *bufio.Reader) (map[string]any, error) {
 		return nil, err
 	}
 
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	// Preserve integer tokens until decodeAs knows the generated target type. Decoding through float64
+	// first would lose precision for signed and unsigned 64-bit values above 2^53.
+	decoder.UseNumber()
 	var message map[string]any
-	if err := json.Unmarshal(body, &message); err != nil {
+	if err := decoder.Decode(&message); err != nil {
+		return nil, err
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); err != io.EOF {
+		if err == nil {
+			return nil, errors.New("AppHost message body contains multiple JSON values")
+		}
 		return nil, err
 	}
 	return message, nil

@@ -32,7 +32,7 @@ internal sealed class ValidateTokenMiddleware
             {
                 _logger.LogDebug($"Request to validate token URL but auth mode isn't set to {FrontendAuthMode.BrowserToken}.");
 
-                RedirectAfterValidation(context);
+                await RedirectAfterValidationAsync(context).ConfigureAwait(false);
             }
             else if (context.Request.Query.TryGetValue("t", out var value) && _options.CurrentValue.Frontend.AuthMode == FrontendAuthMode.BrowserToken)
             {
@@ -40,7 +40,7 @@ internal sealed class ValidateTokenMiddleware
                 if (await TryAuthenticateAsync(value.ToString(), context, dashboardOptions).ConfigureAwait(false))
                 {
                     // Success. Redirect to the app.
-                    RedirectAfterValidation(context);
+                    await RedirectAfterValidationAsync(context).ConfigureAwait(false);
                 }
                 else
                 {
@@ -56,7 +56,7 @@ internal sealed class ValidateTokenMiddleware
                     {
                         newQuerystring = "?" + newQuerystring;
                     }
-                    context.Response.Redirect($"{context.Request.Path}{newQuerystring}");
+                    await RedirectToLocalUrlAsync(context, $"{context.Request.Path}{newQuerystring}").ConfigureAwait(false);
                 }
 
                 return;
@@ -66,19 +66,22 @@ internal sealed class ValidateTokenMiddleware
         await _next(context).ConfigureAwait(false);
     }
 
-    private static void RedirectAfterValidation(HttpContext context)
+    private static Task RedirectAfterValidationAsync(HttpContext context)
     {
-        // An optional returnurl value must be a valid URL and it must be local.
+        // An optional returnUrl value must be a valid URL and it must be local.
         // We don't want an open redirect (the potential to create a URL that redirects to a third-party site).
-        if (context.Request.Query.TryGetValue("returnUrl", out var returnUrl)
-            && UrlValidationHelper.IsSafeRedirectUrl(returnUrl.ToString()))
-        {
-            context.Response.Redirect(returnUrl.ToString());
-        }
-        else
-        {
-            context.Response.Redirect(DashboardUrls.ResourcesUrl());
-        }
+        var returnUrl = context.Request.Query["returnUrl"].ToString();
+
+        return RedirectToLocalUrlAsync(context, UrlValidationHelper.IsSafeRedirectUrl(returnUrl) ? returnUrl : DashboardUrls.HomeUrl());
+    }
+
+    private static Task RedirectToLocalUrlAsync(HttpContext context, string localUrl)
+    {
+        // Redirect with ASP.NET Core's LocalRedirect result instead of HttpResponse.Redirect. LocalRedirect checks that the URL
+        // is local (a single leading '/' or "~/", never "//" or "/\") when the result executes and throws otherwise, so a redirect
+        // to another host can't be written even if a caller passes a URL that wasn't validated.
+        // See https://learn.microsoft.com/aspnet/core/security/preventing-open-redirects
+        return Results.LocalRedirect(localUrl).ExecuteAsync(context);
     }
 
     public static async Task<bool> TryAuthenticateAsync(string incomingBrowserToken, HttpContext httpContext, IOptionsMonitor<DashboardOptions> dashboardOptions)

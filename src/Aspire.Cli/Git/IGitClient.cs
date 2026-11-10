@@ -5,6 +5,7 @@ namespace Aspire.Cli.Git;
 
 internal interface IGitClient
 {
+    IGitClient WithStandardErrorHandler(Action<string> standardErrorHandler);
     Task<string> ResolveReferenceAsync(string repository, string? reference, DirectoryInfo workingDirectory, GitCommandMode mode, CancellationToken cancellationToken);
     Task InitializeAsync(DirectoryInfo workingDirectory, GitRepositoryLocation repository, string? objectFormat, GitCommandMode mode, CancellationToken cancellationToken);
     Task FetchAsync(GitRepositoryLocation destination, string repository, string reference, GitCommandMode mode, CancellationToken cancellationToken);

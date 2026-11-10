@@ -7,6 +7,9 @@
     <trans-unit id="aspire-vscode.strings.resourceCountDescription">
       <source xml:lang="en">({0} resources)</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.dotnetDisplayName">
+      <source xml:lang="en">.NET: {0}</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.debugSessionAlreadyExists">
       <source xml:lang="en">A debug session is already active for id {0}.</source>
     </trans-unit>
@@ -526,8 +529,17 @@
     <trans-unit id="walkthrough.getStarted.title">
       <source xml:lang="en">Get started with Aspire</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.goLabel">
+      <source xml:lang="en">Go</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.goDebuggerExtensionNotInstalled">
+      <source xml:lang="en">Go AppHosts require Go debugger support. Set up {0} in the Extensions view, then start the AppHost again.</source>
+    </trans-unit>
     <trans-unit id="walkthrough.getStarted.description">
       <source xml:lang="en">Go from a workspace to a running, observable distributed app.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.goDisplayName">
+      <source xml:lang="en">Go: {0}</source>
     </trans-unit>
     <trans-unit id="languageModelTool.aspireAppHostStart.mode.description">
       <source xml:lang="en">How to start the AppHost: &apos;run&apos; starts it without attaching the debugger, &apos;debug&apos; starts it with the debugger attached.</source>
@@ -824,10 +836,10 @@
       <source xml:lang="en">Path to the AppHost to run</source>
     </trans-unit>
     <trans-unit id="configuration.aspire.globalAppHostsPollingInterval">
-      <source xml:lang="en">Polling interval in milliseconds for fetching running AppHosts. Minimum: 1000.</source>
+      <source xml:lang="en">Polling interval in milliseconds for fetching running AppHosts and reconciling live status streaming. Minimum: 1000.</source>
     </trans-unit>
     <trans-unit id="configuration.aspire.appHostsPollingInterval">
-      <source xml:lang="en">Polling interval in milliseconds for fetching running AppHosts. Minimum: 1000.</source>
+      <source xml:lang="en">Polling interval in milliseconds for fetching running AppHosts and reconciling live status streaming. Minimum: 1000.</source>
     </trans-unit>
     <trans-unit id="languageModelTool.aspireAppHostStart.modelDescription">
       <source xml:lang="en">Prefer this tool over invoking Aspire AppHost lifecycle commands in a terminal whenever VS Code is active. Start an Aspire AppHost that Aspire has already discovered in the current workspace, using the editor&apos;s own debug lifecycle. Requires the workspace-relative path of one of the discovered AppHosts; absolute paths are rejected. Also requires whether to start it in &apos;run&apos; mode (no debugger attached) or &apos;debug&apos; mode (debugger attached). Optional &apos;isolated&apos; starts the AppHost with randomized ports and isolated user secrets; when omitted, linked git worktrees start isolated automatically so they do not collide with the primary checkout. Explicit true or false overrides that inference. Optional &apos;launchProfile&apos; selects a profile from the AppHost launchSettings.json by its exact name. Does not create, pick, or guess an AppHost: if the path does not name a discovered AppHost, or names more than one, the call fails and the result lists the AppHosts you can pass. If the AppHost is already starting or already running, no second process is started. A successful new launch includes the verified effective &apos;isolated&apos; value; idempotent or uncertain results omit it.</source>
@@ -979,6 +991,9 @@
     <trans-unit id="command.installDebuggerExtension">
       <source xml:lang="en">Set up debugger support</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.appHostDebuggerSetupRequired">
+      <source xml:lang="en">Set up {0} debugging support before debugging this AppHost. You can run it without debugging instead.</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.debuggerSetupNotification">
       <source xml:lang="en">Set up {0} debugging support to debug resources in this app.</source>
     </trans-unit>
@@ -1101,6 +1116,12 @@
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.denoAppHostRunCommandMissing">
       <source xml:lang="en">The Deno AppHost command does not contain the required &apos;run&apos; subcommand.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.denoAppHostInspectorNotReady">
+      <source xml:lang="en">The Deno AppHost inspector at {0} did not become ready within {1} seconds, so the debugger could not attach: {2}</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.goAppHostCommandNotRecognized">
+      <source xml:lang="en">The Go AppHost launch command was not recognized and cannot be debugged.</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.javaAppHostCommandNotRecognized">
       <source xml:lang="en">The Java AppHost launch command was not recognized and cannot be debugged.</source>
@@ -1263,6 +1284,9 @@
     </trans-unit>
     <trans-unit id="configuration.aspire.registerMcpServerInWorkspace">
       <source xml:lang="en">Whether to register the Aspire MCP server when a workspace is open. Enabled by default; set this to false to opt out.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.appHostLifecycleDisableLaunchProfileNotSupported">
+      <source xml:lang="en">Without the C# extension, disableLaunchProfile has no effect: the Aspire CLI still applies the default AppHost launch profile. Install or enable the C# extension to disable launch profiles.</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.workspaceAppHostLabel">
       <source xml:lang="en">Workspace AppHost</source>

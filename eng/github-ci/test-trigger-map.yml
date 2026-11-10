@@ -88,7 +88,7 @@ conventions:
 prefilter:
   patterns_file: eng/github-ci/ci-skip-entirely-patterns.txt
   keep_routed:
-    - .github/workflows/**                            # routed to Infrastructure.Tests (workflow validation)
+    - .github/workflows/**                            # routed to workflow test projects
     - eng/pipelines/**                                # routed to Infrastructure.Tests (pipeline validation)
     - eng/github-ci/ci-skip-entirely-patterns.txt      # a selector input (read above) -> route to Infrastructure.Tests
 
@@ -105,19 +105,16 @@ ignore:
   - eng/scripts/test-native-terminalhost.ps1          # unconditional native CLI archive smoke
   # SDK registration diagnostics run with the unconditional native Windows archive smoke.
   - eng/scripts/tray-registration-control/**
-  # The stabilization job invokes this script independently of the tests selector.
-  - eng/scripts/stabilization-smoke-init-restore.sh
   # Dev/AzDO-only eng/scripts with NO test consumer and no GH-CI build/test path: local debug-channel
   # helpers and the AzDO native-symbol validator. Listed so they do not show as unattributed audit noise.
   # (verify-cli-archive.ps1 and validate-npm-release-aliases.ps1 are NOT here -- they have test consumers
   # and are routed to their tests in path_rules above.)
   - eng/scripts/debug-*.ps1                             # debug-aspire-channel/stable/staging: local channel-switch helpers
   - eng/scripts/debug-*.sh
+  - eng/scripts/config-sources-demo/**                  # manual demo launchers; no GH-CI consumer
   - eng/scripts/validate-cli-symbols.ps1                # AzDO native-AOT symbol publish validation; no GH-CI consumer
   - eng/scripts/validate-mac-platform-sso.sh            # manual managed-Mac validation; no GH-CI consumer
   - eng/generate-catalog.ps1                            # Windows/AzDO template catalog generation; no GH-CI consumer
-  - eng/scripts/update-aspire-skills-bundle.ps1         # schedule/dispatch-only bundle updater
-  - eng/scripts/verify-aspire-skills-bundle.ps1         # exercised by its dedicated PR workflow
   # Native AOT/socket/generated-SDK/workload smokes run in the independently path-triggered
   # native-hosting-validation.yml lane, not a tests.yml run_* target.
   - .github/workflows/native-hosting-validation.yml
@@ -325,6 +322,7 @@ path_rules:
       - src/Aspire.Hosting.AppHost/**
       - src/Aspire.Hosting.Azure.Functions/**
       - src/Aspire.Hosting.Blazor/**
+      - src/Aspire.Hosting.CodeGeneration.Go/**
       - src/Aspire.Hosting.CodeGeneration.Java/**
       - src/Aspire.Hosting.CodeGeneration.TypeScript/**
       - src/Aspire.Hosting.Docker/**
@@ -371,8 +369,13 @@ path_rules:
     reason: native Dashboard archive production and packaged runtime validation
   - paths:
       - eng/scripts/verify-native-dashboard-warnings.ps1
-    targets: [test:Infrastructure.Tests, job:native-dashboard-validation]
-    reason: validates the Native AOT Dashboard publish warning policy
+      - eng/aspire-managed-entitlements.plist
+    targets: [CLI_ARCHIVE_CONSUMERS, test:Infrastructure.Tests]
+    reason: native bundle warning validation and macOS JIT signing inputs
+  - paths:
+      - eng/scripts/test-native-tray.ps1
+    targets: [test:Infrastructure.Tests]
+    reason: behavioral tests exercise packaged tray launch checks; native archive builds run unconditionally
 
   # --- outerloop / e2e test targets: loose paths (production projects in affected_project_rules) --------
   - paths:
@@ -434,14 +437,26 @@ path_rules:
     targets: [test:Aspire.Cli.Tests, test:Infrastructure.Tests]
     reason: Cli.Tests/Npm/AspireJsLauncherTests and Infrastructure.Tests parse the pack script
   - paths:
+      - src/Aspire.Hosting.Go/Aspire.Hosting.Go.csproj
+      - src/Aspire.Hosting.JavaScript/Aspire.Hosting.JavaScript.csproj
+      - src/Aspire.Hosting.Python/Aspire.Hosting.Python.csproj
+    targets: [test:Aspire.Cli.Tests]
+    reason: DefaultHostingPackagesTests reads these project files to guard that each default hosting package ships a stable version.
+  - paths:
       - src/Aspire.ProjectTemplates/templates/**
     targets: [test:Aspire.Cli.Tests]
     reason: CLI tests instantiate template sources and verify frontend package inputs.
   - paths:
+      - tests/Aspire.Cli.EndToEnd.Tests/Fixtures/JsPublish/nextjs/.npmrc
+      - tests/Aspire.Cli.EndToEnd.Tests/Fixtures/JsPublish/npmscript/.npmrc
+    targets: [test:Aspire.Cli.Tests]
+    reason: Cli.Tests/Templating/TemplatePackageLockTests guards these public-registry pins used by Dependabot.
+  - paths:
       - src/Aspire.Hosting.CodeGeneration.Go/AtsGoCodeGenerator.cs
       - src/Aspire.Hosting.CodeGeneration.Go/GoLanguageSupport.cs
+      - src/Aspire.Hosting.Go/GoVersionDetector.cs
     targets: [test:Aspire.Cli.Tests]
-    reason: GoAppHostToolingCheckTests reads the go.mod templates to guard the minimum Go version.
+    reason: GoAppHostToolingCheckTests reads the go.mod templates and hosting fallback to guard the minimum Go version.
   - paths:
       - .github/workflows/update-nix-cli-flake.yml
       - flake.nix
@@ -512,6 +527,17 @@ path_rules:
       - src/Aspire.Tray/Windows/publish.ps1
     targets: [CLI_BUNDLE, test:Infrastructure.Tests]
     reason: native CLI bundle assembly and publishing inputs
+  - paths:
+      - eng/Bundle.proj
+    targets: [test:Aspire.Templates.Tests, job:native-dashboard-validation, job:polyglot]
+    reason: shared bundle phases produce RID runtime packages and the standalone Dashboard archive
+
+  - paths:
+      - tools/AnalyzeCiFailure/**
+      - .github/workflows/analyze-ci-failure*
+      - eng/test-retry-patterns.json
+    targets: [test:AnalyzeCiFailure.Tests]
+    reason: analyzer commands, sparse-build fixtures, workflow examples and adapters
 
   # --- Infrastructure.Tests-only inputs ----------------------------------------------------
   # Keep inputs grouped by their current coverage so test ownership and obsolete checks are visible.
@@ -537,6 +563,7 @@ path_rules:
       # Script behavior and packaging fixtures.
       - eng/scripts/download-native-archives.ps1
       - eng/scripts/stage-native-cli-tool-packages.ps1
+      - eng/scripts/stabilization-smoke-init-restore.sh
       - eng/scripts/validate-npm-package-signatures.ps1
       - eng/scripts/validate-npm-release-aliases.ps1
       - eng/scripts/aspire-skills-bundle.common.ps1
@@ -566,9 +593,12 @@ path_rules:
       - src/Aspire.Dashboard/Components/Controls/TerminalView.razor.js
       - src/Aspire.Dashboard/Components/Controls/TerminalTitle.razor.js
       - src/Aspire.Dashboard/Components/Layout/TerminalDock.razor.js
+      - src/Aspire.Dashboard/Components/Layout/ResourcesLayout.razor.js
       - src/Aspire.Dashboard/wwwroot/js/app.js
       - src/Aspire.Dashboard/wwwroot/js/app-terminalwindow.js
       - src/Aspire.Dashboard/wwwroot/js/app-resourcegraph.js
+      - src/Aspire.Dashboard/wwwroot/js/app-resourcegraph-game.js
+      - src/Aspire.Dashboard/wwwroot/js/app-dashboard-experience.js
       - src/Aspire.Dashboard/package.json
       - src/Aspire.Dashboard/package-lock.json
       - src/Aspire.Dashboard/wwwroot/js/hex1b-web-terminal/**
@@ -585,10 +615,11 @@ path_rules:
 # triggers.
 # Project Name == the .csproj base name (what Layer 1 emits).
 affected_project_rules:
-  - projects: [Aspire.Tray.Mac, Aspire.Tray.Windows]
+  - projects: [Aspire.Tray.Linux, Aspire.Tray.Mac, Aspire.Tray.Windows]
     targets: [test:Aspire.Tray.Tests, test:Infrastructure.Tests]
     reason: native platform changes must retain shared tray contracts and the packaging/signing invariants; tests source-link common code rather than referencing the platform executables
   - projects:
+      - Aspire.Tray.Linux
       - Aspire.Tray.Mac
       - Aspire.Tray.Windows
       - CreateLayout
@@ -605,8 +636,11 @@ affected_project_rules:
       - Aspire.Hosting.Dotnet
       - Aspire.Hosting.CodeGeneration.TypeScript
       - Aspire.Hosting.JavaScript
+      - Aspire.Hosting.CodeGeneration.Go
+      - Aspire.Hosting.Go
+      - Aspire.Hosting.Redis
     targets: [job:cli-starter-validation]
-    reason: direct executables, SDK, and hosting/code-generation packages used by the C# and TypeScript starter scenarios
+    reason: direct executables, SDK, and hosting/code-generation packages used by the C#, TypeScript, and Go starter scenarios
   - projects: [Aspire.Hosting.Dotnet]
     targets: [test:Aspire.Cli.EndToEnd.Tests, test:Aspire.Templates.Tests]
     reason: generated C# AppHosts use AddDotnetProject through a runtime-only package reference
@@ -624,6 +658,7 @@ affected_project_rules:
       - Aspire.Hosting.Rust
       - Aspire.Hosting
       - Aspire.Hosting.Azure
+      - Aspire.Hosting.Azure.ApiManagement
       - Aspire.Hosting.Azure.AppConfiguration
       - Aspire.Hosting.Azure.AppContainers
       - Aspire.Hosting.Azure.AppService
@@ -698,6 +733,7 @@ affected_project_rules:
       - Aspire.Hosting.AppHost
       - Aspire.Hosting.Azure.Functions
       - Aspire.Hosting.Blazor
+      - Aspire.Hosting.CodeGeneration.Go
       - Aspire.Hosting.CodeGeneration.Java
       - Aspire.Hosting.CodeGeneration.TypeScript
       - Aspire.Hosting.Docker
@@ -713,14 +749,16 @@ affected_project_rules:
   - projects: [Aspire.Hosting.Azure*, Aspire.Hosting.Dotnet, Aspire.Hosting.Foundry, Aspire.Cli, Aspire.TypeSystem, Aspire.Managed]
     targets: [job:deployment-e2e]
     reason: SCHEDULE/DISPATCH-ONLY today; deploys generated apps with packages added dynamically by tests
-  - projects: [Aspire.Hosting, Aspire.Hosting.AppHost, Aspire.Hosting.PostgreSQL, Aspire.Hosting.Redis]
+  - projects: [Aspire.Hosting, Aspire.Hosting.AppHost, Aspire.Hosting.Dotnet, Aspire.Hosting.PostgreSQL, Aspire.Hosting.Redis]
     targets: [test:Aspire.EndToEnd.Tests]
     reason: OUTERLOOP-ONLY today; builds testproject apphost against built nugets
   - projects:
       - Aspire.AppHost.Sdk
+      - Aspire.Azure.Storage.Blobs
       - Aspire.Cli
       - Aspire.Hosting
       - Aspire.Hosting.AppHost
+      - Aspire.Hosting.Azure.Storage
       - Aspire.Hosting.Blazor
       - Aspire.Hosting.CodeGeneration.Go
       - Aspire.Hosting.CodeGeneration.Java

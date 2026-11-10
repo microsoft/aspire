@@ -1591,7 +1591,7 @@ ContainerTargetPlatform = typing.Literal["LinuxAmd64", "LinuxArm64", "AllLinux",
 
 DistributedApplicationOperation = typing.Literal["Run", "Publish"]
 
-EndpointProperty = typing.Literal["Url", "Host", "IPV4Host", "Port", "Scheme", "TargetPort", "HostAndPort", "TlsEnabled"]
+EndpointProperty = typing.Literal["Url", "Host", "IPV4Host", "Port", "Scheme", "TargetPort", "HostAndPort", "TlsEnabled", "BrowserOrigins", "PrimaryBrowserOrigin"]
 
 HealthStatus = typing.Literal["Unhealthy", "Degraded", "Healthy"]
 
@@ -2613,6 +2613,21 @@ class DistributedApplicationBuilder:
             rpc_args,
         )
         return typing.cast(AbstractResourceWithConnectionString, result)
+
+    def with_output_diffing(self, *, target_step: str = "publish", diff_step_name: str | None = None, description: str | None = None) -> typing.Self:
+        """Adds an opt-in target that checks for stale generated pipeline output."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        if target_step is not None:
+            rpc_args['targetStep'] = target_step
+        if diff_step_name is not None:
+            rpc_args['diffStepName'] = diff_step_name
+        if description is not None:
+            rpc_args['description'] = description
+        self._client.invoke_capability(
+            'Aspire.Hosting/withOutputDiffing',
+            rpc_args
+        )
+        return self
 
     def add_project(self, name: str, project_path: str, *, launch_profile_or_options: str | ProjectResourceOptions | None = None, **kwargs: typing.Unpack["ProjectResourceKwargs"]) -> ProjectResource:  # type: ignore
         """Adds a .NET project resource"""
@@ -4925,6 +4940,24 @@ class EndpointReference:
             {'context': self._handle}
         )
         return typing.cast(str, result)
+
+    @_cached_property
+    def browser_origins(self) -> EndpointReferenceExpression:
+        """Gets a deferred comma-separated list of browser-facing origins associated with this endpoint."""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/EndpointReference.browserOrigins',
+            {'context': self._handle}
+        )
+        return typing.cast(EndpointReferenceExpression, result)
+
+    @_cached_property
+    def primary_browser_origin(self) -> EndpointReferenceExpression:
+        """Gets the deferred primary browser-facing origin associated with this endpoint."""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/EndpointReference.primaryBrowserOrigin',
+            {'context': self._handle}
+        )
+        return typing.cast(EndpointReferenceExpression, result)
 
     @_cached_property
     def error_message(self) -> str | None:
@@ -7656,6 +7689,10 @@ class AbstractResource(abc.ABC):
         """Sets a child relationship"""
 
     @abc.abstractmethod
+    def with_resource_type_display_name(self, resource_type_display_name: str) -> typing.Self:
+        """Overrides the human-readable resource type label."""
+
+    @abc.abstractmethod
     def with_icon_name(self, icon_name: str, *, icon_variant: IconVariant = "Filled") -> typing.Self:
         """Specifies the icon to use when displaying the resource in the dashboard."""
 
@@ -7670,6 +7707,18 @@ class AbstractResource(abc.ABC):
     @abc.abstractmethod
     def with_hidden_on_completion(self, *, exit_code: int | None = None, exit_codes: typing.Iterable[int] | None = None) -> typing.Self:
         """Hides the resource from default resource lists after successful completion"""
+
+    @abc.abstractmethod
+    def with_trait(self, name: str, value: str) -> typing.Self:
+        """Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values."""
+
+    @abc.abstractmethod
+    def with_tags(self, tags: typing.Iterable[str]) -> typing.Self:
+        """Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags."""
+
+    @abc.abstractmethod
+    def with_dashboard_position(self, position: int) -> typing.Self:
+        """Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence."""
 
     @abc.abstractmethod
     def with_terminal(self, *, configure: typing.Callable[[TerminalOptions], None] | None = None) -> typing.Self:
@@ -8076,10 +8125,14 @@ class _BaseResourceKwargs(typing.TypedDict, total=False):
     relationship: tuple[AbstractResource, str]
     parent_relationship: AbstractResource
     child_relationship: AbstractResource
+    resource_type_display_name: str
     icon_name: str | tuple[str, IconVariant]
     exclude_from_mcp: typing.Literal[True]
     hidden: typing.Literal[True]
     hidden_on_completion: HiddenOnCompletionParameters | typing.Literal[True]
+    trait: tuple[str, str]
+    tags: typing.Iterable[str]
+    dashboard_position: int
     terminal: typing.Callable[[TerminalOptions], None] | typing.Literal[True]
     pipeline_step_factory: tuple[str, typing.Callable[[PipelineStepContext], None]] | PipelineStepFactoryParameters
     pipeline_config: typing.Callable[[PipelineConfigurationContext], None]
@@ -8400,6 +8453,17 @@ class _BaseResource(AbstractResource):
         self._handle = self._wrap_builder(result)
         return self
 
+    def with_resource_type_display_name(self, resource_type_display_name: str) -> typing.Self:
+        """Overrides the human-readable resource type label."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['resourceTypeDisplayName'] = resource_type_display_name
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withResourceTypeDisplayName',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
     def with_icon_name(self, icon_name: str, *, icon_variant: IconVariant = "Filled") -> typing.Self:
         """Specifies the icon to use when displaying the resource in the dashboard."""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
@@ -8442,6 +8506,40 @@ class _BaseResource(AbstractResource):
             rpc_args['exitCodes'] = exit_codes
         result = self._client.invoke_capability(
             'Aspire.Hosting/withHiddenOnCompletion',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
+    def with_trait(self, name: str, value: str) -> typing.Self:
+        """Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['name'] = name
+        rpc_args['value'] = value
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withTrait',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
+    def with_tags(self, tags: typing.Iterable[str]) -> typing.Self:
+        """Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['tags'] = tags
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withTags',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
+    def with_dashboard_position(self, position: int) -> typing.Self:
+        """Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['position'] = position
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withDashboardPosition',
             rpc_args,
         )
         self._handle = self._wrap_builder(result)
@@ -8972,6 +9070,13 @@ class _BaseResource(AbstractResource):
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withBuilderChildRelationship', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'child_relationship'. Expected: AbstractResource")
+        if (_resource_type_display_name := kwargs.pop("resource_type_display_name", None)) is not None:
+            if _validate_type(_resource_type_display_name, str):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["resourceTypeDisplayName"] = typing.cast(str, _resource_type_display_name)
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withResourceTypeDisplayName', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'resource_type_display_name'. Expected: str")
         if (_icon_name := kwargs.pop("icon_name", None)) is not None:
             if _validate_type(_icon_name, str):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -9007,6 +9112,28 @@ class _BaseResource(AbstractResource):
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHiddenOnCompletion', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'hidden_on_completion'. Expected: HiddenOnCompletionParameters or Literal[True]")
+        if (_trait := kwargs.pop("trait", None)) is not None:
+            if _validate_tuple_types(_trait, (str, str)):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["name"] = typing.cast(tuple[str, str], _trait)[0]
+                rpc_args["value"] = typing.cast(tuple[str, str], _trait)[1]
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withTrait', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'trait'. Expected: (str, str)")
+        if (_tags := kwargs.pop("tags", None)) is not None:
+            if _validate_type(_tags, typing.Iterable[str]):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["tags"] = typing.cast(typing.Iterable[str], _tags)
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withTags', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'tags'. Expected: Iterable[str]")
+        if (_dashboard_position := kwargs.pop("dashboard_position", None)) is not None:
+            if _validate_type(_dashboard_position, int):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["position"] = typing.cast(int, _dashboard_position)
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withDashboardPosition', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'dashboard_position'. Expected: int")
         if (_terminal := kwargs.pop("terminal", None)) is not None and _terminal is not False:
             if _validate_type(_terminal, typing.Callable[[TerminalOptions], None]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}

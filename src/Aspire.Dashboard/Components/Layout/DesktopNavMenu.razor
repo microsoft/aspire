@@ -1,39 +1,22 @@
-﻿@using Aspire.Dashboard.Resources
+@using Aspire.Dashboard.Resources
 @inject IStringLocalizer<Layout> Loc
 @inject IDashboardClient DashboardClient
 
-<FluentAppBar PopoverShowSearch="false" Class="desktop-nav-menu">
-    @if (DashboardClient.IsEnabled)
-    {
-        <FluentAppBarItem
-            Href="@DashboardUrls.ResourcesUrl()"
-            Match="@(_isResources ? NavLinkMatch.Prefix : NavLinkMatch.All)"
-            IconRest="ResourcesIcon()"
-            IconActive="ResourcesIcon(active: true)"
-            Text="@Loc[nameof(Layout.NavMenuResourcesTab)]" />
-        <FluentAppBarItem Href="@DashboardUrls.ConsoleLogsUrl()"
-            IconRest="ConsoleLogsIcon()"
-            IconActive="ConsoleLogsIcon(active: true)"
-            Text="@Loc[nameof(Layout.NavMenuConsoleLogsTab)]" />
+<nav class="desktop-nav-menu" aria-label="@Loc[nameof(Layout.NavMenuLandmark)]">
+    @{
+        var displayedSection = GetDisplayedSection();
     }
-    <FluentAppBarItem Href="@DashboardUrls.StructuredLogsUrl()"
-        IconRest="StructuredLogsIcon()"
-        IconActive="StructuredLogsIcon(active: true)"
-        Text="@Loc[nameof(Layout.NavMenuStructuredLogsTab)]" />
-    <FluentAppBarItem Href="@DashboardUrls.TracesUrl()"
-        IconRest="TracesIcon()"
-        IconActive="TracesIcon(active: true)"
-        Text="@Loc[nameof(Layout.NavMenuTracesTab)]" />
-    <FluentAppBarItem
-        Href="@DashboardUrls.MetricsUrl()"
-        IconRest="MetricsIcon()"
-        IconActive="MetricsIcon(active: true)"
-        Text="@Loc[nameof(Layout.NavMenuMetricsTab)]" />
-    @if (DashboardClient.IsEnabled && HasResourceTerminals)
+    @foreach (var item in GetItems())
     {
-        <FluentAppBarItem Href="@DashboardUrls.TerminalsUrl()"
-            IconRest="TerminalsIcon()"
-            IconActive="TerminalsIcon(active: true)"
-            Text="@Loc[nameof(Layout.NavMenuTerminalsTab)]" />
+        var isActive = item.Section == displayedSection;
+        var id = $"desktop-nav-{item.Section.ToString().ToLowerInvariant()}";
+        <a id="@id"
+           href="@item.Href"
+           class="desktop-nav-item @(isActive ? "active" : null)"
+           aria-label="@item.Text"
+           aria-current="@(isActive ? "page" : null)">
+            <FluentIcon Value="@(isActive ? item.ActiveIcon : item.Icon)" Width="20px" Color="Color.Custom" CustomColor="currentColor" />
+            <span>@item.Text</span>
+        </a>
     }
-</FluentAppBar>
+</nav>

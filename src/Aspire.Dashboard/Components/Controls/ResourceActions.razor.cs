@@ -52,7 +52,6 @@ public partial class ResourceActions : ComponentBase
     {
         _highlightedCommands.Clear();
 
-        // If display is desktop then we display highlighted commands next to the ... button.
         if (ViewportInformation.IsDesktop)
         {
             _highlightedCommands.AddRange(Resource.Commands.Where(c => c.IsHighlighted && c.State != CommandViewModelState.Hidden).Take(MaxHighlightedCount));

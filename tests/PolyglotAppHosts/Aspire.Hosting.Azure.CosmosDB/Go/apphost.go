@@ -67,9 +67,9 @@ func main() {
 			emulator.WithDataVolume(&aspire.WithDataVolumeOptions{
 				Name: aspire.StringPtr("cosmos-emulator-data"),
 			}) // 9) WithDataVolume
-			emulator.WithGatewayPort(aspire.Float64Ptr(18081)) // 10) WithGatewayPort
+			emulator.WithGatewayPort(aspire.IntPtr(18081)) // 10) WithGatewayPort
 			emulator.WithDataExplorer(&aspire.WithDataExplorerOptions{
-				Port: aspire.Float64Ptr(11234),
+				Port: aspire.IntPtr(11234),
 			}) // 11) WithDataExplorer
 		},
 	})

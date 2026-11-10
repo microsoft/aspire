@@ -10,8 +10,8 @@
 
 namespace Aspire.Dashboard.Resources {
     using System;
-
-
+    
+    
     /// <summary>
     ///   A strongly-typed resource class, for looking up localized strings, etc.
     /// </summary>
@@ -23,15 +23,15 @@ namespace Aspire.Dashboard.Resources {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
     public class Dialogs {
-
+        
         private static global::System.Resources.ResourceManager resourceMan;
-
+        
         private static global::System.Globalization.CultureInfo resourceCulture;
-
+        
         [global::System.Diagnostics.CodeAnalysis.SuppressMessageAttribute("Microsoft.Performance", "CA1811:AvoidUncalledPrivateCode")]
-        internal Dialogs() {
+        public Dialogs() {
         }
-
+        
         /// <summary>
         ///   Returns the cached ResourceManager instance used by this class.
         /// </summary>
@@ -45,7 +45,7 @@ namespace Aspire.Dashboard.Resources {
                 return resourceMan;
             }
         }
-
+        
         /// <summary>
         ///   Overrides the current thread's CurrentUICulture property for all
         ///   resource lookups using this strongly typed resource class.
@@ -59,48 +59,25 @@ namespace Aspire.Dashboard.Resources {
                 resourceCulture = value;
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Aspire gives AI coding agents deep observability into your app using the same information visible in the dashboard. Agents use telemetry to diagnose issues faster and verify fixes with confidence. 🚀
-        ///
-        ///- 📦 Resource state, health checks, and relationships
-        ///- 🖥️ Console logs
-        ///- 📊 Distributed traces
-        ///- 🪵 Structured logs
-        ///
-        ///## Getting started
-        ///
-        ///AI agents access dashboard telemetry through the Aspire CLI. If you haven&apos;t installed it yet, [install the Aspire CLI]({1}).
-        ///
-        ///Initialize AI agent support in your [rest of string was truncated]&quot;;.
+        ///   Looks up a localized string similar to Aspire gives AI coding agents deep observability into your app using the same information visible in the dashboard. Agents use telemetry to diagnose issues faster and verify fixes with confidence. 🚀  - 📦 Resource state, health checks, and relationships - 🖥️ Console logs - 📊 Distributed traces - 🪵 Structured logs  ## Getting started  AI agents access dashboard telemetry through the Aspire CLI. If you haven&apos;t installed it yet, [install the Aspire CLI]({1}).  Initialize AI agent support in your project wi [rest of string was truncated].
         /// </summary>
         public static string AIAgentsDialogAppHostDescription {
             get {
                 return ResourceManager.GetString("AIAgentsDialogAppHostDescription", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Aspire gives AI coding agents deep observability into your app using the same information visible in the dashboard. Agents use telemetry to diagnose issues faster and verify fixes with confidence. 🚀
-        ///
-        ///- 📊 Distributed traces
-        ///- 🔗 Trace spans
-        ///- 🪵 Structured logs
-        ///- 🗂️ Zip file export
-        ///
-        ///AI agents access dashboard telemetry using the Aspire CLI. [Install the Aspire CLI]({2}) if you haven&apos;t already.
-        ///
-        ///Use Aspire CLI commands to retrieve telemetry data directly in your terminal:
-        ///
-        ///```bash
-        ///aspire otel l [rest of string was truncated]&quot;;.
+        ///   Looks up a localized string similar to Aspire gives AI coding agents deep observability into your app using the same information visible in the dashboard. Agents use telemetry to diagnose issues faster and verify fixes with confidence. 🚀  - 📊 Distributed traces - 🔗 Trace spans - 🪵 Structured logs - 🗂️ Zip file export  AI agents access dashboard telemetry using the Aspire CLI. [Install the Aspire CLI]({2}) if you haven&apos;t already.  Use Aspire CLI commands to retrieve telemetry data directly in your terminal:  ```bash aspire otel logs --dashbo [rest of string was truncated].
         /// </summary>
         public static string AIAgentsDialogStandaloneDescription {
             get {
                 return ResourceManager.GetString("AIAgentsDialogStandaloneDescription", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to AI agents.
         /// </summary>
@@ -109,7 +86,394 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("AIAgentsDialogTitle", resourceCulture);
             }
         }
-
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Back.
+        /// </summary>
+        public static string DashboardFeedbackBack {
+            get {
+                return ResourceManager.GetString("DashboardFeedbackBack", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Continue.
+        /// </summary>
+        public static string DashboardFeedbackContinue {
+            get {
+                return ResourceManager.GetString("DashboardFeedbackContinue", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Feedback copied to the clipboard..
+        /// </summary>
+        public static string DashboardFeedbackCopied {
+            get {
+                return ResourceManager.GetString("DashboardFeedbackCopied", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Feedback copied. Paste it into the GitHub discussion to share it..
+        /// </summary>
+        public static string DashboardFeedbackCopiedAndOpened {
+            get {
+                return ResourceManager.GetString("DashboardFeedbackCopiedAndOpened", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Copy feedback.
+        /// </summary>
+        public static string DashboardFeedbackCopy {
+            get {
+                return ResourceManager.GetString("DashboardFeedbackCopy", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Copy and open discussion.
+        /// </summary>
+        public static string DashboardFeedbackCopyAndOpen {
+            get {
+                return ResourceManager.GetString("DashboardFeedbackCopyAndOpen", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The clipboard could not be accessed. Copy the preview manually..
+        /// </summary>
+        public static string DashboardFeedbackCopyFailed {
+            get {
+                return ResourceManager.GetString("DashboardFeedbackCopyFailed", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Open new discussion and switch.
+        /// </summary>
+        public static string DashboardFeedbackCopyOpenAndSwitch {
+            get {
+                return ResourceManager.GetString("DashboardFeedbackCopyOpenAndSwitch", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Your answers stay in this browser until you copy them. GitHub opens in a new tab so you can review and submit the feedback yourself..
+        /// </summary>
+        public static string DashboardFeedbackDescription {
+            get {
+                return ResourceManager.GetString("DashboardFeedbackDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Share dashboard feedback.
+        /// </summary>
+        public static string DashboardFeedbackDialogTitle {
+            get {
+                return ResourceManager.GetString("DashboardFeedbackDialogTitle", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to What was harder or less clear than in the previous dashboard?.
+        /// </summary>
+        public static string DashboardFeedbackDifficultiesLabel {
+            get {
+                return ResourceManager.GetString("DashboardFeedbackDifficultiesLabel", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to How long have you used the new dashboard?.
+        /// </summary>
+        public static string DashboardFeedbackDurationLabel {
+            get {
+                return ResourceManager.GetString("DashboardFeedbackDurationLabel", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Less than an hour.
+        /// </summary>
+        public static string DashboardFeedbackDurationLessThanOneHour {
+            get {
+                return ResourceManager.GetString("DashboardFeedbackDurationLessThanOneHour", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to More than a week.
+        /// </summary>
+        public static string DashboardFeedbackDurationMoreThanOneWeek {
+            get {
+                return ResourceManager.GetString("DashboardFeedbackDurationMoreThanOneWeek", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to I&apos;d rather not say.
+        /// </summary>
+        public static string DashboardFeedbackDurationNotSpecified {
+            get {
+                return ResourceManager.GetString("DashboardFeedbackDurationNotSpecified", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to About a day.
+        /// </summary>
+        public static string DashboardFeedbackDurationOneDay {
+            get {
+                return ResourceManager.GetString("DashboardFeedbackDurationOneDay", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to 2 to 7 days.
+        /// </summary>
+        public static string DashboardFeedbackDurationTwoToSevenDays {
+            get {
+                return ResourceManager.GetString("DashboardFeedbackDurationTwoToSevenDays", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Dashboard experience feedback.
+        /// </summary>
+        public static string DashboardFeedbackMarkdownTitle {
+            get {
+                return ResourceManager.GetString("DashboardFeedbackMarkdownTitle", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to What is missing from the new dashboard?.
+        /// </summary>
+        public static string DashboardFeedbackMissingLabel {
+            get {
+                return ResourceManager.GetString("DashboardFeedbackMissingLabel", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to With an AppHost.
+        /// </summary>
+        public static string DashboardFeedbackModeAppHost {
+            get {
+                return ResourceManager.GetString("DashboardFeedbackModeAppHost", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to How do you run the dashboard?.
+        /// </summary>
+        public static string DashboardFeedbackModeLabel {
+            get {
+                return ResourceManager.GetString("DashboardFeedbackModeLabel", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Standalone, for telemetry only.
+        /// </summary>
+        public static string DashboardFeedbackModeStandalone {
+            get {
+                return ResourceManager.GetString("DashboardFeedbackModeStandalone", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Tell us what happened.
+        /// </summary>
+        public static string DashboardFeedbackOtherPlaceholder {
+            get {
+                return ResourceManager.GetString("DashboardFeedbackOtherPlaceholder", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Preview copied feedback.
+        /// </summary>
+        public static string DashboardFeedbackPreviewDisclosure {
+            get {
+                return ResourceManager.GetString("DashboardFeedbackPreviewDisclosure", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Your feedback.
+        /// </summary>
+        public static string DashboardFeedbackPreviewLabel {
+            get {
+                return ResourceManager.GetString("DashboardFeedbackPreviewLabel", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Don&apos;t ask again.
+        /// </summary>
+        public static string DashboardFeedbackPromptIgnore {
+            get {
+                return ResourceManager.GetString("DashboardFeedbackPromptIgnore", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to We&apos;d love your feedback on the new experience..
+        /// </summary>
+        public static string DashboardFeedbackPromptMessage {
+            get {
+                return ResourceManager.GetString("DashboardFeedbackPromptMessage", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Share feedback.
+        /// </summary>
+        public static string DashboardFeedbackPromptShare {
+            get {
+                return ResourceManager.GetString("DashboardFeedbackPromptShare", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Welcome to the new Aspire dashboard!.
+        /// </summary>
+        public static string DashboardFeedbackPromptTitle {
+            get {
+                return ResourceManager.GetString("DashboardFeedbackPromptTitle", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to I couldn&apos;t find my application URLs.
+        /// </summary>
+        public static string DashboardFeedbackReasonFindingApplicationUrls {
+            get {
+                return ResourceManager.GetString("DashboardFeedbackReasonFindingApplicationUrls", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to A feature I need is missing.
+        /// </summary>
+        public static string DashboardFeedbackReasonMissingFeature {
+            get {
+                return ResourceManager.GetString("DashboardFeedbackReasonMissingFeature", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to It was hard to find my way around.
+        /// </summary>
+        public static string DashboardFeedbackReasonNavigation {
+            get {
+                return ResourceManager.GetString("DashboardFeedbackReasonNavigation", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Another reason.
+        /// </summary>
+        public static string DashboardFeedbackReasonOther {
+            get {
+                return ResourceManager.GetString("DashboardFeedbackReasonOther", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to It was slow or hard to use with assistive technology.
+        /// </summary>
+        public static string DashboardFeedbackReasonPerformanceOrAccessibility {
+            get {
+                return ResourceManager.GetString("DashboardFeedbackReasonPerformanceOrAccessibility", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to What made you go back? Select all that apply..
+        /// </summary>
+        public static string DashboardFeedbackReasonsLabel {
+            get {
+                return ResourceManager.GetString("DashboardFeedbackReasonsLabel", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The telemetry workflow didn&apos;t work for me.
+        /// </summary>
+        public static string DashboardFeedbackReasonTelemetryWorkflow {
+            get {
+                return ResourceManager.GetString("DashboardFeedbackReasonTelemetryWorkflow", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The terminals didn&apos;t work for me.
+        /// </summary>
+        public static string DashboardFeedbackReasonTerminals {
+            get {
+                return ResourceManager.GetString("DashboardFeedbackReasonTerminals", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Skip and switch.
+        /// </summary>
+        public static string DashboardFeedbackSkipAndSwitch {
+            get {
+                return ResourceManager.GetString("DashboardFeedbackSkipAndSwitch", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Why are you going back to the previous dashboard?.
+        /// </summary>
+        public static string DashboardFeedbackStepOneTitle {
+            get {
+                return ResourceManager.GetString("DashboardFeedbackStepOneTitle", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Step {0} of 2.
+        /// </summary>
+        public static string DashboardFeedbackStepProgress {
+            get {
+                return ResourceManager.GetString("DashboardFeedbackStepProgress", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Both questions are optional, but your answers help us decide what to improve..
+        /// </summary>
+        public static string DashboardFeedbackStepTwoDescription {
+            get {
+                return ResourceManager.GetString("DashboardFeedbackStepTwoDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Is there anything else you want to tell us?.
+        /// </summary>
+        public static string DashboardFeedbackStepTwoTitle {
+            get {
+                return ResourceManager.GetString("DashboardFeedbackStepTwoTitle", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Switch to previous dashboard.
+        /// </summary>
+        public static string DashboardFeedbackSwitchToLegacy {
+            get {
+                return ResourceManager.GetString("DashboardFeedbackSwitchToLegacy", resourceCulture);
+            }
+        }
+        
         /// <summary>
         ///   Looks up a localized string similar to Close.
         /// </summary>
@@ -118,7 +482,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("DialogCloseButtonText", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Details.
         /// </summary>
@@ -127,7 +491,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ExemplarsDialogDetailsColumnHeader", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Timestamp.
         /// </summary>
@@ -136,7 +500,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ExemplarsDialogTimestampColumnHeader", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Exemplars.
         /// </summary>
@@ -145,7 +509,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ExemplarsDialogTitle", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Trace.
         /// </summary>
@@ -154,7 +518,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ExemplarsDialogTrace", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Trace.
         /// </summary>
@@ -163,7 +527,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ExemplarsDialogTraceColumnHeader", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Value.
         /// </summary>
@@ -172,7 +536,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ExemplarsDialogValueColumnHeader", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to A value is required..
         /// </summary>
@@ -181,7 +545,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("FieldRequired", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to A maximum length of {1} characters is allowed..
         /// </summary>
@@ -190,7 +554,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("FieldTooLong", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Apply filter.
         /// </summary>
@@ -199,7 +563,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("FilterDialogApplyFilterButtonText", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Cancel.
         /// </summary>
@@ -208,7 +572,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("FilterDialogCancelButtonText", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Condition.
         /// </summary>
@@ -217,7 +581,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("FilterDialogConditionInputLabel", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to e.g. 2024-01-15T09:30:00.
         /// </summary>
@@ -226,7 +590,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("FilterDialogDatePlaceholder", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Date and time.
         /// </summary>
@@ -235,7 +599,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("FilterDialogDateValueLabel", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Disable all.
         /// </summary>
@@ -244,7 +608,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("FilterDialogDisableAll", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Disable filter.
         /// </summary>
@@ -253,7 +617,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("FilterDialogDisableFilterButtonText", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Enable all.
         /// </summary>
@@ -262,7 +626,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("FilterDialogEnableAll", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Field.
         /// </summary>
@@ -271,7 +635,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("FilterDialogFieldPlaceholder", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Invalid date format.
         /// </summary>
@@ -280,7 +644,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("FilterDialogInvalidDate", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Parameter.
         /// </summary>
@@ -289,7 +653,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("FilterDialogParameterInputLabel", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Pick date and time.
         /// </summary>
@@ -298,7 +662,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("FilterDialogPickDateButtonTitle", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Remove filter.
         /// </summary>
@@ -307,7 +671,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("FilterDialogRemoveFilterButtonText", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Value.
         /// </summary>
@@ -316,7 +680,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("FilterDialogTextValuePlaceholder", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Details.
         /// </summary>
@@ -325,7 +689,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("GenAIDetailsTabText", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Error displaying GenAI content:.
         /// </summary>
@@ -334,7 +698,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("GenAIDisplayErrorMessageText", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Duration.
         /// </summary>
@@ -343,7 +707,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("GenAIDurationLabel", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Error.
         /// </summary>
@@ -352,7 +716,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("GenAIErrorHeaderText", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Evaluations.
         /// </summary>
@@ -361,7 +725,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("GenAIEvaluationsTabText", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Input.
         /// </summary>
@@ -370,7 +734,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("GenAIInputHeaderText", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Input &amp; output.
         /// </summary>
@@ -379,7 +743,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("GenAIInputOutputTabText", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Input tokens: {0}.
         /// </summary>
@@ -388,7 +752,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("GenAIInputTokensText", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to LLM.
         /// </summary>
@@ -397,7 +761,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("GenAILLMBadgeText", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Message.
         /// </summary>
@@ -406,7 +770,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("GenAIMessageCategoryMessage", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Output.
         /// </summary>
@@ -415,7 +779,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("GenAIMessageCategoryOutput", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Status.
         /// </summary>
@@ -424,7 +788,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("GenAIMessageCategoryStatus", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Tool calls.
         /// </summary>
@@ -433,7 +797,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("GenAIMessageCategoryToolCalls", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Tool response.
         /// </summary>
@@ -442,7 +806,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("GenAIMessageCategoryToolResponse", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Assistant.
         /// </summary>
@@ -451,7 +815,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("GenAIMessageTitleAssistant", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Error.
         /// </summary>
@@ -460,7 +824,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("GenAIMessageTitleError", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to System.
         /// </summary>
@@ -469,7 +833,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("GenAIMessageTitleSystem", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Tool.
         /// </summary>
@@ -478,7 +842,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("GenAIMessageTitleTool", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to User.
         /// </summary>
@@ -487,7 +851,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("GenAIMessageTitleUser", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Generative AI messages.
         /// </summary>
@@ -496,7 +860,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("GenAIMessageTreeLabel", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to n/a.
         /// </summary>
@@ -505,7 +869,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("GenAINAText", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Next.
         /// </summary>
@@ -514,7 +878,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("GenAINextButtonText", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to No message content..
         /// </summary>
@@ -523,7 +887,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("GenAINoMessageContent", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to No message content was recorded to telemetry. Additional configuration may be required to view sensitive content. For more information, see &lt;a href=&quot;{0}&quot; target=&quot;_blank&quot;&gt;AI telemetry configuration&lt;/a&gt;..
         /// </summary>
@@ -532,7 +896,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("GenAINoMessageContentMoreInformationMessage", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to No messages found..
         /// </summary>
@@ -541,7 +905,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("GenAINoMessages", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to No tools found..
         /// </summary>
@@ -550,7 +914,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("GenAINoTools", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Output.
         /// </summary>
@@ -559,7 +923,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("GenAIOutputHeaderText", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Output tokens: {0}.
         /// </summary>
@@ -568,7 +932,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("GenAIOutputTokensText", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Preview.
         /// </summary>
@@ -577,7 +941,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("GenAIPreviewTabText", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Previous.
         /// </summary>
@@ -586,7 +950,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("GenAIPreviousButtonText", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Raw.
         /// </summary>
@@ -595,7 +959,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("GenAIRawTabText", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Tokens.
         /// </summary>
@@ -604,7 +968,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("GenAITokensLabel", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Tool call.
         /// </summary>
@@ -613,7 +977,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("GenAIToolCallButtonText", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Tool definition.
         /// </summary>
@@ -622,7 +986,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("GenAIToolDefinitionButtonText", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to No parameters.
         /// </summary>
@@ -631,7 +995,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("GenAIToolNoParameters", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Description.
         /// </summary>
@@ -640,7 +1004,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("GenAIToolParameterDescription", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Name.
         /// </summary>
@@ -649,7 +1013,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("GenAIToolParameterName", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Type.
         /// </summary>
@@ -658,7 +1022,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("GenAIToolParameterType", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Required parameter.
         /// </summary>
@@ -667,7 +1031,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("GenAIToolRequiredParameter", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Tools.
         /// </summary>
@@ -676,7 +1040,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("GenAIToolsTabText", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Unexpected or truncated message content..
         /// </summary>
@@ -685,25 +1049,43 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("GenAIUnexpectedOrTruncatedContent", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Site-wide navigation.
+        ///   Looks up a localized string similar to Get started with Aspire, its integrations and deployment..
+        /// </summary>
+        public static string HelpDialogAspireDocumentationDescription {
+            get {
+                return ResourceManager.GetString("HelpDialogAspireDocumentationDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Aspire documentation.
+        /// </summary>
+        public static string HelpDialogAspireDocumentationTitle {
+            get {
+                return ResourceManager.GetString("HelpDialogAspireDocumentationTitle", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to General.
         /// </summary>
         public static string HelpDialogCategoryNavigation {
             get {
                 return ResourceManager.GetString("HelpDialogCategoryNavigation", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Page navigation.
+        ///   Looks up a localized string similar to Dashboard navigation.
         /// </summary>
         public static string HelpDialogCategoryPageNavigation {
             get {
                 return ResourceManager.GetString("HelpDialogCategoryPageNavigation", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Panels.
         /// </summary>
@@ -712,7 +1094,70 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("HelpDialogCategoryPanels", resourceCulture);
             }
         }
-
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Resource graph.
+        /// </summary>
+        public static string HelpDialogCategoryResourceGraph {
+            get {
+                return ResourceManager.GetString("HelpDialogCategoryResourceGraph", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Logs &amp; telemetry.
+        /// </summary>
+        public static string HelpDialogCategoryTelemetry {
+            get {
+                return ResourceManager.GetString("HelpDialogCategoryTelemetry", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Community and support.
+        /// </summary>
+        public static string HelpDialogCommunityHeading {
+            get {
+                return ResourceManager.GetString("HelpDialogCommunityHeading", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Guides and reference for using the Aspire dashboard..
+        /// </summary>
+        public static string HelpDialogDashboardDocumentationDescription {
+            get {
+                return ResourceManager.GetString("HelpDialogDashboardDocumentationDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Share feedback about the evolving dashboard experience..
+        /// </summary>
+        public static string HelpDialogDashboardFeedbackDescription {
+            get {
+                return ResourceManager.GetString("HelpDialogDashboardFeedbackDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Dashboard feedback.
+        /// </summary>
+        public static string HelpDialogDashboardFeedbackTitle {
+            get {
+                return ResourceManager.GetString("HelpDialogDashboardFeedbackTitle", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Aspire dashboard version {0}.
+        /// </summary>
+        public static string HelpDialogDashboardVersion {
+            get {
+                return ResourceManager.GetString("HelpDialogDashboardVersion", resourceCulture);
+            }
+        }
+        
         /// <summary>
         ///   Looks up a localized string similar to Decrease panel size.
         /// </summary>
@@ -721,7 +1166,52 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("HelpDialogDecreasePanelSize", resourceCulture);
             }
         }
-
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Chat with the Aspire team and community..
+        /// </summary>
+        public static string HelpDialogDiscordDescription {
+            get {
+                return ResourceManager.GetString("HelpDialogDiscordDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Discord.
+        /// </summary>
+        public static string HelpDialogDiscordTitle {
+            get {
+                return ResourceManager.GetString("HelpDialogDiscordTitle", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Documentation.
+        /// </summary>
+        public static string HelpDialogDocumentationTab {
+            get {
+                return ResourceManager.GetString("HelpDialogDocumentationTab", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to In the resource graph, select Play Aspire Outage, or focus the graph and press O, to play a game starring your resources. Press Esc to return to the graph..
+        /// </summary>
+        public static string HelpDialogGameDescription {
+            get {
+                return ResourceManager.GetString("HelpDialogGameDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Aspire Outage.
+        /// </summary>
+        public static string HelpDialogGameTitle {
+            get {
+                return ResourceManager.GetString("HelpDialogGameTitle", resourceCulture);
+            }
+        }
+        
         /// <summary>
         ///   Looks up a localized string similar to Go to aspire.dev documentation.
         /// </summary>
@@ -730,79 +1220,115 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("HelpDialogGetHelpLinkText", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Go to Console Logs.
+        ///   Looks up a localized string similar to Console logs (all resources).
         /// </summary>
         public static string HelpDialogGoToConsoleLogs {
             get {
                 return ResourceManager.GetString("HelpDialogGoToConsoleLogs", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Go to Help.
+        ///   Looks up a localized string similar to Extensions.
+        /// </summary>
+        public static string HelpDialogGoToExtensions {
+            get {
+                return ResourceManager.GetString("HelpDialogGoToExtensions", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Resource graph.
+        /// </summary>
+        public static string HelpDialogGoToGraph {
+            get {
+                return ResourceManager.GetString("HelpDialogGoToGraph", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Keyboard shortcuts.
         /// </summary>
         public static string HelpDialogGoToHelp {
             get {
                 return ResourceManager.GetString("HelpDialogGoToHelp", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Go to Metrics.
+        ///   Looks up a localized string similar to Metrics.
         /// </summary>
         public static string HelpDialogGoToMetrics {
             get {
                 return ResourceManager.GetString("HelpDialogGoToMetrics", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Go to Resources.
+        ///   Looks up a localized string similar to Parameters.
+        /// </summary>
+        public static string HelpDialogGoToParameters {
+            get {
+                return ResourceManager.GetString("HelpDialogGoToParameters", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Resources.
         /// </summary>
         public static string HelpDialogGoToResources {
             get {
                 return ResourceManager.GetString("HelpDialogGoToResources", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Go to Settings.
+        ///   Looks up a localized string similar to Settings.
         /// </summary>
         public static string HelpDialogGoToSettings {
             get {
                 return ResourceManager.GetString("HelpDialogGoToSettings", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Go to Structured Logs.
+        ///   Looks up a localized string similar to Structured logs.
         /// </summary>
         public static string HelpDialogGoToStructuredLogs {
             get {
                 return ResourceManager.GetString("HelpDialogGoToStructuredLogs", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Go to Terminals.
+        ///   Looks up a localized string similar to Telemetry sources.
+        /// </summary>
+        public static string HelpDialogGoToTelemetrySources {
+            get {
+                return ResourceManager.GetString("HelpDialogGoToTelemetrySources", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Terminals.
         /// </summary>
         public static string HelpDialogGoToTerminals {
             get {
                 return ResourceManager.GetString("HelpDialogGoToTerminals", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Go to Traces.
+        ///   Looks up a localized string similar to Traces.
         /// </summary>
         public static string HelpDialogGoToTraces {
             get {
                 return ResourceManager.GetString("HelpDialogGoToTraces", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Increase panel size.
         /// </summary>
@@ -811,7 +1337,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("HelpDialogIncreasePanelSize", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Keyboard Shortcuts.
         /// </summary>
@@ -820,7 +1346,61 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("HelpDialogKeyboardShortcutsTitle", resourceCulture);
             }
         }
-
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Learn.
+        /// </summary>
+        public static string HelpDialogLearnHeading {
+            get {
+                return ResourceManager.GetString("HelpDialogLearnHeading", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Opens in a new tab.
+        /// </summary>
+        public static string HelpDialogOpensInNewTab {
+            get {
+                return ResourceManager.GetString("HelpDialogOpensInNewTab", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Play Aspire Outage, when the graph has focus.
+        /// </summary>
+        public static string HelpDialogPlayGame {
+            get {
+                return ResourceManager.GetString("HelpDialogPlayGame", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Source code, releases and issues on GitHub..
+        /// </summary>
+        public static string HelpDialogRepoDescription {
+            get {
+                return ResourceManager.GetString("HelpDialogRepoDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Found a bug or have an idea? Open an issue on GitHub..
+        /// </summary>
+        public static string HelpDialogReportIssueDescription {
+            get {
+                return ResourceManager.GetString("HelpDialogReportIssueDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Report an issue.
+        /// </summary>
+        public static string HelpDialogReportIssueTitle {
+            get {
+                return ResourceManager.GetString("HelpDialogReportIssueTitle", resourceCulture);
+            }
+        }
+        
         /// <summary>
         ///   Looks up a localized string similar to Reset panel sizes.
         /// </summary>
@@ -829,7 +1409,16 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("HelpDialogResetPanelSize", resourceCulture);
             }
         }
-
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Use shortcuts outside text fields and terminal input. Panel shortcuts apply to an open details panel. Press {0} in a terminal to focus its controls before using dashboard shortcuts..
+        /// </summary>
+        public static string HelpDialogShortcutsHint {
+            get {
+                return ResourceManager.GetString("HelpDialogShortcutsHint", resourceCulture);
+            }
+        }
+        
         /// <summary>
         ///   Looks up a localized string similar to Close panel.
         /// </summary>
@@ -838,7 +1427,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("HelpDialogTogglePanelOpen", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Toggle panel orientation.
         /// </summary>
@@ -847,16 +1436,16 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("HelpDialogTogglePanelOrientation", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Toggle terminal.
+        ///   Looks up a localized string similar to Toggle terminal dock.
         /// </summary>
         public static string HelpDialogToggleTerminalDock {
             get {
                 return ResourceManager.GetString("HelpDialogToggleTerminalDock", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Cancel.
         /// </summary>
@@ -865,7 +1454,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("InteractionButtonCancel", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Close.
         /// </summary>
@@ -874,7 +1463,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("InteractionButtonClose", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to OK.
         /// </summary>
@@ -883,7 +1472,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("InteractionButtonOk", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Exceeds the maximum size of {0}.
         /// </summary>
@@ -892,7 +1481,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("InteractionFileExceedsMaxSize", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Choose a file.
         /// </summary>
@@ -901,7 +1490,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("InteractionFilePlaceholder", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Choose files.
         /// </summary>
@@ -910,7 +1499,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("InteractionFilePlaceholderMultiple", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Upload failed.
         /// </summary>
@@ -919,7 +1508,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("InteractionFileUploadFailed", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to All data.
         /// </summary>
@@ -928,7 +1517,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ManageDataAllDataCheckboxLabel", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Console logs.
         /// </summary>
@@ -937,7 +1526,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ManageDataConsoleLogs", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to {0} for {1}.
         /// </summary>
@@ -946,7 +1535,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ManageDataDataTypeForResourceCheckboxLabel", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Manage logs and telemetry.
         /// </summary>
@@ -955,7 +1544,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ManageDataDialogTitle", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Export selected.
         /// </summary>
@@ -964,7 +1553,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ManageDataExportButtonText", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Failed to export data.
         /// </summary>
@@ -973,7 +1562,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ManageDataExportErrorMessage", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Failed to import data.
         /// </summary>
@@ -982,7 +1571,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ManageDataImportErrorMessage", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Manage.
         /// </summary>
@@ -991,7 +1580,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ManageDataManageButtonText", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Metrics.
         /// </summary>
@@ -1000,7 +1589,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ManageDataMetrics", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to No resources found.
         /// </summary>
@@ -1009,7 +1598,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ManageDataNoResources", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Remove selected.
         /// </summary>
@@ -1018,7 +1607,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ManageDataRemoveButtonText", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Failed to remove data.
         /// </summary>
@@ -1027,7 +1616,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ManageDataRemoveErrorMessage", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Resource.
         /// </summary>
@@ -1036,7 +1625,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ManageDataResource", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Structured logs.
         /// </summary>
@@ -1045,7 +1634,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ManageDataStructuredLogs", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Summary.
         /// </summary>
@@ -1054,7 +1643,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ManageDataSummaryColumnHeader", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Traces.
         /// </summary>
@@ -1063,7 +1652,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ManageDataTraces", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Dismiss all.
         /// </summary>
@@ -1072,7 +1661,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("NotificationCenterDismissAll", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to No notifications.
         /// </summary>
@@ -1081,7 +1670,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("NotificationCenterEmpty", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Dismiss notification.
         /// </summary>
@@ -1090,7 +1679,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("NotificationEntryDismiss", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Open in text visualizer.
         /// </summary>
@@ -1099,7 +1688,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("OpenInTextVisualizer", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Cancel.
         /// </summary>
@@ -1108,7 +1697,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("OpenSpanDialogCancelButtonText", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Waiting for span {0} to load....
         /// </summary>
@@ -1117,7 +1706,16 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("OpenSpanDialogMessage", resourceCulture);
             }
         }
-
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Appearance.
+        /// </summary>
+        public static string SettingsDialogAppearanceGroup {
+            get {
+                return ResourceManager.GetString("SettingsDialogAppearanceGroup", resourceCulture);
+            }
+        }
+        
         /// <summary>
         ///   Looks up a localized string similar to Dark.
         /// </summary>
@@ -1126,7 +1724,52 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("SettingsDialogDarkTheme", resourceCulture);
             }
         }
-
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Dashboard experience.
+        /// </summary>
+        public static string SettingsDialogDashboardExperience {
+            get {
+                return ResourceManager.GetString("SettingsDialogDashboardExperience", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Choose which dashboard experience to use..
+        /// </summary>
+        public static string SettingsDialogDashboardExperienceDescription {
+            get {
+                return ResourceManager.GetString("SettingsDialogDashboardExperienceDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to New dashboard.
+        /// </summary>
+        public static string SettingsDialogDashboardExperienceNew {
+            get {
+                return ResourceManager.GetString("SettingsDialogDashboardExperienceNew", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Previous dashboard.
+        /// </summary>
+        public static string SettingsDialogDashboardExperiencePrevious {
+            get {
+                return ResourceManager.GetString("SettingsDialogDashboardExperiencePrevious", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Experience.
+        /// </summary>
+        public static string SettingsDialogDashboardExperienceSelectorLabel {
+            get {
+                return ResourceManager.GetString("SettingsDialogDashboardExperienceSelectorLabel", resourceCulture);
+            }
+        }
+        
         /// <summary>
         ///   Looks up a localized string similar to Resource logs and telemetry.
         /// </summary>
@@ -1135,7 +1778,16 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("SettingsDialogDashboardLogsAndTelemetry", resourceCulture);
             }
         }
-
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Data and telemetry.
+        /// </summary>
+        public static string SettingsDialogDataAndTelemetryGroup {
+            get {
+                return ResourceManager.GetString("SettingsDialogDataAndTelemetryGroup", resourceCulture);
+            }
+        }
+        
         /// <summary>
         ///   Looks up a localized string similar to Runtime: {0}.
         /// </summary>
@@ -1144,7 +1796,34 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("SettingsDialogDotNetRuntimeVersion", resourceCulture);
             }
         }
-
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Dashboard experience.
+        /// </summary>
+        public static string SettingsDialogExperienceGroup {
+            get {
+                return ResourceManager.GetString("SettingsDialogExperienceGroup", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Overview layout.
+        /// </summary>
+        public static string SettingsDialogGroupOverview {
+            get {
+                return ResourceManager.GetString("SettingsDialogGroupOverview", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Summary.
+        /// </summary>
+        public static string SettingsDialogGroupOverviewSummary {
+            get {
+                return ResourceManager.GetString("SettingsDialogGroupOverviewSummary", resourceCulture);
+            }
+        }
+        
         /// <summary>
         ///   Looks up a localized string similar to Language.
         /// </summary>
@@ -1153,7 +1832,16 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("SettingsDialogLanguage", resourceCulture);
             }
         }
-
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Language and time.
+        /// </summary>
+        public static string SettingsDialogLanguageAndTimeGroup {
+            get {
+                return ResourceManager.GetString("SettingsDialogLanguageAndTimeGroup", resourceCulture);
+            }
+        }
+        
         /// <summary>
         ///   Looks up a localized string similar to The page will reload on language change..
         /// </summary>
@@ -1162,7 +1850,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("SettingsDialogLanguagePageReloads", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Light.
         /// </summary>
@@ -1171,7 +1859,34 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("SettingsDialogLightTheme", resourceCulture);
             }
         }
-
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Resource list density.
+        /// </summary>
+        public static string SettingsDialogResourceListDensity {
+            get {
+                return ResourceManager.GetString("SettingsDialogResourceListDensity", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Comfortable.
+        /// </summary>
+        public static string SettingsDialogResourceListDensityComfortable {
+            get {
+                return ResourceManager.GetString("SettingsDialogResourceListDensityComfortable", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Compact.
+        /// </summary>
+        public static string SettingsDialogResourceListDensityCompact {
+            get {
+                return ResourceManager.GetString("SettingsDialogResourceListDensityCompact", resourceCulture);
+            }
+        }
+        
         /// <summary>
         ///   Looks up a localized string similar to System.
         /// </summary>
@@ -1180,7 +1895,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("SettingsDialogSystemTheme", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Dashboard telemetry is enabled. Aspire will collect usage data and send it to Microsoft..
         /// </summary>
@@ -1189,7 +1904,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("SettingsDialogTelemetryEnabledInfo", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Why?.
         /// </summary>
@@ -1198,7 +1913,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("SettingsDialogTelemetryInfoLinkText", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Go to usage telemetry documentation.
         /// </summary>
@@ -1207,7 +1922,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("SettingsDialogTelemetryInfoLinkTooltip", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Theme.
         /// </summary>
@@ -1216,7 +1931,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("SettingsDialogTheme", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Time format.
         /// </summary>
@@ -1225,7 +1940,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("SettingsDialogTimeFormat", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to System.
         /// </summary>
@@ -1234,7 +1949,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("SettingsDialogTimeFormatSystem", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to 12-hour.
         /// </summary>
@@ -1243,7 +1958,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("SettingsDialogTimeFormatTwelveHour", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to 24-hour.
         /// </summary>
@@ -1252,7 +1967,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("SettingsDialogTimeFormatTwentyFourHour", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Version: {0}.
         /// </summary>
@@ -1261,7 +1976,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("SettingsDialogVersion", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Export all.
         /// </summary>
@@ -1270,7 +1985,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("SettingsExportAllButtonText", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Import logs and telemetry.
         /// </summary>
@@ -1279,7 +1994,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("SettingsImportButtonText", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Remove all.
         /// </summary>
@@ -1288,7 +2003,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("SettingsRemoveAllButtonText", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Set OTEL_EXPORTER_OTLP_HEADERS to x-otlp-api-key=&lt;your-api-key&gt;, replacing &lt;your-api-key&gt; with the dashboard&apos;s configured OTLP API key..
         /// </summary>
@@ -1297,7 +2012,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("TelemetryHelpApiKeyDescription", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Add telemetry.
         /// </summary>
@@ -1306,7 +2021,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("TelemetryHelpButtonText", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Configure your OTLP exporter to present a client certificate trusted by the dashboard. Use your SDK&apos;s OTLP exporter settings to specify the certificate and private key..
         /// </summary>
@@ -1315,7 +2030,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("TelemetryHelpCertificateDescription", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to The dashboard is running in a container. Access it from the host using port forwarding..
         /// </summary>
@@ -1324,7 +2039,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("TelemetryHelpContainerDescription", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Add telemetry.
         /// </summary>
@@ -1333,7 +2048,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("TelemetryHelpDialogTitle", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Dashboard endpoint.
         /// </summary>
@@ -1342,31 +2057,25 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("TelemetryHelpEndpointHeader", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to ### 📥 Import telemetry from a file
-        ///
-        ///Import previously exported telemetry or OTLP JSON files by selecting **{0}** in the **{1}** dialog..
+        ///   Looks up a localized string similar to ### 📥 Import telemetry from a file  Import previously exported telemetry or OTLP JSON files by selecting **{0}** in the **{1}** dialog..
         /// </summary>
         public static string TelemetryHelpImportDescription {
             get {
                 return ResourceManager.GetString("TelemetryHelpImportDescription", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Visualize logs, traces, and metrics in the dashboard. To see telemetry, first send it to the dashboard using OTLP or manually import telemetry JSON files.
-        ///
-        ///### 📡 Send telemetry from your app
-        ///
-        ///Configure your app to export logs, traces, and metrics using [OTLP]({0})..
+        ///   Looks up a localized string similar to Visualize logs, traces, and metrics in the dashboard. To see telemetry, first send it to the dashboard using OTLP or manually import telemetry JSON files.  ### 📡 Send telemetry from your app  Configure your app to export logs, traces, and metrics using [OTLP]({0})..
         /// </summary>
         public static string TelemetryHelpIntroduction {
             get {
                 return ResourceManager.GetString("TelemetryHelpIntroduction", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Learn about managing dashboard data.
         /// </summary>
@@ -1375,7 +2084,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("TelemetryHelpManageDataLink", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Configure your app to send telemetry to the dashboard..
         /// </summary>
@@ -1384,7 +2093,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("TelemetryHelpMessage", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to For setup instructions, see.
         /// </summary>
@@ -1393,7 +2102,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("TelemetryHelpMoreInformation", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to No OTLP endpoints are configured. To receive live telemetry, configure an OTLP endpoint when starting the dashboard..
         /// </summary>
@@ -1402,7 +2111,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("TelemetryHelpNoEndpointsDescription", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Protocol.
         /// </summary>
@@ -1411,7 +2120,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("TelemetryHelpProtocolHeader", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Connect your app to the dashboard.
         /// </summary>
@@ -1420,7 +2129,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("TelemetryHelpSendTelemetryLink", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to JSON.
         /// </summary>
@@ -1429,7 +2138,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("TextVisualizerDialogJsonFormat", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Markdown.
         /// </summary>
@@ -1438,7 +2147,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("TextVisualizerDialogMarkdownFormat", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Unformatted.
         /// </summary>
@@ -1447,7 +2156,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("TextVisualizerDialogPlaintextFormat", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to SQL.
         /// </summary>
@@ -1456,7 +2165,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("TextVisualizerDialogSqlFormat", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to XML.
         /// </summary>
@@ -1465,7 +2174,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("TextVisualizerDialogXmlFormat", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Show value.
         /// </summary>
@@ -1474,7 +2183,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("TextVisualizerSecretWarningAcknowledge", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Confirm you want to show this value. Once confirmed, the text visualizer in the browser will show values automatically.
         /// </summary>
@@ -1483,7 +2192,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("TextVisualizerSecretWarningDescription", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Sensitive value hidden.
         /// </summary>
@@ -1492,13 +2201,22 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("TextVisualizerSecretWarningTitle", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Select format.
         /// </summary>
         public static string TextVisualizerSelectFormatType {
             get {
                 return ResourceManager.GetString("TextVisualizerSelectFormatType", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Word wrap.
+        /// </summary>
+        public static string TextVisualizerWordWrap {
+            get {
+                return ResourceManager.GetString("TextVisualizerWordWrap", resourceCulture);
             }
         }
     }
