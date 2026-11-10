@@ -134,19 +134,12 @@ internal sealed class AppHostInfoResolver(IDotNetCliRunner runner, IAppHostInfoD
         // evaluation. Requesting it preserves that extension point without causing the default
         // probe to build the AppHost. See:
         // https://github.com/dotnet/sdk/blob/main/src/Tasks/Microsoft.NET.Build.Tasks/targets/Microsoft.NET.Sdk.targets
-        //
-        // A failed evaluation is logged at Debug rather than Error because every caller reports or
-        // handles the failure itself. For example, discovery marks the candidate possibly
-        // unbuildable, and the AppHost compatibility check points the user at the log file, which
-        // records Debug by default. An Error record would also keep the automatic log of every
-        // otherwise successful discovery query (`aspire ls`, the extension's AppHost discovery)
-        // that sees an unbuildable candidate.
         var (exitCode, jsonDocument) = await runner.GetProjectItemsAndPropertiesAsync(
             projectFile,
             items: ["PackageReference", "AspireProjectOrPackageReference", "PackageVersion"],
             properties: ["IsAspireHost", "AspireHostingSDKVersion", "AspireUseCliBundle", "UserSecretsId", "RunCommand", "TargetPath", "RunWorkingDirectory", "RunArguments", "TargetFramework", "TargetFrameworks"],
             targets: ["ComputeRunArguments"],
-            new ProcessInvocationOptions { LogFailureAsDebug = true },
+            new ProcessInvocationOptions(),
             cancellationToken).ConfigureAwait(false);
 
         if (exitCode != 0 || jsonDocument is null)

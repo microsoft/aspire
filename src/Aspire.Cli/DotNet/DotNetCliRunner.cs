@@ -89,12 +89,6 @@ internal sealed class ProcessInvocationOptions
     public bool SuppressLogging { get; set; }
 
     /// <summary>
-    /// Logs a failed project property and item query at Debug instead of Error, for callers that
-    /// report the failure themselves.
-    /// </summary>
-    public bool LogFailureAsDebug { get; set; }
-
-    /// <summary>
     /// Controls whether cancellation should terminate the whole process tree or only the root process.
     /// </summary>
     public bool KillEntireProcessTreeOnCancel { get; set; } = true;
@@ -195,7 +189,6 @@ internal sealed class ProcessInvocationOptions
         StartDebugSession = StartDebugSession,
         Debug = Debug,
         SuppressLogging = SuppressLogging,
-        LogFailureAsDebug = LogFailureAsDebug,
         KillEntireProcessTreeOnCancel = KillEntireProcessTreeOnCancel,
         IsolateConsole = IsolateConsole,
         KillOnParentExit = KillOnParentExit,
@@ -866,8 +859,7 @@ internal sealed class DotNetCliRunner(
 
             if (exitCode != 0)
             {
-                logger.Log(
-                    options.LogFailureAsDebug ? LogLevel.Debug : LogLevel.Error,
+                logger.LogError(
                     "Failed to get items and properties from project. Exit code was: {ExitCode}. See debug logs for more details. Stderr: {Stderr}, Stdout: {Stdout}",
                     exitCode,
                     diagnosticStderr,

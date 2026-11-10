@@ -143,13 +143,9 @@ public class ProgramTests(ITestOutputHelper outputHelper)
     [InlineData("ps", CliExitCodes.Success, true)]
     [InlineData("ps --format json", CliExitCodes.Success, true)]
     [InlineData("describe", CliExitCodes.Success, true)]
-    [InlineData("ls", CliExitCodes.Success, true)]
-    [InlineData("config info", CliExitCodes.Success, true)]
-    [InlineData("extension get-apphosts", CliExitCodes.Success, true)]
     [InlineData("ps", CliExitCodes.FailedToFindProject, false)]
     [InlineData("ps --follow", CliExitCodes.Success, false)]
     [InlineData("describe --follow", CliExitCodes.Success, false)]
-    [InlineData("ls --stream --format json", CliExitCodes.Success, true)]
     [InlineData("ps --debug", CliExitCodes.Success, false)]
     [InlineData("ps -d", CliExitCodes.Success, false)]
     [InlineData("ps --log-level Debug", CliExitCodes.Success, false)]
@@ -171,28 +167,8 @@ public class ProgramTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData("--version", true)]
-    [InlineData("-v", true)]
-    [InlineData("--version --debug", false)]
-    [InlineData("--version --log-level Debug", false)]
-    [InlineData("--version --log-file cli.log", false)]
-    public void ShouldDiscardLogOnSuccess_ForRootVersionOption(string commandLine, bool expected)
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        using var provider = services.BuildServiceProvider();
-
-        // Parse errors aren't asserted because the version action clears them, so a combined form
-        // such as "--version --debug" still prints the version and exits successfully.
-        var parseResult = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>().Parse(commandLine.Split(' '));
-
-        Assert.Equal(expected, Program.ShouldDiscardLogOnSuccess(CliExitCodes.Success, cancellationRequested: false, parseResult));
-    }
-
-    [Theory]
-    [InlineData("ls")]
-    [InlineData("ls --stream --format json")]
     [InlineData("ps")]
+    [InlineData("describe")]
     public void ShouldDiscardLogOnSuccess_KeepsLog_WhenCancelledWithSuccessExitCode(string commandLine)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

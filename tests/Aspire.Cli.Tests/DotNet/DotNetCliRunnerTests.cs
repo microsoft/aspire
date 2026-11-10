@@ -2503,39 +2503,6 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
             error.Message);
     }
 
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task GetProjectItemsAndPropertiesAsync_FailureLogLevelHonorsLogFailureAsDebug(bool logFailureAsDebug)
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var projectFile = new FileInfo(Path.Combine(workspace.Path, "AppHost.csproj"));
-        using var provider = CliTestHelper.CreateServiceCollection(workspace, outputHelper).BuildServiceProvider();
-        var logger = new FakeLogger<DotNetCliRunner>();
-        const string stderr = "error MSB4236: The SDK 'Aspire.AppHost.Sdk' specified could not be found.";
-        var runner = DotNetCliRunnerTestHelper.Create(
-            provider,
-            CreateExecutionContext(workspace.WorkspaceRoot),
-            (_, _, _, options) => options.StandardErrorCallback?.Invoke(stderr),
-            exitCode: 1,
-            logger: logger);
-
-        var (exitCode, output) = await runner.GetProjectItemsAndPropertiesAsync(
-            projectFile, items: [], properties: ["IsAspireHost"], targets: [],
-            new ProcessInvocationOptions { LogFailureAsDebug = logFailureAsDebug },
-            TestContext.Current.CancellationToken);
-
-        Assert.Equal(1, exitCode);
-        Assert.Null(output);
-        var failure = Assert.Single(
-            logger.Collector.GetSnapshot(),
-            record => record.Message.StartsWith("Failed to get items and properties from project.", StringComparison.Ordinal));
-        Assert.Equal(logFailureAsDebug ? LogLevel.Debug : LogLevel.Error, failure.Level);
-        Assert.Equal(
-            $"Failed to get items and properties from project. Exit code was: 1. See debug logs for more details. Stderr: {stderr}{Environment.NewLine}, Stdout: ",
-            failure.Message);
-    }
-
     [Fact]
     public async Task GetProjectItemsAndPropertiesAsyncSuppressesCliRunHook()
     {

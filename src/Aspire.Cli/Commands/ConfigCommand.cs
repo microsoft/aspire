@@ -462,8 +462,6 @@ internal sealed class ConfigCommand : BaseCommand
             Options.Add(jsonOption);
         }
 
-        internal override bool DiscardsLogOnSuccess(ParseResult parseResult) => true;
-
         protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
         {
             var useJson = parseResult.GetValue<bool>("--json");

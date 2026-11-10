@@ -68,10 +68,6 @@ internal sealed class LsCommand : BaseCommand
         });
     }
 
-    // --stream only streams results while discovery runs and then exits, so it is as bounded as the
-    // buffered modes. Cancelled runs keep their log because Program checks cancellation separately.
-    internal override bool DiscardsLogOnSuccess(ParseResult parseResult) => true;
-
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         using var activity = Telemetry.StartDiagnosticActivity(Name);

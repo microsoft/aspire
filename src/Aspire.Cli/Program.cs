@@ -169,11 +169,10 @@ public class Program
 
     /// <summary>
     /// Determines whether a successful one-shot command's automatic log can be deleted at exit.
-    /// Commands opt in through <see cref="BaseCommand.DiscardsLogOnSuccess"/>, and root <c>--version</c>
-    /// always opts in. Logs are kept when the user asked for diagnostics (<c>--debug</c>, <c>--log-level</c>,
-    /// or <c>--log-file</c>), when the command does not opt in, such as follow modes, or when the run was
-    /// cancelled. Cancellation is checked separately because some commands, such as <c>ls</c>, report
-    /// a cancelled run with a success exit code.
+    /// Commands opt in through <see cref="BaseCommand.DiscardsLogOnSuccess"/>. Logs are kept when the user
+    /// asked for diagnostics (<c>--debug</c>, <c>--log-level</c>, or <c>--log-file</c>), when the command
+    /// does not opt in, such as follow modes, or when the run was cancelled. Cancellation is checked
+    /// separately so a cancelled run that still reports success keeps its log.
     /// </summary>
     /// <remarks>
     /// The diagnostic options are read from the parse result rather than the raw-argument pre-parse in
@@ -186,10 +185,8 @@ public class Program
             && !parseResult.GetValue(RootCommand.DebugOption)
             && parseResult.GetValue(RootCommand.DebugLevelOption) is null
             && parseResult.GetValue(RootCommand.s_logFileOption) is null
-            // Root --version runs an option action instead of a BaseCommand, so it can't opt in through
-            // DiscardsLogOnSuccess. The VS Code extension runs it periodically to check for an outdated CLI.
-            && (parseResult.Action is IdentityVersionAction
-                || (parseResult.CommandResult.Command is BaseCommand command && command.DiscardsLogOnSuccess(parseResult)));
+            && parseResult.CommandResult.Command is BaseCommand command
+            && command.DiscardsLogOnSuccess(parseResult);
 
     private static async Task<string> GetGlobalSettingsPathAsync(ILogger logger, bool migrate, CancellationToken cancellationToken)
     {

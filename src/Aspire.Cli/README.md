@@ -596,7 +596,7 @@ On Unix, CLI diagnostic log files use owner-only read/write permissions (`0600`)
 
 The dedicated Aspire logs directory (`~/.aspire/logs`, or under `ASPIRE_HOME` when set) keeps the 100 most recent automatically named log files (`cli_<timestamp>_*.log`). Older files are deleted when the CLI starts, up to 100 per run, skipping files a running CLI process still holds open where the platform enforces file locks. Other files, such as custom `--log-file` names, are never pruned.
 
-Successful one-shot queries (`aspire --version`, `aspire ps`, `aspire describe`, `aspire ls`, `aspire config info`, and the extension's AppHost discovery) delete their automatic log on exit. The log is kept when the command fails or is cancelled, logs a warning or error, runs in `--follow` mode, or is run with `--debug`, `--log-level`, or `--log-file`. A candidate AppHost that MSBuild can't evaluate is marked possibly unbuildable and its evaluation output is logged at Debug level, so it doesn't keep the log by itself; run the query with `--debug` to see that output.
+Successful `aspire ps` and `aspire describe` runs delete their automatic log on exit. The log is kept when the command fails or is cancelled, logs a warning or error, runs in `--follow` mode, or is run with `--debug`, `--log-level`, or `--log-file`.
 
 Diagnostic logs can contain sensitive data, including dashboard login URLs captured from AppHost output. Review logs before sharing them.
 
