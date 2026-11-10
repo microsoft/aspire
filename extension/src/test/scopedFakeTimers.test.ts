@@ -6,6 +6,19 @@ suite('withScopedFakeTimers', () => {
     // Long enough that the timer can only fire if a test advances the fake clock to it.
     const unreachableDelayMs = 60_000;
 
+    const captureGlobals = () => ({
+        setTimeout: globalThis.setTimeout,
+        clearTimeout: globalThis.clearTimeout,
+        setInterval: globalThis.setInterval,
+        clearInterval: globalThis.clearInterval,
+        setImmediate: globalThis.setImmediate,
+        clearImmediate: globalThis.clearImmediate,
+        queueMicrotask: globalThis.queueMicrotask,
+        Date: globalThis.Date,
+        dateNow: globalThis.Date.now,
+        nextTick: process.nextTick,
+    });
+
     test('ignores timers and microtasks scheduled by callbacks that started outside the body', async () => {
         let foreignTimer: ReturnType<typeof setTimeout> | undefined;
         // Stands in for an extension-host callback that is already queued when the test starts and runs
@@ -88,18 +101,6 @@ suite('withScopedFakeTimers', () => {
     });
 
     test('restores the real globals when the body resolves, rejects or throws', async () => {
-        const captureGlobals = () => ({
-            setTimeout: globalThis.setTimeout,
-            clearTimeout: globalThis.clearTimeout,
-            setInterval: globalThis.setInterval,
-            clearInterval: globalThis.clearInterval,
-            setImmediate: globalThis.setImmediate,
-            clearImmediate: globalThis.clearImmediate,
-            queueMicrotask: globalThis.queueMicrotask,
-            Date: globalThis.Date,
-            dateNow: globalThis.Date.now,
-            nextTick: process.nextTick,
-        });
         const originals = captureGlobals();
         const failure = new Error('body failed');
 
@@ -147,5 +148,47 @@ suite('withScopedFakeTimers', () => {
         finally {
             foreignContext.emitDestroy();
         }
+    });
+
+    test('keeps each scope faked and restores the real globals when scopes settle out of order', async () => {
+        const originals = captureGlobals();
+        let releaseFirst = () => { };
+        let releaseSecond = () => { };
+        const firstGate = new Promise<void>(resolve => { releaseFirst = resolve; });
+        const secondGate = new Promise<void>(resolve => { releaseSecond = resolve; });
+        let firstTimerAfterSecondStarted: ReturnType<typeof setTimeout> | undefined;
+        let secondTimerAfterFirstSettled: ReturnType<typeof setTimeout> | undefined;
+
+        // Models a mocha timeout: the first body is still running when the next test starts its own scope,
+        // and the first body settles before the second.
+        const first = withScopedFakeTimers(async clock => {
+            await firstGate;
+
+            assert.strictEqual(Date.now(), 0, 'The first scope lost its fake clock when the second started.');
+            firstTimerAfterSecondStarted = setTimeout(() => { }, unreachableDelayMs);
+            assert.strictEqual(clock.countTimers(), 1);
+            clearTimeout(firstTimerAfterSecondStarted);
+        });
+        const second = withScopedFakeTimers(async clock => {
+            await secondGate;
+
+            assert.strictEqual(Date.now(), 0, 'The second scope lost its fake clock when the first settled.');
+            secondTimerAfterFirstSettled = setTimeout(() => { }, unreachableDelayMs);
+            assert.strictEqual(clock.countTimers(), 1);
+        });
+
+        try {
+            releaseFirst();
+            await first;
+            assert.notStrictEqual(Date.now(), 0, 'Code outside both bodies must keep real time.');
+
+            releaseSecond();
+            await second;
+        }
+        finally {
+            clearTimeout(secondTimerAfterFirstSettled);
+        }
+
+        assert.deepStrictEqual(captureGlobals(), originals, 'Globals were not restored after the scopes settled out of order.');
     });
 });
