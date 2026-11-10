@@ -503,12 +503,11 @@ public class ReleaseScriptFunctionTests(ITestOutputHelper testOutput)
         using var env = new TestEnvironment();
         var cliPath = Path.Combine(env.TempDirectory, "aspire");
         var capturePath = Path.Combine(env.TempDirectory, "setup-args.txt");
-        await File.WriteAllTextAsync(cliPath, ($$"""
+        await FileHelper.WriteExecutableFileAsync(cliPath, ($$"""
             #!/bin/sh
             printf '%s\n' "$@" > "{{capturePath}}"
             exit 23
             """).ReplaceLineEndings("\n"));
-        FileHelper.MakeExecutable(cliPath);
 
         using var cmd = new ScriptFunctionCommand(
             s_releaseScript,
@@ -677,7 +676,7 @@ public class ReleaseScriptFunctionTests(ITestOutputHelper testOutput)
         Directory.CreateDirectory(mockBinDir);
 
         var mockCurl = Path.Combine(mockBinDir, "curl");
-        await File.WriteAllTextAsync(mockCurl,
+        await FileHelper.WriteExecutableFileAsync(mockCurl,
             """
             #!/bin/bash
             # Mock curl that returns HTML content-type headers for HEAD requests
@@ -691,7 +690,6 @@ public class ReleaseScriptFunctionTests(ITestOutputHelper testOutput)
             done
             exit 0
             """);
-        FileHelper.MakeExecutable(mockCurl);
 
         using var cmd = new ScriptFunctionCommand(
             s_releaseScript,
@@ -714,7 +712,7 @@ public class ReleaseScriptFunctionTests(ITestOutputHelper testOutput)
         Directory.CreateDirectory(mockBinDir);
 
         var mockCurl = Path.Combine(mockBinDir, "curl");
-        await File.WriteAllTextAsync(mockCurl,
+        await FileHelper.WriteExecutableFileAsync(mockCurl,
             """
             #!/bin/bash
             # Mock curl that returns binary content-type headers for HEAD requests
@@ -728,7 +726,6 @@ public class ReleaseScriptFunctionTests(ITestOutputHelper testOutput)
             done
             exit 0
             """);
-        FileHelper.MakeExecutable(mockCurl);
 
         using var cmd = new ScriptFunctionCommand(
             s_releaseScript,

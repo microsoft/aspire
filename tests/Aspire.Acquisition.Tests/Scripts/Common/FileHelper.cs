@@ -12,18 +12,6 @@ namespace Aspire.Acquisition.Tests.Scripts;
 internal static class FileHelper
 {
     /// <summary>
-    /// Marks a file as user-executable on Unix; no-op on Windows.
-    /// </summary>
-    internal static void MakeExecutable(string path)
-    {
-        if (!OperatingSystem.IsWindows())
-        {
-            File.SetUnixFileMode(path,
-                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-        }
-    }
-
-    /// <summary>
     /// Writes a script that the test will execute directly. On Unix the file is written by a short-lived
     /// child process so that the test host never holds a writable descriptor for it.
     /// </summary>
