@@ -227,6 +227,24 @@ public class AgentTelemetryHookTests
     }
 
     [Fact]
+    public void ClaudeReadIfSelectsEveryCanonicalSkillFile()
+    {
+        // Claude normalizes Windows paths to POSIX form before matching, so C:\Users\user becomes /c/Users/user.
+        var paths = AgentTelemetryCatalog.Canonical.Skills.Select(skill => $"/c/Users/user/.claude/skills/{skill}/SKILL.md")
+            .Concat(AgentTelemetryCatalog.Canonical.References.Select(reference => $"/home/user/.claude/plugins/cache/marketplace/aspire/1.0.0/skills/{reference}"));
+        foreach (var path in paths)
+        {
+            Assert.True(MatchesClaudeReadIf(path), path);
+            Assert.NotNull(AgentTelemetryHook.Classify(
+                $$$"""{"tool_name":"Read","tool_input":{"file_path":"{{{path}}}"}}""",
+                new TestEnvironment(),
+                AgentTelemetryHook.DefaultMaxPayloadCharacters));
+        }
+
+        Assert.False(MatchesClaudeReadIf("/home/user/repo/skills/third-party/SKILL.md"));
+    }
+
+    [Fact]
     public void CanonicalCatalogCoversKnownMcpTools()
     {
         Assert.Equal(KnownMcpTools.All.Order(), AgentTelemetryCatalog.Canonical.Tools.Order());
@@ -333,4 +351,21 @@ public class AgentTelemetryHookTests
 
     private static bool MatchesAsClaude(string toolName, string matcher) =>
         Regex.IsMatch(toolName, matcher, RegexOptions.ECMAScript);
+
+    // Emulates the subset of Claude permission-rule globs that ClaudeReadIf uses. "//" anchors the pattern at
+    // the filesystem root, "**/" spans any number of directories, and "*" stays within one path segment:
+    //   Read(//**/skills/aspire*/**) matches /c/Users/user/.claude/skills/aspire-init/SKILL.md
+    // https://code.claude.com/docs/en/permissions
+    private static bool MatchesClaudeReadIf(string path)
+    {
+        const string RulePrefix = "Read(/";
+        Assert.StartsWith(RulePrefix + "/", AgentTelemetryHook.ClaudeReadIf);
+        Assert.EndsWith(")", AgentTelemetryHook.ClaudeReadIf);
+        var glob = AgentTelemetryHook.ClaudeReadIf[RulePrefix.Length..^1];
+        var pattern = Regex.Escape(glob)
+            .Replace(@"\*\*/", "(?:.*/)?")
+            .Replace(@"/\*\*", "/.*")
+            .Replace(@"\*", "[^/]*");
+        return Regex.IsMatch(path, $"^{pattern}$");
+    }
 }
