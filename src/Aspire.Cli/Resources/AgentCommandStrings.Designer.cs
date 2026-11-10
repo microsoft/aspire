@@ -106,6 +106,15 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to The opaque tool call identifier used to skip duplicate hook deliveries.
+        /// </summary>
+        internal static string AgentTelemetryCommand_ToolUseIdDescription {
+            get {
+                return ResourceManager.GetString("AgentTelemetryCommand_ToolUseIdDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to The Aspire skill name for a skill_invocation event.
         /// </summary>
         internal static string AgentTelemetryCommand_SkillNameDescription {

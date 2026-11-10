@@ -435,6 +435,14 @@ is_session_id() {
     printf '%s' "$1" | grep -Eq '^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$'
 }
 
+is_tool_use_id() {
+    [ "${#1}" -ge 1 ] && [ "${#1}" -le 128 ] || return 1
+    # A case pattern checks every character; grep would accept a value whose first line matches.
+    case "$1" in
+        *[!A-Za-z0-9._-]*) return 1 ;;
+    esac
+}
+
 # No stdin (interactive) means nothing to track.
 if [ -t 0 ]; then
     exit 0
@@ -471,6 +479,10 @@ EOF
 toolName=$(decode_event_value "${toolNameCamel:-$toolNameSnake}")
 sessionId=$(decode_event_value "${sessionIdCamel:-$sessionIdSnake}")
 [ -n "$sessionId" ] && ! is_session_id "$sessionId" && sessionId=""
+# VS Code can run both the Copilot and Claude hooks for one tool call. The CLI uses the session
+# and tool call IDs to record only the first delivery.
+toolUseId=$(decode_event_value "$toolUseIdValue")
+[ -n "$toolUseId" ] && ! is_tool_use_id "$toolUseId" && toolUseId=""
 
 encodedToolInput="${toolArgsValue:-$toolInputValue}"
 [ "${#encodedToolInput}" -gt 8192 ] && exit 0
@@ -484,7 +496,6 @@ if [ "$AI_AGENT" = "github_copilot_app_agent" ]; then
 elif [ "$COPILOT_CLI" = "1" ]; then
     clientName="copilot-cli"
 elif [ -n "$hookEventNameValue" ]; then
-    toolUseId=$(decode_event_value "$toolUseIdValue")
     transcriptPath=$(decode_event_value "$transcriptPathValue")
     transcriptPathNorm=$(printf '%s' "$transcriptPath" | tr '\\' '/')
     case "$toolUseId$transcriptPathNorm" in
@@ -604,6 +615,7 @@ esac
 # (never concatenated into a shell string).
 args=(agent telemetry --event-type "$eventType" --client-name "$clientName" --timestamp "$timestamp")
 [ -n "$sessionId" ] && args+=(--session-id "$sessionId")
+[ -n "$sessionId" ] && [ -n "$toolUseId" ] && args+=(--tool-use-id "$toolUseId")
 [ -n "$skillName" ] && args+=(--skill-name "$skillName")
 [ -n "$mcpToolName" ] && args+=(--tool-name "$mcpToolName")
 [ -n "$fileReference" ] && args+=(--file-reference "$fileReference")

@@ -34,6 +34,7 @@ internal sealed class AgentTelemetryCommand : BaseCommand
 
     private readonly TelemetryManager _telemetryManager;
     private readonly AgentTelemetryHook _hook;
+    private readonly AgentTelemetryDeduplicator _deduplicator;
     private readonly IEnvironment _environment;
     private readonly ConsoleEnvironment _console;
     private readonly ILogger _logger;
@@ -69,6 +70,11 @@ internal sealed class AgentTelemetryCommand : BaseCommand
         Description = AgentCommandStrings.AgentTelemetryCommand_SessionIdDescription
     };
 
+    private readonly Option<string?> _toolUseIdOption = new(AgentTelemetryProtocol.ToolUseIdOptionName)
+    {
+        Description = AgentCommandStrings.AgentTelemetryCommand_ToolUseIdDescription
+    };
+
     private readonly Option<string?> _skillNameOption = new(AgentTelemetryProtocol.SkillNameOptionName)
     {
         Description = AgentCommandStrings.AgentTelemetryCommand_SkillNameDescription
@@ -90,11 +96,12 @@ internal sealed class AgentTelemetryCommand : BaseCommand
     };
 
     public AgentTelemetryCommand(CommonCommandServices services, TelemetryManager telemetryManager,
-        AgentTelemetryHook hook, IEnvironment environment, ConsoleEnvironment console)
+        AgentTelemetryHook hook, AgentTelemetryDeduplicator deduplicator, IEnvironment environment, ConsoleEnvironment console)
         : base(AgentTelemetryProtocol.TelemetryCommandName, AgentCommandStrings.AgentTelemetryCommand_Description, services)
     {
         _telemetryManager = telemetryManager;
         _hook = hook;
+        _deduplicator = deduplicator;
         _environment = environment;
         _console = console;
         _logger = services.LoggerFactory.CreateLogger<AgentTelemetryCommand>();
@@ -109,6 +116,7 @@ internal sealed class AgentTelemetryCommand : BaseCommand
         Options.Add(_eventTypeOption);
         Options.Add(_clientNameOption);
         Options.Add(_sessionIdOption);
+        Options.Add(_toolUseIdOption);
         Options.Add(_skillNameOption);
         Options.Add(_toolNameOption);
         Options.Add(_fileReferenceOption);
@@ -175,6 +183,16 @@ internal sealed class AgentTelemetryCommand : BaseCommand
         // Nothing valid survived validation (for example a newer hook script paired with an older
         // CLI dropped every field): emit no span rather than a tagless one.
         if (tags.Count is 0)
+        {
+            return;
+        }
+
+        // VS Code can run both the Copilot and Claude hooks for one tool call. Only the first
+        // delivery is recorded. Events without both IDs cannot be matched and are always recorded.
+        if (tags.Find(static t => t.Name == TelemetryConstants.Tags.AgentSessionId).Value is { } sessionId &&
+            parseResult.GetValue(_toolUseIdOption) is { } toolUseId &&
+            AgentTelemetryHook.IsToolUseId(toolUseId) &&
+            !_deduplicator.TryMarkFirst(sessionId, toolUseId))
         {
             return;
         }

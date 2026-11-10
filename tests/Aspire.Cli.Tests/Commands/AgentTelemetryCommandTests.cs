@@ -392,6 +392,34 @@ public class AgentTelemetryCommandTests(ITestOutputHelper outputHelper)
         }
     }
 
+    [Theory]
+    [InlineData("--session-id 11111111-1111-1111-1111-111111111111 --tool-use-id toolu_1", "--session-id 11111111-1111-1111-1111-111111111111 --tool-use-id toolu_1", 1)]
+    [InlineData("--session-id 11111111-1111-1111-1111-111111111111 --tool-use-id toolu_1", "--session-id 11111111-1111-1111-1111-111111111111 --tool-use-id toolu_2", 2)]
+    [InlineData("--session-id 11111111-1111-1111-1111-111111111111 --tool-use-id toolu_1", "--session-id 22222222-2222-2222-2222-222222222222 --tool-use-id toolu_1", 2)]
+    [InlineData("--tool-use-id toolu_1", "--tool-use-id toolu_1", 2)]
+    [InlineData("--session-id 11111111-1111-1111-1111-111111111111", "--session-id 11111111-1111-1111-1111-111111111111", 2)]
+    public async Task AgentTelemetry_RecordsRepeatedToolCallOnce(string firstIds, string secondIds, int expectedActivities)
+    {
+        var (capturedActivities, listener) = CreateCapturingListener(out var reportedSourceName);
+        using (listener)
+        {
+            using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+            var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+            {
+                options.TelemetryFactory = _ => TestTelemetryHelper.CreateInitializedTelemetry(reportedSourceName, $"Diag.{Path.GetRandomFileName()}");
+            });
+            using var provider = services.BuildServiceProvider();
+            var command = provider.GetRequiredService<RootCommand>();
+
+            Assert.Equal(CliExitCodes.Success, await command.Parse($"agent telemetry --event-type tool_invocation --client-name copilot-cli --tool-name aspire-list_resources {firstIds}").InvokeAsync().DefaultTimeout());
+            Assert.Equal(CliExitCodes.Success, await command.Parse($"agent telemetry --event-type tool_invocation --client-name claude-code --tool-name aspire-list_resources {secondIds}").InvokeAsync().DefaultTimeout());
+
+            Assert.Equal(expectedActivities, capturedActivities.Count);
+            Assert.Equal("copilot-cli", capturedActivities[0].GetTagItem(TelemetryConstants.Tags.AgentClientName));
+            Assert.All(capturedActivities, a => Assert.Null(a.GetTagItem("agent.tool_use_id")));
+        }
+    }
+
     private static (List<Activity> Activities, ActivityListener Listener) CreateCapturingListener(out string reportedSourceName)
     {
         reportedSourceName = $"Test.{Path.GetRandomFileName()}";

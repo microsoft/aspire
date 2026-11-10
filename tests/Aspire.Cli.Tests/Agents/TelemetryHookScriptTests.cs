@@ -223,6 +223,20 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
         AssertArg(args, "--tool-name", "mcp_aspire_list_resources");
     }
 
+    [Fact]
+    [RequiresTools(["bash"])]
+    [SkipOnPlatform(TestPlatforms.Windows, "The shell hook targets POSIX shells; the PowerShell hook covers Windows.")]
+    public async Task Bash_McpTool_ForwardsToolUseIdWithSession()
+    {
+        var run = await RunBashHookAsync(
+            """{"hook_event_name":"PostToolUse","tool_name":"mcp_aspire_list_resources","session_id":"11111111-2222-3333-4444-555555555555","tool_use_id":"toolu_01__vscode"}""");
+
+        AssertContinue(run);
+        var args = AssertInvoked(run);
+        AssertArg(args, "--session-id", "11111111-2222-3333-4444-555555555555");
+        AssertArg(args, "--tool-use-id", "toolu_01__vscode");
+    }
+
     // Copilot CLI delivers toolArgs as a JSON-encoded STRING (e.g. "toolArgs":"{\"skill\":\"aspire\"}"),
     // not a nested object, so its skill/view events look different on the wire than every other client.
     // These fixtures capture that real shape to lock in the shape-agnostic extraction.
@@ -466,6 +480,19 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
         // A __vscode marker in tool_use_id distinguishes the VS Code client from Claude Code.
         AssertArg(args, "--client-name", "vscode");
         AssertArg(args, "--tool-name", "mcp_aspire_list_resources");
+    }
+
+    [Fact]
+    [RequiresTools(["pwsh"])]
+    public async Task Pwsh_McpTool_ForwardsToolUseIdWithSession()
+    {
+        var run = await RunPwshHookAsync(
+            """{"hook_event_name":"PostToolUse","tool_name":"mcp_aspire_list_resources","session_id":"11111111-2222-3333-4444-555555555555","tool_use_id":"toolu_01__vscode"}""");
+
+        AssertContinue(run);
+        var args = AssertInvoked(run);
+        AssertArg(args, "--session-id", "11111111-2222-3333-4444-555555555555");
+        AssertArg(args, "--tool-use-id", "toolu_01__vscode");
     }
 
     // Copilot CLI delivers toolArgs as a JSON-encoded STRING (e.g. "toolArgs":"{\"skill\":\"aspire\"}"),

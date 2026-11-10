@@ -16,6 +16,7 @@ internal static class AgentTelemetryProtocol
     internal const string EventTypeOptionName = "--event-type";
     internal const string ClientNameOptionName = "--client-name";
     internal const string SessionIdOptionName = "--session-id";
+    internal const string ToolUseIdOptionName = "--tool-use-id";
     internal const string SkillNameOptionName = "--skill-name";
     internal const string ToolNameOptionName = "--tool-name";
     internal const string FileReferenceOptionName = "--file-reference";
