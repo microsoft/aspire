@@ -66,51 +66,193 @@ aspire start --apphost playground\TestShop\TestShop.AppHost\TestShop.AppHost.csp
 
 For IDE run/debug, put `"Aspire__LaunchGroup": "catalog"` in the AppHost launch profile's
 `environmentVariables`. TestShop provides `https_catalog`, `https_basket`, and
-`https_frontend` profiles. The same configuration contract applies regardless of
-whether the CLI, Visual Studio, or VS Code launches the AppHost. The CLI option is
-also preserved when an Aspire terminal delegates run/debug to VS Code.
+`https_frontend` profiles. The CLI option is also preserved when an Aspire terminal
+delegates run/debug to VS Code.
 
 Omit the selection to preserve the existing full-application run.
 
 ## Startup behavior
 
-Selecting a launch group only mutates the application model before startup.
-Unless opted out as described below, every resource without explicit membership
-in the selected group is marked with `WithExplicitStart`, including resources in
-other groups and resources with no group membership. Existing explicit-start
-settings are preserved, even for members of the selected group.
+Selected members remain eligible for automatic startup unless they are already
+marked for explicit start. Resources excluded from launch-group selection keep their
+existing startup configuration. Other resources stay in the model and are marked
+for explicit start, including resources in other groups and resources with no group
+membership. Group membership does not override an existing `WithExplicitStart`.
 
 Membership is not inherited from parents or inferred from dependencies,
 references, or connection strings. Assign every resource that should start to the
 group explicitly. Use `WithLaunchGroups` for resources shared by multiple groups.
-Selection does not evaluate environment or argument callbacks.
 
-After selection, normal explicit-start behavior applies. Existing `WaitFor`,
-`WaitForStart`, and `WaitForCompletion` relationships still control readiness and
-ordering, but do not select or automatically start dependencies. A selected
-resource can therefore wait for an unselected dependency until that dependency is
-started manually.
+Before startup, Aspire validates required, declaratively recorded local dependencies
+of automatically starting resources, including transitive dependencies. These include
+reference relationships, `WaitFor`, `WaitForStart`, `WaitForCompletion`, and
+connection-string redirects. If a required local dependency would not start
+automatically, startup fails with the resource and dependency names. This includes
+dependencies marked with `WithExplicitStart`, even if they belong to the group.
+Parameters, connection-string resources, external services, and resources without a
+lifetime are not local execution dependencies.
 
-Start, stop, restart, health monitoring, persistent-resource reuse, and project
-builds behave exactly as they do with ordinary `WithExplicitStart` resources.
-Starting an excluded resource does not start its dependencies or other group
-members. Launch groups do not introduce build deferral or build serialization.
+Add required dependencies to the group; they are not added automatically.
+`WithReference` does not imply a readiness wait: use `WaitFor` when the dependent
+must wait for readiness. If a dependency is genuinely optional at startup, use
+`WithOptionalLaunchGroupDependency(dependency)` on the dependent resource. This
+marks the reference optional for launch-group validation; it does not remove a
+separate `WaitFor` or make the application able to run without the dependency.
+
+Preflight does not execute `WithEnvironment` or `WithArgs` callbacks. A dependency
+used only inside a callback must also be declared with `WithReferenceRelationship`
+to be validated. The guarantee covers declared model dependencies, not arbitrary
+callback code.
+
+After startup, manual Start and Restart use the ordinary resource lifecycle. They
+do not enforce the group or automatically start dependencies. Start those
+dependencies yourself if the resource needs them.
 
 Resources marked with `ExcludeFromLaunchGroupSelectionAnnotation` keep their
 existing startup configuration regardless of group membership. The annotation
 does not remove an existing `WithExplicitStart` setting. It is currently applied
 to the internal .NET coordinated build resources, the framework dashboard, and
-per-replica terminal support hosts. Builds and the dashboard retain their normal
-automatic startup. Terminal hosts remain available even for unselected workloads,
-so those workloads can still be started manually later without starting hidden
-dependencies separately. Other hidden resources do not automatically opt out.
-
-The existing shared build plan may also build projects that are not selected to
-run; launch groups do not change which projects the build coordinator builds.
+per-replica terminal support hosts. Initial builds and the dashboard retain their
+automatic startup; deferred builds start on demand. Terminal hosts remain
+available even for unselected workloads, so those workloads can still be started
+manually later without starting hidden dependencies separately. Other hidden
+resources do not automatically opt out.
 
 The selection lasts for the AppHost session. Watch/rebuild of a running resource
 retains the selection; restarting/reloading the AppHost recomputes it. Editing the
 configuration does not dynamically switch groups in an already running AppHost.
+
+## Project builds
+
+When a group is selected, the AppHost's .NET build coordinator initially builds
+automatically starting coordinator-owned project roots and their MSBuild
+`ProjectReference` dependencies. An unrelated, excluded coordinator-owned project
+root is not built initially. Compatible registrations of the same physical project
+share one coordinated build, including when that build is deferred until cold Start.
+A compile-time reference can still build a project whose resource is excluded from
+runtime startup; building it does not start that resource.
+
+An ordinary Start of an excluded, never-built non-persistent .NET project builds
+it before launch. A separate Rebuild is not required. Build-completion consumers,
+such as EF migration commands, trigger or join the needed build without waiting
+for the application to be ready.
+
+Coordinator-owned output-writing builds are conservatively serialized. This includes
+initial builds, deferred cold-Start builds, and Rebuild commands, so separate build
+processes do not race while writing shared `bin` and `obj` directories.
+
+There are two eager exceptions:
+
+- Legacy AppHost `ProjectReference` projects build as part of the AppHost build.
+- .NET resources with an effective persistent lifetime, including an inherited
+  lifetime, build eagerly because DCP registration needs their build-produced run
+  properties. They do not automatically start just because they were built.
+
+Build ownership remains capability-based. An extension host that owns project builds
+does not also use AppHost-owned coordinated builds. Without a selected group, normal
+full-run build behavior applies. Publishing is unchanged. Further work on fully lazy
+persistent and legacy builds is tracked in
+[issue #22075](https://github.com/microsoft/aspire/issues/22075).
+
+### Try selective builds and cold Start
+
+In an AppHost with `Aspire.Hosting.Dotnet`, use two independent .NET projects and
+no AppHost `ProjectReference` to either project. Replace the paths with your
+projects. Run the commands from the AppHost directory.
+
+```csharp
+#pragma warning disable ASPIRELAUNCHGROUPS001
+
+var builder = DistributedApplication.CreateBuilder(args);
+builder.AddDotnetProject("alpha", "../Alpha/Alpha.csproj").WithLaunchGroup("alpha");
+builder.AddDotnetProject("beta", "../Beta/Beta.csproj").WithLaunchGroup("beta");
+builder.Build().Run();
+```
+
+```bash
+aspire run --launch-group alpha
+```
+
+With AppHost-owned builds, the initial coordinated build includes `alpha`, not
+the unrelated `beta` root. Check the build output; previously existing artifacts
+are not evidence that a project built in this run. Start `beta` from the dashboard,
+or in another terminal:
+
+```bash
+aspire resource beta start
+```
+
+The cold Start builds `beta` before launching it. To try the failure path, introduce
+a compile error in `Beta`, start it, fix the error, and select Start again. The
+new attempt retries the build before launching.
+
+### Compile references and runtime dependencies
+
+If `Alpha.csproj` has a `ProjectReference` to `Shared.csproj`, MSBuild builds
+`Shared` with `alpha`, even if a separate resource for `Shared` is outside the
+selected group. That compile-time reference does not start the resource or create
+a runtime readiness wait.
+
+For a runtime dependency, declare membership and readiness separately. In these
+snippets, `Backend` is a web project with an `http` launch-profile endpoint.
+Use either snippet in place of the resources in the earlier AppHost:
+
+```csharp
+var backend = builder.AddDotnetProject("backend", "../Backend/Backend.csproj")
+    .WithLaunchGroup("frontend");
+builder.AddDotnetProject("frontend", "../Frontend/Frontend.csproj")
+    .WithLaunchGroup("frontend")
+    .WithReference(backend)
+    .WaitFor(backend);
+```
+
+```bash
+aspire run --launch-group frontend
+```
+
+If the frontend only uses the backend inside a callback, use this alternative and
+declare the relationship explicitly so preflight can see it:
+
+```csharp
+var backend = builder.AddDotnetProject("backend", "../Backend/Backend.csproj")
+    .WithLaunchGroup("frontend");
+builder.AddDotnetProject("frontend", "../Frontend/Frontend.csproj")
+    .WithLaunchGroup("frontend")
+    .WithReferenceRelationship(backend.Resource)
+    .WithEnvironment(context => context.EnvironmentVariables["BACKEND_URL"] = backend.GetEndpoint("http"));
+```
+
+This relationship does not wait for readiness. Add `.WaitFor(backend)` if needed.
+If `backend` is instead assigned only to another group, selecting `frontend`
+fails preflight rather than starting it implicitly.
+
+### Try the eager exceptions
+
+With the independent `alpha` and `beta` example above, a legacy AppHost project
+reference to `Beta.csproj` makes Beta part of the AppHost build even when `alpha`
+is selected. Add this to an `ItemGroup` in the AppHost project:
+
+```xml
+<ProjectReference Include="../Beta/Beta.csproj" />
+```
+
+Alternatively, remove that AppHost reference and replace the earlier `beta`
+registration with:
+
+```csharp
+#pragma warning disable ASPIREPERSISTENCE001
+
+builder.AddDotnetProject("beta", "../Beta/Beta.csproj")
+    .WithLaunchGroup("beta")
+    .WithPersistentLifetime();
+```
+
+```bash
+aspire run --launch-group alpha
+```
+
+Beta builds eagerly in either case, but remains explicitly started when it is
+outside the selected group.
 
 ## TestShop
 
@@ -123,8 +265,21 @@ service. The `frontend` group includes the frontend and gateway, both services,
 and their database/cache/messaging dependencies, but not the order processor.
 The `orders` group contains messaging and the order processor.
 
-The shared .NET build runs automatically before the selected projects launch.
+TestShop's AppHost has legacy `ProjectReference` entries for its projects, so it
+is not a clean demonstration of deferred initial builds. Its `catalogservice`
+and `basketservice` both reference `TestShop.ServiceDefaults` at compile time;
+that does not make either service a runtime dependency of the other.
 
 To start `basketservice` after a catalog-only run, manually start its dependencies
-(`basketcache` and `messaging`) as well. Stop and clear `Aspire:LaunchGroup` (or choose
-the ordinary `https` launch profile) for a full run.
+(`basketcache` and `messaging`) as well. Start does not automatically start them:
+
+```bash
+aspire run --apphost playground/TestShop/TestShop.AppHost/TestShop.AppHost.csproj --launch-group catalog
+# In another terminal:
+aspire resource basketcache start --apphost playground/TestShop/TestShop.AppHost/TestShop.AppHost.csproj
+aspire resource messaging start --apphost playground/TestShop/TestShop.AppHost/TestShop.AppHost.csproj
+aspire resource basketservice start --apphost playground/TestShop/TestShop.AppHost/TestShop.AppHost.csproj
+```
+
+Stop and clear `Aspire:LaunchGroup` (or choose the ordinary `https` launch profile)
+for a full run.

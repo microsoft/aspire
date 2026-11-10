@@ -1080,6 +1080,22 @@ internal sealed class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAsyncDispo
         return matchingResource;
     }
 
+    public IResourceReference GetResource(IResource modelResource)
+    {
+        var matchingResources = _appResources.Get()
+            .OfType<RenderedModelResource<Executable>>()
+            .Where(r => ReferenceEquals(r.ModelResource, modelResource))
+            .Cast<IResourceReference>()
+            .ToArray();
+        if (matchingResources.Length != 1)
+        {
+            throw new InvalidOperationException(
+                $"Expected one DCP resource for model resource '{modelResource.Name}', found {matchingResources.Length}.");
+        }
+
+        return matchingResources[0];
+    }
+
     public async Task StopResourceAsync(IResourceReference resourceReference, CancellationToken cancellationToken)
     {
         _logger.LogDebug("Stopping resource '{ResourceName}'...", resourceReference.DcpResourceName);

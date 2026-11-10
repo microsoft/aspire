@@ -1188,7 +1188,7 @@ internal sealed class PythonModuleBuilder
             def _marshal_transport_value(self, value: typing.Any) -> typing.Any:
                 if callable(value):
                     return self.register_callback(value)
-                if isinstance(value, dict):
+                if isinstance(value, typing.Mapping):
                     return {key: self._marshal_transport_value(nested_value) for key, nested_value in value.items()}
                 if isinstance(value, (list, tuple)):
                     return [self._marshal_transport_value(item) for item in value]
@@ -1741,13 +1741,33 @@ internal sealed class PythonModuleBuilder
                 )
 
 
+        class _LazyNormalizedMapping(typing.Mapping[typing.Any, typing.Any]):
+            def __init__(self, value: typing.Mapping[typing.Any, typing.Any]) -> None:
+                self._value = value
+                self._normalized: dict[typing.Any, typing.Any] = {}
+
+            def __getitem__(self, key: typing.Any) -> typing.Any:
+                if key not in self._normalized:
+                    self._normalized[key] = _normalize_constructor_value(self._value[key])
+                return self._normalized[key]
+
+            def __iter__(self) -> typing.Iterator[typing.Any]:
+                return iter(self._value)
+
+            def __len__(self) -> int:
+                return len(self._value)
+
+            def __contains__(self, key: object) -> bool:
+                return key in self._value
+
+
         def _normalize_constructor_value(value: typing.Any) -> typing.Any:
-            # Validation must not exhaust generators that are later sent over JSON-RPC.
-            # Preserve tuple and mapping shapes used to select constructor overloads.
-            if isinstance(value, (str, _ReferenceHandle)) or callable(value):
+            # Cache values only when accessed: a mapping used as an Iterable yields
+            # keys, while mapping and constructor-parameter overloads need values.
+            if isinstance(value, (str, _ReferenceHandle, _LazyNormalizedMapping)) or callable(value):
                 return value
             if isinstance(value, typing.Mapping):
-                return {key: _normalize_constructor_value(item) for key, item in value.items()}
+                return _LazyNormalizedMapping(value)
             if isinstance(value, tuple):
                 return tuple(_normalize_constructor_value(item) for item in value)
             if isinstance(value, typing.Iterable):
@@ -1800,6 +1820,8 @@ internal sealed class PythonModuleBuilder
                         return False
             elif typing.get_origin(expected_type) is typing.get_origin(typing.Callable):
                 return callable(arg)
+            elif typing.get_origin(expected_type) in (typing.Union, types.UnionType):
+                return any(_validate_type(arg, subtype) for subtype in typing.get_args(expected_type))
             elif isinstance(arg, (tuple, typing.Mapping)):
                 return False
             elif typing.get_origin(expected_type) is typing.Literal:

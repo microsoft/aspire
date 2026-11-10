@@ -4,7 +4,8 @@
 extern alias HostingDotnet;
 
 #pragma warning disable ASPIREEXTENSION001, ASPIREPROJECTS001
-#pragma warning disable ASPIRELAUNCHGROUPS001 // Verifies launch-group selection preserves coordinated builds.
+#pragma warning disable ASPIRELAUNCHGROUPS001 // Verifies launch-group selection scopes coordinated builds.
+#pragma warning disable ASPIREPERSISTENCE001 // Covers eager builds for persistent .NET resources.
 
 using System.IO.Compression;
 using System.Reflection;
@@ -65,15 +66,19 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         builder.Pipeline.WithFinalAction(WellKnownPipelineSteps.BeforeStart, context =>
         {
             var builds = context.Model.Resources.OfType<DotnetProjectBuildResource>().ToArray();
-            Assert.Equal(separateBuildEnvironment ? ["__dotnet-project-build", "__dotnet-project-build-2"] : ["__dotnet-project-build"],
-                builds.Select(build => build.Name));
+            Assert.Equal(["__dotnet-project-build", "__dotnet-project-build-2"], builds.Select(build => build.Name));
             Assert.All(builds, build =>
             {
                 Assert.True(build.HasAnnotationOfType<ExcludeFromLaunchGroupSelectionAnnotation>());
-                Assert.False(build.HasAnnotationOfType<ExplicitStartupAnnotation>());
             });
-            AssertBuildDependency(api.Resource, builds[^1]);
-            AssertBuildDependency(worker.Resource, builds[^1]);
+            var apiBuild = Assert.Single(builds, build =>
+                build.ProjectPaths.SequenceEqual([NormalizeProjectPath(apiProject)]));
+            var workerBuild = Assert.Single(builds, build =>
+                build.ProjectPaths.SequenceEqual([NormalizeProjectPath(workerProject)]));
+            Assert.False(apiBuild.HasAnnotationOfType<ExplicitStartupAnnotation>());
+            Assert.True(workerBuild.HasAnnotationOfType<ExplicitStartupAnnotation>());
+            AssertBuildDependency(api.Resource, apiBuild);
+            AssertBuildDependency(worker.Resource, workerBuild);
             Assert.False(api.Resource.HasAnnotationOfType<ExplicitStartupAnnotation>());
             Assert.True(worker.Resource.HasAnnotationOfType<ExplicitStartupAnnotation>());
             Assert.All(context.Model.Resources.Where(resource => resource is not DotnetProjectBuildResource),
@@ -97,9 +102,353 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
 
         Assert.Equal("shared", File.ReadAllText(apiSentinel));
         Assert.False(File.Exists(workerSentinel));
-        Assert.Equal(separateBuildEnvironment ? 2 : 1, File.ReadAllLines(GetBuildCountPath(sharedProject)).Length);
+        Assert.Single(File.ReadAllLines(GetBuildCountPath(sharedProject)));
         Assert.Single(File.ReadAllLines(GetBuildCountPath(apiProject)));
+        Assert.False(File.Exists(GetBuildCountPath(workerProject)));
+    }
+
+    [Fact]
+    [RequiresTools(["dotnet"])]
+    public async Task ColdStartOfExcludedProjectBuildsBeforeRunning()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var sharedProject = CreateSharedProject(workspace.Path);
+        var apiProject = CreateConsoleProject(workspace.Path, "Api", sharedProject);
+        var workerProject = CreateConsoleProject(workspace.Path, "Worker", sharedProject);
+        var apiSentinel = Path.Combine(workspace.Path, "api-ran.txt");
+        var workerSentinel = Path.Combine(workspace.Path, "worker-ran.txt");
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path,
+            outputHelper).WithResourceCleanUp(true);
+        builder.Configuration["Aspire:LaunchGroup"] = "catalog";
+        builder.AddDotnetProject("api", apiProject, options => options.ExcludeLaunchProfile = true)
+            .WithArgs(apiSentinel)
+            .WithLaunchGroup("catalog");
+        builder.AddDotnetProject("worker", workerProject, options => options.ExcludeLaunchProfile = true)
+            .WithArgs(workerSentinel)
+            .WithLaunchGroup("basket");
+        await using var app = builder.Build();
+
+        using (var startup = new CancellationTokenSource(TestConstants.LongTimeoutTimeSpan))
+        {
+            await app.StartAsync(startup.Token);
+        }
+        using (var apiCompletion = new CancellationTokenSource(TestConstants.LongTimeoutTimeSpan))
+        {
+            await app.ResourceNotifications.WaitForResourceAsync("api", KnownResourceStates.Finished, apiCompletion.Token);
+        }
+
+        Assert.True(File.Exists(apiSentinel));
+        Assert.False(File.Exists(workerSentinel));
+        Assert.False(File.Exists(GetBuildCountPath(workerProject)));
+
+        using (var coldStart = new CancellationTokenSource(TestConstants.LongTimeoutTimeSpan))
+        {
+            var orchestrator = app.Services.GetRequiredService<ApplicationOrchestratorProxy>();
+            var worker = builder.Resources.Single(resource => resource.Name == "worker");
+            Assert.True(worker.TryGetInstances(out var workerInstances));
+            await orchestrator.StartResourceAsync(workerInstances[0].Name, coldStart.Token);
+            await app.ResourceNotifications.WaitForResourceAsync("worker", KnownResourceStates.Finished, coldStart.Token);
+        }
+
+        Assert.True(File.Exists(workerSentinel));
         Assert.Single(File.ReadAllLines(GetBuildCountPath(workerProject)));
+
+        using var shutdown = new CancellationTokenSource(TestConstants.LongTimeoutTimeSpan);
+        await app.StopAsync(shutdown.Token);
+    }
+
+    [Fact]
+    [RequiresTools(["dotnet"])]
+    public async Task ConcurrentColdStartsOfDuplicateRegistrationsShareOneBuild()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var sharedProject = CreateSharedProject(workspace.Path);
+        var apiProject = CreateConsoleProject(workspace.Path, "Api", sharedProject);
+        var workerProject = CreateConsoleProject(workspace.Path, "Worker", sharedProject);
+        var apiSentinel = Path.Combine(workspace.Path, "api-ran.txt");
+        var firstSentinel = Path.Combine(workspace.Path, "worker1-ran.txt");
+        var secondSentinel = Path.Combine(workspace.Path, "worker2-ran.txt");
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path,
+            outputHelper).WithResourceCleanUp(true);
+        builder.Configuration["Aspire:LaunchGroup"] = "catalog";
+        builder.AddDotnetProject("api", apiProject, options => options.ExcludeLaunchProfile = true)
+            .WithArgs(apiSentinel)
+            .WithLaunchGroup("catalog");
+        builder.AddDotnetProject("worker1", workerProject, options => options.ExcludeLaunchProfile = true)
+            .WithArgs(firstSentinel)
+            .WithLaunchGroup("basket");
+        builder.AddDotnetProject("worker2", workerProject, options => options.ExcludeLaunchProfile = true)
+            .WithArgs(secondSentinel)
+            .WithLaunchGroup("basket");
+        await using var app = builder.Build();
+
+        using var timeout = new CancellationTokenSource(TestConstants.LongTimeoutTimeSpan);
+        await app.StartAsync(timeout.Token);
+        await app.ResourceNotifications.WaitForResourceAsync("api", KnownResourceStates.Finished, timeout.Token);
+        Assert.False(File.Exists(GetBuildCountPath(workerProject)));
+
+        var orchestrator = app.Services.GetRequiredService<ApplicationOrchestratorProxy>();
+        await Task.WhenAll(
+            StartColdAsync(app, orchestrator, builder, "worker1", timeout.Token),
+            StartColdAsync(app, orchestrator, builder, "worker2", timeout.Token));
+
+        Assert.Equal("shared", File.ReadAllText(firstSentinel));
+        Assert.Equal("shared", File.ReadAllText(secondSentinel));
+        Assert.Single(File.ReadAllLines(GetBuildCountPath(workerProject)));
+
+        await app.StopAsync(timeout.Token);
+    }
+
+    [Fact]
+    [RequiresTools(["dotnet"])]
+    public async Task ConcurrentColdStartsOfRootsSharingACompileDependencyAreSerialized()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var sharedProject = CreateSharedProject(workspace.Path);
+        var apiProject = CreateConsoleProject(workspace.Path, "Api", sharedProject);
+        var basketProject = CreateConsoleProject(workspace.Path, "Basket", sharedProject);
+        var ordersProject = CreateConsoleProject(workspace.Path, "Orders", sharedProject);
+        var apiSentinel = Path.Combine(workspace.Path, "api-ran.txt");
+        var basketSentinel = Path.Combine(workspace.Path, "basket-ran.txt");
+        var ordersSentinel = Path.Combine(workspace.Path, "orders-ran.txt");
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path,
+            outputHelper).WithResourceCleanUp(true);
+        builder.Configuration["Aspire:LaunchGroup"] = "catalog";
+        builder.AddDotnetProject("api", apiProject, options => options.ExcludeLaunchProfile = true)
+            .WithArgs(apiSentinel)
+            .WithLaunchGroup("catalog");
+        builder.AddDotnetProject("basket", basketProject, options => options.ExcludeLaunchProfile = true)
+            .WithArgs(basketSentinel)
+            .WithLaunchGroup("basket");
+        builder.AddDotnetProject("orders", ordersProject, options => options.ExcludeLaunchProfile = true)
+            .WithArgs(ordersSentinel)
+            .WithLaunchGroup("orders");
+        await using var app = builder.Build();
+
+        using var timeout = new CancellationTokenSource(TestConstants.LongTimeoutTimeSpan);
+        await app.StartAsync(timeout.Token);
+        await app.ResourceNotifications.WaitForResourceAsync("api", KnownResourceStates.Finished, timeout.Token);
+
+        var orchestrator = app.Services.GetRequiredService<ApplicationOrchestratorProxy>();
+        await Task.WhenAll(
+            StartColdAsync(app, orchestrator, builder, "basket", timeout.Token),
+            StartColdAsync(app, orchestrator, builder, "orders", timeout.Token));
+
+        Assert.Equal("shared", File.ReadAllText(basketSentinel));
+        Assert.Equal("shared", File.ReadAllText(ordersSentinel));
+        Assert.Single(File.ReadAllLines(GetBuildCountPath(basketProject)));
+        Assert.Single(File.ReadAllLines(GetBuildCountPath(ordersProject)));
+
+        await app.StopAsync(timeout.Token);
+    }
+
+    [Fact]
+    [RequiresTools(["dotnet"])]
+    public async Task ColdStartBuildFailureBlocksLaunchUntilRepaired()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var sharedProject = CreateSharedProject(workspace.Path);
+        var apiProject = CreateConsoleProject(workspace.Path, "Api", sharedProject);
+        var workerProject = CreateConsoleProject(workspace.Path, "Worker", sharedProject);
+        var workerProgram = Path.Combine(Path.GetDirectoryName(workerProject)!, "Program.cs");
+        var workingProgram = File.ReadAllText(workerProgram);
+        File.WriteAllText(workerProgram, "this does not compile");
+        var apiSentinel = Path.Combine(workspace.Path, "api-ran.txt");
+        var workerSentinel = Path.Combine(workspace.Path, "worker-ran.txt");
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path,
+            outputHelper).WithResourceCleanUp(true);
+        builder.Configuration["Aspire:LaunchGroup"] = "catalog";
+        builder.AddDotnetProject("api", apiProject, options => options.ExcludeLaunchProfile = true)
+            .WithArgs(apiSentinel)
+            .WithLaunchGroup("catalog");
+        builder.AddDotnetProject("worker", workerProject, options => options.ExcludeLaunchProfile = true)
+            .WithArgs(workerSentinel)
+            .WithLaunchGroup("basket");
+        await using var app = builder.Build();
+
+        using var timeout = new CancellationTokenSource(TestConstants.LongTimeoutTimeSpan);
+        await app.StartAsync(timeout.Token);
+        await app.ResourceNotifications.WaitForResourceAsync("api", KnownResourceStates.Finished, timeout.Token);
+
+        var orchestrator = app.Services.GetRequiredService<ApplicationOrchestratorProxy>();
+        var worker = builder.Resources.Single(resource => resource.Name == "worker");
+        Assert.True(worker.TryGetInstances(out var workerInstances));
+        var failure = await Assert.ThrowsAsync<DistributedApplicationException>(
+            () => orchestrator.StartResourceAsync(workerInstances[0].Name, timeout.Token));
+        Assert.Contains("coordinated .NET build failed with exit code 1", failure.Message);
+        await app.ResourceNotifications.WaitForResourceAsync("worker", KnownResourceStates.FailedToStart, timeout.Token);
+        Assert.False(File.Exists(workerSentinel));
+
+        File.WriteAllText(workerProgram, workingProgram);
+        await StartColdAsync(app, orchestrator, builder, "worker", timeout.Token);
+
+        Assert.Equal("shared", File.ReadAllText(workerSentinel));
+        Assert.Equal(2, File.ReadAllLines(GetBuildCountPath(workerProject)).Length);
+
+        await app.StopAsync(timeout.Token);
+    }
+
+    [Fact]
+    [RequiresTools(["dotnet"])]
+    public async Task RepeatedStartOfColdBuiltProjectReusesSuccessfulBuild()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var sharedProject = CreateSharedProject(workspace.Path);
+        var apiProject = CreateConsoleProject(workspace.Path, "Api", sharedProject);
+        var workerProject = CreateConsoleProject(workspace.Path, "Worker", sharedProject);
+        var workerSentinel = Path.Combine(workspace.Path, "worker-ran.txt");
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path,
+            outputHelper).WithResourceCleanUp(true);
+        builder.Configuration["Aspire:LaunchGroup"] = "catalog";
+        builder.AddDotnetProject("api", apiProject, options => options.ExcludeLaunchProfile = true)
+            .WithArgs(Path.Combine(workspace.Path, "api-ran.txt"))
+            .WithLaunchGroup("catalog");
+        builder.AddDotnetProject("worker", workerProject, options => options.ExcludeLaunchProfile = true)
+            .WithArgs(workerSentinel)
+            .WithLaunchGroup("basket");
+        await using var app = builder.Build();
+
+        using var timeout = new CancellationTokenSource(TestConstants.LongTimeoutTimeSpan);
+        await app.StartAsync(timeout.Token);
+        await app.ResourceNotifications.WaitForResourceAsync("api", KnownResourceStates.Finished, timeout.Token);
+
+        var orchestrator = app.Services.GetRequiredService<ApplicationOrchestratorProxy>();
+        await StartColdAsync(app, orchestrator, builder, "worker", timeout.Token);
+        File.Delete(workerSentinel);
+        await StartColdAsync(app, orchestrator, builder, "worker", timeout.Token);
+
+        Assert.Equal("shared", File.ReadAllText(workerSentinel));
+        Assert.Single(File.ReadAllLines(GetBuildCountPath(workerProject)));
+
+        await app.StopAsync(timeout.Token);
+    }
+
+    [Fact]
+    [RequiresTools(["dotnet"])]
+    public async Task CanceledBuildCompletionWaiterDoesNotCancelSharedDeferredBuild()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var sharedProject = CreateSharedProject(workspace.Path);
+        var apiProject = CreateConsoleProject(workspace.Path, "Api", sharedProject);
+        var workerProject = CreateConsoleProject(workspace.Path, "Worker", sharedProject);
+        var workerSentinel = Path.Combine(workspace.Path, "worker-ran.txt");
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path,
+            outputHelper).WithResourceCleanUp(true);
+        builder.Configuration["Aspire:LaunchGroup"] = "catalog";
+        builder.AddDotnetProject("api", apiProject, options => options.ExcludeLaunchProfile = true)
+            .WithArgs(Path.Combine(workspace.Path, "api-ran.txt"))
+            .WithLaunchGroup("catalog");
+        var worker = builder.AddDotnetProject("worker", workerProject, options => options.ExcludeLaunchProfile = true)
+            .WithArgs(workerSentinel)
+            .WithLaunchGroup("basket");
+        await using var app = builder.Build();
+
+        using var timeout = new CancellationTokenSource(TestConstants.LongTimeoutTimeSpan);
+        await app.StartAsync(timeout.Token);
+        await app.ResourceNotifications.WaitForResourceAsync("api", KnownResourceStates.Finished, timeout.Token);
+        Assert.False(File.Exists(GetBuildCountPath(workerProject)));
+
+        // Build-completion consumers such as EF commands need output without starting the runtime resource.
+        var completion = Assert.Single(worker.Resource.Annotations.OfType<DotnetProgramBuildCompletionAnnotation>());
+        using var abandoned = CancellationTokenSource.CreateLinkedTokenSource(timeout.Token);
+        var abandonedWait = completion.Callback(app.Services, abandoned.Token);
+        var retainedWait = completion.Callback(app.Services, timeout.Token);
+        abandoned.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => abandonedWait);
+        await retainedWait;
+
+        Assert.Single(File.ReadAllLines(GetBuildCountPath(workerProject)));
+        Assert.False(File.Exists(workerSentinel));
+        Assert.True(app.ResourceNotifications.TryGetCurrentState("worker", out var workerEvent));
+        Assert.Equal(KnownResourceStates.NotStarted, workerEvent.Snapshot.State?.Text);
+
+        await app.StopAsync(timeout.Token);
+    }
+
+    private static async Task StartColdAsync(
+        DistributedApplication app,
+        ApplicationOrchestratorProxy orchestrator,
+        IDistributedApplicationBuilder builder,
+        string resourceName,
+        CancellationToken cancellationToken)
+    {
+        var resource = builder.Resources.Single(resource => resource.Name == resourceName);
+        Assert.True(resource.TryGetInstances(out var instances));
+        await orchestrator.StartResourceAsync(instances[0].Name, cancellationToken);
+        await app.ResourceNotifications.WaitForResourceAsync(resourceName, KnownResourceStates.Finished, cancellationToken);
+    }
+
+    [Fact]
+    [RequiresTools(["dotnet"])]
+    public async Task LaunchGroupWithoutAutomaticDotnetRootRetainsDeferredBuildRegistration()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path,
+            outputHelper);
+        builder.Configuration["Aspire:LaunchGroup"] = "catalog";
+        builder.AddParameter("selected").WithLaunchGroup("catalog");
+        var projectPath = CreateProject(workspace.Path, "Worker", "Worker.csproj");
+        var project = builder.AddDotnetProject("worker", projectPath, options => options.ExcludeLaunchProfile = true);
+        await using var app = builder.Build();
+
+        await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
+
+        var buildResource = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
+        Assert.True(buildResource.HasAnnotationOfType<ExplicitStartupAnnotation>());
+        Assert.True(project.Resource.HasAnnotationOfType<ExplicitStartupAnnotation>());
+        Assert.Equal([NormalizeProjectPath(projectPath)], buildResource.ProjectPaths);
+        AssertBuildDependency(project.Resource, buildResource);
+        Assert.Contains(project.Resource, builder.Resources);
+    }
+
+    [Theory]
+    [InlineData(PersistenceMode.Persistent)]
+    [InlineData(PersistenceMode.ParentProcess)]
+    [InlineData(PersistenceMode.Resource)]
+    [RequiresTools(["dotnet"])]
+    public async Task PersistentExplicitStartProjectBuildsEagerlyForSelectedGroup(PersistenceMode persistenceMode)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path,
+            outputHelper);
+        builder.Configuration["Aspire:LaunchGroup"] = "catalog";
+        builder.AddParameter("selected").WithLaunchGroup("catalog");
+        var projectPath = CreateProject(workspace.Path, "Worker", "Worker.csproj");
+        var project = builder.AddDotnetProject("worker", projectPath, options => options.ExcludeLaunchProfile = true)
+            .WithExplicitStart();
+
+        switch (persistenceMode)
+        {
+            case PersistenceMode.Persistent:
+                project.WithPersistentLifetime();
+                break;
+            case PersistenceMode.ParentProcess:
+                project.WithParentProcessLifetime(Environment.ProcessId);
+                break;
+            case PersistenceMode.Resource:
+                var source = builder.AddContainer("source", "image").WithPersistentLifetime();
+                project.WithLifetimeOf(source);
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(persistenceMode), persistenceMode, null);
+        }
+
+        await using var app = builder.Build();
+        await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
+
+        var buildResource = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
+        Assert.False(buildResource.HasAnnotationOfType<ExplicitStartupAnnotation>());
+        Assert.True(project.Resource.HasAnnotationOfType<ExplicitStartupAnnotation>());
+        AssertBuildDependency(project.Resource, buildResource);
     }
 
     [Fact]
@@ -1721,6 +2070,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
 
         var buildResource = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
+        Assert.False(buildResource.HasAnnotationOfType<ExplicitStartupAnnotation>());
         const string compilerError = "/src/Worker/Program.cs(3,1): error CS1002: ; expected [/src/Worker/Worker.csproj]";
         var getReadCount = UseBuildOutput(app, buildResource, compilerError);
         await builder.Eventing.PublishAsync(
@@ -5077,16 +5427,23 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         DotnetProjectResource resource,
         DotnetProjectBuildResource buildResource)
     {
-        var wait = Assert.Single(
-            resource.Annotations.OfType<WaitAnnotation>(),
-            annotation => ReferenceEquals(annotation.Resource, buildResource));
-        Assert.Equal(WaitType.WaitForCompletion, wait.WaitType);
-        Assert.Equal(0, wait.ExitCode);
+        if (resource.Annotations.OfType<WaitAnnotation>()
+            .SingleOrDefault(annotation => ReferenceEquals(annotation.Resource, buildResource)) is { } wait)
+        {
+            Assert.Equal(WaitType.WaitForCompletion, wait.WaitType);
+            Assert.Equal(0, wait.ExitCode);
 
-        Assert.Single(
-            resource.Annotations.OfType<ResourceRelationshipAnnotation>(),
-            annotation => ReferenceEquals(annotation.Resource, buildResource) &&
-                          annotation.Type == "WaitFor");
+            Assert.Single(
+                resource.Annotations.OfType<ResourceRelationshipAnnotation>(),
+                annotation => ReferenceEquals(annotation.Resource, buildResource) &&
+                              annotation.Type == "WaitFor");
+        }
+        else
+        {
+            Assert.Single(
+                resource.Annotations.OfType<DotnetProjectBuildCoordinator.CoordinatedBuildDependencyAnnotation>(),
+                annotation => ReferenceEquals(annotation.Resource, buildResource));
+        }
     }
 
     private static void AssertBuildDependency(

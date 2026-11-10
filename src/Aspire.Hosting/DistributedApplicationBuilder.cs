@@ -68,6 +68,8 @@ namespace Aspire.Hosting;
 /// </remarks>
 public class DistributedApplicationBuilder : IDistributedApplicationBuilder
 {
+    internal const string ResourceStarterServiceKey = "Aspire.Hosting.ResourceStarter";
+
     private const string HostingDiagnosticListenerName = "Aspire.Hosting";
     private const string ApplicationBuildingEventName = "DistributedApplicationBuilding";
     private const string ApplicationBuiltEventName = "DistributedApplicationBuilt";
@@ -606,6 +608,9 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         {
             // Orchestrator
             _innerBuilder.Services.AddSingleton<ApplicationOrchestrator>();
+            _innerBuilder.Services.AddKeyedSingleton<Func<IResource, CancellationToken, Task>>(
+                ResourceStarterServiceKey,
+                (sp, _) => sp.GetRequiredService<ApplicationOrchestrator>().StartResourceAsync);
             _innerBuilder.Services.AddHostedService<OrchestratorHostService>();
 
             // DCP stuff

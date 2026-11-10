@@ -711,7 +711,17 @@ internal sealed class ApplicationOrchestrator
     public async Task StartResourceAsync(string resourceName, CancellationToken cancellationToken)
     {
         var resourceReference = _dcpExecutor.GetResource(resourceName);
+        await StartResourceAsync(resourceReference, cancellationToken).ConfigureAwait(false);
+    }
 
+    internal async Task StartResourceAsync(IResource resource, CancellationToken cancellationToken)
+    {
+        var resourceReference = _dcpExecutor.GetResource(resource);
+        await StartResourceAsync(resourceReference, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task StartResourceAsync(IResourceReference resourceReference, CancellationToken cancellationToken)
+    {
         // Figure out if the resource is waiting or not using PublishUpdateAsync, and if it is then set the
         // state to "Starting" to force waiting to complete.
         var isWaiting = false;

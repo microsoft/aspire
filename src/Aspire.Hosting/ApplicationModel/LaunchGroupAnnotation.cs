@@ -36,3 +36,11 @@ public sealed class LaunchGroupAnnotation(string launchGroupName) : IResourceAnn
         return name;
     }
 }
+
+/// <summary>
+/// Marks a declared dependency as optional for initial launch-group validation.
+/// </summary>
+internal sealed class OptionalLaunchGroupDependencyAnnotation(IResource resource) : IResourceAnnotation
+{
+    public IResource Resource { get; } = resource;
+}

@@ -95,6 +95,41 @@ public static class LaunchGroupExtensions
     }
 
     /// <summary>
+    /// Declares a local resource dependency that is optional during initial launch-group selection.
+    /// </summary>
+    /// <typeparam name="T">The dependent resource type.</typeparam>
+    /// <typeparam name="TDependency">The dependency resource type.</typeparam>
+    /// <param name="builder">The dependent resource builder.</param>
+    /// <param name="dependency">The optional dependency resource builder.</param>
+    /// <returns>The resource builder.</returns>
+    /// <remarks>
+    /// This declares a reference relationship for launch-group validation. It does not add a readiness wait or
+    /// change behavior when no launch group is selected. Use it only when the dependent resource can run without
+    /// the dependency during initial startup.
+    /// </remarks>
+    /// <example>
+    /// <code lang="csharp">
+    /// var frontend = builder.AddProject("frontend", "../Frontend/Frontend.csproj")
+    ///     .WithLaunchGroup("frontend")
+    ///     .WithOptionalLaunchGroupDependency(metrics);
+    /// </code>
+    /// </example>
+    [AspireExportIgnore(Reason = "The experimental launch-group helper is C#-only.")]
+    [Experimental("ASPIRELAUNCHGROUPS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public static IResourceBuilder<T> WithOptionalLaunchGroupDependency<T, TDependency>(
+        this IResourceBuilder<T> builder,
+        IResourceBuilder<TDependency> dependency)
+        where T : IResource
+        where TDependency : IResource
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(dependency);
+
+        builder.WithReferenceRelationship(dependency.Resource);
+        return builder.WithAnnotation(new OptionalLaunchGroupDependencyAnnotation(dependency.Resource));
+    }
+
+    /// <summary>
     /// Registers services and the pre-start step for launch groups.
     /// </summary>
     internal static void EnsureSupport(IDistributedApplicationBuilder builder)

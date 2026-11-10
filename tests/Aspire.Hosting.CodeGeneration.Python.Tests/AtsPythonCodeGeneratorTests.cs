@@ -360,6 +360,7 @@ public class AtsPythonCodeGeneratorTests
     [InlineData("tuple")]
     [InlineData("set")]
     [InlineData("dictionary")]
+    [InlineData("keys_only_mapping")]
     [InlineData("generator")]
     [InlineData("empty_generator")]
     [RequiresTools(["python3"])]
@@ -372,6 +373,7 @@ public class AtsPythonCodeGeneratorTests
     [InlineData("tuple")]
     [InlineData("set")]
     [InlineData("dictionary")]
+    [InlineData("keys_only_mapping")]
     [InlineData("generator")]
     [InlineData("empty_generator")]
     [RequiresTools(["python"])]
@@ -387,6 +389,7 @@ public class AtsPythonCodeGeneratorTests
             """
             import json
             import typing
+            from collections.abc import Mapping
             import aspire_app
 
             client = aspire_app.AspireClient("unused")
@@ -407,11 +410,27 @@ public class AtsPythonCodeGeneratorTests
 
             client._socket = Socket()
             client._connected = True
+
+            def ignored_value():
+                raise AssertionError("A mapping value was accessed for an iterable argument")
+                yield
+
+            class KeysOnlyMapping(Mapping):
+                def __iter__(self):
+                    return iter(["catalog", "basket"])
+
+                def __len__(self):
+                    return 2
+
+                def __getitem__(self, key):
+                    raise AssertionError(f"Unexpected access to mapping value for {key}")
+
             create_groups = {
                 "list": lambda: ["catalog", "basket"],
                 "tuple": lambda: ("catalog", "basket"),
                 "set": lambda: {"catalog", "basket"},
-                "dictionary": lambda: {"catalog": 1, "basket": 2},
+                "dictionary": lambda: {"catalog": ignored_value(), "basket": ignored_value()},
+                "keys_only_mapping": KeysOnlyMapping,
                 "generator": lambda: (name for name in ["catalog", "basket"]),
                 "empty_generator": lambda: (name for name in []),
             }[iterable_kind]
@@ -462,8 +481,9 @@ public class AtsPythonCodeGeneratorTests
             aspire_app.ExecutableResource(handle, client, pipeline_step_factory={
                 "step_name": "publish",
                 "callback": callback,
-                "depends_on": {"build": 1, "deploy": 2},
-                "tags": {"release": True},
+                "depends_on": {"build": ignored_value(), "deploy": ignored_value()},
+                "tags": {"release": ignored_value()},
+                "unused": ignored_value(),
             })
             capability_id, args = calls.pop()
             assert capability_id == "Aspire.Hosting/withPipelineStepFactory"
@@ -516,11 +536,18 @@ public class AtsPythonCodeGeneratorTests
                 (name for name in ["catalog", "basket"]), typing.Iterable[str] | None
             ) == ["catalog", "basket"]
             assert aspire_app._normalize_argument(
+                KeysOnlyMapping(), typing.Iterable[str] | None
+            ) == ["catalog", "basket"]
+            assert aspire_app._normalize_argument(
                 {"catalog": (name for name in ["api", "cache"])}, typing.Mapping[str, typing.Iterable[str]] | None
             ) == {"catalog": ["api", "cache"]}
             assert aspire_app._normalize_argument(None, typing.Iterable[str] | None) is None
             assert aspire_app._validate_type({"catalog": ["api", "cache"]}, typing.Mapping[str, typing.Iterable[str]])
+            assert aspire_app._validate_type({"catalog": ["api"]}, typing.Mapping[str, typing.Iterable[str]] | None)
             assert not aspire_app._validate_type({"catalog": ["api", 42]}, typing.Mapping[str, typing.Iterable[str]])
+            assert client._marshal_transport_value(
+                aspire_app._normalize_constructor_value({"mode": "production"})
+            ) == {"mode": "production"}
             """);
     }
 

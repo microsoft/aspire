@@ -1650,9 +1650,9 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
                 // are supplied. Preserve the selected profile's arguments when only the CLI selector was added.
                 if (appHostArguments.Count == 0)
                 {
-                    TryApplyProjectLaunchSettings(effectiveAppHostFile, new Dictionary<string, string>(), appHostArguments,
+                    TryApplyLaunchSettings(effectiveAppHostFile, new Dictionary<string, string>(), appHostArguments,
                         runOptions.NoLaunchProfile, runOptions.LaunchProfile,
-                        hasExplicitApplicationArgs: false, hasRunArguments: false);
+                        hasExplicitApplicationArgs: false, hasRunArguments: false, argumentsOnly: true);
                 }
 
                 appHostArguments.Add($"--Aspire:LaunchGroup={launchGroup}");
@@ -1877,14 +1877,15 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         }
 
         var directEnv = new Dictionary<string, string>();
-        if (!TryApplyProjectLaunchSettings(
+        if (!TryApplyLaunchSettings(
                 effectiveAppHostFile,
                 directEnv,
                 arguments,
                 noLaunchProfile,
                 launchProfile,
                 hasExplicitApplicationArgs: unmatchedTokens.Length > 0,
-                hasRunArguments))
+                hasRunArguments,
+                argumentsOnly: false))
         {
             return null;
         }
@@ -2017,14 +2018,15 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
     private static bool IsDotNetMuxerCommand(string command)
         => string.Equals(Path.GetFileNameWithoutExtension(CommandPathResolver.NormalizeRunCommand(command)), "dotnet", StringComparison.OrdinalIgnoreCase);
 
-    private bool TryApplyProjectLaunchSettings(
+    private bool TryApplyLaunchSettings(
         FileInfo effectiveAppHostFile,
         Dictionary<string, string> env,
         List<string> arguments,
         bool noLaunchProfile,
         string? launchProfile,
         bool hasExplicitApplicationArgs,
-        bool hasRunArguments)
+        bool hasRunArguments,
+        bool argumentsOnly)
     {
         if (noLaunchProfile)
         {
@@ -2046,6 +2048,19 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
                     "Falling back to dotnet run for {Project}; launch settings do not contain the requested or a supported default profile.",
                     effectiveAppHostFile.FullName);
                 return false;
+            }
+
+            if (argumentsOnly)
+            {
+                // Both SDK providers use commandLineArgs when no application arguments were supplied.
+                // Executable profiles still need the SDK to launch their configured executable.
+                if (profile.CommandName is not ("Project" or "Executable"))
+                {
+                    return false;
+                }
+
+                AppendParsedArguments(Environment.ExpandEnvironmentVariables(profile.CommandLineArgs ?? string.Empty), arguments);
+                return true;
             }
 
             if (!IsProjectLaunchProfile(profile))

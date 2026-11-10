@@ -8,6 +8,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Text;
 using System.Text.Json;
+using Aspire.Dashboard.Model;
 using Aspire.Hosting.Orchestrator;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Configuration;
@@ -24,7 +25,11 @@ public class LaunchGroupTests(ITestOutputHelper outputHelper)
         var types = new[] { typeof(LaunchGroupExtensions), typeof(LaunchGroupAnnotation), typeof(ExcludeFromLaunchGroupSelectionAnnotation) };
         var methods = typeof(LaunchGroupExtensions).GetMethods(BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly);
         Assert.Equal(
-            [nameof(LaunchGroupExtensions.WithLaunchGroup), nameof(LaunchGroupExtensions.WithLaunchGroups)],
+            [
+                nameof(LaunchGroupExtensions.WithLaunchGroup),
+                nameof(LaunchGroupExtensions.WithLaunchGroups),
+                nameof(LaunchGroupExtensions.WithOptionalLaunchGroupDependency)
+            ],
             methods.Select(method => method.Name).Order(StringComparer.Ordinal));
 
         foreach (var member in types.Cast<MemberInfo>().Concat(methods))
@@ -199,6 +204,7 @@ public class LaunchGroupTests(ITestOutputHelper outputHelper)
     [InlineData("\"local\"")]
     [InlineData("[null]")]
     [InlineData("[[\"local\"]]")]
+    [InlineData("{\"name\":\"local\"}")]
     public async Task InvalidConfigurationDefinitionsFailBeforeStarting(string definitions)
     {
         using var builder = TestDistributedApplicationBuilder.Create();
@@ -234,7 +240,7 @@ public class LaunchGroupTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task ReferencedResourcesAreNotImplicitlySelected(bool expression)
+    public async Task MissingReferencedResourcesFailWithoutEvaluatingCallbacks(bool expression)
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.Configuration["Aspire:LaunchGroups:0"] = "frontend";
@@ -246,13 +252,157 @@ public class LaunchGroupTests(ITestOutputHelper outputHelper)
         object argument = expression ? ReferenceExpression.Create($"--server={endpoint}") : endpoint;
         var frontend = builder.AddExecutable("frontend", "unused", ".", new object[] { argument }).WithLaunchGroup("frontend");
         var callbacks = 0;
+        frontend.WithReferenceRelationship(dependency.Resource);
         frontend.WithArgs(context => { Interlocked.Increment(ref callbacks); });
         await using var app = builder.Build();
-        await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
 
-        Assert.True(dependency.Resource.HasAnnotationOfType<ExplicitStartupAnnotation>());
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(
+            () => app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken));
+
+        Assert.Contains("frontend", exception.Message);
+        Assert.Contains("backend", exception.Message);
+        Assert.False(dependency.Resource.HasAnnotationOfType<ExplicitStartupAnnotation>());
         Assert.False(frontend.Resource.HasAnnotationOfType<ExplicitStartupAnnotation>());
         Assert.Equal(0, callbacks);
+    }
+
+    [Fact]
+    public async Task CallbackOnlyReferencesCanBeDeclaredWithoutEvaluatingCallbacks()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        builder.Configuration["Aspire:LaunchGroup"] = "frontend";
+        var backend = builder.AddExecutable("backend", "unused", ".").WithLaunchGroup("backend");
+        var frontend = builder.AddExecutable("frontend", "unused", ".").WithLaunchGroup("frontend");
+        var callbacks = 0;
+        frontend.WithEnvironment(context =>
+        {
+            Interlocked.Increment(ref callbacks);
+            context.EnvironmentVariables["BACKEND"] = backend.GetEndpoint("http");
+        });
+        frontend.WithReferenceRelationship(backend);
+        await using var app = builder.Build();
+
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(
+            () => app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken));
+
+        Assert.Contains("frontend", exception.Message);
+        Assert.Contains("backend", exception.Message);
+        Assert.Equal(0, callbacks);
+    }
+
+    [Fact]
+    public async Task SelectedReferencesDoNotAddReadinessWaits()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        builder.Configuration["Aspire:LaunchGroup"] = "frontend";
+        var backend = builder.AddExecutable("backend", "unused", ".").WithLaunchGroup("frontend");
+        var frontend = builder.AddExecutable("frontend", "unused", ".")
+            .WithLaunchGroup("frontend").WithReferenceRelationship(backend);
+        var callbacks = 0;
+        frontend.WithArgs(context => Interlocked.Increment(ref callbacks));
+        await using var app = builder.Build();
+
+        await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
+
+        Assert.Empty(frontend.Resource.Annotations.OfType<WaitAnnotation>());
+        Assert.False(backend.Resource.HasAnnotationOfType<ExplicitStartupAnnotation>());
+        Assert.Equal(0, callbacks);
+    }
+
+    [Fact]
+    public async Task OptionalExecutionDependencyCanBeExcludedFromInitialSelection()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        builder.Configuration["Aspire:LaunchGroup"] = "frontend";
+        var backend = builder.AddExecutable("backend", "unused", ".").WithLaunchGroup("backend");
+        var frontend = builder.AddExecutable("frontend", "unused", ".")
+            .WithLaunchGroup("frontend")
+            .WithOptionalLaunchGroupDependency(backend);
+        await using var app = builder.Build();
+
+        await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
+
+        Assert.False(frontend.Resource.HasAnnotationOfType<ExplicitStartupAnnotation>());
+        Assert.True(backend.Resource.HasAnnotationOfType<ExplicitStartupAnnotation>());
+        Assert.Contains(
+            frontend.Resource.Annotations.OfType<ResourceRelationshipAnnotation>(),
+            annotation => ReferenceEquals(annotation.Resource, backend.Resource) &&
+                annotation.Type == KnownRelationshipTypes.Reference);
+    }
+
+    [Fact]
+    public async Task SelectedResourceRejectsExplicitlyStartedDependencyEvenWhenBothAreMembers()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        builder.Configuration["Aspire:LaunchGroup"] = "frontend";
+        var backend = builder.AddExecutable("backend", "unused", ".")
+            .WithLaunchGroup("frontend").WithExplicitStart();
+        var frontend = builder.AddExecutable("frontend", "unused", ".")
+            .WithLaunchGroup("frontend").WithReferenceRelationship(backend);
+        await using var app = builder.Build();
+
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(
+            () => app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken));
+
+        Assert.Contains("frontend", exception.Message);
+        Assert.Contains("backend", exception.Message);
+        Assert.Contains("explicit", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.True(backend.Resource.HasAnnotationOfType<ExplicitStartupAnnotation>());
+        Assert.False(frontend.Resource.HasAnnotationOfType<ExplicitStartupAnnotation>());
+    }
+
+    [Theory]
+    [InlineData(WaitType.WaitUntilHealthy)]
+    [InlineData(WaitType.WaitUntilStarted)]
+    [InlineData(WaitType.WaitForCompletion)]
+    public async Task SelectedResourceRejectsMissingWaitDependency(WaitType waitType)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        builder.Configuration["Aspire:LaunchGroup"] = "frontend";
+        var backend = builder.AddExecutable("backend", "unused", ".").WithLaunchGroup("backend");
+        var frontend = builder.AddExecutable("frontend", "unused", ".").WithLaunchGroup("frontend");
+        switch (waitType)
+        {
+            case WaitType.WaitUntilHealthy:
+                frontend.WaitFor(backend, WaitBehavior.StopOnResourceUnavailable);
+                break;
+            case WaitType.WaitUntilStarted:
+                frontend.WaitForStart(backend);
+                break;
+            case WaitType.WaitForCompletion:
+                frontend.WaitForCompletion(backend, exitCode: 42);
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(waitType));
+        }
+        await using var app = builder.Build();
+
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(
+            () => app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken));
+
+        Assert.Contains("frontend", exception.Message);
+        Assert.Contains("backend", exception.Message);
+    }
+
+    [Fact]
+    public async Task ConnectionStringReferencesAreValidatedTransitively()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        builder.Configuration["Aspire:LaunchGroup"] = "frontend";
+        var database = builder.AddContainer("database", "image").WithLaunchGroup("backend")
+            .WithEndpoint(name: "tcp", scheme: "tcp", targetPort: 1234);
+        var connection = builder.AddConnectionString("connection", ReferenceExpression.Create($"{database.GetEndpoint("tcp")}"));
+        var frontend = builder.AddExecutable("frontend", "unused", ".")
+            .WithLaunchGroup("frontend").WithReference(connection, optional: true);
+        await using var app = builder.Build();
+
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(
+            () => app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken));
+
+        Assert.Contains("database", exception.Message);
+        Assert.Contains("frontend", exception.Message);
+        Assert.False(frontend.Resource.HasAnnotationOfType<ExplicitStartupAnnotation>());
+        Assert.False(database.Resource.HasAnnotationOfType<ExplicitStartupAnnotation>());
     }
 
     [Theory]
@@ -323,7 +473,7 @@ public class LaunchGroupTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task SelectionDoesNotIncludeWaitReferenceOrConnectionStringDependencies()
+    public async Task SelectionRejectsMissingWaitReferenceOrConnectionStringDependencies()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.Configuration["Aspire:LaunchGroup"] = "frontend";
@@ -339,13 +489,16 @@ public class LaunchGroupTests(ITestOutputHelper outputHelper)
         var unrelated = builder.AddContainer("unrelated", "image").WithLaunchGroup("backend");
         await using var app = builder.Build();
 
-        await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(
+            () => app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken));
 
         foreach (var resource in new IResource[] { database.Resource, child.Resource, migration.Resource, api.Resource, unrelated.Resource })
         {
-            Assert.True(resource.HasAnnotationOfType<ExplicitStartupAnnotation>());
+            Assert.False(resource.HasAnnotationOfType<ExplicitStartupAnnotation>());
         }
         Assert.False(frontend.Resource.HasAnnotationOfType<ExplicitStartupAnnotation>());
+        Assert.Contains("frontend", exception.Message);
+        Assert.Contains("api", exception.Message);
     }
 
     [Theory]
@@ -472,7 +625,7 @@ public class LaunchGroupTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task ReferenceCyclesDoNotChangeSelection()
+    public async Task ReferenceCycleRejectsMissingMemberWithoutChangingSelection()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.Configuration["Aspire:LaunchGroup"] = "selected";
@@ -482,10 +635,30 @@ public class LaunchGroupTests(ITestOutputHelper outputHelper)
         second.WithReferenceRelationship(first);
 
         await using var app = builder.Build();
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(
+            () => app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken));
+
+        Assert.Contains("first", exception.Message);
+        Assert.Contains("second", exception.Message);
+        Assert.False(first.Resource.HasAnnotationOfType<ExplicitStartupAnnotation>());
+        Assert.False(second.Resource.HasAnnotationOfType<ExplicitStartupAnnotation>());
+    }
+
+    [Fact]
+    public async Task ReferenceCycleWithSelectedMembersSucceeds()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        builder.Configuration["Aspire:LaunchGroup"] = "selected";
+        var first = builder.AddExecutable("first", "unused", ".").WithLaunchGroup("selected");
+        var second = builder.AddExecutable("second", "unused", ".").WithLaunchGroup("selected");
+        first.WithReferenceRelationship(second);
+        second.WithReferenceRelationship(first);
+        await using var app = builder.Build();
+
         await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
 
         Assert.False(first.Resource.HasAnnotationOfType<ExplicitStartupAnnotation>());
-        Assert.True(second.Resource.HasAnnotationOfType<ExplicitStartupAnnotation>());
+        Assert.False(second.Resource.HasAnnotationOfType<ExplicitStartupAnnotation>());
     }
 
     [Theory]

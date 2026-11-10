@@ -139,7 +139,7 @@ public class AppHostServerEnvironmentTests(ITestOutputHelper outputHelper)
                 NullLogger<DotNetBasedAppHostServerProject>.Instance),
             "prebuilt" => new PrebuiltAppHostServer(
                 workspace.Path, "test.sock", layout,
-                new BundleNuGetService(NullLogger<BundleNuGetService>.Instance, new FakeNuGetClient()),
+                new BundleNuGetService(NullLogger<BundleNuGetService>.Instance, new FakeNuGetClient(), new TestConfigurationService()),
                 runner, new TestDotNetSdkInstaller(), packaging, TestExecutionContextFactory.CreateTestContext(),
                 processes, environment, NullLogger.Instance),
             "native" => new NativeAppHostServerProject(workspace.Path, executable, processes, NullLogger.Instance),

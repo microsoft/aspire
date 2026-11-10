@@ -3,6 +3,8 @@
 
 #pragma warning disable ASPIRELAUNCHGROUPS001 // Internal use of launch-group membership annotations.
 
+using System.Globalization;
+using Aspire.Dashboard.Model;
 using Aspire.Hosting.ApplicationModel;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -33,6 +35,12 @@ internal sealed class LaunchGroupService(
 
         foreach (var entry in configuredGroups.GetChildren())
         {
+            if (!int.TryParse(entry.Key, NumberStyles.None, CultureInfo.InvariantCulture, out _))
+            {
+                throw new DistributedApplicationException(
+                    $"{ConfigurationSectionName} must be an array of group names.");
+            }
+
             if (entry.Value is not { } name)
             {
                 throw new DistributedApplicationException(
@@ -84,6 +92,8 @@ internal sealed class LaunchGroupService(
                 $"Launch group '{selectedGroup}' is invalid. {validGroupsDescription}");
         }
 
+        ValidateSelectedGroupDependencies(model.Resources, selectedGroup);
+
         foreach (var resource in model.Resources)
         {
             if (!resource.HasAnnotationOfType<ExcludeFromLaunchGroupSelectionAnnotation>() &&
@@ -99,4 +109,82 @@ internal sealed class LaunchGroupService(
             "Launch group '{LaunchGroup}' is selected. Other resources are marked for explicit start unless excluded from selection.",
             selectedGroup);
     }
+
+    private static void ValidateSelectedGroupDependencies(IEnumerable<IResource> resources, string selectedGroup)
+    {
+        var resourceList = resources.ToArray();
+        var automaticStartResources = new HashSet<IResource>(
+            resourceList.Where(resource => !WillStartExplicitly(resource, selectedGroup)),
+            ReferenceEqualityComparer.Instance);
+
+        foreach (var resource in automaticStartResources)
+        {
+            if (!IsLocalExecutionResource(resource))
+            {
+                continue;
+            }
+
+            ValidateDependencies(
+                resource,
+                resource,
+                selectedGroup,
+                automaticStartResources,
+                new HashSet<IResource>(ReferenceEqualityComparer.Instance));
+        }
+    }
+
+    private static void ValidateDependencies(
+        IResource root,
+        IResource current,
+        string selectedGroup,
+        HashSet<IResource> automaticStartResources,
+        HashSet<IResource> visited)
+    {
+        if (!visited.Add(current))
+        {
+            return;
+        }
+
+        var optionalReferences = current.Annotations
+            .OfType<OptionalLaunchGroupDependencyAnnotation>()
+            .Select(annotation => annotation.Resource)
+            .ToHashSet<IResource>(ReferenceEqualityComparer.Instance);
+        var dependencies = current.Annotations
+            .OfType<ResourceRelationshipAnnotation>()
+            .Where(annotation => annotation.Type == KnownRelationshipTypes.Reference &&
+                !optionalReferences.Contains(annotation.Resource))
+            .Select(annotation => annotation.Resource)
+            .Concat(current.Annotations.OfType<WaitAnnotation>().Select(annotation => annotation.Resource))
+            .Concat(current.Annotations.OfType<ConnectionStringRedirectAnnotation>().Select(annotation => annotation.Resource))
+            .Distinct<IResource>(ReferenceEqualityComparer.Instance);
+
+        foreach (var dependency in dependencies)
+        {
+            if (IsLocalExecutionResource(dependency) &&
+                !automaticStartResources.Contains(dependency))
+            {
+                var reason = dependency.HasAnnotationOfType<ExplicitStartupAnnotation>()
+                    ? "is marked for explicit start"
+                    : $"is not included in launch group '{selectedGroup}'";
+                throw new DistributedApplicationException(
+                    $"Resource '{root.Name}' requires local resource '{dependency.Name}', which {reason}. " +
+                    $"Add the dependency to the selected launch group or mark it optional with " +
+                    $"{nameof(LaunchGroupExtensions.WithOptionalLaunchGroupDependency)}.");
+            }
+
+            ValidateDependencies(root, dependency, selectedGroup, automaticStartResources, visited);
+        }
+    }
+
+    private static bool IsLocalExecutionResource(IResource resource) =>
+        resource is not IResourceWithoutLifetime and
+            not ParameterResource and
+            not ConnectionStringResource and
+            not ExternalServiceResource;
+
+    private static bool WillStartExplicitly(IResource resource, string selectedGroup) =>
+        resource.HasAnnotationOfType<ExplicitStartupAnnotation>() ||
+        (!resource.HasAnnotationOfType<ExcludeFromLaunchGroupSelectionAnnotation>() &&
+            !resource.Annotations.OfType<LaunchGroupAnnotation>()
+                .Any(annotation => StringComparer.OrdinalIgnoreCase.Equals(annotation.LaunchGroupName, selectedGroup)));
 }
