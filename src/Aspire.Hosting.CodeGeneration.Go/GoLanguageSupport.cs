@@ -47,7 +47,6 @@ internal sealed class GoLanguageSupport : ILanguageSupport
             	"apphost/modules/aspire"
             )
 
-            // Add resources in main. Build reports failures from every resource.
             func main() {
             	builder, err := aspire.CreateBuilder()
             	if err != nil {

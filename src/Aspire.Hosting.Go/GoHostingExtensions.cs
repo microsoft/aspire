@@ -405,6 +405,7 @@ public static class GoHostingExtensions
             var tidy = builder.ApplicationBuilder
                 .AddResource(tidyResource)
                 .WithArgs("mod", "tidy", "-e")
+                .WithParentRelationship(builder.Resource)
                 .ExcludeFromManifest();
 
             // Store the builder reference so WithModVendor/WithModDownload can chain after tidy.
