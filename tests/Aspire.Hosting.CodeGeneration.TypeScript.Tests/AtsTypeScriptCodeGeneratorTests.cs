@@ -1316,6 +1316,73 @@ public class AtsTypeScriptCodeGeneratorTests
         });
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Generate_RadiusWithContainerImage_PreservesConcreteFluentMethods(bool includeDotnet)
+    {
+        const string capabilityId = "Aspire.Hosting.Radius/withContainerImage";
+        var assemblies = new List<Assembly> { typeof(DistributedApplication).Assembly, typeof(RadiusExtensions).Assembly };
+        var resourceTypes = new List<Type> { typeof(ProjectResource), typeof(CSharpAppResource) };
+        if (includeDotnet)
+        {
+            assemblies.Add(typeof(DotnetProjectHostingExtensions).Assembly);
+            resourceTypes.Add(typeof(global::Aspire.Hosting.Dotnet.DotnetProjectResource));
+        }
+
+        var result = AtsCapabilityScanner.ScanAssemblies(assemblies);
+        var capability = Assert.Single(result.Capabilities,
+            c => c.CapabilityId.StartsWith("Aspire.Hosting.Radius/", StringComparison.Ordinal) &&
+                c.MethodName == "withContainerImage");
+
+        Assert.Equal(capabilityId, capability.CapabilityId);
+        Assert.Equal(GetAtsTypeId(typeof(IDotnetProgramResource)), capability.TargetTypeId);
+        Assert.Equal(capability.TargetTypeId, capability.ReturnType.TypeId);
+        Assert.True(capability.ReturnsBuilder);
+        Assert.True(capability.IsExperimental);
+        var image = Assert.Single(capability.Parameters);
+        Assert.Equal("image", image.Name);
+        Assert.Equal(AtsConstants.String, image.Type?.TypeId);
+        Assert.False(image.IsOptional);
+        Assert.Equal(
+            resourceTypes.Select(GetAtsTypeId).Order(StringComparer.Ordinal),
+            capability.ExpandedTargetTypes.Select(t => t.TypeId).Order(StringComparer.Ordinal));
+        var diagnostic = Assert.Single(result.Diagnostics, d => d.Message.Contains(capabilityId, StringComparison.Ordinal));
+        Assert.Equal(AtsDiagnosticSeverity.Info, diagnostic.Severity);
+
+        var code = _generator.GenerateDistributedApplication(result.ToAtsContext())["aspire.mts"].ReplaceLineEndings("\n");
+        var declarations = new List<string>();
+        foreach (var resourceType in resourceTypes)
+        {
+            foreach (var suffix in new[] { "", "Promise" })
+            {
+                var name = resourceType.Name + suffix;
+                // Generated declarations have the shape:
+                // export interface ProjectResourcePromise extends PromiseLike<ProjectResource> { ... }
+                var declaration = Regex.Match(code, $@"^export interface {name}(?: extends [^\n]+)? \{{.*?^\}}",
+                    RegexOptions.Multiline | RegexOptions.Singleline);
+                Assert.True(declaration.Success, $"Missing generated interface {name}.");
+                var method = Assert.Single(declaration.Value.Split('\n'),
+                    line => line.TrimStart().StartsWith("withContainerImage(", StringComparison.Ordinal));
+                Assert.Equal($"    withContainerImage(image: string): {resourceType.Name}Promise;", method);
+                declarations.Add($"interface {name} {{\n{method}\n}}");
+            }
+
+            var implementation = Regex.Match(code, $@"^class {resourceType.Name}Impl\b.*?^\}}",
+                RegexOptions.Multiline | RegexOptions.Singleline);
+            Assert.True(implementation.Success, $"Missing generated implementation for {resourceType.Name}.");
+            var invocation = Regex.Match(implementation.Value, @"^    private async _withContainerImageInternal\(.*?^    \}",
+                RegexOptions.Multiline | RegexOptions.Singleline);
+            Assert.True(invocation.Success, $"Missing generated image invocation for {resourceType.Name}.");
+            var dispatchCall = Assert.Single(invocation.Value.Split('\n'),
+                line => line.TrimStart().StartsWith("'Aspire.Hosting.Radius/", StringComparison.Ordinal));
+            Assert.Equal($"'{capabilityId}',", dispatchCall.Trim());
+            declarations.Add(invocation.Value);
+        }
+
+        await Verify(string.Join("\n\n", declarations), "ts").UseParameters(includeDotnet);
+    }
+
     [Fact]
     public void Generate_KubernetesPersistentVolumeMount_UsesOptionsObject()
     {

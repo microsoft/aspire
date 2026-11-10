@@ -15,10 +15,11 @@ param web_containerport string
 
 param enabled_value string
 
-resource web 'Microsoft.App/containerApps@2026-03-02-preview' = {
+resource web 'Microsoft.App/containerApps@2026-07-01' = {
   name: 'web'
   location: location
   properties: {
+    environmentId: env_outputs_azure_container_apps_environment_id
     configuration: {
       activeRevisionsMode: 'Single'
       ingress: {
@@ -33,7 +34,6 @@ resource web 'Microsoft.App/containerApps@2026-03-02-preview' = {
         }
       ]
     }
-    environmentId: env_outputs_azure_container_apps_environment_id
     template: {
       containers: [
         {

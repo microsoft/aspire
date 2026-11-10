@@ -6,9 +6,9 @@
     height: 28px;
     min-height: 28px;
     padding: 0 8px;
-    font-weight: var(--fontWeightRegular);
+    font-weight: var(--aspire-font-weight-regular);
     border: 1px solid transparent;
-    border-radius: 6px;
+    border-radius: var(--aspire-radius-small);
 }
 
 .application-run-select ::deep .application-run-status {
@@ -21,5 +21,5 @@
     padding-left: 8px;
     padding-right: 8px;
     border: 1px solid transparent;
-    border-radius: 6px;
+    border-radius: var(--aspire-radius-small);
 }

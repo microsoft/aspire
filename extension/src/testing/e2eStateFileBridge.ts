@@ -20,6 +20,7 @@ import { AspireTerminalCommandEvent, AspireTerminalProvider } from '../utils/Asp
 import { delay } from '../utils/async';
 import { dashboardDefaultChangedNotificationKey } from '../utils/dashboardNotificationState';
 import { extensionLogOutputChannel } from '../utils/logging';
+import { certificateBase64ToPem } from '../utils/security';
 import { isCommandCancellation, onDidInvokeCommand } from '../utils/telemetry';
 import { AspireAppHostTreeProvider } from '../views/AspireAppHostTreeProvider';
 import { ResourceItem } from '../views/treeItems/resourceItems';
@@ -675,6 +676,10 @@ export async function executeE2eControlCommand(
       markStarted();
       await vscode.commands.executeCommand('workbench.action.closeAllEditors');
       return getActiveEditorInfo();
+    }
+    case 'clearAllNotifications': {
+      markStarted();
+      return await vscode.commands.executeCommand('notifications.clearAll');
     }
     case 'getRegisteredAspireCommands': {
       markStarted();
@@ -1929,6 +1934,7 @@ async function proveAppHostAndResourceDebugging(command: AppHostAndResourceDebug
         matchingStackFrame: resourceHit.matchingFrame,
         topStackFrame: resourceHit.stackTrace?.stackFrames?.[0],
       },
+      appHostCodeLenses: await getCodeLensesForFile(appHostSourcePath),
       debugSessions,
       launchRequests,
       debugAdapterResponses,
@@ -3404,16 +3410,16 @@ function getE2eBreakpoints(): Array<{ filePath: string; line: number; enabled: b
 
 // Verify the packaged extension's externally visible DCP /info response, rather
 // than only calling the in-process capability helper.
-async function getDcpRunSessionInfoForE2E({ address, token }: DcpServerConnectionInfo): Promise<unknown> {
+async function getDcpRunSessionInfoForE2E({ address, token, certificate }: DcpServerConnectionInfo): Promise<unknown> {
   return await new Promise((resolve, reject) => {
     const request = https.get(`https://${address}/info`, {
       headers: {
         Authorization: `Bearer ${token}`,
         'microsoft-developer-dcp-instance-id': 'aspire-extension-e2e',
       },
-      // The opt-in E2E bridge calls the extension's loopback-only DCP server,
-      // which uses a per-session self-signed certificate.
-      rejectUnauthorized: false,
+      // The opt-in E2E bridge calls the extension's loopback-only DCP server, which uses a
+      // per-session self-signed certificate. Trust exactly that certificate instead of disabling validation.
+      ca: certificateBase64ToPem(certificate),
     }, response => {
       const chunks: Buffer[] = [];
       response.on('data', chunk => chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)));

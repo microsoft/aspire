@@ -244,8 +244,8 @@
   <data name="ConfiguredTemplateConflictingOptions" xml:space="preserve">
     <value>Templates from configured sources cannot be combined with --source, --version, --channel, or --language.</value>
   </data>
-  <data name="SearchingTemplateSource" xml:space="preserve">
-    <value>Searching template source '{0}'...</value>
+  <data name="TemplateSourceExplanation" xml:space="preserve">
+    <value>One or more template sources are configured. A template source lets an organization share Aspire templates to customize your development experience.</value>
   </data>
   <data name="BuiltInTemplates" xml:space="preserve">
     <value>Built-in templates</value>
@@ -336,9 +336,6 @@
   </data>
   <data name="TemplateSourceListEmpty" xml:space="preserve">
     <value>No template sources are configured. Use 'aspire template source add' to add one.</value>
-  </data>
-  <data name="TemplateSourceNameHeader" xml:space="preserve">
-    <value>Name</value>
   </data>
   <data name="TemplateSourceConfigurationHeader" xml:space="preserve">
     <value>Configuration</value>

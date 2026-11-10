@@ -352,7 +352,15 @@ internal class ConsoleInteractionService : IInteractionService
                 // two more cells for grouped children. Its converter also controls
                 // search, so only the visible prefix remains searchable after cropping.
                 // https://github.com/spectreconsole/spectre.console/blob/0.57.2/src/Spectre.Console/Prompts/SelectionPrompt.cs
-                .UseConverter(item => FormatSelectionLabel(item.Label, MessageConsole.Profile.Width - item.Indent - 3))
+                .UseConverter(item =>
+                {
+                    var label = FormatSelectionLabel(item.Label, MessageConsole.Profile.Width - item.Indent - 3);
+                    // Apply the trusted presentation style after cropping and escaping the
+                    // source label so source-provided markup cannot change its appearance.
+                    return item is SelectionPromptGroup { Style: { } style }
+                        ? $"[{style.ToMarkup()}]{label}[/]"
+                        : label;
+                })
                 .PageSize(10)
                 .EnableSearch();
             prompt.Mode = SelectionMode.Leaf;
@@ -375,7 +383,7 @@ internal class ConsoleInteractionService : IInteractionService
                     {
                         // Only create headers for populated groups. An empty Spectre group is
                         // a leaf and would otherwise become a selectable value.
-                        header = prompt.AddChoice(new SelectionPromptGroup(group.Label.EscapeMarkup()));
+                        header = prompt.AddChoice(new SelectionPromptGroup(group.Label.EscapeMarkup(), group.Style));
                         groups.Add(group.Id, header);
                     }
                     header.AddChild(item);
@@ -948,5 +956,5 @@ internal class ConsoleInteractionService : IInteractionService
 
     private abstract record SelectionPromptItem(string Label, int Indent);
     private sealed record SelectionPromptValue<T>(T Value, string Text, bool Grouped) : SelectionPromptItem(Text, Grouped ? 2 : 0) where T : notnull;
-    private sealed record SelectionPromptGroup(string Text) : SelectionPromptItem(Text, 0);
+    private sealed record SelectionPromptGroup(string Text, Style? Style) : SelectionPromptItem(Text, 0);
 }

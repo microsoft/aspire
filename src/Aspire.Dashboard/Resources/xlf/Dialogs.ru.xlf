@@ -1083,11 +1083,6 @@ aspire otel logs --dashboard-url {0}
         <target state="new">Compact</target>
         <note />
       </trans-unit>
-      <trans-unit id="SettingsDialogResourceListDensitySpacious">
-        <source>Spacious</source>
-        <target state="new">Spacious</target>
-        <note />
-      </trans-unit>
       <trans-unit id="SettingsDialogSystemTheme">
         <source>System</source>
         <target state="translated">Система</target>

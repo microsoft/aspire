@@ -205,9 +205,6 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         await File.WriteAllTextAsync(localSkillPath, localSkillContent);
         string[] expectedWarnings =
         [
-            "Skill sources:",
-            "https://github.com/microsoft/aspire-skills",
-            "Only use sources you trust.",
             "Local Aspire skill files may override plugin skills",
             ".agents/skills/aspire/SKILL.md"
         ];
@@ -349,8 +346,6 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
 
         await auto.WaitUntilTextAsync("Where should skills and tools be installed?", timeout: TimeSpan.FromSeconds(30));
         var scopeScreen = auto.CreateSnapshot().GetScreenText();
-        Assert.Contains("Only use sources you trust.", scopeScreen);
-        Assert.Contains("https://github.com/microsoft/aspire-skills", scopeScreen);
         Assert.DoesNotContain("Install Aspire MCP server", scopeScreen);
         Assert.DoesNotContain("Which source do you want to use for Aspire?", scopeScreen);
         await auto.EnterAsync();
@@ -411,8 +406,6 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         // registration — no MCP prompt is shown, and Claude's project MCP file is untouched.
         await auto.WaitUntilTextAsync("configuration complete", timeout: TimeSpan.FromSeconds(30));
         var completionScreen = auto.CreateSnapshot().GetScreenText();
-        Assert.Contains("Only use sources you trust.", completionScreen);
-        Assert.Contains("https://github.com/microsoft/aspire-skills", completionScreen);
         Assert.DoesNotContain("Which source do you want to use for Aspire?", completionScreen);
         Assert.DoesNotContain("Configure the Aspire MCP server", completionScreen);
         await auto.WaitForSuccessPromptAsync(counter);

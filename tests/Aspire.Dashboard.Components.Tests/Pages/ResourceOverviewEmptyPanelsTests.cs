@@ -1,4 +1,4 @@
-// Licensed to the .NET Foundation under one or more agreements.
+﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Threading.Channels;
@@ -93,7 +93,9 @@ public class ResourceOverviewEmptyPanelsTests : DashboardTestContext
         cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
         var selector = cut.Find(".resource-header-controls .overview-panel-selector [role='group']");
         var options = cut.FindAll(".overview-panel-selector button");
-        Assert.Equal("Panels", selector.TextContent.Trim());
+        // The choices are icons with tooltips; the group's name is for assistive technologies, not shown.
+        Assert.Equal("Panels", selector.GetAttribute("aria-label"));
+        Assert.Equal(string.Empty, selector.TextContent.Trim());
         Assert.Equal(["Hide empty panels", "Show all panels"], options.Select(option => option.GetAttribute("aria-label")));
         Assert.All(options, option =>
         {

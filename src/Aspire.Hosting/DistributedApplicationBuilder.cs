@@ -610,6 +610,9 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
             // DCP stuff
             _innerBuilder.Services.AddSingleton<DcpAppResourceStore>();
             _innerBuilder.Services.AddSingleton<ProxylessEndpointPortAllocator>();
+            _innerBuilder.Services.AddSingleton<AppHostLocalStateStore>();
+            _innerBuilder.Services.AddSingleton<PersistentPortAllocationStore>();
+            _innerBuilder.Services.AddSingleton<PersistentPortAllocator>();
             _innerBuilder.Services.AddSingleton<ContainerNetworkEndpointProvisioner>();
             _innerBuilder.Services.AddSingleton<ExecutableConfigurationResolver>();
             _innerBuilder.Services.AddSingleton<ExecutableLaunchPolicy>();
@@ -637,6 +640,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         Eventing.Subscribe<BeforeStartEvent>(BuiltInDistributedApplicationEventSubscriptionHandlers.MutateHttp2TransportAsync);
         _innerBuilder.Services.AddKeyedSingleton<IContainerRuntime, DockerContainerRuntime>(KnownContainerRuntimes.Docker);
         _innerBuilder.Services.AddKeyedSingleton<IContainerRuntime, PodmanContainerRuntime>(KnownContainerRuntimes.Podman);
+        _innerBuilder.Services.AddKeyedSingleton<IContainerRuntime, WslcContainerRuntime>(KnownContainerRuntimes.Wslc);
         _innerBuilder.Services.AddSingleton<IContainerRuntimeResolver, ContainerRuntimeResolver>();
         _innerBuilder.Services.AddSingleton<ContainerRuntimeReadiness>();
         _innerBuilder.Services.AddSingleton<IResourceContainerImageManager, ResourceContainerImageManager>();

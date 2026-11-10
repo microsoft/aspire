@@ -15,6 +15,19 @@ namespace Infrastructure.Tests.TestTriggerMap;
 [Collection("GraphAffectedProjects")] // MSBuildLocator registers process-wide; keep graph use serialized.
 public sealed class TestTriggerMapTests
 {
+    [Theory]
+    [InlineData("Aspire.Hosting.CodeGeneration.Go")]
+    [InlineData("Aspire.Hosting.Go")]
+    [InlineData("Aspire.Hosting.Redis")]
+    public void GoStarterRuntimePackagesSelectRealRunnerValidation(string project)
+    {
+        var result = SelectWithRealMap($"src/{project}/{project}.csproj", project);
+
+        Assert.False(result.SelectsAll);
+        Assert.Empty(result.UnmatchedFiles);
+        Assert.Contains("job:cli-starter-validation", result.Jobs);
+    }
+
     [Fact]
     public void IndependentNativeWorkflowSelectsInfrastructureWithoutExtraJobs()
     {
@@ -152,13 +165,15 @@ public sealed class TestTriggerMapTests
     }
 
     [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public void GoHostingChangesSelectExtensionE2e(bool hasAffectedProject)
+    [InlineData(true, "Aspire.Hosting.Go", "GoHostingExtensions.cs")]
+    [InlineData(false, "Aspire.Hosting.Go", "GoHostingExtensions.cs")]
+    [InlineData(true, "Aspire.Hosting.CodeGeneration.Go", "GoLanguageSupport.cs")]
+    [InlineData(false, "Aspire.Hosting.CodeGeneration.Go", "GoLanguageSupport.cs")]
+    public void GoRuntimeChangesSelectExtensionE2e(bool hasAffectedProject, string project, string fileName)
     {
-        const string path = "src/Aspire.Hosting.Go/GoHostingExtensions.cs";
+        var path = $"src/{project}/{fileName}";
         var result = hasAffectedProject
-            ? SelectWithRealMap(path, "Aspire.Hosting.Go")
+            ? SelectWithRealMap(path, project)
             : SelectWithRealMap(path);
 
         Assert.False(result.SelectsAll);
@@ -352,7 +367,7 @@ public sealed class TestTriggerMapTests
         },
         {
             "eng/scripts/verify-native-dashboard-warnings.ps1",
-            ["test:Infrastructure.Tests", "job:native-dashboard-validation"]
+            ["test:Aspire.Cli.EndToEnd.Tests", "test:Aspire.Templates.Tests", "test:Infrastructure.Tests", "job:cli-starter-validation", "job:native-dashboard-validation", "job:extension-e2e", "job:homebrew-installer", "job:polyglot", "job:winget-installer"]
         },
         {
             ".github/workflows/native-dashboard-validation.yml",
@@ -415,7 +430,7 @@ public sealed class TestTriggerMapTests
         },
         {
             "eng/Bundle.proj",
-            ["test:Aspire.Cli.EndToEnd.Tests", "test:Infrastructure.Tests", "job:cli-starter-validation", "job:extension-e2e", "job:winget-installer", "job:homebrew-installer"]
+            ["test:Aspire.Cli.EndToEnd.Tests", "test:Aspire.Templates.Tests", "test:Infrastructure.Tests", "job:cli-starter-validation", "job:native-dashboard-validation", "job:extension-e2e", "job:homebrew-installer", "job:polyglot", "job:winget-installer"]
         },
         {
             "tools/CreateLayout/verify-tray-payload.sh",
@@ -634,7 +649,6 @@ public sealed class TestTriggerMapTests
     [Theory]
     [InlineData("eng/scripts/verify-cli-npm-package.ps1")]
     [InlineData("eng/scripts/verify-cli-tool-nupkg.ps1")]
-    [InlineData("eng/scripts/stabilization-smoke-init-restore.sh")]
     [InlineData("eng/generate-catalog.ps1")]
     public void PathHandledOutsideSelectorDoesNotForceTestSelection(string path)
     {
@@ -643,6 +657,17 @@ public sealed class TestTriggerMapTests
         Assert.False(result.SelectsAll);
         Assert.Empty(result.UnmatchedFiles);
         Assert.Empty(result.TestProjects);
+        Assert.Empty(result.Jobs);
+    }
+
+    [Fact]
+    public void StabilizationSmokeScriptSelectsItsWrapperCoverage()
+    {
+        var result = SelectWithRealMap("eng/scripts/stabilization-smoke-init-restore.sh");
+
+        Assert.False(result.SelectsAll);
+        Assert.Empty(result.UnmatchedFiles);
+        Assert.Equal(["Infrastructure.Tests"], result.TestProjects);
         Assert.Empty(result.Jobs);
     }
 
@@ -744,6 +769,26 @@ public sealed class TestTriggerMapTests
             result.Jobs.Order(StringComparer.Ordinal));
     }
 
+    [Theory]
+    [InlineData("eng/Bundle.proj")]
+    [InlineData("eng/scripts/verify-native-dashboard-warnings.ps1")]
+    [InlineData("eng/aspire-managed-entitlements.plist")]
+    public void SharedBundlePhasesSelectRegularRuntimePackageConsumers(string path)
+    {
+        var result = SelectWithRealMap(path);
+
+        Assert.False(result.SelectsAll);
+        Assert.Empty(result.UnmatchedFiles);
+        Assert.Equal(
+            ["Aspire.Cli.EndToEnd.Tests", "Aspire.Templates.Tests", "Infrastructure.Tests"],
+            result.TestProjects.Order(StringComparer.Ordinal));
+        Assert.Contains(result.TestCauses["Aspire.Templates.Tests"],
+            cause => cause.Kind == CauseKind.PathRule && cause.Trigger == path);
+        Assert.Equal(
+            ["job:cli-starter-validation", "job:extension-e2e", "job:homebrew-installer", "job:native-dashboard-validation", "job:polyglot", "job:winget-installer"],
+            result.Jobs.Order(StringComparer.Ordinal));
+    }
+
     [Fact]
     public void CliBundleConsumersRunWhenStandaloneTerminalHostIsAffected()
     {
@@ -811,15 +856,15 @@ public sealed class TestTriggerMapTests
     public void CliStarterValidationDoesNotRunForUnrelatedHostingIntegrationChange()
     {
         var result = SelectWithRealMap(
-            "src/Aspire.Hosting.Redis/RedisBuilderExtensions.cs",
-            "Aspire.Hosting.Redis",
-            "Aspire.Hosting.Redis.Tests",
+            "src/Aspire.Hosting.RabbitMQ/RabbitMQBuilderExtensions.cs",
+            "Aspire.Hosting.RabbitMQ",
+            "Aspire.Hosting.RabbitMQ.Tests",
             "Aspire.Hosting.Tests");
 
         Assert.False(result.SelectsAll);
         Assert.False(
             result.Jobs.Contains("job:cli-starter-validation", StringComparer.Ordinal),
-            "Aggregate tests selected by Redis changes must not pull in all six starter-validation jobs.");
+            "Aggregate tests selected by RabbitMQ changes must not pull in all six starter-validation jobs.");
     }
 
     [Fact]
@@ -896,11 +941,12 @@ public sealed class TestTriggerMapTests
     }
 
     [Theory]
-    [InlineData("src/Aspire.Hosting.CodeGeneration.Go/AtsGoCodeGenerator.cs")]
-    [InlineData("src/Aspire.Hosting.CodeGeneration.Go/GoLanguageSupport.cs")]
-    public void GoModTemplatesSelectCliMinimumGoVersionGuard(string path)
+    [InlineData("src/Aspire.Hosting.CodeGeneration.Go/AtsGoCodeGenerator.cs", "Aspire.Hosting.CodeGeneration.Go")]
+    [InlineData("src/Aspire.Hosting.CodeGeneration.Go/GoLanguageSupport.cs", "Aspire.Hosting.CodeGeneration.Go")]
+    [InlineData("src/Aspire.Hosting.Go/GoVersionDetector.cs", "Aspire.Hosting.Go")]
+    public void GoVersionInputsSelectCliMinimumGoVersionGuard(string path, string affectedProject)
     {
-        var result = SelectWithRealMap(path, "Aspire.Hosting.CodeGeneration.Go");
+        var result = SelectWithRealMap(path, affectedProject);
 
         Assert.False(result.SelectsAll);
         Assert.Empty(result.UnmatchedFiles);
