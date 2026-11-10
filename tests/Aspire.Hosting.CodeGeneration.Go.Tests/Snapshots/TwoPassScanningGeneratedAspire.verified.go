@@ -5475,7 +5475,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithTerminal(o
 // WithTesting marks a resource for testing with an optional runtime result
 // collector.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithTesting(options ...*WithTestingOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -8671,7 +8671,7 @@ func (s *cSharpAppResource) WithTerminal(options ...*WithTerminalOptions) CSharp
 // WithTesting marks a resource for testing with an optional runtime result
 // collector.
 func (s *cSharpAppResource) WithTesting(options ...*WithTestingOptions) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -11920,7 +11920,7 @@ func (s *containerRegistryResource) WithTerminal(options ...*WithTerminalOptions
 // WithTesting marks a resource for testing with an optional runtime result
 // collector.
 func (s *containerRegistryResource) WithTesting(options ...*WithTestingOptions) ContainerRegistryResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -15375,7 +15375,7 @@ func (s *containerResource) WithTerminal(options ...*WithTerminalOptions) Contai
 // WithTesting marks a resource for testing with an optional runtime result
 // collector.
 func (s *containerResource) WithTesting(options ...*WithTestingOptions) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -20550,7 +20550,7 @@ func (s *dotnetToolResource) WithTerminal(options ...*WithTerminalOptions) Dotne
 // WithTesting marks a resource for testing with an optional runtime result
 // collector.
 func (s *dotnetToolResource) WithTesting(options ...*WithTestingOptions) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -24905,7 +24905,7 @@ func (s *executableResource) WithTerminal(options ...*WithTerminalOptions) Execu
 // WithTesting marks a resource for testing with an optional runtime result
 // collector.
 func (s *executableResource) WithTesting(options ...*WithTestingOptions) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -27030,7 +27030,7 @@ func (s *externalServiceResource) WithTerminal(options ...*WithTerminalOptions) 
 // WithTesting marks a resource for testing with an optional runtime result
 // collector.
 func (s *externalServiceResource) WithTesting(options ...*WithTestingOptions) ExternalServiceResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -31013,7 +31013,7 @@ func (s *parameterResource) WithTerminal(options ...*WithTerminalOptions) Parame
 // WithTesting marks a resource for testing with an optional runtime result
 // collector.
 func (s *parameterResource) WithTesting(options ...*WithTestingOptions) ParameterResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -34854,7 +34854,7 @@ func (s *projectResource) WithTerminal(options ...*WithTerminalOptions) ProjectR
 // WithTesting marks a resource for testing with an optional runtime result
 // collector.
 func (s *projectResource) WithTesting(options ...*WithTestingOptions) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -36442,7 +36442,7 @@ func newResourceTestingContextFromHandle(h *handle, c *client) ResourceTestingCo
 
 // CancellationToken gets the token used to cancel collection.
 func (s *resourceTestingContext) CancellationToken() (*CancellationToken, error) {
-	if s.err != nil { var zero *CancellationToken; return zero, s.err }
+	if err := s.Err(); err != nil { var zero *CancellationToken; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -36458,7 +36458,7 @@ func (s *resourceTestingContext) CancellationToken() (*CancellationToken, error)
 // OutputPath gets the absolute host path to this resource's private output
 // directory.
 func (s *resourceTestingContext) OutputPath() (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -36473,7 +36473,7 @@ func (s *resourceTestingContext) OutputPath() (string, error) {
 
 // PublishResult publishes an observed test result for this resource.
 func (s *resourceTestingContext) PublishResult(result *TestResult) error {
-	if s.err != nil { return s.err }
+	if err := s.Err(); err != nil { return err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -36486,7 +36486,7 @@ func (s *resourceTestingContext) PublishResult(result *TestResult) error {
 // ResourceName gets the logical resource name associated with every result
 // published through this context.
 func (s *resourceTestingContext) ResourceName() (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -36501,7 +36501,7 @@ func (s *resourceTestingContext) ResourceName() (string, error) {
 
 // TestingContext gets the context for the containing testing invocation.
 func (s *resourceTestingContext) TestingContext() TestingContext {
-	if s.err != nil { return &testingContext{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &testingContext{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -36521,7 +36521,7 @@ func (s *resourceTestingContext) TestingContext() TestingContext {
 // WaitForCompletionAsync waits until every replica of this resource has reached
 // an authoritative terminal outcome.
 func (s *resourceTestingContext) WaitForCompletionAsync(options ...*WaitForCompletionAsyncOptions) (bool, error) {
-	if s.err != nil { var zero bool; return zero, s.err }
+	if err := s.Err(); err != nil { var zero bool; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -40605,7 +40605,7 @@ func (s *testDatabaseResource) WithTerminal(options ...*WithTerminalOptions) Tes
 // WithTesting marks a resource for testing with an optional runtime result
 // collector.
 func (s *testDatabaseResource) WithTesting(options ...*WithTestingOptions) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -44810,7 +44810,7 @@ func (s *testRedisResource) WithTerminal(options ...*WithTerminalOptions) TestRe
 // WithTesting marks a resource for testing with an optional runtime result
 // collector.
 func (s *testRedisResource) WithTesting(options ...*WithTestingOptions) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -45397,7 +45397,7 @@ func newTestingContextFromHandle(h *handle, c *client) TestingContext {
 // OutputPath gets the absolute host path to the unique output directory for
 // this invocation.
 func (s *testingContext) OutputPath() (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
