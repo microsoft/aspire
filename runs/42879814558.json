@@ -1,0 +1,54 @@
+{
+  "run_id": 42879814558,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/42879814558",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-10T19:31:50Z",
+  "verdict": "main-repository-breakage",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 21957,
+    "title": "Don't probe the container runtime at startup when the app has no containers",
+    "author": "davidfowl",
+    "state": "closed",
+    "head_branch": "aspireagent/dcp-version-check-without-containers",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/21957",
+    "merged_at": "2026-11-10T18:53:50Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "32d2dd9c2214f7118628a1ab6a4e9e0795b584a9",
+    "failed_sha": "e6a9cadfd4a9238d9f8ae3ef91e4c0c282169d21",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "e6a9cadfd4a9238d9f8ae3ef91e4c0c282169d21",
+        "message": "Don't probe the container runtime at startup when the app has no containers (#21957) ## Description **What failed.** On Windows runners, the Deno functional tests (`DenoTelemetryFunctionalTests.VerifyDenoAppExportsNativeTelemetryToDashboard`, `DenoFunctionalTests.VerifyDenoAppDirectExecutionWorks`, `DenoFunctionalTests.VerifyDenoAppTaskScriptWorks`) and other DCP-backed fixtures fail in `InitializeAsync` with: ``` Aspire.Hosting.DistributedApplicationException : Application orchestrator dependen",
+        "html_url": "https://github.com/microsoft/aspire/commit/e6a9cadfd4a9238d9f8ae3ef91e4c0c282169d21",
+        "pull_request": {
+          "number": 21957,
+          "title": "Don't probe the container runtime at startup when the app has no containers",
+          "url": "https://github.com/microsoft/aspire/pull/21957",
+          "merged_at": "2026-11-10T18:53:50Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, browser-debugger)",
+      "id": 130063053846,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/42879814558/job/130063053846",
+      "classification": "main-repository-breakage",
+      "reason": "Browser-debugger E2E before-all hook timed out waiting for resource 'standalone' to reach Running; the AppHost debug startup never completed.",
+      "failed_steps": [
+        "Run extension E2E tests"
+      ]
+    }
+  ],
+  "failed_tests": [],
+  "causes": [
+    "vscode-e2e-windows-browser-debugger-resource-running-timeout"
+  ]
+}
