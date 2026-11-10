@@ -39,6 +39,10 @@ interface AttachedResourceDebugProof {
     attachRequests: unknown[];
     breakpointResponses: Array<{ success?: boolean }>;
     debugAdapterResponses: unknown[];
+    resumeInterruptedInspectionResponses: Array<{
+        command?: string;
+        classification: { reason: 'pendingAtProofContinue' | 'sentAfterProofContinue'; proofContinueSeq: number };
+    }>;
     resourceResponseAfterDetach: string;
     sessionTerminated: boolean;
 }
@@ -339,6 +343,7 @@ suite('Aspire resource debug language model tool E2E', function () {
             assert.ok(proof.attachRequests.length > 0);
             assert.ok(proof.breakpointResponses.some(response => response.success === true));
             assert.deepStrictEqual(proof.debugAdapterResponses, []);
+            logResumeInterruptedInspectionResponses(proof);
             assert.strictEqual(proof.resourceResponseAfterDetach, scenario.expectedResponse);
             assert.strictEqual(proof.sessionTerminated, true);
         }
@@ -410,6 +415,7 @@ suite('Aspire resource debug language model tool E2E', function () {
 
         assertSafeResourceDebugResult(proof.toolPayload);
         assert.deepStrictEqual(proof.debugAdapterResponses, []);
+        logResumeInterruptedInspectionResponses(proof);
 
         await stopPrimaryAppHostIfRunning();
         await waitForNoDebugSessions(120000);
@@ -525,6 +531,14 @@ suite('Aspire resource debug source paths', function () {
         assert.strictEqual(isSamePath(uppercaseDrivePath, lowercaseDrivePath), true);
     });
 });
+
+// The attach proof exempts failed inspection requests interrupted by its own resume (#21777). Log them so a
+// passing run still shows that the exemption fired and why each response was classified.
+function logResumeInterruptedInspectionResponses(proof: AttachedResourceDebugProof): void {
+    if (proof.resumeInterruptedInspectionResponses.length > 0) {
+        console.log(`Resource debug E2E ${proof.resourceName}: ignored failed inspection responses interrupted by the proof's continue: ${JSON.stringify(proof.resumeInterruptedInspectionResponses)}`);
+    }
+}
 
 function toWorkspaceRelativePath(filePath: string): string {
     const relativePath = path.relative(getWorkspaceRoot(), filePath);

@@ -34,7 +34,7 @@ import type { BlazorWasmDebuggerStatus } from './blazorWasmDebuggerSetup';
 import { getPsFollowProcessLogPath, type PsFollowProcessEvent } from './psFollowProcessLog';
 import { proveDotnetResourceLaunch } from './dotnetResourceLaunchProof';
 import { attachWhenResourceResponds, runAttachedResourceDetachSequence } from './attachedResourceDetachSequence';
-import { ResumeInterruptedInspectionRequests } from './resumeInterruptedInspectionRequests';
+import { ResumeInterruptedInspectionRequests, type ResumeInterruptionClassification } from './resumeInterruptedInspectionRequests';
 
 let atomicWriteSequence = 0;
 
@@ -1365,7 +1365,7 @@ async function proveAttachedResourceDebugging(
   const terminatedSessionIds = new Set<string>();
   const attachRequests: DebugAdapterMessageSummary[] = [];
   const debugAdapterResponses: DebugAdapterMessageSummary[] = [];
-  const resumeInterruptedInspectionResponses: DebugAdapterMessageSummary[] = [];
+  const resumeInterruptedInspectionResponses: Array<DebugAdapterMessageSummary & { classification: ResumeInterruptionClassification }> = [];
   const resumeInterruptedInspectionRequests = new ResumeInterruptedInspectionRequests();
   const breakpointResponses: DebugAdapterMessageSummary[] = [];
   const stoppedEvents: DebugAdapterStoppedEvent[] = [];
@@ -1407,16 +1407,22 @@ async function proveAttachedResourceDebugging(
         },
         onDidSendMessage(message) {
           resumeInterruptedInspectionRequests.onEvent(session.id, message);
-          const interruptedByResume = resumeInterruptedInspectionRequests.onResponse(session.id, message);
+          const resumeInterruption = resumeInterruptedInspectionRequests.onResponse(session.id, message);
           if (message?.type === 'response' && message.success === false) {
-            (interruptedByResume ? resumeInterruptedInspectionResponses : debugAdapterResponses).push({
+            const failedResponse: DebugAdapterMessageSummary = {
               sessionId: session.id,
               sessionType: session.type,
               sessionName: session.name,
               command: message.command,
               success: false,
               body: redactDebugAdapterArguments(message),
-            });
+            };
+            if (resumeInterruption) {
+              resumeInterruptedInspectionResponses.push({ ...failedResponse, classification: resumeInterruption });
+            }
+            else {
+              debugAdapterResponses.push(failedResponse);
+            }
           }
           if (message?.type === 'response' && message.command === 'setBreakpoints') {
             const breakpointResponse = {

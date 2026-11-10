@@ -1,18 +1,19 @@
 import * as assert from 'assert';
 
-import { ResumeInterruptedInspectionRequests } from '../testing/resumeInterruptedInspectionRequests';
+import { ResumeInterruptedInspectionRequests, type ResumeInterruptionClassification } from '../testing/resumeInterruptedInspectionRequests';
 
 type DapMessage = { type: string; seq?: number; command?: string; event?: string; request_seq?: number; success?: boolean; message?: string };
 
 const attachedSessionId = 'attached';
 
 // Replays messages the way the attach proof's debug adapter tracker observes them and returns the failed
-// responses it would still report in debugAdapterResponses.
+// responses it would still report in debugAdapterResponses, plus the classification of each one it ignored.
 type TraceStep = { sessionId?: string; direction: 'toAdapter' | 'fromAdapter' | 'proofResume'; message: DapMessage };
 
-function reportedFailures(trace: TraceStep[]): DapMessage[] {
+function replay(trace: TraceStep[]): { failures: DapMessage[]; ignored: Array<{ requestSeq?: number } & ResumeInterruptionClassification> } {
     const tracker = new ResumeInterruptedInspectionRequests();
     const failures: DapMessage[] = [];
+    const ignored: Array<{ requestSeq?: number } & ResumeInterruptionClassification> = [];
     for (const { sessionId = attachedSessionId, direction, message } of trace) {
         if (direction === 'proofResume') {
             tracker.expectProofResume(sessionId);
@@ -26,13 +27,20 @@ function reportedFailures(trace: TraceStep[]): DapMessage[] {
         }
 
         tracker.onEvent(sessionId, message);
-        const interruptedByResume = tracker.onResponse(sessionId, message);
-        if (message.type === 'response' && message.success === false && !interruptedByResume) {
+        const classification = tracker.onResponse(sessionId, message);
+        if (classification) {
+            ignored.push({ requestSeq: message.request_seq, ...classification });
+        }
+        else if (message.type === 'response' && message.success === false) {
             failures.push(message);
         }
     }
 
-    return failures;
+    return { failures, ignored };
+}
+
+function reportedFailures(trace: TraceStep[]): DapMessage[] {
+    return replay(trace).failures;
 }
 
 const request = (seq: number, command: string, sessionId?: string) =>
@@ -49,7 +57,7 @@ suite('Resume-interrupted inspection requests', () => {
     test('ignores a Variables view request that the proof\'s continue aborts (#21777)', () => {
         // Windows resource-debug-tools job 126943883962: vsdbg failed VS Code's variables request 13 with
         // 'Evaluation aborted.' because the proof resumed the breakpoint while it was in flight.
-        const failures = reportedFailures([
+        const { failures, ignored } = replay([
             stopped(),
             request(10, 'stackTrace'),
             response(10, 'stackTrace', true),
@@ -62,20 +70,23 @@ suite('Resume-interrupted inspection requests', () => {
         ]);
 
         assert.deepStrictEqual(failures, []);
+        assert.deepStrictEqual(ignored, [{ requestSeq: 13, reason: 'pendingAtProofContinue', proofContinueSeq: 14 }]);
     });
 
+    // Defensive: no CI run has shown this ordering yet; the failure message here is illustrative.
     test('ignores an inspection request VS Code sends after the proof resumes and before the next stop', () => {
-        const failures = reportedFailures([
+        const { failures, ignored } = replay([
             stopped(),
             request(10, 'stackTrace'),
             response(10, 'stackTrace', true),
             proofContinue(11),
             request(12, 'scopes'),
             response(11, 'continue', true),
-            response(12, 'scopes', false, 'Unable to get scopes: the target process is running.'),
+            response(12, 'scopes', false, 'Evaluation aborted.'),
         ]);
 
         assert.deepStrictEqual(failures, []);
+        assert.deepStrictEqual(ignored, [{ requestSeq: 12, reason: 'sentAfterProofContinue', proofContinueSeq: 11 }]);
     });
 
     test('reports an inspection failure while the thread is still stopped', () => {
@@ -136,7 +147,7 @@ suite('Resume-interrupted inspection requests', () => {
             request(15, 'scopes', 'other'),
             response(14, 'continue', true, undefined, 'other'),
             response(13, 'variables', false, 'Evaluation aborted.', 'other'),
-            response(15, 'scopes', false, 'Unable to get scopes: the target process is running.', 'other'),
+            response(15, 'scopes', false, 'Evaluation aborted.', 'other'),
         ]);
 
         assert.deepStrictEqual(failures.map(failure => failure.request_seq), [13, 15]);
