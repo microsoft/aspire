@@ -10,8 +10,8 @@
 
 namespace Aspire.Cli.Resources {
     using System;
-
-
+    
+    
     /// <summary>
     ///   A strongly-typed resource class, for looking up localized strings, etc.
     /// </summary>
@@ -23,15 +23,15 @@ namespace Aspire.Cli.Resources {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
     internal class SecretCommandStrings {
-
+        
         private static global::System.Resources.ResourceManager resourceMan;
-
+        
         private static global::System.Globalization.CultureInfo resourceCulture;
-
+        
         [global::System.Diagnostics.CodeAnalysis.SuppressMessageAttribute("Microsoft.Performance", "CA1811:AvoidUncalledPrivateCode")]
         internal SecretCommandStrings() {
         }
-
+        
         /// <summary>
         ///   Returns the cached ResourceManager instance used by this class.
         /// </summary>
@@ -45,7 +45,7 @@ namespace Aspire.Cli.Resources {
                 return resourceMan;
             }
         }
-
+        
         /// <summary>
         ///   Overrides the current thread's CurrentUICulture property for all
         ///   resource lookups using this strongly typed resource class.
@@ -59,7 +59,7 @@ namespace Aspire.Cli.Resources {
                 resourceCulture = value;
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to The --all option cannot be combined with --environment..
         /// </summary>
@@ -68,7 +68,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("AllEnvironmentsCannotUseEnvironment", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to List secrets from all AppHost environment Aspire secrets files..
         /// </summary>
@@ -77,7 +77,16 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("AllEnvironmentsOptionDescription", resourceCulture);
             }
         }
-
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Specify either a positional secret value or --envvar, not both..
+        /// </summary>
+        internal static string ConflictingValueSources {
+            get {
+                return ResourceManager.GetString("ConflictingValueSources", resourceCulture);
+            }
+        }
+        
         /// <summary>
         ///   Looks up a localized string similar to Could not find an AppHost project..
         /// </summary>
@@ -86,7 +95,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("CouldNotFindAppHost", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Delete a secret.
         /// </summary>
@@ -95,7 +104,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("DeleteDescription", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Manage AppHost secrets.
         /// </summary>
@@ -104,7 +113,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("Description", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Environment.
         /// </summary>
@@ -113,7 +122,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("EnvironmentColumnHeader", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to The AppHost environment whose Aspire secrets file is used. Names are case-insensitive. The default is &apos;Development&apos;..
         /// </summary>
@@ -122,7 +131,34 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("EnvironmentOptionDescription", resourceCulture);
             }
         }
-
+        
+        /// <summary>
+        ///   Looks up a localized string similar to --envvar requires a nonempty environment variable name..
+        /// </summary>
+        internal static string EnvvarSourceNameRequired {
+            get {
+                return ResourceManager.GetString("EnvvarSourceNameRequired", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Environment variable &apos;{0}&apos; is not set. No secret was changed..
+        /// </summary>
+        internal static string EnvvarSourceNotSet {
+            get {
+                return ResourceManager.GetString("EnvvarSourceNotSet", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Read the secret value from the named environment variable instead of a positional value.
+        /// </summary>
+        internal static string EnvvarSourceOptionDescription {
+            get {
+                return ResourceManager.GetString("EnvvarSourceOptionDescription", resourceCulture);
+            }
+        }
+        
         /// <summary>
         ///   Looks up a localized string similar to Output format.
         /// </summary>
@@ -131,7 +167,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("FormatOptionDescription", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Get a secret value.
         /// </summary>
@@ -140,7 +176,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("GetDescription", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Environment names must contain 1-80 ASCII letters, digits, hyphens, or underscores, start with a letter or digit, and must not be Windows reserved device names..
         /// </summary>
@@ -149,7 +185,16 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("InvalidEnvironmentName", resourceCulture);
             }
         }
-
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Secrets file &apos;{0}&apos; contains invalid JSON (line {1}, byte position {2}). Fix the JSON in this file and try again. In JSON strings, escape a backslash as &apos;\\&apos; (for example, &apos;server\\sql&apos;)..
+        /// </summary>
+        internal static string InvalidSecretsFile {
+            get {
+                return ResourceManager.GetString("InvalidSecretsFile", resourceCulture);
+            }
+        }
+        
         /// <summary>
         ///   Looks up a localized string similar to The secret key (e.g., Azure:Location or Parameters:postgres-password).
         /// </summary>
@@ -158,7 +203,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("KeyArgumentDescription", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Key.
         /// </summary>
@@ -167,7 +212,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("KeyColumnHeader", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to The secret key to delete.
         /// </summary>
@@ -176,7 +221,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("KeyDeleteArgumentDescription", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to The secret key to retrieve.
         /// </summary>
@@ -185,7 +230,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("KeyRetrieveArgumentDescription", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to List all secrets.
         /// </summary>
@@ -194,7 +239,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ListDescription", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to No secrets configured..
         /// </summary>
@@ -203,7 +248,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("NoSecretsConfigured", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Show the secrets store path..
         /// </summary>
@@ -212,7 +257,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("PathDescription", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Secret &apos;{0}&apos; deleted successfully..
         /// </summary>
@@ -221,7 +266,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("SecretDeleteSuccess", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Secret &apos;{0}&apos; not found..
         /// </summary>
@@ -230,7 +275,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("SecretNotFound", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Secret &apos;{0}&apos; set successfully..
         /// </summary>
@@ -239,7 +284,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("SecretSetSuccess", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Set a secret value.
         /// </summary>
@@ -248,22 +293,40 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("SetDescription", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to The secret value to set.
+        ///   Looks up a localized string similar to The secret value to set (omit to prompt or use --envvar).
         /// </summary>
         internal static string ValueArgumentDescription {
             get {
                 return ResourceManager.GetString("ValueArgumentDescription", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Value.
         /// </summary>
         internal static string ValueColumnHeader {
             get {
                 return ResourceManager.GetString("ValueColumnHeader", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Enter the secret value:.
+        /// </summary>
+        internal static string ValuePrompt {
+            get {
+                return ResourceManager.GetString("ValuePrompt", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Specify a positional secret value or --envvar &lt;variable-name&gt;..
+        /// </summary>
+        internal static string ValueSourceRequired {
+            get {
+                return ResourceManager.GetString("ValueSourceRequired", resourceCulture);
             }
         }
     }

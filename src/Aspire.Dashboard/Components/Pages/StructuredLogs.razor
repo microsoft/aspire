@@ -122,7 +122,7 @@
                                         <AspireTemplateColumn ColumnId="@TraceColumn" ColumnManager="@_manager" Title="@Loc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsTraceColumnHeader)]">
                                             @if (!string.IsNullOrEmpty(context.TraceId))
                                             {
-                                                <a href="@(ResourcesLayout?.AddPaneToUrl(DashboardUrls.TraceDetailUrl(context.TraceId, context.SpanId)) ?? DashboardUrls.TraceDetailUrl(context.TraceId, context.SpanId))" class="long-inner-content" @onclick:stopPropagation="true">
+                                                <a href="@(ResourcesLayout?.GetTraceDetailUrl(context.TraceId, context.SpanId) ?? DashboardUrls.TraceDetailUrl(context.TraceId, context.SpanId))" class="long-inner-content" @onclick:stopPropagation="true">
                                                     @OtlpHelpers.ToShortenedId(context.TraceId)
                                                 </a>
                                             }

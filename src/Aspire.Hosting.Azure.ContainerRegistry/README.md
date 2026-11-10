@@ -67,6 +67,36 @@ Without an explicit registry, the Container Apps environment creates a default r
 The registry is deployment infrastructure and is not provisioned during local runs. `aspire publish` generates its Bicep; `aspire deploy` provisions it and pushes the application's images as part of deployment.
 See the [Container Apps deployment guide](https://aspire.dev/deployment/azure/container-apps/) for Azure settings, deployment, and cleanup.
 
+## Schedule image cleanup
+
+`WithPurgeTask` schedules image cleanup, retaining the newest `keep` matching tags per repository
+and removing other matching tags older than `ago`. Defaults are `keep: 3` and `ago: 0` (no age
+protection); younger tags are retained, so more than `keep` can remain.
+
+**C#**
+
+```csharp
+registry.WithPurgeTask("0 1 * * *",
+    filter: "myapp:.*",
+    ago: TimeSpan.FromDays(7),
+    keep: 5);
+```
+
+**TypeScript**
+
+```typescript
+await registry.withPurgeTask("0 1 * * *", {
+    filter: "myapp:.*",
+    ago: 7 * 24 * 60 * 60 * 1000,
+    keep: 5
+});
+```
+
+**Warning:** Cleanup also deletes eligible untagged manifests in matching repositories, regardless
+of age, which can break digest-based pulls and rollbacks. Locked artifacts and dependencies of
+retained images remain protected. See
+[ACR purge behavior](https://learn.microsoft.com/azure/container-registry/container-registry-auto-purge).
+
 ## Additional documentation
 
 * https://aspire.dev/integrations/gallery/

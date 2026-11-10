@@ -4,11 +4,11 @@
 using System.CommandLine;
 using System.Diagnostics;
 using System.Globalization;
+using System.Net;
 using System.Text;
 using System.Text.Json;
 using Aspire.Cli.Acquisition;
 using Aspire.Cli.Agents;
-using Aspire.Cli.Agents.AspireSkills;
 using Aspire.Cli.Agents.ClaudeCode;
 using Aspire.Cli.Agents.Copilot;
 using Aspire.Cli.Agents.OpenCode;
@@ -228,7 +228,7 @@ public class Program
                 globalSettingsFile.FullName,
                 key);
 
-            errorWriter.WriteMarkup(warning.EscapeMarkup(), KnownEmojis.Warning);
+            errorWriter.WriteMarkup(warning.EscapeMarkup(), KnownEmojis.PoliceCarLight);
         }
     }
 
@@ -566,14 +566,7 @@ public class Program
         builder.Services.AddSingleton<ResourceColorMap>();
         builder.Services.AddMemoryCache();
 
-        // aspire.dev documentation services.
-        builder.Services.AddSingleton<IDocsCache, DocsCache>();
-        builder.Services.AddHttpClient<IDocsFetcher, DocsFetcher>();
-        builder.Services.AddSingleton<IDocsIndexService, DocsIndexService>();
-        builder.Services.AddSingleton<IDocsSearchService, DocsSearchService>();
-        builder.Services.AddSingleton<IApiDocsCache, ApiDocsCache>();
-        builder.Services.AddHttpClient<IApiDocsFetcher, ApiDocsFetcher>();
-        builder.Services.AddSingleton<IApiDocsIndexService, ApiDocsIndexService>();
+        AddDocumentationServices(builder.Services);
 
         // Bundle layout services (for polyglot apphost without .NET SDK).
         // Registered before NuGetPackageCache so the factory can choose implementation.
@@ -630,10 +623,6 @@ public class Program
         builder.Services.AddSingleton(serviceProvider =>
             new SigstoreVerifier(serviceProvider.GetRequiredService<ITrustRootProvider>()));
         builder.Services.AddHttpClient<INpmProvenanceChecker, SigstoreNpmProvenanceChecker>();
-        builder.Services.AddHttpClient<IGitHubArtifactAttestationVerifier, GitHubArtifactAttestationVerifier>();
-        builder.Services.AddSingleton<IAspireSkillsBundleProvider, AspireSkillsBundleProvider>();
-        builder.Services.AddSingleton<IEmbeddedAspireSkillsBundleProvider, EmbeddedAspireSkillsBundleProvider>();
-        builder.Services.AddSingleton<IAspireSkillsInstaller, AspireSkillsInstaller>();
         builder.Services.AddSingleton<IPlaywrightCliRunner, PlaywrightCliRunner>();
         builder.Services.AddSingleton<PlaywrightCliInstaller>();
         builder.Services.AddSingleton<IAgentClient, CopilotAgentClient>();
@@ -688,6 +677,7 @@ public class Program
         builder.Services.AddSingleton<IEnvironmentCheck, DeprecatedAgentConfigCheck>();
         builder.Services.AddSingleton<IEnvironmentCheck, LegacySettingsFileCheck>();
         builder.Services.AddSingleton<IEnvironmentCheck, PendingMigrationsCheck>();
+        builder.Services.AddSingleton<IEnvironmentCheck, AspireSkillsCheck>();
         builder.Services.AddSingleton<IEnvironmentCheck, VsCodeExtensionCheck>();
         builder.Services.AddSingleton<IEnvironmentChecker, EnvironmentChecker>();
 
@@ -802,6 +792,19 @@ public class Program
         var homeDirectory = GetUsersAspirePath(processPath);
         var sdksPath = Path.Combine(homeDirectory, "sdks");
         return new DirectoryInfo(sdksPath);
+    }
+
+    internal static void AddDocumentationServices(IServiceCollection services)
+    {
+        services.AddSingleton<IDocsCache, DocsCache>();
+        services.AddHttpClient<IDocsFetcher, DocsFetcher>()
+            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AutomaticDecompression = DecompressionMethods.All });
+        services.AddSingleton<IDocsIndexService, DocsIndexService>();
+        services.AddSingleton<IDocsSearchService, DocsSearchService>();
+        services.AddSingleton<IApiDocsCache, ApiDocsCache>();
+        services.AddHttpClient<IApiDocsFetcher, ApiDocsFetcher>()
+            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AutomaticDecompression = DecompressionMethods.All });
+        services.AddSingleton<IApiDocsIndexService, ApiDocsIndexService>();
     }
 
     internal static CliExecutionContext BuildCliExecutionContext(bool debugMode, LogLevel? consoleLogLevel, string logsDirectory, string logFilePath, IIdentityResolver identityResolver, string? processPath = null)
@@ -976,7 +979,7 @@ public class Program
             // to stderr (ConsoleOutput.Error) so it never contaminates stdout for callers that
             // parse it. The surrounding blank lines stay on the same stderr stream for spacing.
             consoleEnvironment.Error.WriteLine();
-            interactionService.DisplayMessage(KnownEmojis.Warning, $"[yellow]{notice.EscapeMarkup()}[/]", allowMarkup: true, consoleOverride: ConsoleOutput.Error);
+            interactionService.DisplayMessage(KnownEmojis.PoliceCarLight, $"[yellow]{notice.EscapeMarkup()}[/]", allowMarkup: true, consoleOverride: ConsoleOutput.Error);
             consoleEnvironment.Error.WriteLine();
         }
     }

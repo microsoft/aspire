@@ -89,7 +89,7 @@ internal static class ResourceCommandHelper
         }
         else if (response.Canceled)
         {
-            interactionService.DisplayMessage(KnownEmojis.Warning, $"Command '{commandName}' on '{resourceName}' was canceled.");
+            interactionService.DisplayMessage(KnownEmojis.PoliceCarLight, $"Command '{commandName}' on '{resourceName}' was canceled.");
             return CliExitCodes.FailedToExecuteResourceCommand;
         }
         else
@@ -132,7 +132,7 @@ internal static class ResourceCommandHelper
         }
         else if (response.Canceled)
         {
-            interactionService.DisplayMessage(KnownEmojis.Warning, $"{progressVerb} command for '{resourceName}' was canceled.");
+            interactionService.DisplayMessage(KnownEmojis.PoliceCarLight, $"{progressVerb} command for '{resourceName}' was canceled.");
             return CliExitCodes.FailedToExecuteResourceCommand;
         }
         else

@@ -4,6 +4,7 @@
 using System.Diagnostics;
 using System.Text;
 using Aspire.Cli.DotNet;
+using Aspire.Cli.Interaction;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -12,11 +13,20 @@ namespace Aspire.Cli.Git;
 
 internal interface IGitCommandRunner
 {
+    IGitCommandRunner WithStandardErrorHandler(Action<string> standardErrorHandler);
     Task<string> RunAsync(DirectoryInfo workingDirectory, string[] arguments, GitCommandMode mode, CancellationToken cancellationToken);
 }
 
-internal sealed class GitCommandRunner(ICliHostEnvironment hostEnvironment, ILogger<GitCommandRunner> logger) : IGitCommandRunner
+internal sealed class GitCommandRunner(ICliHostEnvironment hostEnvironment, IInteractionService interaction, ILogger<GitCommandRunner> logger) : IGitCommandRunner
 {
+    private Action<string> StandardErrorHandler { get; init; } =
+        output => interaction.DisplayRawText(output, ConsoleOutput.Error);
+
+    // Keep diagnostic routing operation-local: foreground and background Git work
+    // can share the registered runner without changing each other's output.
+    public IGitCommandRunner WithStandardErrorHandler(Action<string> standardErrorHandler) =>
+        new GitCommandRunner(hostEnvironment, interaction, logger) { StandardErrorHandler = standardErrorHandler };
+
     private static readonly HashSet<string> s_repositoryEnvironmentVariables = new(StringComparer.OrdinalIgnoreCase)
     {
         "GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES"
@@ -269,8 +279,17 @@ internal sealed class GitCommandRunner(ICliHostEnvironment hostEnvironment, ILog
         probe.FileName = executable;
         probe.ArgumentList.Clear();
         probe.ArgumentList.Add("-V");
+
+        return await VerifyOpenSshAsync(probe, cancellationToken) ? executable : null;
+    }
+
+    internal async Task<bool> VerifyOpenSshAsync(ProcessStartInfo probe, CancellationToken cancellationToken)
+    {
+        var stopwatch = Stopwatch.StartNew();
+        // Allow slow OpenSSH initialization on busy Windows runners without exceeding
+        // the caller's acquisition deadline or leaving an unbounded probe.
         var result = await ProcessCaptureRunner.RunAsync<string?>(
-            probe, TimeSpan.FromSeconds(5),
+            probe, TimeSpan.FromSeconds(30),
             async (process, token) =>
             {
                 process.StandardInput.Close();
@@ -280,9 +299,11 @@ internal sealed class GitCommandRunner(ICliHostEnvironment hostEnvironment, ILog
                 return (await stdout + await stderr).Trim();
             },
             () => null, NullLogger.Instance, cancellationToken);
+        logger.LogDebug("OpenSSH verification completed after {Elapsed}; exit code {ExitCode}, failure {Failure}, cancelled {Cancelled}.",
+            stopwatch.Elapsed, result.ExitCode, result.FailureKind, result.Cancelled);
         cancellationToken.ThrowIfCancellationRequested();
         return !result.Cancelled && result.FailureKind is null && result.ExitCode == 0
-            && result.Capture?.StartsWith("OpenSSH_", StringComparison.Ordinal) is true ? executable : null;
+            && result.Capture?.StartsWith("OpenSSH_", StringComparison.Ordinal) is true;
     }
 
     internal static string NormalizeSshPath(string path, string workingDirectory)
@@ -373,6 +394,13 @@ internal sealed class GitCommandRunner(ICliHostEnvironment hostEnvironment, ILog
         if (result.Capture is not { } capture || result.FailureKind is not null)
         {
             throw new GitCommandException(GitFailure.RepositoryUnavailable, null);
+        }
+        if (capture.StandardError.Length > 0)
+        {
+            // Quiet acquisition suppresses routine Git output, not diagnostics. Keep
+            // captured stderr on the operation's diagnostic path without copying parsed
+            // stdout into it. Interactive remote stderr is inherited.
+            StandardErrorHandler(capture.StandardError);
         }
         if (result.ExitCode != 0)
         {

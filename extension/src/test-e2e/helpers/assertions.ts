@@ -3,7 +3,7 @@ import * as http from 'http';
 import * as https from 'https';
 import * as path from 'path';
 import type { AspireAppHostState as AppHostState, AspireDebugSessionState, AspireExtensionE2EControlStatus as ExtensionE2EControlStatus, AspireExtensionE2EStateFile as ExtensionE2EStateFile, AspireExtensionE2ETaskProcessEvent as TaskProcessEvent, AspireExtensionStateSnapshot as ExtensionStateSnapshot, AspireResourceState as ResourceState } from '../../types/extensionApi';
-import { getControlFilePath, getPrimaryAppHostProjectPath, getRunId, getStateFilePath, getWorkspaceRoot } from './paths';
+import { getControlFilePath, getDevCertPath, getPrimaryAppHostProjectPath, getRunId, getStateFilePath, getWorkspaceRoot } from './paths';
 
 type CommandInvocation = ExtensionE2EStateFile['commandInvocations'][number];
 type BrowserDebugSession = ExtensionE2EStateFile['browserDebugSessions'][number];
@@ -90,8 +90,45 @@ export async function waitForDashboardUrl(timeoutMs = 120000): Promise<Extension
     return await waitForExtensionState(file => typeof file.dashboardUrl === 'string' && file.dashboardUrl.length > 0, 'dashboard URL', timeoutMs);
 }
 
+/**
+ * Waits for the AppHost debug session to report startup completion.
+ *
+ * Fails as soon as an observed session for the AppHost ends before completing startup, unless the AppHost is
+ * still launching or a newer debug launch for it has been recorded (an intentional restart). Without this, a crashed AppHost keeps
+ * the caller polling for its full timeout and a shard of such waits can exhaust the E2E process timeout
+ * before Mocha writes any failure details.
+ */
 export async function waitForDebugSessionStartup(appHostPath = getPrimaryAppHostProjectPath(), timeoutMs = 180000): Promise<ExtensionE2EStateFile> {
-    return await waitForExtensionState(file => file.state.debugSessions.some(session => isDebugSessionForAppHost(session, appHostPath) && session.startupCompleted), 'debug AppHost startup', timeoutMs);
+    let observedLaunchSequence: number | undefined;
+    return await waitForExtensionState(
+        file => file.state.debugSessions.some(session => isDebugSessionForAppHost(session, appHostPath) && session.startupCompleted),
+        'debug AppHost startup',
+        timeoutMs,
+        file => {
+            const latestLaunchSequence = getLatestDebugLaunchSequence(file, appHostPath);
+            if (file.state.debugSessions.some(session => isDebugSessionForAppHost(session, appHostPath))) {
+                observedLaunchSequence = latestLaunchSequence;
+                return undefined;
+            }
+
+            if (observedLaunchSequence === undefined) {
+                return undefined;
+            }
+
+            if (latestLaunchSequence > observedLaunchSequence) {
+                observedLaunchSequence = undefined;
+                return undefined;
+            }
+
+            // Keep the observation while the AppHost is launching: if the flag clears without a newer launch or
+            // session, the observed session still ended before startup completed.
+            if (file.state.launchingPaths.some(launchingPath => isSamePath(launchingPath, appHostPath))) {
+                return undefined;
+            }
+
+            return `The debug session for AppHost '${appHostPath}' ended before startup completed.\n`
+                + `Last debug console output:\n${formatRecentDebugConsoleOutput(file, appHostPath)}`;
+        });
 }
 
 export async function waitForDebugDashboardUrl(appHostPath = getPrimaryAppHostProjectPath(), timeoutMs = 120000): Promise<ExtensionE2EStateFile> {
@@ -284,21 +321,29 @@ export async function waitForExtensionState(
     predicate: (file: ExtensionE2EStateFile) => boolean,
     description: string,
     timeoutMs = 60000,
+    getTerminalFailure?: (file: ExtensionE2EStateFile) => string | undefined,
 ): Promise<ExtensionE2EStateFile> {
     const started = Date.now();
     let lastState: string | undefined;
     let lastError: Error | undefined;
 
     while (Date.now() - started < timeoutMs) {
+        let terminalFailure: string | undefined;
         try {
             const file = readStateFile();
             lastState = JSON.stringify(file, undefined, 2);
             if (predicate(file)) {
                 return file;
             }
+
+            terminalFailure = getTerminalFailure?.(file);
         }
         catch (error) {
             lastError = error instanceof Error ? error : new Error(String(error));
+        }
+
+        if (terminalFailure !== undefined) {
+            throw new Error(`Stopped waiting for ${description} after ${Date.now() - started}ms: ${terminalFailure}\nLast state: ${lastState}`);
         }
 
         await delay(200);
@@ -505,6 +550,21 @@ function isDebugSessionForAppHost(session: AspireDebugSessionState, appHostPath:
     return session.appHostPath !== undefined && isSamePath(session.appHostPath, appHostPath);
 }
 
+function getLatestDebugLaunchSequence(file: ExtensionE2EStateFile, appHostPath: string): number {
+    return Math.max(0, ...file.debugLaunches
+        .filter(launch => isSamePath(launch.appHostPath, appHostPath))
+        .map(launch => launch.sequence));
+}
+
+function formatRecentDebugConsoleOutput(file: ExtensionE2EStateFile, appHostPath: string, maxEvents = 40): string {
+    const output = file.debugConsoleOutputs
+        .filter(event => event.appHostPath !== undefined && isSamePath(event.appHostPath, appHostPath))
+        .slice(-maxEvents)
+        .map(event => `[${event.category}] ${event.output.trimEnd()}`)
+        .join('\n');
+    return output.length > 0 ? output : '<none>';
+}
+
 function isResourceMatch(resource: ResourceState, resourceName: string): boolean {
     return resource.name === resourceName || resource.displayName === resourceName;
 }
@@ -548,7 +608,7 @@ function getUrlText(url: string, redirectLimit = 5, cookies: string[] = []): Pro
             });
         };
         const request = parsed.protocol === 'https:'
-            ? https.get(parsed, { headers, rejectUnauthorized: false }, handleResponse)
+            ? https.get(parsed, { headers, ca: readTrustedDevCertificate() }, handleResponse)
             : http.get(parsed, { headers }, handleResponse);
 
         request.on('error', reject);
@@ -556,6 +616,18 @@ function getUrlText(url: string, redirectLimit = 5, cookies: string[] = []): Pro
             request.destroy(new Error('request timed out'));
         });
     });
+}
+
+/**
+ * The Dashboard and HTTPS resource endpoints in the E2E AppHost are served with the ASP.NET Core
+ * development certificate, which clean machines and hosted runners do not trust. Trust exactly that
+ * certificate instead of turning verification off: chain and host name checks still run, so a server
+ * presenting any other certificate is rejected. The runner exports the public PEM before launch; when
+ * it is unavailable the default trust store applies.
+ */
+function readTrustedDevCertificate(): Buffer | undefined {
+    const certificatePath = getDevCertPath();
+    return certificatePath === undefined ? undefined : fs.readFileSync(certificatePath);
 }
 
 function sanitizeUrlForDiagnostics(url: string): string {

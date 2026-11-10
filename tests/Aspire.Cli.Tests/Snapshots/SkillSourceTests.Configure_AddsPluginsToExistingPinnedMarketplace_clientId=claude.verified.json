@@ -1,0 +1,15 @@
+﻿{
+  "extraKnownMarketplaces": {
+    "team": {
+      "source": {
+        "source": "github",
+        "repo": "example/team",
+        "ref": "release"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "aspire@team": true,
+    "deployment@team": true
+  }
+}

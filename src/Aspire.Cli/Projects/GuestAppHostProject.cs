@@ -623,6 +623,10 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 launchProfileEnvironmentVariables,
                 defaultEnvironment: AppHostEnvironmentDefaults.DevelopmentEnvironmentName,
                 args: context.UnmatchedTokens);
+            if (context.Isolated)
+            {
+                launchSettingsEnvVars["DcpPublisher__RandomizePorts"] = "true";
+            }
             await _appHostConfigurationProjector.ApplyEnvironmentVariablesAsync(launchSettingsEnvVars, directory, cancellationToken);
             launchSettingsEnvVars[KnownConfigNames.DcpWorkloadId] = AppHostWorkloadId.Create(appHostFile);
             if (appHostServerProject is NativeAppHostServerProject)
@@ -2142,7 +2146,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             // Nudge the user toward the modern `apphost.mts` layout. The legacy layout keeps
             // working, so this is a single, non-blocking warning that points at `aspire update --migrate`.
             _interactionService.DisplayMessage(
-                KnownEmojis.Warning,
+                KnownEmojis.PoliceCarLight,
                 $"[yellow]{Markup.Escape(ErrorStrings.LegacyTypeScriptAppHostWarning)}[/]",
                 allowMarkup: true);
         }
@@ -2275,7 +2279,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 ErrorStrings.CodegenVersionSkewWarning,
                 cliVersion,
                 sdkVersion);
-            _interactionService.DisplayMessage(KnownEmojis.Warning, $"[yellow]{Markup.Escape(message)}[/]", allowMarkup: true);
+            _interactionService.DisplayMessage(KnownEmojis.PoliceCarLight, $"[yellow]{Markup.Escape(message)}[/]", allowMarkup: true);
         }
         catch (Exception ex)
         {
@@ -2607,7 +2611,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
 
             if (treatMissingJavaScriptToolAsWarning && MissingJavaScriptToolWarning.IsMatch(lines))
             {
-                _interactionService.DisplayMessage(KnownEmojis.Warning, MissingJavaScriptToolWarning.GetMessage(directory, _resolvedLanguage, _environment));
+                _interactionService.DisplayMessage(KnownEmojis.PoliceCarLight, MissingJavaScriptToolWarning.GetMessage(directory, _resolvedLanguage, _environment));
                 return 0;
             }
         }
@@ -2752,7 +2756,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             {
                 _logger.LogWarning(ex, "Failed to combine {EnvironmentVariableName} bundle {ExistingBundlePath} with the Aspire development certificate", environmentVariableName, existingCertificateBundle);
                 _interactionService.DisplayMessage(
-                    KnownEmojis.Warning,
+                    KnownEmojis.PoliceCarLight,
                     $"Unable to add the Aspire development certificate to {environmentVariableName} '{existingCertificateBundle}'. The existing certificate bundle will be used unchanged.");
                 certificateBundlePath = existingCertificateBundle;
             }

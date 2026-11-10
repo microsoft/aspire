@@ -1938,7 +1938,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
         // This test fails on new default versions for ContainerApp so we check if autoConfigureDataProtection exists on the new Azure.Provisioning version.
         // Also, we need to ensure the new default version isn't newer than the preview version used to set autoConfigureDataProtection because
         // callers will get new APIs that may not work with the preview version we are using.
-        Assert.True(containerApp.ResourceVersion == "2025-07-01", "When we get a new ResourceVersion for ContainerApps, ensure the version used by ContainerAppContext.CreateContainerApp() still works correctly.");
+        Assert.True(containerApp.ResourceVersion == "2026-07-01", "When we get a new ResourceVersion for ContainerApps, ensure the version used by ContainerAppContext.CreateContainerApp() still works correctly.");
     }
 
     [Fact]

@@ -14,6 +14,10 @@ suite('Aspire coordinated build E2E', function () {
     suiteSetup(async () => {
         await openAspireView();
         await restoreWorkspaceFoldersForE2E({ waitForExtensionHostReload: true });
+        // The C# language server discovers workspace projects once at startup. Let that discovery finish
+        // before this suite creates project fixtures in the workspace; otherwise Roslyn can load a fixture
+        // and keep its directory busy on Windows while the test tries to delete it.
+        await executeE2eControlCommand({ name: 'waitForCSharpProjectInitialization', timeoutMs: 180000 }, { timeoutMs: 210000 });
     });
 
     for (const language of ['C#', 'F#', 'VB'] as const) {
@@ -91,9 +95,10 @@ suite('Aspire coordinated build E2E', function () {
                     await proveLaunch(false, {}, 'properties-primary', '--primary');
                 }
             } finally {
-                // The resource process and debug session are already terminated by the proof. Roslyn can
-                // still be finishing project discovery on Windows, so use the shared bounded retry helper
-                // for that transient project-system handle before proving the fixture path is reusable.
+                // The resource process and debug session are already terminated by the proof, and suiteSetup
+                // keeps the fixture project out of the C# language server's startup project load. Opening
+                // Program.cs at the breakpoint can still start a short file-based-program load, so use the shared
+                // bounded retry helper for transient Windows handles before proving the fixture path is reusable.
                 removePath(fixture.directory, { recursive: true, force: true });
                 assert.strictEqual(fs.existsSync(fixture.directory), false);
                 fs.mkdirSync(fixture.directory);

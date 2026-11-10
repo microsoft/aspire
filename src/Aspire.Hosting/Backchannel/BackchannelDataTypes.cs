@@ -1151,6 +1151,15 @@ internal sealed class ResourceSnapshot
     public string? ResourceType { get; init; }
 
     /// <summary>
+    /// Gets the human-readable resource type label, falling back to the resource type for older producers.
+    /// </summary>
+    public string? ResourceTypeDisplayName
+    {
+        get => string.IsNullOrWhiteSpace(field) ? ResourceType : field;
+        init;
+    }
+
+    /// <summary>
     /// Gets the type of the resource (e.g., "Project", "Container", "Executable").
     /// </summary>
     [Obsolete("Use ResourceType property instead.")]

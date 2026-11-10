@@ -1,11 +1,13 @@
 import * as assert from 'assert';
 import * as fs from 'fs';
 import * as path from 'path';
-import { findResource, getCommandInvocationCount, isSamePath, waitForCommandOutcome, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForResourceState, waitForWorkspaceAppHost } from './helpers/assertions';
-import { executeE2eControlCommand, restoreWorkspaceCliPath, runE2eTeardown, stopPrimaryAppHostIfRunning } from './helpers/fixtures';
+import { findResource, getCommandInvocationCount, isSamePath, waitForCommandOutcome, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForResourceState, waitForSelectedWorkspaceAppHost, waitForWorkspaceAppHost } from './helpers/assertions';
+import { executeE2eControlCommand, getGeneratedProjectRoot, removeGeneratedProject, restoreWorkspaceAppHostConfig, restoreWorkspaceCliPath, runE2eTeardown, stopAppHostIfRunning, stopPrimaryAppHostIfRunning, writeFileWithRetry, writeWorkspaceAppHostConfigForPath } from './helpers/fixtures';
 import { invokeLanguageModelTool, prepareLanguageModelToolInvocation } from './helpers/languageModelTools';
-import { getPrimaryAppHostProjectPath, getWorkspaceRoot } from './helpers/paths';
+import { getCliPath, getPrimaryAppHostProjectPath, getWorkspaceRoot } from './helpers/paths';
 import { openAspireView } from './helpers/vscode';
+import { runProcess } from './helpers/process';
+import type { AspireExtensionE2ECodeLensProbeResult } from '../types/extensionApi';
 
 interface ResourceDebugToolResult {
     tool: 'aspire_resource_debug';
@@ -63,6 +65,9 @@ suite('Aspire resource debug language model tool E2E', function () {
         await openAspireView();
         await waitForRepositoryIdle();
         const discovered = await waitForWorkspaceAppHost();
+        // The first discovery wait can reopen the E2E workspace folder, which reloads the window and
+        // hides the Aspire view. Reopen it so the extension keeps refreshing AppHost and resource state.
+        await openAspireView();
         const appHostPath = discovered.state.workspaceAppHostPath ?? getPrimaryAppHostProjectPath();
         const relativeAppHostPath = toWorkspaceRelativePath(appHostPath);
 
@@ -123,6 +128,7 @@ suite('Aspire resource debug language model tool E2E', function () {
         await openAspireView();
         await waitForRepositoryIdle();
         const discovered = await waitForWorkspaceAppHost();
+        await openAspireView();
         const appHostPath = discovered.state.workspaceAppHostPath ?? getPrimaryAppHostProjectPath();
         const relativeAppHostPath = toWorkspaceRelativePath(appHostPath);
 
@@ -215,6 +221,7 @@ suite('Aspire resource debug language model tool E2E', function () {
         await openAspireView();
         await waitForRepositoryIdle();
         const discovered = await waitForWorkspaceAppHost();
+        await openAspireView();
         const appHostPath = discovered.state.workspaceAppHostPath ?? getPrimaryAppHostProjectPath();
         const relativeAppHostPath = toWorkspaceRelativePath(appHostPath);
 
@@ -241,7 +248,9 @@ suite('Aspire resource debug language model tool E2E', function () {
             });
         }
 
-        await executeE2eControlCommand({ name: 'stopResource', appHostPath, resourceName: worker.name });
+        const stopInvocationBefore = getCommandInvocationCount('aspire-vscode.stopResource');
+        await executeE2eControlCommand({ name: 'stopResource', appHostPath, resourceName: worker.name }, { waitFor: 'started' });
+        await waitForCommandOutcome('aspire-vscode.stopResource', 'success', 60000, stopInvocationBefore);
         await waitForResourceState(worker.name, ['Exited', 'Finished', 'Stopped'], 90000);
 
         const stopped = await invokeLanguageModelTool<ResourceDebugToolResult>(
@@ -266,6 +275,7 @@ suite('Aspire resource debug language model tool E2E', function () {
         await openAspireView();
         await waitForRepositoryIdle();
         const discovered = await waitForWorkspaceAppHost();
+        await openAspireView();
         const appHostPath = discovered.state.workspaceAppHostPath ?? getPrimaryAppHostProjectPath();
 
         const start = (await executeE2eControlCommand({
@@ -352,6 +362,7 @@ suite('Aspire resource debug language model tool E2E', function () {
         await openAspireView();
         await waitForRepositoryIdle();
         const discovered = await waitForWorkspaceAppHost();
+        await openAspireView();
         const appHostPath = discovered.state.workspaceAppHostPath ?? getPrimaryAppHostProjectPath();
         const runBefore = getCommandInvocationCount('aspire-vscode.runAppHost');
         await executeE2eControlCommand({ name: 'runAppHost', appHostPath }, { waitFor: 'started' });
@@ -384,6 +395,7 @@ suite('Aspire resource debug language model tool E2E', function () {
         await openAspireView();
         await waitForRepositoryIdle();
         const discovered = await waitForWorkspaceAppHost();
+        await openAspireView();
         const appHostPath = discovered.state.workspaceAppHostPath ?? getPrimaryAppHostProjectPath();
         const runBefore = getCommandInvocationCount('aspire-vscode.runAppHost');
         await executeE2eControlCommand({ name: 'runAppHost', appHostPath }, { waitFor: 'started' });
@@ -410,6 +422,104 @@ suite('Aspire resource debug language model tool E2E', function () {
         await stopPrimaryAppHostIfRunning();
         await waitForNoDebugSessions(120000);
         await waitForNoRunningAppHost(120000, appHostPath);
+    });
+
+    test('hits source breakpoints in a Go AppHost and its Go resource using packaged Delve', async function () {
+        this.timeout(900000);
+        if (!resourceDebugPrerequisitesInstalled) {
+            this.skip();
+        }
+
+        const sdkVersion = process.env.ASPIRE_EXTENSION_E2E_APPHOST_SDK_VERSION;
+        assert.ok(sdkVersion, 'The runner must provide the built AppHost SDK version.');
+        const projectName = 'AspireE2E.GoAppHost';
+        const projectRoot = getGeneratedProjectRoot(projectName);
+        const appHostPath = path.join(projectRoot, 'apphost.go');
+        const resourceSourcePath = path.join(getWorkspaceRoot(), 'AspireE2E.Go', 'main.go');
+        fs.mkdirSync(projectRoot, { recursive: true });
+        writeFileWithRetry(path.join(projectRoot, 'go.mod'), `module apphost
+
+go 1.26
+
+require apphost/modules/aspire v0.0.0
+replace apphost/modules/aspire => ./.aspire/modules
+`);
+        writeFileWithRetry(path.join(projectRoot, 'aspire.config.json'), JSON.stringify({
+            appHost: { path: 'apphost.go', language: 'go' },
+            sdk: { version: sdkVersion },
+            packages: { 'Aspire.Hosting.Go': sdkVersion },
+        }, undefined, 2));
+        writeFileWithRetry(appHostPath, `package main
+
+import (
+    "log"
+    "apphost/modules/aspire"
+)
+
+func main() {
+    builder, err := aspire.CreateBuilder()
+    if err != nil {
+        log.Fatal(aspire.FormatError(err))
+    }
+    api := builder.AddGoApp("go-api", "../AspireE2E.Go").
+        WithHttpEndpoint(&aspire.WithHttpEndpointOptions{Env: aspire.StringPtr("PORT")})
+    if err := api.Err(); err != nil {
+        log.Fatal(aspire.FormatError(err))
+    }
+    app, err := builder.Build()
+    if err != nil {
+        log.Fatal(aspire.FormatError(err))
+    }
+    if err := app.Run(); err != nil {
+        log.Fatal(aspire.FormatError(err))
+    }
+}
+`);
+        try {
+            // Reuse the resource-debug shard's pinned Go extension, Go toolchain and preinstalled
+            // Delve. The offline extension host must never depend on golang.go downloading tools.
+            await runProcess(getCliPath(), ['restore', '--nologo'], { cwd: projectRoot, timeoutMs: 300000 });
+            writeWorkspaceAppHostConfigForPath(appHostPath);
+            await openAspireView();
+            await executeE2eControlCommand({ name: 'refreshAppHosts' });
+            await waitForSelectedWorkspaceAppHost(appHostPath, 180000);
+            await openAspireView();
+            const capabilities = (await executeE2eControlCommand({ name: 'getSupportedCapabilities' })).result as string[];
+            assert.ok(capabilities.includes('go-apphost.v1'), `Missing Go AppHost capability: ${JSON.stringify(capabilities)}`);
+
+            const proof = (await executeE2eControlCommand({
+                name: 'proveAppHostAndResourceDebugging',
+                appHostPath,
+                resourceName: 'go-api',
+                appHostSourcePath: appHostPath,
+                appHostBreakpointLine: findBreakpointLine(appHostPath, 'api := builder.AddGoApp'),
+                resourceSourcePath,
+                resourceBreakpointLine: findBreakpointLine(resourceSourcePath, 'message := "go-ok"'),
+                timeoutMs: 480000,
+            }, { timeoutMs: 540000 })).result as {
+                proof: string;
+                appHostBreakpoint: { matchingStackFrame: { source?: { path?: string } } };
+                resourceBreakpoint: { matchingStackFrame: { source?: { path?: string } } };
+                appHostCodeLenses: AspireExtensionE2ECodeLensProbeResult;
+                debugSessions: Array<{ type: string }>;
+            };
+            assert.strictEqual(proof.proof, 'aspire-apphost-and-resource-debug-breakpoints-hit');
+            assert.ok(isSamePath(proof.appHostBreakpoint.matchingStackFrame.source?.path ?? '', appHostPath));
+            assert.ok(isSamePath(proof.resourceBreakpoint.matchingStackFrame.source?.path ?? '', resourceSourcePath));
+            assert.strictEqual(proof.debugSessions.filter(session => session.type === 'go').length, 2);
+            assert.strictEqual(proof.appHostCodeLenses.languageId, 'go');
+            assert.ok(proof.appHostCodeLenses.commandTitles.some(title => title.includes('Dashboard')), 'The Go AppHost must expose its dashboard action.');
+            assert.ok(proof.appHostCodeLenses.commandTitles.some(title => title.includes('Running')), 'The Go resource must expose its running state.');
+            await waitForNoDebugSessions(120000);
+            await waitForNoRunningAppHost(120000, appHostPath);
+        }
+        finally {
+            await runE2eTeardown([
+                () => stopAppHostIfRunning(appHostPath),
+                () => restoreWorkspaceAppHostConfig(),
+                () => removeGeneratedProject(projectName),
+            ], 'Go AppHost debug E2E teardown failed.');
+        }
     });
 });
 

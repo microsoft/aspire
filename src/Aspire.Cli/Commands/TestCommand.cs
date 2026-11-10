@@ -226,12 +226,12 @@ internal sealed class TestCommand : BaseCommand
         {
             return CommandResult.Failure(CliExitCodes.InvalidCommand, profileError);
         }
-        var isolated = AppHostLauncher.ResolveIsolated(parseResult);
+        var isolated = AppHostLauncher.ResolveIsolated(parseResult, appHostFile, _services.Features);
         var runningInstance = await project.FindAndStopRunningInstanceAsync(
             appHostFile, ExecutionContext.HomeDirectory, cancellationToken).WaitAsync(cancellationToken).ConfigureAwait(false);
         if (isolated && runningInstance == RunningInstanceResult.InstanceStopped)
         {
-            InteractionService.DisplayMessage(KnownEmojis.Warning, TestCommandStrings.IsolatedModeRunningInstanceWarning);
+            InteractionService.DisplayMessage(KnownEmojis.PoliceCarLight, TestCommandStrings.IsolatedModeRunningInstanceWarning);
         }
 
         var built = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -320,7 +320,7 @@ internal sealed class TestCommand : BaseCommand
             started = true;
             if (dashboard.DashboardHealthy is false)
             {
-                InteractionService.DisplayMessage(KnownEmojis.Warning, TestCommandStrings.DashboardFailedToStart);
+                InteractionService.DisplayMessage(KnownEmojis.PoliceCarLight, TestCommandStrings.DashboardFailedToStart);
             }
             return await ExecuteTestRunAsync(new TestAppHostSession(backchannel, run, dashboard,
                 Path.GetRelativePath(ExecutionContext.WorkingDirectory.FullName, appHostFile.FullName),
@@ -392,7 +392,7 @@ internal sealed class TestCommand : BaseCommand
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "Failed to capture logs from the test AppHost.");
-                InteractionService.DisplayMessage(KnownEmojis.Warning, TestCommandStrings.LogCaptureFailed);
+                InteractionService.DisplayMessage(KnownEmojis.PoliceCarLight, TestCommandStrings.LogCaptureFailed);
                 ObserveFaults(logs);
             }
         }

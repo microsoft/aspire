@@ -636,6 +636,25 @@ public class AtsTypeScriptCodeGeneratorTests
     }
 
     [Fact]
+    public void Scanner_HostingAssembly_BrowserUrlReferences()
+    {
+        var capabilities = ScanCapabilitiesFromHostingAssembly();
+
+        var endpointOrigins = Assert.Single(capabilities, c =>
+            c.CapabilityId == "Aspire.Hosting.ApplicationModel/EndpointReference.browserOrigins");
+        Assert.Equal("browserOrigins", endpointOrigins.MethodName);
+        Assert.Equal("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReferenceExpression", endpointOrigins.ReturnType.TypeId);
+        Assert.IsType<EndpointReferenceExpression>(
+            new ContainerResource("frontend").GetEndpoint("https").BrowserOrigins);
+        var primaryOrigin = Assert.Single(capabilities, c =>
+            c.CapabilityId == "Aspire.Hosting.ApplicationModel/EndpointReference.primaryBrowserOrigin");
+        Assert.Equal("primaryBrowserOrigin", primaryOrigin.MethodName);
+        Assert.Equal(endpointOrigins.ReturnType.TypeId, primaryOrigin.ReturnType.TypeId);
+        Assert.IsType<EndpointReferenceExpression>(
+            new ContainerResource("frontend").GetEndpoint("https").PrimaryBrowserOrigin);
+    }
+
+    [Fact]
     public async Task Scanner_HostingAssembly_AddContainerCapability()
     {
         // Verify the addContainer capability from the real Aspire.Hosting assembly
@@ -1295,6 +1314,73 @@ public class AtsTypeScriptCodeGeneratorTests
             AddNodePool = members.Where(member => member.CapabilityId == addNodePool.CapabilityId).Select(member => member.Declaration).Distinct().ToArray(),
             WithSystemNodePool = members.Where(member => member.CapabilityId == withSystemNodePool.CapabilityId).Select(member => member.Declaration).Distinct().ToArray()
         });
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Generate_RadiusWithContainerImage_PreservesConcreteFluentMethods(bool includeDotnet)
+    {
+        const string capabilityId = "Aspire.Hosting.Radius/withContainerImage";
+        var assemblies = new List<Assembly> { typeof(DistributedApplication).Assembly, typeof(RadiusExtensions).Assembly };
+        var resourceTypes = new List<Type> { typeof(ProjectResource), typeof(CSharpAppResource) };
+        if (includeDotnet)
+        {
+            assemblies.Add(typeof(DotnetProjectHostingExtensions).Assembly);
+            resourceTypes.Add(typeof(global::Aspire.Hosting.Dotnet.DotnetProjectResource));
+        }
+
+        var result = AtsCapabilityScanner.ScanAssemblies(assemblies);
+        var capability = Assert.Single(result.Capabilities,
+            c => c.CapabilityId.StartsWith("Aspire.Hosting.Radius/", StringComparison.Ordinal) &&
+                c.MethodName == "withContainerImage");
+
+        Assert.Equal(capabilityId, capability.CapabilityId);
+        Assert.Equal(GetAtsTypeId(typeof(IDotnetProgramResource)), capability.TargetTypeId);
+        Assert.Equal(capability.TargetTypeId, capability.ReturnType.TypeId);
+        Assert.True(capability.ReturnsBuilder);
+        Assert.True(capability.IsExperimental);
+        var image = Assert.Single(capability.Parameters);
+        Assert.Equal("image", image.Name);
+        Assert.Equal(AtsConstants.String, image.Type?.TypeId);
+        Assert.False(image.IsOptional);
+        Assert.Equal(
+            resourceTypes.Select(GetAtsTypeId).Order(StringComparer.Ordinal),
+            capability.ExpandedTargetTypes.Select(t => t.TypeId).Order(StringComparer.Ordinal));
+        var diagnostic = Assert.Single(result.Diagnostics, d => d.Message.Contains(capabilityId, StringComparison.Ordinal));
+        Assert.Equal(AtsDiagnosticSeverity.Info, diagnostic.Severity);
+
+        var code = _generator.GenerateDistributedApplication(result.ToAtsContext())["aspire.mts"].ReplaceLineEndings("\n");
+        var declarations = new List<string>();
+        foreach (var resourceType in resourceTypes)
+        {
+            foreach (var suffix in new[] { "", "Promise" })
+            {
+                var name = resourceType.Name + suffix;
+                // Generated declarations have the shape:
+                // export interface ProjectResourcePromise extends PromiseLike<ProjectResource> { ... }
+                var declaration = Regex.Match(code, $@"^export interface {name}(?: extends [^\n]+)? \{{.*?^\}}",
+                    RegexOptions.Multiline | RegexOptions.Singleline);
+                Assert.True(declaration.Success, $"Missing generated interface {name}.");
+                var method = Assert.Single(declaration.Value.Split('\n'),
+                    line => line.TrimStart().StartsWith("withContainerImage(", StringComparison.Ordinal));
+                Assert.Equal($"    withContainerImage(image: string): {resourceType.Name}Promise;", method);
+                declarations.Add($"interface {name} {{\n{method}\n}}");
+            }
+
+            var implementation = Regex.Match(code, $@"^class {resourceType.Name}Impl\b.*?^\}}",
+                RegexOptions.Multiline | RegexOptions.Singleline);
+            Assert.True(implementation.Success, $"Missing generated implementation for {resourceType.Name}.");
+            var invocation = Regex.Match(implementation.Value, @"^    private async _withContainerImageInternal\(.*?^    \}",
+                RegexOptions.Multiline | RegexOptions.Singleline);
+            Assert.True(invocation.Success, $"Missing generated image invocation for {resourceType.Name}.");
+            var dispatchCall = Assert.Single(invocation.Value.Split('\n'),
+                line => line.TrimStart().StartsWith("'Aspire.Hosting.Radius/", StringComparison.Ordinal));
+            Assert.Equal($"'{capabilityId}',", dispatchCall.Trim());
+            declarations.Add(invocation.Value);
+        }
+
+        await Verify(string.Join("\n\n", declarations), "ts").UseParameters(includeDotnet);
     }
 
     [Fact]
@@ -1985,6 +2071,29 @@ public class AtsTypeScriptCodeGeneratorTests
         Assert.Contains("runAsExistingInTenant", aspireTs);
         Assert.Contains("publishAsExistingInTenant", aspireTs);
         Assert.Contains("asExistingInTenant", aspireTs);
+    }
+
+    [Fact]
+    public async Task GenerateDistributedApplication_InternalLoadBalancerUsesNetworkCapability()
+    {
+#pragma warning disable ASPIREAZURE003
+        var result = AtsCapabilityScanner.ScanAssemblies(
+            [.. LoadAzureAssemblies(), typeof(AzureInternalLoadBalancerExtensions).Assembly]);
+        var capability = Assert.Single(result.Capabilities,
+            c => c.CapabilityId == "Aspire.Hosting.Azure.Network/withNetworkInternalLoadBalancer");
+        Assert.Equal("withInternalLoadBalancer", capability.MethodName);
+        Assert.Equal(GetAtsTypeId(typeof(IAzureInternalIngressResource)), capability.TargetTypeId);
+#pragma warning restore ASPIREAZURE003
+
+        var files = _generator.GenerateDistributedApplication(result.ToAtsContext());
+        // Exercise Windows line endings even when this test runs on Linux.
+        var generatedCode = files["aspire.mts"].ReplaceLineEndings("\r\n");
+        // Split without retaining CR characters: a final CR becomes an extra newline in Verify on Windows.
+        var lines = generatedCode.ReplaceLineEndings("\n").Split('\n')
+            .Where(line => line.Contains("withInternalLoadBalancer", StringComparison.Ordinal) ||
+                line.Contains("withNetworkInternalLoadBalancer", StringComparison.Ordinal));
+
+        await Verify(string.Join('\n', lines), "ts");
     }
 
     private static List<AtsCapabilityInfo> ScanCapabilitiesFromTestAssembly()

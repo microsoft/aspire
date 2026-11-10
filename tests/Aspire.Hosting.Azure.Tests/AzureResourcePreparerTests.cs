@@ -407,6 +407,32 @@ public class AzureResourcePreparerTests(ITestOutputHelper testOutputHelper)
         Assert.Same(api.Resource, storageRoleAssignment.OwnerResource);
     }
 
+    [Fact]
+    public async Task PrepareResourcesStepRunsAfterComputeEnvironmentValidation()
+    {
+        // Regression test for https://github.com/microsoft/aspire/issues/19308.
+        // Preparing Azure resources adds role assignment resources to the model, which must not happen
+        // while compute environment validation is enumerating the model's resources.
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper, step: WellKnownPipelineSteps.BeforeStart);
+        builder.AddAzureContainerAppEnvironment("env1").WithUniqueResourceNaming();
+        builder.AddAzureContainerAppEnvironment("env2").WithUniqueResourceNaming();
+
+        var keyVault = builder.AddAzureKeyVault("keyvault");
+
+        // Not bound to either compute environment, so validation fails.
+        builder.AddProject<Project>("api", launchProfileName: null)
+            .WithRoleAssignments(keyVault, KeyVaultBuiltInRole.KeyVaultSecretsUser);
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => ExecutePipelineAsync(app));
+        Assert.Contains($"Step '{WellKnownPipelineSteps.ValidateComputeEnvironments}' failed", ex.Message);
+
+        // The prepare step depends on validation, so it never ran and never mutated the model.
+        Assert.Empty(model.Resources.OfType<AzureRoleAssignmentResource>());
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

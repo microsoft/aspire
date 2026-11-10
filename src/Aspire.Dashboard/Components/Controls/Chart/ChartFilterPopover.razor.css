@@ -17,7 +17,7 @@
 
 .dimension-popup-container ::deep .dimension-popup {
     min-width: 0;
-    row-gap: 4px;
+    row-gap: var(--aspire-space-1);
     width: 100%;
 }
 

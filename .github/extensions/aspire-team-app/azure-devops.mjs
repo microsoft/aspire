@@ -4,14 +4,13 @@
 // owned by Azure CLI (`az login`) or AZURE_DEVOPS_EXT_PAT and is never persisted here.
 
 import { Buffer } from "node:buffer";
-import { execFile } from "node:child_process";
 import { access } from "node:fs/promises";
 import { win32 } from "node:path";
-import { promisify } from "node:util";
 
 import { dayMs } from "./constants.mjs";
+import { createCliRunner } from "./cli.mjs";
 
-const execFileAsync = promisify(execFile);
+const runAzExecutable = createCliRunner("az", "Azure CLI");
 const DEFAULT_BRANCH = "refs/heads/main";
 const RECENT_BUILD_LIMIT = 50;
 const COMMAND_TIMEOUT_MS = 30_000;
@@ -659,7 +658,7 @@ async function executeAzureCli(args, suffixArgs) {
   try {
     const command = await resolveAzureCliCommand();
     const commandArgs = [...command.prefixArgs, ...args, ...suffixArgs];
-    const { stdout } = await execFileAsync(
+    const { stdout } = await runAzExecutable(
       command.path,
       commandArgs,
       {
@@ -749,6 +748,9 @@ async function invokeAz(runAz, args) {
 }
 
 function classifyCommandError(error) {
+  if (error?.code === "az_cli_missing" || error?.code === "az_cli_lookup_failed") {
+    return new AzureDevOpsError(error.code, error.message);
+  }
   if (error?.code === "ENOENT") {
     return new AzureDevOpsError("az_cli_missing", "Azure CLI is not installed or is not available on PATH.");
   }

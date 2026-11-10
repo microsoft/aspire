@@ -1,0 +1,51 @@
+﻿{
+  "resources": {
+    "frontend": {
+      "type": "container.v0",
+      "image": "image:latest",
+      "bindings": {
+        "http": {
+          "scheme": "http",
+          "protocol": "tcp",
+          "transport": "http",
+          "targetPort": 8080
+        }
+      }
+    },
+    "backend": {
+      "type": "container.v0",
+      "image": "image:latest",
+      "env": {
+        "DIRECT": "{frontend-http-BrowserOrigins.value}",
+        "COMPOSITE": "prefix/{frontend-http-BrowserOrigins.value}/suffix",
+        "WRAPPED": "{frontend-http-BrowserOrigins.value}",
+        "SELECTED": "{cond-frontend-bindings-http-tlsenabled-cc8a3e0f.connectionString}",
+        "ENCODED": "{value-aaf0d96b49043651-uri-encoded.connectionString}",
+        "ENDPOINT": "{frontend.bindings.http.url}",
+        "HOST": "{frontend.bindings.http.host}"
+      }
+    },
+    "cond-frontend-bindings-http-tlsenabled-cc8a3e0f": {
+      "type": "value.v0",
+      "connectionString": "{frontend-http-BrowserOrigins.value}"
+    },
+    "frontend-http-BrowserOrigins": {
+      "type": "parameter.v0",
+      "value": "{frontend-http-BrowserOrigins.inputs.value}",
+      "inputs": {
+        "value": {
+          "type": "string"
+        }
+      }
+    },
+    "value-aaf0d96b49043651-uri-encoded": {
+      "type": "value.v0",
+      "connectionString": "{value-aaf0d96b49043651-uri-encoded-1.value}"
+    },
+    "value-aaf0d96b49043651-uri-encoded-1": {
+      "type": "annotated.string",
+      "value": "{frontend-http-BrowserOrigins.value}",
+      "filter": "uri"
+    }
+  }
+}

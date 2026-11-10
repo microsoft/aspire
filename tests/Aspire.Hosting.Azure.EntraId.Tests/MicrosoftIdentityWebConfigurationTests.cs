@@ -20,19 +20,26 @@ public class MicrosoftIdentityWebConfigurationTests
     private const string ManagedIdentityClientId = "11112222-bbbb-3333-cccc-4444dddd5555";
 
     [Theory]
-    [InlineData(DistributedApplicationOperation.Run, "AzureAd")]
-    [InlineData(DistributedApplicationOperation.Publish, "AzureAd")]
-    [InlineData(DistributedApplicationOperation.Run, "Authentication:Entra")]
-    [InlineData(DistributedApplicationOperation.Publish, "Authentication:Entra")]
+    [InlineData(DistributedApplicationOperation.Run, "AzureAd", false)]
+    [InlineData(DistributedApplicationOperation.Publish, "AzureAd", false)]
+    [InlineData(DistributedApplicationOperation.Run, "Authentication:Entra", false)]
+    [InlineData(DistributedApplicationOperation.Publish, "Authentication:Entra", false)]
+    [InlineData(DistributedApplicationOperation.Run, "AzureAd", true)]
+    [InlineData(DistributedApplicationOperation.Publish, "AzureAd", true)]
+    [InlineData(DistributedApplicationOperation.Run, "Authentication:Entra", true)]
+    [InlineData(DistributedApplicationOperation.Publish, "Authentication:Entra", true)]
     public async Task WithReference_BindsToMicrosoftIdentityWebOptions(
         DistributedApplicationOperation operation,
-        string sectionName)
+        string sectionName,
+        bool configureBeforeConversion)
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var secret = builder.AddParameter("EntraSecret", "test-client-secret", secret: true);
         var password = builder.AddParameter("CertificatePassword", "test-certificate-password", secret: true);
-        var entra = builder.AddExistingEntraApplication("entra-web", tenantId: TenantId, clientId: ClientId)
-            .WithInstance("https://login.microsoftonline.us/")
+        var entra = configureBeforeConversion
+            ? builder.AddEntraIdApplication("entra-web")
+            : builder.AddExistingEntraApplication("entra-web", tenantId: TenantId, clientId: ClientId);
+        entra.WithInstance("https://login.microsoftonline.us/")
             .WithSignInAudience(EntraIdSignInAudience.AzureADMultipleOrgs)
             .WithClientSecret(secret)
             .WithCredential(new EntraIdFederatedIdentityCredential(ManagedIdentityClientId)
@@ -54,6 +61,11 @@ public class MicrosoftIdentityWebConfigurationTests
             .WithSendX5C()
             .WithAllowWebApiToBeAuthorizedByACL()
             .WithExtraQueryParameter("loginHint", "user@contoso.example");
+        if (configureBeforeConversion)
+        {
+            entra.AsExistingApplication(TenantId, ClientId);
+        }
+
         var project = builder.AddResource(new ProjectResource("web"))
             .WithReference(entra, connectionName: sectionName);
 

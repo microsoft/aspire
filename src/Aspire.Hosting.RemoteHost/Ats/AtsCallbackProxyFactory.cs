@@ -309,10 +309,14 @@ internal sealed class AtsCallbackProxyFactory : IDisposable
         return UnmarshalResult<T>(result, callbackId);
     }
 
-    private Task<JsonNode?> InvokeCallbackAsync(string callbackId, JsonObject? args, CancellationToken cancellationToken, TimeSpan? timeout) =>
-        timeout is { } explicitTimeout
+    private Task<JsonNode?> InvokeCallbackAsync(string callbackId, JsonObject? args, CancellationToken cancellationToken, TimeSpan? timeout)
+    {
+        // The guest callback may call back into the remote host before it completes.
+        CapabilityInvocationGate.ReleaseForCallback();
+        return timeout is { } explicitTimeout
             ? _invoker.InvokeAsync<JsonNode?>(callbackId, args, cancellationToken, explicitTimeout)
             : _invoker.InvokeAsync<JsonNode?>(callbackId, args, cancellationToken);
+    }
 
     private T? UnmarshalResult<T>(JsonNode? result, string callbackId)
     {
