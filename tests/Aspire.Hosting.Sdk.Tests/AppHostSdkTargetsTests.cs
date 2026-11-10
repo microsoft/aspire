@@ -229,6 +229,50 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
         Assert.Equal("true", properties["IsAspireHost"]);
     }
 
+    [Theory]
+    [InlineData("Path", "aspire.cli@13.5.0")]
+    [InlineData("Dnx", "aspire.cli@13.6.0")]
+    [InlineData("DnxPinned", "aspire.cli@13.5.0")]
+    public async Task DnxCliVersionOverridesPackageReferenceOnlyForDnxMode(string invocationMode, string expectedPackageReference)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var project = await CreateRunHookProjectAsync(workspace.Path, aspireUseCliBundle: true);
+
+        var properties = await GetTargetPropertiesAsync(
+            project,
+            "CollectPackageReferences",
+            "AspireDnxCliVersion,_AspireCliDnxPackageReference",
+            extraArguments:
+            [
+                $"-p:AspireCliInvocationMode={invocationMode}",
+                "-p:AspireDnxCliVersion=13.6.0"
+            ],
+            environment: null);
+
+        Assert.Equal("13.6.0", properties["AspireDnxCliVersion"]);
+        Assert.Equal(expectedPackageReference, properties["_AspireCliDnxPackageReference"]);
+    }
+
+    [Theory]
+    [InlineData("Path", "aspire.cli@13.5.0")]
+    [InlineData("Dnx", "aspire.cli")]
+    [InlineData("DnxPinned", "aspire.cli@13.5.0")]
+    public async Task DnxCliVersionIsUnsetByDefault(string invocationMode, string expectedPackageReference)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var project = await CreateRunHookProjectAsync(workspace.Path, aspireUseCliBundle: true);
+
+        var properties = await GetTargetPropertiesAsync(
+            project,
+            "CollectPackageReferences",
+            "AspireDnxCliVersion,_AspireCliDnxPackageReference",
+            extraArguments: [$"-p:AspireCliInvocationMode={invocationMode}"],
+            environment: null);
+
+        Assert.Empty(properties["AspireDnxCliVersion"]);
+        Assert.Equal(expectedPackageReference, properties["_AspireCliDnxPackageReference"]);
+    }
+
     private static async Task<string> RunWriteDashboardAndDcpTargetAsync(TemporaryWorkspace workspace, string? extraProjectXml, bool setUsingAspireAppHostSdkMarker = true)
     {
         var repoRoot = GetRepoRoot();
@@ -407,6 +451,35 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
         Assert.Equal(GetExpectedDnxRunCommand(dnxPath), properties["RunCommand"]);
         Assert.Equal(GetExpectedDnxRunArguments(dnxPath, project, "--custom foo", pinned: false), properties["RunArguments"]);
         Assert.Contains("--yes aspire.cli -- --version", properties["_AspireCliVersionCommand"]);
+        Assert.Equal(project.ProjectDirectory, properties["RunWorkingDirectory"]);
+    }
+
+    [Theory]
+    [InlineData("Path", "aspire.cli@13.5.0")]
+    [InlineData("Dnx", "aspire.cli@13.6.0")]
+    [InlineData("DnxPinned", "aspire.cli@13.5.0")]
+    public async Task ComputeRunArgumentsUsesConfiguredDnxCliVersionOnlyForDnxMode(string invocationMode, string expectedPackageReference)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var fakeCliDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "fake-cli"));
+        await CreateFakeDnxAsync(fakeCliDirectory.FullName, "aspire.cli@13.6.0");
+        var project = await CreateRunHookProjectAsync(workspace.Path, aspireUseCliBundle: true);
+
+        var properties = await GetComputeRunArgumentsPropertiesAsync(
+            project,
+            [
+                $"-p:AspireCliInvocationMode={invocationMode}",
+                "-p:AspireDnxCliVersion=13.6.0",
+                "-p:RunArguments=--custom foo"
+            ],
+            new Dictionary<string, string>
+            {
+                [GetPathEnvironmentVariableName()] = CreatePathWithoutAspire(fakeCliDirectory.FullName)
+            });
+
+        Assert.Equal("Dnx", properties["_AspireResolvedCliInvocationMode"]);
+        Assert.Contains($"--yes {expectedPackageReference} -- --version", properties["_AspireCliVersionCommand"]);
+        Assert.Contains($"--yes {expectedPackageReference} -- run", properties["RunArguments"]);
         Assert.Equal(project.ProjectDirectory, properties["RunWorkingDirectory"]);
     }
 
@@ -1887,7 +1960,7 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
         return aspirePath;
     }
 
-    private static async Task<string> CreateFakeDnxAsync(string fakeCliDirectory)
+    private static async Task<string> CreateFakeDnxAsync(string fakeCliDirectory, string? additionalPackageReference = null)
     {
         var dnxPath = Path.Combine(fakeCliDirectory, OperatingSystem.IsWindows() ? "dnx.cmd" : "dnx");
         if (OperatingSystem.IsWindows())
@@ -1897,9 +1970,14 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
             await File.WriteAllTextAsync(Path.Combine(fakeSdkDirectory.FullName, "dotnet.dll"), "");
         }
 
+        additionalPackageReference ??= $"aspire.cli@{AspireCliVersion}";
         await File.WriteAllTextAsync(dnxPath, OperatingSystem.IsWindows()
-            ? """
+            ? $$"""
                 @echo off
+                if "%~1"=="--yes" if "%~2"=="{{additionalPackageReference}}" if "%~3"=="--" if "%~4"=="--version" (
+                    echo 13.5.0
+                    exit /b 0
+                )
                 if "%~1"=="--yes" if "%~2"=="aspire.cli@13.5.0" if "%~3"=="--" if "%~4"=="--version" (
                     echo 13.5.0
                     exit /b 0
@@ -1915,13 +1993,13 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
                 shift
                 goto loop
                 """
-            : ("""
+            : ($$"""
                 #!/bin/sh
-                if [ "$1" = "--yes" ] && { [ "$2" = "aspire.cli@13.5.0" ] || [ "$2" = "aspire.cli" ]; } && [ "$3" = "--" ] && [ "$4" = "--version" ]; then
+                if [ "$1" = "--yes" ] && { [ "$2" = "{{additionalPackageReference}}" ] || [ "$2" = "aspire.cli@{{AspireCliVersion}}" ] || [ "$2" = "aspire.cli" ]; } && [ "$3" = "--" ] && [ "$4" = "--version" ]; then
                     echo "13.5.0"
                     exit 0
                 fi
-                if [ "$1" = "--yes" ] && { [ "$2" = "aspire.cli@13.5.0" ] || [ "$2" = "aspire.cli" ]; } && [ "$3" = "--" ] && [ "$4" = "setup" ] && [ "$5" = "--install-path" ]; then
+                if [ "$1" = "--yes" ] && { [ "$2" = "{{additionalPackageReference}}" ] || [ "$2" = "aspire.cli@{{AspireCliVersion}}" ] || [ "$2" = "aspire.cli" ]; } && [ "$3" = "--" ] && [ "$4" = "setup" ] && [ "$5" = "--install-path" ]; then
                     mkdir -p "$6/bundle/dcp" "$6/bundle/managed" "$6/bundle/dashboard"
                     : > "$6/bundle/dcp/dcp"
                     : > "$6/bundle/managed/aspire-managed"
