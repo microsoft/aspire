@@ -18,8 +18,8 @@ func main() {
 	//     metrics, and logs flow to the Aspire dashboard.
 	api := builder.AddGoApp("api", "./api").
 		WithModTidy().
-		WithHttpEndpoint(&aspire.WithHttpEndpointOptions{Env: aspire.StringPtr("PORT")}).
-		WithHttpHealthCheck(&aspire.WithHttpHealthCheckOptions{Path: aspire.StringPtr("/health")}).
+		WithHttpEndpoint(aspire.HttpEndpointEnv("PORT")).
+		WithHttpHealthCheck(aspire.HttpHealthCheckPath("/health")).
 		WithExternalHttpEndpoints().
 		WithOtlpExporter()
 
