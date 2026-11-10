@@ -707,7 +707,7 @@ public class TerminalWebSocketTests(ITestOutputHelper output)
             while (!frame.EndOfMessage);
         }
 
-        await host.EndTerminalAsync(includeHmpExit);
+        await host.EndTerminalAsync(includeHmpExit, timeout.Token);
         await host.WaitForEndedObservedAsync(timeout.Token);
         await session.Ended.WaitAsync(timeout.Token);
         var close = await ReadCloseAsync(browser, timeout.Token);
@@ -719,9 +719,11 @@ public class TerminalWebSocketTests(ITestOutputHelper output)
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task BrowserView_DrainsFinalOutputAndGraphicsBeforeDisconnect(bool useGrpc)
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task BrowserView_DrainsFinalOutputAndGraphicsBeforeDisconnect(bool useGrpc, bool slowProducerDelivery)
     {
         await using var host = new TerminalTestHost(output, requireAuthentication: false, useGrpc);
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
@@ -729,11 +731,17 @@ public class TerminalWebSocketTests(ITestOutputHelper output)
         using var browser = await host.ConnectBrowserAsync(timeout.Token);
         // Hold the initial acknowledgement so final output must coalesce behind it.
         var initial = await ReadFrameAsync(browser, timeout.Token);
+        if (slowProducerDelivery)
+        {
+            // The producer applies output before its HMP write pump delivers it, and disposing
+            // the producer discards undelivered output. Widen that window deterministically.
+            host.ProducerOutputDelay = TimeSpan.FromMilliseconds(500);
+        }
         host.Workload.Write(string.Join("\r\n", Enumerable.Range(0, 35).Select(i => $"Retained output {i:D2}")) +
             "\r\nfinal line\r\ncompleted\u001b]2;Final screen\u0007" +
             "\u001b_Ga=T,f=32,t=d,s=1,v=1,i=7300,q=2;/wAA/w==\u001b\\");
         await host.WaitForProducerTextAsync("completed", timeout.Token);
-        await host.EndTerminalAsync(includeHmpExit: true);
+        await host.EndTerminalAsync(includeHmpExit: true, timeout.Token);
 
         await SendAsync(browser, $$"""{"type":"ack","revision":{{initial.GetProperty("revision").GetUInt32()}}}""", timeout.Token);
         var final = await ReadUntilAsync(browser, frame => frame.GetProperty("title").GetString() == "Final screen", timeout.Token);
