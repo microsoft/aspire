@@ -22,11 +22,6 @@ import (
 	"github.com/redis/go-redis/v9"
 	// {{/redis}}
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
-	// {{#redis}}
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/metric"
-	// {{/redis}}
 )
 
 // {{#redis}}
@@ -34,7 +29,6 @@ const cacheKey = "weatherforecast"
 const cacheTTL = 5 * time.Second
 
 var cache *redis.Client
-var cacheRequests metric.Int64Counter
 
 // {{/redis}}
 func main() {
@@ -102,16 +96,6 @@ func listenAddress() string {
 
 // {{#redis}}
 func setupRedis() error {
-	var err error
-	cacheRequests, err = otel.Meter("aspired-api").Int64Counter(
-		"aspired.api.cache.requests",
-		metric.WithDescription("Weather forecast cache lookups by result"),
-		metric.WithUnit("{request}"),
-	)
-	if err != nil {
-		return fmt.Errorf("create cache counter: %w", err)
-	}
-
 	cacheURI := os.Getenv("CACHE_URI")
 	if cacheURI == "" {
 		log.Println("CACHE_URI not set; running without cache")
@@ -148,26 +132,16 @@ var summaries = []string{
 }
 
 func weatherHandler() http.HandlerFunc {
-	// {{#redis}}
-	hit := metric.WithAttributes(attribute.String("result", "hit"))
-	miss := metric.WithAttributes(attribute.String("result", "miss"))
-	skip := metric.WithAttributes(attribute.String("result", "skip"))
-	// {{/redis}}
-
 	return func(w http.ResponseWriter, r *http.Request) {
 		// {{#redis}}
 		ctx := r.Context()
 
 		if cache != nil {
 			if cached, err := cache.Get(ctx, cacheKey).Result(); err == nil {
-				cacheRequests.Add(ctx, 1, hit)
 				w.Header().Set("Content-Type", "application/json")
 				_, _ = w.Write([]byte(cached))
 				return
 			}
-			cacheRequests.Add(ctx, 1, miss)
-		} else {
-			cacheRequests.Add(ctx, 1, skip)
 		}
 		// {{/redis}}
 
