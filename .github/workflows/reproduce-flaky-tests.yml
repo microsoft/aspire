@@ -12,9 +12,18 @@
 name: Reproduce Flaky Tests
 
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      runners_per_source:
+        description: "Additional fresh runners per source for the admitted stage"
+        required: true
+        type: choice
+        options:
+          - "31"
+          - "65"
+        default: "31"
 
-run-name: Aspire.Cli.Tests before/after validation
+run-name: Aspire.Cli.Tests before/after validation (+${{ inputs.runners_per_source }} per source)
 permissions: {}
 
 # ============================================================
@@ -32,9 +41,9 @@ env:
   # Options: ubuntu-latest, windows-latest, macos-latest
   TARGET_OSES: "windows-latest"
 
-  # 29 jobs per source plus the setup and results jobs stays within the
-  # authorized 60-job cap. Each matrix job runs the project once.
-  RUNNERS_PER_OS: "29"
+  # Count the prior 29 attempts per source: +31 reaches 60, and a later
+  # +65 reaches 125 per source (250 test jobs plus six helper jobs overall).
+  RUNNERS_PER_OS: ${{ inputs.runners_per_source }}
 
   ITERATIONS_PER_RUNNER: "1"
   BASELINE_SOURCE_SHA: "cedfcd0f14e6086a808106144134b3d6fb998afd"
@@ -59,8 +68,8 @@ jobs:
             ERRORS=1
           fi
 
-          if [[ "${{ env.RUNNERS_PER_OS }}" != "29" ]]; then
-            echo "::error::RUNNERS_PER_OS must be 29 to stay within the authorized job cap."
+          if [[ "${{ env.RUNNERS_PER_OS }}" != "31" && "${{ env.RUNNERS_PER_OS }}" != "65" ]]; then
+            echo "::error::RUNNERS_PER_OS must match an admitted stage increment (31 or 65)."
             ERRORS=1
           fi
 
@@ -104,8 +113,8 @@ jobs:
 
           TOTAL=$(( RUNNERS * 2 * ${#OSES[@]} ))
           echo "Generated matrix: $TOTAL runners across two source arms"
-          if [[ "$TOTAL" -ne 58 ]]; then
-            echo "::error::Expected exactly 58 matrix jobs, got $TOTAL."
+          if [[ "$TOTAL" -ne 62 && "$TOTAL" -ne 130 ]]; then
+            echo "::error::Expected exactly 62 or 130 matrix jobs, got $TOTAL."
             exit 1
           fi
 
@@ -422,7 +431,7 @@ jobs:
           echo "| Runs per source | ${{ env.RUNNERS_PER_OS }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Baseline source | \`${{ env.BASELINE_SOURCE_SHA }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| Fixed source | \`${{ env.FIXED_SOURCE_SHA }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Total test jobs | 58 |" >> $GITHUB_STEP_SUMMARY
+          echo "| Total test jobs | $(( ${{ env.RUNNERS_PER_OS }} * 2 )) |" >> $GITHUB_STEP_SUMMARY
           echo "| Invocations per job | ${{ env.ITERATIONS_PER_RUNNER }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
