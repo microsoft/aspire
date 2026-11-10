@@ -1,0 +1,29 @@
+{
+  "id": "dashboard-components-chartcontainer-stray-sqlite-activity",
+  "type": "flaky-test",
+  "title": "Intermittent ChartContainer_ParametersAndActiveView test fails Assert.Empty with stray SQLite Activity",
+  "error_pattern": "Assert.Empty() Failure: Collection was not empty\nCollection: [Activity { ... DisplayName = \"SELECT sqlite\" ... }]",
+  "occurrences": [
+    {
+      "run_id": 42737460978,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/42737460978",
+      "job": "Tests / No-package tests (regular, Aspire.Dashboard.Components.Tests, Dashboard.Components, Dashboard.Com... / Dashboard.Components (windows-latest)",
+      "observed_at": "2026-11-10T02:43:41Z",
+      "pr_number": 0,
+      "tests": [
+        {
+          "name": "Aspire.Dashboard.Components.Tests.Pages.MetricsTests.ChartContainer_ParametersAndActiveView_OnlyRefreshAndRenderWhenChanged",
+          "job_id": 129574821773,
+          "job": "Tests / No-package tests (regular, Aspire.Dashboard.Components.Tests, Dashboard.Components, Dashboard.Com... / Dashboard.Components (windows-latest)",
+          "error": "Assert.Empty() Failure: Collection was not empty\nCollection: [Activity { ActivityTraceFlags = Recorded | RandomTraceId, Baggage = [], Context = System.Diagnostics.ActivityContext, DisplayName = \"SELECT sqlite\", Duration = 00:00:00.0010075, ··· }]",
+          "stack_trace": "   at Aspire.Dashboard.Components.Tests.Pages.MetricsTests.ChartContainer_ParametersAndActiveView_OnlyRefreshAndRenderWhenChanged() in /_/tests/Aspire.Dashboard.Components.Tests/Pages/MetricsTests.cs:line 614\n--- End of stack trace from previous location ---",
+          "standard_output": "Temporary workspace created at: C:\\Users\\runneradmin\\AppData\\Local\\Temp\\Aspire.Dashboard.Components.Tests\\Workspace\\cishxzcf.akg\nDisposing temporary workspace at: C:\\Users\\runneradmin\\AppData\\Local\\Temp\\Aspire.Dashboard.Components.Tests\\Workspace\\cishxzcf.akg\n",
+          "standard_error": "",
+          "result_file": "00001.trx",
+          "result_format": "trx",
+          "execution_id": "50329123-50c7-4256-a46c-541a1810314f"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,69 @@
+{
+  "run_id": 42737460978,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/42737460978",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-10T02:43:41Z",
+  "verdict": "flaky-test",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 21890,
+    "title": "Stop idle extension polling",
+    "author": "ellahathaway",
+    "state": "closed",
+    "head_branch": "ellahathaway-stop-idle-extension-polling",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/21890",
+    "merged_at": "2026-11-10T01:40:30Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "5d87b4ffe4fb4a67af8c1ad5f049c652e46eddaf",
+    "failed_sha": "f234eed3dc3e13693b137a9f0a003cd95878c705",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "f234eed3dc3e13693b137a9f0a003cd95878c705",
+        "message": "Stop idle extension polling (#21890) ## Description Stop status and resource watchers when neither the Aspire panel nor an AppHost editor is visible and no extension-owned run/debug session or explicit consumer needs data. Background tabs and passive debugger hints no longer keep polling alive. Preserve the configured active cadence and immediate resumption, and move the existing lifecycle coverage and brief documentation with the change. Related to #21066 ### Validation Commands run from `exten",
+        "html_url": "https://github.com/microsoft/aspire/commit/f234eed3dc3e13693b137a9f0a003cd95878c705",
+        "pull_request": {
+          "number": 21890,
+          "title": "Stop idle extension polling",
+          "url": "https://github.com/microsoft/aspire/pull/21890",
+          "merged_at": "2026-11-10T01:40:30Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Dashboard.Components.Tests, Dashboard.Components, Dashboard.Com... / Dashboard.Components (windows-latest)",
+      "id": 129574821773,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/42737460978/job/129574821773",
+      "classification": "flaky-test",
+      "reason": "Single Dashboard.Components test failed on an unexpected stray SQLite activity; unrelated to the extension-only change.",
+      "failed_steps": [
+        "Run tests (Windows)"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Dashboard.Components.Tests.Pages.MetricsTests.ChartContainer_ParametersAndActiveView_OnlyRefreshAndRenderWhenChanged",
+      "job": "Tests / No-package tests (regular, Aspire.Dashboard.Components.Tests, Dashboard.Components, Dashboard.Com... / Dashboard.Components (windows-latest)",
+      "error": "Assert.Empty() Failure: Collection was not empty\nCollection: [Activity { ActivityTraceFlags = Recorded | RandomTraceId, Baggage = [], Context = System.Diagnostics.ActivityContext, DisplayName = \"SELECT sqlite\", Duration = 00:00:00.0010075, ··· }]",
+      "stack_trace": "   at Aspire.Dashboard.Components.Tests.Pages.MetricsTests.ChartContainer_ParametersAndActiveView_OnlyRefreshAndRenderWhenChanged() in /_/tests/Aspire.Dashboard.Components.Tests/Pages/MetricsTests.cs:line 614\n--- End of stack trace from previous location ---",
+      "standard_output": "Temporary workspace created at: C:\\Users\\runneradmin\\AppData\\Local\\Temp\\Aspire.Dashboard.Components.Tests\\Workspace\\cishxzcf.akg\nDisposing temporary workspace at: C:\\Users\\runneradmin\\AppData\\Local\\Temp\\Aspire.Dashboard.Components.Tests\\Workspace\\cishxzcf.akg\n",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Stray ambient 'SELECT sqlite' Activity leaked into an Assert.Empty check, indicating intermittent cross-test timing; code unrelated to the merge.",
+      "job_id": 129574821773,
+      "execution_id": "50329123-50c7-4256-a46c-541a1810314f",
+      "result_file": "00001.trx",
+      "result_format": "trx"
+    }
+  ],
+  "causes": [
+    "dashboard-components-chartcontainer-stray-sqlite-activity"
+  ]
+}
