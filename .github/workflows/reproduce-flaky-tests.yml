@@ -21,6 +21,7 @@ on:
         options:
           - "31"
           - "65"
+          - "125"
         default: "31"
 
 run-name: Aspire.Cli.Tests before/after validation (+${{ inputs.runners_per_source }} per source)
@@ -41,8 +42,8 @@ env:
   # Options: ubuntu-latest, windows-latest, macos-latest
   TARGET_OSES: "windows-latest"
 
-  # Count the prior 29 attempts per source: +31 reaches 60, and a later
-  # +65 reaches 125 per source (250 test jobs plus six helper jobs overall).
+  # Stage increments count all prior attempts, including lost runners:
+  # 29 + 31 + 65 + 125 = 250 attempts per source, plus eight helpers overall.
   RUNNERS_PER_OS: ${{ inputs.runners_per_source }}
 
   ITERATIONS_PER_RUNNER: "1"
@@ -68,8 +69,8 @@ jobs:
             ERRORS=1
           fi
 
-          if [[ "${{ env.RUNNERS_PER_OS }}" != "31" && "${{ env.RUNNERS_PER_OS }}" != "65" ]]; then
-            echo "::error::RUNNERS_PER_OS must match an admitted stage increment (31 or 65)."
+          if [[ "${{ env.RUNNERS_PER_OS }}" != "31" && "${{ env.RUNNERS_PER_OS }}" != "65" && "${{ env.RUNNERS_PER_OS }}" != "125" ]]; then
+            echo "::error::RUNNERS_PER_OS must match an admitted stage increment (31, 65 or 125)."
             ERRORS=1
           fi
 
@@ -113,8 +114,8 @@ jobs:
 
           TOTAL=$(( RUNNERS * 2 * ${#OSES[@]} ))
           echo "Generated matrix: $TOTAL runners across two source arms"
-          if [[ "$TOTAL" -ne 62 && "$TOTAL" -ne 130 ]]; then
-            echo "::error::Expected exactly 62 or 130 matrix jobs, got $TOTAL."
+          if [[ "$TOTAL" -ne 62 && "$TOTAL" -ne 130 && "$TOTAL" -ne 250 ]]; then
+            echo "::error::Expected exactly 62, 130 or 250 matrix jobs, got $TOTAL."
             exit 1
           fi
 
