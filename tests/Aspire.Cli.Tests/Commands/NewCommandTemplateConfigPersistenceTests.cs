@@ -371,7 +371,7 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
     }
 
     [Theory]
-    [InlineData("default", true)]
+    [InlineData("default", false)]
     [InlineData("true", true)]
     [InlineData("false", false)]
     public async Task GoStarterHonorsRedisChoice(string choice, bool usesRedis)

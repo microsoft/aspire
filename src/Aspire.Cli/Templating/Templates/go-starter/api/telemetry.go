@@ -1,8 +1,4 @@
-// OpenTelemetry setup for the Aspire starter API.
-//
-// Reads OTEL_EXPORTER_OTLP_* env vars (Aspire injects them via WithOtlpExporter)
-// and configures traces, metrics, and logs to flow to the dashboard's OTLP
-// gRPC collector.
+// Configures traces, metrics, and logs from Aspire's OTLP environment variables.
 package main
 
 import (
@@ -26,27 +22,17 @@ import (
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-	semconv "go.opentelemetry.io/otel/semconv/v1.40.0"
 )
 
 // setupOTel returns a shutdown func that flushes pending telemetry.
 func setupOTel(ctx context.Context, serviceName string) (func(context.Context) error, error) {
 	if os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT") == "" {
-		// No exporter configured — install no-op providers so the app still runs
-		// (e.g., outside of `aspire run`).
+		// Keep standalone runs working when no exporter is configured.
 		return func(context.Context) error { return nil }, nil
 	}
 
-	res, err := resource.Merge(
-		resource.Default(),
-		resource.NewWithAttributes(
-			semconv.SchemaURL,
-			semconv.ServiceName(serviceName),
-		),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("otel resource: %w", err)
-	}
+	// Preserve Aspire's service identity so telemetry stays associated with this resource.
+	res := resource.Default()
 
 	headers := otlpHeaders()
 
@@ -96,8 +82,7 @@ func setupOTel(ctx context.Context, serviceName string) (func(context.Context) e
 	)
 	otellog.SetLoggerProvider(lp)
 
-	// Keep standard-library logs visible in the resource console while also routing them
-	// through slog to the OTel logger provider for the dashboard's structured logs view.
+	// Mirror standard logs to stderr and OTel for both resource and structured log views.
 	otelLogHandler := otelslog.NewHandler(serviceName, otelslog.WithLoggerProvider(lp))
 	slog.SetDefault(slog.New(otelLogHandler))
 	log.SetOutput(io.MultiWriter(os.Stderr, slog.NewLogLogger(otelLogHandler, slog.LevelInfo).Writer()))

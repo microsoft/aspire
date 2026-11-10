@@ -12,10 +12,7 @@ func main() {
 		log.Fatal(aspire.FormatError(err))
 	}
 
-	// The Go HTTP API. WithModTidy runs "go mod tidy" before launching so that
-	// go.sum is always up to date. Aspire injects:
-	//   - "OTEL_EXPORTER_OTLP_*" env vars (via WithOtlpExporter) so traces,
-	//     metrics, and logs flow to the Aspire dashboard.
+	// Keep Go modules current and send traces, metrics, and logs to the dashboard.
 	api := builder.AddGoApp("api", "./api").
 		WithModTidy().
 		WithHttpEndpoint(aspire.HttpEndpointEnv("PORT")).
@@ -23,23 +20,13 @@ func main() {
 		WithExternalHttpEndpoints().
 		WithOtlpExporter()
 
-	// Aspire injects API_HTTP for the frontend's Vite proxy and delays the frontend
-	// until the API is ready to serve /api/weatherforecast.
+	// Reference the API for Vite proxying and wait until it is healthy.
 	frontend := builder.AddViteApp("frontend", "./frontend", nil).
 		WithReference(api).
 		WaitFor(api)
 
-	// In publish and deploy mode, copy the frontend build output into the Go API
-	// container. The API serves these files from ./static on the same origin as /api.
+	// Bundle the frontend into the API container for same-origin production serving.
 	api.PublishWithContainerFiles(frontend, "./static")
-	resources := []aspire.Resource{api, frontend}
-
-	// Each call records its failure on the handle that it returns, so check every resource.
-	for _, resource := range resources {
-		if err := resource.Err(); err != nil {
-			log.Fatal(aspire.FormatError(err))
-		}
-	}
 
 	app, err := builder.Build()
 	if err != nil {

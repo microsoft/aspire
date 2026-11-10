@@ -69,8 +69,8 @@ internal enum AspireTemplate
     JavaEmptyAppHost,
 
     /// <summary>
-    /// Starter App (Go API/React + Redis, Go AppHost) — visible only when experimental Go support is enabled.
-    /// Prompts: template, project name, output path, URLs. No Redis or test project prompt because the template always includes Redis.
+    /// Starter App (Go API/React, Go AppHost) — visible only when experimental Go support is enabled.
+    /// Prompts: template, project name, output path, URLs, and optional Redis.
     /// </summary>
     GoStarter,
 
@@ -457,7 +457,7 @@ internal static class Hex1bTestHelpers
             case AspireTemplate.GoStarter:
                 // The list omits the C# starters when the image has no .NET SDK, so search by text instead of counting Downs.
                 var goStarterSelected = new CellPatternSearcher()
-                    .Find("> Starter App (Go API/React + Redis, Go AppHost)");
+                    .Find("> Starter App (Go API/React, Go AppHost)");
                 builder.Type("Go API")
                     .WaitUntil(s => goStarterSelected.Search(s).Count > 0, TimeSpan.FromSeconds(5))
                     .Enter();
@@ -488,8 +488,8 @@ internal static class Hex1bTestHelpers
         builder.WaitUntil(s => waitingForUrlsPrompt.Search(s).Count > 0, TimeSpan.FromSeconds(10))
             .Enter(); // Accept default "No"
 
-        // Step 6: Redis prompt (only Starter, JsReact, PythonReact)
-        if (template is AspireTemplate.Starter or AspireTemplate.JsReact or AspireTemplate.PythonReact)
+        // Step 6: Redis prompt
+        if (template is AspireTemplate.Starter or AspireTemplate.JsReact or AspireTemplate.PythonReact or AspireTemplate.GoStarter)
         {
             var waitingForRedisPrompt = new CellPatternSearcher()
                 .Find("Use Redis Cache");

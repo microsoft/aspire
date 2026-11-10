@@ -27,6 +27,17 @@ public class GoScaffoldTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void Scaffold_ReliesOnBuildForResourceErrors()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var appHost = Scaffold(workspace)["apphost.go"];
+
+        Assert.DoesNotContain(".Err()", appHost, StringComparison.Ordinal);
+        Assert.Contains("Add resources in main. Build reports failures from every resource.", appHost, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Scaffold_WritesFilesWithLfLineEndings()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

@@ -39,6 +39,7 @@ public class GoStarterTemplateTests
         Assert.Contains("WaitFor(api)", appHost, StringComparison.Ordinal);
         Assert.Contains("WithHttpEndpoint(aspire.HttpEndpointEnv(\"PORT\"))", appHost, StringComparison.Ordinal);
         Assert.Contains("WithHttpHealthCheck(aspire.HttpHealthCheckPath(\"/health\"))", appHost, StringComparison.Ordinal);
+        Assert.DoesNotContain(".Err()", appHost, StringComparison.Ordinal);
         Assert.Contains("api.PublishWithContainerFiles(frontend, \"./static\")", appHost, StringComparison.Ordinal);
 
         var viteConfig = File.ReadAllText(Path.Combine(GetGoStarterDirectory(), "frontend", "vite.config.ts"));
@@ -46,6 +47,11 @@ public class GoStarterTemplateTests
 
         var api = File.ReadAllText(Path.Combine(GetGoStarterDirectory(), "api", "main.go"));
         Assert.Contains("mux.Handle(\"/\", http.FileServer(http.Dir(\"./static\")))", api, StringComparison.Ordinal);
+        Assert.Contains("os.Getenv(\"CACHE_URI\")", api, StringComparison.Ordinal);
+        Assert.DoesNotContain("ConnectionStrings__cache", api, StringComparison.Ordinal);
+        Assert.DoesNotContain("parseAspireRedisConnString", api, StringComparison.Ordinal);
+        Assert.Contains("runtime.GOOS == \"windows\"", api, StringComparison.Ordinal);
+        Assert.Contains("host = \"127.0.0.1\"", api, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -73,6 +79,8 @@ public class GoStarterTemplateTests
         var telemetry = File.ReadAllText(Path.Combine(apiDirectory, "telemetry.go"));
         Assert.Contains("otelslog.NewHandler(serviceName, otelslog.WithLoggerProvider(lp))", telemetry, StringComparison.Ordinal);
         Assert.Contains("log.SetOutput(io.MultiWriter(os.Stderr", telemetry, StringComparison.Ordinal);
+        Assert.Contains("res := resource.Default()", telemetry, StringComparison.Ordinal);
+        Assert.DoesNotContain("semconv.ServiceName", telemetry, StringComparison.Ordinal);
     }
 
     private static string GetGoStarterAppHostPath()

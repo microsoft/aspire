@@ -47,21 +47,12 @@ internal sealed class GoLanguageSupport : ILanguageSupport
             	"apphost/modules/aspire"
             )
 
+            // Add resources in main. Build reports failures from every resource.
             func main() {
             	builder, err := aspire.CreateBuilder()
             	if err != nil {
             		log.Fatal(aspire.FormatError(err))
             	}
-
-            	// Add your resources here. Each call records its failure on the handle that it returns,
-            	// so check every resource, for example:
-            	// cache := builder.AddRedis("cache")
-            	// db := builder.AddPostgres("db")
-            	// for _, resource := range []aspire.Resource{cache, db} {
-            	// 	if err := resource.Err(); err != nil {
-            	// 		log.Fatal(aspire.FormatError(err))
-            	// 	}
-            	// }
 
             	app, err := builder.Build()
             	if err != nil {

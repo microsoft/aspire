@@ -36,8 +36,7 @@ internal sealed partial class CliTemplateFactory
         _logger.LogDebug("Applying Go starter template. ProjectName: {ProjectName}, OutputPath: {OutputPath}, AspireVersion: {AspireVersion}.", projectName, outputPath, aspireVersion);
 
         var useLocalhostTld = await ResolveUseLocalhostTldAsync(parseResult, cancellationToken);
-        // Keep the existing Redis-enabled default, including non-interactive scaffolding.
-        var useRedisCache = parseResult.GetValue(_useRedisCacheOption) ?? true;
+        var useRedisCache = await ResolveUseRedisCacheAsync(parseResult, cancellationToken);
 
         TemplateResult templateResult;
         try

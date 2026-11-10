@@ -287,9 +287,9 @@ foreach ($template in $templates)
             $newStartedAt = Get-Date
             Write-DiagnosticMessage "${templateId}: invoking aspire new."
             $templateArguments = @()
-            if ($templateId -eq 'aspire-go-starter' -and -not $IsLinux)
+            if ($templateId -eq 'aspire-go-starter')
             {
-                $templateArguments = @('--use-redis-cache', 'false')
+                $templateArguments = @('--use-redis-cache', $(if ($IsLinux) { 'true' } else { 'false' }))
             }
             aspire new $templateId --name $projectName --output $projectRoot --channel "pr-$PRNumber" --non-interactive --nologo --suppress-agent-init @templateArguments
             Write-DiagnosticMessage "${templateId}: aspire new returned after $([math]::Round(((Get-Date) - $newStartedAt).TotalSeconds, 1)) seconds."

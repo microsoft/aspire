@@ -1,14 +1,9 @@
-// Sample Go API for the Aspire starter template.
-//
-// Aspire injects:
-//   - ConnectionStrings__cache  → Redis connection string (set via WithReference(cache))
-//   - OTEL_EXPORTER_OTLP_*      → OTLP endpoint + headers (set via WithOtlpExporter)
-//   - PORT / ASPNETCORE_URLS    → host endpoint Aspire wants this app to listen on
+// Sample Go API for the Aspire starter template. Aspire injects CACHE_URI for
+// optional Redis, OTEL_EXPORTER_OTLP_* for telemetry, and the listen endpoint.
 package main
 
 import (
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -17,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"runtime"
 	"strings"
 	"syscall"
 	"time"
@@ -41,7 +37,10 @@ func main() {
 	}
 	defer func() { _ = shutdownTelemetry(context.Background()) }()
 
-	cache := newRedisClient()
+	cache, err := newRedisClient()
+	if err != nil {
+		log.Fatalf("cache: %v", err)
+	}
 	if cache != nil {
 		defer func() { _ = cache.Close() }()
 	}
@@ -81,61 +80,39 @@ func main() {
 	_ = srv.Shutdown(shutdownCtx)
 }
 
-// listenAddress resolves the address Aspire wants this service to bind to.
-// Falls back to :8080 for standalone runs.
+// listenAddress uses Aspire's endpoint, or loopback:8080 for standalone runs.
 func listenAddress() string {
+	host := "0.0.0.0"
+	if runtime.GOOS == "windows" {
+		// Each `go run` build has a new executable path, so loopback avoids repeated Windows Firewall prompts.
+		host = "127.0.0.1"
+	}
+
 	if port := os.Getenv("PORT"); port != "" {
-		return ":" + port
+		return host + ":" + port
 	}
 	if urls := os.Getenv("ASPNETCORE_URLS"); urls != "" {
-		// "http://localhost:5000;https://localhost:5001" → ":5000"
+		// "http://localhost:5000;https://localhost:5001" → "127.0.0.1:5000"
 		first := strings.Split(urls, ";")[0]
 		if i := strings.LastIndex(first, ":"); i != -1 {
-			return first[i:]
+			return host + first[i:]
 		}
 	}
-	return ":8080"
+	return host + ":8080"
 }
 
-// newRedisClient returns nil if no Redis connection string is provided.
-func newRedisClient() *redis.Client {
-	connStr := os.Getenv("ConnectionStrings__cache")
-	if connStr == "" {
-		log.Println("ConnectionStrings__cache not set; running without cache")
-		return nil
+// newRedisClient returns nil if no Redis URI is provided.
+func newRedisClient() (*redis.Client, error) {
+	cacheURI := os.Getenv("CACHE_URI")
+	if cacheURI == "" {
+		log.Println("CACHE_URI not set; running without cache")
+		return nil, nil
 	}
-	opts, err := redis.ParseURL(connStr)
+	opts, err := redis.ParseURL(cacheURI)
 	if err != nil {
-		// Fall back to assuming "host:port[,password=…]" Aspire-style.
-		opts = parseAspireRedisConnString(connStr)
+		return nil, fmt.Errorf("parse CACHE_URI: %w", err)
 	}
-	return redis.NewClient(opts)
-}
-
-// parseAspireRedisConnString accepts the comma-separated key/value form Aspire
-// emits for Redis (e.g. "localhost:6379,password=…,ssl=true").
-func parseAspireRedisConnString(s string) *redis.Options {
-	opts := &redis.Options{}
-	for i, part := range strings.Split(s, ",") {
-		part = strings.TrimSpace(part)
-		if i == 0 {
-			opts.Addr = part
-			continue
-		}
-		k, v, ok := strings.Cut(part, "=")
-		if !ok {
-			continue
-		}
-		switch strings.TrimSpace(k) {
-		case "password":
-			opts.Password = strings.TrimSpace(v)
-		case "ssl":
-			if strings.EqualFold(strings.TrimSpace(v), "true") {
-				opts.TLSConfig = &tls.Config{MinVersion: tls.VersionTLS12}
-			}
-		}
-	}
-	return opts
+	return redis.NewClient(opts), nil
 }
 
 type forecast struct {

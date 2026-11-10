@@ -10,7 +10,7 @@ namespace Aspire.Cli.EndToEnd.Tests;
 
 /// <summary>
 /// End-to-end tests for the Go starter template (aspire-go-starter).
-/// Validates that aspire new creates a Go API + Redis project with a restored Go SDK
+/// Validates that aspire new creates a Go API + React project with optional Redis and a restored Go SDK
 /// and that aspire start runs it successfully.
 /// </summary>
 public sealed class GoStarterTemplateTests(ITestOutputHelper output)
