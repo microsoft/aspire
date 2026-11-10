@@ -79,6 +79,8 @@ internal static class TemplateSourceConfiguration
     public static ConfiguredTemplateSource Parse(
         string? path, string? repository, string? reference, string? displayName, string settingPath, bool requireComplete)
     {
+        // Give malformed source definitions actionable errors before discovery.
+        // These shape checks do not establish trust in the publisher or its templates.
         if (displayName?.Any(char.IsControl) is true)
         {
             throw new TemplateSourceConfigurationException($"{settingPath}.displayName", NewCommandStrings.TemplateSourceDisplayNameInvalid);

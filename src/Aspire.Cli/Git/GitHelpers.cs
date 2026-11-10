@@ -5,6 +5,8 @@ namespace Aspire.Cli.Git;
 
 internal static class GitHelpers
 {
+    // Validate supported syntax for clearer configuration errors, not to police trusted
+    // source choices. Rejecting embedded credentials is best-effort hygiene, not a sandbox.
     internal static bool IsValidRepository(string repository)
     {
         if (string.IsNullOrWhiteSpace(repository))
@@ -53,8 +55,9 @@ internal static class GitHelpers
         }
 
         var branch = reference.StartsWith("refs/heads/", StringComparison.Ordinal) ? reference["refs/heads/".Length..] : reference;
-        // Branch selectors follow git-check-ref-format rather than accepting revision
-        // expressions, refspec operators, tags, or command-line options.
+        // Keep selectors unambiguous and report unsupported syntax before invoking Git.
+        // This is a correctness check, not a boundary against a trusted caller.
+        // Branch selectors follow git-check-ref-format, not arbitrary revision expressions.
         // https://git-scm.com/docs/git-check-ref-format
         return branch is not ("" or "@" or "HEAD") && !branch.StartsWith('-') && !branch.StartsWith("refs/", StringComparison.Ordinal)
             && !branch.Contains("..", StringComparison.Ordinal) && !branch.Contains("@{", StringComparison.Ordinal)
