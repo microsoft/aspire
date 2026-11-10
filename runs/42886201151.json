@@ -1,0 +1,65 @@
+{
+  "run_id": 42886201151,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/42886201151",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-10T20:07:51Z",
+  "verdict": "main-repository-breakage",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 21766,
+    "title": "Address deferred review feedback for the modern dashboard",
+    "author": "sebastienros",
+    "state": "closed",
+    "head_branch": "sebros/dashboard-review-tracking-issue-f03a30",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/21766",
+    "merged_at": "2026-11-10T19:31:53Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "32d2dd9c2214f7118628a1ab6a4e9e0795b584a9",
+    "failed_sha": "727eaa702afaf69a5a3ac8acfcd746c7af28e7f2",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "e6a9cadfd4a9238d9f8ae3ef91e4c0c282169d21",
+        "message": "Don't probe the container runtime at startup when the app has no containers (#21957) ## Description **What failed.** On Windows runners, the Deno functional tests (`DenoTelemetryFunctionalTests.VerifyDenoAppExportsNativeTelemetryToDashboard`, `DenoFunctionalTests.VerifyDenoAppDirectExecutionWorks`, `DenoFunctionalTests.VerifyDenoAppTaskScriptWorks`) and other DCP-backed fixtures fail in `InitializeAsync` with: ``` Aspire.Hosting.DistributedApplicationException : Application orchestrator dependen",
+        "html_url": "https://github.com/microsoft/aspire/commit/e6a9cadfd4a9238d9f8ae3ef91e4c0c282169d21",
+        "pull_request": {
+          "number": 21957,
+          "title": "Don't probe the container runtime at startup when the app has no containers",
+          "url": "https://github.com/microsoft/aspire/pull/21957",
+          "merged_at": "2026-11-10T18:53:50Z"
+        }
+      },
+      {
+        "sha": "727eaa702afaf69a5a3ac8acfcd746c7af28e7f2",
+        "message": "Address deferred review feedback for the modern dashboard (#21766) ## Description Addresses the review feedback from #21412 (Modernize the dashboard experience) that was deferred to the tracking issue #21421. Each item was checked against the current code first. Item 17 was already fixed, and every other item is addressed here. The design questions are answered in a comment below. Fixes #21421 | Items | Change | |---|---| | 1, 3, 6 | Replaces `WithDashboardPosition` with `WithDisplayOrder`, back",
+        "html_url": "https://github.com/microsoft/aspire/commit/727eaa702afaf69a5a3ac8acfcd746c7af28e7f2",
+        "pull_request": {
+          "number": 21766,
+          "title": "Address deferred review feedback for the modern dashboard",
+          "url": "https://github.com/microsoft/aspire/pull/21766",
+          "merged_at": "2026-11-10T19:31:53Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Run VS Code extension unit tests (Windows) / Run VS Code extension unit tests (Windows)",
+      "id": 130076181942,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/42886201151/job/130076181942",
+      "classification": "main-repository-breakage",
+      "reason": "Windows VS Code extension unit test 'rejects when a Windows child does not close after successful taskkill' fails a strict equality assertion (2 !== 0).",
+      "failed_steps": [
+        "Run tests"
+      ]
+    }
+  ],
+  "failed_tests": [],
+  "causes": [
+    "vscode-unit-windows-spawncliprocess-taskkill-close-timers"
+  ]
+}
