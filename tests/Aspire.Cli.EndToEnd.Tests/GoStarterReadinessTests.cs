@@ -73,6 +73,13 @@ public sealed class GoStarterReadinessTests(ITestOutputHelper output)
                 """found=0; for i in $(seq 1 20); do aspire otel spans --format json --limit 100 > spans.json && aspire otel logs --format json --limit 100 > otel-logs.json && node -e 'const assert = require("node:assert/strict"); const spans = require("./spans.json"); const logs = require("./otel-logs.json"); assert.ok(spans.some(span => span.source === "api" && span.attributes?.["url.path"] === "/api/weatherforecast")); assert.ok(logs.some(log => log.resourceName === "api" && log.message.includes("api listening")));' && found=1 && break; sleep 1; done; test "$found" = 1""",
                 counter,
                 TimeSpan.FromMinutes(2));
+            if (useRedisCache)
+            {
+                await auto.RunCommandAsync(
+                    """found=0; for i in $(seq 1 20); do aspire otel spans --format json --limit 100 > spans.json && node -e 'const assert = require("node:assert/strict"); const spans = require("./spans.json"); assert.ok(spans.some(span => span.source === "api" && span.attributes?.["db.system"] === "redis"));' && found=1 && break; sleep 1; done; test "$found" = 1""",
+                    counter,
+                    TimeSpan.FromMinutes(2));
+            }
         }
         finally
         {

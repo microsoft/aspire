@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json;
+using Aspire.Cli.Templating;
 
 namespace Aspire.Cli.Tests.Templating;
 
@@ -50,8 +51,31 @@ public class GoStarterTemplateTests
         Assert.Contains("os.Getenv(\"CACHE_URI\")", api, StringComparison.Ordinal);
         Assert.DoesNotContain("ConnectionStrings__cache", api, StringComparison.Ordinal);
         Assert.DoesNotContain("parseAspireRedisConnString", api, StringComparison.Ordinal);
+        Assert.Contains("redisotel.InstrumentTracing(cache)", api, StringComparison.Ordinal);
+        Assert.Contains("redisotel.InstrumentMetrics(cache)", api, StringComparison.Ordinal);
         Assert.Contains("runtime.GOOS == \"windows\"", api, StringComparison.Ordinal);
         Assert.Contains("host = \"127.0.0.1\"", api, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void GoStarterTemplate_IncludesRedisApiOnlyWhenSelected(bool useRedis)
+    {
+        var conditions = new Dictionary<string, bool>
+        {
+            ["redis"] = useRedis,
+            ["no-redis"] = !useRedis,
+        };
+        var apiDirectory = Path.Combine(GetGoStarterDirectory(), "api");
+        var main = ConditionalBlockProcessor.Process(File.ReadAllText(Path.Combine(apiDirectory, "main.go")), conditions);
+        var goMod = ConditionalBlockProcessor.Process(File.ReadAllText(Path.Combine(apiDirectory, "go.mod")), conditions);
+        var goSum = ConditionalBlockProcessor.Process(File.ReadAllText(Path.Combine(apiDirectory, "go.sum")), conditions);
+
+        Assert.Equal(useRedis, main.Contains("redisotel.InstrumentTracing(cache)", StringComparison.Ordinal));
+        Assert.Equal(useRedis, main.Contains("os.Getenv(\"CACHE_URI\")", StringComparison.Ordinal));
+        Assert.Equal(useRedis, goMod.Contains("github.com/redis/go-redis/extra/redisotel/v9", StringComparison.Ordinal));
+        Assert.Equal(useRedis, goSum.Contains("github.com/redis/go-redis/extra/redisotel/v9", StringComparison.Ordinal));
     }
 
     [Fact]

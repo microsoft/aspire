@@ -53,7 +53,11 @@ internal sealed partial class CliTemplateFactory
                     var projectNameLower = projectName.ToLowerInvariant();
                     var ports = GenerateRandomPorts();
                     var hostName = useLocalhostTld ? $"{projectNameLower}.dev.localhost" : "localhost";
-                    var conditions = new Dictionary<string, bool> { ["redis"] = useRedisCache };
+                    var conditions = new Dictionary<string, bool>
+                    {
+                        ["redis"] = useRedisCache,
+                        ["no-redis"] = !useRedisCache,
+                    };
                     string ApplyAllTokens(string content) => ConditionalBlockProcessor.Process(
                         ApplyTokens(content, projectName, projectNameLower, aspireVersion, ports, hostName),
                         conditions);

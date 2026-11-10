@@ -1,12 +1,13 @@
-// Sample Go API for the Aspire starter template. Aspire injects CACHE_URI for
-// optional Redis, OTEL_EXPORTER_OTLP_* for telemetry, and the listen endpoint.
+// Sample Go API using Aspire's injected telemetry and listen settings.
 package main
 
 import (
 	"context"
 	"encoding/json"
 	"errors"
+	// {{#redis}}
 	"fmt"
+	// {{/redis}}
 	"log"
 	"math/rand/v2"
 	"net/http"
@@ -17,16 +18,26 @@ import (
 	"syscall"
 	"time"
 
+	// {{#redis}}
+	"github.com/redis/go-redis/extra/redisotel/v9"
 	"github.com/redis/go-redis/v9"
+	// {{/redis}}
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	// {{#redis}}
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
+	// {{/redis}}
 )
 
+// {{#redis}}
 const cacheKey = "weatherforecast"
 const cacheTTL = 5 * time.Second
 
+var cache *redis.Client
+var cacheRequests metric.Int64Counter
+
+// {{/redis}}
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -37,27 +48,17 @@ func main() {
 	}
 	defer func() { _ = shutdownTelemetry(context.Background()) }()
 
-	cache, err := newRedisClient()
-	if err != nil {
+	// {{#redis}}
+	if err := setupRedis(); err != nil {
 		log.Fatalf("cache: %v", err)
 	}
 	if cache != nil {
 		defer func() { _ = cache.Close() }()
 	}
-
-	meter := otel.Meter("aspired-api")
-	cacheRequests, err := meter.Int64Counter(
-		"aspired.api.cache.requests",
-		metric.WithDescription("Weather forecast cache lookups by result"),
-		metric.WithUnit("{request}"),
-	)
-	if err != nil {
-		log.Fatalf("counter: %v", err)
-	}
-
+	// {{/redis}}
 	mux := http.NewServeMux()
-	mux.HandleFunc("/api/weatherforecast", weatherHandler(cache, cacheRequests))
-	mux.HandleFunc("/health", healthHandler(cache))
+	mux.HandleFunc("/api/weatherforecast", weatherHandler())
+	mux.HandleFunc("/health", healthHandler())
 	mux.Handle("/", http.FileServer(http.Dir("./static")))
 
 	addr := listenAddress()
@@ -101,20 +102,41 @@ func listenAddress() string {
 	return host + ":8080"
 }
 
-// newRedisClient returns nil if no Redis URI is provided.
-func newRedisClient() (*redis.Client, error) {
+// {{#redis}}
+func setupRedis() error {
+	var err error
+	cacheRequests, err = otel.Meter("aspired-api").Int64Counter(
+		"aspired.api.cache.requests",
+		metric.WithDescription("Weather forecast cache lookups by result"),
+		metric.WithUnit("{request}"),
+	)
+	if err != nil {
+		return fmt.Errorf("create cache counter: %w", err)
+	}
+
 	cacheURI := os.Getenv("CACHE_URI")
 	if cacheURI == "" {
 		log.Println("CACHE_URI not set; running without cache")
-		return nil, nil
+		return nil
 	}
 	opts, err := redis.ParseURL(cacheURI)
 	if err != nil {
-		return nil, fmt.Errorf("parse CACHE_URI: %w", err)
+		return fmt.Errorf("parse CACHE_URI: %w", err)
 	}
-	return redis.NewClient(opts), nil
+
+	cache = redis.NewClient(opts)
+	if err := redisotel.InstrumentTracing(cache); err != nil {
+		_ = cache.Close()
+		return fmt.Errorf("instrument Redis tracing: %w", err)
+	}
+	if err := redisotel.InstrumentMetrics(cache); err != nil {
+		_ = cache.Close()
+		return fmt.Errorf("instrument Redis metrics: %w", err)
+	}
+	return nil
 }
 
+// {{/redis}}
 type forecast struct {
 	Date         string `json:"date"`
 	TemperatureC int    `json:"temperatureC"`
@@ -127,12 +149,15 @@ var summaries = []string{
 	"Warm", "Balmy", "Hot", "Sweltering", "Scorching",
 }
 
-func weatherHandler(cache *redis.Client, cacheRequests metric.Int64Counter) http.HandlerFunc {
+func weatherHandler() http.HandlerFunc {
+	// {{#redis}}
 	hit := metric.WithAttributes(attribute.String("result", "hit"))
 	miss := metric.WithAttributes(attribute.String("result", "miss"))
 	skip := metric.WithAttributes(attribute.String("result", "skip"))
+	// {{/redis}}
 
 	return func(w http.ResponseWriter, r *http.Request) {
+		// {{#redis}}
 		ctx := r.Context()
 
 		if cache != nil {
@@ -146,6 +171,7 @@ func weatherHandler(cache *redis.Client, cacheRequests metric.Int64Counter) http
 		} else {
 			cacheRequests.Add(ctx, 1, skip)
 		}
+		// {{/redis}}
 
 		forecasts := make([]forecast, 5)
 		for i := range forecasts {
@@ -164,23 +190,26 @@ func weatherHandler(cache *redis.Client, cacheRequests metric.Int64Counter) http
 			return
 		}
 
+		// {{#redis}}
 		if cache != nil {
 			_ = cache.Set(ctx, cacheKey, body, cacheTTL).Err()
 		}
-
+		// {{/redis}}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write(body)
 	}
 }
 
-func healthHandler(cache *redis.Client) http.HandlerFunc {
+func healthHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// {{#redis}}
 		if cache != nil {
 			if err := cache.Ping(r.Context()).Err(); err != nil {
 				http.Error(w, fmt.Sprintf("cache unhealthy: %v", err), http.StatusServiceUnavailable)
 				return
 			}
 		}
+		// {{/redis}}
 		w.Header().Set("Content-Type", "text/plain")
 		_, _ = w.Write([]byte("Healthy"))
 	}
