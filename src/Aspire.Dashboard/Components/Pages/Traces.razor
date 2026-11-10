@@ -144,15 +144,13 @@
                                 </div>
                             </AspireTemplateColumn>
                             <AspireTemplateColumn ColumnId="@SpansColumn" ColumnManager="@_manager" Title="@Loc[nameof(Dashboard.Resources.Traces.TracesSpansColumnHeader)]">
-                                <FluentOverflow TItem="object">
-                                    <ChildContent>
-                                        @foreach (var item in context.Resources)
-                                        {
-                                            <div>
-                                                @RenderTraceResourceSummary(item)
-                                            </div>
-                                        }
-                                    </ChildContent>
+                                @* Typed items filter stale browser overflow indexes against the current resource list. *@
+                                <FluentOverflow TItem="TraceResourceSummary" Items="@context.Resources">
+                                    <ItemTemplate Context="item">
+                                        <div>
+                                            @RenderTraceResourceSummary(item)
+                                        </div>
+                                    </ItemTemplate>
                                     <MoreTemplate Context="overflow">
                                         <span class="trace-tag">
                                             @($"+{overflow.OverflowCount}")
@@ -160,16 +158,16 @@
                                     </MoreTemplate>
                                     <OverflowTemplate Context="overflow">
                                         @{
-                                            var items = overflow.ItemsOverflow.ToList();
+                                            var items = overflow.Items;
                                         }
 
                                         @if (items.Count > 0)
                                         {
-                                            <FluentTooltip aria-label="@(string.Join(", ", items.Select(i => i.Text)))" UseTooltipService="false" Anchor="@overflow.IdMoreButton" Class="trace-overflow-tooltip">
+                                            <FluentTooltip aria-label="@(string.Join(", ", items.Select(item => $"{GetResourceName(item.Resource)} ({item.TotalSpans})")))" UseTooltipService="false" Anchor="@overflow.IdMoreButton" Class="trace-overflow-tooltip">
                                                 <div class="trace-overflow-tooltip-content">
                                                     @foreach (var item in items)
                                                     {
-                                                        @RenderTraceResourceSummary(context.Resources[item.Index])
+                                                        @RenderTraceResourceSummary(item)
                                                     }
                                                 </div>
                                             </FluentTooltip>
