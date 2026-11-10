@@ -40,6 +40,8 @@ internal sealed class AgentTelemetryCommand : BaseCommand
     private readonly ILogger _logger;
     private readonly Option<bool> _hookOption = new(AgentTelemetryProtocol.HookOptionName) { Hidden = true };
     private readonly Option<bool> _drainOption = new(AgentTelemetryProtocol.DrainOptionName) { Hidden = true };
+    private readonly Option<string?> _sourceOption = new(AgentTelemetryProtocol.SourceOptionName) { Hidden = true };
+    private readonly Option<string?> _scopeOption = new(AgentTelemetryProtocol.ScopeOptionName) { Hidden = true };
 
     // Defensive cap so a malformed or hostile hook payload cannot push oversized or
     // high-cardinality values into the telemetry backend. Real values (skill names, tool names,
@@ -123,6 +125,8 @@ internal sealed class AgentTelemetryCommand : BaseCommand
         Options.Add(_timestampOption);
         Options.Add(_hookOption);
         Options.Add(_drainOption);
+        Options.Add(_sourceOption);
+        Options.Add(_scopeOption);
     }
 
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
@@ -131,13 +135,20 @@ internal sealed class AgentTelemetryCommand : BaseCommand
         {
             if (parseResult.GetValue(_hookOption))
             {
-                await _hook.RunAsync(_console.Input, _console.Out.Profile.Out.Writer, _console.Error.Profile.Out.Writer, async args =>
-                {
-                    // Classification produces the same options as legacy script invocations. Parse
-                    // those options on this command, without invoking another CLI or handler.
-                    await RecordAsync(Parse(args[2..])).ConfigureAwait(false);
-                    return CliExitCodes.Success;
-                }).ConfigureAwait(false);
+                await _hook.RunAsync(
+                    _console.Input,
+                    _console.Out.Profile.Out.Writer,
+                    _console.Error.Profile.Out.Writer,
+                    parseResult.GetValue(_sourceOption),
+                    parseResult.GetValue(_scopeOption),
+                    ExecutionContext.WorkingDirectory.FullName,
+                    async args =>
+                    {
+                        // Classification produces the same options as legacy script invocations. Parse
+                        // those options on this command, without invoking another CLI or handler.
+                        await RecordAsync(Parse(args[2..])).ConfigureAwait(false);
+                        return CliExitCodes.Success;
+                    }).ConfigureAwait(false);
             }
             else if (parseResult.GetValue(_drainOption))
             {

@@ -13,6 +13,8 @@ internal static class AgentTelemetryProtocol
 
     internal const string HookOptionName = "--hook";
     internal const string DrainOptionName = "--drain";
+    internal const string SourceOptionName = "--source";
+    internal const string ScopeOptionName = "--scope";
     internal const string EventTypeOptionName = "--event-type";
     internal const string ClientNameOptionName = "--client-name";
     internal const string SessionIdOptionName = "--session-id";
@@ -25,4 +27,17 @@ internal static class AgentTelemetryProtocol
     internal const string SkillInvocationEventType = "skill_invocation";
     internal const string ToolInvocationEventType = "tool_invocation";
     internal const string ReferenceFileReadEventType = "reference_file_read";
+
+    // Values for --source: the hook configuration format that invoked the hook.
+    internal const string CopilotSource = "copilot";
+    internal const string ClaudeSource = "claude";
+
+    // Values for --scope: where the hook configuration was installed.
+    internal const string UserScope = "user";
+    internal const string ProjectScope = "project";
+
+    /// <summary>
+    /// The Copilot hook file name used at both user scope (<c>~/.copilot/hooks</c>) and project scope (<c>.github/hooks</c>).
+    /// </summary>
+    internal const string CopilotHookFileName = "aspire-telemetry.json";
 }

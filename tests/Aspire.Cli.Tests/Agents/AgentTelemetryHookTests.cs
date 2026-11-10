@@ -1,15 +1,19 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
+using Aspire.Cli.Agents;
 using Aspire.Cli.Agents.Hooks;
 using Aspire.Cli.Mcp;
 using Aspire.Cli.Tests.Utils;
 
 namespace Aspire.Cli.Tests.Agents;
 
-public class AgentTelemetryHookTests
+public class AgentTelemetryHookTests(ITestOutputHelper outputHelper)
 {
+    private const string McpPayload = """{"hook_event_name":"PostToolUse","tool_name":"mcp__aspire__list_resources"}""";
+
     [Theory]
     [InlineData("{}")]
     [InlineData("null")]
@@ -86,7 +90,7 @@ public class AgentTelemetryHookTests
         using var output = new StringWriter();
         using var error = new StringWriter();
         var calls = 0;
-        var result = await hook.RunAsync(input, output, error, _ =>
+        var result = await hook.RunAsync(input, output, error, source: null, scope: null, AppContext.BaseDirectory, _ =>
         {
             calls++;
             return Task.FromResult(0);
@@ -107,7 +111,7 @@ public class AgentTelemetryHookTests
         using var input = new StringReader("""{"toolName":"skill","toolArgs":{"skill":"aspire"}}""");
         using var output = new StringWriter();
         using var error = new StringWriter();
-        var result = await hook.RunAsync(input, output, error, _ => throw new InvalidOperationException());
+        var result = await hook.RunAsync(input, output, error, source: null, scope: null, AppContext.BaseDirectory, _ => throw new InvalidOperationException());
         Assert.Equal(0, result);
         Assert.Equal('{', input.Peek());
         Assert.Equal("""{"continue":true}""" + Environment.NewLine, output.ToString());
@@ -177,7 +181,7 @@ public class AgentTelemetryHookTests
         using var error = new StringWriter();
         string[]? recordedArgs = null;
 
-        Assert.Equal(0, await hook.RunAsync(input, output, error, args =>
+        Assert.Equal(0, await hook.RunAsync(input, output, error, source: null, scope: null, AppContext.BaseDirectory, args =>
         {
             recordedArgs = args;
             throw new IOException("Must not expose payload or exception message.");
@@ -323,7 +327,7 @@ public class AgentTelemetryHookTests
         using var error = new StringWriter();
         var invoked = false;
 
-        Assert.Equal(0, await hook.RunAsync(input, output, error, _ =>
+        Assert.Equal(0, await hook.RunAsync(input, output, error, source: null, scope: null, AppContext.BaseDirectory, _ =>
         {
             invoked = true;
             return Task.FromResult(0);
@@ -346,7 +350,7 @@ public class AgentTelemetryHookTests
         using var output = new StringWriter();
         using var error = new StringWriter();
 
-        Assert.Equal(0, await hook.RunAsync(input, output, error, _ => throw new InvalidOperationException()));
+        Assert.Equal(0, await hook.RunAsync(input, output, error, source: null, scope: null, AppContext.BaseDirectory, _ => throw new InvalidOperationException()));
         Assert.Contains(AgentTelemetryHook.PayloadLimitEnvironmentVariable, error.ToString());
         Assert.Equal("""{"continue":true}""" + Environment.NewLine, output.ToString());
     }
@@ -358,6 +362,114 @@ public class AgentTelemetryHookTests
         var padded = payload.PadRight(AgentTelemetryHook.DefaultMaxPayloadCharacters + 1);
         Assert.Null(AgentTelemetryHook.Classify(padded, new TestEnvironment(), AgentTelemetryHook.DefaultMaxPayloadCharacters));
         Assert.NotNull(AgentTelemetryHook.Classify(padded, new TestEnvironment(), padded.Length));
+    }
+
+    [Theory]
+    [InlineData("COPILOT_CLI", "1")]
+    [InlineData("AI_AGENT", "github_copilot_app_agent")]
+    public async Task ClaudeSourceHookDefersToCopilotHookInsideCopilot(string variable, string value)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var hook = new AgentTelemetryHook(new TestEnvironment(new Dictionary<string, string?> { [variable] = value }));
+
+        Assert.False(await RecordsAsync(hook, AgentTelemetryProtocol.ClaudeSource, AgentTelemetryProtocol.UserScope, workspace.WorkspaceRoot));
+        Assert.False(await RecordsAsync(hook, AgentTelemetryProtocol.ClaudeSource, AgentTelemetryProtocol.ProjectScope, workspace.WorkspaceRoot));
+        Assert.True(await RecordsAsync(hook, AgentTelemetryProtocol.CopilotSource, AgentTelemetryProtocol.UserScope, workspace.WorkspaceRoot));
+        Assert.True(await RecordsAsync(hook, source: null, scope: null, workspace.WorkspaceRoot));
+    }
+
+    [Theory]
+    [InlineData(AgentTelemetryProtocol.CopilotSource, AgentTelemetryProtocol.ClaudeSource)]
+    [InlineData(AgentTelemetryProtocol.ClaudeSource, AgentTelemetryProtocol.CopilotSource)]
+    public async Task UserHookDefersToProjectHookForSameSource(string source, string otherSource)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        workspace.CreateDirectory(".git");
+        WriteProjectHook(workspace.WorkspaceRoot, source, AgentTelemetryHook.GetHookCommand(source, AgentConfigurationScope.Project));
+        var nested = workspace.CreateDirectory(Path.Combine("src", "app"));
+        var hook = new AgentTelemetryHook(new TestEnvironment());
+
+        Assert.False(await RecordsAsync(hook, source, AgentTelemetryProtocol.UserScope, nested));
+        Assert.True(await RecordsAsync(hook, source, AgentTelemetryProtocol.ProjectScope, nested));
+        Assert.True(await RecordsAsync(hook, otherSource, AgentTelemetryProtocol.UserScope, nested));
+        Assert.True(await RecordsAsync(hook, source, scope: null, nested));
+    }
+
+    [Theory]
+    [InlineData(AgentTelemetryProtocol.CopilotSource)]
+    [InlineData(AgentTelemetryProtocol.ClaudeSource)]
+    public async Task UserHookRecordsWhenRepositoryHasNoProjectHook(string source)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var repository = workspace.CreateDirectory("repo");
+        Directory.CreateDirectory(Path.Combine(repository.FullName, ".git"));
+        var hook = new AgentTelemetryHook(new TestEnvironment());
+
+        Assert.True(await RecordsAsync(hook, source, AgentTelemetryProtocol.UserScope, repository));
+
+        // A user-scope hook copied into the repository does not own the event.
+        WriteProjectHook(repository, source, AgentTelemetryHook.GetHookCommand(source, AgentConfigurationScope.Global));
+        Assert.True(await RecordsAsync(hook, source, AgentTelemetryProtocol.UserScope, repository));
+
+        // Neither does a hook installed before --scope existed.
+        WriteProjectHook(repository, source, AgentTelemetryHook.GetCommand(AgentTelemetryProtocol.HookOptionName));
+        Assert.True(await RecordsAsync(hook, source, AgentTelemetryProtocol.UserScope, repository));
+
+        // Unreadable project settings fail open.
+        File.WriteAllText(GetProjectHookPath(repository, source), "{ malformed");
+        Assert.True(await RecordsAsync(hook, source, AgentTelemetryProtocol.UserScope, repository));
+    }
+
+    private static async Task<bool> RecordsAsync(AgentTelemetryHook hook, string? source, string? scope, DirectoryInfo workingDirectory)
+    {
+        using var input = new StringReader(McpPayload);
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+        var recorded = false;
+
+        Assert.Equal(0, await hook.RunAsync(input, output, error, source, scope, workingDirectory.FullName, _ =>
+        {
+            recorded = true;
+            return Task.FromResult(0);
+        }));
+        Assert.Equal("""{"continue":true}""" + Environment.NewLine, output.ToString());
+        Assert.Empty(error.ToString());
+
+        return recorded;
+    }
+
+    private static string GetProjectHookPath(DirectoryInfo root, string source)
+        => source == AgentTelemetryProtocol.CopilotSource
+            ? Path.Combine(root.FullName, ".github", "hooks", AgentTelemetryProtocol.CopilotHookFileName)
+            : Path.Combine(root.FullName, ".claude", "settings.json");
+
+    // Writes the minimal shape each client reads; TelemetryHookConfiguratorTests covers the full files init writes.
+    private static void WriteProjectHook(DirectoryInfo root, string source, (string Command, string[] Args) invocation)
+    {
+        var path = GetProjectHookPath(root, source);
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        var args = new JsonArray(invocation.Args.Select(arg => (JsonNode?)JsonValue.Create(arg)).ToArray());
+        JsonNode settings = source == AgentTelemetryProtocol.CopilotSource
+            ? new JsonObject
+            {
+                ["version"] = 1,
+                ["hooks"] = new JsonObject
+                {
+                    ["postToolUse"] = new JsonArray(new JsonObject { ["type"] = "command", ["exec"] = invocation.Command, ["args"] = args })
+                }
+            }
+            : new JsonObject
+            {
+                ["hooks"] = new JsonObject
+                {
+                    ["PostToolUse"] = new JsonArray(new JsonObject
+                    {
+                        ["matcher"] = AgentTelemetryHook.ClaudeToolMatcher,
+                        ["hooks"] = new JsonArray(new JsonObject { ["type"] = "command", ["command"] = invocation.Command, ["args"] = args })
+                    })
+                }
+            };
+        File.WriteAllText(path, settings.ToJsonString());
     }
 
     // Both clients evaluate matchers as JavaScript regular expressions. Copilot wraps the pattern as

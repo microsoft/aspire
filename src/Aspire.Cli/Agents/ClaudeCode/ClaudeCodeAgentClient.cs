@@ -22,9 +22,7 @@ internal sealed class ClaudeCodeAgentClient(
     public AgentEnvironment Environments => AgentEnvironment.ClaudeCode;
 
     public string GetSkillBaseDirectory(AgentConfigurationScope scope, DirectoryInfo workspaceRoot)
-        => Path.Combine(scope is AgentConfigurationScope.Project
-            ? Path.Combine(workspaceRoot.FullName, ClaudeCodePaths.ConfigDirectoryName)
-            : ClaudeCodePaths.GetConfigDirectory(context, environment), "skills");
+        => Path.Combine(ClaudeCodePaths.GetConfigDirectory(scope, workspaceRoot, context, environment), "skills");
 
     public IEnumerable<string> GetLocalSkillDirectories(AgentConfigurationScope scope, DirectoryInfo workspaceRoot)
     {
@@ -38,13 +36,7 @@ internal sealed class ClaudeCodeAgentClient(
                 AgentConfiguration.EnumerateJsonFiles(Path.Combine(ManagedSettingsDirectory, "managed-settings.d"))), sources);
 
     public string GetIntegrationConfigPath(AgentConfigurationScope scope, DirectoryInfo workspaceRoot)
-    {
-        var directory = scope is AgentConfigurationScope.Project
-            ? Path.Combine(workspaceRoot.FullName, ClaudeCodePaths.ConfigDirectoryName)
-            : ClaudeCodePaths.GetConfigDirectory(context, environment);
-
-        return Path.Combine(directory, "settings.json");
-    }
+        => Path.Combine(ClaudeCodePaths.GetConfigDirectory(scope, workspaceRoot, context, environment), "settings.json");
 
     public Task UpdateIntegrationConfigAsync(
         JsonObject config, DirectoryInfo workspaceRoot, AgentConfigurationScope scope,
@@ -80,9 +72,13 @@ internal sealed class ClaudeCodeAgentClient(
 
     public override string ToString() => Id;
 
-    public Task<TelemetryHookStatus> ConfigureTelemetryHookAsync(CancellationToken cancellationToken)
+    public Task<TelemetryHookStatus> ConfigureTelemetryHookAsync(
+        AgentConfigurationScope scope, DirectoryInfo workspaceRoot, CancellationToken cancellationToken)
     {
-        var settingsPath = Path.Combine(ClaudeCodePaths.GetConfigDirectory(context, environment), "settings.json");
+        // Project hooks go in the shared settings.json, not settings.local.json, so they can be committed.
+        // https://code.claude.com/docs/en/settings#settings-files
+        var settingsPath = GetIntegrationConfigPath(scope, workspaceRoot);
+        var (command, args) = AgentTelemetryHook.GetHookCommand(AgentTelemetryProtocol.ClaudeSource, scope);
         return TelemetryHookSettings.UpdateAsync(settingsPath, logger, hooks =>
         {
             if (!TelemetryHookSettings.TryGetEventArray(hooks, "PostToolUse", out var postToolUse))
@@ -94,15 +90,14 @@ internal sealed class ClaudeCodeAgentClient(
             // track so Claude does not launch the CLI on every tool call or read.
             // https://code.claude.com/docs/en/hooks
             RemoveExistingAspireHooks(postToolUse);
-            AddAspireHook(postToolUse, AgentTelemetryHook.ClaudeToolMatcher, condition: null);
-            AddAspireHook(postToolUse, AgentTelemetryHook.ClaudeReadMatcher, AgentTelemetryHook.ClaudeReadIf);
+            AddAspireHook(postToolUse, command, args, AgentTelemetryHook.ClaudeToolMatcher, condition: null);
+            AddAspireHook(postToolUse, command, args, AgentTelemetryHook.ClaudeReadMatcher, AgentTelemetryHook.ClaudeReadIf);
             return true;
         }, cancellationToken);
     }
 
-    private static void AddAspireHook(JsonArray groups, string matcher, string? condition)
+    private static void AddAspireHook(JsonArray groups, string command, IEnumerable<string> args, string matcher, string? condition)
     {
-        var (command, args) = AgentTelemetryHook.GetCommand(AgentTelemetryProtocol.HookOptionName);
         var hook = new JsonObject
         {
             ["type"] = "command",

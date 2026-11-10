@@ -178,9 +178,16 @@ Dashboard shutdown retains its service-style policy, even when the host's cancel
 
 ### Registration and classification
 
-Global-scope `aspire agent init` registers user-level post-invocation hooks for a supported Copilot or Claude client only after it registers the `aspire@aspire-skills` plugin or configures the Aspire MCP server for that client. Hooks are registered through [TelemetryHookConfigurator](../../src/Aspire.Cli/Agents/Hooks/TelemetryHookConfigurator.cs). Hooks invoke `aspire agent telemetry --hook` directly through the CLI executable or its managed entry point, without launching PowerShell or Bash. Re-running initialization refreshes Aspire's registration while preserving unrelated user hooks.
+`aspire agent init` registers post-invocation hooks for a supported Copilot or Claude client only after it registers the `aspire@aspire-skills` plugin or configures the Aspire MCP server for that client. Hooks are registered through [TelemetryHookConfigurator](../../src/Aspire.Cli/Agents/Hooks/TelemetryHookConfigurator.cs). The hook files follow the init scope:
 
-Each registration includes a tool-name `matcher` ([AgentTelemetryHook](../../src/Aspire.Cli/Agents/Hooks/AgentTelemetryHook.cs)) so the client starts the CLI only for tools the classifier can track. The Copilot user hook matches skill and Aspire MCP tools. Copilot matchers see only the tool name, so the user hook does not match file-read tools, which would start the CLI for every read in every repository. Claude matches the Skill and Aspire MCP tools, and matches `Read` only for Aspire skill paths through an `if` rule. Clients that ignore `matcher`, such as Copilot CLI versions earlier than 1.0.63, invoke the hook for every tool, and the classifier remains the authoritative filter.
+| Client | Global scope | Project scope |
+| --- | --- | --- |
+| Copilot | `~/.copilot/hooks/aspire-telemetry.json` | `<repo>/.github/hooks/aspire-telemetry.json` |
+| Claude Code | `~/.claude/settings.json` (or `CLAUDE_CONFIG_DIR`) | `<repo>/.claude/settings.json` |
+
+Project files are the committable [Copilot repository hooks](https://docs.github.com/en/copilot/reference/hooks-reference) and [Claude project settings](https://code.claude.com/docs/en/settings#settings-files). Hooks invoke `aspire agent telemetry --hook --source copilot|claude --scope user|project` directly through the absolute path of the CLI executable or its managed entry point, without launching PowerShell or Bash. Both scopes use the same command, so a committed project hook points at the path on the machine that ran init; teammates re-run `aspire agent init` to refresh it, and a missing executable fails open. Copilot documents `exec` hooks for Copilot CLI; the Copilot cloud agent honors only `bash` or `command` entries, so it does not run them. Re-running initialization refreshes Aspire's registration while preserving unrelated hooks.
+
+Each registration includes a tool-name `matcher` ([AgentTelemetryHook](../../src/Aspire.Cli/Agents/Hooks/AgentTelemetryHook.cs)) so the client starts the CLI only for tools the classifier can track. The Copilot hook matches skill and Aspire MCP tools. Copilot matchers see only the tool name, so the hook does not match file-read tools, which would start the CLI for every read. Claude matches the Skill and Aspire MCP tools, and matches `Read` only for Aspire skill paths through an `if` rule. Clients that ignore `matcher`, such as Copilot CLI versions earlier than 1.0.63, invoke the hook for every tool, and the classifier remains the authoritative filter.
 
 [AgentTelemetryHook](../../src/Aspire.Cli/Agents/Hooks/AgentTelemetryHook.cs) classifies incoming tool invocations before initializing telemetry. It reports only the Aspire-owned catalog:
 
@@ -204,7 +211,14 @@ Client attribution checks `AI_AGENT=github_copilot_app_agent` first and reports 
 
 An eligible invocation initializes providers before metadata enrichment and records `aspire/cli/agent_telemetry` as a reported span. Agent telemetry invocations suppress the generic `aspire/cli/main` span and the first-run notice, and disable the reported internal-Microsoft detector diagnostic. This avoids counting a background hook as an ordinary CLI invocation.
 
-VS Code reads both Copilot and Claude hook files, so one tool call can reach two installed hooks. When the payload has a GUID session ID and a tool-use ID (1 to 128 ASCII letters, digits, `.`, `_`, or `-`), the classifier forwards the tool-use ID as `--tool-use-id`. [AgentTelemetryDeduplicator](../../src/Aspire.Cli/Telemetry/AgentTelemetryDeduplicator.cs) atomically creates a marker file named by an XxHash3 of the session and tool-use IDs, next to the CLI telemetry storage, and drops any later delivery that finds the marker. Markers expire after one hour. The tool-use ID is never recorded. If markers cannot be written, the event is recorded rather than lost. Deliveries without both IDs are always recorded.
+Clients run every matching hook from user and project sources without merging them, and Copilot CLI and [VS Code](https://code.visualstudio.com/docs/agent-customization/hooks) also read the repository's Claude settings. [AgentTelemetryHook](../../src/Aspire.Cli/Agents/Hooks/AgentTelemetryHook.cs) therefore drops an eligible event without recording it when another installed hook owns it:
+
+- A `--scope user` hook skips when the enclosing repository (the nearest directory with `.git`) has an Aspire `--scope project` hook for the same source.
+- A `--source claude` hook skips when `COPILOT_CLI` is enabled or `AI_AGENT=github_copilot_app_agent`, because the Copilot hook receives the same event.
+
+Hooks registered without `--source` and `--scope` never skip. Unreadable or malformed hook files count as no project hook.
+
+As a backstop, one tool call can still reach two installed hooks, for example in VS Code. When the payload has a GUID session ID and a tool-use ID (1 to 128 ASCII letters, digits, `.`, `_`, or `-`), the classifier forwards the tool-use ID as `--tool-use-id`. [AgentTelemetryDeduplicator](../../src/Aspire.Cli/Telemetry/AgentTelemetryDeduplicator.cs) atomically creates a marker file named by an XxHash3 of the session and tool-use IDs, next to the CLI telemetry storage, and drops any later delivery that finds the marker. Markers expire after one hour. The tool-use ID is never recorded. If markers cannot be written, the event is recorded rather than lost. Deliveries without both IDs are always recorded.
 
 The hook emits its continuation response and the command returns success even when telemetry processing fails. Caught processing failures are reported through local diagnostics without including the raw payload.
 

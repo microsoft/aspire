@@ -20,8 +20,14 @@ internal sealed class TestTelemetryHookConfigurator : ITelemetryHookConfigurator
     /// </summary>
     public IReadOnlyList<string> SelectedClientIds { get; private set; } = [];
 
+    public AgentConfigurationScope? Scope { get; private set; }
+
+    public DirectoryInfo? WorkspaceRoot { get; private set; }
+
     public Task<IReadOnlyList<TelemetryHookResult>> ConfigureAsync(
         IReadOnlyList<IAgentClient> selectedClients,
+        AgentConfigurationScope scope,
+        DirectoryInfo workspaceRoot,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -31,6 +37,8 @@ internal sealed class TestTelemetryHookConfigurator : ITelemetryHookConfigurator
         }
 
         SelectedClientIds = [.. selectedClients.Select(static client => client.Id)];
+        Scope = scope;
+        WorkspaceRoot = workspaceRoot;
         return Task.FromResult(ResultFactory?.Invoke(selectedClients) ?? []);
     }
 }

@@ -4,10 +4,10 @@
 namespace Aspire.Cli.Agents.Hooks;
 
 /// <summary>
-/// Registers the Aspire agent telemetry <c>PostToolUse</c> hook once into the user-level configuration of
-/// each given agent client that supports telemetry hooks, mirroring the behavior of the azure-skills
-/// plugin hooks. Whether telemetry is actually transmitted remains gated by the telemetry opt-out
-/// environment variables; this only wires the hooks up.
+/// Registers the Aspire agent telemetry <c>PostToolUse</c> hook once into the user-level or project-level
+/// configuration of each given agent client that supports telemetry hooks, mirroring the behavior of the
+/// azure-skills plugin hooks. Whether telemetry is actually transmitted remains gated by the telemetry
+/// opt-out environment variables; this only wires the hooks up.
 /// </summary>
 internal interface ITelemetryHookConfigurator
 {
@@ -16,10 +16,14 @@ internal interface ITelemetryHookConfigurator
     /// telemetry hooks.
     /// </summary>
     /// <param name="clients">The agent clients to register hooks for.</param>
+    /// <param name="scope">Whether to write user-level hooks or committable hooks in the workspace.</param>
+    /// <param name="workspaceRoot">The repository root that receives project-level hooks.</param>
     /// <param name="cancellationToken">A token to cancel the operation.</param>
     /// <returns>One result per client that supports telemetry hooks, in input order.</returns>
     Task<IReadOnlyList<TelemetryHookResult>> ConfigureAsync(
         IReadOnlyList<IAgentClient> clients,
+        AgentConfigurationScope scope,
+        DirectoryInfo workspaceRoot,
         CancellationToken cancellationToken);
 }
 

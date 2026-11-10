@@ -145,10 +145,10 @@ internal static class TelemetryHookSettings
             var executableName = Path.GetFileNameWithoutExtension(executable);
             var isDotnet = string.Equals(executableName, "dotnet", StringComparison.OrdinalIgnoreCase);
             var isDirectAspireInvocation = !isDotnet
-                && values is [AgentTelemetryProtocol.AgentCommandName, AgentTelemetryProtocol.TelemetryCommandName, AgentTelemetryProtocol.HookOptionName]
+                && values is [AgentTelemetryProtocol.AgentCommandName, AgentTelemetryProtocol.TelemetryCommandName, AgentTelemetryProtocol.HookOptionName, ..]
                 && (executable == currentCommand || string.Equals(executableName, "aspire", StringComparison.OrdinalIgnoreCase));
             var isManagedAspireInvocation = isDotnet
-                && values is [var assemblyPath, AgentTelemetryProtocol.AgentCommandName, AgentTelemetryProtocol.TelemetryCommandName, AgentTelemetryProtocol.HookOptionName]
+                && values is [var assemblyPath, AgentTelemetryProtocol.AgentCommandName, AgentTelemetryProtocol.TelemetryCommandName, AgentTelemetryProtocol.HookOptionName, ..]
                 && string.Equals(Path.GetFileName(assemblyPath), "aspire.dll", StringComparison.OrdinalIgnoreCase);
 
             return isDirectAspireInvocation || isManagedAspireInvocation || values.Any(ReferencesTelemetryScript);

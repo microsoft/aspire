@@ -101,22 +101,28 @@ internal sealed class CopilotAgentClient(
     }
 
     // VS Code, the Copilot App, and the Copilot CLI share the Copilot harness, which reads user hooks from
-    // ~/.copilot/hooks, so one registration covers all of them:
+    // ~/.copilot/hooks and repository hooks from .github/hooks, so one registration covers all of them:
     // https://code.visualstudio.com/docs/agent-customization/hooks#_choose-a-hook-source
     public bool SupportsTelemetryHooks => true;
 
-    public async Task<TelemetryHookStatus> ConfigureTelemetryHookAsync(CancellationToken cancellationToken)
+    public async Task<TelemetryHookStatus> ConfigureTelemetryHookAsync(
+        AgentConfigurationScope scope, DirectoryInfo workspaceRoot, CancellationToken cancellationToken)
     {
         try
         {
-            // Copilot reads Claude settings only at project scope, so these user hooks cannot
-            // duplicate Claude's user hook. Direct exec avoids a shell launch, and the matcher keeps
-            // Copilot from launching the CLI for tool calls the classifier would discard.
-            // https://docs.github.com/en/copilot/reference/hooks-reference#command-hooks
-            var hooksDirectory = Path.Combine(GetSettingsDirectory(), "hooks");
+            // Project hooks live in .github/hooks so they can be committed. Copilot also runs Claude project
+            // hooks, which skip themselves inside Copilot. Direct exec avoids a shell launch and shell quoting,
+            // and the matcher keeps Copilot from launching the CLI for tool calls the classifier would discard.
+            // Copilot cloud agent honors only bash or command entries, so it ignores this hook; its sandbox
+            // has no Aspire CLI at this path and a restricted network.
+            // https://docs.github.com/en/copilot/reference/hooks-reference#hooks-locations
+            // https://docs.github.com/en/copilot/reference/hooks-reference#cloud-agent-execution-environment
+            var hooksDirectory = scope is AgentConfigurationScope.Project
+                ? Path.Combine(workspaceRoot.FullName, ".github", "hooks")
+                : Path.Combine(GetSettingsDirectory(), "hooks");
             Directory.CreateDirectory(hooksDirectory);
-            var filePath = Path.Combine(hooksDirectory, "aspire-telemetry.json");
-            var (command, args) = AgentTelemetryHook.GetCommand(AgentTelemetryProtocol.HookOptionName);
+            var filePath = Path.Combine(hooksDirectory, AgentTelemetryProtocol.CopilotHookFileName);
+            var (command, args) = AgentTelemetryHook.GetHookCommand(AgentTelemetryProtocol.CopilotSource, scope);
             var config = new JsonObject
             {
                 ["version"] = 1,

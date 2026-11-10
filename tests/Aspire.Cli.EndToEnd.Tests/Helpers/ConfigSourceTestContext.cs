@@ -276,8 +276,10 @@ internal sealed class ConfigSourceTestContext
             await _auto.RunCommandAsync(command, _counter);
             foreach (var (path, expected) in settings)
             {
+                // Project telemetry hooks depend on agent detection, which the first run's .claude directory
+                // changes for the second run. AgentCommandTests covers hooks; this test covers skill sources.
                 await _auto.RunCommandAsync(
-                    $"cat \"{path}\" > \"$ASPIRE_E2E_WORKSPACE/actual-agent-settings.json\"", _counter);
+                    $"jq 'del(.hooks)' \"{path}\" > \"$ASPIRE_E2E_WORKSPACE/actual-agent-settings.json\"", _counter);
                 var actual = await File.ReadAllTextAsync(Path.Combine(_root, "actual-agent-settings.json"), _cancellationToken);
                 Assert.True(JsonNode.DeepEquals(JsonNode.Parse(expected), JsonNode.Parse(actual)),
                     $"Unexpected skill-source registration in {path}: {actual}");

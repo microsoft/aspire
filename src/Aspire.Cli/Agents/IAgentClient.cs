@@ -46,7 +46,8 @@ internal interface IAgentClient
     // False means the client has no verified hook schema, and ConfigureTelemetryHookAsync throws NotSupportedException.
     bool SupportsTelemetryHooks { get; }
 
-    Task<TelemetryHookStatus> ConfigureTelemetryHookAsync(CancellationToken cancellationToken);
+    Task<TelemetryHookStatus> ConfigureTelemetryHookAsync(
+        AgentConfigurationScope scope, DirectoryInfo workspaceRoot, CancellationToken cancellationToken);
 }
 
 internal enum AgentConfigurationScope

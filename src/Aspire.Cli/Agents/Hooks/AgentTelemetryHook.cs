@@ -3,6 +3,7 @@
 
 using System.Globalization;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Aspire.Cli.Agents.Copilot;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
@@ -68,7 +69,41 @@ internal sealed class AgentTelemetryHook(IEnvironment environment)
         return (command, args);
     }
 
-    internal async Task<int> RunAsync(TextReader input, TextWriter output, TextWriter error, Func<string[], Task<int>> execute)
+    /// <summary>
+    /// Gets the hook command written into an agent's hook configuration.
+    /// </summary>
+    /// <param name="source">The hook configuration format, <see cref="AgentTelemetryProtocol.CopilotSource"/> or <see cref="AgentTelemetryProtocol.ClaudeSource"/>.</param>
+    /// <param name="scope">Where the hook configuration is installed.</param>
+    /// <remarks>
+    /// User and project hooks run the same CLI invocation. <c>--source</c> and <c>--scope</c> let the hook detect
+    /// when another installed hook owns the same event (see <see cref="ShouldSkip"/>).
+    /// </remarks>
+    internal static (string Command, string[] Args) GetHookCommand(string source, AgentConfigurationScope scope)
+    {
+        var (command, args) = GetCommand(AgentTelemetryProtocol.HookOptionName);
+        return (command,
+        [
+            .. args,
+            AgentTelemetryProtocol.SourceOptionName, source,
+            AgentTelemetryProtocol.ScopeOptionName, scope == AgentConfigurationScope.Project ? AgentTelemetryProtocol.ProjectScope : AgentTelemetryProtocol.UserScope
+        ]);
+    }
+
+    /// <param name="input">The hook payload.</param>
+    /// <param name="output">Receives the hook response.</param>
+    /// <param name="error">Receives diagnostics.</param>
+    /// <param name="source">The <c>--source</c> value, or <see langword="null"/> for hooks installed without one.</param>
+    /// <param name="scope">The <c>--scope</c> value, or <see langword="null"/> for hooks installed without one.</param>
+    /// <param name="workingDirectory">The directory the agent ran the hook in, used to find project hooks.</param>
+    /// <param name="execute">Records the classified event.</param>
+    internal async Task<int> RunAsync(
+        TextReader input,
+        TextWriter output,
+        TextWriter error,
+        string? source,
+        string? scope,
+        string workingDirectory,
+        Func<string[], Task<int>> execute)
     {
         try
         {
@@ -100,7 +135,7 @@ internal sealed class AgentTelemetryHook(IEnvironment environment)
             }
 
             var args = Classify(new string(buffer, 0, length), environment, maxPayloadCharacters);
-            if (args is not null)
+            if (args is not null && !ShouldSkip(source, scope, workingDirectory))
             {
                 await execute(args).ConfigureAwait(false);
             }
@@ -117,6 +152,90 @@ internal sealed class AgentTelemetryHook(IEnvironment environment)
         }
 
         return 0;
+    }
+
+    /// <summary>
+    /// Determines whether another installed hook owns this event, so recording it here would double count.
+    /// </summary>
+    /// <remarks>
+    /// Copilot CLI runs the repository's <c>.claude/settings.json</c> hooks alongside its own, so a Claude hook
+    /// defers to the Copilot hook inside Copilot. A user hook defers to a project hook for the same source because
+    /// agents run both without deduplication (https://docs.github.com/en/copilot/reference/hooks-reference#hooks-locations).
+    /// Hooks installed without <c>--source</c> or <c>--scope</c> never skip. Failures fall back to recording.
+    /// </remarks>
+    private bool ShouldSkip(string? source, string? scope, string workingDirectory)
+    {
+        try
+        {
+            if (source == AgentTelemetryProtocol.ClaudeSource
+                && (environment.IsFlagEnabled("COPILOT_CLI")
+                    || string.Equals(
+                        environment.GetEnvironmentVariable(CopilotAppInstallationDetector.AgentEnvironmentVariable),
+                        CopilotAppInstallationDetector.AgentEnvironmentValue,
+                        StringComparison.Ordinal)))
+            {
+                return true;
+            }
+
+            if (scope != AgentTelemetryProtocol.UserScope || FindRepositoryRoot(workingDirectory) is not { } root)
+            {
+                return false;
+            }
+
+            return source switch
+            {
+                AgentTelemetryProtocol.CopilotSource => HasProjectHook(
+                    Path.Combine(root, ".github", "hooks", AgentTelemetryProtocol.CopilotHookFileName), "postToolUse", "exec", nested: false),
+                AgentTelemetryProtocol.ClaudeSource => HasProjectHook(
+                    Path.Combine(root, ".claude", "settings.json"), "PostToolUse", "command", nested: true),
+                _ => false,
+            };
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or ArgumentException)
+        {
+            return false;
+        }
+    }
+
+    // A worktree or submodule has a .git file instead of a directory.
+    private static string? FindRepositoryRoot(string workingDirectory)
+    {
+        for (var directory = new DirectoryInfo(workingDirectory); directory is not null; directory = directory.Parent)
+        {
+            var gitPath = Path.Combine(directory.FullName, ".git");
+            if (Directory.Exists(gitPath) || File.Exists(gitPath))
+            {
+                return directory.FullName;
+            }
+        }
+
+        return null;
+    }
+
+    // Copilot hook files list handlers directly under the event:
+    //   {"hooks":{"postToolUse":[{"exec":"/path/to/aspire","args":["agent","telemetry","--hook","--source","copilot","--scope","project"]}]}}
+    // Claude settings nest handlers in matcher groups:
+    //   {"hooks":{"PostToolUse":[{"matcher":"...","hooks":[{"command":"/path/to/aspire","args":[...,"--scope","project"]}]}]}}
+    private static bool HasProjectHook(string path, string eventName, string executableProperty, bool nested)
+    {
+        if (!File.Exists(path)
+            || JsonNode.Parse(File.ReadAllText(path)) is not JsonObject settings
+            || settings["hooks"] is not JsonObject hooks
+            || hooks[eventName] is not JsonArray entries)
+        {
+            return false;
+        }
+
+        var handlers = nested
+            ? entries.SelectMany(entry => entry is JsonObject { } group && group["hooks"] is JsonArray groupHooks ? groupHooks : [])
+            : entries;
+
+        return handlers.Any(handler => TelemetryHookSettings.IsAspireHook(handler, executableProperty)
+            && handler!["args"] is JsonArray args
+            && args.Select(arg => arg?.GetValueKind() == JsonValueKind.String ? arg.GetValue<string>() : null)
+                .SkipWhile(arg => arg != AgentTelemetryProtocol.ScopeOptionName)
+                .Skip(1)
+                .FirstOrDefault() == AgentTelemetryProtocol.ProjectScope);
     }
 
     internal static int GetMaxPayloadCharacters(string? configuredValue)

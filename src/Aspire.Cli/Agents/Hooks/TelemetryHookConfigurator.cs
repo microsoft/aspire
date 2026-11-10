@@ -7,6 +7,8 @@ internal sealed class TelemetryHookConfigurator(ITelemetryHookInstaller installe
 {
     public async Task<IReadOnlyList<TelemetryHookResult>> ConfigureAsync(
         IReadOnlyList<IAgentClient> clients,
+        AgentConfigurationScope scope,
+        DirectoryInfo workspaceRoot,
         CancellationToken cancellationToken)
     {
         var eligibleClients = clients.Where(client => client.SupportsTelemetryHooks).ToList();
@@ -21,7 +23,8 @@ internal sealed class TelemetryHookConfigurator(ITelemetryHookInstaller installe
         var results = new List<TelemetryHookResult>(eligibleClients.Count);
         foreach (var client in eligibleClients)
         {
-            results.Add(new TelemetryHookResult(client, await client.ConfigureTelemetryHookAsync(cancellationToken)));
+            results.Add(new TelemetryHookResult(
+                client, await client.ConfigureTelemetryHookAsync(scope, workspaceRoot, cancellationToken)));
         }
 
         return results;

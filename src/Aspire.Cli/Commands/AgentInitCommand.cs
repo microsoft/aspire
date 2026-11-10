@@ -683,9 +683,12 @@ internal sealed class AgentInitCommand : BaseCommand
         }
 
         // --- Phase 6: Install agent telemetry hooks (default-on, parity with azure-skills) ---
-        // Global setup registers one user-level hook per selected client. Whether telemetry is actually
-        // transmitted stays gated by the single ASPIRE_CLI_TELEMETRY_OPTOUT opt-out, which both the hook
-        // scripts and the `aspire agent telemetry` command path re-check at runtime.
+        // Registers one hook per selected client at the chosen scope. Project hooks are written to committable
+        // repository files and run the same CLI command as user hooks. Each hook carries its source and scope so
+        // it can skip events another installed hook owns: a user hook defers to a project hook for the same
+        // client, and a Claude hook defers to the Copilot hook when Copilot runs it.
+        // Whether telemetry is actually transmitted stays gated by the single ASPIRE_CLI_TELEMETRY_OPTOUT
+        // opt-out, which both the hook scripts and the `aspire agent telemetry` command path re-check at runtime.
         // The hooks only report aspire@aspire-skills skills and Aspire MCP tool usage, so a client gets a
         // hook only when this run registered that plugin or configured the Aspire MCP server for it.
         // Selecting the aspire skill choice is not enough: skill sources can disable the default source
@@ -694,9 +697,9 @@ internal sealed class AgentInitCommand : BaseCommand
             .Concat(mcpConfiguredClients)
             .ToHashSet();
         var telemetryHookClients = selectedClients.Where(aspireConfiguredClients.Contains).ToList();
-        if (scope is AgentConfigurationScope.Global && telemetryHookClients.Count > 0)
+        if (telemetryHookClients.Count > 0)
         {
-            await ConfigureTelemetryHooksAsync(telemetryHookClients, cancellationToken);
+            await ConfigureTelemetryHooksAsync(telemetryHookClients, scope, workspaceRoot, cancellationToken);
         }
 
         if (hasErrors)
@@ -736,12 +739,14 @@ internal sealed class AgentInitCommand : BaseCommand
 
     private async Task ConfigureTelemetryHooksAsync(
         IReadOnlyList<IAgentClient> clients,
+        AgentConfigurationScope scope,
+        DirectoryInfo workspaceRoot,
         CancellationToken cancellationToken)
     {
         IReadOnlyList<TelemetryHookResult> results;
         try
         {
-            results = await _telemetryHookConfigurator.ConfigureAsync(clients, cancellationToken);
+            results = await _telemetryHookConfigurator.ConfigureAsync(clients, scope, workspaceRoot, cancellationToken);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

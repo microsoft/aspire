@@ -118,8 +118,9 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
         var unselectedRoot = scope == "project" ? homeDirectory : workspace.WorkspaceRoot;
         Assert.False(Directory.Exists(Path.Combine(unselectedRoot.FullName, ".agents")));
         Assert.Equal(
-            (configureAspire || configureMcp) && selectedScope is AgentConfigurationScope.Global ? expectedClients.Split(',') : [],
+            configureAspire || configureMcp ? expectedClients.Split(',') : [],
             hooks.SelectedClientIds);
+        Assert.Equal(configureAspire || configureMcp ? selectedScope : null, hooks.Scope);
     }
 
     [Theory]
@@ -127,7 +128,7 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
     [InlineData("global", false)]
     [InlineData("project", true)]
     [InlineData("global", true)]
-    public async Task AgentInit_ExplicitAgents_SkipDetectionAndConfigureHooksOnlyForGlobalAssets(string scope, bool configureMcp)
+    public async Task AgentInit_ExplicitAgents_SkipDetectionAndConfigureHooksOnlyForAspireAssets(string scope, bool configureMcp)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var homeDirectory = workspace.CreateDirectory("fake-home");
@@ -145,7 +146,7 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
             $"agent init --agents claude --scope {scope} --skills none --mcp={configureMcp}");
         Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
         Assert.Equal(0, detector.ScanCount);
-        Assert.Equal(scope == "global" && configureMcp ? ["claude"] : [], hooks.SelectedClientIds);
+        Assert.Equal(configureMcp ? ["claude"] : [], hooks.SelectedClientIds);
     }
 
     [Theory]
@@ -739,6 +740,8 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.InteractionServiceFactory = _ => interaction;
+            // Isolate the MCP description from the telemetry hook summary, which project-scope MCP now also triggers.
+            options.TelemetryHookConfiguratorFactory = _ => new TestTelemetryHookConfigurator();
         });
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
@@ -1364,7 +1367,7 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData("project")]
     [InlineData("global")]
-    public async Task AgentInit_Hooks_UseSelectedClientsOnlyInGlobalScope(string scope)
+    public async Task AgentInit_Hooks_UseSelectedClientsInEitherScope(string scope)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var hooks = new TestTelemetryHookConfigurator();
@@ -1376,7 +1379,8 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
 
         var result = provider.GetRequiredService<RootCommand>().Parse($"agent init --agents claude --scope {scope} --skills aspire");
         Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
-        Assert.Equal(scope == "global" ? ["claude"] : [], hooks.SelectedClientIds);
+        Assert.Equal(["claude"], hooks.SelectedClientIds);
+        Assert.Equal(scope == "project" ? AgentConfigurationScope.Project : AgentConfigurationScope.Global, hooks.Scope);
     }
 
     [Theory]
