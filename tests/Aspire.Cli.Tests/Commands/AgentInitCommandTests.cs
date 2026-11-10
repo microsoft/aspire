@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Agents;
 using Aspire.Cli.Agents.AspireSkills;
+using Aspire.Cli.Agents.Copilot;
 using Aspire.Cli.Agents.Hooks;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Configuration;
@@ -669,20 +670,15 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(expected, File.Exists(Path.Combine(workspace.Path, ".agents", "skills", SkillDefinition.DotnetInspect.Name, "SKILL.md")));
     }
 
-    [Theory]
-    [InlineData(nameof(AgentEnvironment.CopilotCli))]
-    [InlineData(nameof(AgentEnvironment.CopilotApp))]
-    [InlineData($"{nameof(AgentEnvironment.CopilotApp)}, {nameof(AgentEnvironment.CopilotCli)}")]
-    public async Task AgentInitCommand_GlobalScope_InstallsTelemetryHook_ForSelectedDetectedEnvironment(string environmentName)
+    [Fact]
+    public async Task AgentInitCommand_GlobalScope_InstallsTelemetryHook_ForSelectedClient()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var homeDirectory = workspace.CreateDirectory("fake-home");
         var interactionService = new TestInteractionService();
-        var environment = Enum.Parse<AgentEnvironment>(environmentName);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.CliExecutionContextFactory = _ => CreateExecutionContext(workspace.WorkspaceRoot, homeDirectory);
-            options.AgentEnvironmentDetectorFactory = _ => new TestAgentEnvironmentDetector { DetectedEnvironments = environment };
             options.InteractionServiceFactory = _ => interactionService;
         });
 
@@ -701,12 +697,12 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData((int)TelemetryHookSkipReason.MalformedConfig)]
-    [InlineData((int)TelemetryHookSkipReason.UnexpectedConfigShape)]
-    [InlineData((int)TelemetryHookSkipReason.WriteFailed)]
-    public async Task AgentInitCommand_DisplaysSkippedTelemetryHookMessage_UsingClientDisplayName(int reasonValue)
+    [InlineData(nameof(TelemetryHookStatus.MalformedConfig))]
+    [InlineData(nameof(TelemetryHookStatus.UnexpectedConfigShape))]
+    [InlineData(nameof(TelemetryHookStatus.WriteFailed))]
+    public async Task AgentInitCommand_DisplaysSkippedTelemetryHookMessage_UsingClientDisplayName(string statusName)
     {
-        var reason = (TelemetryHookSkipReason)reasonValue;
+        var status = Enum.Parse<TelemetryHookStatus>(statusName);
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var homeDirectory = workspace.CreateDirectory("fake-home");
         var interactionService = new TestInteractionService();
@@ -716,11 +712,10 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.CliExecutionContextFactory = _ => CreateExecutionContext(workspace.WorkspaceRoot, homeDirectory);
-            options.AgentEnvironmentDetectorFactory = _ => new TestAgentEnvironmentDetector { DetectedEnvironments = AgentEnvironment.CopilotCli };
             options.InteractionServiceFactory = _ => interactionService;
             options.TelemetryHookConfiguratorFactory = _ => new TestTelemetryHookConfigurator
             {
-                ResultFactory = selected => new TelemetryHookConfigurationResult([], [new TelemetryHookSkip(selected[0], reason)])
+                ResultFactory = selected => [new TelemetryHookResult(selected[0], status)]
             };
         });
 
@@ -730,11 +725,12 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        var format = reason switch
+        var format = status switch
         {
-            TelemetryHookSkipReason.MalformedConfig => AgentCommandStrings.InitCommand_TelemetryHookSkippedMalformedConfig,
-            TelemetryHookSkipReason.UnexpectedConfigShape => AgentCommandStrings.InitCommand_TelemetryHookSkippedUnexpectedShape,
-            _ => AgentCommandStrings.InitCommand_TelemetryHookWriteFailed,
+            TelemetryHookStatus.MalformedConfig => AgentCommandStrings.InitCommand_TelemetryHookSkippedMalformedConfig,
+            TelemetryHookStatus.UnexpectedConfigShape => AgentCommandStrings.InitCommand_TelemetryHookSkippedUnexpectedShape,
+            TelemetryHookStatus.WriteFailed => AgentCommandStrings.InitCommand_TelemetryHookWriteFailed,
+            _ => throw new ArgumentOutOfRangeException(nameof(statusName)),
         };
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Contains(string.Format(CultureInfo.CurrentCulture, format, "GitHub Copilot"), subtleMessages);
@@ -755,7 +751,6 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.CliExecutionContextFactory = _ => CreateExecutionContext(workspace.WorkspaceRoot, homeDirectory);
-            options.AgentEnvironmentDetectorFactory = _ => new TestAgentEnvironmentDetector { DetectedEnvironments = AgentEnvironment.CopilotCli };
             options.InteractionServiceFactory = _ => interactionService;
             options.TelemetryHookConfiguratorFactory = _ => new TestTelemetryHookConfigurator { Exception = new InvalidOperationException(failureMessage) };
         });
@@ -797,6 +792,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         {
             options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
             options.InteractionServiceFactory = _ => interaction;
+            options.TelemetryHookConfiguratorFactory = _ => new TestTelemetryHookConfigurator();
         });
         using var provider = services.BuildServiceProvider();
 
@@ -1045,7 +1041,6 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         var services = context.CreateServiceCollection(outputHelper, options =>
         {
             options.InteractionServiceFactory = _ => interaction;
-            options.AgentEnvironmentDetectorFactory = _ => new TestAgentEnvironmentDetector { DetectedEnvironments = AgentEnvironment.CopilotCli };
             options.TelemetryHookConfiguratorFactory = _ => hooks;
         });
         using var provider = services.BuildServiceProvider();
@@ -1056,7 +1051,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.InvalidCommand, await result.InvokeAsync().DefaultTimeout());
         Assert.Equal(original, await File.ReadAllTextAsync(path));
         Assert.True(File.Exists(context.Copilot.GetMcpConfigPath(scope, context.Project)));
-        Assert.Equal(scope is AgentConfigurationScope.Global ? AgentEnvironment.CopilotCli : AgentEnvironment.None, hooks.ConfiguredEnvironments);
+        Assert.Equal(scope is AgentConfigurationScope.Global ? [CopilotAgentClient.ClientId] : [], hooks.SelectedClientIds);
         Assert.Equal(string.Format(CultureInfo.CurrentCulture,
             AgentCommandStrings.McpServerContainerMustBeJsonObject, "mcp.servers", path), Assert.Single(interaction.DisplayedErrors));
     }

@@ -42,11 +42,11 @@ internal interface IAgentClient
     (bool Repaired, bool Added) UpdateMcpConfig(
         JsonObject config, string configFilePath, bool configureServer, AgentConfigurationScope scope);
 
-    // Telemetry hooks are registered once per client, so detecting any of the client's environments
-    // makes it eligible. False means the client has no verified hook schema.
+    // Telemetry hooks are registered once per client, so a selected client covers all of its environments.
+    // False means the client has no verified hook schema, and ConfigureTelemetryHookAsync throws NotSupportedException.
     bool SupportsTelemetryHooks { get; }
 
-    Task<TelemetryHookConfigurationResult> ConfigureTelemetryHookAsync(CancellationToken cancellationToken);
+    Task<TelemetryHookStatus> ConfigureTelemetryHookAsync(CancellationToken cancellationToken);
 }
 
 internal enum AgentConfigurationScope

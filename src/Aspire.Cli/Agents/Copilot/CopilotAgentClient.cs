@@ -105,7 +105,7 @@ internal sealed class CopilotAgentClient(
     // https://code.visualstudio.com/docs/agent-customization/hooks#_choose-a-hook-source
     public bool SupportsTelemetryHooks => true;
 
-    public async Task<TelemetryHookConfigurationResult> ConfigureTelemetryHookAsync(CancellationToken cancellationToken)
+    public async Task<TelemetryHookStatus> ConfigureTelemetryHookAsync(CancellationToken cancellationToken)
     {
         try
         {
@@ -135,12 +135,12 @@ internal sealed class CopilotAgentClient(
             await edit.ReadBytesForEditAsync(filePath, cancellationToken);
             await edit.PublishAsync(filePath, config, cancellationToken);
 
-            return new TelemetryHookConfigurationResult([this], []);
+            return TelemetryHookStatus.Configured;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             logger.LogDebug(ex, "Failed to write Copilot telemetry hook configuration.");
-            return new TelemetryHookConfigurationResult([], [new TelemetryHookSkip(this, TelemetryHookSkipReason.WriteFailed)]);
+            return TelemetryHookStatus.WriteFailed;
         }
     }
 
