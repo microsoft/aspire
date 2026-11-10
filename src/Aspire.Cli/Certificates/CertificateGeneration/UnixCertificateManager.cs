@@ -256,7 +256,7 @@ internal sealed partial class UnixCertificateManager : CertificateManager
                 // store, not the system trust store (see the class remarks: all trust locations are per-user), so no
                 // other user or system-wide trust is changed. The certificate is not a CA (basicConstraints CA:false),
                 // has only the serverAuth EKU, and is only valid for localhost, loopback and local container-host names.
-                // CodeQL [SM02730] Safe use per threat model: by-design dev-cert trust that adds only the public localhost HTTPS development certificate (CA:false, serverAuth, local names only) to .NET's per-user CurrentUser store, never LocalMachine or the system trust store.
+                // CodeQL [SM02730] By-design dev-cert trust: adds only the public localhost HTTPS development certificate (CA:false, serverAuth, local names only) to .NET's per-user CurrentUser store, never LocalMachine or the system trust store.
                 store.Add(publicCertificate);
                 Log.UnixDotnetTrustSucceeded();
                 sawTrustSuccess = true;

@@ -98,7 +98,7 @@ internal sealed class WindowsCertificateManager : CertificateManager
             // only to the CurrentUser store (never LocalMachine), and Windows shows its own security dialog so the
             // user must consent to the new root. The certificate is not a CA (basicConstraints CA:false), has only the
             // serverAuth EKU, and is only valid for localhost, loopback and local container-host names.
-            // CodeQL [SM02730] Safe use per threat model: by-design dev-cert trust that adds only the public localhost HTTPS development certificate (CA:false, serverAuth, local names only) to the CurrentUser store, never LocalMachine, after an OS consent prompt.
+            // CodeQL [SM02730] By-design dev-cert trust: adds only the public localhost HTTPS development certificate (CA:false, serverAuth, local names only) to the CurrentUser store, never LocalMachine, after an OS consent prompt.
             store.Add(publicCertificate);
             return TrustLevel.Full;
         }
