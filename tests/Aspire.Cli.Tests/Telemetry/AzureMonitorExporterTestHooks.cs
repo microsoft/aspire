@@ -9,6 +9,14 @@ namespace Aspire.Cli.Tests.Telemetry;
 /// <summary>
 /// Sets the Azure Monitor exporter's own test switches. Call only inside a RemoteExecutor process because they are static.
 /// </summary>
+/// <remarks>
+/// These are private static fields on <c>TransmitFromStorageHandler</c> that the exporter itself provides for tests that
+/// cannot tolerate a background drain. Setting them changes only which storage drain uploads persisted telemetry, not
+/// how the CLI persists or exports it, so the tests still exercise the real exporter. Verified against
+/// Azure.Monitor.OpenTelemetry.Exporter 1.9.0 (AzureMonitorOpenTelemetryExporterVersion in eng/Versions.props).
+/// A missing or retyped field fails loudly, but if a later version keeps a field and stops reading it, the
+/// drain race these switches avoid can return silently. Recheck the switches when updating the exporter.
+/// </remarks>
 internal static class AzureMonitorExporterTestHooks
 {
     private const string TransmitFromStorageHandlerTypeName = "Azure.Monitor.OpenTelemetry.Exporter.Internals.TransmitFromStorageHandler";

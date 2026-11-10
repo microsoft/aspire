@@ -418,7 +418,9 @@ public class AgentTelemetryPersistenceTests(ITestOutputHelper outputHelper)
         }, storage).Dispose();
 
         // A producer can exit while holding the exporter's three-minute blob lease. Exercise real
-        // expiry/recovery rather than editing private storage names or disabling exporter behavior.
+        // expiry/recovery rather than editing private storage names. Other tests here set the exporter's
+        // own *ForTesting drain switches (see AzureMonitorExporterTestHooks), but only to choose which
+        // drain uploads; this test needs the exporter's default drain and lease behavior.
         RemoteExecutor.Invoke(static async (directory, lockPath) =>
         {
             TelemetryManager.ConfigureExporterForProcess(isAgentTelemetryInvocation: true, isCIEnvironment: false);
@@ -585,7 +587,7 @@ public class AgentTelemetryPersistenceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void ForceFlush_LocalTelemetryWithStoredBacklogIsUploadedByFlushDrain()
+    public void ForceFlush_WithEagerDrainDisabled_FlushDrainSnapshotsStorageAfterPersisting()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var storage = workspace.CreateDirectory("storage").FullName;
@@ -624,8 +626,11 @@ public class AgentTelemetryPersistenceTests(ITestOutputHelper outputHelper)
             Assert.Equal(0, Volatile.Read(ref agentUploads));
         }, storage).Dispose();
 
-        // The exporter's eager startup drain would find that backlog and occupy the only drain slot,
-        // so the drain started by ForceFlush would return without uploading the new telemetry.
+        // Production never disables the eager startup drain. With a backlog it would occupy the only drain
+        // slot, so the drain started by ForceFlush could return without uploading and the new telemetry would
+        // wait for a later drain. This verifies only the exporter behavior the other tests rely on once the
+        // eager drain is disabled: the flush drain snapshots storage after ForceFlush persists, so its first
+        // batch carries both the backlog and the new events. It is not a guarantee about CLI upload timing.
         RemoteExecutor.Invoke(static async directory =>
         {
             TelemetryManager.ConfigureExporterForProcess(isAgentTelemetryInvocation: false, isCIEnvironment: false);
