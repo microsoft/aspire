@@ -236,12 +236,40 @@ public class GoDocCommentTests
                     resource.WithPersistence(&WithPersistenceOptions{})
                 }
                 """, timeout.Token);
+            await File.WriteAllTextAsync(Path.Combine(directory.FullName, "handle_options_test.go"), """
+                package aspire
+
+                import (
+                    "reflect"
+                    "testing"
+                )
+
+                func TestOptionalHandleOptionsSerializeTheHandle(t *testing.T) {
+                    c := newClient("")
+                    password := newParameterResourceFromHandle(&handle{
+                        HandleID: "password",
+                        TypeID:   "Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource",
+                    }, c)
+                    options := &WithHttpsDeveloperCertificateOptions{Password: &password}
+                    got := options.ToMap()["password"]
+                    want := map[string]any{
+                        "$handle": "password",
+                        "$type":   handleType("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource"),
+                    }
+                    if !reflect.DeepEqual(got, want) {
+                        t.Fatalf("got %#v, want %#v", got, want)
+                    }
+                }
+                """, timeout.Token);
 
             var build = await RunAsync("go", directory.FullName, timeout.Token, "build", "./...");
             Assert.True(build.ExitCode == 0, $"go build failed:{Environment.NewLine}{build.Output}");
 
             var vet = await RunAsync("go", directory.FullName, timeout.Token, "vet", "./...");
             Assert.True(vet.ExitCode == 0, $"go vet failed:{Environment.NewLine}{vet.Output}");
+
+            var test = await RunAsync("go", directory.FullName, timeout.Token, "test", "-run", "^TestOptionalHandleOptionsSerializeTheHandle$", ".");
+            Assert.True(test.ExitCode == 0, $"go test failed:{Environment.NewLine}{test.Output}");
 
             // gofmt rewrites a doc comment that is not in canonical form, so an unchanged comment line proves the
             // generated comment already is. go/printer only reformats doc comments that start in column 1, so this

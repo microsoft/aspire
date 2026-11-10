@@ -54659,7 +54659,7 @@ func (o *WithHttpsDeveloperCertificateOptions) ToMap() map[string]any {
 		return m
 	}
 	if o.Password != nil {
-		m["password"] = serializeValue(o.Password)
+		m["password"] = serializeValue(*o.Password)
 	}
 	return m
 }
@@ -55321,7 +55321,7 @@ func (o *AddContainerFilesStagesOptions) ToMap() map[string]any {
 		return m
 	}
 	if o.Logger != nil {
-		m["logger"] = serializeValue(o.Logger)
+		m["logger"] = serializeValue(*o.Logger)
 	}
 	return m
 }
@@ -55359,7 +55359,7 @@ func (o *AddContainerFilesOptions) ToMap() map[string]any {
 		return m
 	}
 	if o.Logger != nil {
-		m["logger"] = serializeValue(o.Logger)
+		m["logger"] = serializeValue(*o.Logger)
 	}
 	return m
 }
@@ -55411,7 +55411,7 @@ func (o *BuildOptions) ToMap() map[string]any {
 		return m
 	}
 	if o.ResourceLogger != nil {
-		m["resourceLogger"] = serializeValue(o.ResourceLogger)
+		m["resourceLogger"] = serializeValue(*o.ResourceLogger)
 	}
 	return m
 }

@@ -2432,7 +2432,11 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
                 var fieldType = MapTypeRefToGo(p.Type, isOptional: true);
                 if (IsNilableGoType(fieldType))
                 {
-                    WriteLine($"\tif o.{fieldName} != nil {{ m[{GoStringLiteral(p.Name)}] = serializeValue(o.{fieldName}) }}");
+                    var value = p.Type?.Category == AtsTypeCategory.Handle
+                        && !IsNilableGoType(MapInputTypeRefToGo(p.Type, isOptional: false))
+                            ? $"*o.{fieldName}"
+                            : $"o.{fieldName}";
+                    WriteLine($"\tif o.{fieldName} != nil {{ m[{GoStringLiteral(p.Name)}] = serializeValue({value}) }}");
                 }
                 else
                 {

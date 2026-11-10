@@ -6562,6 +6562,13 @@ func readMessage(reader *bufio.Reader) (map[string]any, error) {
 	if err := decoder.Decode(&message); err != nil {
 		return nil, err
 	}
+	var trailing any
+	if err := decoder.Decode(&trailing); err != io.EOF {
+		if err == nil {
+			return nil, errors.New("AppHost message body contains multiple JSON values")
+		}
+		return nil, err
+	}
 	return message, nil
 }
 

@@ -454,6 +454,21 @@ public class AtsGoCodeGeneratorTests
                     }
                 }
 
+                func TestReadMessageRejectsTrailingJson(t *testing.T) {
+                    for _, payload := range []string{
+                        `{"jsonrpc":"2.0","id":1,"result":null}{}`,
+                        `{"jsonrpc":"2.0","id":1,"result":null}garbage`,
+                    } {
+                        var wire bytes.Buffer
+                        if err := writeMessageBody(&wire, []byte(payload)); err != nil {
+                            t.Fatal(err)
+                        }
+                        if message, err := readMessage(bufio.NewReader(&wire)); err == nil {
+                            t.Fatalf("readMessage accepted %q as %v", payload, message)
+                        }
+                    }
+                }
+
                 func TestPanickingCallbackIsAnsweredWithError(t *testing.T) {
                     c, host := newFakeHost(t)
                     var nilMap map[string]int
