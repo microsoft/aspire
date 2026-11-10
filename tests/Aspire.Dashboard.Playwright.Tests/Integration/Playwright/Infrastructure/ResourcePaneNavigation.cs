@@ -17,7 +17,7 @@ internal static class ResourcePaneNavigation
         await Assertions.Expect(page.Locator(".resources-layout")).ToHaveAttributeAsync("data-pane-interactions-ready", "true");
         if (await page.Locator(".resources-layout.pane-full-canvas").CountAsync() > 0)
         {
-            await page.Locator(".resource-select-all-toggle").ClickAsync();
+            await page.Locator(".resource-row-all .resource-row-link").ClickAsync();
             await Assertions.Expect(page.Locator(".resources-layout.pane-full-canvas")).ToHaveCountAsync(0);
         }
     }
@@ -26,7 +26,7 @@ internal static class ResourcePaneNavigation
     {
         await Assertions.Expect(page.Locator(".resources-layout")).ToHaveAttributeAsync("data-pane-interactions-ready", "true");
         var isFullCanvas = await page.Locator(".pane-full-canvas").CountAsync() > 0;
-        var toggle = page.Locator(isFullCanvas ? ".pane-full-canvas .resource-select-all-toggle" : ".detail-page-close");
+        var toggle = page.Locator(isFullCanvas ? ".pane-full-canvas .resource-row-all .resource-row-link" : ".detail-page-close");
         var destination = isFullCanvas ? null : new Uri(new Uri(page.Url),
             await toggle.GetAttributeAsync("data-parent-url") ?? throw new InvalidOperationException("Close view must expose its parent URL.")).AbsoluteUri;
         await toggle.ClickAsync();
@@ -36,7 +36,7 @@ internal static class ResourcePaneNavigation
         }
         else
         {
-            await Assertions.Expect(page.Locator(".resource-select-all-toggle")).ToHaveAttributeAsync("aria-description", Resources.Layout.ResourcePaneAllSelected);
+            await Assertions.Expect(page.Locator(".resource-row-all .resource-row-link")).ToHaveAttributeAsync("aria-current", "page");
         }
         await Assertions.Expect(page.Locator(".pane-full-canvas")).ToHaveCountAsync(isFullCanvas ? 0 : 1);
         // Close view navigates as well as hiding content. Wait for both the router

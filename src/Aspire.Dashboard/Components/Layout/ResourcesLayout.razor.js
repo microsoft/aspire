@@ -225,14 +225,41 @@ export function registerTabOverflow(registrationId, dotNetRef) {
 
     state.resizeObserver = new ResizeObserver(schedule);
     state.tabsObserver = new MutationObserver(schedule);
-    // Cheap check on any DOM change (the terminal updates constantly): only a replaced strip needs attaching again.
+    // Only a replaced strip needs attaching again. The strip is rendered into the header's section outlet on desktop
+    // and into the layout's own header on mobile, so only those containers are watched: observing the whole document
+    // would run this on every console log line, terminal frame and grid update.
+    //
+    // MainLayout renders its header, and the .header-context in it, only on desktop, so switching between mobile and
+    // desktop replaces the container. The layout root is watched too, for its direct children only (the header coming
+    // and going, not content updates), and the containers are observed again whenever they've been replaced.
+    // Otherwise the observations would stay on the detached container, and a later navigation that replaces the tab
+    // strip wouldn't measure it.
+    const bindContainers = () => {
+        const containers = [".header-context", ".resource-context-header"]
+            .map(selector => document.querySelector(selector))
+            .filter(Boolean);
+        if (state.containers && containers.length === state.containers.length &&
+            containers.every((container, index) => container === state.containers[index])) {
+            return;
+        }
+        state.containers = containers;
+        state.bodyObserver.disconnect();
+        for (const container of containers.length > 0 ? containers : [document.body]) {
+            state.bodyObserver.observe(container, { childList: true, subtree: true });
+        }
+        const layoutRoot = document.querySelector(".layout");
+        if (layoutRoot) {
+            state.bodyObserver.observe(layoutRoot, { childList: true });
+        }
+    };
     state.bodyObserver = new MutationObserver(() => {
+        bindContainers();
         const nav = document.querySelector(".resource-tabs-nav");
         if (nav !== state.nav || (nav?.querySelector(".resources-tab-header") ?? null) !== state.tablist) {
             schedule();
         }
     });
-    state.bodyObserver.observe(document.body, { childList: true, subtree: true });
+    bindContainers();
     window.addEventListener("resize", schedule);
     state.schedule = schedule;
     // Recording switches can mount the new layout before the old layout finishes disposing.
@@ -254,7 +281,7 @@ export function unregisterTabOverflow(registrationId) {
     window.removeEventListener("resize", state.schedule);
 }
 
-export function registerPaneResizer(layoutElement, dotNetRef, minimumWidth, maximumWidth) {
+export function registerPaneResizer(layoutElement, dotNetRef, minimumWidth, maximumWidth, defaultWidth) {
     unregisterPaneResizer(layoutElement);
 
     const pane = layoutElement.querySelector(':scope > .resource-pane');
@@ -405,7 +432,8 @@ export function registerPaneResizer(layoutElement, dotNetRef, minimumWidth, maxi
     const onDoubleClick = e => {
         e.preventDefault();
         handle.focus({ preventScroll: true });
-        resizeTo(minimumWidth);
+        // Double-click restores the default width, which is wider than the minimum the pane can be dragged to.
+        resizeTo(defaultWidth);
         commit();
     };
 
@@ -452,6 +480,22 @@ export function setTabListAriaLabel(tabId, label) {
 
 export function isResourceTabFocused(tabId) {
     return document.activeElement?.closest("fluent-tab")?.id === tabId;
+}
+
+// The last tab the user pressed, clicked or chose with Enter or Space (see registerPaneInteractions). The tab strip is
+// re-created whenever the location changes, so a click that lands just as a navigation finishes reaches the layout
+// from the outgoing strip, along with the change events that strip raises as it's torn down. Only a real activation
+// tells the click apart from that noise.
+let recentTabActivation = null;
+
+// Returns whether the user activated the tab in the last second, and forgets the activation so it's used once.
+export function consumeRecentTabActivation(tabId) {
+    const activation = recentTabActivation;
+    if (activation && activation.id === tabId && performance.now() - activation.time < 1000) {
+        recentTabActivation = null;
+        return true;
+    }
+    return false;
 }
 
 export function unregisterPaneResizer(layoutElement) {
@@ -643,14 +687,21 @@ export function registerResourceContextMenu(layoutElement, dotNetRef) {
     };
     const onIdentityInteraction = event => {
         const link = event.target.closest('.resource-row-link');
+        // mouseover bubbles from every element in the row. The tooltip is computed from the row's layout, so moving
+        // between elements of the same link changes nothing, and the check below forces layout, so skip that.
+        // Entering the link from outside recomputes it, even if it's the link hovered last: the resource's state may
+        // have changed while the pointer was elsewhere.
+        if (event.type === 'mouseover' && link && event.relatedTarget instanceof Node && link.contains(event.relatedTarget)) {
+            return;
+        }
         const name = link?.querySelector('.resource-row-name');
-        // A compact sidebar row's type and state columns give way to its actions while the row is
-        // hovered or focused, where rows can be hovered (see ResourcesLayout.razor.css). The row's
-        // tooltip names them instead, from the full text the hidden columns keep in data-tooltip:
+        // A compact sidebar row's type column gives way to its actions while the row is hovered or
+        // focused, where rows can be hovered (see ResourcesLayout.razor.css). The row's tooltip names
+        // the type instead, from the full text the hidden column keeps in data-tooltip:
         //   <span class="resource-row-meta">
         //     <span class="resource-row-type" data-tooltip="Container (persistent)">…</span>
-        //     <span class="resource-row-meta-state" data-tooltip="Running (Unhealthy)">…</span>
         //   </span>
+        // The state dot stays after the name, outside the column, with the state in its own tooltip.
         // The columns may not be hidden yet when the event arrives, so this decides from the layout
         // (compact, sidebar, a hovering pointer) rather than from their visibility.
         const meta = link?.querySelector('.resource-row-meta');
@@ -822,8 +873,20 @@ export function registerResourceContextMenu(layoutElement, dotNetRef) {
         }
     };
 
+    const onTabUserActivation = event => {
+        if (event.type === 'keydown' && (event.isComposing || (event.key !== 'Enter' && event.key !== ' '))) {
+            return;
+        }
+        const tab = event.target instanceof Element ? event.target.closest('.resources-tab-header fluent-tab[id^="tab-"]') : null;
+        if (tab) {
+            recentTabActivation = { id: tab.id, time: performance.now() };
+        }
+    };
+
     layoutElement.addEventListener('contextmenu', onContextMenu);
     layoutElement.addEventListener('pointerdown', onShiftPointerDown, true);
+    document.addEventListener('pointerdown', onTabUserActivation, true);
+    document.addEventListener('keydown', onTabUserActivation, true);
     layoutElement.addEventListener('mousedown', onShiftPointerDown, true);
     document.addEventListener('keydown', onContextMenuDismiss, true);
     window.addEventListener('keydown', onEscapeCapture, true);
@@ -838,6 +901,8 @@ export function registerResourceContextMenu(layoutElement, dotNetRef) {
         state.disposed = true;
         layoutElement.removeEventListener('contextmenu', onContextMenu);
         layoutElement.removeEventListener('pointerdown', onShiftPointerDown, true);
+        document.removeEventListener('pointerdown', onTabUserActivation, true);
+        document.removeEventListener('keydown', onTabUserActivation, true);
         layoutElement.removeEventListener('mousedown', onShiftPointerDown, true);
         document.removeEventListener('keydown', onContextMenuDismiss, true);
         window.removeEventListener('keydown', onEscapeCapture, true);

@@ -530,7 +530,7 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
         if (DashboardClient.IsEnabled)
         {
             await SessionStorage.SetAsync(BrowserStorageKeys.LastSelectedResources, new List<string>());
-            NavigationManager.NavigateTo(DashboardUrls.ResourceListUrl());
+            NavigationManager.NavigateTo(DashboardUrls.ResourceListUrl(), new NavigationOptions { HistoryEntryState = ResourcesLayout.ResourceListHomeHistoryEntryState });
         }
         else
         {
