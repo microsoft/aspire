@@ -103,6 +103,13 @@ type DistributedApplication interface { handleReference }
 
 type distributedApplication struct { *resourceBuilderBase }
 
+// Err returns an error combining every failure recorded by this builder or by
+// any handle created from it.
+func (b *distributedApplicationBuilder) Err() error {
+	if err := b.client.combinedError(); err != nil { return err }
+	return b.resourceBuilderBase.Err()
+}
+
 // Build invokes the build capability and returns the running application.
 func (b *distributedApplicationBuilder) Build() (DistributedApplication, error) {
 	if err := b.Err(); err != nil { return nil, err }

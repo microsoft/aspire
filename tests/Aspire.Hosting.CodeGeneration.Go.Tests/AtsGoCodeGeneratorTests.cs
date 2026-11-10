@@ -1256,7 +1256,13 @@ public class AtsGoCodeGeneratorTests
                 package aspire
 
                 import (
+                    "bufio"
+                    "errors"
+                    "fmt"
+                    "net"
                     "reflect"
+                    "slices"
+                    "strconv"
                     "strings"
                     "sync"
                     "testing"
@@ -1397,6 +1403,257 @@ public class AtsGoCodeGeneratorTests
                         if err == nil || !strings.Contains(err.Error(), "must be one of [string, float64, bool]") {
                             t.Errorf("%T: got %v, want the guard error", value, err)
                         }
+                    }
+                }
+
+                const (
+                    testRedisTypeID   = "Aspire.Hosting.CodeGeneration.Go.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestRedisResource"
+                    applicationTypeID = "application"
+                )
+
+                // connectChildErrorHost connects a client to an in-process AppHost that answers
+                // every capability call with a new handle, or with an error when the method (the
+                // part of the capability ID after the last "/") is in failing. The returned
+                // function lists the methods the AppHost has received, in order.
+                func connectChildErrorHost(t *testing.T, failing ...string) (*client, func() []string) {
+                    t.Helper()
+
+                    clientEnd, serverEnd := net.Pipe()
+                    c := newClient("")
+                    conn := newConnection(clientEnd, c, c.onConnectionClose)
+                    c.mu.Lock()
+                    c.conn = conn
+                    c.mu.Unlock()
+                    conn.start()
+                    registerWrappers(c)
+                    c.registerHandleWrapper(applicationTypeID, func(h *handle, c *client) any {
+                        return &distributedApplication{resourceBuilderBase: newResourceBuilderBase(h, c)}
+                    })
+                    t.Cleanup(func() {
+                        c.disconnect()
+                        serverEnd.Close()
+                    })
+
+                    var mu sync.Mutex
+                    var received []string
+                    go func() {
+                        reader := bufio.NewReader(serverEnd)
+                        for n := 1; ; n++ {
+                            request, err := readMessage(reader)
+                            if err != nil {
+                                return
+                            }
+                            capability := request["params"].([]any)[0].(string)
+                            method := capability[strings.LastIndex(capability, "/")+1:]
+                            mu.Lock()
+                            received = append(received, method)
+                            mu.Unlock()
+
+                            response := map[string]any{"jsonrpc": "2.0", "id": request["id"]}
+                            switch {
+                            case slices.Contains(failing, method):
+                                response["error"] = map[string]any{"message": fmt.Sprintf("%s failed (request %d)", method, n)}
+                            case method == "build":
+                                response["result"] = map[string]any{"$handle": "application", "$type": applicationTypeID}
+                            default:
+                                response["result"] = map[string]any{"$handle": strconv.Itoa(n), "$type": testRedisTypeID}
+                            }
+                            if writeMessage(serverEnd, response) != nil {
+                                return
+                            }
+                        }
+                    }()
+
+                    return c, func() []string {
+                        mu.Lock()
+                        defer mu.Unlock()
+                        return slices.Clone(received)
+                    }
+                }
+
+                func newBuilderOn(c *client) IDistributedApplicationBuilder {
+                    return newIDistributedApplicationBuilderFromHandle(&handle{HandleID: "0", TypeID: "builder"}, c)
+                }
+
+                func TestFailedChildErrorReachesBuilder(t *testing.T) {
+                    c, received := connectChildErrorHost(t, "addTestRedis")
+                    builder := newBuilderOn(c)
+
+                    cache := builder.AddTestRedis("cache")
+                    if cache.Err() == nil {
+                        t.Fatal("the failed AddTestRedis left no error on the child")
+                    }
+                    if !errors.Is(builder.Err(), cache.Err()) {
+                        t.Errorf("builder.Err() = %v, want the child's error %v", builder.Err(), cache.Err())
+                    }
+
+                    app, err := builder.Build()
+                    if app != nil || !errors.Is(err, cache.Err()) {
+                        t.Errorf("Build() = %v, %v; want nil and the child's error %v", app, err, cache.Err())
+                    }
+                    if got, want := received(), []string{"addTestRedis"}; !slices.Equal(got, want) {
+                        t.Errorf("the AppHost received %v, want %v (Build must not be sent)", got, want)
+                    }
+                }
+
+                func TestAllRecordedChildErrorsReachBuilder(t *testing.T) {
+                    c, received := connectChildErrorHost(t, "addTestRedis")
+                    builder := newBuilderOn(c)
+
+                    first := builder.AddTestRedis("first")
+                    second := builder.AddTestRedis("second")
+
+                    got := builder.Err()
+                    if !errors.Is(got, first.Err()) || !errors.Is(got, second.Err()) {
+                        t.Errorf("builder.Err() = %v, want both %v and %v", got, first.Err(), second.Err())
+                    }
+                    if want := first.Err().Error() + "\n" + second.Err().Error(); got.Error() != want {
+                        t.Errorf("builder.Err() = %q, want %q", got, want)
+                    }
+                    if _, err := builder.Build(); !errors.Is(err, first.Err()) || !errors.Is(err, second.Err()) {
+                        t.Errorf("Build() error = %v, want both %v and %v", err, first.Err(), second.Err())
+                    }
+                    if got, want := received(), []string{"addTestRedis", "addTestRedis"}; !slices.Equal(got, want) {
+                        t.Errorf("the AppHost received %v, want %v (Build must not be sent)", got, want)
+                    }
+                }
+
+                func TestFormatErrorIncludesEveryJoinedCapabilityError(t *testing.T) {
+                    first := &CapabilityError{err: atsError{
+                        Code:       "FIRST",
+                        Message:    "first failed",
+                        Capability: "addFirst",
+                    }}
+                    second := &CapabilityError{err: atsError{
+                        Code:       "SECOND",
+                        Message:    "second failed",
+                        Capability: "addSecond",
+                    }}
+
+                    got := FormatError(errors.Join(first, second))
+                    want := "Capability Error: first failed\n" +
+                        "  Code: FIRST\n" +
+                        "  Capability: addFirst\n" +
+                        "Capability Error: second failed\n" +
+                        "  Code: SECOND\n" +
+                        "  Capability: addSecond"
+                    if got != want {
+                        t.Errorf("FormatError() = %q, want %q", got, want)
+                    }
+                }
+
+                func TestFormatErrorIncludesJoinedCapabilityAndOrdinaryErrors(t *testing.T) {
+                    capability := &CapabilityError{err: atsError{
+                        Code:       "CAPABILITY",
+                        Message:    "capability failed",
+                        Capability: "addResource",
+                    }}
+                    ordinary := errors.New("ordinary failure")
+
+                    got := FormatError(errors.Join(capability, ordinary))
+                    want := "Capability Error: capability failed\n" +
+                        "  Code: CAPABILITY\n" +
+                        "  Capability: addResource\n" +
+                        "ordinary failure"
+                    if got != want {
+                        t.Errorf("FormatError() = %q, want %q", got, want)
+                    }
+                }
+
+                func TestFormatErrorPreservesOrdinaryMultiWrappedError(t *testing.T) {
+                    resourceErr := errors.New("resource failure")
+                    cleanupErr := errors.New("cleanup failure")
+                    joined := fmt.Errorf("deployment failed for cache: %w; cleanup failed: %w", resourceErr, cleanupErr)
+
+                    if got := FormatError(joined); got != joined.Error() {
+                        t.Errorf("FormatError() = %q, want %q", got, joined.Error())
+                    }
+                }
+
+                func TestPropagatedChildErrorIsNotRecordedAgain(t *testing.T) {
+                    c := newClient("")
+                    builder := newBuilderOn(c)
+
+                    failure := fmt.Errorf("child failed")
+                    newErroredHandleWrapperBase(failure, c)
+                    newPropagatedErroredResourceBuilder(failure, c)
+                    newPropagatedErroredResourceBuilder(failure, c)
+
+                    if got := builder.Err(); !errors.Is(got, failure) || got.Error() != failure.Error() {
+                        t.Errorf("builder.Err() = %v, want the original error %v", got, failure)
+                    }
+                }
+
+                func TestFailedWithCallOnChildReachesBuilder(t *testing.T) {
+                    c, _ := connectChildErrorHost(t, "withConnectionStringDirect")
+                    builder := newBuilderOn(c)
+
+                    cache := builder.AddTestRedis("cache")
+                    if builder.Err() != nil {
+                        t.Fatalf("builder.Err() = %v before any call failed", builder.Err())
+                    }
+
+                    cache.WithConnectionStringDirect("connection")
+                    if cache.Err() == nil || !errors.Is(builder.Err(), cache.Err()) {
+                        t.Errorf("builder.Err() = %v, want the child's error %v", builder.Err(), cache.Err())
+                    }
+                }
+
+                func TestBuildSucceedsWhenNoCallFailed(t *testing.T) {
+                    c, received := connectChildErrorHost(t)
+                    builder := newBuilderOn(c)
+
+                    builder.AddTestRedis("cache").WithConnectionStringDirect("connection")
+                    if builder.Err() != nil {
+                        t.Fatalf("builder.Err() = %v, want nil", builder.Err())
+                    }
+                    if _, err := builder.Build(); err != nil {
+                        t.Fatalf("Build() error = %v", err)
+                    }
+                    if got, want := received(), []string{"addTestRedis", "withConnectionStringDirect", "build"}; !slices.Equal(got, want) {
+                        t.Errorf("the AppHost received %v, want %v", got, want)
+                    }
+                }
+
+                func TestConcurrentChildErrorsAreAggregated(t *testing.T) {
+                    c := newClient("")
+                    builder := newBuilderOn(c)
+
+                    errs := make([]error, 64)
+                    var ready, done sync.WaitGroup
+                    ready.Add(1)
+                    done.Add(1)
+                    go func() {
+                        defer done.Done()
+                        ready.Wait()
+                        for range errs {
+                            _ = builder.Err()
+                        }
+                    }()
+                    for i := range errs {
+                        errs[i] = fmt.Errorf("error %d", i)
+                        done.Add(1)
+                        go func() {
+                            defer done.Done()
+                            ready.Wait()
+                            if i%2 == 0 {
+                                newHandleWrapperBase(&handle{HandleID: "1", TypeID: "type"}, c).setErr(errs[i])
+                            } else {
+                                newErroredHandleWrapperBase(errs[i], c)
+                            }
+                        }()
+                    }
+                    ready.Done()
+                    done.Wait()
+
+                    got := builder.Err()
+                    for _, err := range errs {
+                        if !errors.Is(got, err) {
+                            t.Errorf("builder.Err() = %v, want it to include %v", got, err)
+                        }
+                    }
+                    if gotLines := strings.Count(got.Error(), "\n") + 1; gotLines != len(errs) {
+                        t.Errorf("builder.Err() contains %d errors, want %d", gotLines, len(errs))
                     }
                 }
                 """, timeout.Token);
