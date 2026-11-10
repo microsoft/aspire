@@ -100,17 +100,13 @@ internal sealed class CopilotAgentClient(
         return (repaired, added);
     }
 
-    public async Task<TelemetryHookConfigurationResult> ConfigureTelemetryHooksAsync(
-        AgentEnvironment detectedEnvironments, CancellationToken cancellationToken)
-    {
-        // The App and CLI share one user hook, so a single write configures Copilot whichever of them
-        // was detected. Canonical scripts still attribute App events to copilot-cli:
-        // https://github.com/microsoft/aspire-skills/issues/71.
-        if ((detectedEnvironments & (AgentEnvironment.CopilotApp | AgentEnvironment.CopilotCli)) == AgentEnvironment.None)
-        {
-            return TelemetryHookConfigurationResult.None;
-        }
+    // The App and CLI share one user hook, so detecting either one makes Copilot eligible. VS Code does
+    // not yet have a verified hook schema. Canonical scripts still attribute App events to copilot-cli:
+    // https://github.com/microsoft/aspire-skills/issues/71.
+    public AgentEnvironment TelemetryHookEnvironments => AgentEnvironment.CopilotApp | AgentEnvironment.CopilotCli;
 
+    public async Task<TelemetryHookConfigurationResult> ConfigureTelemetryHookAsync(CancellationToken cancellationToken)
+    {
         try
         {
             // Copilot reads Claude settings only at project scope, so these user hooks cannot
