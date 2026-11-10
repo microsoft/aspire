@@ -1,0 +1,5 @@
+﻿{
+  apphostprojectbaseintermediateoutputpath: {Workspace}/AppHost/obj/,
+  apphostprojectname: AppHost.csproj,
+  apphostprojectpath: {Workspace}/AppHost
+}

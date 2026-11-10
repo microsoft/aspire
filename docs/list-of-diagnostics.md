@@ -22,6 +22,11 @@ The CLI bundle is required by default for C# AppHosts and cannot be disabled (`A
 
 When automatic CLI bundle setup fails, `ASPIRE009` includes the setup command's captured standard output and standard error, including DNX package acquisition errors. If a PATH CLI setup attempt falls back to DNX and neither produces a usable bundle, output from both attempts is included with the corresponding command. Successful or recovered setup attempts keep this output at diagnostic verbosity.
 
+For build-only environments, `AspireSkipCliBundleResolution=true` skips bundle lookup, automatic
+setup, and the `ASPIRE009` check without changing runtime validation. Normal builds retain
+`ASPIRE009` as an error. See [build-only environments without the CLI bundle](migrate-from-apphost-sdk.md#build-only-environments-without-the-cli-bundle)
+for the emitted metadata and runtime requirements.
+
 ## Experimental API Warnings
 
 | Diagnostic ID | Severity | Description | Location |

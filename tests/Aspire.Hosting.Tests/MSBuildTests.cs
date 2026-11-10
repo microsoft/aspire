@@ -746,6 +746,141 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
         Assert.Contains($"Run '\"{fakeCliPath}\" setup'", result.Output);
     }
 
+    [Theory]
+    [InlineData(false, false, false, false)]
+    [InlineData(true, false, false, false)]
+    [InlineData(false, true, false, false)]
+    [InlineData(true, true, false, false)]
+    [InlineData(false, false, true, false)]
+    [InlineData(false, false, false, true)]
+    public async Task CliBundleResolutionCanBeSkippedForBuildOnly(bool supplyDcpPath, bool supplyDashboardPath, bool useEnvironment, bool supplyDashboardDirectory)
+    {
+        var repoRoot = MSBuildUtils.GetRepoRoot();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var fakeCliDirectory = workspace.CreateDirectory("fake-cli");
+        var fakeCliPath = CreateFakeAspireCliThatSetsUpBundle(fakeCliDirectory.FullName);
+        var dcpDir = Path.Combine(workspace.Path, "explicit-dcp");
+        var dashboardLocation = Path.Combine(workspace.Path, "explicit-dashboard");
+        var appHostDirectory = CreateSdkBundleAppHostProject(workspace.Path, repoRoot,
+            $"""
+              <AspireCliPath>{fakeCliPath}</AspireCliPath>
+              {(supplyDcpPath ? $"<DcpDir>{dcpDir}</DcpDir>" : "")}
+              {(supplyDashboardPath ? $"<AspireDashboardPath>{dashboardLocation}</AspireDashboardPath>" : "")}
+              {(supplyDashboardDirectory ? $"<AspireDashboardDir>{dashboardLocation}</AspireDashboardDir>" : "")}
+            """);
+        CreateAppHostPackageDirectoryBuildFiles(appHostDirectory, repoRoot);
+
+        // Inspect the emitted assembly without starting Aspire or requiring any runtime bundle.
+        File.WriteAllText(Path.Combine(appHostDirectory, "AppHost.cs"), """
+            using System.Reflection;
+            using System.Text.Json;
+
+            var metadata = Assembly.GetExecutingAssembly().GetCustomAttributes<AssemblyMetadataAttribute>()
+                .ToDictionary(attribute => attribute.Key, attribute => attribute.Value);
+            Console.WriteLine(JsonSerializer.Serialize(metadata));
+            """);
+
+        var environment = new Dictionary<string, string>
+        {
+            ["ASPIRE_HOME"] = Path.Combine(workspace.Path, "empty-aspire-home")
+        };
+        if (useEnvironment)
+        {
+            environment["AspireSkipCliBundleResolution"] = "true";
+        }
+
+        var build = RunDotNet(appHostDirectory,
+            $"build --disable-build-servers{(useEnvironment ? "" : " -p:AspireSkipCliBundleResolution=true")}",
+            timeoutMilliseconds: 180_000, environment);
+        Assert.True(build.ExitCode == 0, $"Build-only validation failed: {Environment.NewLine}{build.Output}");
+
+        // This fake CLI creates this directory on setup, so its absence detects setup invocation.
+        Assert.False(Directory.Exists(Path.Combine(workspace.Path, BundleDiscovery.BundleDirectoryName)),
+            "The build-only opt-out must not invoke CLI bundle setup.");
+        var assemblyPath = Path.Combine(appHostDirectory, "bin", "Debug", "net10.0", "AppHost.dll");
+        Assert.True(File.Exists(assemblyPath), "A real build must emit the compiled AppHost assembly.");
+        var result = RunDotNet(appHostDirectory, $"\"{assemblyPath}\"", timeoutMilliseconds: 60_000);
+        Assert.True(result.ExitCode == 0, $"Metadata inspection failed: {Environment.NewLine}{result.Output}");
+        var metadata = JsonSerializer.Deserialize<SortedDictionary<string, string>>(result.Output);
+        Assert.NotNull(metadata);
+
+        if (supplyDashboardDirectory)
+        {
+            var dashboardExecutableName = OperatingSystem.IsWindows() ? "Aspire.Dashboard.exe"
+                : OperatingSystem.IsMacOS() ? "Aspire.Dashboard.dll"
+                : "Aspire.Dashboard";
+            Assert.Equal(Path.Combine(dashboardLocation, dashboardExecutableName), metadata["aspiredashboardpath"]);
+        }
+
+        await Verify(metadata)
+            .UseParameters(supplyDcpPath, supplyDashboardPath, useEnvironment, supplyDashboardDirectory)
+            .ScrubLinesWithReplace(line => line.Replace(workspace.Path, "{Workspace}")
+                .Replace('\\', '/')
+                .Replace("Aspire.Dashboard.exe", "Aspire.Dashboard")
+                .Replace("Aspire.Dashboard.dll", "Aspire.Dashboard")
+                .Replace("dcp.exe", "dcp"));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("false")]
+    public void CliBundleResolutionMissingBundleRemainsAnError(string skipResolution)
+    {
+        var repoRoot = MSBuildUtils.GetRepoRoot();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var fakeCliPath = CreateFakeAspireCliThatFailsSetup(workspace.CreateDirectory("fake-cli").FullName);
+        var appHostDirectory = CreateSdkBundleAppHostProject(workspace.Path, repoRoot,
+            $"""
+              <AspireSkipCliBundleResolution>{skipResolution}</AspireSkipCliBundleResolution>
+              <AspireCliPath>{fakeCliPath}</AspireCliPath>
+            """);
+        CreateAppHostPackageDirectoryBuildFiles(appHostDirectory, repoRoot);
+
+        var output = BuildProjectWithFailure(appHostDirectory, new Dictionary<string, string>
+        {
+            ["ASPIRE_HOME"] = Path.Combine(workspace.Path, "empty-aspire-home")
+        });
+
+        Assert.Contains("error ASPIRE009", output);
+        Assert.Contains("failed with exit code 42", output);
+    }
+
+    [Fact]
+    public void CliBundleResolutionBuildOnlyOutputStillRequiresRuntimePaths()
+    {
+        var repoRoot = MSBuildUtils.GetRepoRoot();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var appHostDirectory = CreateSdkBundleAppHostProject(workspace.Path, repoRoot,
+            "<AspireSkipCliBundleResolution>true</AspireSkipCliBundleResolution>");
+        CreateAppHostPackageDirectoryBuildFiles(appHostDirectory, repoRoot);
+        File.WriteAllText(Path.Combine(appHostDirectory, "AppHost.cs"), """
+            using Microsoft.Extensions.Options;
+
+            var builder = DistributedApplication.CreateBuilder();
+            // Do not let the test machine supply runtime paths through environment configuration.
+            builder.Configuration.Sources.Clear();
+            try
+            {
+                using var app = builder.Build();
+                await app.StartAsync();
+            }
+            catch (OptionsValidationException exception)
+            {
+                Console.WriteLine(exception.Message);
+                Environment.ExitCode = 1;
+            }
+            """);
+
+        BuildProject(appHostDirectory);
+        var result = RunDotNet(appHostDirectory, "\"bin/Debug/net10.0/AppHost.dll\"", timeoutMilliseconds: 60_000);
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Contains("The path to the DCP executable used for Aspire orchestration is required.", result.Output);
+        Assert.Contains("The path to the Aspire Dashboard binaries is missing.", result.Output);
+    }
+
     [Fact]
     public void CliBundleSetupTimeoutReportsAspire009()
     {

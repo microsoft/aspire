@@ -250,7 +250,7 @@ namespace Projects%3B
 
   <Target Name="ResolveAspireCliBundlePaths"
           DependsOnTargets="_ResolveAspireCliInvocation"
-          Condition="'$(DesignTimeBuild)' != 'true' and '$(IsAspireHost)' == 'true' and '$(AspireUseCliBundle)' == 'true' and ('$(DcpDir)' == '' or ('$(AspireDashboardDir)' == '' and '$(AspireDashboardPath)' == ''))">
+          Condition="'$(DesignTimeBuild)' != 'true' and '$(AspireSkipCliBundleResolution)' != 'true' and '$(IsAspireHost)' == 'true' and '$(AspireUseCliBundle)' == 'true' and ('$(DcpDir)' == '' or ('$(AspireDashboardDir)' == '' and '$(AspireDashboardPath)' == ''))">
     <!-- Bundle discovery must follow the invocation selected above so an unselected PATH CLI
          cannot supply runtime metadata. DNX layouts are resolved from Aspire home instead. -->
     <PropertyGroup>

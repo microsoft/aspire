@@ -1,0 +1,7 @@
+﻿{
+  apphostprojectbaseintermediateoutputpath: {Workspace}/AppHost/obj/,
+  apphostprojectname: AppHost.csproj,
+  apphostprojectpath: {Workspace}/AppHost,
+  dcpclipath: {Workspace}/explicit-dcp/dcp,
+  dcpextensionpaths: {Workspace}/explicit-dcp/ext/
+}

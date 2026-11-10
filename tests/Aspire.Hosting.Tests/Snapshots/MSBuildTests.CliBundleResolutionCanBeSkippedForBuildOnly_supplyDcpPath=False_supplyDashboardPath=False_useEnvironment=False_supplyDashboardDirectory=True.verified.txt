@@ -1,0 +1,6 @@
+﻿{
+  apphostprojectbaseintermediateoutputpath: {Workspace}/AppHost/obj/,
+  apphostprojectname: AppHost.csproj,
+  apphostprojectpath: {Workspace}/AppHost,
+  aspiredashboardpath: {Workspace}/explicit-dashboard/Aspire.Dashboard
+}

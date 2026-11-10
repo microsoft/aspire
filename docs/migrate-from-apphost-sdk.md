@@ -167,10 +167,41 @@ expected responses, and Restart/Rebuild work. Check service-to-service reference
 not just whether the AppHost compiles. Build the solution separately to check genuine library
 references and resource-project build inputs.
 
-An unresolved CLI bundle produces `ASPIRE009` with installation/setup guidance. Fix the
-installation or explicit bundle path rather than suppressing the diagnostic.
+An unresolved CLI bundle produces the `ASPIRE009` error with installation/setup guidance. When the
+AppHost needs to run, fix the installation or explicit bundle path rather than suppressing the diagnostic.
 Pinned DNX selection uses the CLI version paired with `Aspire.Hosting.AppHost`, independently
 of an older SDK retained during staged migration.
+
+### Build-only environments without the CLI bundle
+
+For compile-only validation, such as CI analysis that does not run the AppHost, use:
+
+```shell
+dotnet build -p:AspireSkipCliBundleResolution=true
+```
+
+For a generated build command, such as CodeQL autobuild, set the property through
+the job environment instead:
+
+```yaml
+env:
+  AspireSkipCliBundleResolution: 'true'
+```
+
+MSBuild [imports valid environment-variable names as properties](https://learn.microsoft.com/en-us/visualstudio/msbuild/how-to-use-environment-variables-in-a-build?view=vs-2022).
+An explicit project-file definition of the property overrides the environment value.
+
+`AspireSkipCliBundleResolution=true` skips CLI bundle lookup, automatic setup, and the
+`ASPIRE009` check. This is a real build, not a `DesignTimeBuild`; compilation and the
+normal build targets still run. The default (unset or `false`) retains bundle resolution
+and reports `ASPIRE009` as an error if the bundle is missing.
+
+The opt-out does not disable the runtime bundle requirement or change CLI runtime path
+injection. Explicit `DcpDir`, `AspireDashboardDir`, or `AspireDashboardPath` properties
+still generate their existing assembly metadata; missing paths are omitted. Running output
+without embedded paths requires those paths to be supplied at runtime. Runtime validation
+still fails when required paths are unavailable, so a successful build alone does not mean
+the AppHost can run.
 
 ## Suppressing the warning temporarily
 
