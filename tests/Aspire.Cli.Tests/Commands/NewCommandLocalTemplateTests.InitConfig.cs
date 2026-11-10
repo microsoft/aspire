@@ -12,6 +12,7 @@ using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
+using Spectre.Console;
 using RootCommand = Aspire.Cli.Commands.RootCommand;
 
 namespace Aspire.Cli.Tests.Commands;
@@ -162,7 +163,8 @@ public partial class NewCommandLocalTemplateTests
         Assert.Equal(1, selectionCount);
         Assert.Equal(1, git.Calls);
         Assert.Equal(
-            [new SelectionChoiceGroup("source:enterprise", "Team [templates]"), new SelectionChoiceGroup("source:personal", "Team [templates]")],
+            [new SelectionChoiceGroup("source:enterprise", "Team [templates]") { Style = new Style(Color.Green) },
+                new SelectionChoiceGroup("source:personal", "Team [templates]") { Style = new Style(Color.Green) }],
             Assert.Single(interaction.GroupedSelectionPromptCalls).TakeLast(2).Select(choice => choice.Group));
         Assert.Equal(originalGlobal, await File.ReadAllTextAsync(globalPath));
         var projectConfig = Path.Combine(workspace.Path, "out", AspireConfigFile.FileName);
@@ -178,14 +180,15 @@ public partial class NewCommandLocalTemplateTests
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         await CreateSearchTemplateAsync(workspace, "personal", "personal", "Personal", "Personal");
         var interaction = new TestInteractionService();
+        interaction.ConfirmCallback = (prompt, _) =>
+        {
+            Assert.Equal(ConfigSourceStrings.UseSourcePrompt, prompt);
+            return false;
+        };
         interaction.SetupStringPromptResponse("Hello");
         var selectionCount = 0;
-        interaction.PromptForSelectionCallback = (prompt, choices, formatter, _) =>
+        interaction.PromptForSelectionCallback = (_, choices, formatter, _) =>
         {
-            if (prompt == ConfigSourceStrings.UseSourcePrompt)
-            {
-                return ConfigSourceStrings.Decline;
-            }
             var options = choices.Cast<object>().ToArray();
             selectionCount++;
             Assert.Equal(

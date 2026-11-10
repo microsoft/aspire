@@ -20,7 +20,7 @@
                              Options="@PanelOptions"
                              Value="@_hideEmptyPanels"
                              ValueChanged="@SetHideEmptyPanelsAsync"
-                             ShowLabel="true"
+                             ShowLabel="false"
                              ShowCurrentLabel="false" />
         </div>
     </StableSectionContent>
@@ -48,7 +48,7 @@
     else if (ResourcesLayout.IsMultiSelection || ResourceName is null)
     {
         @* All resources, or several selected resources: show their scoped Summary or Graph. *@
-        <ApplicationSummary ResourceNames="@(ResourcesLayout.IsMultiSelection ? ResourcesLayout.SelectedResourceNames : ResourcesLayout.GetScopeResourceNames())" />
+        <ApplicationSummary ResourceNames="@(ResourcesLayout.IsMultiSelection ? ResourcesLayout.SelectedResourceNames : null)" />
     }
     else if (Resource is { IsParameter: true } parameter && parameter.HasMissingParameterValueState())
     {
@@ -93,7 +93,7 @@
         var showMetrics = isInstrumented && (!_telemetryLoaded || _telemetry is { Instruments.Count: > 0 });
         var consoleLines = GetConsoleLines();
         var showEndpoints = urls.Count > 0;
-        var showTerminal = ResourceSelectHelpers.HasUsableTerminal(resource);
+        var showTerminal = CanShowTerminal(resource);
         var showConsole = !showTerminal;
         var showOverviewTerminal = showTerminal && (IsTerminalFocused || !TerminalDockState.IsResourceOpen(resource.Name));
         var properties = GetVisibleProperties();
@@ -161,7 +161,7 @@
                         <dd>@healthStatus.Humanize()</dd>
                     }
                     <dt>@Loc[nameof(Dashboard.Resources.Resources.ResourcesTypeColumnHeader)]</dt>
-                    <dd>@resource.ResourceType</dd>
+                    <dd>@resource.ResourceTypeDisplayName</dd>
                     @if (resource.IsPersistentContainer)
                     {
                         <dt>@Loc[nameof(Dashboard.Resources.Resources.ResourcesDetailsContainerLifetimeProperty)]</dt>
@@ -210,24 +210,28 @@
                     {
                         var url = group.Primary;
                         var label = url.DisplayName is { } displayName && url.Name == "-" ? displayName : url.Name;
-                        <li>
+                        var maskedUrl = DashboardUIHelpers.MaskUrlForDisplay(url.OriginalUrlString);
+                        // The endpoint's other address (usually its localhost one) is in the tooltip rather than on a line
+                        // of its own, so each endpoint is listed once. Tooltips also show on keyboard focus.
+                        var addressTooltip = group.Secondary is { } secondary
+                            ? Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewEndpointAlsoAt), maskedUrl, DashboardUIHelpers.MaskUrlForDisplay(secondary.OriginalUrlString)].Value
+                            : maskedUrl;
+                        <li class="overview-endpoint">
                             <span class="overview-list-label" data-tooltip="@label">@label</span>
-                            @if (url.Url is not null)
-                            {
-                                var maskedUrl = DashboardUIHelpers.MaskQueryStringValues(url.Url);
-                                <a class="overview-list-value" href="@url.Url" data-tooltip="@maskedUrl" target="_blank" rel="noreferrer noopener">@(url.DisplayName ?? maskedUrl)</a>
-                            }
-                            else
-                            {
-                                <span class="overview-list-value overview-mono" data-tooltip="@url.Text">@url.Text</span>
-                            }
-                            @if (group.Secondary?.Url is { } secondaryUrl)
-                            {
-                                @* The secondary url (typically the internal address of the same endpoint) is shown as faint
-                                   supplementary text instead of a duplicate row, and hides first as space runs out. *@
-                                var maskedSecondaryUrl = DashboardUIHelpers.MaskQueryStringValues(secondaryUrl);
-                                <span class="overview-list-ghost overview-mono" data-tooltip="@maskedSecondaryUrl">@maskedSecondaryUrl</span>
-                            }
+                            <div class="overview-endpoint-addresses">
+                                @if (url.DisplayName is { } friendlyName && friendlyName != label)
+                                {
+                                    <span class="overview-endpoint-name">@friendlyName</span>
+                                }
+                                @if (url.Url is not null)
+                                {
+                                    <a class="overview-endpoint-address overview-mono" href="@url.Url" data-tooltip="@addressTooltip" target="_blank" rel="noreferrer noopener">@maskedUrl</a>
+                                }
+                                else
+                                {
+                                    <span class="overview-endpoint-address overview-mono" data-tooltip="@addressTooltip" tabindex="0">@maskedUrl</span>
+                                }
+                            </div>
                             @if (url.IsInternal)
                             {
                                 <span class="overview-badge">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewInternalEndpoint)]</span>
@@ -501,7 +505,7 @@
                                     {
                                         <span class="overview-dot"></span>
                                     }
-                                    <a class="overview-list-value" href="@DashboardUrls.TraceDetailUrl(trace.TraceId)" data-tooltip="@trace.FullName">@trace.FullName</a>
+                                    <a class="overview-list-value" href="@(ResourcesLayout?.GetTraceDetailUrl(trace.TraceId) ?? DashboardUrls.TraceDetailUrl(trace.TraceId))" data-tooltip="@trace.FullName">@trace.FullName</a>
                                     <span class="overview-list-time">@DurationFormatter.FormatDuration(trace.Duration, CultureInfo.CurrentCulture)</span>
                                 </li>
                             }
@@ -536,7 +540,7 @@
                 }
                 else
                 {
-                    <ResourceRelationshipGraph Resource="@(new RelationshipGraphNode(resourceName, resource.ResourceType, Url: null))"
+                    <ResourceRelationshipGraph Resource="@(new RelationshipGraphNode(resourceName, resource.ResourceTypeDisplayName, Url: null))"
                                                Incoming="@GetGraphNodes(relatedResources, incoming: true)"
                                                Outgoing="@GetGraphNodes(relatedResources, incoming: false)" />
                 }

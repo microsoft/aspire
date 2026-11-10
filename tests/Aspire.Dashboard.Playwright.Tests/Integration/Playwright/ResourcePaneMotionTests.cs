@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Tests.Integration.Playwright.Infrastructure;
 using Aspire.Dashboard.Utils;
 using Aspire.TestUtilities;
@@ -46,13 +47,16 @@ public sealed class ResourcePaneMotionTests(ResourcePaneResponsiveTests.Metadata
                                     observer.disconnect();
                                     const frames=[];
                                     const sample=() => {
-                                        const pane=layout.querySelector('.resource-pane'), row=pane.querySelector('.resource-row[data-resource-name]');
-                                        const b=pane.getBoundingClientRect(),r=row.getBoundingClientRect(),
+                                        const pane=layout.querySelector(':scope > .resource-pane'), row=pane?.querySelector('.resource-row[data-resource-name]');
+                                        const b=pane?.getBoundingClientRect(),r=row?.getBoundingClientRect(),
                                             content=layout.querySelector('.resource-content'),c=content.getBoundingClientRect(),
                                             workspace=layout.getBoundingClientRect();
-                                        frames.push([b.width,r.width,r.height,document.documentElement.scrollWidth,
+                                        // Resolved tracks look like "420px 1020px". The first track still
+                                        // animates after its pane is unmounted.
+                                        const trackWidth=parseFloat(getComputedStyle(layout).gridTemplateColumns);
+                                        frames.push([trackWidth,r?.width??0,r?.height??0,document.documentElement.scrollWidth,
                                             document.documentElement.clientWidth,c.width,c.left,c.right,workspace.left,
-                                            workspace.right,b.right,getComputedStyle(content).transform==='none'?0:1]);
+                                            workspace.right,b?.right??workspace.left+trackWidth,getComputedStyle(content).transform==='none'?0:1]);
                                         if(layout.getAnimations().some(a => a.playState==='running')) requestAnimationFrame(sample);
                                         else resolve(frames);
                                     };
@@ -75,8 +79,16 @@ public sealed class ResourcePaneMotionTests(ResourcePaneResponsiveTests.Metadata
                     }
                     Assert.All(frames, frame =>
                     {
-                        Assert.Equal(originalRow.Width, frame[1]);
-                        Assert.Equal(originalRow.Height, frame[2]);
+                        if (frame[1] > 0)
+                        {
+                            Assert.Equal(originalRow.Width, frame[1]);
+                            Assert.Equal(originalRow.Height, frame[2]);
+                        }
+                        else
+                        {
+                            Assert.True(collapse);
+                            Assert.Equal(0, frame[2]);
+                        }
                         Assert.True(frame[3] <= frame[4]);
                         Assert.InRange(Math.Abs(frame[7] - frame[9]), 0, .5);
                         Assert.InRange(Math.Abs(frame[6] - frame[10]), 0, .5);
@@ -87,8 +99,7 @@ public sealed class ResourcePaneMotionTests(ResourcePaneResponsiveTests.Metadata
                     await Assertions.Expect(toggle).ToHaveAttributeAsync("aria-expanded", collapse ? "false" : "true");
                     if (collapse)
                     {
-                        await Assertions.Expect(pane).Not.ToBeVisibleAsync();
-                        await Assertions.Expect(pane).ToHaveAttributeAsync("inert", "");
+                        await Assertions.Expect(pane).ToHaveCountAsync(0);
                         await Assertions.Expect(separator).ToHaveCountAsync(0);
                         var content = await page.Locator(".resource-content").BoundingBoxAsync();
                         var layout = await page.Locator(".resources-layout").BoundingBoxAsync();
@@ -133,9 +144,13 @@ public sealed class ResourcePaneMotionTests(ResourcePaneResponsiveTests.Metadata
             }
             else
             {
-                await page.GetByRole(AriaRole.Separator, new() { Name = Resources.Layout.ResourcePaneResize }).PressAsync("Home");
+                // The handle takes keyboard focus only once its handlers are attached, so a key pressed earlier is lost.
+                var separator = page.GetByRole(AriaRole.Separator, new() { Name = Resources.Layout.ResourcePaneResize });
+                await Assertions.Expect(separator).ToHaveAttributeAsync("tabindex", "0");
+                await separator.PressAsync("Home");
+                await Assertions.Expect(separator).ToHaveAttributeAsync("aria-valuenow", "300");
             }
-            await pane.Locator(".resource-pane-canvas-toggle").ClickAsync();
+            await ResourcePaneNavigation.ToggleResourceListAsync(page);
             await page.WaitForFunctionAsync("""
                 () => Math.abs(document.querySelector('.resource-pane').getBoundingClientRect().width -
                     document.querySelector('.resources-layout').getBoundingClientRect().width) < .1
@@ -193,7 +208,8 @@ public sealed class ResourcePaneMotionTests(ResourcePaneResponsiveTests.Metadata
             await Assertions.Expect(page.Locator(".resource-content")).Not.ToHaveAttributeAsync("inert", "");
             var layoutBox = await page.Locator(".resources-layout").BoundingBoxAsync();
             Assert.NotNull(layoutBox);
-            var expectedDetailsWidth = layoutBox.Width - (width > 768 ? 420 : 0);
+            // Home shrank the pane to its minimum width, 300px.
+            var expectedDetailsWidth = layoutBox.Width - (width > 768 ? 300 : 0);
             Assert.NotEmpty(frames);
             Assert.All(await page.EvaluateAsync<string[]>("() => window.selectionRevealTitles"),
                 title => Assert.Equal("api", title));
@@ -216,7 +232,7 @@ public sealed class ResourcePaneMotionTests(ResourcePaneResponsiveTests.Metadata
             });
             if (width > 768)
             {
-                var intermediate = frames.Where(frame => frame[0] > 420.1 && frame[0] < layoutBox.Width - .1).ToList();
+                var intermediate = frames.Where(frame => frame[0] > 300.1 && frame[0] < layoutBox.Width - .1).ToList();
                 Assert.Equal(!reducedMotion, intermediate.Count > 0);
                 Assert.All(intermediate, frame =>
                 {
@@ -246,17 +262,17 @@ public sealed class ResourcePaneMotionTests(ResourcePaneResponsiveTests.Metadata
             await page.SetViewportSizeAsync(2000, 1000);
             await page.GotoAsync("/resources/cache?pane=tags");
             var pane = page.Locator(".resource-pane");
-            await pane.Locator(".resource-pane-canvas-toggle").ClickAsync();
+            await ResourcePaneNavigation.ToggleResourceListAsync(page);
             await page.WaitForFunctionAsync("() => document.querySelector('.resource-pane').getBoundingClientRect().width === 2000");
             await page.EvaluateAsync("""
                 () => {
                     window.interruptedSelectionFrames = [];
                     const start = performance.now();
-                    const sample = () => {
+                    window.recordInterruptedSelectionFrame = () => {
                         const layout = document.querySelector('.resources-layout');
                         if (!layout.classList.contains('pane-full-canvas')) {
                             const selected = layout.querySelector('.resource-row:has(.resource-row-link[aria-current="page"])');
-                            window.interruptedSelectionFrames.push([
+                            if (selected) window.interruptedSelectionFrames.push([
                                 selected?.dataset.resourceName,
                                 layout.querySelector('.resource-overview')?.dataset.resourceName,
                                 selected?.querySelector('.resource-row-name')?.textContent.trim(),
@@ -264,6 +280,9 @@ public sealed class ResourcePaneMotionTests(ResourcePaneResponsiveTests.Metadata
                                 layout.querySelector('.resource-overview')?.dataset.resourceSubscription
                             ]);
                         }
+                    };
+                    const sample = () => {
+                        window.recordInterruptedSelectionFrame();
                         if (performance.now()-start < 2000) requestAnimationFrame(sample);
                     };
                     requestAnimationFrame(sample);
@@ -278,33 +297,54 @@ public sealed class ResourcePaneMotionTests(ResourcePaneResponsiveTests.Metadata
                         () => field.focus(), { once:true })
                     """);
             }
+            // Interrupt in the browser when the reveal begins. A test-host round trip can
+            // miss the entire transition, especially with shorter motion or a busy runner.
+            await pane.GetByRole(AriaRole.Searchbox).EvaluateAsync("""
+                (field, interruption) => {
+                    const layout = document.querySelector('.resources-layout');
+                    window.revealInterruptionObserved = false;
+                    const observer = new MutationObserver(() => {
+                        if (!layout.classList.contains('pane-selection-reveal')) return;
+                        observer.disconnect();
+                        window.revealInterruptionObserved = true;
+                        window.recordInterruptedSelectionFrame();
+                        switch (interruption) {
+                            case 'selection':
+                                layout.querySelector('[data-resource-name="frontend"] .resource-row-link').click();
+                                break;
+                            case 'reverse':
+                                layout.querySelector('.detail-page-close').click();
+                                break;
+                            case 'back':
+                                history.back();
+                                break;
+                            case 'reload':
+                                location.reload();
+                                break;
+                            case 'focus':
+                                field.focus();
+                                break;
+                        }
+                    });
+                    observer.observe(layout, { attributes:true, attributeFilter:['class'] });
+                }
+                """, interruption);
             await pane.Locator("[data-resource-name='api'] .resource-row-link").First.ClickAsync();
-            await Assertions.Expect(page.Locator(".pane-selection-reveal")).ToHaveCountAsync(1);
-            switch (interruption)
+            if (interruption == "reload")
             {
-                case "selection":
-                    await pane.Locator("[data-resource-name='frontend'] .resource-row-link").DispatchEventAsync("click");
-                    break;
-                case "reverse":
-                    await pane.Locator(".resource-pane-canvas-toggle").DispatchEventAsync("click");
-                    break;
-                case "back":
-                    await page.GoBackAsync();
-                    break;
-                case "reload":
-                    await page.ReloadAsync();
-                    break;
-                case "focus":
-                    await pane.GetByRole(AriaRole.Searchbox).FocusAsync();
-                    break;
+                await page.WaitForFunctionAsync("() => performance.getEntriesByType('navigation')[0]?.type === 'reload'");
+            }
+            else
+            {
+                await page.WaitForFunctionAsync("() => window.revealInterruptionObserved");
             }
             await Assertions.Expect(page.Locator(".pane-selection-reveal")).ToHaveCountAsync(0);
-            var expected = interruption == "selection" ? "frontend" : interruption == "back" ? "cache" : "api";
+            var expected = interruption == "selection" ? "frontend" : interruption == "back" ? Resources.Layout.ResourceHeaderAllResources : "api";
             if (interruption == "reverse")
             {
                 await Assertions.Expect(page.Locator(".resource-content")).ToHaveAttributeAsync("inert", "");
-                await Assertions.Expect(pane.Locator("[data-resource-name='api'] .resource-row-link").First).ToHaveAttributeAsync("aria-current", "page");
-                await pane.Locator(".resource-pane-canvas-toggle").DispatchEventAsync("click");
+                await Assertions.Expect(pane.Locator(".resource-row-all .resource-row-link")).ToHaveAttributeAsync("aria-current", "page");
+                await pane.Locator("[data-resource-name='api'] .resource-row-link").First.ClickAsync();
             }
             else
             {
@@ -312,7 +352,8 @@ public sealed class ResourcePaneMotionTests(ResourcePaneResponsiveTests.Metadata
             }
             await Assertions.Expect(page.Locator("h1.resource-title")).ToHaveTextAsync(expected);
             var interruptionFrames = await page.EvaluateAsync<string[][]>("() => window.interruptedSelectionFrames ?? []");
-            if (interruption != "reload")
+            // An immediate reversal can restore full canvas before a selected row is rendered.
+            if (interruption is not ("reload" or "reverse"))
             {
                 Assert.NotEmpty(interruptionFrames);
             }
@@ -359,21 +400,24 @@ public sealed class ResourcePaneMotionTests(ResourcePaneResponsiveTests.Metadata
             var separator = page.GetByRole(AriaRole.Separator, new() { Name = Resources.Layout.ResourcePaneResize });
             await separator.PressAsync("End");
             var expectedWidth = await separator.EvaluateAsync<double>("e => Number(e.getAttribute('aria-valuenow'))");
-            var toggle = pane.Locator(".resource-pane-canvas-toggle");
+            var toggle = page.Locator(".detail-page-close, .pane-full-canvas .resource-row-all .resource-row-link");
             await ToggleAsync();
-            await Assertions.Expect(toggle).ToHaveAttributeAsync("aria-expanded", "true");
+            await Assertions.Expect(page.Locator(".pane-full-canvas")).ToBeVisibleAsync();
 
-            // Kind changes must not change the saved width while the resizer is unmounted.
-            var parametersToggle = pane.Locator(".resource-kind-toggle").Nth(1);
-            await parametersToggle.ClickAsync();
+            // Filtering must not change the saved width while the resizer is unmounted.
+            await page.Locator("#resourcePaneFilterButton").ClickAsync();
+            var parameterType = page.GetByRole(AriaRole.Group, new() { Name = Resources.ControlsStrings.ChartContainerFiltersHeader, Exact = true })
+                .GetByRole(AriaRole.Checkbox, new() { Name = KnownResourceTypes.Parameter, Exact = true });
+            await parameterType.ClickAsync();
             await Assertions.Expect(parameter).ToHaveCountAsync(0);
-            await parametersToggle.ClickAsync();
+            await parameterType.ClickAsync();
             await Assertions.Expect(parameter).ToHaveCountAsync(1);
+            await page.Keyboard.PressAsync("Escape");
             await ToggleAsync();
             await AssertReturnedAsync();
 
             await ToggleAsync();
-            await Assertions.Expect(toggle).ToHaveAttributeAsync("aria-expanded", "true");
+            await Assertions.Expect(page.Locator(".pane-full-canvas")).ToBeVisibleAsync();
             await ToggleAsync();
             await AssertReturnedAsync();
             await page.ReloadAsync();
@@ -394,7 +438,7 @@ public sealed class ResourcePaneMotionTests(ResourcePaneResponsiveTests.Metadata
 
             async Task AssertReturnedAsync()
             {
-                await Assertions.Expect(toggle).ToHaveAttributeAsync("aria-expanded", "false");
+                await Assertions.Expect(page.Locator(".pane-full-canvas")).ToHaveCountAsync(0);
                 await Assertions.Expect(page.Locator(".resource-content")).Not.ToHaveAttributeAsync("inert", "");
                 await page.WaitForFunctionAsync("""
                     width => {
@@ -429,7 +473,7 @@ public sealed class ResourcePaneMotionTests(ResourcePaneResponsiveTests.Metadata
             }
             var layout = page.Locator(".resources-layout");
             var pane = page.Locator(".resource-pane");
-            var toggle = pane.Locator(".resource-pane-canvas-toggle");
+            var toggle = page.Locator(".detail-page-close, .pane-full-canvas .resource-row-all .resource-row-link");
             var header = page.Locator(".resource-tabs-nav");
             var headerBox = await header.BoundingBoxAsync();
             var toolbarBox = await pane.Locator(".resource-pane-head").BoundingBoxAsync();

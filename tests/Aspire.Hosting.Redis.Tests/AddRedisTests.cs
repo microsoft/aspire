@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
 using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
@@ -12,6 +13,7 @@ using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Aspire.TestUtilities;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 
 #pragma warning disable ASPIRECERTIFICATES001
 #pragma warning disable ASPIREPERSISTENCE001
@@ -778,6 +780,66 @@ public class AddRedisTests(ITestOutputHelper testOutputHelper)
 
         Assert.Equal(1, args.Count(arg => arg == "--loadmodule"));
         Assert.Equal(1, args.Count(arg => arg == "/usr/local/lib/redis/modules/rejson.so"));
+    }
+
+    [Fact]
+    [SkipOnPlatform(TestPlatforms.Windows, "Executes the published /bin/sh command line.")]
+    public async Task PublishModeArgsPassWithArgsValuesToRedisServer()
+    {
+        // https://github.com/microsoft/aspire/issues/21400
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var redis = builder.AddRedis("myRedis")
+            .WithDataVolume()
+            .WithArgs("--dir", "/data", "--appendonly", "yes", "--save", "");
+
+        Assert.Equal("/bin/sh", redis.Resource.Entrypoint);
+
+        var executionContext = new DistributedApplicationExecutionContext(
+            new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Publish));
+        var configuration = await ExecutionConfigurationBuilder.Create(redis.Resource)
+            .WithArgumentsConfig()
+            .BuildAsync(executionContext, NullLogger.Instance, CancellationToken.None);
+        Assert.Null(configuration.Exception);
+        var args = configuration.Arguments.Select(a => a.Value).ToList();
+
+        // Run the published command line through the real shell with a stub redis-server that
+        // reports the arguments it receives, one per line.
+        var binDirectory = Directory.CreateTempSubdirectory("aspire-redis-args");
+        try
+        {
+            var stubPath = Path.Combine(binDirectory.FullName, "redis-server");
+            File.WriteAllText(stubPath, "#!/bin/sh\nfor arg in \"$@\"; do printf '[%s]\\n' \"$arg\"; done\n");
+            // The analyzer cannot see through [SkipOnPlatform].
+#pragma warning disable CA1416
+            File.SetUnixFileMode(stubPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+#pragma warning restore CA1416
+
+            var startInfo = new ProcessStartInfo(redis.Resource.Entrypoint!)
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+            };
+            foreach (var arg in args)
+            {
+                startInfo.ArgumentList.Add(arg);
+            }
+            startInfo.Environment["PATH"] = $"{binDirectory.FullName}:{Environment.GetEnvironmentVariable("PATH")}";
+            startInfo.Environment["REDIS_PASSWORD"] = "p@ss";
+
+            using var process = Process.Start(startInfo)!;
+            var stdout = await process.StandardOutput.ReadToEndAsync();
+            var stderr = await process.StandardError.ReadToEndAsync();
+            await process.WaitForExitAsync();
+
+            Assert.True(process.ExitCode == 0, $"Shell exited with {process.ExitCode}: {stderr}");
+            Assert.Equal(
+                ["[--requirepass]", "[p@ss]", "[--save]", "[60]", "[1]", "[--dir]", "[/data]", "[--appendonly]", "[yes]", "[--save]", "[]"],
+                stdout.Split('\n', StringSplitOptions.RemoveEmptyEntries));
+        }
+        finally
+        {
+            binDirectory.Delete(recursive: true);
+        }
     }
 
     private static async Task<string> GetCommandLineArgs(IResourceBuilder<RedisResource> builder)

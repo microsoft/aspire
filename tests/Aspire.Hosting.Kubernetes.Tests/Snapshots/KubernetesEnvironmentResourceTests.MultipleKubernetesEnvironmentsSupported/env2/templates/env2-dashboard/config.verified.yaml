@@ -8,4 +8,4 @@ metadata:
     app.kubernetes.io/component: "env2-dashboard"
     app.kubernetes.io/instance: "{{ .Release.Name }}"
 data:
-  ASPIRE_DASHBOARD_TELEMETRY_OPTOUT: "{{ .Values.config.env2_dashboard.ASPIRE_DASHBOARD_TELEMETRY_OPTOUT }}"
+  ASPIRE_DASHBOARD_TELEMETRY_OPTOUT: {{ tpl "{{ .Values.config.env2_dashboard.ASPIRE_DASHBOARD_TELEMETRY_OPTOUT }}" . | quote }}

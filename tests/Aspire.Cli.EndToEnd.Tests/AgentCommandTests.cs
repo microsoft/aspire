@@ -205,10 +205,7 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         await File.WriteAllTextAsync(localSkillPath, localSkillContent);
         string[] expectedWarnings =
         [
-            "Skill sources:",
-            "https://github.com/microsoft/aspire-skills",
-            "Only use sources you trust.",
-            "Local Aspire skill files may override plugin skills:",
+            "Local Aspire skill files may override plugin skills",
             ".agents/skills/aspire/SKILL.md"
         ];
 
@@ -244,7 +241,7 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         // MCP configuration is strictly opt-in and defaults to No, so accepting the default
         // here leaves MCP unconfigured.
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("Installation scope", timeout: TimeSpan.FromSeconds(30));
+        await auto.WaitUntilTextAsync("Where should skills and tools be installed?", timeout: TimeSpan.FromSeconds(30));
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("configuration complete", timeout: TimeSpan.FromSeconds(30));
         await auto.WaitForSuccessPromptAsync(counter);
@@ -347,10 +344,8 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
             timeout: TimeSpan.FromSeconds(30), description: "agent selection prompt");
         await auto.EnterAsync();
 
-        await auto.WaitUntilTextAsync("Installation scope", timeout: TimeSpan.FromSeconds(30));
+        await auto.WaitUntilTextAsync("Where should skills and tools be installed?", timeout: TimeSpan.FromSeconds(30));
         var scopeScreen = auto.CreateSnapshot().GetScreenText();
-        Assert.Contains("Only use sources you trust.", scopeScreen);
-        Assert.Contains("https://github.com/microsoft/aspire-skills", scopeScreen);
         Assert.DoesNotContain("Install Aspire MCP server", scopeScreen);
         Assert.DoesNotContain("Which source do you want to use for Aspire?", scopeScreen);
         await auto.EnterAsync();
@@ -395,18 +390,22 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         var mcpConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, "StarterApp", ".mcp.json");
         const string originalMcpConfig = """{"mcpServers":{"custom":{"command":"custom"}}}""";
 
-        // Explicit client, skill, and scope choices leave no additional asset-selection prompt.
+        // Explicit client and skill choices leave only the scope prompt.
         await auto.AspireNewAcceptingAgentInitAsync(
             "StarterApp",
-            extraArguments: "--agents claude --scope project --skills aspire",
+            extraArguments: "--agents claude --skills aspire",
             beforeAcceptingAgentInit: () => File.WriteAllTextAsync(mcpConfigPath, originalMcpConfig));
+
+        await auto.WaitUntilTextAsync("Where should skills and tools be installed?", timeout: TimeSpan.FromSeconds(30));
+        var scopeScreen = auto.CreateSnapshot().GetScreenText();
+        Assert.Contains("This project (In your workspace, ready to commit with your project)", scopeScreen);
+        Assert.Contains("Global (In your home directory, available across all projects)", scopeScreen);
+        await auto.EnterAsync();
 
         // aspire new never registers --mcp, so it goes straight to configuration after
         // registration — no MCP prompt is shown, and Claude's project MCP file is untouched.
         await auto.WaitUntilTextAsync("configuration complete", timeout: TimeSpan.FromSeconds(30));
         var completionScreen = auto.CreateSnapshot().GetScreenText();
-        Assert.Contains("Only use sources you trust.", completionScreen);
-        Assert.Contains("https://github.com/microsoft/aspire-skills", completionScreen);
         Assert.DoesNotContain("Which source do you want to use for Aspire?", completionScreen);
         Assert.DoesNotContain("Configure the Aspire MCP server", completionScreen);
         await auto.WaitForSuccessPromptAsync(counter);

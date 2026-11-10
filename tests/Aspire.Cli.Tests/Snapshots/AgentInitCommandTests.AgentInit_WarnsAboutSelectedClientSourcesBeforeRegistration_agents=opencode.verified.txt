@@ -1,7 +1,15 @@
-﻿[
-  Skill sources:
-https://third-party.example/skills/
-https://raw.githubusercontent.com/microsoft/aspire-skills/main/opencode/v2/
-https://team.example/skills/,
-  [yellow]Only use sources you trust. Content from these sources can run code on your machine.[/]
-]
+﻿{
+  Sources:
+                  Name:  team
+   OpenCode V1 catalog:  https://team.example/skills/
+   OpenCode V2 catalog:  https://team.example/skills/
+
+                  Name:  teamAlias
+   OpenCode V1 catalog:  https://team.example/skills/
+
+,
+  Warnings: [
+    One or more skill sources are configured. A skill source lets an organization share skills to customize your development experience.,
+    [yellow]Only use sources you trust. Content from these sources can run code on your machine.[/]
+  ]
+}

@@ -33,12 +33,13 @@ internal sealed class ConfigSourceService(
     ILogger<ConfigSourceService> logger) : IDisposable
 {
     internal const string MicrosoftRepository = "https://msft.ghe.com/coreai/aspire-1p-init";
+    internal const string MicrosoftReadmeUrl = $"{MicrosoftRepository}/blob/HEAD/README.md";
     private static readonly string[] s_allowedSettings = [SkillSource.SectionName, IntegrationSourceConfiguration.SectionName];
     private static readonly TimeSpan s_gitTimeout = TimeSpan.FromSeconds(30);
     private readonly Dictionary<ConfigSourceIdentity, ConfigSourceSnapshot> _snapshots = [];
     private string? _projectDirectory;
     private bool _projectChecked;
-    private readonly List<(string Message, string? GitOutput)> _notifications = [];
+    private readonly List<(string? Message, string? GitOutput)> _notifications = [];
     private readonly Lock _checksLock = new();
     private readonly CancellationTokenSource _stopping = new();
     private Task? _check;
@@ -113,7 +114,7 @@ internal sealed class ConfigSourceService(
 
     public void NotifyIfUpdateAvailable()
     {
-        (string Message, string? GitOutput)[] notifications;
+        (string? Message, string? GitOutput)[] notifications;
         lock (_checksLock)
         {
             notifications = _notifications.ToArray();
@@ -121,12 +122,15 @@ internal sealed class ConfigSourceService(
         }
         foreach (var pending in notifications)
         {
-            interaction.DisplayMessage(KnownEmojis.PoliceCarLight, pending.Message, consoleOverride: ConsoleOutput.Error);
-            DisplayGitTimeoutOutput(interaction, pending.GitOutput);
+            if (pending.Message is { } message)
+            {
+                interaction.DisplayMessage(KnownEmojis.PoliceCarLight, message, consoleOverride: ConsoleOutput.Error);
+            }
+            DisplayGitOutput(interaction, pending.GitOutput);
         }
     }
 
-    internal static void DisplayGitTimeoutOutput(IInteractionService interaction, string? output)
+    internal static void DisplayGitOutput(IInteractionService interaction, string? output)
     {
         const int outputLimit = 64 * 1024;
         if (output is { Length: > 0 })
@@ -175,9 +179,35 @@ internal sealed class ConfigSourceService(
             Ref = explicitSource ? environment.GetEnvironmentVariable(CliConfigNames.InitSourceRef) : null
         };
         source.Validate();
-        interaction.DisplayMessage(KnownEmojis.Information, string.Format(CultureInfo.CurrentCulture, ConfigSourceStrings.Candidate,
-            source.Repository, source.Path, source.Ref ?? ConfigSourceStrings.DefaultBranch,
-            explicitSource ? CliConfigNames.InitSourceUrl : ConfigSourceStrings.EmployeeOrigin));
+        var readmeUrl = environment.GetEnvironmentVariable(CliConfigNames.InitSourceReadmeUrl)
+            ?? (source.Repository == MicrosoftRepository ? MicrosoftReadmeUrl : null);
+        if (readmeUrl is not null && (!UrlHelper.IsHttpUrl(readmeUrl) || readmeUrl.Any(char.IsControl)))
+        {
+            throw new ConfigSourceException(string.Format(CultureInfo.CurrentCulture,
+                ConfigSourceStrings.InvalidReadmeUrl, CliConfigNames.InitSourceReadmeUrl));
+        }
+
+        interaction.DisplayMessage(KnownEmojis.Information, ConfigSourceStrings.Explanation);
+        List<(string Label, string Value)> details =
+        [
+            (SharedCommandStrings.SourceGitRepository, source.Repository)
+        ];
+        if (source.Path != AspireConfigFile.FileName)
+        {
+            details.Add((ConfigSourceStrings.ConfigurationFile, source.Path));
+        }
+        if (source.Ref is not null)
+        {
+            details.Add((SharedCommandStrings.SourceRef, source.Ref));
+        }
+        details.Add((ConfigSourceStrings.SourceOrigin, explicitSource ? CliConfigNames.InitSourceUrl : ConfigSourceStrings.EmployeeOrigin));
+
+        interaction.DisplaySourceDetails([details]);
+        if (readmeUrl is not null)
+        {
+            interaction.DisplayMessage(KnownEmojis.Information,
+                MarkupHelpers.SafeLink(interaction, readmeUrl, ConfigSourceStrings.ReadmeLink), allowMarkup: true);
+        }
         interaction.DisplaySourceTrustWarning(executionContext);
 
         // Machine-configured or detected sources suggest useful defaults for new apps;
@@ -190,12 +220,9 @@ internal sealed class ConfigSourceService(
             {
                 throw new ConfigSourceException(ConfigSourceStrings.ConsentRequired);
             }
-            // Boolean choices let the prompt select default(bool), highlighting decline
-            // even when accept is first. String choices preserve the first-item default.
-            var selection = await interaction.PromptForSelectionAsync(ConfigSourceStrings.UseSourcePrompt,
-                new[] { ConfigSourceStrings.Accept, ConfigSourceStrings.Decline }, choice => choice,
+            accepted = await interaction.PromptConfirmAsync(ConfigSourceStrings.UseSourcePrompt,
+                binding: PromptBinding.CreateDefault(true),
                 cancellationToken: cancellationToken);
-            accepted = selection == ConfigSourceStrings.Accept;
         }
         _sourceDeclined = !accepted.Value;
         if (_sourceDeclined)
@@ -364,7 +391,7 @@ internal sealed class ConfigSourceService(
             // Replace all case-equivalent local sections, preserving every source section
             // that IConfiguration combines (for example {"SKILLSOURCES":{...},"skillSources":{...}}).
             // Keep the original position so an unchanged section does not reorder the file
-            // and make an otherwise identical refresh report changes.
+            // and make an otherwise identical refresh rewrite the file.
             var insertionIndex = configuration.Count;
             foreach (var key in configuration.Select(property => property.Key)
                 .Where(key => key.Equals(setting, StringComparison.OrdinalIgnoreCase)).ToArray())
@@ -404,9 +431,6 @@ internal sealed class ConfigSourceService(
         {
             _projectChecked = true;
         }
-        interaction.DisplayMessage(KnownEmojis.Information, string.Format(CultureInfo.CurrentCulture, ConfigSourceStrings.UseNotice,
-            source.Repository, source.Path, snapshot.Metadata.Commit,
-            changed ? ConfigSourceStrings.Refreshed : ConfigSourceStrings.RefreshedUnchanged, path), consoleOverride: ConsoleOutput.Error);
     }
 
     public async Task CheckProjectAsync(DirectoryInfo directory, bool force, CancellationToken cancellationToken)
@@ -574,6 +598,10 @@ internal sealed class ConfigSourceService(
                 Path = source.Path,
                 Ref = source.Ref
             };
+            interaction.DisplayGitFetchNotice(SharedCommandStrings.GitFetchConfigurationSource,
+                PackageSourceRedactor.RedactForDisplay(identity.Repository),
+                allowInteractiveInput && hostEnvironment.SupportsInteractiveInput);
+            // Keep Git outside animated status so authentication prompts remain visible.
             var (commit, version, configuration) = await AcquireRepositoryAsync(identity, snapshotDirectory, allowInteractiveInput, cancellationToken);
             ConfigurationHelper.NormalizeSettings(configuration);
             var now = timeProvider.GetUtcNow();
@@ -684,7 +712,7 @@ internal sealed class ConfigSourceService(
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
         try
         {
-            var (repositoryDirectory, commit, version) = await FetchVersionAsync(source, directory, allowInteractiveInput, timeout.Token);
+            var (repositoryDirectory, commit, version) = await FetchVersionAsync(git, source, directory, allowInteractiveInput, timeout.Token);
             var json = await git.ReadBlobAsync(repositoryDirectory, version, GitCommandMode.Interactive, timeout.Token);
             try
             {
@@ -733,7 +761,10 @@ internal sealed class ConfigSourceService(
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
         try
         {
-            var (_, commit, version) = await FetchVersionAsync(source, directory, allowInteractive: false, timeout.Token);
+            // Every subprocess in an advisory check, including local queries and SSH
+            // preflight, must defer diagnostics until command exit.
+            var checkGit = git.WithStandardErrorHandler(output => ReportOnce(null, output));
+            var (_, commit, version) = await FetchVersionAsync(checkGit, source, directory, allowInteractive: false, timeout.Token);
             return (commit, version);
         }
         catch (GitCommandException ex)
@@ -749,15 +780,15 @@ internal sealed class ConfigSourceService(
         }
     }
 
-    private async Task<(GitRepositoryLocation Directory, string Commit, string Version)> FetchVersionAsync(
-        ConfigSource source, string directory, bool allowInteractive, CancellationToken cancellationToken)
+    private static async Task<(GitRepositoryLocation Directory, string Commit, string Version)> FetchVersionAsync(
+        IGitClient client, ConfigSource source, string directory, bool allowInteractive, CancellationToken cancellationToken)
     {
         var workingDirectory = new DirectoryInfo(directory);
         var mode = allowInteractive ? GitCommandMode.Interactive : GitCommandMode.Unattended;
         string resolvedCommit;
         try
         {
-            resolvedCommit = await git.ResolveReferenceAsync(source.Repository, source.GetGitRef(), workingDirectory, mode, cancellationToken);
+            resolvedCommit = await client.ResolveReferenceAsync(source.Repository, source.GetGitRef(), workingDirectory, mode, cancellationToken);
         }
         catch (GitReferenceException)
         {
@@ -767,15 +798,15 @@ internal sealed class ConfigSourceService(
         // before initialization so branch/default selectors also choose the source format.
         // https://git-scm.com/docs/git-init#Documentation/git-init.txt---object-formatltformatgt
         var repositoryDirectory = new GitRepositoryLocation(new DirectoryInfo(Path.Combine(directory, "repository.git")), IsBare: true);
-        await git.InitializeAsync(workingDirectory, repositoryDirectory,
+        await client.InitializeAsync(workingDirectory, repositoryDirectory,
             resolvedCommit.Length == 64 ? "sha256" : "sha1", GitCommandMode.Interactive, cancellationToken);
         // Fetch accepts both a fully qualified branch ref and a full commit ID. Unlike
         // clone --branch, this also acquires commits outside the default branch's shallow history.
         // https://git-scm.com/docs/git-fetch
-        await git.FetchAsync(repositoryDirectory, source.Repository, source.GetGitRef(),
+        await client.FetchAsync(repositoryDirectory, source.Repository, source.GetGitRef(),
             allowInteractive ? GitCommandMode.Interactive : GitCommandMode.Unattended, cancellationToken);
-        var commit = await git.GetCommitAsync(repositoryDirectory, "FETCH_HEAD^{commit}", GitCommandMode.Interactive, cancellationToken);
-        var entry = await git.GetFileAsync(repositoryDirectory, commit, source.Path, GitCommandMode.Interactive, cancellationToken);
+        var commit = await client.GetCommitAsync(repositoryDirectory, "FETCH_HEAD^{commit}", GitCommandMode.Interactive, cancellationToken);
+        var entry = await client.GetFileAsync(repositoryDirectory, commit, source.Path, GitCommandMode.Interactive, cancellationToken);
         // Read blob contents directly, without interpreting file modes or creating filesystem links.
         if (entry is not { Type: "blob" })
         {
@@ -800,7 +831,7 @@ internal sealed class ConfigSourceService(
         return ConfigurationHelper.WriteSettingsFileAtomicallyAsync(Path.Combine(directory, "check.json"), json, cancellationToken);
     }
 
-    private void ReportOnce(string message, string? gitOutput = null)
+    private void ReportOnce(string? message, string? gitOutput = null)
     {
         lock (_checksLock)
         {

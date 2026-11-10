@@ -1354,6 +1354,13 @@ classDiagram
 | `aspire publish` | `PublishAsync` | Gets `RuntimeSpec`, executes in publish mode |
 | `aspire add` | `AddPackageAsync` | Add integration package, regenerate SDK |
 
+When `aspire init --language go` runs in a directory that already contains `go.mod`,
+it creates the AppHost in `aspire-apphost/` and records
+`aspire-apphost/apphost.go` in the root `aspire.config.json`. The AppHost has its
+own `go.mod` and `go.work`, so the application's module, source files, and
+workspace remain unchanged. The local workspace also lets the AppHost run
+without adding it to an existing parent `go.work`.
+
 ---
 
 ## Configuration
@@ -1414,8 +1421,8 @@ The unified config file for polyglot AppHosts. Replaces the legacy split across 
 ### Project-local experimental language flags
 
 The experimental polyglot AppHost flags use the same flat naming pattern:
-`experimentalPolyglotJava`, `experimentalPolyglotGo`, `experimentalPolyglotPython`,
-and `experimentalPolyglotRust`. To enable Java for a single AppHost, run this from
+`experimentalPolyglotJava`, `experimentalPolyglotPython`, and
+`experimentalPolyglotRust`. To enable Java for a single AppHost, run this from
 its project directory:
 
 ```console
@@ -1434,8 +1441,10 @@ This writes a single key in the `features` dictionary of `aspire.config.json`:
 
 The configuration reader accepts both `"true"` and `true` for feature values.
 Existing project or global configurations using `experimentalPolyglot:java`,
-`experimentalPolyglot:go`, `experimentalPolyglot:python`, or
-`experimentalPolyglot:rust` must rename those keys to the flat names above.
+`experimentalPolyglot:python`, or `experimentalPolyglot:rust` must rename those
+keys to the flat names above.
+
+TypeScript and Go AppHosts are always available and have no feature flag.
 
 ### Application settings
 

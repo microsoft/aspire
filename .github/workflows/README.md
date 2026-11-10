@@ -114,6 +114,23 @@ tool sees the same protected snapshot as the host. Push-time Git reads use an
 external object directory: lazy fetching into `.git` would otherwise fail
 gh-aw's memory-mutation check. Keep these contexts working when changing validation.
 
+## Milestone changelog fetch diagnostics
+
+`milestone-changelog.md` retries PR-list requests up to four times, waiting
+15, 30, and 60 seconds between attempts. HTTP 5xx errors and the
+`unexpected end of JSON input` diagnostic are retryable. When `gh` succeeds
+but returns invalid or empty JSON, validation also retries, even if stderr
+contains warnings. Other command failures and valid JSON of the wrong type
+fail immediately.
+
+Each failed attempt logs the output filename, command and validation exit codes,
+stderr from both tools, and the first 4096 bytes of the response with its total
+byte count. Response previews are bounded because PR bodies can be large.
+Diagnostic lines are prefixed and legacy `##[` command markers are escaped so
+response text is not interpreted as GitHub Actions workflow commands.
+Successful requests also replay any `gh` warnings;
+their complete JSON is kept in the normal data files rather than printed.
+
 ## Auto-sec dependency reconciliation
 
 `auto-sec.md` runs every 12 hours (and on demand). It reconciles open Dependabot

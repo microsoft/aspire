@@ -7,6 +7,7 @@ using Aspire.Hosting.RemoteHost.Ats;
 using Aspire.Hosting.RemoteHost.CodeGeneration;
 using Aspire.Hosting.RemoteHost.Diagnostics;
 using Aspire.Hosting.RemoteHost.Language;
+using Aspire.TestUtilities;
 using Aspire.TypeSystem;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -169,6 +170,7 @@ public class ApiReferenceExportTests
     }
 
     [Fact]
+    [RequiresTools(["gofmt"])]
     public void ExportApi_Go_ReturnsCanonicalSchemaForRequestedPackage()
     {
         var service = CreateCodeGenerationService();
@@ -204,6 +206,7 @@ public class ApiReferenceExportTests
     }
 
     [Fact]
+    [RequiresTools(["gofmt"])]
     public void ExportApi_Go_ScopesDocumentedItemsToRequestedPackage()
     {
         var service = CreateCodeGenerationService();

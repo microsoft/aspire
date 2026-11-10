@@ -197,8 +197,7 @@ function redactE2eTeardownFailure(failure: unknown): string {
         .replace(/Last state:[\s\S]*/g, 'Last state: <redacted>');
 }
 
-export async function createEmptyAppHostProject(projectName: string): Promise<string> {
-    const outputPath = getGeneratedProjectRoot(projectName);
+export async function createEmptyAppHostProject(projectName: string, outputPath = getGeneratedProjectRoot(projectName)): Promise<string> {
     removePath(outputPath, { recursive: true, force: true });
     await runProcess(getCliPath(), [
         'new',
@@ -217,7 +216,7 @@ export async function createEmptyAppHostProject(projectName: string): Promise<st
         cwd: getWorkspaceRoot(),
         timeoutMs: 180000,
     });
-    await waitForPath(getGeneratedAppHostPath(projectName), 180000);
+    await waitForPath(path.join(outputPath, 'apphost.cs'), 180000);
     await waitForPath(path.join(outputPath, 'aspire.config.json'), 180000);
 
     return outputPath;

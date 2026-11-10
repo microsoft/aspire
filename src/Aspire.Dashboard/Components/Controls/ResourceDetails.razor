@@ -44,7 +44,7 @@
             <AspirePropertyDetailsAccordionItem Header="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsUrlsHeader)]"
                                                 Count="@FilteredUrls.Count()"
                                                 Expanded="@_isUrlsExpanded">
-                <FluentDataGrid TGridItem="DisplayedUrl"
+                <DisposalSafeFluentDataGrid TGridItem="DisplayedUrl"
                                 ItemKey="@(vm => ((IPropertyGridItem)vm).Key)"
                                 ItemsProvider="@EnumerableGridItemsProvider.Create(() => FilteredUrls)"
                                 HeaderCellAsButtonWithMenu="true"
@@ -76,14 +76,14 @@
                                    EnableHighlighting="@(!string.IsNullOrEmpty(_filter))"
                                    HighlightText="@_filter" />
                     </AspireTemplateColumn>
-                </FluentDataGrid>
+                </DisposalSafeFluentDataGrid>
             </AspirePropertyDetailsAccordionItem>
             @if (Resource.IsContainer())
             {
                 <AspirePropertyDetailsAccordionItem Header="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsVolumesHeader)]"
                                                     Count="@FilteredVolumes.Count()"
                                                     Expanded="@_isVolumesExpanded">
-                    <FluentDataGrid TGridItem="VolumeViewModel"
+                    <DisposalSafeFluentDataGrid TGridItem="VolumeViewModel"
                                     ItemKey="@(vm => ((IPropertyGridItem)vm).Key)"
                                     ItemsProvider="@EnumerableGridItemsProvider.Create(() => FilteredVolumes)"
                                     HeaderCellAsButtonWithMenu="true"
@@ -116,13 +116,13 @@
                                 </ContentBeforeValue>
                             </GridValue>
                         </AspireTemplateColumn>
-                    </FluentDataGrid>
+                    </DisposalSafeFluentDataGrid>
                 </AspirePropertyDetailsAccordionItem>
             }
             <AspirePropertyDetailsAccordionItem Header="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsReferences)]"
                                                 Count="@FilteredRelationships.Count()"
                                                 Expanded="@_isRelationshipsExpanded">
-                <FluentDataGrid
+                <DisposalSafeFluentDataGrid
                                 HeaderCellAsButtonWithMenu="true"
                                 ResizeType="DataGridResizeType.Discrete"
                                 TGridItem="ResourceDetailRelationshipViewModel"
@@ -142,12 +142,12 @@
                     <AspireTemplateColumn Title="@ControlStringsLoc[nameof(ControlsStrings.ViewAction)]" Class="no-ellipsis">
                         <FluentButton Appearance="ButtonAppearance.Transparent" Class="button-hyperlink-no-icon" OnClick="@(() => OnViewRelationshipAsync(context))">@ControlStringsLoc[nameof(ControlsStrings.ViewAction)]</FluentButton>
                     </AspireTemplateColumn>
-                </FluentDataGrid>
+                </DisposalSafeFluentDataGrid>
             </AspirePropertyDetailsAccordionItem>
             <AspirePropertyDetailsAccordionItem Header="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsBackReferences)]"
                                                 Count="@FilteredBackRelationships.Count()"
                                                 Expanded="@_isBackRelationshipsExpanded">
-                <FluentDataGrid
+                <DisposalSafeFluentDataGrid
                                 HeaderCellAsButtonWithMenu="true"
                                 ResizeType="DataGridResizeType.Discrete"
                                 TGridItem="ResourceDetailRelationshipViewModel"
@@ -167,12 +167,12 @@
                     <AspireTemplateColumn Title="@ControlStringsLoc[nameof(ControlsStrings.ViewAction)]" Class="no-ellipsis">
                         <FluentButton Appearance="ButtonAppearance.Transparent" Class="button-hyperlink-no-icon" OnClick="@(() => OnViewRelationshipAsync(context))">@ControlStringsLoc[nameof(ControlsStrings.ViewAction)]</FluentButton>
                     </AspireTemplateColumn>
-                </FluentDataGrid>
+                </DisposalSafeFluentDataGrid>
             </AspirePropertyDetailsAccordionItem>
             <AspirePropertyDetailsAccordionItem Header="@ControlStringsLoc[nameof(ControlsStrings.ResourceHealthChecksHeader)]"
                                                 Count="@FilteredHealthReports.Count()"
                                                 Expanded="@_isHealthChecksExpanded">
-                <FluentDataGrid
+                <DisposalSafeFluentDataGrid
                                 HeaderCellAsButtonWithMenu="true"
                                 ResizeType="DataGridResizeType.Discrete"
                                 ItemsProvider="@EnumerableGridItemsProvider.Create(() => FilteredHealthReports)"
@@ -223,7 +223,7 @@
                             </ContentInButtonArea>
                         </GridValue>
                     </AspireTemplateColumn>
-                </FluentDataGrid>
+                </DisposalSafeFluentDataGrid>
             </AspirePropertyDetailsAccordionItem>
             <AspirePropertyDetailsAccordionItem Header="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsEnvironmentVariablesHeader)]"
                                                 Count="@FilteredEnvironmentVariables.Count()"

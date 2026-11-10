@@ -1343,6 +1343,46 @@ suite('Resource debug service', () => {
         }
     });
 
+    test('reports whether any accepted or started attach session is active', () => {
+        const events = new TestDebugSessionEvents();
+        const sessions = new ResourceDebugSessionRegistry(events);
+        let changeCount = 0;
+        const subscription = sessions.onDidChangeSessions(() => changeCount++);
+        const attempt = sessions.createAttempt(target, 'api', {
+            type: 'coreclr',
+            request: 'attach',
+            name: 'Attach debugger: API',
+        }, {
+            source: 'tree',
+            provider: 'dotnet',
+            resource_type: 'project',
+            requested_strategy: 'attach',
+            effective_strategy: 'attach',
+        });
+
+        try {
+            assert.strictEqual(sessions.hasActiveSessions(), false);
+
+            attempt.markStarted();
+
+            assert.strictEqual(sessions.hasActiveSessions(), true);
+            assert.strictEqual(changeCount, 1);
+
+            events.start(attempt.configuration);
+
+            assert.strictEqual(sessions.hasActiveSessions(), true);
+
+            events.terminate(attempt.configuration);
+
+            assert.strictEqual(sessions.hasActiveSessions(), false);
+            assert.strictEqual(changeCount, 2);
+        }
+        finally {
+            subscription.dispose();
+            sessions.dispose();
+        }
+    });
+
     test('serializes aliases that resolve to the same running AppHost', async () => {
         const canonicalPath = path.resolve('/repo/resolved/AppHost.csproj');
         const firstAlias = path.resolve('/repo/alias-one/AppHost.csproj');
