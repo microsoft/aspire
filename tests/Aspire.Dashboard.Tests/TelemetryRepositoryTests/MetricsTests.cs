@@ -225,6 +225,26 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
     }
 
     [Fact]
+    public async Task GetInstrumentAsync_OutOfOrderEqualDeltasSharingAStoredStart_AreAllKept()
+    {
+        var start = s_testTime.AddMinutes(1);
+        var windowEnd = start.AddSeconds(30);
+
+        // A delta's stored start is the previous export's end, so these exports are stored as [10s, 20s], [20s, 10s]
+        // and [10s, 30s]. The first and last share a start but are different observations.
+        var instrument = await GetDeltaInstrumentAsync(
+            [
+                CreateDeltaPoint(5, start.AddSeconds(10), start.AddSeconds(20)),
+                CreateDeltaPoint(5, start, start.AddSeconds(10)),
+                CreateDeltaPoint(5, start.AddSeconds(20), start.AddSeconds(30))
+            ],
+            start, windowEnd, TimeSpan.FromSeconds(1), includeExemplars: false);
+
+        Assert.True(ChartDataCalculator.TryCalculateDeltaPoint(instrument.Dimensions, new DateTimeOffset(start, TimeSpan.Zero), new DateTimeOffset(windowEnd, TimeSpan.Zero), out var total));
+        Assert.Equal(15, total);
+    }
+
+    [Fact]
     public async Task GetInstrumentAsync_Rollup_SparseDeltaStaysInItsInterval()
     {
         var start = s_testTime.AddMinutes(1);

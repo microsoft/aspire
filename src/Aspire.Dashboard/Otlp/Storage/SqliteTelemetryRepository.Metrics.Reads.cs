@@ -43,8 +43,18 @@ public sealed partial class SqliteTelemetryRepository
         ranked_metric_points AS (
             SELECT
                 p.*,
+                -- Points of a dimension at the same time are the same observation exported again, and the newest one wins.
+                -- A delta number is observed at its end, like in the range filter and rollups. Its stored start is the
+                -- previous export's end, which out-of-order exports can repeat: [10s, 20s], [0s, 10s] then [20s, 30s] are
+                -- stored with starts of 10s, 20s and 10s, and partitioning by start would drop the first one.
                 ROW_NUMBER() OVER (
-                    PARTITION BY p.start_time_unix_nano, p.dimension_id, p.histogram_aggregation_id
+                    PARTITION BY
+                        CASE
+                            WHEN p.point_type <> {HistogramPointType} AND p.aggregation_temporality = {(int)OtlpAggregationTemporality.Delta}
+                                THEN p.end_time_unix_nano
+                            ELSE p.start_time_unix_nano
+                        END,
+                        p.dimension_id, p.histogram_aggregation_id
                     ORDER BY p.point_id DESC) AS point_rank
             FROM selected_metric_points p
         ),
