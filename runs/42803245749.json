@@ -1,0 +1,54 @@
+{
+  "run_id": 42803245749,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/42803245749",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-10T12:25:40Z",
+  "verdict": "main-repository-breakage",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 21949,
+    "title": "Bound and retry GitHub downloads in Kubernetes E2E setup",
+    "author": "davidfowl",
+    "state": "closed",
+    "head_branch": "aspireagent/k8s-e2e-bounded-downloads",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/21949",
+    "merged_at": "2026-11-10T10:55:45Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "031536bc9eea22ee9ce2cc1d31bfd30d0c14cfd2",
+    "failed_sha": "beec6841d07c3b8009d55c73be7dac92bb75f7ac",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "beec6841d07c3b8009d55c73be7dac92bb75f7ac",
+        "message": "Bound and retry GitHub downloads in Kubernetes E2E setup (#21949) **What failed:** `KubernetesDeployWithCertManagerTests.DeployTypeScriptWithExternalAccountBinding` failed on attempt 1 in [41927787281](https://github.com/microsoft/aspire/actions/runs/41927787281) and [42468444499](https://github.com/microsoft/aspire/actions/runs/42468444499). Both failures were network fetches from GitHub during test setup, not in the cert-manager scenario: - **11-04:** the `curl` download of the `kind` binary f",
+        "html_url": "https://github.com/microsoft/aspire/commit/beec6841d07c3b8009d55c73be7dac92bb75f7ac",
+        "pull_request": {
+          "number": 21949,
+          "title": "Bound and retry GitHub downloads in Kubernetes E2E setup",
+          "url": "https://github.com/microsoft/aspire/pull/21949",
+          "merged_at": "2026-11-10T10:55:45Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Run VS Code extension unit tests (Windows) / Run VS Code extension unit tests (Windows)",
+      "id": 129813481636,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/42803245749/job/129813481636",
+      "classification": "main-repository-breakage",
+      "reason": "VS Code extension unit test 'retrying POSIX cleanup after confirmation timeout retains process-group ownership' failed with 4 !== 0; no transient evidence.",
+      "failed_steps": [
+        "Run tests"
+      ]
+    }
+  ],
+  "failed_tests": [],
+  "causes": [
+    "vscode-unit-windows-spawncliprocess-posix-cleanup-retry-ownership"
+  ]
+}

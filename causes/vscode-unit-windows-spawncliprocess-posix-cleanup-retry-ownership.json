@@ -1,0 +1,15 @@
+{
+  "id": "vscode-unit-windows-spawncliprocess-posix-cleanup-retry-ownership",
+  "type": "main-repository-breakage",
+  "title": "VS Code extension Windows unit test 'retrying POSIX cleanup after confirmation timeout retains process-group ownership' fails strict equality 4 !== 0",
+  "error_pattern": "spawnCliProcess tests\nretrying POSIX cleanup after confirmation timeout retains process-group ownership:\nAssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n4 !== 0",
+  "occurrences": [
+    {
+      "run_id": 42803245749,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/42803245749",
+      "job": "Tests / Run VS Code extension unit tests (Windows) / Run VS Code extension unit tests (Windows)",
+      "observed_at": "2026-11-10T12:25:40Z",
+      "pr_number": 0
+    }
+  ]
+}
