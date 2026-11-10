@@ -39,6 +39,13 @@ External HTTP endpoints with an explicit published port default to `http://local
 External HTTP(S) endpoints without a known published port require an explicit input. Internal and non-HTTP(S) endpoint references are rejected.
 Generated input names include a stable suffix for hyphenated endpoint names so different resource/endpoint combinations cannot share an input.
 
+### Dashboard login after deployment
+
+After `aspire deploy`, open the dashboard's mapped host URL from the deployment summary.
+The dashboard login entry includes the output directory and a Compose command scoped to the deployed project and dashboard service to retrieve the login token.
+Copy the token from those logs into the login page at the mapped URL. The URL printed inside the container logs uses the container port, which can differ from the host port.
+The deployment summary does not print the token or change dashboard authentication.
+
 ### Volumes
 
 Use an environment variable so projects and executables can use a local Aspire store directory while Docker Compose mounts the published named volume:

@@ -1,0 +1,10 @@
+﻿{
+  Summary: [
+    {
+      Key: api,
+      Value: http://localhost:23457,
+      EnableMarkdown: false
+    }
+  ],
+  DashboardLogs: []
+}

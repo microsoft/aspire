@@ -406,6 +406,103 @@ public class DockerComposeTests(ITestOutputHelper outputHelper)
         Assert.Contains(stepDependencyLines, msg => msg.Contains("docker-compose-up-env"));
     }
 
+    [Theory]
+    [InlineData(null, 51324, "Docker")]
+    [InlineData(23456, 23456, "Docker")]
+    [InlineData(null, 51324, "Podman")]
+    public async Task DeployWithDashboard_PrintsLoginInstructions(int? hostPort, int publishedPort, string runtimeName)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var reporter = new TestPipelineActivityReporter(outputHelper);
+        var runtime = new FakeContainerRuntime(name: runtimeName)
+        {
+            ComposeServices =
+            [
+                new() { Service = "env-dashboard", Publishers = [new() { TargetPort = 18888, PublishedPort = publishedPort }] },
+                new() { Service = "api", Publishers = [new() { TargetPort = 80, PublishedPort = 23457 }] }
+            ]
+        };
+
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path, step: WellKnownPipelineSteps.Deploy);
+        builder.Configuration["AppHost:PathSha256"] = "ABC123DEF4567890";
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        builder.Services.AddSingleton<IContainerRuntime>(runtime);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(runtime);
+        builder.Services.AddSingleton<IPipelineActivityReporter>(reporter);
+        builder.Services.AddSingleton<IDeploymentStateManager, InMemoryDeploymentStateManager>();
+
+        builder.AddDockerComposeEnvironment("Env")
+            .WithDashboard(dashboard =>
+            {
+                if (hostPort is not null)
+                {
+                    dashboard.WithHostPort(hostPort);
+                }
+            });
+        builder.AddContainer("api", "nginx:alpine")
+            .WithEndpoint(scheme: "http", targetPort: 80, isExternal: true);
+
+        using var app = builder.Build();
+        await app.RunAsync();
+
+        Assert.NotNull(reporter.PipelineSummary);
+        await Verify(new
+        {
+            Summary = reporter.PipelineSummary.OrderBy(item => item.Key),
+            DashboardLogs = reporter.LoggedMessages
+                .Where(log => log.StepTitle == "print-Env-dashboard-summary")
+                .Select(log => log.Message)
+        }).UseParameters(hostPort, publishedPort, runtimeName)
+            .ScrubLinesWithReplace(line => line.Replace(workspace.Path, "<compose-output>", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    public async Task DeployWithoutExposedDashboard_OmitsLoginInstructions(bool dashboardEnabled, bool dashboardExposed)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var reporter = new TestPipelineActivityReporter(outputHelper);
+        var runtime = new FakeContainerRuntime(name: "Docker")
+        {
+            ComposeServices =
+            [
+                new() { Service = "env-dashboard", Publishers = [] },
+                new() { Service = "api", Publishers = [new() { TargetPort = 80, PublishedPort = 23457 }] }
+            ]
+        };
+
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path, step: WellKnownPipelineSteps.Deploy);
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        builder.Services.AddSingleton<IContainerRuntime>(runtime);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(runtime);
+        builder.Services.AddSingleton<IPipelineActivityReporter>(reporter);
+        builder.Services.AddSingleton<IDeploymentStateManager, InMemoryDeploymentStateManager>();
+
+        var environment = builder.AddDockerComposeEnvironment("env")
+            .WithDashboard(dashboard =>
+            {
+                if (!dashboardExposed)
+                {
+                    dashboard.WithHostPort(null);
+                }
+            });
+        environment.WithDashboard(dashboardEnabled);
+        builder.AddContainer("api", "nginx:alpine")
+            .WithEndpoint(scheme: "http", targetPort: 80, isExternal: true);
+
+        using var app = builder.Build();
+        await app.RunAsync();
+
+        await Verify(new
+        {
+            Summary = reporter.PipelineSummary?.OrderBy(item => item.Key),
+            DashboardLogs = reporter.LoggedMessages
+                .Where(log => log.StepTitle == "print-env-dashboard-summary")
+                .Select(log => log.Message)
+        }).UseParameters(dashboardEnabled, dashboardExposed);
+    }
+
     [Fact]
     [RequiresFeature(TestFeature.ContainerRuntime)]
     [ActiveIssue("https://github.com/microsoft/aspire/issues/15078", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningFromAzdo))]

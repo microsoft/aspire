@@ -352,6 +352,16 @@ public class DockerComposeServiceResource : Resource, IResourceWithParent<Docker
             var endpointList = string.Join(", ", endpoints.Select(e => $"[{e}]({e})"));
             context.ReportingStep.Log(LogLevel.Information, new MarkdownString($"Successfully deployed **{TargetResource.Name}** to {endpointList}."));
             context.Summary.Add(TargetResource.Name, string.Join(", ", endpoints));
+
+            if (TargetResource is DockerComposeAspireDashboardResource)
+            {
+                // Include the output directory and env file because Podman's Compose provider
+                // can require the project files even when reading logs from an existing deployment.
+                var command = $"{runtime.Name.ToLowerInvariant()} compose --file docker-compose.yaml --env-file \"{Path.GetFileName(composeContext.EnvFilePath)}\" --project-name {composeContext.ProjectName} logs --tail=50 {TargetResource.Name.ToLowerInvariant()}";
+                var instructions = new MarkdownString($"From `{composeContext.WorkingDirectory}`, run `{command}` to retrieve the dashboard login token. Copy the token from the logs into the login page at {endpointList}; the URL in the container logs uses the container port.");
+                context.ReportingStep.Log(LogLevel.Information, instructions);
+                context.Summary.Add($"{TargetResource.Name} login", instructions);
+            }
         }
         else
         {
