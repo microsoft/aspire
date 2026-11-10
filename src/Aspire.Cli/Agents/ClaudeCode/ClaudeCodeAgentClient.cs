@@ -77,14 +77,11 @@ internal sealed class ClaudeCodeAgentClient(
         return (repaired, added);
     }
 
-    public async Task<TelemetryHookConfigurationResult> ConfigureTelemetryHooksAsync(
-        AgentEnvironment detectedEnvironments, CancellationToken cancellationToken)
+    public AgentEnvironment TelemetryHookEnvironments => AgentEnvironment.ClaudeCode;
+
+    public async Task<TelemetryHookConfigurationResult> ConfigureTelemetryHookAsync(CancellationToken cancellationToken)
     {
-        if (!detectedEnvironments.HasFlag(AgentEnvironment.ClaudeCode))
-        {
-            return TelemetryHookConfigurationResult.None;
-        }
-        var reason = await ConfigureTelemetryHookAsync(cancellationToken);
+        var reason = await WriteTelemetryHookAsync(cancellationToken);
 
         return reason is { } skipReason
             ? new TelemetryHookConfigurationResult([], [new TelemetryHookSkip(this, skipReason)])
@@ -93,7 +90,7 @@ internal sealed class ClaudeCodeAgentClient(
 
     public override string ToString() => Id;
 
-    private async Task<TelemetryHookSkipReason?> ConfigureTelemetryHookAsync(CancellationToken cancellationToken)
+    private async Task<TelemetryHookSkipReason?> WriteTelemetryHookAsync(CancellationToken cancellationToken)
     {
         var claudeDirectory = ClaudeCodePaths.GetConfigDirectory(context, environment);
         var settingsPath = Path.Combine(claudeDirectory, "settings.json");

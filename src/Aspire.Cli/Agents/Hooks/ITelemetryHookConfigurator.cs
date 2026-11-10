@@ -4,17 +4,18 @@
 namespace Aspire.Cli.Agents.Hooks;
 
 /// <summary>
-/// Registers the Aspire agent telemetry <c>PostToolUse</c> hooks into the user-level configuration of
-/// each detected agent environment, mirroring the behavior of the azure-skills plugin hooks. Whether
+/// Registers the Aspire agent telemetry <c>PostToolUse</c> hook once into the user-level configuration of
+/// each eligible agent client, mirroring the behavior of the azure-skills plugin hooks. Whether
 /// telemetry is actually transmitted remains gated by the telemetry opt-out environment variables;
 /// this only wires the hooks up.
 /// </summary>
 internal interface ITelemetryHookConfigurator
 {
     /// <summary>
-    /// Materializes the hook scripts and registers them for each supported, detected agent environment.
+    /// Materializes the hook scripts and registers one hook for each agent client made eligible by a
+    /// detected environment.
     /// </summary>
-    /// <param name="detectedEnvironments">The detected agent environments.</param>
+    /// <param name="detectedEnvironments">The detected agent environments used to decide client eligibility.</param>
     /// <param name="cancellationToken">A token to cancel the operation.</param>
     /// <returns>A summary of which agent clients were configured and which were skipped (and why).</returns>
     Task<TelemetryHookConfigurationResult> ConfigureAsync(

@@ -689,7 +689,8 @@ internal sealed class AgentInitCommand : BaseCommand
         }
 
         // --- Phase 6: Install agent telemetry hooks (default-on, parity with azure-skills) ---
-        // Global setup instruments selected, detected supported environments only. Whether telemetry is actually
+        // Global setup registers one hook per selected agent client that a detected environment makes
+        // eligible. Whether telemetry is actually
         // transmitted stays gated by the single ASPIRE_CLI_TELEMETRY_OPTOUT opt-out, which both the
         // hook scripts and the `aspire agent telemetry` command path re-check at runtime.
         if (scope is AgentConfigurationScope.Global)
