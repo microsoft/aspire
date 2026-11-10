@@ -5,31 +5,25 @@ namespace Aspire.Cli.Agents.Hooks;
 
 internal sealed class TelemetryHookConfigurator(ITelemetryHookInstaller installer) : ITelemetryHookConfigurator
 {
-    public async Task<TelemetryHookConfigurationResult> ConfigureAsync(
+    public async Task<IReadOnlyList<TelemetryHookResult>> ConfigureAsync(
         IReadOnlyList<IAgentClient> selectedClients,
-        AgentEnvironment detectedEnvironments,
         CancellationToken cancellationToken)
     {
-        var eligibleClients = selectedClients
-            .Where(client => client.SupportsTelemetryHooks && (client.Environments & detectedEnvironments) != AgentEnvironment.None)
-            .ToList();
+        var eligibleClients = selectedClients.Where(client => client.SupportsTelemetryHooks).ToList();
         if (eligibleClients.Count == 0)
         {
-            return TelemetryHookConfigurationResult.None;
+            return [];
         }
 
         // Keep compatibility scripts current for existing registrations and older clients.
         await installer.EnsureInstalledAsync(cancellationToken);
 
-        var configured = new List<IAgentClient>();
-        var skipped = new List<TelemetryHookSkip>();
+        var results = new List<TelemetryHookResult>(eligibleClients.Count);
         foreach (var client in eligibleClients)
         {
-            var result = await client.ConfigureTelemetryHookAsync(cancellationToken);
-            configured.AddRange(result.ConfiguredClients);
-            skipped.AddRange(result.Skipped);
+            results.Add(new TelemetryHookResult(client, await client.ConfigureTelemetryHookAsync(cancellationToken)));
         }
 
-        return new TelemetryHookConfigurationResult(configured, skipped);
+        return results;
     }
 }

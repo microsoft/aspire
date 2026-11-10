@@ -11,20 +11,17 @@ internal sealed class TestTelemetryHookConfigurator : ITelemetryHookConfigurator
     public Exception? Exception { get; init; }
 
     /// <summary>
-    /// Builds the result returned for the selected clients. Returns no configured or skipped clients when unset.
+    /// Builds the results returned for the selected clients. Returns no results when unset.
     /// </summary>
-    public Func<IReadOnlyList<IAgentClient>, TelemetryHookConfigurationResult>? ResultFactory { get; init; }
-
-    public IReadOnlyList<IAgentClient> SelectedClients { get; private set; } = [];
+    public Func<IReadOnlyList<IAgentClient>, IReadOnlyList<TelemetryHookResult>>? ResultFactory { get; init; }
 
     /// <summary>
-    /// The detected environments that overlap the selected clients' environments.
+    /// The ids of the clients passed to the most recent <see cref="ConfigureAsync"/> call.
     /// </summary>
-    public AgentEnvironment ConfiguredEnvironments { get; private set; }
+    public IReadOnlyList<string> SelectedClientIds { get; private set; } = [];
 
-    public Task<TelemetryHookConfigurationResult> ConfigureAsync(
+    public Task<IReadOnlyList<TelemetryHookResult>> ConfigureAsync(
         IReadOnlyList<IAgentClient> selectedClients,
-        AgentEnvironment detectedEnvironments,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -33,9 +30,7 @@ internal sealed class TestTelemetryHookConfigurator : ITelemetryHookConfigurator
             throw exception;
         }
 
-        SelectedClients = selectedClients;
-        ConfiguredEnvironments = detectedEnvironments & selectedClients.Aggregate(
-            AgentEnvironment.None, static (environments, client) => environments | client.Environments);
-        return Task.FromResult(ResultFactory?.Invoke(selectedClients) ?? TelemetryHookConfigurationResult.None);
+        SelectedClientIds = [.. selectedClients.Select(static client => client.Id)];
+        return Task.FromResult(ResultFactory?.Invoke(selectedClients) ?? []);
     }
 }

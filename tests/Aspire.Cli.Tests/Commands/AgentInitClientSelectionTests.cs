@@ -118,17 +118,16 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
         var unselectedRoot = scope == "project" ? homeDirectory : workspace.WorkspaceRoot;
         Assert.False(Directory.Exists(Path.Combine(unselectedRoot.FullName, ".agents")));
         Assert.Equal(
-            (configureAspire || configureMcp) && selectedScope is AgentConfigurationScope.Global && detectedEnvironment is { } detected &&
-                defaults.Any(client => (client.Environments & detected) != AgentEnvironment.None) ? detected : AgentEnvironment.None,
-            hooks.ConfiguredEnvironments);
+            (configureAspire || configureMcp) && selectedScope is AgentConfigurationScope.Global ? expectedClients.Split(',') : [],
+            hooks.SelectedClientIds);
     }
 
     [Theory]
-    [InlineData("project", false, 0)]
-    [InlineData("global", false, 0)]
-    [InlineData("project", true, 0)]
-    [InlineData("global", true, 1)]
-    public async Task AgentInit_ExplicitAgents_DetectsOnlyForConsentedGlobalAssets(string scope, bool configureMcp, int expectedScanCount)
+    [InlineData("project", false)]
+    [InlineData("global", false)]
+    [InlineData("project", true)]
+    [InlineData("global", true)]
+    public async Task AgentInit_ExplicitAgents_SkipDetectionAndConfigureHooksOnlyForGlobalAssets(string scope, bool configureMcp)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var homeDirectory = workspace.CreateDirectory("fake-home");
@@ -145,8 +144,8 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
         var result = provider.GetRequiredService<RootCommand>().Parse(
             $"agent init --agents claude --scope {scope} --skills none --mcp={configureMcp}");
         Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
-        Assert.Equal(expectedScanCount, detector.ScanCount);
-        Assert.Equal(expectedScanCount == 1 ? AgentEnvironment.ClaudeCode : AgentEnvironment.None, hooks.ConfiguredEnvironments);
+        Assert.Equal(0, detector.ScanCount);
+        Assert.Equal(scope == "global" && configureMcp ? ["claude"] : [], hooks.SelectedClientIds);
     }
 
     [Theory]
@@ -310,7 +309,7 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
         Assert.Equal(before, GetFilesWithoutCliLogs(workspace.WorkspaceRoot));
         Assert.Empty(homeDirectory.GetFileSystemInfos());
-        Assert.Equal(AgentEnvironment.None, hooks.ConfiguredEnvironments);
+        Assert.Empty(hooks.SelectedClientIds);
     }
 
     [Theory]
@@ -642,6 +641,7 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.CliExecutionContextFactory = _ => executionContext;
+            options.TelemetryHookConfiguratorFactory = _ => new TestTelemetryHookConfigurator();
         });
         services.AddSingleton<IEnvironment>(environment);
         using var provider = services.BuildServiceProvider();
@@ -766,6 +766,7 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.CliExecutionContextFactory = _ => TestExecutionContextHelper.CreateExecutionContext(workspace.WorkspaceRoot, homeDirectory: homeDirectory);
+            options.TelemetryHookConfiguratorFactory = _ => new TestTelemetryHookConfigurator();
         });
         services.AddSingleton<IEnvironment>(new TestEnvironment(new Dictionary<string, string?> { [variable] = value }));
         using var provider = services.BuildServiceProvider();
@@ -1080,7 +1081,10 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
             ["CLAUDE_CONFIG_DIR"] = claude.FullName,
             ["OPENCODE_CONFIG"] = Path.Combine(openCode.FullName, "custom.json")
         });
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.TelemetryHookConfiguratorFactory = _ => new TestTelemetryHookConfigurator();
+        });
         services.AddSingleton<IEnvironment>(environment);
         using var provider = services.BuildServiceProvider();
         var originals = new Dictionary<string, string>();
@@ -1123,6 +1127,7 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.CliExecutionContextFactory = _ => executionContext;
+            options.TelemetryHookConfiguratorFactory = _ => new TestTelemetryHookConfigurator();
         });
         services.AddSingleton<IEnvironment>(environment);
         using var provider = services.BuildServiceProvider();
@@ -1359,23 +1364,55 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData("project")]
     [InlineData("global")]
-    public async Task AgentInit_Hooks_AreLimitedToSelectedDetectedEnvironmentsInGlobalScope(string scope)
+    public async Task AgentInit_Hooks_UseSelectedClientsOnlyInGlobalScope(string scope)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var hooks = new TestTelemetryHookConfigurator();
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
-            options.AgentEnvironmentDetectorFactory = _ => new TestAgentEnvironmentDetector
-            {
-                DetectedEnvironments = AgentEnvironment.CopilotApp | AgentEnvironment.ClaudeCode | AgentEnvironment.OpenCode
-            };
             options.TelemetryHookConfiguratorFactory = _ => hooks;
         });
         using var provider = services.BuildServiceProvider();
 
         var result = provider.GetRequiredService<RootCommand>().Parse($"agent init --agents claude --scope {scope} --skills aspire");
         Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
-        Assert.Equal(scope == "global" ? AgentEnvironment.ClaudeCode : AgentEnvironment.None, hooks.ConfiguredEnvironments);
+        Assert.Equal(scope == "global" ? ["claude"] : [], hooks.SelectedClientIds);
+    }
+
+    [Theory]
+    [InlineData("aspire", false, null, true)]
+    [InlineData("aspire", false, "{}", true)]
+    [InlineData("aspire", false, """{"skillSources":{}}""", true)]
+    [InlineData("aspire", false, """{"skillSources":{"contoso":{"repository":"contoso/skills"}}}""", true)]
+    [InlineData("aspire", false, """{"skillSources":{"default":{"enabled":false},"contoso":{"repository":"contoso/skills"}}}""", false)]
+    [InlineData("aspire", false, """{"skillSources":{"default":{"plugins":["other"]}}}""", false)]
+    [InlineData("aspire", true, """{"skillSources":{"default":{"enabled":false},"contoso":{"repository":"contoso/skills"}}}""", true)]
+    [InlineData("none", true, null, true)]
+    [InlineData("playwright-cli", false, null, false)]
+    public async Task AgentInit_Hooks_RequireAspireSkillsPluginOrMcp(string skills, bool mcp, string? config, bool expectHooks)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        if (config is not null)
+        {
+            await File.WriteAllTextAsync(Path.Combine(workspace.WorkspaceRoot.FullName, "aspire.config.json"), config);
+        }
+        var hooks = new TestTelemetryHookConfigurator();
+        var playwrightVersion = SemVersion.Parse("0.1.3", SemVersionStyles.Strict);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.TelemetryHookConfiguratorFactory = _ => hooks;
+            options.NpmRunnerFactory = _ => new FakeNpmRunner
+            {
+                ResolvePackageAsyncCallback = (_, _, _) => Task.FromResult<NpmPackageInfo?>(new NpmPackageInfo { Version = playwrightVersion })
+            };
+            options.PlaywrightCliRunnerFactory = _ => new FakePlaywrightCliRunner { InstalledVersion = playwrightVersion };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var result = provider.GetRequiredService<RootCommand>().Parse(
+            $"agent init --agents claude --scope global --skills {skills} --mcp={mcp.ToString().ToLowerInvariant()}");
+        Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
+        Assert.Equal(expectHooks ? ["claude"] : [], hooks.SelectedClientIds);
     }
 
     [Fact]
@@ -1428,7 +1465,6 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
         {
             options.CliExecutionContextFactory = _ => context.ExecutionContext;
             options.InteractionServiceFactory = _ => interaction;
-            options.AgentEnvironmentDetectorFactory = _ => new TestAgentEnvironmentDetector { DetectedEnvironments = AgentEnvironment.CopilotCli };
             options.NpmRunnerFactory = _ => new FakeNpmRunner { IsAvailable = false };
             options.TelemetryHookConfiguratorFactory = _ => hooks;
         });
@@ -1461,7 +1497,7 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
             Assert.True(File.Exists(context.Copilot.GetIntegrationConfigPath(AgentConfigurationScope.Global, context.Project)));
             Assert.True(File.Exists(context.Copilot.GetMcpConfigPath(AgentConfigurationScope.Global, context.Project)));
             Assert.False(File.Exists(context.ClaudeCode.GetIntegrationConfigPath(AgentConfigurationScope.Global, context.Project)));
-            Assert.Equal(AgentEnvironment.CopilotCli, hooks.ConfiguredEnvironments);
+            Assert.Equal(["copilot"], hooks.SelectedClientIds);
         }
         else
         {
@@ -1471,12 +1507,12 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
                 var mcpPath = context.Copilot.GetMcpConfigPath(AgentConfigurationScope.Global, context.Project);
                 Assert.Equal(before.Append(mcpPath).Order(StringComparer.Ordinal),
                     GetFilesWithoutCliLogs(context.Workspace.WorkspaceRoot));
-                Assert.Equal(AgentEnvironment.CopilotCli, hooks.ConfiguredEnvironments);
+                Assert.Equal(["copilot"], hooks.SelectedClientIds);
             }
             else
             {
                 Assert.Equal(before, GetFilesWithoutCliLogs(context.Workspace.WorkspaceRoot));
-                Assert.Equal(AgentEnvironment.None, hooks.ConfiguredEnvironments);
+                Assert.Empty(hooks.SelectedClientIds);
             }
         }
     }

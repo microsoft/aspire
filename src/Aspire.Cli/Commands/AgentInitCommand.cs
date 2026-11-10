@@ -317,14 +317,6 @@ internal sealed class AgentInitCommand : BaseCommand
         PromptBinding<bool>? mcpBinding,
         CancellationToken cancellationToken)
     {
-        var context = new AgentEnvironmentScanContext
-        {
-            WorkingDirectory = ExecutionContext.WorkingDirectory,
-            RepositoryRoot = workspaceRoot
-        };
-
-        AgentEnvironment? detectedEnvironments = null;
-
         var (agentsProvided, requestedAgents) = agentsBinding.Resolve();
         IReadOnlyList<IAgentClient> selectedClients;
         if (agentsProvided && requestedAgents is not null)
@@ -342,7 +334,12 @@ internal sealed class AgentInitCommand : BaseCommand
         }
         else
         {
-            detectedEnvironments = await InteractionService.ShowStatusAsync(
+            var context = new AgentEnvironmentScanContext
+            {
+                WorkingDirectory = ExecutionContext.WorkingDirectory,
+                RepositoryRoot = workspaceRoot
+            };
+            var detectedEnvironments = await InteractionService.ShowStatusAsync(
                 McpCommandStrings.InitCommand_DetectingAgentEnvironments,
                 async () => await _agentEnvironmentDetector.DetectAsync(context, cancellationToken),
                 emoji: KnownEmojis.Robot);
@@ -350,7 +347,7 @@ internal sealed class AgentInitCommand : BaseCommand
             // Shared discovery does not authorize configuring another agent. Defaults
             // express detected agent use, independently of assets and their destinations.
             var defaultClients = _clients
-                .Where(client => (client.Environments & detectedEnvironments.Value) != AgentEnvironment.None).ToArray();
+                .Where(client => (client.Environments & detectedEnvironments) != AgentEnvironment.None).ToArray();
             if (defaultClients.Length == 0)
             {
                 defaultClients = [_clients.Single(client => string.Equals(client.Id, CopilotAgentClient.ClientId, StringComparisons.AgentClientId))];
@@ -522,15 +519,6 @@ internal sealed class AgentInitCommand : BaseCommand
                 cancellationToken: cancellationToken);
         }
 
-        if (scope is AgentConfigurationScope.Global && detectedEnvironments is null)
-        {
-            // Capture hook evidence before configuration can create new detection markers.
-            detectedEnvironments = await InteractionService.ShowStatusAsync(
-                McpCommandStrings.InitCommand_DetectingAgentEnvironments,
-                async () => await _agentEnvironmentDetector.DetectAsync(context, cancellationToken),
-                emoji: KnownEmojis.Robot);
-        }
-
         List<SkillDefinition> selectedSkills = [];
         var hasErrors = false;
         if (playwright)
@@ -550,12 +538,27 @@ internal sealed class AgentInitCommand : BaseCommand
                 .Select(client => client.GetSkillBaseDirectory(scope, workspaceRoot)));
         }
 
+        // The telemetry hooks only classify skills shipped by the aspire@aspire-skills plugin and Aspire MCP
+        // tool usage, so a client's hook is installed only after this run registers that plugin or configures
+        // the Aspire MCP server for the client. Selecting the aspire skill choice is not enough on its own:
+        // skill sources can disable the default source or replace its plugins with ones the hooks do not
+        // report on. Third-party skills (playwright-cli, dotnet-inspect) alone produce no events either.
+        var aspireConfiguredClients = new HashSet<IAgentClient>();
         IReadOnlyList<AgentTargetResult> registrationResults = [];
         if (configureAspire)
         {
             cancellationToken.ThrowIfCancellationRequested();
             registrationResults = await AgentConfiguration.ApplyRemoteAsync(selectedClients, workspaceRoot, scope, skillSources, cancellationToken);
             hasErrors |= DisplayRemoteConfigurationResults(registrationResults, workspaceRoot);
+
+            var registersAspireSkillsPlugin = skillSources.Any(static source =>
+                source.GetPluginNames().Contains(AspireSkillsRemoteConfiguration.PluginName, StringComparer.Ordinal));
+            if (registersAspireSkillsPlugin)
+            {
+                aspireConfiguredClients.UnionWith(registrationResults
+                    .Where(static result => result.Status is not AgentConfigurationStatus.Failed)
+                    .SelectMany(static result => result.Clients));
+            }
         }
 
         // --- Phase 3: Apply copied skill files at each unique destination ---
@@ -674,6 +677,8 @@ internal sealed class AgentInitCommand : BaseCommand
                     {
                         InteractionService.DisplayMessage(emoji, message);
                     }
+
+                    aspireConfiguredClients.UnionWith(targets.Select(static target => target.Client));
                 }
                 catch (Exception ex) when (ex is InvalidOperationException or IOException or UnauthorizedAccessException)
                 {
@@ -689,13 +694,14 @@ internal sealed class AgentInitCommand : BaseCommand
         }
 
         // --- Phase 6: Install agent telemetry hooks (default-on, parity with azure-skills) ---
-        // Global setup registers one hook per selected agent client that a detected environment makes
-        // eligible. Whether telemetry is actually transmitted stays gated by the single
+        // Global setup registers one user-level hook per selected client whose Aspire configuration
+        // succeeded. Whether telemetry is actually transmitted stays gated by the single
         // ASPIRE_CLI_TELEMETRY_OPTOUT opt-out, which both the hook scripts and the
         // `aspire agent telemetry` command path re-check at runtime.
-        if (scope is AgentConfigurationScope.Global)
+        var telemetryHookClients = selectedClients.Where(aspireConfiguredClients.Contains).ToList();
+        if (scope is AgentConfigurationScope.Global && telemetryHookClients.Count > 0)
         {
-            await ConfigureTelemetryHooksAsync(selectedClients, detectedEnvironments.GetValueOrDefault(), cancellationToken);
+            await ConfigureTelemetryHooksAsync(telemetryHookClients, cancellationToken);
         }
 
         if (hasErrors)
@@ -719,13 +725,12 @@ internal sealed class AgentInitCommand : BaseCommand
 
     private async Task ConfigureTelemetryHooksAsync(
         IReadOnlyList<IAgentClient> selectedClients,
-        AgentEnvironment detectedEnvironments,
         CancellationToken cancellationToken)
     {
-        TelemetryHookConfigurationResult result;
+        IReadOnlyList<TelemetryHookResult> results;
         try
         {
-            result = await _telemetryHookConfigurator.ConfigureAsync(selectedClients, detectedEnvironments, cancellationToken);
+            results = await _telemetryHookConfigurator.ConfigureAsync(selectedClients, cancellationToken);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -737,22 +742,26 @@ internal sealed class AgentInitCommand : BaseCommand
             return;
         }
 
-        if (result.ConfiguredClients.Count > 0)
+        var configuredNames = results
+            .Where(result => result.Status is TelemetryHookStatus.Configured)
+            .Select(result => result.Client.DisplayName)
+            .ToList();
+        if (configuredNames.Count > 0)
         {
-            var clientNames = string.Join(", ", result.ConfiguredClients.Select(client => client.DisplayName));
             InteractionService.DisplayMessage(
                 KnownEmojis.BarChart,
-                string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_TelemetryHooksInstalled, clientNames));
+                string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_TelemetryHooksInstalled, string.Join(", ", configuredNames)));
         }
 
-        foreach (var skip in result.Skipped)
+        foreach (var result in results.Where(result => result.Status is not TelemetryHookStatus.Configured))
         {
-            var clientName = skip.Client.DisplayName;
-            var message = skip.Reason switch
+            var clientName = result.Client.DisplayName;
+            var message = result.Status switch
             {
-                TelemetryHookSkipReason.MalformedConfig => string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_TelemetryHookSkippedMalformedConfig, clientName),
-                TelemetryHookSkipReason.UnexpectedConfigShape => string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_TelemetryHookSkippedUnexpectedShape, clientName),
-                _ => string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_TelemetryHookWriteFailed, clientName),
+                TelemetryHookStatus.MalformedConfig => string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_TelemetryHookSkippedMalformedConfig, clientName),
+                TelemetryHookStatus.UnexpectedConfigShape => string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_TelemetryHookSkippedUnexpectedShape, clientName),
+                TelemetryHookStatus.WriteFailed => string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_TelemetryHookWriteFailed, clientName),
+                _ => throw new UnreachableException($"Unexpected telemetry hook status: {result.Status}"),
             };
 
             // Skips are surfaced to the user but never treated as command failures: a user-owned
