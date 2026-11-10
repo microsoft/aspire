@@ -180,6 +180,21 @@ public class ProgramTests(ITestOutputHelper outputHelper)
         Assert.False(Program.ShouldDiscardLogOnSuccess(CliExitCodes.Success, cancellationRequested: true, parseResult));
     }
 
+    [Theory]
+    [InlineData("--version --log-level bogus")]
+    [InlineData("--version --log-file")]
+    [InlineData("ps --help --log-level bogus")]
+    [InlineData("describe --help --log-level bogus")]
+    public void ShouldDiscardLogOnSuccess_KeepsLog_WhenDiagnosticOptionValueIsInvalid(string commandLine)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+        var parseResult = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>().Parse(commandLine.Split(' '));
+
+        Assert.False(Program.ShouldDiscardLogOnSuccess(CliExitCodes.Success, cancellationRequested: false, parseResult));
+    }
+
     [Fact]
     public void BuildAnsiConsole_DoesNotReenablePlaygroundFormatting_WhenHostDisablesAnsi()
     {

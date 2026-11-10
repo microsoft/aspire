@@ -175,16 +175,20 @@ public class Program
     /// separately so a cancelled run that still reports success keeps its log.
     /// </summary>
     /// <remarks>
-    /// The diagnostic options are read from the parse result rather than the raw-argument pre-parse in
+    /// The diagnostic options are checked in the parse result rather than the raw-argument pre-parse in
     /// <see cref="ParseLoggingOptions"/>, which only recognizes the space-separated form, so inline forms
-    /// such as <c>--log-level=Debug</c> also keep the log.
+    /// such as <c>--log-level=Debug</c> also keep the log. Only explicitly passed options count, and their
+    /// values are never read. Help and version actions clear parse errors and return success, so an invalid
+    /// value such as <c>--log-level bogus</c> or a bare <c>--log-file</c> can reach this check, where reading
+    /// the value would throw. Implicit results are skipped because System.CommandLine creates one for options
+    /// with a default value, such as <c>--debug</c>.
     /// </remarks>
     internal static bool ShouldDiscardLogOnSuccess(int exitCode, bool cancellationRequested, ParseResult parseResult)
         => exitCode == CliExitCodes.Success
             && !cancellationRequested
-            && !parseResult.GetValue(RootCommand.DebugOption)
-            && parseResult.GetValue(RootCommand.DebugLevelOption) is null
-            && parseResult.GetValue(RootCommand.s_logFileOption) is null
+            && parseResult.GetResult(RootCommand.DebugOption) is not { Implicit: false }
+            && parseResult.GetResult(RootCommand.DebugLevelOption) is not { Implicit: false }
+            && parseResult.GetResult(RootCommand.s_logFileOption) is not { Implicit: false }
             && parseResult.CommandResult.Command is BaseCommand command
             && command.DiscardsLogOnSuccess(parseResult);
 
