@@ -604,6 +604,19 @@
     text-align: center;
 }
 
+/* In compact rows the state dots form a column at the end of each row, so a group's count badge is centered over that
+   column rather than sitting 9px to its right. The header and its rows end differently: a row's dot center is 49px
+   from the row's edge (12px action rail margin + 20px rail + 4px row gap + 8px link padding + half the 10px dot),
+   while the header's badge center is 40px (2px chevron margin + 20px chevron + 8px link padding + half the 20px
+   badge). A wider badge, for a two-digit count, grows to the left and sits a few pixels off center. Only where rows
+   can be hovered: on touch screens the action rail is always showing, which moves the dots further in, and the full
+   canvas lays its rows out as a table. */
+@media (hover: hover) {
+    .resources-layout:not(.pane-full-canvas) .density-compact .resource-tag-count {
+        margin-inline-end: 9px;
+    }
+}
+
 /* Rows of a group are indented under its header so the grouping reads at a glance. */
 .resource-tag-group .resource-row-link {
     padding-inline-start: calc(var(--resource-row-icon-offset) + 8px);
