@@ -501,15 +501,25 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
             """;
         // Opt-out suppresses emission, but global setup still registers the CLI hook.
         var expectedClaudeGlobalSettings = JsonNode.Parse(expectedPluginSettings)!;
+        var hookExecutable = JsonSerializer.Serialize(executablePath);
         expectedClaudeGlobalSettings["hooks"] = JsonNode.Parse($$"""
             {
               "PostToolUse": [{
-                "matcher": "*",
+                "matcher": "^(?:Skill|aspire-.+|mcp__aspire__.+|mcp_aspire_.+)$",
                 "hooks": [{
                   "type": "command",
-                  "command": {{JsonSerializer.Serialize(executablePath)}},
+                  "command": {{hookExecutable}},
                   "args": ["agent", "telemetry", "--hook"],
                   "timeout": 30
+                }]
+              }, {
+                "matcher": "^Read$",
+                "hooks": [{
+                  "type": "command",
+                  "command": {{hookExecutable}},
+                  "args": ["agent", "telemetry", "--hook"],
+                  "timeout": 30,
+                  "if": "Read(//**/skills/aspire*/**)"
                 }]
               }]
             }
