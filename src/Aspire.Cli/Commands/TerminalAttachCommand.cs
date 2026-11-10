@@ -118,7 +118,7 @@ internal sealed class TerminalAttachCommand : BaseCommand
 
         if (!replica.IsAlive)
         {
-            _interactionService.DisplayMessage(KnownEmojis.Warning,
+            _interactionService.DisplayMessage(KnownEmojis.PoliceCarLight,
                 string.Format(CultureInfo.CurrentCulture,
                     "Replica {0} of '{1}' has exited (code {2}). Attaching to the historical buffer; no live input will be sent.",
                     replica.ReplicaIndex,

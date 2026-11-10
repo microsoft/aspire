@@ -6,7 +6,13 @@ using Azure.Provisioning.AppContainers;
 
 [assembly: GenerateAspireProvisioningProxy(
     typeof(ContainerAppManagedEnvironment),
-    IncludeContainingAssemblyTypes = true)]
+    IncludeContainingAssemblyTypes = true,
+    // These SDK properties require raw JSON collections and arbitrary resource wrapping,
+    // neither of which has a supported provisioning proxy representation.
+    ExcludedMemberNames = [
+        "Azure.Provisioning.AppContainers.ContainerAppDiagnosticDataTableResult.Rows",
+        "Azure.Provisioning.AppContainers.LogicApp.Scope"
+    ])]
 // Publish callbacks use synthetic hosting resource identifiers rather than the app or job identifier.
 [assembly: GenerateAspireProvisioningProxy(typeof(ContainerApp), IsInfrastructureRoot = false)]
 [assembly: GenerateAspireProvisioningProxy(typeof(ContainerAppJob), IsInfrastructureRoot = false)]

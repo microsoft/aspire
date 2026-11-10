@@ -142,6 +142,11 @@ internal static class GoApiExportWriter
         AddIfPresent(json, "returns", member.Returns);
         AddIfPresent(json, "jsonName", member.JsonName);
         AddIfPresent(json, "value", member.Value);
+        if (member.Kind is GoApiMemberKind.Field or GoApiMemberKind.Constant)
+        {
+            json["type"] = member.DeclaredType;
+            json["optional"] = member.IsOptional;
+        }
         AddIfTrue(json, "returnsReceiver", member.ReturnsReceiver);
         AddIfTrue(json, "returnsBuilder", member.ReturnsBuilder);
         AddIfTrue(json, "synthesized", member.IsSynthesized);

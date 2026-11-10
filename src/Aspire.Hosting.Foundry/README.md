@@ -14,7 +14,11 @@ From your AppHost directory, add the `Aspire.Hosting.Foundry` integration with t
 
 ```bash
 aspire add Aspire.Hosting.Foundry
+aspire add Aspire.Hosting.Dotnet
 ```
+
+Foundry's own
+`AddProject` / `addProject` APIs model Foundry projects and are unrelated to .NET service hosting.
 
 ## Configure Azure Provisioning for local development
 
@@ -38,7 +42,7 @@ In the AppHost, add a Microsoft Foundry deployment and reference it from another
 var chat = builder.AddFoundry("foundry")
                   .AddDeployment("chat", "Phi-4", "1", "Microsoft");
 
-var myService = builder.AddProject<Projects.MyService>()
+var myService = builder.AddDotnetProject("myservice", "../MyService/MyService.csproj")
                        .WithReference(chat);
 ```
 
@@ -51,6 +55,9 @@ const chat = await builder.addFoundry("foundry")
 const myService = await builder.addNodeApp("myService", "../my-service", "server.js")
                        .withReference(chat);
 ```
+
+Browser-origin endpoint properties for hosted agents use the deployed project's public authority.
+The origin excludes the project's `/api/projects/<name>` and agent navigation paths; it is emitted as a deployment output rather than derived from local endpoint allocation.
 
 ## Foundry Local usage
 
@@ -224,7 +231,7 @@ var toolbox = project.AddToolbox("field-tools")
             }
         });
 
-builder.AddProject<Projects.MyService>("service")
+builder.AddDotnetProject("service", "../MyService/MyService.csproj")
     .WithReference(toolbox)
     .WaitFor(toolbox);
 ```

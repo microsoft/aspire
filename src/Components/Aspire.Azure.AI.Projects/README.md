@@ -115,13 +115,14 @@ Install `Aspire.Hosting.Foundry` in the AppHost and reference the project from t
 
 ```dotnetcli
 dotnet add package Aspire.Hosting.Foundry
+dotnet add package Aspire.Hosting.Dotnet
 ```
 
 ```csharp
 var foundry = builder.AddFoundry("foundry");
 var project = foundry.AddProject("ai");
 
-builder.AddProject<Projects.MyApp>("app")
+builder.AddDotnetProject("app", "../MyApp/MyApp.csproj")
     .WithReference(foundry)
     .WithReference(project);
 ```

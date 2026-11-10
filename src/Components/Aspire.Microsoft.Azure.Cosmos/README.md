@@ -144,16 +144,19 @@ In your AppHost project, install the Aspire Azure CosmosDB Hosting library with 
 
 ```dotnetcli
 dotnet add package Aspire.Hosting.Azure.CosmosDB
+dotnet add package Aspire.Hosting.Dotnet
 ```
 
 Then, in the _AppHost.cs_ file of `AppHost`, add a Cosmos DB connection and consume the connection using the following methods:
 
 ```csharp
-var cosmosdb = builder.ExecutionContext.IsPublishMode
+using Aspire.Hosting.ApplicationModel;
+
+IResourceBuilder<IResourceWithConnectionString> cosmosdb = builder.ExecutionContext.IsPublishMode
     ? builder.AddAzureCosmosDB("cdb").AddCosmosDatabase("cosmosdb")
     : builder.AddConnectionString("cosmosdb");
 
-var myService = builder.AddProject<Projects.MyService>()
+var myService = builder.AddDotnetProject("myservice", "../MyService/MyService.csproj")
                        .WithReference(cosmosdb);
 ```
 

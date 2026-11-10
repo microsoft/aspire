@@ -19,6 +19,22 @@ The GitHub Actions test workflow builds native CLI archives per OS/RID and uploa
 
 These PR artifacts are useful for validation and dogfooding, but they are not the final official signed release artifacts.
 
+## Shared bundle validation
+
+Validate packaging and signing against the outputs of the producing build,
+not replacement projects or private MSBuild targets in `Infrastructure.Tests`.
+The native jobs verify packaged Dashboard and TerminalHost behavior and compare
+the CLI archive with its tool and npm packages. Official builds additionally
+exercise real signing and notarization; unsigned GitHub artifacts cannot
+establish those contracts.
+
+The deployment workflow consumes a different build mode: it invokes
+`eng/Bundle.proj` with `BuildDistributionPackages` omitted, producing a
+standalone CLI rather than distribution packages. Validate that path with a
+Linux build and inspect the resulting CLI and extracted bundle. A successful
+distribution-mode build alone does not establish this contract, and validating
+the build does not require deploying to Azure.
+
 ## Internal signed builds
 
 The internal Azure DevOps `build_sign_native` stage is responsible for producing signed native CLI artifacts. Windows and macOS native jobs run with code signing enabled so each OS/arch-specific native executable can be signed or notarized on the appropriate platform.
@@ -26,6 +42,24 @@ The internal Azure DevOps `build_sign_native` stage is responsible for producing
 MicroBuild treats each CLI archive as a signing container. It extracts signable nested files such as `aspire.exe`, `aspire`, and native libraries to `artifacts/tmp/<Configuration>/ContainerSigning`, signs them, and writes the signed streams back into the archive. It does not update Arcade's original `PublishToDisk` staging directory.
 
 Because of that, the archive is the canonical payload after signing. Consumers that need the final native CLI binary should read it from the signed archive, not from `artifacts/obj/.../output` or another intermediate staging directory.
+
+### macOS tray notarization checks
+
+`src/Aspire.Tray/Mac/Aspire.Tray.Mac.csproj` staples and validates the restored,
+notarized tray app. `tools/CreateLayout/verify-tray-payload.sh` validates it again
+after extracting the packaged payload, between signature verification and
+Gatekeeper assessment. Both use `tools/CreateLayout/macos-stapler-with-retry.sh`.
+
+Apple's `stapler` requires internet access for both operations. The helper retries
+only failures containing `Error Domain=NSURLErrorDomain Code=-1005` (connection
+lost), with four total attempts and 5, 15, and 30 second delays. Each attempt's
+output and each retry are logged. Other failures stop immediately; exit 68 alone
+is not retryable because it can also mean missing notarization or an unexpected
+ticket-service response. Exhaustion propagates the final failing exit code.
+
+Retries repeat only the failed stapler operation, not signing, notarization
+submission, or the build. All signature, ticket, and Gatekeeper checks remain
+required; a network failure never turns verification into success.
 
 ## Dotnet-tool package signing constraints
 
@@ -36,6 +70,29 @@ If the macOS job produced a tool `.nupkg` from an unsigned binary and the main W
 The tool packaging flow therefore extracts the signed `aspire` binary from the signed native archive and packs that into the RID-specific tool `.nupkg`. This produces an unsigned `.nupkg` that contains the signed `aspire` CLI; the `.nupkg` itself is signed later by the main Windows job.
 
 Linux native jobs do not sign ELF binaries in `build_sign_native`. For Linux, extracting from the native archive gives the same unsigned ELF payload, and the resulting NuGet packages are signed later as packages by the main Windows build.
+
+## Native AOT Dashboard package signing
+
+The official Assemble job stages the three Linux Dashboard SDK NuGet packages
+before its Windows signing pass because Linux native jobs skip signing.
+Windows/macOS Dashboard packages are staged afterward so their signed producer
+outputs are preserved.
+
+NuGet signing follows `PostBuildSign` in
+[`common-variables.yml`](../../eng/pipelines/common-variables.yml):
+release-branch and manually queued official builds set it to `false`, enabling
+Arcade's default package-signing inputs. Automatic main builds set it to `true`,
+excluding NuGet packages from in-build signing; native executable and npm
+signing are selected separately.
+
+Assembly checks that all seven Dashboard packages reached `Shipping`. When real
+signing is enabled and `PostBuildSign` is not `true`, it also verifies every final
+NuGet release package's signature before publishing, including Dashboard, CLI,
+and managed packages. This matches package-signing selection
+rather than assuming that a real-signed build signs every artifact. The unsigned
+`*.symbols.nupkg` files are excluded because they are symbol-server inputs, not
+NuGet release packages. See the Assemble job in
+[`azure-pipelines.yml`](../../eng/pipelines/azure-pipelines.yml).
 
 ## Nix flake packaging
 

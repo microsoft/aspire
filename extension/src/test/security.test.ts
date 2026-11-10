@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 import { X509Certificate } from 'crypto';
 import forge from 'node-forge';
-import { createSelfSignedCertAsync, generateCertificateSerialNumber, generateToken } from '../utils/security';
+import { certificateBase64ToPem, createSelfSignedCertAsync, generateCertificateSerialNumber, generateToken } from '../utils/security';
 
 suite('Security utilities', () => {
     test('createSelfSignedCertAsync generates a valid certificate', async () => {
@@ -34,6 +34,15 @@ suite('Security utilities', () => {
             const serialHex = x509.serialNumber.replace(/:/g, '');
             assert.ok(/^[0-9a-fA-F]+$/.test(serialHex), `Iteration ${i}: Serial number should be valid hex`);
         }
+    });
+
+    test('certificateBase64ToPem converts the base64 DER certificate to the same PEM certificate', async () => {
+        const result = await createSelfSignedCertAsync();
+
+        const pem = certificateBase64ToPem(result.certBase64);
+
+        assert.ok(pem.startsWith('-----BEGIN CERTIFICATE-----'), 'Should be in PEM format');
+        assert.ok(new X509Certificate(pem).raw.equals(new X509Certificate(result.cert).raw), 'Should describe the same certificate');
     });
 
     test('generateCertificateSerialNumber emits a serial that OpenSSL can parse', () => {

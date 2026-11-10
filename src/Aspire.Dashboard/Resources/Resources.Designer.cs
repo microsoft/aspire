@@ -10,8 +10,8 @@
 
 namespace Aspire.Dashboard.Resources {
     using System;
-
-
+    
+    
     /// <summary>
     ///   A strongly-typed resource class, for looking up localized strings, etc.
     /// </summary>
@@ -23,15 +23,15 @@ namespace Aspire.Dashboard.Resources {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
     public class Resources {
-
+        
         private static global::System.Resources.ResourceManager resourceMan;
-
+        
         private static global::System.Globalization.CultureInfo resourceCulture;
-
+        
         [global::System.Diagnostics.CodeAnalysis.SuppressMessageAttribute("Microsoft.Performance", "CA1811:AvoidUncalledPrivateCode")]
-        internal Resources() {
+        public Resources() {
         }
-
+        
         /// <summary>
         ///   Returns the cached ResourceManager instance used by this class.
         /// </summary>
@@ -45,7 +45,7 @@ namespace Aspire.Dashboard.Resources {
                 return resourceMan;
             }
         }
-
+        
         /// <summary>
         ///   Overrides the current thread's CurrentUICulture property for all
         ///   resource lookups using this strongly typed resource class.
@@ -59,34 +59,7 @@ namespace Aspire.Dashboard.Resources {
                 resourceCulture = value;
             }
         }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Persistent.
-        /// </summary>
-        public static string ResourcePersistentLifetime {
-            get {
-                return ResourceManager.GetString("ResourcePersistentLifetime", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Not automatically stopped when the AppHost stops. This lifetime does not guarantee durable data..
-        /// </summary>
-        public static string ResourcePersistentLifetimeDescription {
-            get {
-                return ResourceManager.GetString("ResourcePersistentLifetimeDescription", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to {0} (persistent).
-        /// </summary>
-        public static string ResourcePersistentType {
-            get {
-                return ResourceManager.GetString("ResourcePersistentType", resourceCulture);
-            }
-        }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Graph.
         /// </summary>
@@ -95,16 +68,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("GraphPageTitle", resourceCulture);
             }
         }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Layout.
-        /// </summary>
-        public static string LayoutLabel {
-            get {
-                return ResourceManager.GetString("LayoutLabel", resourceCulture);
-            }
-        }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to {0} (just now).
         /// </summary>
@@ -113,7 +77,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("HealthCheckStatusJustNowFormat", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to {0} ({1} ago).
         /// </summary>
@@ -122,7 +86,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("HealthCheckStatusWithTimeFormat", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to {0} (last run at {1}).
         /// </summary>
@@ -131,7 +95,151 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("HealthCheckStatusWithTimeTooltipFormat", resourceCulture);
             }
         }
-
+        
+        /// <summary>
+        ///   Looks up a localized string similar to {0} · {1} requests, {2} failed.
+        /// </summary>
+        public static string HomeActivityBucketTooltip {
+            get {
+                return ResourceManager.GetString("HomeActivityBucketTooltip", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Requests per 30 seconds over the last 15 minutes.
+        /// </summary>
+        public static string HomeActivityChartLabel {
+            get {
+                return ResourceManager.GetString("HomeActivityChartLabel", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Loading activity….
+        /// </summary>
+        public static string HomeActivityLoading {
+            get {
+                return ResourceManager.GetString("HomeActivityLoading", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Waiting for requests. Interact with your app to see live traffic..
+        /// </summary>
+        public static string HomeActivityWaiting {
+            get {
+                return ResourceManager.GetString("HomeActivityWaiting", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Incoming requests · last 15 min.
+        /// </summary>
+        public static string HomeActivityWindow {
+            get {
+                return ResourceManager.GetString("HomeActivityWindow", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to now.
+        /// </summary>
+        public static string HomeActivityWindowEnd {
+            get {
+                return ResourceManager.GetString("HomeActivityWindowEnd", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to 15 min ago.
+        /// </summary>
+        public static string HomeActivityWindowStart {
+            get {
+                return ResourceManager.GetString("HomeActivityWindowStart", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Busiest resources.
+        /// </summary>
+        public static string HomeBusiestResources {
+            get {
+                return ResourceManager.GetString("HomeBusiestResources", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to {0}: {1} ({2} requests).
+        /// </summary>
+        public static string HomeEndpointTooltip {
+            get {
+                return ResourceManager.GetString("HomeEndpointTooltip", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Error hotspots.
+        /// </summary>
+        public static string HomeErrorHotspots {
+            get {
+                return ResourceManager.GetString("HomeErrorHotspots", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to failed requests + error logs.
+        /// </summary>
+        public static string HomeErrorHotspotsHint {
+            get {
+                return ResourceManager.GetString("HomeErrorHotspotsHint", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to {0} error logs.
+        /// </summary>
+        public static string HomeErrorLogCount {
+            get {
+                return ResourceManager.GetString("HomeErrorLogCount", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to error rate.
+        /// </summary>
+        public static string HomeErrorRate {
+            get {
+                return ResourceManager.GetString("HomeErrorRate", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to {0} failed.
+        /// </summary>
+        public static string HomeFailedCount {
+            get {
+                return ResourceManager.GetString("HomeFailedCount", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to {0} failed requests.
+        /// </summary>
+        public static string HomeFailedRequestCount {
+            get {
+                return ResourceManager.GetString("HomeFailedRequestCount", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Finished.
+        /// </summary>
+        public static string HomeFinishedLabel {
+            get {
+                return ResourceManager.GetString("HomeFinishedLabel", resourceCulture);
+            }
+        }
+        
         /// <summary>
         ///   Looks up a localized string similar to All {0} resources are running.
         /// </summary>
@@ -140,7 +248,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("HomeHeadlineAllRunning", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to {0} of {1} resources need attention.
         /// </summary>
@@ -149,7 +257,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("HomeHeadlineAttention", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to No resources need attention.
         /// </summary>
@@ -158,7 +266,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("HomeHeadlineHealthy", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to {0} of {1} resources are pending.
         /// </summary>
@@ -167,16 +275,70 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("HomeHeadlinePending", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Inactive.
+        ///   Looks up a localized string similar to 1 resource needs attention.
         /// </summary>
-        public static string HomeInactiveLabel {
+        public static string HomeHeadlineSingleAttention {
             get {
-                return ResourceManager.GetString("HomeInactiveLabel", resourceCulture);
+                return ResourceManager.GetString("HomeHeadlineSingleAttention", resourceCulture);
             }
         }
-
+        
+        /// <summary>
+        ///   Looks up a localized string similar to 1 resource is pending.
+        /// </summary>
+        public static string HomeHeadlineSinglePending {
+            get {
+                return ResourceManager.GetString("HomeHeadlineSinglePending", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to 1 resource is running.
+        /// </summary>
+        public static string HomeHeadlineSingleRunning {
+            get {
+                return ResourceManager.GetString("HomeHeadlineSingleRunning", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Insights.
+        /// </summary>
+        public static string HomeInsightsLabel {
+            get {
+                return ResourceManager.GetString("HomeInsightsLabel", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Live activity.
+        /// </summary>
+        public static string HomeLiveActivity {
+            get {
+                return ResourceManager.GetString("HomeLiveActivity", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to logs.
+        /// </summary>
+        public static string HomeLogsLabel {
+            get {
+                return ResourceManager.GetString("HomeLogsLabel", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to metrics.
+        /// </summary>
+        public static string HomeMetricsLabel {
+            get {
+                return ResourceManager.GetString("HomeMetricsLabel", resourceCulture);
+            }
+        }
+        
         /// <summary>
         ///   Looks up a localized string similar to Need attention.
         /// </summary>
@@ -185,7 +347,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("HomeNeedsAttentionLabel", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to No failed traces.
         /// </summary>
@@ -194,7 +356,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("HomeNoFailedTraces", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to No errors logged.
         /// </summary>
@@ -203,7 +365,34 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("HomeNoRecentErrors", resourceCulture);
             }
         }
-
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Not started.
+        /// </summary>
+        public static string HomeNotStartedLabel {
+            get {
+                return ResourceManager.GetString("HomeNotStartedLabel", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to p95.
+        /// </summary>
+        public static string HomeP95Label {
+            get {
+                return ResourceManager.GetString("HomeP95Label", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to p95 latency.
+        /// </summary>
+        public static string HomeP95Latency {
+            get {
+                return ResourceManager.GetString("HomeP95Latency", resourceCulture);
+            }
+        }
+        
         /// <summary>
         ///   Looks up a localized string similar to Pending.
         /// </summary>
@@ -212,7 +401,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("HomePendingLabel", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Recent errors.
         /// </summary>
@@ -221,7 +410,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("HomeRecentErrorsTitle", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Recent failed traces.
         /// </summary>
@@ -230,34 +419,34 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("HomeRecentFailedTracesTitle", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Resource states.
+        ///   Looks up a localized string similar to {0} requests.
         /// </summary>
-        public static string HomeResourceStatesLabel {
+        public static string HomeRequestCount {
             get {
-                return ResourceManager.GetString("HomeResourceStatesLabel", resourceCulture);
+                return ResourceManager.GetString("HomeRequestCount", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Resources.
+        ///   Looks up a localized string similar to {0} req.
         /// </summary>
-        public static string HomeResourcesLabel {
+        public static string HomeRequestCountShort {
             get {
-                return ResourceManager.GetString("HomeResourcesLabel", resourceCulture);
+                return ResourceManager.GetString("HomeRequestCountShort", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Resource.
+        ///   Looks up a localized string similar to requests / min.
         /// </summary>
-        public static string HomeResourceColumn {
+        public static string HomeRequestsPerMinute {
             get {
-                return ResourceManager.GetString("HomeResourceColumn", resourceCulture);
+                return ResourceManager.GetString("HomeRequestsPerMinute", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Actions for {0}.
         /// </summary>
@@ -266,7 +455,25 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("HomeResourceActions", resourceCulture);
             }
         }
-
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Resource.
+        /// </summary>
+        public static string HomeResourceColumn {
+            get {
+                return ResourceManager.GetString("HomeResourceColumn", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Resource states.
+        /// </summary>
+        public static string HomeResourceStatesLabel {
+            get {
+                return ResourceManager.GetString("HomeResourceStatesLabel", resourceCulture);
+            }
+        }
+        
         /// <summary>
         ///   Looks up a localized string similar to Running.
         /// </summary>
@@ -275,7 +482,16 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("HomeRunningLabel", resourceCulture);
             }
         }
-
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Slowest endpoints.
+        /// </summary>
+        public static string HomeSlowestEndpoints {
+            get {
+                return ResourceManager.GetString("HomeSlowestEndpoints", resourceCulture);
+            }
+        }
+        
         /// <summary>
         ///   Looks up a localized string similar to Started {0}.
         /// </summary>
@@ -284,7 +500,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("HomeStartedAt", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Summary.
         /// </summary>
@@ -293,7 +509,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("HomeSummaryLandmark", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Telemetry.
         /// </summary>
@@ -302,7 +518,25 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("HomeTelemetryLandmark", resourceCulture);
             }
         }
-
+        
+        /// <summary>
+        ///   Looks up a localized string similar to traces.
+        /// </summary>
+        public static string HomeTracesLabel {
+            get {
+                return ResourceManager.GetString("HomeTracesLabel", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Unknown.
+        /// </summary>
+        public static string HomeUnknownLabel {
+            get {
+                return ResourceManager.GetString("HomeUnknownLabel", resourceCulture);
+            }
+        }
+        
         /// <summary>
         ///   Looks up a localized string similar to {0} unviewed error logs.
         /// </summary>
@@ -311,1099 +545,16 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("HomeUnviewedErrors", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Parameters.
+        ///   Looks up a localized string similar to Layout.
         /// </summary>
-        public static string ParametersPageTitle {
+        public static string LayoutLabel {
             get {
-                return ResourceManager.GetString("ParametersPageTitle", resourceCulture);
+                return ResourceManager.GetString("LayoutLabel", resourceCulture);
             }
         }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Commands.
-        /// </summary>
-        public static string ResourceActionCommandsText {
-            get {
-                return ResourceManager.GetString("ResourceActionCommandsText", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Console logs.
-        /// </summary>
-        public static string ResourceActionConsoleLogsText {
-            get {
-                return ResourceManager.GetString("ResourceActionConsoleLogsText", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Metrics.
-        /// </summary>
-        public static string ResourceActionMetricsText {
-            get {
-                return ResourceManager.GetString("ResourceActionMetricsText", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Structured logs.
-        /// </summary>
-        public static string ResourceActionStructuredLogsText {
-            get {
-                return ResourceManager.GetString("ResourceActionStructuredLogsText", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Traces.
-        /// </summary>
-        public static string ResourceActionTracesText {
-            get {
-                return ResourceManager.GetString("ResourceActionTracesText", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to URLs.
-        /// </summary>
-        public static string ResourceActionUrlsText {
-            get {
-                return ResourceManager.GetString("ResourceActionUrlsText", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Collapse child resources.
-        /// </summary>
-        public static string ResourceCollapseAllChildren {
-            get {
-                return ResourceManager.GetString("ResourceCollapseAllChildren", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to The AppHost disconnected while executing the command. Restart the AppHost and try again..
-        /// </summary>
-        public static string ResourceCommandAppHostDisconnected {
-            get {
-                return ResourceManager.GetString("ResourceCommandAppHostDisconnected", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Cancel.
-        /// </summary>
-        public static string ResourceCommandCancel {
-            get {
-                return ResourceManager.GetString("ResourceCommandCancel", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to &quot;{0}&quot; canceled.
-        /// </summary>
-        public static string ResourceCommandCanceled {
-            get {
-                return ResourceManager.GetString("ResourceCommandCanceled", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to &quot;{0}&quot; canceling....
-        /// </summary>
-        public static string ResourceCommandCanceling {
-            get {
-                return ResourceManager.GetString("ResourceCommandCanceling", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to &quot;{0}&quot; failed.
-        /// </summary>
-        public static string ResourceCommandFailed {
-            get {
-                return ResourceManager.GetString("ResourceCommandFailed", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to &quot;{0}&quot; starting.
-        /// </summary>
-        public static string ResourceCommandStarting {
-            get {
-                return ResourceManager.GetString("ResourceCommandStarting", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to &quot;{0}&quot; succeeded.
-        /// </summary>
-        public static string ResourceCommandSuccess {
-            get {
-                return ResourceManager.GetString("ResourceCommandSuccess", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to View console logs.
-        /// </summary>
-        public static string ResourceCommandToastViewLogs {
-            get {
-                return ResourceManager.GetString("ResourceCommandToastViewLogs", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to View response.
-        /// </summary>
-        public static string ResourceCommandViewResponse {
-            get {
-                return ResourceManager.GetString("ResourceCommandViewResponse", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to View console logs.
-        /// </summary>
-        public static string ResourceDetailsViewConsoleLogs {
-            get {
-                return ResourceManager.GetString("ResourceDetailsViewConsoleLogs", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Expand child resources.
-        /// </summary>
-        public static string ResourceExpandAllChildren {
-            get {
-                return ResourceManager.GetString("ResourceExpandAllChildren", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to (Unset).
-        /// </summary>
-        public static string ResourceFilterOptionEmpty {
-            get {
-                return ResourceManager.GetString("ResourceFilterOptionEmpty", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Console.
-        /// </summary>
-        public static string ResourceOverviewConsoleTitle {
-            get {
-                return ResourceManager.GetString("ResourceOverviewConsoleTitle", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to {0} of {1}.
-        /// </summary>
-        public static string ResourceOverviewCountOfTotal {
-            get {
-                return ResourceManager.GetString("ResourceOverviewCountOfTotal", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Endpoints.
-        /// </summary>
-        public static string ResourceOverviewEndpointsTitle {
-            get {
-                return ResourceManager.GetString("ResourceOverviewEndpointsTitle", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Errors.
-        /// </summary>
-        public static string ResourceOverviewErrors {
-            get {
-                return ResourceManager.GetString("ResourceOverviewErrors", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Exit code.
-        /// </summary>
-        public static string ResourceOverviewExitCode {
-            get {
-                return ResourceManager.GetString("ResourceOverviewExitCode", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Failed.
-        /// </summary>
-        public static string ResourceOverviewFailed {
-            get {
-                return ResourceManager.GetString("ResourceOverviewFailed", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Filter environment variables.
-        /// </summary>
-        public static string ResourceOverviewFilterEnvironmentVariables {
-            get {
-                return ResourceManager.GetString("ResourceOverviewFilterEnvironmentVariables", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Instruments.
-        /// </summary>
-        public static string ResourceOverviewInstruments {
-            get {
-                return ResourceManager.GetString("ResourceOverviewInstruments", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Internal.
-        /// </summary>
-        public static string ResourceOverviewInternalEndpoint {
-            get {
-                return ResourceManager.GetString("ResourceOverviewInternalEndpoint", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Structured logs.
-        /// </summary>
-        public static string ResourceOverviewLogsTitle {
-            get {
-                return ResourceManager.GetString("ResourceOverviewLogsTitle", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Meters.
-        /// </summary>
-        public static string ResourceOverviewMeters {
-            get {
-                return ResourceManager.GetString("ResourceOverviewMeters", resourceCulture);
-            }
-        }
-
-        public static string ResourceOverviewNoPinnedMetrics {
-            get {
-                return ResourceManager.GetString("ResourceOverviewNoPinnedMetrics", resourceCulture);
-            }
-        }
-
-        public static string ResourceOverviewBrowseMeters {
-            get {
-                return ResourceManager.GetString("ResourceOverviewBrowseMeters", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Metrics.
-        /// </summary>
-        public static string ResourceOverviewMetricsTitle {
-            get {
-                return ResourceManager.GetString("ResourceOverviewMetricsTitle", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to No warnings or errors.
-        /// </summary>
-        public static string ResourceOverviewNoAttentionLogs {
-            get {
-                return ResourceManager.GetString("ResourceOverviewNoAttentionLogs", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to No console output.
-        /// </summary>
-        public static string ResourceOverviewNoConsoleLogs {
-            get {
-                return ResourceManager.GetString("ResourceOverviewNoConsoleLogs", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to No endpoints.
-        /// </summary>
-        public static string ResourceOverviewNoEndpoints {
-            get {
-                return ResourceManager.GetString("ResourceOverviewNoEndpoints", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to No environment variables.
-        /// </summary>
-        public static string ResourceOverviewNoEnvironmentVariables {
-            get {
-                return ResourceManager.GetString("ResourceOverviewNoEnvironmentVariables", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to No volumes.
-        /// </summary>
-        public static string ResourceOverviewNoVolumes {
-            get {
-                return ResourceManager.GetString("ResourceOverviewNoVolumes", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to No health checks.
-        /// </summary>
-        public static string ResourceOverviewNoHealthChecks {
-            get {
-                return ResourceManager.GetString("ResourceOverviewNoHealthChecks", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to No environment variables match the filter.
-        /// </summary>
-        public static string ResourceOverviewNoMatchingEnvironmentVariables {
-            get {
-                return ResourceManager.GetString("ResourceOverviewNoMatchingEnvironmentVariables", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to No metrics.
-        /// </summary>
-        public static string ResourceOverviewNoMetrics {
-            get {
-                return ResourceManager.GetString("ResourceOverviewNoMetrics", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to No properties.
-        /// </summary>
-        public static string ResourceOverviewNoProperties {
-            get {
-                return ResourceManager.GetString("ResourceOverviewNoProperties", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to No relationships.
-        /// </summary>
-        public static string ResourceOverviewNoRelationships {
-            get {
-                return ResourceManager.GetString("ResourceOverviewNoRelationships", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to This resource hasn't sent telemetry.
-        /// </summary>
-        public static string ResourceOverviewNoTelemetry {
-            get {
-                return ResourceManager.GetString("ResourceOverviewNoTelemetry", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to No traces.
-        /// </summary>
-        public static string ResourceOverviewNoTraces {
-            get {
-                return ResourceManager.GetString("ResourceOverviewNoTraces", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Resource '{0}' was not found..
-        /// </summary>
-        public static string ResourceOverviewNotFound {
-            get {
-                return ResourceManager.GetString("ResourceOverviewNotFound", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Open console.
-        /// </summary>
-        public static string ResourceOverviewOpenConsole {
-            get {
-                return ResourceManager.GetString("ResourceOverviewOpenConsole", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Resource overview.
-        /// </summary>
-        public static string ResourceOverviewPageTitle {
-            get {
-                return ResourceManager.GetString("ResourceOverviewPageTitle", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Properties.
-        /// </summary>
-        public static string ResourceOverviewPropertiesTitle {
-            get {
-                return ResourceManager.GetString("ResourceOverviewPropertiesTitle", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Relationship graph.
-        /// </summary>
-        public static string ResourceOverviewRelationshipGraph {
-            get {
-                return ResourceManager.GetString("ResourceOverviewRelationshipGraph", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Relationships.
-        /// </summary>
-        public static string ResourceOverviewRelationshipsTitle {
-            get {
-                return ResourceManager.GetString("ResourceOverviewRelationshipsTitle", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Show all environment variables.
-        /// </summary>
-        public static string ResourceOverviewShowAllEnvironmentVariables {
-            get {
-                return ResourceManager.GetString("ResourceOverviewShowAllEnvironmentVariables", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Show only environment variables from the app model.
-        /// </summary>
-        public static string ResourceOverviewShowAppModelEnvironmentVariables {
-            get {
-                return ResourceManager.GetString("ResourceOverviewShowAppModelEnvironmentVariables", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Show less.
-        /// </summary>
-        public static string ResourceOverviewShowLess {
-            get {
-                return ResourceManager.GetString("ResourceOverviewShowLess", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to {0} more.
-        /// </summary>
-        public static string ResourceOverviewShowMore {
-            get {
-                return ResourceManager.GetString("ResourceOverviewShowMore", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Status.
-        /// </summary>
-        public static string ResourceOverviewStatusTitle {
-            get {
-                return ResourceManager.GetString("ResourceOverviewStatusTitle", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Stop time.
-        /// </summary>
-        public static string ResourceOverviewStopTime {
-            get {
-                return ResourceManager.GetString("ResourceOverviewStopTime", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Total.
-        /// </summary>
-        public static string ResourceOverviewTotal {
-            get {
-                return ResourceManager.GetString("ResourceOverviewTotal", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Traces.
-        /// </summary>
-        public static string ResourceOverviewTracesTitle {
-            get {
-                return ResourceManager.GetString("ResourceOverviewTracesTitle", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to View all.
-        /// </summary>
-        public static string ResourceOverviewViewAll {
-            get {
-                return ResourceManager.GetString("ResourceOverviewViewAll", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Warnings.
-        /// </summary>
-        public static string ResourceOverviewWarnings {
-            get {
-                return ResourceManager.GetString("ResourceOverviewWarnings", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Add tag.
-        /// </summary>
-        public static string ResourceTagsAdd {
-            get {
-                return ResourceManager.GetString("ResourceTagsAdd", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Create tag "{0}".
-        /// </summary>
-        public static string ResourceTagsCreate {
-            get {
-                return ResourceManager.GetString("ResourceTagsCreate", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Add a tag to {0}.
-        /// </summary>
-        public static string ResourceTagsInputLabel {
-            get {
-                return ResourceManager.GetString("ResourceTagsInputLabel", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Tag name.
-        /// </summary>
-        public static string ResourceTagsInputPlaceholder {
-            get {
-                return ResourceManager.GetString("ResourceTagsInputPlaceholder", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Tags.
-        /// </summary>
-        public static string ResourceTagsLabel {
-            get {
-                return ResourceManager.GetString("ResourceTagsLabel", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Remove tag {0}.
-        /// </summary>
-        public static string ResourceTagsRemove {
-            get {
-                return ResourceManager.GetString("ResourceTagsRemove", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Defined by the AppHost. This tag cannot be removed..
-        /// </summary>
-        public static string ResourceTagsAppHostDefined {
-            get {
-                return ResourceManager.GetString("ResourceTagsAppHostDefined", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Dashboard position.
-        /// </summary>
-        public static string ResourceTraitDashboardPosition {
-            get {
-                return ResourceManager.GetString("ResourceTraitDashboardPosition", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Dashboard tags.
-        /// </summary>
-        public static string ResourceTraitDashboardTags {
-            get {
-                return ResourceManager.GetString("ResourceTraitDashboardTags", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Tags.
-        /// </summary>
-        public static string ResourceTagsSuggestions {
-            get {
-                return ResourceManager.GetString("ResourceTagsSuggestions", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Actions.
-        /// </summary>
-        public static string ResourcesActionsColumnHeader {
-            get {
-                return ResourceManager.GetString("ResourcesActionsColumnHeader", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to View options.
-        /// </summary>
-        public static string ResourcesChangeViewOptions {
-            get {
-                return ResourceManager.GetString("ResourcesChangeViewOptions", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Connection string.
-        /// </summary>
-        public static string ResourcesDetailsConnectionStringProperty {
-            get {
-                return ResourceManager.GetString("ResourcesDetailsConnectionStringProperty", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Container arguments.
-        /// </summary>
-        public static string ResourcesDetailsContainerArgumentsProperty {
-            get {
-                return ResourceManager.GetString("ResourcesDetailsContainerArgumentsProperty", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Container command.
-        /// </summary>
-        public static string ResourcesDetailsContainerCommandProperty {
-            get {
-                return ResourceManager.GetString("ResourcesDetailsContainerCommandProperty", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Container ID.
-        /// </summary>
-        public static string ResourcesDetailsContainerIdProperty {
-            get {
-                return ResourceManager.GetString("ResourcesDetailsContainerIdProperty", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Container image.
-        /// </summary>
-        public static string ResourcesDetailsContainerImageProperty {
-            get {
-                return ResourceManager.GetString("ResourcesDetailsContainerImageProperty", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Container lifetime.
-        /// </summary>
-        public static string ResourcesDetailsContainerLifetimeProperty {
-            get {
-                return ResourceManager.GetString("ResourcesDetailsContainerLifetimeProperty", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Container ports.
-        /// </summary>
-        public static string ResourcesDetailsContainerPortsProperty {
-            get {
-                return ResourceManager.GetString("ResourcesDetailsContainerPortsProperty", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Display name.
-        /// </summary>
-        public static string ResourcesDetailsDisplayNameProperty {
-            get {
-                return ResourceManager.GetString("ResourcesDetailsDisplayNameProperty", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Executable arguments.
-        /// </summary>
-        public static string ResourcesDetailsExecutableArgumentsProperty {
-            get {
-                return ResourceManager.GetString("ResourcesDetailsExecutableArgumentsProperty", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Executable path.
-        /// </summary>
-        public static string ResourcesDetailsExecutablePathProperty {
-            get {
-                return ResourceManager.GetString("ResourcesDetailsExecutablePathProperty", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Process ID.
-        /// </summary>
-        public static string ResourcesDetailsExecutableProcessIdProperty {
-            get {
-                return ResourceManager.GetString("ResourcesDetailsExecutableProcessIdProperty", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Working directory.
-        /// </summary>
-        public static string ResourcesDetailsExecutableWorkingDirectoryProperty {
-            get {
-                return ResourceManager.GetString("ResourcesDetailsExecutableWorkingDirectoryProperty", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Exit code.
-        /// </summary>
-        public static string ResourcesDetailsExitCodeProperty {
-            get {
-                return ResourceManager.GetString("ResourcesDetailsExitCodeProperty", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Health state.
-        /// </summary>
-        public static string ResourcesDetailsHealthStateProperty {
-            get {
-                return ResourceManager.GetString("ResourcesDetailsHealthStateProperty", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Value.
-        /// </summary>
-        public static string ResourcesDetailsParameterValueProperty {
-            get {
-                return ResourceManager.GetString("ResourcesDetailsParameterValueProperty", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Launch profile.
-        /// </summary>
-        public static string ResourcesDetailsProjectLaunchProfileProperty {
-            get {
-                return ResourceManager.GetString("ResourcesDetailsProjectLaunchProfileProperty", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Project path.
-        /// </summary>
-        public static string ResourcesDetailsProjectPathProperty {
-            get {
-                return ResourceManager.GetString("ResourcesDetailsProjectPathProperty", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Start time.
-        /// </summary>
-        public static string ResourcesDetailsStartTimeProperty {
-            get {
-                return ResourceManager.GetString("ResourcesDetailsStartTimeProperty", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to State.
-        /// </summary>
-        public static string ResourcesDetailsStateProperty {
-            get {
-                return ResourceManager.GetString("ResourcesDetailsStateProperty", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Stop time.
-        /// </summary>
-        public static string ResourcesDetailsStopTimeProperty {
-            get {
-                return ResourceManager.GetString("ResourcesDetailsStopTimeProperty", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Has filters.
-        /// </summary>
-        public static string ResourcesFiltered {
-            get {
-                return ResourceManager.GetString("ResourcesFiltered", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Export as Mermaid.
-        /// </summary>
-        public static string ResourcesGraphExportMermaidButton {
-            get {
-                return ResourceManager.GetString("ResourcesGraphExportMermaidButton", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Mermaid is a text-based format for defining diagrams. [Learn more about Mermaid](https://aka.ms/aspire/about-mermaid)..
-        /// </summary>
-        public static string ResourcesGraphExportMermaidDescription {
-            get {
-                return ResourceManager.GetString("ResourcesGraphExportMermaidDescription", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Reset.
-        /// </summary>
-        public static string ResourcesGraphResetButton {
-            get {
-                return ResourceManager.GetString("ResourcesGraphResetButton", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Resource actions for {0}.
-        /// </summary>
-        public static string ResourcesGraphResourceActionsButton {
-            get {
-                return ResourceManager.GetString("ResourcesGraphResourceActionsButton", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Zoom in.
-        /// </summary>
-        public static string ResourcesGraphZoomInButton {
-            get {
-                return ResourceManager.GetString("ResourcesGraphZoomInButton", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Zoom out.
-        /// </summary>
-        public static string ResourcesGraphZoomOutButton {
-            get {
-                return ResourceManager.GetString("ResourcesGraphZoomOutButton", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Resources.
-        /// </summary>
-        public static string ResourcesHeader {
-            get {
-                return ResourceManager.GetString("ResourcesHeader", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Hide resource types.
-        /// </summary>
-        public static string ResourcesHideTypes {
-            get {
-                return ResourceManager.GetString("ResourcesHideTypes", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to No parameters found.
-        /// </summary>
-        public static string ResourcesNoParameters {
-            get {
-                return ResourceManager.GetString("ResourcesNoParameters", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to No resources found.
-        /// </summary>
-        public static string ResourcesNoResources {
-            get {
-                return ResourceManager.GetString("ResourcesNoResources", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to No filters.
-        /// </summary>
-        public static string ResourcesNotFiltered {
-            get {
-                return ResourceManager.GetString("ResourcesNotFiltered", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to {0} resources.
-        /// </summary>
-        public static string ResourcesPageTitle {
-            get {
-                return ResourceManager.GetString("ResourcesPageTitle", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to State.
-        /// </summary>
-        public static string ResourcesResourceStatesHeader {
-            get {
-                return ResourceManager.GetString("ResourcesResourceStatesHeader", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Resource types.
-        /// </summary>
-        public static string ResourcesResourceTypesHeader {
-            get {
-                return ResourceManager.GetString("ResourcesResourceTypesHeader", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Show resource types.
-        /// </summary>
-        public static string ResourcesShowTypes {
-            get {
-                return ResourceManager.GetString("ResourcesShowTypes", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Source.
-        /// </summary>
-        public static string ResourcesSourceColumnHeader {
-            get {
-                return ResourceManager.GetString("ResourcesSourceColumnHeader", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Start time.
-        /// </summary>
-        public static string ResourcesStartTimeColumnHeader {
-            get {
-                return ResourceManager.GetString("ResourcesStartTimeColumnHeader", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to State.
-        /// </summary>
-        public static string ResourcesStateColumnHeader {
-            get {
-                return ResourceManager.GetString("ResourcesStateColumnHeader", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Type.
-        /// </summary>
-        public static string ResourcesTypeColumnHeader {
-            get {
-                return ResourceManager.GetString("ResourcesTypeColumnHeader", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to URLs.
-        /// </summary>
-        public static string ResourcesUrlsColumnHeader {
-            get {
-                return ResourceManager.GetString("ResourcesUrlsColumnHeader", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Showing &lt;strong&gt;{0} parameters&lt;/strong&gt;.
-        /// </summary>
-        public static string TotalItemsFooterParametersPluralText {
-            get {
-                return ResourceManager.GetString("TotalItemsFooterParametersPluralText", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Showing &lt;strong&gt;{0} parameter&lt;/strong&gt;.
-        /// </summary>
-        public static string TotalItemsFooterParametersSingularText {
-            get {
-                return ResourceManager.GetString("TotalItemsFooterParametersSingularText", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Showing &lt;strong&gt;{0} resources&lt;/strong&gt;.
-        /// </summary>
-        public static string TotalItemsFooterPluralText {
-            get {
-                return ResourceManager.GetString("TotalItemsFooterPluralText", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Showing &lt;strong&gt;{0} resource&lt;/strong&gt;.
-        /// </summary>
-        public static string TotalItemsFooterSingularText {
-            get {
-                return ResourceManager.GetString("TotalItemsFooterSingularText", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Waiting for health data....
-        /// </summary>
-        public static string WaitingForHealthDataMessage {
-            get {
-                return ResourceManager.GetString("WaitingForHealthDataMessage", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Waiting....
-        /// </summary>
-        public static string WaitingHealthDataStatusMessage {
-            get {
-                return ResourceManager.GetString("WaitingHealthDataStatusMessage", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to {0} parameters need values.
-        /// </summary>
-        public static string MissingParametersCount {
-            get {
-                return ResourceManager.GetString("MissingParametersCount", resourceCulture);
-            }
-        }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to {0} parameter needs a value.
         /// </summary>
@@ -1412,52 +563,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("MissingParameterCount", resourceCulture);
             }
         }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Review missing parameters.
-        /// </summary>
-        public static string MissingParametersReview {
-            get {
-                return ResourceManager.GetString("MissingParametersReview", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to All values are set.
-        /// </summary>
-        public static string ParametersAllValuesSet {
-            get {
-                return ResourceManager.GetString("ParametersAllValuesSet", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Value required.
-        /// </summary>
-        public static string ParameterValueRequired {
-            get {
-                return ResourceManager.GetString("ParameterValueRequired", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Value set.
-        /// </summary>
-        public static string ParameterValueSet {
-            get {
-                return ResourceManager.GetString("ParameterValueSet", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Enter the missing values together, then apply them without leaving the resource overview..
-        /// </summary>
-        public static string MissingParametersPanelDescription {
-            get {
-                return ResourceManager.GetString("MissingParametersPanelDescription", resourceCulture);
-            }
-        }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Missing parameter values.
         /// </summary>
@@ -1466,7 +572,34 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("MissingParametersCardTitle", resourceCulture);
             }
         }
-
+        
+        /// <summary>
+        ///   Looks up a localized string similar to {0} parameters need values.
+        /// </summary>
+        public static string MissingParametersCount {
+            get {
+                return ResourceManager.GetString("MissingParametersCount", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Enter the missing values together, then apply them without leaving the resource overview..
+        /// </summary>
+        public static string MissingParametersPanelDescription {
+            get {
+                return ResourceManager.GetString("MissingParametersPanelDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Review missing parameters.
+        /// </summary>
+        public static string MissingParametersReview {
+            get {
+                return ResourceManager.GetString("MissingParametersReview", resourceCulture);
+            }
+        }
+        
         /// <summary>
         ///   Looks up a localized string similar to Save values to user secrets.
         /// </summary>
@@ -1475,13 +608,1291 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("MissingParametersSaveToUserSecrets", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Set parameter values.
         /// </summary>
         public static string MissingParametersSetValues {
             get {
                 return ResourceManager.GetString("MissingParametersSetValues", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to All values are set.
+        /// </summary>
+        public static string ParametersAllValuesSet {
+            get {
+                return ResourceManager.GetString("ParametersAllValuesSet", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Parameters.
+        /// </summary>
+        public static string ParametersPageTitle {
+            get {
+                return ResourceManager.GetString("ParametersPageTitle", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Value required.
+        /// </summary>
+        public static string ParameterValueRequired {
+            get {
+                return ResourceManager.GetString("ParameterValueRequired", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Value set.
+        /// </summary>
+        public static string ParameterValueSet {
+            get {
+                return ResourceManager.GetString("ParameterValueSet", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Commands.
+        /// </summary>
+        public static string ResourceActionCommandsText {
+            get {
+                return ResourceManager.GetString("ResourceActionCommandsText", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Console logs.
+        /// </summary>
+        public static string ResourceActionConsoleLogsText {
+            get {
+                return ResourceManager.GetString("ResourceActionConsoleLogsText", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Metrics.
+        /// </summary>
+        public static string ResourceActionMetricsText {
+            get {
+                return ResourceManager.GetString("ResourceActionMetricsText", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Structured logs.
+        /// </summary>
+        public static string ResourceActionStructuredLogsText {
+            get {
+                return ResourceManager.GetString("ResourceActionStructuredLogsText", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Traces.
+        /// </summary>
+        public static string ResourceActionTracesText {
+            get {
+                return ResourceManager.GetString("ResourceActionTracesText", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to URLs.
+        /// </summary>
+        public static string ResourceActionUrlsText {
+            get {
+                return ResourceManager.GetString("ResourceActionUrlsText", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Collapse child resources.
+        /// </summary>
+        public static string ResourceCollapseAllChildren {
+            get {
+                return ResourceManager.GetString("ResourceCollapseAllChildren", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The AppHost disconnected while executing the command. Restart the AppHost and try again..
+        /// </summary>
+        public static string ResourceCommandAppHostDisconnected {
+            get {
+                return ResourceManager.GetString("ResourceCommandAppHostDisconnected", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Cancel.
+        /// </summary>
+        public static string ResourceCommandCancel {
+            get {
+                return ResourceManager.GetString("ResourceCommandCancel", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to &quot;{0}&quot; canceled.
+        /// </summary>
+        public static string ResourceCommandCanceled {
+            get {
+                return ResourceManager.GetString("ResourceCommandCanceled", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to &quot;{0}&quot; canceling....
+        /// </summary>
+        public static string ResourceCommandCanceling {
+            get {
+                return ResourceManager.GetString("ResourceCommandCanceling", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to &quot;{0}&quot; failed.
+        /// </summary>
+        public static string ResourceCommandFailed {
+            get {
+                return ResourceManager.GetString("ResourceCommandFailed", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to &quot;{0}&quot; starting.
+        /// </summary>
+        public static string ResourceCommandStarting {
+            get {
+                return ResourceManager.GetString("ResourceCommandStarting", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to &quot;{0}&quot; succeeded.
+        /// </summary>
+        public static string ResourceCommandSuccess {
+            get {
+                return ResourceManager.GetString("ResourceCommandSuccess", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to View console logs.
+        /// </summary>
+        public static string ResourceCommandToastViewLogs {
+            get {
+                return ResourceManager.GetString("ResourceCommandToastViewLogs", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to View response.
+        /// </summary>
+        public static string ResourceCommandViewResponse {
+            get {
+                return ResourceManager.GetString("ResourceCommandViewResponse", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to View console logs.
+        /// </summary>
+        public static string ResourceDetailsViewConsoleLogs {
+            get {
+                return ResourceManager.GetString("ResourceDetailsViewConsoleLogs", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Expand child resources.
+        /// </summary>
+        public static string ResourceExpandAllChildren {
+            get {
+                return ResourceManager.GetString("ResourceExpandAllChildren", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to (Unset).
+        /// </summary>
+        public static string ResourceFilterOptionEmpty {
+            get {
+                return ResourceManager.GetString("ResourceFilterOptionEmpty", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Exit.
+        /// </summary>
+        public static string ResourceGraphGameExit {
+            get {
+                return ResourceManager.GetString("ResourceGraphGameExit", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Exit Aspire Outage and return to the graph.
+        /// </summary>
+        public static string ResourceGraphGameExitLabel {
+            get {
+                return ResourceManager.GetString("ResourceGraphGameExitLabel", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Resources still stopped: {0}.
+        /// </summary>
+        public static string ResourceGraphGameHardCoreStopped {
+            get {
+                return ResourceManager.GetString("ResourceGraphGameHardCoreStopped", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Destroying an enemy really stops its resource. Stopped resources restart when you clear the wave, and stay stopped if you lose or exit..
+        /// </summary>
+        public static string ResourceGraphGameHardCoreWarning {
+            get {
+                return ResourceManager.GetString("ResourceGraphGameHardCoreWarning", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Aspire Outage. Arrow keys or A and D to move, Space to fire, P to pause, M to mute, H to switch between normal and hard core mode on the start screen, Escape to return to the graph..
+        /// </summary>
+        public static string ResourceGraphGameInstructions {
+            get {
+                return ResourceManager.GetString("ResourceGraphGameInstructions", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Hard core.
+        /// </summary>
+        public static string ResourceGraphGameModeHardCore {
+            get {
+                return ResourceManager.GetString("ResourceGraphGameModeHardCore", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Normal.
+        /// </summary>
+        public static string ResourceGraphGameModeNormal {
+            get {
+                return ResourceManager.GetString("ResourceGraphGameModeNormal", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Play Aspire Outage.
+        /// </summary>
+        public static string ResourceGraphGamePlay {
+            get {
+                return ResourceManager.GetString("ResourceGraphGamePlay", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Sound: off.
+        /// </summary>
+        public static string ResourceGraphGameSoundOff {
+            get {
+                return ResourceManager.GetString("ResourceGraphGameSoundOff", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Sound: on.
+        /// </summary>
+        public static string ResourceGraphGameSoundOn {
+            get {
+                return ResourceManager.GetString("ResourceGraphGameSoundOn", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Browse meters.
+        /// </summary>
+        public static string ResourceOverviewBrowseMeters {
+            get {
+                return ResourceManager.GetString("ResourceOverviewBrowseMeters", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Console.
+        /// </summary>
+        public static string ResourceOverviewConsoleTitle {
+            get {
+                return ResourceManager.GetString("ResourceOverviewConsoleTitle", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to {0} of {1}.
+        /// </summary>
+        public static string ResourceOverviewCountOfTotal {
+            get {
+                return ResourceManager.GetString("ResourceOverviewCountOfTotal", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to {0}, also at {1}.
+        /// </summary>
+        public static string ResourceOverviewEndpointAlsoAt {
+            get {
+                return ResourceManager.GetString("ResourceOverviewEndpointAlsoAt", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Endpoints.
+        /// </summary>
+        public static string ResourceOverviewEndpointsTitle {
+            get {
+                return ResourceManager.GetString("ResourceOverviewEndpointsTitle", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Errors.
+        /// </summary>
+        public static string ResourceOverviewErrors {
+            get {
+                return ResourceManager.GetString("ResourceOverviewErrors", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Exit code.
+        /// </summary>
+        public static string ResourceOverviewExitCode {
+            get {
+                return ResourceManager.GetString("ResourceOverviewExitCode", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Failed.
+        /// </summary>
+        public static string ResourceOverviewFailed {
+            get {
+                return ResourceManager.GetString("ResourceOverviewFailed", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Filter environment variables.
+        /// </summary>
+        public static string ResourceOverviewFilterEnvironmentVariables {
+            get {
+                return ResourceManager.GetString("ResourceOverviewFilterEnvironmentVariables", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Hide empty panels.
+        /// </summary>
+        public static string ResourceOverviewHideEmptyPanels {
+            get {
+                return ResourceManager.GetString("ResourceOverviewHideEmptyPanels", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Instruments.
+        /// </summary>
+        public static string ResourceOverviewInstruments {
+            get {
+                return ResourceManager.GetString("ResourceOverviewInstruments", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Internal.
+        /// </summary>
+        public static string ResourceOverviewInternalEndpoint {
+            get {
+                return ResourceManager.GetString("ResourceOverviewInternalEndpoint", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Structured logs.
+        /// </summary>
+        public static string ResourceOverviewLogsTitle {
+            get {
+                return ResourceManager.GetString("ResourceOverviewLogsTitle", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Meters.
+        /// </summary>
+        public static string ResourceOverviewMeters {
+            get {
+                return ResourceManager.GetString("ResourceOverviewMeters", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Metrics.
+        /// </summary>
+        public static string ResourceOverviewMetricsTitle {
+            get {
+                return ResourceManager.GetString("ResourceOverviewMetricsTitle", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to No warnings or errors.
+        /// </summary>
+        public static string ResourceOverviewNoAttentionLogs {
+            get {
+                return ResourceManager.GetString("ResourceOverviewNoAttentionLogs", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to No console output.
+        /// </summary>
+        public static string ResourceOverviewNoConsoleLogs {
+            get {
+                return ResourceManager.GetString("ResourceOverviewNoConsoleLogs", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to No endpoints.
+        /// </summary>
+        public static string ResourceOverviewNoEndpoints {
+            get {
+                return ResourceManager.GetString("ResourceOverviewNoEndpoints", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to No environment variables.
+        /// </summary>
+        public static string ResourceOverviewNoEnvironmentVariables {
+            get {
+                return ResourceManager.GetString("ResourceOverviewNoEnvironmentVariables", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to No health checks.
+        /// </summary>
+        public static string ResourceOverviewNoHealthChecks {
+            get {
+                return ResourceManager.GetString("ResourceOverviewNoHealthChecks", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to No environment variables match the filter.
+        /// </summary>
+        public static string ResourceOverviewNoMatchingEnvironmentVariables {
+            get {
+                return ResourceManager.GetString("ResourceOverviewNoMatchingEnvironmentVariables", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to No metrics.
+        /// </summary>
+        public static string ResourceOverviewNoMetrics {
+            get {
+                return ResourceManager.GetString("ResourceOverviewNoMetrics", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Pin the metrics you want to keep an eye on and they&apos;ll show up here..
+        /// </summary>
+        public static string ResourceOverviewNoPinnedMetrics {
+            get {
+                return ResourceManager.GetString("ResourceOverviewNoPinnedMetrics", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to No properties.
+        /// </summary>
+        public static string ResourceOverviewNoProperties {
+            get {
+                return ResourceManager.GetString("ResourceOverviewNoProperties", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to No relationships.
+        /// </summary>
+        public static string ResourceOverviewNoRelationships {
+            get {
+                return ResourceManager.GetString("ResourceOverviewNoRelationships", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to This resource hasn&apos;t sent telemetry.
+        /// </summary>
+        public static string ResourceOverviewNoTelemetry {
+            get {
+                return ResourceManager.GetString("ResourceOverviewNoTelemetry", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Resource &apos;{0}&apos; was not found..
+        /// </summary>
+        public static string ResourceOverviewNotFound {
+            get {
+                return ResourceManager.GetString("ResourceOverviewNotFound", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to No traces.
+        /// </summary>
+        public static string ResourceOverviewNoTraces {
+            get {
+                return ResourceManager.GetString("ResourceOverviewNoTraces", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to No volumes.
+        /// </summary>
+        public static string ResourceOverviewNoVolumes {
+            get {
+                return ResourceManager.GetString("ResourceOverviewNoVolumes", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Open console.
+        /// </summary>
+        public static string ResourceOverviewOpenConsole {
+            get {
+                return ResourceManager.GetString("ResourceOverviewOpenConsole", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Resource overview.
+        /// </summary>
+        public static string ResourceOverviewPageTitle {
+            get {
+                return ResourceManager.GetString("ResourceOverviewPageTitle", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Panels.
+        /// </summary>
+        public static string ResourceOverviewPanelsLabel {
+            get {
+                return ResourceManager.GetString("ResourceOverviewPanelsLabel", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Properties.
+        /// </summary>
+        public static string ResourceOverviewPropertiesTitle {
+            get {
+                return ResourceManager.GetString("ResourceOverviewPropertiesTitle", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Relationship graph.
+        /// </summary>
+        public static string ResourceOverviewRelationshipGraph {
+            get {
+                return ResourceManager.GetString("ResourceOverviewRelationshipGraph", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Relationships.
+        /// </summary>
+        public static string ResourceOverviewRelationshipsTitle {
+            get {
+                return ResourceManager.GetString("ResourceOverviewRelationshipsTitle", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Show all environment variables.
+        /// </summary>
+        public static string ResourceOverviewShowAllEnvironmentVariables {
+            get {
+                return ResourceManager.GetString("ResourceOverviewShowAllEnvironmentVariables", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Show all panels.
+        /// </summary>
+        public static string ResourceOverviewShowAllPanels {
+            get {
+                return ResourceManager.GetString("ResourceOverviewShowAllPanels", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Show only environment variables from the app model.
+        /// </summary>
+        public static string ResourceOverviewShowAppModelEnvironmentVariables {
+            get {
+                return ResourceManager.GetString("ResourceOverviewShowAppModelEnvironmentVariables", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Show less.
+        /// </summary>
+        public static string ResourceOverviewShowLess {
+            get {
+                return ResourceManager.GetString("ResourceOverviewShowLess", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to {0} more.
+        /// </summary>
+        public static string ResourceOverviewShowMore {
+            get {
+                return ResourceManager.GetString("ResourceOverviewShowMore", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Status.
+        /// </summary>
+        public static string ResourceOverviewStatusTitle {
+            get {
+                return ResourceManager.GetString("ResourceOverviewStatusTitle", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Stop time.
+        /// </summary>
+        public static string ResourceOverviewStopTime {
+            get {
+                return ResourceManager.GetString("ResourceOverviewStopTime", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Total.
+        /// </summary>
+        public static string ResourceOverviewTotal {
+            get {
+                return ResourceManager.GetString("ResourceOverviewTotal", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Traces.
+        /// </summary>
+        public static string ResourceOverviewTracesTitle {
+            get {
+                return ResourceManager.GetString("ResourceOverviewTracesTitle", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to View all.
+        /// </summary>
+        public static string ResourceOverviewViewAll {
+            get {
+                return ResourceManager.GetString("ResourceOverviewViewAll", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Warnings.
+        /// </summary>
+        public static string ResourceOverviewWarnings {
+            get {
+                return ResourceManager.GetString("ResourceOverviewWarnings", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Persistent.
+        /// </summary>
+        public static string ResourcePersistentLifetime {
+            get {
+                return ResourceManager.GetString("ResourcePersistentLifetime", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Not automatically stopped when the AppHost stops. This lifetime does not guarantee durable data..
+        /// </summary>
+        public static string ResourcePersistentLifetimeDescription {
+            get {
+                return ResourceManager.GetString("ResourcePersistentLifetimeDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to {0} (persistent).
+        /// </summary>
+        public static string ResourcePersistentType {
+            get {
+                return ResourceManager.GetString("ResourcePersistentType", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Actions.
+        /// </summary>
+        public static string ResourcesActionsColumnHeader {
+            get {
+                return ResourceManager.GetString("ResourcesActionsColumnHeader", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to View options.
+        /// </summary>
+        public static string ResourcesChangeViewOptions {
+            get {
+                return ResourceManager.GetString("ResourcesChangeViewOptions", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Connection string.
+        /// </summary>
+        public static string ResourcesDetailsConnectionStringProperty {
+            get {
+                return ResourceManager.GetString("ResourcesDetailsConnectionStringProperty", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Container arguments.
+        /// </summary>
+        public static string ResourcesDetailsContainerArgumentsProperty {
+            get {
+                return ResourceManager.GetString("ResourcesDetailsContainerArgumentsProperty", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Container command.
+        /// </summary>
+        public static string ResourcesDetailsContainerCommandProperty {
+            get {
+                return ResourceManager.GetString("ResourcesDetailsContainerCommandProperty", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Container ID.
+        /// </summary>
+        public static string ResourcesDetailsContainerIdProperty {
+            get {
+                return ResourceManager.GetString("ResourcesDetailsContainerIdProperty", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Container image.
+        /// </summary>
+        public static string ResourcesDetailsContainerImageProperty {
+            get {
+                return ResourceManager.GetString("ResourcesDetailsContainerImageProperty", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Container lifetime.
+        /// </summary>
+        public static string ResourcesDetailsContainerLifetimeProperty {
+            get {
+                return ResourceManager.GetString("ResourcesDetailsContainerLifetimeProperty", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Container ports.
+        /// </summary>
+        public static string ResourcesDetailsContainerPortsProperty {
+            get {
+                return ResourceManager.GetString("ResourcesDetailsContainerPortsProperty", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Display name.
+        /// </summary>
+        public static string ResourcesDetailsDisplayNameProperty {
+            get {
+                return ResourceManager.GetString("ResourcesDetailsDisplayNameProperty", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Executable arguments.
+        /// </summary>
+        public static string ResourcesDetailsExecutableArgumentsProperty {
+            get {
+                return ResourceManager.GetString("ResourcesDetailsExecutableArgumentsProperty", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Executable path.
+        /// </summary>
+        public static string ResourcesDetailsExecutablePathProperty {
+            get {
+                return ResourceManager.GetString("ResourcesDetailsExecutablePathProperty", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Process ID.
+        /// </summary>
+        public static string ResourcesDetailsExecutableProcessIdProperty {
+            get {
+                return ResourceManager.GetString("ResourcesDetailsExecutableProcessIdProperty", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Working directory.
+        /// </summary>
+        public static string ResourcesDetailsExecutableWorkingDirectoryProperty {
+            get {
+                return ResourceManager.GetString("ResourcesDetailsExecutableWorkingDirectoryProperty", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Exit code.
+        /// </summary>
+        public static string ResourcesDetailsExitCodeProperty {
+            get {
+                return ResourceManager.GetString("ResourcesDetailsExitCodeProperty", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Health state.
+        /// </summary>
+        public static string ResourcesDetailsHealthStateProperty {
+            get {
+                return ResourceManager.GetString("ResourcesDetailsHealthStateProperty", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Value.
+        /// </summary>
+        public static string ResourcesDetailsParameterValueProperty {
+            get {
+                return ResourceManager.GetString("ResourcesDetailsParameterValueProperty", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Launch profile.
+        /// </summary>
+        public static string ResourcesDetailsProjectLaunchProfileProperty {
+            get {
+                return ResourceManager.GetString("ResourcesDetailsProjectLaunchProfileProperty", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Project path.
+        /// </summary>
+        public static string ResourcesDetailsProjectPathProperty {
+            get {
+                return ResourceManager.GetString("ResourcesDetailsProjectPathProperty", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Type display name.
+        /// </summary>
+        public static string ResourcesDetailsResourceTypeDisplayNameProperty {
+            get {
+                return ResourceManager.GetString("ResourcesDetailsResourceTypeDisplayNameProperty", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Start time.
+        /// </summary>
+        public static string ResourcesDetailsStartTimeProperty {
+            get {
+                return ResourceManager.GetString("ResourcesDetailsStartTimeProperty", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to State.
+        /// </summary>
+        public static string ResourcesDetailsStateProperty {
+            get {
+                return ResourceManager.GetString("ResourcesDetailsStateProperty", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Stop time.
+        /// </summary>
+        public static string ResourcesDetailsStopTimeProperty {
+            get {
+                return ResourceManager.GetString("ResourcesDetailsStopTimeProperty", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Has filters.
+        /// </summary>
+        public static string ResourcesFiltered {
+            get {
+                return ResourceManager.GetString("ResourcesFiltered", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Export as Mermaid.
+        /// </summary>
+        public static string ResourcesGraphExportMermaidButton {
+            get {
+                return ResourceManager.GetString("ResourcesGraphExportMermaidButton", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Mermaid is a text-based format for defining diagrams. [Learn more about Mermaid](https://aka.ms/aspire/about-mermaid)..
+        /// </summary>
+        public static string ResourcesGraphExportMermaidDescription {
+            get {
+                return ResourceManager.GetString("ResourcesGraphExportMermaidDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Reset.
+        /// </summary>
+        public static string ResourcesGraphResetButton {
+            get {
+                return ResourceManager.GetString("ResourcesGraphResetButton", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Resource actions for {0}.
+        /// </summary>
+        public static string ResourcesGraphResourceActionsButton {
+            get {
+                return ResourceManager.GetString("ResourcesGraphResourceActionsButton", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Zoom in.
+        /// </summary>
+        public static string ResourcesGraphZoomInButton {
+            get {
+                return ResourceManager.GetString("ResourcesGraphZoomInButton", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Zoom out.
+        /// </summary>
+        public static string ResourcesGraphZoomOutButton {
+            get {
+                return ResourceManager.GetString("ResourcesGraphZoomOutButton", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Resources.
+        /// </summary>
+        public static string ResourcesHeader {
+            get {
+                return ResourceManager.GetString("ResourcesHeader", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Hide resource types.
+        /// </summary>
+        public static string ResourcesHideTypes {
+            get {
+                return ResourceManager.GetString("ResourcesHideTypes", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to No parameters found.
+        /// </summary>
+        public static string ResourcesNoParameters {
+            get {
+                return ResourceManager.GetString("ResourcesNoParameters", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to No resources found.
+        /// </summary>
+        public static string ResourcesNoResources {
+            get {
+                return ResourceManager.GetString("ResourcesNoResources", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to No filters.
+        /// </summary>
+        public static string ResourcesNotFiltered {
+            get {
+                return ResourceManager.GetString("ResourcesNotFiltered", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to {0} resources.
+        /// </summary>
+        public static string ResourcesPageTitle {
+            get {
+                return ResourceManager.GetString("ResourcesPageTitle", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to State.
+        /// </summary>
+        public static string ResourcesResourceStatesHeader {
+            get {
+                return ResourceManager.GetString("ResourcesResourceStatesHeader", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Resource types.
+        /// </summary>
+        public static string ResourcesResourceTypesHeader {
+            get {
+                return ResourceManager.GetString("ResourcesResourceTypesHeader", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Show resource types.
+        /// </summary>
+        public static string ResourcesShowTypes {
+            get {
+                return ResourceManager.GetString("ResourcesShowTypes", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Source.
+        /// </summary>
+        public static string ResourcesSourceColumnHeader {
+            get {
+                return ResourceManager.GetString("ResourcesSourceColumnHeader", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Start time.
+        /// </summary>
+        public static string ResourcesStartTimeColumnHeader {
+            get {
+                return ResourceManager.GetString("ResourcesStartTimeColumnHeader", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to State.
+        /// </summary>
+        public static string ResourcesStateColumnHeader {
+            get {
+                return ResourceManager.GetString("ResourcesStateColumnHeader", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Type.
+        /// </summary>
+        public static string ResourcesTypeColumnHeader {
+            get {
+                return ResourceManager.GetString("ResourcesTypeColumnHeader", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to URLs.
+        /// </summary>
+        public static string ResourcesUrlsColumnHeader {
+            get {
+                return ResourceManager.GetString("ResourcesUrlsColumnHeader", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Add tag.
+        /// </summary>
+        public static string ResourceTagsAdd {
+            get {
+                return ResourceManager.GetString("ResourceTagsAdd", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Defined by the AppHost. This tag cannot be removed..
+        /// </summary>
+        public static string ResourceTagsAppHostDefined {
+            get {
+                return ResourceManager.GetString("ResourceTagsAppHostDefined", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Create tag &quot;{0}&quot;.
+        /// </summary>
+        public static string ResourceTagsCreate {
+            get {
+                return ResourceManager.GetString("ResourceTagsCreate", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Add a tag to {0}.
+        /// </summary>
+        public static string ResourceTagsInputLabel {
+            get {
+                return ResourceManager.GetString("ResourceTagsInputLabel", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Tag name.
+        /// </summary>
+        public static string ResourceTagsInputPlaceholder {
+            get {
+                return ResourceManager.GetString("ResourceTagsInputPlaceholder", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Tags.
+        /// </summary>
+        public static string ResourceTagsLabel {
+            get {
+                return ResourceManager.GetString("ResourceTagsLabel", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Remove tag {0}.
+        /// </summary>
+        public static string ResourceTagsRemove {
+            get {
+                return ResourceManager.GetString("ResourceTagsRemove", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Tags.
+        /// </summary>
+        public static string ResourceTagsSuggestions {
+            get {
+                return ResourceManager.GetString("ResourceTagsSuggestions", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Dashboard position.
+        /// </summary>
+        public static string ResourceTraitDashboardPosition {
+            get {
+                return ResourceManager.GetString("ResourceTraitDashboardPosition", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Dashboard tags.
+        /// </summary>
+        public static string ResourceTraitDashboardTags {
+            get {
+                return ResourceManager.GetString("ResourceTraitDashboardTags", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Showing &lt;strong&gt;{0} parameters&lt;/strong&gt;.
+        /// </summary>
+        public static string TotalItemsFooterParametersPluralText {
+            get {
+                return ResourceManager.GetString("TotalItemsFooterParametersPluralText", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Showing &lt;strong&gt;{0} parameter&lt;/strong&gt;.
+        /// </summary>
+        public static string TotalItemsFooterParametersSingularText {
+            get {
+                return ResourceManager.GetString("TotalItemsFooterParametersSingularText", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Showing &lt;strong&gt;{0} resources&lt;/strong&gt;.
+        /// </summary>
+        public static string TotalItemsFooterPluralText {
+            get {
+                return ResourceManager.GetString("TotalItemsFooterPluralText", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Showing &lt;strong&gt;{0} resource&lt;/strong&gt;.
+        /// </summary>
+        public static string TotalItemsFooterSingularText {
+            get {
+                return ResourceManager.GetString("TotalItemsFooterSingularText", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Waiting for health data....
+        /// </summary>
+        public static string WaitingForHealthDataMessage {
+            get {
+                return ResourceManager.GetString("WaitingForHealthDataMessage", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Waiting....
+        /// </summary>
+        public static string WaitingHealthDataStatusMessage {
+            get {
+                return ResourceManager.GetString("WaitingHealthDataStatusMessage", resourceCulture);
             }
         }
     }

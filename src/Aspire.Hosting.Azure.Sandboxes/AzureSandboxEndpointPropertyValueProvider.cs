@@ -6,6 +6,7 @@ using System.Globalization;
 using System.Text.Json.Nodes;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
+using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Azure;
@@ -107,6 +108,8 @@ internal sealed class AzureSandboxEndpointPropertyValueProvider : IValueProvider
             EndpointProperty.Scheme => uri.Scheme,
             EndpointProperty.HostAndPort => uri.IsDefaultPort ? uri.Host : uri.Authority,
             EndpointProperty.TlsEnabled => string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) ? bool.TrueString : bool.FalseString,
+            EndpointProperty.BrowserOrigins or EndpointProperty.PrimaryBrowserOrigin =>
+                BrowserOriginHelpers.GetOrigin(uri),
             _ => throw new InvalidOperationException($"The property '{_endpointReferenceExpression.Property}' is not supported for the endpoint '{_endpointReferenceExpression.Endpoint.EndpointName}'.")
         };
     }

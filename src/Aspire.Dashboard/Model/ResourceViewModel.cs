@@ -26,6 +26,11 @@ public sealed class ResourceViewModel
 
     public required string Name { get; init; }
     public required string ResourceType { get; init; }
+    public string ResourceTypeDisplayName
+    {
+        get => string.IsNullOrWhiteSpace(field) ? ResourceType : field;
+        init;
+    }
     public required string DisplayName { get; init; }
     public required string Uid { get; init; }
     public required int ReplicaIndex { get; init; }
@@ -55,7 +60,7 @@ public sealed class ResourceViewModel
             ? property.Value.ListValue.Values.Where(v => v.HasStringValue).Select(v => v.StringValue).ToArray()
             : [];
 
-    internal IReadOnlyList<string> AppHostTags => GetTraitValues(KnownResourceTraits.DashboardTag);
+    internal IReadOnlyList<string> AppHostTags => GetTraitValues(KnownResourceTraits.Tag);
 
     internal int? DefaultDashboardPosition
     {
@@ -79,8 +84,8 @@ public sealed class ResourceViewModel
         string.Equals(lifetime.Value.StringValue, "Persistent", StringComparison.Ordinal);
 
     internal string GetResourceTypeDisplayName(IStringLocalizer<Resources.Resources> localizer) => IsPersistentContainer
-        ? string.Format(CultureInfo.CurrentCulture, localizer[nameof(Resources.Resources.ResourcePersistentType)], ResourceType)
-        : ResourceType;
+        ? string.Format(CultureInfo.CurrentCulture, localizer[nameof(Resources.Resources.ResourcePersistentType)], ResourceTypeDisplayName)
+        : ResourceTypeDisplayName;
 
     /// <summary>
     /// Gets the cached addresses for this resource that can be used for peer matching.
@@ -191,7 +196,8 @@ public sealed class ResourceViewModel
     internal bool MatchesFilter(string filter)
     {
         // TODO let ResourceType define the additional data values we include in searches
-        return Name.Contains(filter, StringComparisons.UserTextSearch);
+        return Name.Contains(filter, StringComparisons.UserTextSearch) ||
+            ResourceTypeDisplayName.Contains(filter, StringComparisons.UserTextSearch);
     }
 
     public string? GetResourcePropertyValue(string propertyName)
@@ -401,11 +407,11 @@ public sealed class DisplayedResourcePropertyViewModel : IPropertyGridItem
     public int SortOrder => _propertyViewModel.SortOrder;
     public bool IsTrait => _propertyViewModel.IsTrait;
 
-    // The AppHost sends the raw trait name as the display name, e.g. "Aspire_Dashboard_Tag". Reserved dashboard
+    // The AppHost sends the raw trait name as the display name, e.g. "Aspire_Tag". Reserved Aspire
     // traits get a readable, localized name instead.
     public string DisplayName => _propertyViewModel.Name switch
     {
-        KnownProperties.Resource.TraitPrefix + KnownResourceTraits.DashboardTag => _loc[nameof(Resources.Resources.ResourceTraitDashboardTags)],
+        KnownProperties.Resource.TraitPrefix + KnownResourceTraits.Tag => _loc[nameof(Resources.Resources.ResourceTraitDashboardTags)],
         KnownProperties.Resource.TraitPrefix + KnownResourceTraits.DashboardPosition => _loc[nameof(Resources.Resources.ResourceTraitDashboardPosition)],
         _ => _propertyViewModel.DisplayName ?? _propertyViewModel.KnownProperty?.GetDisplayName(_loc) ?? _propertyViewModel.Name
     };

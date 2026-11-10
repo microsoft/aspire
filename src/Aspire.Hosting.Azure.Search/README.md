@@ -14,6 +14,7 @@ From your AppHost directory, add the `Aspire.Hosting.Azure.Search` integration w
 
 ```bash
 aspire add Aspire.Hosting.Azure.Search
+aspire add Aspire.Hosting.Dotnet
 ```
 
 ## Configure Azure Provisioning for local development
@@ -40,7 +41,7 @@ In the AppHost, add an Azure AI Search service and reference it from another res
 ```csharp
 var search = builder.AddAzureSearch("search");
 
-var myService = builder.AddProject<Projects.MyService>()
+var myService = builder.AddDotnetProject("myservice", "../MyService/MyService.csproj")
                        .WithReference(search);
 ```
 

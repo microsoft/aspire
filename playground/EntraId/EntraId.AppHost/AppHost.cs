@@ -34,7 +34,7 @@ else
         .WithAppRole(new EntraIdAppRole("Admin", "Administrator", "Can administer the playground."));
 }
 
-var webFrontend = builder.AddProject<Projects.EntraId_Web>("webfrontend")
+var webFrontend = builder.AddDotnetProject("webfrontend", "../EntraId.Web/EntraId.Web.csproj")
     .WithExternalHttpEndpoints()
     .WithReference(entraWeb);
 
@@ -61,7 +61,7 @@ var nodeWeb = builder.AddNodeApp("nodefrontend", "../EntraId.NodeWeb", "server.m
     .WithReference(entraWeb);
 #pragma warning restore ASPIRECERTIFICATES001
 
-nodeWeb.WithEnvironment("NODE_WEB_BASE_URL", nodeWeb.GetEndpoint("https"));
+nodeWeb.WithEnvironment("NODE_WEB_BASE_URL", nodeWeb.GetEndpoint("https").PrimaryBrowserOrigin);
 
 // The callback paths are configured by each front end, so they are declared here; the host and port follow the endpoints.
 if (!useExistingApplication)
@@ -77,7 +77,7 @@ if (!useExistingApplication)
 // dashboard launch experience, Refer to Directory.Build.props for the path to
 // the dashboard binary (defaults to the Aspire.Dashboard bin output in the
 // artifacts dir).
-builder.AddProject<Projects.Aspire_Dashboard>(KnownResourceNames.AspireDashboard);
+builder.AddDotnetProject(KnownResourceNames.AspireDashboard, "../../../src/Aspire.Dashboard/Aspire.Dashboard.csproj");
 #endif
 
 builder.Build().Run();

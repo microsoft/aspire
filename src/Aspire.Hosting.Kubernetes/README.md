@@ -6,7 +6,7 @@ Use this integration to model, configure, and deploy Aspire compute resources to
 
 ### Prerequisites
 
-- [Helm](https://helm.sh/docs/intro/install/) **v4.2.0 or later** on your `PATH`.
+- [Helm](https://helm.sh/docs/intro/install/) **v4.0.0 or later** on your `PATH`.
 
 Aspire shells out to `helm upgrade --install` to deploy the generated chart and validates the Helm version up front, so missing or older installs produce a clear actionable error instead of cryptic flag failures.
 
@@ -16,6 +16,7 @@ From your AppHost directory, add the `Aspire.Hosting.Kubernetes` integration wit
 
 ```bash
 aspire add Aspire.Hosting.Kubernetes
+aspire add Aspire.Hosting.Dotnet
 ```
 
 ## Usage example
@@ -36,6 +37,36 @@ await builder.addKubernetesEnvironment("k8s");
 
 The dashboard container included in the published Helm chart opts out of dashboard usage and error telemetry by default (`ASPIRE_DASHBOARD_TELEMETRY_OPTOUT=true`). This does not affect the application's OpenTelemetry data sent to the dashboard.
 
+Browser-origin endpoint properties use deployment inputs rather than internal Kubernetes service addresses.
+The referenced endpoint must be external HTTP(S); internal and non-HTTP(S) endpoint references are rejected.
+For example, `frontend.GetEndpoint("http").BrowserOrigins` reads `Parameters:frontend-http-BrowserOrigins`, which `aspire deploy` supplies through its Helm values override file.
+The input accepts a comma-separated origin list; published charts retain a placeholder for it.
+`frontend.GetEndpoint("http").PrimaryBrowserOrigin` uses a separate `Parameters:frontend-http-PrimaryBrowserOrigin` input containing a single origin. Its default is the first origin from the same matching routes used for `BrowserOrigins`.
+Explicit literal hostnames on matching Ingress paths or Gateway routes provide overridable defaults. Route-specific hostnames override inherited hostnames, and matching TLS configuration selects HTTPS.
+Concrete route hostnames also match wildcard HTTPS listener scopes. Ingress wildcards match one label; Gateway wildcards can match multiple labels. This uses configured routing hostnames, not certificate contents.
+Hostless routes, wildcard hosts, and deferred hostname expressions still require an explicit origin input; internal service DNS and controller-assigned addresses are not assumed to be browser origins.
+Different endpoint identities retain separate inputs even when their readable names collide.
+
+### Custom manifests in polyglot AppHosts
+
+Use `addManifest` inside a Kubernetes service customization to add custom resources to the generated Helm chart. `withField` accepts JSON-compatible primitives, objects, and arrays, including arrays of objects:
+
+```typescript
+await api.publishAsKubernetesService(async (service) => {
+    const policy = await service.addManifest("cilium.io/v2", "CiliumNetworkPolicy", "api-netpol");
+    await policy.withField("spec.endpointSelector.matchLabels", {
+        "app.kubernetes.io/component": "api"
+    });
+    await policy.withField("spec.ingress", [{
+        fromEndpoints: [{
+            matchLabels: { "app.kubernetes.io/component": "frontend" }
+        }]
+    }]);
+});
+```
+
+Paths are dot-separated, so pass keys containing dots or slashes inside an object at the parent path, as shown above. Each call replaces the value at that path; it does not merge an existing subtree. Non-JSON objects such as resource handles are not supported as field values, including inside objects and arrays. Use the dedicated namespace, label, and annotation methods for manifest metadata. In C# AppHosts, use `AdditionalResources` with a `BaseKubernetesResource` subclass for typed custom resources.
+
 ### Container registries
 
 Assign a registry to a project or Dockerfile-backed resource to include its registry-qualified image name in the published Helm chart:
@@ -45,7 +76,7 @@ Assign a registry to a project or Dockerfile-backed resource to include its regi
 ```csharp
 var registry = builder.AddContainerRegistry("registry", "registry.example.com", "apps");
 
-builder.AddProject<Projects.Api>("api")
+builder.AddDotnetProject("api", "../Api/Api.csproj")
     .WithContainerRegistry(registry);
 ```
 
@@ -68,7 +99,7 @@ Use a target-neutral volume when the Kubernetes environment's default storage po
 **C#**
 
 ```csharp
-builder.AddProject<Projects.Api>("api")
+builder.AddDotnetProject("api", "../Api/Api.csproj")
     .WithVolume("data", "/data", env: "DATA_PATH");
 ```
 
@@ -92,7 +123,7 @@ var k8s = builder.AddKubernetesEnvironment("k8s");
 var data = k8s.AddPersistentVolume("data")
     .WithCapacity("20Gi");
 
-builder.AddProject<Projects.Api>("api")
+builder.AddDotnetProject("api", "../Api/Api.csproj")
     .WithPersistentVolume(data, "/data", env: "DATA_PATH");
 ```
 

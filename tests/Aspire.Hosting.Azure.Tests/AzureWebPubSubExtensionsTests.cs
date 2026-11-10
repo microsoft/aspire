@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource Azure publishing/provisioning contracts with synthetic metadata.
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Utils;
 using Azure.Provisioning.WebPubSub;
@@ -438,3 +439,4 @@ public class AzureWebPubSubExtensionsTests(ITestOutputHelper output)
         public string ProjectPath => "projectA";
     }
 }
+#pragma warning restore CS0618

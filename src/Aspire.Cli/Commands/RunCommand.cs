@@ -112,6 +112,8 @@ internal sealed class RunCommand : BaseCommand
 
     protected override TimeSpan GracefulShutdownBudget => s_gracefulShutdownBudget;
 
+    protected override string CancellationMessage => InteractionServiceStrings.StoppingAspire;
+
     internal override void PrepareForExecution(ParseResult parseResult)
     {
         // The spawned child runs without --detach, so its environment marker preserves detach-only
@@ -313,7 +315,10 @@ internal sealed class RunCommand : BaseCommand
                 return CommandResult.Failure(CliExitCodes.FailedToFindProject);
             }
 
-            var isolated = AppHostLauncher.ResolveIsolated(parseResult);
+            var isolated = AppHostLauncher.ResolveIsolated(
+                parseResult,
+                effectiveAppHostFile,
+                _features);
             Telemetry.SetActivityProperty(runActivity, TelemetryConstants.Tags.AppHostIsolated, isolated);
 
             // Resolve the language for this file and get the appropriate handler
@@ -346,7 +351,7 @@ internal sealed class RunCommand : BaseCommand
             // If in isolated mode and a running instance was stopped, warn the user
             if (isolated && runningInstanceResult == RunningInstanceResult.InstanceStopped)
             {
-                InteractionService.DisplayMessage(KnownEmojis.Warning, RunCommandStrings.IsolatedModeRunningInstanceWarning);
+                InteractionService.DisplayMessage(KnownEmojis.PoliceCarLight, RunCommandStrings.IsolatedModeRunningInstanceWarning);
             }
 
             // The completion sources are the contract between RunCommand and IAppHostProject
@@ -486,7 +491,7 @@ internal sealed class RunCommand : BaseCommand
 
                 if (dashboardUrls.DashboardHealthy is false)
                 {
-                    InteractionService.DisplayMessage(KnownEmojis.Warning, RunCommandStrings.DashboardFailedToStart);
+                    InteractionService.DisplayMessage(KnownEmojis.PoliceCarLight, RunCommandStrings.DashboardFailedToStart);
                 }
 
                 // Display the UX
@@ -645,7 +650,7 @@ internal sealed class RunCommand : BaseCommand
                     catch (Exception ex)
                     {
                         _logger.LogWarning(ex, "Failed to capture logs from AppHost");
-                        InteractionService.DisplayMessage(KnownEmojis.Warning, "No longer receiving logs from AppHost.");
+                        InteractionService.DisplayMessage(KnownEmojis.PoliceCarLight, "No longer receiving logs from AppHost.");
                     }
                     finally
                     {

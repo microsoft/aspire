@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource Azure publishing/provisioning contracts with synthetic metadata.
 #pragma warning disable ASPIREPIPELINES003
 #pragma warning disable ASPIREAZURE001
 
@@ -14,17 +15,49 @@ using System.Text.Json.Nodes;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Publishing;
+using Aspire.Hosting.Tests;
 using Aspire.Hosting.Tests.Publishing;
 using Aspire.Hosting.Utils;
 using Azure.Core;
 using Azure.Provisioning.Resources;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging.Testing;
 
 namespace Aspire.Hosting.Azure.Tests;
 
 public class AzureSandboxesTests(ITestOutputHelper output)
 {
+    [Theory]
+    [InlineData(EndpointProperty.BrowserOrigins, "https://api.example.test")]
+    [InlineData(EndpointProperty.PrimaryBrowserOrigin, "https://api.example.test")]
+    public async Task BrowserOriginsUseDeployedSandboxProxyAuthority(EndpointProperty property, string expected)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
+        builder.Services.AddSingleton<IDeploymentStateManager>(new InMemoryDeploymentStateManager());
+        var environment = builder.AddAzureSandboxGroup("sandboxes");
+        var api = builder.AddContainer("api", "image").WithHttpEndpoint(targetPort: 8080)
+            .WithExternalHttpEndpoints().PublishAsAzureSandbox();
+        using var app = builder.Build();
+        await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
+        var target = Assert.IsType<AzureSandboxContainerResource>(api.Resource.GetDeploymentTargetAnnotation(environment.Resource)!.DeploymentTarget);
+        var manager = app.Services.GetRequiredService<IDeploymentStateManager>();
+        var state = await manager.AcquireSectionAsync(AzureSandboxContainerDeployment.GetStateSectionName(target), default);
+        state.Data["Ports"] = new JsonArray(new JsonObject
+        {
+            ["Name"] = "http",
+            ["Port"] = 8080,
+            ["Url"] = "https://api.example.test:443/path?query=value#fragment"
+        });
+        await manager.SaveSectionAsync(state, default);
+        Assert.True(AzureSandboxContainerDeployment.TryResolveEndpointReferenceValue(
+            api.GetEndpoint("http").Property(property), environment.Resource, out var value));
+        var context = new ValueProviderContext { ExecutionContext = app.Services.GetRequiredService<DistributedApplicationExecutionContext>() };
+
+        Assert.Equal(expected, await value.GetValueAsync(context, default));
+    }
+
     [Fact]
     public void AzureSandboxGroupUsesExplicitOutputReferenceNames()
     {
@@ -1585,13 +1618,28 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     [Fact]
     public async Task AzureDevComputeClientKeepsCancellationAfterRejectedCreateDefinite()
     {
-        var handler = new RecordingHandler(_ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.Forbidden)));
+        var requestCount = 0;
+        var handler = new RecordingHandler(_ =>
+        {
+            Interlocked.Increment(ref requestCount);
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.Forbidden));
+        });
+        // Cancel when the client logs the 403 retry warning, after the rejection has been received and
+        // before the retry delay starts. A wall-clock timeout could fire while the request is still in flight.
+        using var cancellationTokenSource = new CancellationTokenSource();
+        var sink = new TestSink();
+        sink.MessageLogged += context =>
+        {
+            if (context.LogLevel == LogLevel.Warning)
+            {
+                cancellationTokenSource.Cancel();
+            }
+        };
         var client = new AzureDevComputeClient(
             new HttpClient(handler),
             new RecordingTokenCredential(),
-            NullLogger.Instance,
+            new TestLogger(nameof(AzureDevComputeClient), sink, enabled: true),
             TimeSpan.FromMinutes(1));
-        using var cancellationTokenSource = new CancellationTokenSource(TimeSpan.FromMilliseconds(10));
 
         var exception = await Assert.ThrowsAsync<AzureDevComputeCreateException>(() => client.CreateDiskImageAsync(
             new AzureDevComputeResourceScope("sub", "rg", "sg", "westus3"),
@@ -1602,6 +1650,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
             },
             cancellationTokenSource.Token));
 
+        Assert.Equal(1, requestCount);
         Assert.False(exception.ResponseMayHaveBeenLost);
         Assert.IsType<TaskCanceledException>(exception.OriginalException);
     }
@@ -3711,3 +3760,4 @@ public class AzureSandboxesTests(ITestOutputHelper output)
         };
     }
 }
+#pragma warning restore CS0618

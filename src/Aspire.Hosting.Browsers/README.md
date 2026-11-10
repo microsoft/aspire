@@ -15,6 +15,7 @@ From your AppHost directory, add the `Aspire.Hosting.Browsers` integration with 
 
 ```bash
 aspire add Aspire.Hosting.Browsers
+aspire add Aspire.Hosting.Dotnet
 ```
 
 The browser logs API is experimental. C# callers must opt in by suppressing `ASPIREBROWSERLOGS001`, as shown below.
@@ -30,7 +31,7 @@ Then, in the AppHost, add browser logs to a web frontend resource with either C#
 
 var builder = DistributedApplication.CreateBuilder(args);
 
-builder.AddProject<Projects.WebFrontend>("web")
+builder.AddDotnetProject("web", "../WebFrontend/WebFrontend.csproj")
     .WithExternalHttpEndpoints()
     .WithBrowserLogs();
 
@@ -46,7 +47,7 @@ import { createBuilder } from "./.aspire/modules/aspire.mjs";
 
 const builder = await createBuilder();
 
-await builder.addProject("web", "../WebFrontend/WebFrontend.csproj")
+await builder.addDotnetProject("web", "../WebFrontend/WebFrontend.csproj")
     .withExternalHttpEndpoints()
     .withBrowserLogs();
 

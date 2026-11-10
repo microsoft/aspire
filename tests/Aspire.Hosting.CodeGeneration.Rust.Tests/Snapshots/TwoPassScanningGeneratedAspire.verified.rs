@@ -389,6 +389,10 @@ pub enum EndpointProperty {
     HostAndPort,
     #[serde(rename = "TlsEnabled")]
     TlsEnabled,
+    #[serde(rename = "BrowserOrigins")]
+    BrowserOrigins,
+    #[serde(rename = "PrimaryBrowserOrigin")]
+    PrimaryBrowserOrigin,
 }
 
 impl std::fmt::Display for EndpointProperty {
@@ -402,6 +406,8 @@ impl std::fmt::Display for EndpointProperty {
             Self::TargetPort => write!(f, "TargetPort"),
             Self::HostAndPort => write!(f, "HostAndPort"),
             Self::TlsEnabled => write!(f, "TlsEnabled"),
+            Self::BrowserOrigins => write!(f, "BrowserOrigins"),
+            Self::PrimaryBrowserOrigin => write!(f, "PrimaryBrowserOrigin"),
         }
     }
 }
@@ -3043,6 +3049,16 @@ impl CSharpAppResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
+    /// Overrides the human-readable resource type label.
+    pub fn with_resource_type_display_name(&self, resource_type_display_name: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("resourceTypeDisplayName".to_string(), serde_json::to_value(&resource_type_display_name).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withResourceTypeDisplayName", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
     /// Specifies the icon to use when displaying the resource in the dashboard.
     pub fn with_icon_name(&self, icon_name: &str, icon_variant: Option<IconVariant>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -4649,6 +4665,16 @@ impl ContainerRegistryResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
+    /// Overrides the human-readable resource type label.
+    pub fn with_resource_type_display_name(&self, resource_type_display_name: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("resourceTypeDisplayName".to_string(), serde_json::to_value(&resource_type_display_name).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withResourceTypeDisplayName", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
     /// Specifies the icon to use when displaying the resource in the dashboard.
     pub fn with_icon_name(&self, icon_name: &str, icon_variant: Option<IconVariant>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -6051,6 +6077,16 @@ impl ContainerResource {
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("child".to_string(), child.handle().to_json());
         let result = self.client.invoke_capability("Aspire.Hosting/withBuilderChildRelationship", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Overrides the human-readable resource type label.
+    pub fn with_resource_type_display_name(&self, resource_type_display_name: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("resourceTypeDisplayName".to_string(), serde_json::to_value(&resource_type_display_name).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withResourceTypeDisplayName", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
@@ -8019,6 +8055,16 @@ impl DotnetToolResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
+    /// Overrides the human-readable resource type label.
+    pub fn with_resource_type_display_name(&self, resource_type_display_name: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("resourceTypeDisplayName".to_string(), serde_json::to_value(&resource_type_display_name).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withResourceTypeDisplayName", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
     /// Specifies the icon to use when displaying the resource in the dashboard.
     pub fn with_icon_name(&self, icon_name: &str, icon_variant: Option<IconVariant>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -8643,6 +8689,24 @@ impl EndpointReference {
         args.insert("context".to_string(), self.handle.to_json());
         let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/EndpointReference.endpointName", args)?;
         Ok(serde_json::from_value(result)?)
+    }
+
+    /// Gets a deferred comma-separated list of browser-facing origins associated with this endpoint.
+    pub fn browser_origins(&self) -> Result<EndpointReferenceExpression, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/EndpointReference.browserOrigins", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(EndpointReferenceExpression::new(handle, self.client.clone()))
+    }
+
+    /// Gets the deferred primary browser-facing origin associated with this endpoint.
+    pub fn primary_browser_origin(&self) -> Result<EndpointReferenceExpression, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/EndpointReference.primaryBrowserOrigin", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(EndpointReferenceExpression::new(handle, self.client.clone()))
     }
 
     /// Gets or sets a custom error message to be thrown when the endpoint annotation is not found.
@@ -9972,6 +10036,16 @@ impl ExecutableResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
+    /// Overrides the human-readable resource type label.
+    pub fn with_resource_type_display_name(&self, resource_type_display_name: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("resourceTypeDisplayName".to_string(), serde_json::to_value(&resource_type_display_name).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withResourceTypeDisplayName", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
     /// Specifies the icon to use when displaying the resource in the dashboard.
     pub fn with_icon_name(&self, icon_name: &str, icon_variant: Option<IconVariant>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -10935,6 +11009,16 @@ impl ExternalServiceResource {
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("child".to_string(), child.handle().to_json());
         let result = self.client.invoke_capability("Aspire.Hosting/withBuilderChildRelationship", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Overrides the human-readable resource type label.
+    pub fn with_resource_type_display_name(&self, resource_type_display_name: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("resourceTypeDisplayName".to_string(), serde_json::to_value(&resource_type_display_name).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withResourceTypeDisplayName", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
@@ -12124,6 +12208,24 @@ impl IDistributedApplicationBuilder {
         let result = self.client.invoke_capability("Aspire.Hosting/addConnectionString", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithConnectionString::new(handle, self.client.clone()))
+    }
+
+    /// Adds an opt-in target that checks for stale generated pipeline output.
+    pub fn with_output_diffing(&self, target_step: Option<&str>, diff_step_name: Option<&str>, description: Option<&str>) -> Result<IDistributedApplicationBuilder, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        if let Some(ref v) = target_step {
+            args.insert("targetStep".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = diff_step_name {
+            args.insert("diffStepName".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = description {
+            args.insert("description".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withOutputDiffing", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IDistributedApplicationBuilder::new(handle, self.client.clone()))
     }
 
     /// Adds a .NET project resource
@@ -14564,6 +14666,16 @@ impl ParameterResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
+    /// Overrides the human-readable resource type label.
+    pub fn with_resource_type_display_name(&self, resource_type_display_name: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("resourceTypeDisplayName".to_string(), serde_json::to_value(&resource_type_display_name).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withResourceTypeDisplayName", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
     /// Specifies the icon to use when displaying the resource in the dashboard.
     pub fn with_icon_name(&self, icon_name: &str, icon_variant: Option<IconVariant>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -16279,6 +16391,16 @@ impl ProjectResource {
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("child".to_string(), child.handle().to_json());
         let result = self.client.invoke_capability("Aspire.Hosting/withBuilderChildRelationship", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Overrides the human-readable resource type label.
+    pub fn with_resource_type_display_name(&self, resource_type_display_name: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("resourceTypeDisplayName".to_string(), serde_json::to_value(&resource_type_display_name).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withResourceTypeDisplayName", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
@@ -18647,6 +18769,16 @@ impl TestDatabaseResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
+    /// Overrides the human-readable resource type label.
+    pub fn with_resource_type_display_name(&self, resource_type_display_name: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("resourceTypeDisplayName".to_string(), serde_json::to_value(&resource_type_display_name).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withResourceTypeDisplayName", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
     /// Specifies the icon to use when displaying the resource in the dashboard.
     pub fn with_icon_name(&self, icon_name: &str, icon_variant: Option<IconVariant>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -20325,6 +20457,16 @@ impl TestRedisResource {
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("child".to_string(), child.handle().to_json());
         let result = self.client.invoke_capability("Aspire.Hosting/withBuilderChildRelationship", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Overrides the human-readable resource type label.
+    pub fn with_resource_type_display_name(&self, resource_type_display_name: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("resourceTypeDisplayName".to_string(), serde_json::to_value(&resource_type_display_name).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withResourceTypeDisplayName", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
@@ -22227,6 +22369,16 @@ impl TestVaultResource {
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("child".to_string(), child.handle().to_json());
         let result = self.client.invoke_capability("Aspire.Hosting/withBuilderChildRelationship", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Overrides the human-readable resource type label.
+    pub fn with_resource_type_display_name(&self, resource_type_display_name: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("resourceTypeDisplayName".to_string(), serde_json::to_value(&resource_type_display_name).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withResourceTypeDisplayName", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }

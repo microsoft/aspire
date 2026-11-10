@@ -46,16 +46,16 @@ public class TrayStartupOptionsTests
     {
         using var installation = new TestTrayStartupInstallation();
         var options = installation.Options(windows);
-        Assert.Null(TrayStartupEntry.GetUnavailableReason(options, true, windows));
-        Assert.NotNull(TrayStartupEntry.GetUnavailableReason(options, false, windows));
-        Assert.NotNull(TrayStartupEntry.GetUnavailableReason(options with { StartupCliPath = null }, true, windows));
-        Assert.NotNull(TrayStartupEntry.GetUnavailableReason(options with { BundleRoot = null }, true, windows));
-        Assert.NotNull(TrayStartupEntry.GetUnavailableReason(options with { SmokeSeconds = 1 }, true, windows));
+        Assert.Null(TrayStartupEntry.GetUnavailableReason(options, true, windows, linux: false));
+        Assert.NotNull(TrayStartupEntry.GetUnavailableReason(options, false, windows, linux: false));
+        Assert.NotNull(TrayStartupEntry.GetUnavailableReason(options with { StartupCliPath = null }, true, windows, linux: false));
+        Assert.NotNull(TrayStartupEntry.GetUnavailableReason(options with { BundleRoot = null }, true, windows, linux: false));
+        Assert.NotNull(TrayStartupEntry.GetUnavailableReason(options with { SmokeSeconds = 1 }, true, windows, linux: false));
 
         File.WriteAllText(Path.ChangeExtension(options.CliPath, ".runtimeconfig.json"), "{}");
-        Assert.NotNull(TrayStartupEntry.GetUnavailableReason(options, true, windows));
+        Assert.NotNull(TrayStartupEntry.GetUnavailableReason(options, true, windows, linux: false));
         File.Delete(options.CliPath);
-        Assert.NotNull(TrayStartupEntry.GetUnavailableReason(options, true, windows));
+        Assert.NotNull(TrayStartupEntry.GetUnavailableReason(options, true, windows, linux: false));
     }
 
     [Theory]
@@ -69,7 +69,7 @@ public class TrayStartupOptionsTests
         File.Copy(options.CliPath, cli);
 
         Assert.Equal("Launch at sign-in cannot use a CLI inside an extracted version bundle.",
-            TrayStartupEntry.GetUnavailableReason(options with { CliPath = cli, StartupCliPath = cli }, true, windows));
+            TrayStartupEntry.GetUnavailableReason(options with { CliPath = cli, StartupCliPath = cli }, true, windows, linux: false));
     }
 
     [Theory]
@@ -83,7 +83,7 @@ public class TrayStartupOptionsTests
         File.Copy(installation.MacCli, cli);
         var options = installation.Options(windows: false) with { CliPath = cli, StartupCliPath = cli };
 
-        Assert.Equal(TrayStartupEntry.Unavailable, TrayStartupEntry.GetUnavailableReason(options, true, false));
+        Assert.Equal(TrayStartupEntry.Unavailable, TrayStartupEntry.GetUnavailableReason(options, true, false, linux: false));
     }
 
     [Fact(Skip = "Symlinks are checked on macOS.", SkipUnless = nameof(SupportsMac))]
@@ -93,14 +93,14 @@ public class TrayStartupOptionsTests
         var options = installation.Options(windows: false);
         var link = Path.Combine(installation.Root, "stable-installation");
         File.CreateSymbolicLink(link, installation.MacCli);
-        Assert.Null(TrayStartupEntry.GetUnavailableReason(options with { StartupCliPath = link }, true, false));
+        Assert.Null(TrayStartupEntry.GetUnavailableReason(options with { StartupCliPath = link }, true, false, linux: false));
 
         File.Delete(link);
         var versioned = Path.Combine(installation.BundleRoot, "aspire");
         File.Copy(installation.MacCli, versioned);
         File.CreateSymbolicLink(link, versioned);
         Assert.Equal("Launch at sign-in cannot use a CLI inside an extracted version bundle.",
-            TrayStartupEntry.GetUnavailableReason(options with { CliPath = versioned, StartupCliPath = link }, true, false));
+            TrayStartupEntry.GetUnavailableReason(options with { CliPath = versioned, StartupCliPath = link }, true, false, linux: false));
     }
 
     [Fact]

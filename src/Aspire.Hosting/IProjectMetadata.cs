@@ -54,6 +54,16 @@ public interface IProjectMetadata : IResourceAnnotation
     public string? BuildWorkingDirectory => null;
 
     /// <summary>
+    /// Gets the project output identity produced by an externally coordinated build.
+    /// </summary>
+    /// <remarks>
+    /// Debugger clients use this value to verify that a running process matches the exact output produced by
+    /// the coordinated build without re-evaluating the project with different build inputs.
+    /// </remarks>
+    [Experimental("ASPIREEXTENSION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public ProjectBuildTarget? BuildTarget => null;
+
+    /// <summary>
     /// Gets a value indicating whether the project is a file-based app (a .cs file) rather than a full project (.csproj).
     /// </summary>
     public bool IsFileBasedApp => string.Equals(Path.GetExtension(ProjectPath), ".cs", StringComparison.OrdinalIgnoreCase);

@@ -27,6 +27,14 @@ func main() {
 			log.Fatal(aspire.FormatError(err))
 		}
 	})
+	aks.WithSystemNodePool(func(pool *aspire.AksNodePoolConfig) {
+		pool.OsSku = aspire.StringPtr("AzureLinux")
+	})
+	aks.AddNodePool("workers", func(pool *aspire.AksNodePoolConfig) {
+		pool.VmSize = aspire.AksNodeVmSizes.StandardDSv5.StandardD2sV5
+		pool.OsSku = aspire.StringPtr("AzureLinux")
+	})
+	aks.AddPersistentVolume("aks-data").WithCapacity("20Gi")
 	if aks.Err() != nil {
 		log.Fatal(aspire.FormatError(aks.Err()))
 	}
@@ -330,6 +338,9 @@ ENTRYPOINT ["dotnet", "App.dll"]
 	container.WithIconName("Database", &aspire.WithIconNameOptions{
 		IconVariant: &iconVariant,
 	})
+
+	// WithResourceTypeDisplayName
+	container.WithResourceTypeDisplayName("Validation Service")
 
 	// WithHttpProbe
 	container.WithHttpProbe(aspire.ProbeTypeLiveness, &aspire.WithHttpProbeOptions{

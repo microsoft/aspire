@@ -1,0 +1,4 @@
+﻿Installed skills:
+  Skills: playwright-cli
+  Locations: .agents/skills (GitHub Copilot, OpenCode)
+  [dim]Shared files may be discovered by agents that aren't selected.[/]

@@ -47,10 +47,11 @@ public sealed class UpdateConfig
     /// This property specifies the threshold for the ratio of failed tasks
     /// over the total number of tasks during a service update. If the failure
     /// ratio exceeds this value, the update will be rolled back or stopped
-    /// depending on the configured failure action.
+    /// depending on the configured failure action. Docker requires this value to be a number
+    /// (for example, <c>0.3</c>).
     /// </summary>
     [YamlMember(Alias = "max_failure_ratio")]
-    public string? MaxFailureRatio { get; set; }
+    public double? MaxFailureRatio { get; set; }
 
     /// <summary>
     /// Represents the execution order of service updates during the update process.

@@ -19,6 +19,9 @@ public class AzureDataLakeStorageFileSystemResource(string name, string dataLake
     IResourceWithConnectionString,
     IResourceWithParent<AzureDataLakeStorageResource>
 {
+    /// <inheritdoc/>
+    public override string ResourceTypeDisplayName => "Azure Data Lake Storage File System";
+
     /// <summary>
     /// Gets the data lake file system name.
     /// </summary>
