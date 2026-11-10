@@ -52,8 +52,8 @@ internal static class FluentUISetupHelpers
     public static void SetupFluentOverflow(BunitContext context)
     {
         var overflowModule = context.JSInterop.SetupModule(GetFluentFile("./_content/Microsoft.FluentUI.AspNetCore.Components/Components/Overflow/FluentOverflow.razor.js"));
-        overflowModule.SetupVoid("fluentOverflowInitialize", _ => true);
-        overflowModule.SetupVoid("fluentOverflowDispose", _ => true);
+        overflowModule.SetupVoid("fluentOverflowInitialize", _ => true).SetVoidResult();
+        overflowModule.SetupVoid("fluentOverflowDispose", _ => true).SetVoidResult();
     }
 
     public static void SetupFluentAnchor(BunitContext context)
@@ -64,9 +64,9 @@ internal static class FluentUISetupHelpers
     public static void SetupFluentAnchoredRegion(BunitContext context)
     {
         var module = context.JSInterop.SetupModule(GetFluentFile("./_content/Microsoft.FluentUI.AspNetCore.Components/Components/AnchoredRegion/FluentAnchoredRegion.razor.js"));
-        module.SetupVoid("goToNextFocusableElement", _ => true);
-        module.SetupVoid("initializeKeyboardNavigation", _ => true);
-        module.SetupVoid("removeKeyboardNavigation", _ => true);
+        module.SetupVoid("goToNextFocusableElement", _ => true).SetVoidResult();
+        module.SetupVoid("initializeKeyboardNavigation", _ => true).SetVoidResult();
+        module.SetupVoid("removeKeyboardNavigation", _ => true).SetVoidResult();
     }
 
     public static void SetupFluentDivider(BunitContext context)

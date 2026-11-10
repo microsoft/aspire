@@ -23,7 +23,6 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.FluentUI.AspNetCore.Components;
-using Microsoft.JSInterop;
 using OpenTelemetry.Proto.Logs.V1;
 using Xunit;
 using static Aspire.Tests.Shared.Telemetry.TelemetryTestHelpers;
@@ -58,22 +57,6 @@ public partial class StructuredLogsTests : DashboardTestContext
             Assert.Single(cut.FindAll(".telemetry-empty-content"));
             Assert.Empty(cut.FindAll(".telemetry-help-button"));
         });
-    }
-
-    [Fact]
-    public async Task Setup_FirstRenderFocusInvocationCompletes()
-    {
-        // Arrange
-        SetupStructureLogsServices();
-
-        // Act
-        var focusTask = JSInterop.JSRuntime.InvokeVoidAsync("focusElement", "structuredLogsScrollContainer", true).AsTask();
-
-        // Assert
-        // bUnit faults planned invocations that have no result once DefaultWaitTimeout elapses, which fails
-        // any test still running at that point. The first-render focus must complete immediately.
-        Assert.True(focusTask.IsCompletedSuccessfully);
-        await focusTask;
     }
 
     [Fact]

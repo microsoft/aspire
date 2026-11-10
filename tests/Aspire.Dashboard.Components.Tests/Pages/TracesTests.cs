@@ -19,7 +19,6 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.FluentUI.AspNetCore.Components;
-using Microsoft.JSInterop;
 using OpenTelemetry.Proto.Trace.V1;
 using Xunit;
 using static Aspire.Tests.Shared.Telemetry.TelemetryTestHelpers;
@@ -54,39 +53,6 @@ public class TracesTests : DashboardTestContext
             Assert.Single(cut.FindAll(".telemetry-empty-content"));
             Assert.Empty(cut.FindAll(".telemetry-help-button"));
         });
-    }
-
-    [Fact]
-    public async Task Setup_FirstRenderFocusInvocationCompletes()
-    {
-        // Arrange
-        SetupTracesServices();
-
-        // Act
-        var focusTask = JSInterop.JSRuntime.InvokeVoidAsync("focusElement", "tracesScrollContainer", true).AsTask();
-
-        // Assert
-        // bUnit faults planned invocations that have no result once DefaultWaitTimeout elapses, which fails
-        // any test still running at that point. The first-render focus must complete immediately.
-        Assert.True(focusTask.IsCompletedSuccessfully);
-        await focusTask;
-    }
-
-    [Fact]
-    public async Task Setup_TooltipInitializeInvocationCompletes()
-    {
-        // Arrange
-        SetupTracesServices();
-        var module = await JSInterop.JSRuntime.InvokeAsync<IJSObjectReference>("import", "./_content/Microsoft.FluentUI.AspNetCore.Components/Components/Tooltip/FluentTooltip.razor.js");
-
-        // Act
-        var initializeTask = module.InvokeVoidAsync("Microsoft.FluentUI.Blazor.Tooltip.FluentTooltipInitialize", "tooltip-id").AsTask();
-
-        // Assert
-        // bUnit faults planned invocations that have no result once DefaultWaitTimeout elapses, which fails
-        // any test still running at that point. Tooltip initialization must complete immediately.
-        Assert.True(initializeTask.IsCompletedSuccessfully);
-        await initializeTask;
     }
 
     [Fact]

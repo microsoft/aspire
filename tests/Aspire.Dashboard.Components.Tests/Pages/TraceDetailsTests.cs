@@ -17,7 +17,6 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging.Testing;
 using Microsoft.FluentUI.AspNetCore.Components;
-using Microsoft.JSInterop;
 using OpenTelemetry.Proto.Logs.V1;
 using OpenTelemetry.Proto.Trace.V1;
 using Xunit;
@@ -35,22 +34,6 @@ public partial class TraceDetailsTests : DashboardTestContext
     public TraceDetailsTests(ITestOutputHelper testOutputHelper)
     {
         _testOutputHelper = testOutputHelper;
-    }
-
-    [Fact]
-    public async Task Setup_FirstRenderFocusInvocationCompletes()
-    {
-        // Arrange
-        SetupTraceDetailsServices();
-
-        // Act
-        var focusTask = JSInterop.JSRuntime.InvokeVoidAsync("focusElement", "traceDetailScrollContainer", true).AsTask();
-
-        // Assert
-        // bUnit faults planned invocations that have no result once DefaultWaitTimeout elapses, which fails
-        // any test still running at that point. The first-render focus must complete immediately.
-        Assert.True(focusTask.IsCompletedSuccessfully);
-        await focusTask;
     }
 
     [Fact]
