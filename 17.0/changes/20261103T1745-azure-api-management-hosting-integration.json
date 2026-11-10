@@ -6,7 +6,9 @@
   "changeType": "New features",
   "communityContributors": [],
   "description": "New experimental `Aspire.Hosting.Azure.ApiManagement` integration models an API Management service with its APIs, backends, policies, and products, provisioned on deploy without hand-authored Bicep.",
-  "docsPrs": [],
+  "docsPrs": [
+    2083
+  ],
   "docsRequired": true,
   "emoji": "🌉",
   "firstMergedAt": "2026-11-03T17:45:38Z",
