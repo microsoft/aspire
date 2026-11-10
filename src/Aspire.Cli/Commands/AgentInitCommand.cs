@@ -538,27 +538,12 @@ internal sealed class AgentInitCommand : BaseCommand
                 .Select(client => client.GetSkillBaseDirectory(scope, workspaceRoot)));
         }
 
-        // The telemetry hooks only classify skills shipped by the aspire@aspire-skills plugin and Aspire MCP
-        // tool usage, so a client's hook is installed only after this run registers that plugin or configures
-        // the Aspire MCP server for the client. Selecting the aspire skill choice is not enough on its own:
-        // skill sources can disable the default source or replace its plugins with ones the hooks do not
-        // report on. Third-party skills (playwright-cli, dotnet-inspect) alone produce no events either.
-        var aspireConfiguredClients = new HashSet<IAgentClient>();
         IReadOnlyList<AgentTargetResult> registrationResults = [];
         if (configureAspire)
         {
             cancellationToken.ThrowIfCancellationRequested();
             registrationResults = await AgentConfiguration.ApplyRemoteAsync(selectedClients, workspaceRoot, scope, skillSources, cancellationToken);
             hasErrors |= DisplayRemoteConfigurationResults(registrationResults, workspaceRoot);
-
-            var registersAspireSkillsPlugin = skillSources.Any(static source =>
-                source.GetPluginNames().Contains(AspireSkillsRemoteConfiguration.PluginName, StringComparer.Ordinal));
-            if (registersAspireSkillsPlugin)
-            {
-                aspireConfiguredClients.UnionWith(registrationResults
-                    .Where(static result => result.Status is not AgentConfigurationStatus.Failed)
-                    .SelectMany(static result => result.Clients));
-            }
         }
 
         // --- Phase 3: Apply copied skill files at each unique destination ---
@@ -632,6 +617,7 @@ internal sealed class AgentInitCommand : BaseCommand
         DisplayInstalledSkillsSummary(installedSkills, scope, workspaceRoot);
 
         // --- Phase 5: Apply MCP server configuration if the user confirmed ---
+        var mcpConfiguredClients = new List<IAgentClient>();
         if (configureMcp)
         {
             var pathComparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
@@ -678,7 +664,10 @@ internal sealed class AgentInitCommand : BaseCommand
                         InteractionService.DisplayMessage(emoji, message);
                     }
 
-                    aspireConfiguredClients.UnionWith(targets.Select(static target => target.Client));
+                    // Repair-only targets don't add the Aspire server, so they don't count as configured.
+                    mcpConfiguredClients.AddRange(targets
+                        .Where(static target => target.ConfigureServer)
+                        .Select(static target => target.Client));
                 }
                 catch (Exception ex) when (ex is InvalidOperationException or IOException or UnauthorizedAccessException)
                 {
@@ -694,10 +683,16 @@ internal sealed class AgentInitCommand : BaseCommand
         }
 
         // --- Phase 6: Install agent telemetry hooks (default-on, parity with azure-skills) ---
-        // Global setup registers one user-level hook per selected client whose Aspire configuration
-        // succeeded. Whether telemetry is actually transmitted stays gated by the single
-        // ASPIRE_CLI_TELEMETRY_OPTOUT opt-out, which both the hook scripts and the
-        // `aspire agent telemetry` command path re-check at runtime.
+        // Global setup registers one user-level hook per selected client. Whether telemetry is actually
+        // transmitted stays gated by the single ASPIRE_CLI_TELEMETRY_OPTOUT opt-out, which both the hook
+        // scripts and the `aspire agent telemetry` command path re-check at runtime.
+        // The hooks only report aspire@aspire-skills skills and Aspire MCP tool usage, so a client gets a
+        // hook only when this run registered that plugin or configured the Aspire MCP server for it.
+        // Selecting the aspire skill choice is not enough: skill sources can disable the default source
+        // or replace its plugins.
+        var aspireConfiguredClients = GetAspireSkillsRegisteredClients(registrationResults, skillSources)
+            .Concat(mcpConfiguredClients)
+            .ToHashSet();
         var telemetryHookClients = selectedClients.Where(aspireConfiguredClients.Contains).ToList();
         if (scope is AgentConfigurationScope.Global && telemetryHookClients.Count > 0)
         {
@@ -723,14 +718,30 @@ internal sealed class AgentInitCommand : BaseCommand
         };
     }
 
+    private static IEnumerable<IAgentClient> GetAspireSkillsRegisteredClients(
+        IReadOnlyList<AgentTargetResult> registrationResults,
+        IReadOnlyList<SkillSource> skillSources)
+    {
+        var registersAspireSkillsPlugin = skillSources.Any(static source =>
+            source.GetPluginNames().Contains(AspireSkillsRemoteConfiguration.PluginName, StringComparer.Ordinal));
+        if (!registersAspireSkillsPlugin)
+        {
+            return [];
+        }
+
+        return registrationResults
+            .Where(static result => result.Status is not AgentConfigurationStatus.Failed)
+            .SelectMany(static result => result.Clients);
+    }
+
     private async Task ConfigureTelemetryHooksAsync(
-        IReadOnlyList<IAgentClient> selectedClients,
+        IReadOnlyList<IAgentClient> clients,
         CancellationToken cancellationToken)
     {
         IReadOnlyList<TelemetryHookResult> results;
         try
         {
-            results = await _telemetryHookConfigurator.ConfigureAsync(selectedClients, cancellationToken);
+            results = await _telemetryHookConfigurator.ConfigureAsync(clients, cancellationToken);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
