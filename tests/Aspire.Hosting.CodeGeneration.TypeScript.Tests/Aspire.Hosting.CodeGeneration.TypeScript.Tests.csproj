@@ -16,6 +16,7 @@
     <ProjectReference Include="..\..\src\Aspire.Hosting.Dotnet\Aspire.Hosting.Dotnet.csproj" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.Python\Aspire.Hosting.Python.csproj" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.Go\Aspire.Hosting.Go.csproj" />
+    <ProjectReference Include="..\..\src\Aspire.Hosting.Rust\Aspire.Hosting.Rust.csproj" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.Azure.AppContainers\Aspire.Hosting.Azure.AppContainers.csproj" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.Azure.AppService\Aspire.Hosting.Azure.AppService.csproj" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.Azure.Network\Aspire.Hosting.Azure.Network.csproj" />
