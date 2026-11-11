@@ -126,7 +126,10 @@ internal sealed class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAsyncDispo
     {
         using var activity = ProfilingTelemetry.StartDcpRunApplication(_configuration, _model.Resources.Count);
 
-        _dcpInfo = await _dcpDependencyCheckService.GetDcpInfoAsync(cancellationToken: ct).ConfigureAwait(false);
+        // Container runtime details are only needed when the model has containers.
+        _dcpInfo = _model.Resources.Any(r => r.IsContainer())
+            ? await _dcpDependencyCheckService.GetDcpInfoAsync(cancellationToken: ct).ConfigureAwait(false)
+            : await _dcpDependencyCheckService.GetDcpVersionAsync(ct).ConfigureAwait(false);
 
         Debug.Assert(_dcpInfo is not null, "DCP info should not be null at this point");
 

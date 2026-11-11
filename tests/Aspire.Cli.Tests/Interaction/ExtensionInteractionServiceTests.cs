@@ -182,13 +182,19 @@ public class ExtensionInteractionServiceTests(ITestOutputHelper outputHelper)
             });
     }
 
-    [Fact]
-    public async Task TryDisplayCommandFailureAsync_WithError_CombinesDiagnosticLogActions()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task TryDisplayCommandFailureAsync_WithError_CombinesDiagnosticLogActions(bool allowMarkup)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var cliLogFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, "aspire.cli.log");
         var appHostLogFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cli.log");
         string? capturedError = null;
+        const string expectedError = "The project could not be built.\nSee https://docs.example/help?team=[platform].";
+        var errorMessage = allowMarkup
+            ? "[bold]The project could not be built.[/]\nSee [link]https://docs.example/help?team=[[platform]][/]."
+            : expectedError;
         IReadOnlyList<InteractionMessageAction>? capturedActions = null;
         var displayedLogNotification = false;
         var backchannel = new TestExtensionBackchannel
@@ -209,14 +215,15 @@ public class ExtensionInteractionServiceTests(ITestOutputHelper outputHelper)
         using var interactionService = CreateExtensionInteractionService(workspace, backchannel);
 
         var displayed = await interactionService.TryDisplayCommandFailureAsync(
-            "The project could not be built.",
+            errorMessage,
             cliLogFilePath,
             appHostLogFilePath,
+            allowMarkup,
             CancellationToken.None);
         await interactionService.FlushAsync();
 
         Assert.True(displayed);
-        Assert.Equal("The project could not be built.", capturedError);
+        Assert.Equal(expectedError, capturedError);
         Assert.Collection(
             Assert.IsAssignableFrom<IReadOnlyList<InteractionMessageAction>>(capturedActions),
             action =>
@@ -255,6 +262,7 @@ public class ExtensionInteractionServiceTests(ITestOutputHelper outputHelper)
             errorMessage: null,
             logFilePath,
             appHostCliLogFilePath: null,
+            allowMarkup: false,
             CancellationToken.None);
         await interactionService.FlushAsync();
 
@@ -301,6 +309,7 @@ public class ExtensionInteractionServiceTests(ITestOutputHelper outputHelper)
             "The project could not be built.",
             Path.Combine(workspace.WorkspaceRoot.FullName, "aspire.cli.log"),
             appHostCliLogFilePath: null,
+            allowMarkup: false,
             CancellationToken.None);
         await interactionService.FlushAsync();
 

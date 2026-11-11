@@ -36,8 +36,7 @@ internal sealed partial class CliTemplateFactory
         _logger.LogDebug("Applying Go starter template. ProjectName: {ProjectName}, OutputPath: {OutputPath}, AspireVersion: {AspireVersion}.", projectName, outputPath, aspireVersion);
 
         var useLocalhostTld = await ResolveUseLocalhostTldAsync(parseResult, cancellationToken);
-        // Keep the existing Redis-enabled default, including non-interactive scaffolding.
-        var useRedisCache = parseResult.GetValue(_useRedisCacheOption) ?? true;
+        var useRedisCache = await ResolveUseRedisCacheAsync(parseResult, cancellationToken);
 
         TemplateResult templateResult;
         try
@@ -54,7 +53,11 @@ internal sealed partial class CliTemplateFactory
                     var projectNameLower = projectName.ToLowerInvariant();
                     var ports = GenerateRandomPorts();
                     var hostName = useLocalhostTld ? $"{projectNameLower}.dev.localhost" : "localhost";
-                    var conditions = new Dictionary<string, bool> { ["redis"] = useRedisCache };
+                    var conditions = new Dictionary<string, bool>
+                    {
+                        ["redis"] = useRedisCache,
+                        ["no-redis"] = !useRedisCache,
+                    };
                     string ApplyAllTokens(string content) => ConditionalBlockProcessor.Process(
                         ApplyTokens(content, projectName, projectNameLower, aspireVersion, ports, hostName),
                         conditions);
