@@ -823,7 +823,7 @@ extends:
                     # a dry run never actually publishes and is the documented way to
                     # exercise the npm path for a prerelease build.
                     if ("${{ parameters.DryRun }}" -eq "false" -and "${{ parameters.IsPrerelease }}" -eq "true") {
-                      Write-Error "npm publishing is blocked for prerelease runs because the MicroBuild npm publish template does not yet expose a dist-tag parameter. Set SkipNpmRidPublish=true and SkipNpmPointerPublish=true, or run with DryRun=true until prereleases can publish under a non-latest tag."
+                      Write-Error "npm publishing is blocked for prerelease runs because Aspire does not configure a non-latest dist-tag. Set SkipNpmRidPublish=true and SkipNpmPointerPublish=true, or run with DryRun=true until prereleases can publish under a non-latest tag."
                       exit 1
                     }
 
@@ -1375,9 +1375,9 @@ extends:
                     Write-Host "All staged npm tarballs match validated version '$validatedVersion'."
                   displayName: 'Verify Staged npm Package Versions'
 
-                # npm publish can move the pointer package's `latest` dist-tag backward.
-                # MicroBuild exposes no dist-tag input, so check it only when the pointer
-                # is scheduled. RID-only retries do not change the pointer's tag.
+                # Publishing with the default tag can move the pointer package's `latest`
+                # backward. Check it only when the pointer is scheduled; RID-only retries
+                # do not change the pointer's tag.
                 - pwsh: |
                     $ErrorActionPreference = 'Stop'
                     $isDryRun = "${{ parameters.DryRun }}" -eq "true"
