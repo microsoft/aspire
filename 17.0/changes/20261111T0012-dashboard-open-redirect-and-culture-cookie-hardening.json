@@ -1,0 +1,20 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "\ud83d\udcca",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The token validation middleware now uses a local redirect, and the language cookie is set with Secure, HttpOnly, and SameSite attributes.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udee1\ufe0f",
+  "firstMergedAt": "2026-11-11T00:12:22Z",
+  "lastMergedAt": "2026-11-11T00:12:36Z",
+  "name": "Dashboard open redirect and culture cookie hardening",
+  "owner": "eerhardt",
+  "prs": [
+    22066,
+    22067
+  ]
+}

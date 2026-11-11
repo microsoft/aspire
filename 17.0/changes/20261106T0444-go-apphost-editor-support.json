@@ -10,10 +10,11 @@
   "docsRequired": false,
   "emoji": "\ud83d\udc39",
   "firstMergedAt": "2026-11-06T04:44:42Z",
-  "lastMergedAt": "2026-11-06T04:44:42Z",
+  "lastMergedAt": "2026-11-11T00:14:19Z",
   "name": "Go AppHost editor support",
   "owner": "IEvangelist",
   "prs": [
-    21826
+    21826,
+    22103
   ]
 }

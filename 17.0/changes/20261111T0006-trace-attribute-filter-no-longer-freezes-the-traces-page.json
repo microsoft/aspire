@@ -1,0 +1,21 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "\ud83d\udcca",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [
+    "@sammychinedu2ky"
+  ],
+  "description": "Filtering traces by a span attribute with tens of thousands of spans no longer pins the dashboard CPU and leaves the trace list empty.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83e\uddca",
+  "firstMergedAt": "2026-11-11T00:06:13Z",
+  "lastMergedAt": "2026-11-11T00:06:13Z",
+  "name": "Trace attribute filter no longer freezes the traces page",
+  "owner": "joperezr",
+  "prs": [
+    21997
+  ]
+}

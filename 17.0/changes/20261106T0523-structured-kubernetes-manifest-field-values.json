@@ -10,10 +10,11 @@
   "docsRequired": false,
   "emoji": "\u2638\ufe0f",
   "firstMergedAt": "2026-11-06T05:23:54Z",
-  "lastMergedAt": "2026-11-06T05:23:54Z",
+  "lastMergedAt": "2026-11-11T00:12:56Z",
   "name": "Structured Kubernetes manifest field values",
   "owner": "IEvangelist",
   "prs": [
-    21824
+    21824,
+    22107
   ]
 }

@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Trace attribute filter no longer freezes the traces page",
+  "mergedAt": "2026-11-11T00:06:13Z",
+  "number": 21997,
+  "runDate": "2026-11-11T06:10:00Z",
+  "status": "included",
+  "title": "[release/17.0] Fix trace attribute filter freezing the traces page"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "File-based AppHosts with Central Package Management",
+  "mergedAt": "2026-11-11T00:07:18Z",
+  "number": 22089,
+  "runDate": "2026-11-11T06:10:00Z",
+  "status": "included",
+  "title": "[release/17.0] Detect file-based AppHosts with versionless #:package directives (CPM)"
+}

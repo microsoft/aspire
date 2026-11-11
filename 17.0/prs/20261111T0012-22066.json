@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Dashboard open redirect and culture cookie hardening",
+  "mergedAt": "2026-11-11T00:12:22Z",
+  "number": 22066,
+  "runDate": "2026-11-11T06:10:00Z",
+  "status": "included",
+  "title": "[release/17.0] Use LocalRedirect in dashboard ValidateTokenMiddleware (CodeQL open redirect)"
+}

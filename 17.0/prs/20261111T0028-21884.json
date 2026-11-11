@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Container image tag bump",
+  "mergedAt": "2026-11-11T00:28:48Z",
+  "number": 21884,
+  "runDate": "2026-11-11T06:10:00Z",
+  "status": "excluded",
+  "title": "[release/17.0] Update container image tags to newer minor and patch releases"
+}

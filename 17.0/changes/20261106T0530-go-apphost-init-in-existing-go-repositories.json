@@ -10,10 +10,11 @@
   "docsRequired": false,
   "emoji": "\ud83d\udcc2",
   "firstMergedAt": "2026-11-06T05:30:21Z",
-  "lastMergedAt": "2026-11-06T05:30:21Z",
+  "lastMergedAt": "2026-11-11T00:00:16Z",
   "name": "Go AppHost init in existing Go repositories",
   "owner": "IEvangelist",
   "prs": [
-    21823
+    21823,
+    22105
   ]
 }

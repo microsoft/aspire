@@ -1,0 +1,21 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "\ud83d\udcca",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [
+    "@sebastienros"
+  ],
+  "description": "Switching tabs or crossing the desktop breakpoint right after a grid or metrics view opens no longer ends the Blazor circuit and stops every view in the tab.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udd0c",
+  "firstMergedAt": "2026-11-11T00:06:42Z",
+  "lastMergedAt": "2026-11-11T00:06:42Z",
+  "name": "Dashboard views removed during initialization no longer end the circuit",
+  "owner": "joperezr",
+  "prs": [
+    22058
+  ]
+}

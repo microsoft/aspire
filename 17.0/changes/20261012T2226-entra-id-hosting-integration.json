@@ -1,6 +1,6 @@
 {
   "area": "AppHost",
-  "areaEmoji": "🏠",
+  "areaEmoji": "\ud83c\udfe0",
   "backport": false,
   "breaking": false,
   "changeType": "New features",
@@ -8,9 +8,12 @@
     "@jmprieur"
   ],
   "description": "Added a new `Aspire.Hosting.Azure.EntraId` integration that models Entra ID application registrations as a first-class AppHost resource, including client-secret, certificate, and federated-identity credential types. This provides a single source of truth that the AppHost, CLI, and dashboard can read to configure authentication for referencing services and project publish-mode federated credentials.",
-  "docsPrs": [],
+  "docsPrs": [
+    2086,
+    2111
+  ],
   "docsRequired": true,
-  "emoji": "🪪",
+  "emoji": "\ud83e\udeaa",
   "firstMergedAt": "2026-10-12T22:26:53Z",
   "lastMergedAt": "2026-10-12T22:26:53Z",
   "name": "Entra ID application hosting integration",

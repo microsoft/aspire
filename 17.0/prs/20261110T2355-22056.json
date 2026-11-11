@@ -1,0 +1,9 @@
+{
+  "author": "joperezr",
+  "comment": "Release stabilization property change; not user-facing",
+  "mergedAt": "2026-11-10T23:55:07Z",
+  "number": 22056,
+  "runDate": "2026-11-11T06:10:00Z",
+  "status": "excluded",
+  "title": "[release/17.0] Temporarily disable build stabilization"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Dashboard views removed during initialization no longer end the circuit",
+  "mergedAt": "2026-11-11T00:06:42Z",
+  "number": 22058,
+  "runDate": "2026-11-11T06:10:00Z",
+  "status": "included",
+  "title": "[release/17.0] Keep dashboard views removed while they initialize from ending the circuit"
+}

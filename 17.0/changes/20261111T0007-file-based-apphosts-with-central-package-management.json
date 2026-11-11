@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "\ud83d\udcbb",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "`aspire run` and `aspire start` now detect single-file AppHosts that use versionless `#:package` directives resolved by Central Package Management.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udce6",
+  "firstMergedAt": "2026-11-11T00:07:18Z",
+  "lastMergedAt": "2026-11-11T00:07:18Z",
+  "name": "File-based AppHosts with Central Package Management",
+  "owner": "eerhardt",
+  "prs": [
+    22089
+  ]
+}

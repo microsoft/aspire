@@ -6,7 +6,9 @@
   "changeType": "New features",
   "communityContributors": [],
   "description": "App Service workloads can now be private origins behind Azure Front Door using `WithAzureFrontDoorPrivateLink`.",
-  "docsPrs": [],
+  "docsPrs": [
+    2084
+  ],
   "docsRequired": true,
   "emoji": "\ud83d\udeaa",
   "firstMergedAt": "2026-11-05T21:27:54Z",

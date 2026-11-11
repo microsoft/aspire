@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Clearer CLI source and agent setup output",
+  "mergedAt": "2026-11-11T00:21:28Z",
+  "number": 22109,
+  "runDate": "2026-11-11T06:10:00Z",
+  "status": "included",
+  "title": "[release/17.0] Backport CLI source and agent setup improvements"
+}

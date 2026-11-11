@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Backport of Kubernetes manifest entry",
+  "mergedAt": "2026-11-11T00:12:56Z",
+  "number": 22107,
+  "runDate": "2026-11-11T06:10:00Z",
+  "status": "included",
+  "title": "[release/17.0] Allow structured Kubernetes manifest field values"
+}

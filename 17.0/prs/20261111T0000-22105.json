@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Backport of Go AppHost init entry",
+  "mergedAt": "2026-11-11T00:00:16Z",
+  "number": 22105,
+  "runDate": "2026-11-11T06:10:00Z",
+  "status": "included",
+  "title": "[release/17.0] Close Go AppHost CLI preview readiness gaps"
+}

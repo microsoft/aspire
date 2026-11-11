@@ -6,7 +6,9 @@
   "changeType": "New features",
   "communityContributors": [],
   "description": "WithAzureFrontDoorPrivateLink lets an AppHost reach an Azure Container Apps environment through an Azure Front Door Private Link, disabling public network access on the environment.",
-  "docsPrs": [],
+  "docsPrs": [
+    2084
+  ],
   "docsRequired": true,
   "emoji": "\ud83d\udd17",
   "firstMergedAt": "2026-10-28T15:58:25Z",

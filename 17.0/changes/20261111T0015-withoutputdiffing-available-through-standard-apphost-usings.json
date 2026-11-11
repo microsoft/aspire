@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "\ud83c\udfe0",
+  "backport": true,
+  "breaking": true,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The experimental `WithOutputDiffing` extension methods moved to the `Aspire.Hosting` namespace so they resolve without an extra pipelines import.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "\ud83d\udd00",
+  "firstMergedAt": "2026-11-11T00:15:04Z",
+  "lastMergedAt": "2026-11-11T00:15:04Z",
+  "name": "WithOutputDiffing available through standard AppHost usings",
+  "owner": "MattKotsenas",
+  "prs": [
+    21990
+  ]
+}

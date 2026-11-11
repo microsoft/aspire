@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "\ud83c\udfe0",
+  "backport": true,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "WSLc is now available as a container runtime for building, publishing, and deploying images on Windows, and `aspire doctor` reports the capabilities WSLc doesn't support.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "\ud83d\udc27",
+  "firstMergedAt": "2026-11-11T00:30:47Z",
+  "lastMergedAt": "2026-11-11T00:30:47Z",
+  "name": "WSLc publish and deploy support",
+  "owner": "danegsta",
+  "prs": [
+    21991
+  ]
+}

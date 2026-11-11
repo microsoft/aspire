@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "\ud83d\udcbb",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The CLI now shows repository and ref in template source headings, separates configured sources from installed skills in `aspire agent init`, and shows Git acquisition progress while quieting routine Git output.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83e\udded",
+  "firstMergedAt": "2026-11-11T00:21:28Z",
+  "lastMergedAt": "2026-11-11T00:21:28Z",
+  "name": "Clearer CLI source and agent setup output",
+  "owner": "JamesNK",
+  "prs": [
+    22109
+  ]
+}

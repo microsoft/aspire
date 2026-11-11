@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "WithOutputDiffing available through standard AppHost usings",
+  "mergedAt": "2026-11-11T00:15:04Z",
+  "number": 21990,
+  "runDate": "2026-11-11T06:10:00Z",
+  "status": "included",
+  "title": "[release/17.0] Make WithOutputDiffing available through standard AppHost usings"
+}
