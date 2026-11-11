@@ -54,6 +54,23 @@ The runtime used for local development must be installed and available on `PATH`
 entry point directly by default; use `WithDenoTask`, `WithDenoServe`, and the other `WithDeno*` APIs
 to select another mode or configure permissions and runtime flags.
 
+### Publishing
+
+Next.js hosting and the JavaScript publishing helpers are stable APIs and do not require suppressing
+`ASPIREJAVASCRIPT001`. Choose the publish shape that matches the framework's production output:
+
+| API | Published container |
+|---|---|
+| `AddNextJsApp` | Node.js running Next.js standalone output, including `public/` and `.next/static/`. |
+| `PublishAsStaticWebsite` | YARP serving the built static files, with optional API reverse-proxying. `PublishAsStaticWebsiteOptions.OutputPath` defaults to `dist`. |
+| `PublishAsNodeServer` | Node.js running the specified built entry point directly. |
+| `PublishAsPackageScript` | The configured package manager running a production script, with its runtime dependencies. |
+
+`AddNextJsApp` requires `output: "standalone"` in the Next.js configuration and a `public/` directory
+for the generated Dockerfile. Use `DisableBuildValidation()` only when the configuration is
+provided dynamically and cannot be statically inspected; it does not change the required build output.
+User-authored Dockerfiles are preserved rather than replaced by generated Dockerfiles.
+
 ## Additional documentation
 
 https://aspire.dev/integrations/gallery/
