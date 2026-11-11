@@ -1919,9 +1919,9 @@ export interface WithImageOptions {
 }
 
 export interface WithMcpServerOptions {
-    /** An optional path to append to the endpoint URL when forming the MCP server address. Defaults to `"/mcp"`. */
+    /** An optional path to append to the endpoint URL when forming the MCP server address. Defaults to `"/mcp"`. A leading slash is added if missing. A null or empty value uses the endpoint URL without an additional path. */
     path?: string;
-    /** An optional name of the endpoint that hosts the MCP server. If not specified, defaults to the first HTTPS or HTTP endpoint. */
+    /** An optional name of the endpoint that hosts the MCP server. If not specified, selects the endpoint named `https`, falling back to the endpoint named `http`. Names are matched case-insensitively; endpoints with other names must be selected explicitly, regardless of their URI scheme. */
     endpointName?: string;
 }
 
@@ -15559,9 +15559,12 @@ export interface ContainerResource {
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): ContainerResourcePromise;
     /**
@@ -16427,9 +16430,12 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): ContainerResourcePromise;
     /**
@@ -17645,9 +17651,12 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): ContainerResourcePromise {
         const path = options?.path;
@@ -20153,9 +20162,12 @@ export interface CSharpAppResource {
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): CSharpAppResourcePromise;
     /**
@@ -20861,9 +20873,12 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): CSharpAppResourcePromise;
     /**
@@ -21620,9 +21635,12 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): CSharpAppResourcePromise {
         const path = options?.path;
@@ -24251,9 +24269,12 @@ export interface DotnetToolResource {
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): DotnetToolResourcePromise;
     /**
@@ -24995,9 +25016,12 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): DotnetToolResourcePromise;
     /**
@@ -25912,9 +25936,12 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): DotnetToolResourcePromise {
         const path = options?.path;
@@ -28435,9 +28462,12 @@ export interface ExecutableResource {
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): ExecutableResourcePromise;
     /**
@@ -29140,9 +29170,12 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): ExecutableResourcePromise;
     /**
@@ -29947,9 +29980,12 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): ExecutableResourcePromise {
         const path = options?.path;
@@ -37148,9 +37184,12 @@ export interface ProjectResource {
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): ProjectResourcePromise;
     /**
@@ -37856,9 +37895,12 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): ProjectResourcePromise;
     /**
@@ -38616,9 +38658,12 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): ProjectResourcePromise {
         const path = options?.path;
@@ -41366,9 +41411,12 @@ export interface TestDatabaseResource {
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): TestDatabaseResourcePromise;
     /**
@@ -42234,9 +42282,12 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): TestDatabaseResourcePromise;
     /**
@@ -43451,9 +43502,12 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): TestDatabaseResourcePromise {
         const path = options?.path;
@@ -46139,9 +46193,12 @@ export interface TestRedisResource {
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): TestRedisResourcePromise;
     /**
@@ -47091,9 +47148,12 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): TestRedisResourcePromise;
     /**
@@ -48392,9 +48452,12 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): TestRedisResourcePromise {
         const path = options?.path;
@@ -51409,9 +51472,12 @@ export interface TestVaultResource {
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): TestVaultResourcePromise;
     /**
@@ -52279,9 +52345,12 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): TestVaultResourcePromise;
     /**
@@ -53498,9 +53567,12 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): TestVaultResourcePromise {
         const path = options?.path;
@@ -58944,9 +59016,12 @@ export interface ResourceWithEndpoints {
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): ResourceWithEndpointsPromise;
     /**
@@ -59045,9 +59120,12 @@ export interface ResourceWithEndpointsPromise extends PromiseLike<ResourceWithEn
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): ResourceWithEndpointsPromise;
     /**
@@ -59167,9 +59245,12 @@ class ResourceWithEndpointsImpl extends ResourceBuilderBase<IResourceWithEndpoin
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): ResourceWithEndpointsPromise {
         const path = options?.path;
