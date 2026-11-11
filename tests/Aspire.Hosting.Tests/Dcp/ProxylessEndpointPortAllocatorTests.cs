@@ -97,6 +97,58 @@ public class ProxylessEndpointPortAllocatorTests
     }
 
     [Fact]
+    public void TryReservePortReservesAvailablePort()
+    {
+        var reservations = new ProxylessEndpointPortReservations();
+        using var allocator = new ProxylessEndpointPortAllocator(
+            rangeStart: 10000,
+            rangeEnd: 10001,
+            randomWalkOffset: 0,
+            randomWalkStep: 1,
+            tryProbe: static (_, _) => true,
+            reservations);
+        using var otherAllocator = new ProxylessEndpointPortAllocator(
+            rangeStart: 10000,
+            rangeEnd: 10001,
+            randomWalkOffset: 0,
+            randomWalkStep: 1,
+            tryProbe: static (_, _) => true,
+            reservations);
+
+        Assert.True(allocator.TryReservePort(10000, ProtocolType.Tcp));
+        Assert.Equal(10001, otherAllocator.AllocatePort(ProtocolType.Tcp));
+    }
+
+    [Fact]
+    public void TryReservePortRejectsUnavailablePortAndDoesNotAllocateItLater()
+    {
+        var allocator = new ProxylessEndpointPortAllocator(
+            rangeStart: 10000,
+            rangeEnd: 10001,
+            randomWalkOffset: 0,
+            randomWalkStep: 1,
+            tryProbe: static (port, _) => port != 10000);
+
+        Assert.False(allocator.TryReservePort(10000, ProtocolType.Tcp));
+        Assert.Equal(10001, allocator.AllocatePort(ProtocolType.Tcp));
+    }
+
+    [Fact]
+    public void TryReservePortClearsCachedNextCandidate()
+    {
+        var allocator = new ProxylessEndpointPortAllocator(
+            rangeStart: 10000,
+            rangeEnd: 10002,
+            randomWalkOffset: 0,
+            randomWalkStep: 1,
+            tryProbe: static (_, _) => true);
+
+        Assert.Equal(10000, allocator.AllocatePort(ProtocolType.Tcp));
+        Assert.True(allocator.TryReservePort(10001, ProtocolType.Tcp));
+        Assert.Equal(10002, allocator.AllocatePort(ProtocolType.Tcp));
+    }
+
+    [Fact]
     public void AllocatorsForDifferentApplicationsInTheSameProcessDoNotShareAPort()
     {
         // Each application gets its own allocator, and the probe releases the port before the workload binds it.
@@ -278,6 +330,34 @@ public class ProxylessEndpointPortAllocatorTests
         Assert.Throws<InvalidOperationException>(() => reservations.TryAddReference(10000));
         Assert.Equal(254, reservations.GetReferenceCount(10000));
         Assert.False(reservations.TryReserve(10000));
+    }
+
+    [Theory]
+    [InlineData(ProtocolType.Tcp)]
+    [InlineData(ProtocolType.Udp)]
+    public void ProbeRejectsOccupiedLoopbackPorts(ProtocolType protocol)
+    {
+        foreach (var address in Socket.OSSupportsIPv6
+            ? new[] { IPAddress.Loopback, IPAddress.IPv6Loopback }
+            : new[] { IPAddress.Loopback })
+        {
+            var socketType = protocol == ProtocolType.Tcp ? SocketType.Stream : SocketType.Dgram;
+            using var listener = new Socket(address.AddressFamily, socketType, protocol);
+            listener.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
+            if (address.AddressFamily == AddressFamily.InterNetworkV6)
+            {
+                listener.DualMode = false;
+            }
+
+            listener.Bind(new IPEndPoint(address, 0));
+            if (protocol == ProtocolType.Tcp)
+            {
+                listener.Listen(1);
+            }
+
+            var port = ((IPEndPoint)listener.LocalEndPoint!).Port;
+            Assert.False(ProxylessEndpointPortAllocator.TryProbePort(port, protocol));
+        }
     }
 
     private static ProxylessEndpointPortAllocator CreateAllocator(ProxylessEndpointPortReservations reservations, Func<int, ProtocolType, bool>? tryProbe = null)

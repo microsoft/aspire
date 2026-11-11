@@ -225,14 +225,41 @@ export function registerTabOverflow(registrationId, dotNetRef) {
 
     state.resizeObserver = new ResizeObserver(schedule);
     state.tabsObserver = new MutationObserver(schedule);
-    // Cheap check on any DOM change (the terminal updates constantly): only a replaced strip needs attaching again.
+    // Only a replaced strip needs attaching again. The strip is rendered into the header's section outlet on desktop
+    // and into the layout's own header on mobile, so only those containers are watched: observing the whole document
+    // would run this on every console log line, terminal frame and grid update.
+    //
+    // MainLayout renders its header, and the .header-context in it, only on desktop, so switching between mobile and
+    // desktop replaces the container. The layout root is watched too, for its direct children only (the header coming
+    // and going, not content updates), and the containers are observed again whenever they've been replaced.
+    // Otherwise the observations would stay on the detached container, and a later navigation that replaces the tab
+    // strip wouldn't measure it.
+    const bindContainers = () => {
+        const containers = [".header-context", ".resource-context-header"]
+            .map(selector => document.querySelector(selector))
+            .filter(Boolean);
+        if (state.containers && containers.length === state.containers.length &&
+            containers.every((container, index) => container === state.containers[index])) {
+            return;
+        }
+        state.containers = containers;
+        state.bodyObserver.disconnect();
+        for (const container of containers.length > 0 ? containers : [document.body]) {
+            state.bodyObserver.observe(container, { childList: true, subtree: true });
+        }
+        const layoutRoot = document.querySelector(".layout");
+        if (layoutRoot) {
+            state.bodyObserver.observe(layoutRoot, { childList: true });
+        }
+    };
     state.bodyObserver = new MutationObserver(() => {
+        bindContainers();
         const nav = document.querySelector(".resource-tabs-nav");
         if (nav !== state.nav || (nav?.querySelector(".resources-tab-header") ?? null) !== state.tablist) {
             schedule();
         }
     });
-    state.bodyObserver.observe(document.body, { childList: true, subtree: true });
+    bindContainers();
     window.addEventListener("resize", schedule);
     state.schedule = schedule;
     // Recording switches can mount the new layout before the old layout finishes disposing.
@@ -254,7 +281,7 @@ export function unregisterTabOverflow(registrationId) {
     window.removeEventListener("resize", state.schedule);
 }
 
-export function registerPaneResizer(layoutElement, dotNetRef, minimumWidth, maximumWidth) {
+export function registerPaneResizer(layoutElement, dotNetRef, minimumWidth, maximumWidth, defaultWidth) {
     unregisterPaneResizer(layoutElement);
 
     const pane = layoutElement.querySelector(':scope > .resource-pane');
@@ -405,7 +432,8 @@ export function registerPaneResizer(layoutElement, dotNetRef, minimumWidth, maxi
     const onDoubleClick = e => {
         e.preventDefault();
         handle.focus({ preventScroll: true });
-        resizeTo(minimumWidth);
+        // Double-click restores the default width, which is wider than the minimum the pane can be dragged to.
+        resizeTo(defaultWidth);
         commit();
     };
 
@@ -452,6 +480,22 @@ export function setTabListAriaLabel(tabId, label) {
 
 export function isResourceTabFocused(tabId) {
     return document.activeElement?.closest("fluent-tab")?.id === tabId;
+}
+
+// The last tab the user pressed, clicked or chose with Enter or Space (see registerPaneInteractions). The tab strip is
+// re-created whenever the location changes, so a click that lands just as a navigation finishes reaches the layout
+// from the outgoing strip, along with the change events that strip raises as it's torn down. Only a real activation
+// tells the click apart from that noise.
+let recentTabActivation = null;
+
+// Returns whether the user activated the tab in the last second, and forgets the activation so it's used once.
+export function consumeRecentTabActivation(tabId) {
+    const activation = recentTabActivation;
+    if (activation && activation.id === tabId && performance.now() - activation.time < 1000) {
+        recentTabActivation = null;
+        return true;
+    }
+    return false;
 }
 
 export function unregisterPaneResizer(layoutElement) {
@@ -607,7 +651,10 @@ export function registerResourceContextMenu(layoutElement, dotNetRef) {
     unregisterResourceContextMenu(layoutElement);
 
     const state = { trigger: null, selectionTrigger: null, disposed: false };
-    const interactiveSelector = 'a, button, fluent-button, fluent-menu-item, input, select, textarea, .resource-relationship-summary, [role="button"], [role="checkbox"], [contenteditable]';
+    // A popover opened from a row, such as the URLs column's list of URLs, renders inside the row. Clicking its
+    // text mustn't select the row either. FluentPopover's host element (fluent-popover-b) is the ancestor a click in
+    // its content finds: the element with the popover attribute is in its shadow root.
+    const interactiveSelector = 'a, button, fluent-button, fluent-menu-item, input, select, textarea, .resource-relationship-summary, [role="button"], [role="checkbox"], [contenteditable], [popover], fluent-popover-b';
     const open = (event, keyboard) => {
         const row = event.target.closest('.resource-pane-list .resource-row[data-resource-name]');
         const link = row?.querySelector('.resource-row-link');
@@ -640,11 +687,32 @@ export function registerResourceContextMenu(layoutElement, dotNetRef) {
     };
     const onIdentityInteraction = event => {
         const link = event.target.closest('.resource-row-link');
+        // mouseover bubbles from every element in the row. The tooltip is computed from the row's layout, so moving
+        // between elements of the same link changes nothing, and the check below forces layout, so skip that.
+        // Entering the link from outside recomputes it, even if it's the link hovered last: the resource's state may
+        // have changed while the pointer was elsewhere.
+        if (event.type === 'mouseover' && link && event.relatedTarget instanceof Node && link.contains(event.relatedTarget)) {
+            return;
+        }
         const name = link?.querySelector('.resource-row-name');
+        // A compact sidebar row's type column gives way to its actions while the row is hovered or
+        // focused, where rows can be hovered (see ResourcesLayout.razor.css). The row's tooltip names
+        // the type instead, from the full text the hidden column keeps in data-tooltip:
+        //   <span class="resource-row-meta">
+        //     <span class="resource-row-type" data-tooltip="Container (persistent)">…</span>
+        //   </span>
+        // The state dot stays after the name, outside the column, with the state in its own tooltip.
+        // The columns may not be hidden yet when the event arrives, so this decides from the layout
+        // (compact, sidebar, a hovering pointer) rather than from their visibility.
+        const meta = link?.querySelector('.resource-row-meta');
+        const metaText = meta && !link.closest('.pane-full-canvas') && window.matchMedia('(hover: hover)').matches
+            ? [...meta.querySelectorAll('[data-tooltip]')].map(el => el.getAttribute('data-tooltip')).filter(Boolean).join(' · ')
+            : null;
         // Keep availability explanations even when the name fits. Clipped names also
-        // need their full identity; ordinary available rows remain quiet.
+        // need their full identity; other available rows remain quiet.
         const tooltip = [
             name && name.scrollWidth > name.clientWidth ? link.getAttribute('aria-label') : null,
+            metaText,
             link?.getAttribute('data-resource-unavailable-reason')
         ].filter(Boolean).join('\n');
         if (tooltip) {
@@ -731,10 +799,100 @@ export function registerResourceContextMenu(layoutElement, dotNetRef) {
             event.target.click();
         }
     };
+    // Escape closes the resource content, as the header's close button does, when nothing else uses the key. Menus,
+    // popovers and dialogs close themselves with it, and text fields and the terminal keep it. Some of them close in
+    // their own keydown handler, so whether the key is free is decided in the capture phase, before any of them runs,
+    // and the button is clicked in the bubble phase, only if no handler took the key (preventDefault). The capture
+    // listener is on the window, which comes before the document: the tooltip provider removes a shown tooltip in its
+    // own capture listener on the document.
+    let escapeIsFree = false;
+    const escapeOwnerSelector = 'input, textarea, select, [contenteditable=""], [contenteditable="true"], .xterm, ' +
+        '[popover], fluent-popover-b, fluent-menu, fluent-dialog, dialog, [role="dialog"], [role="menu"], [role="listbox"], [role="combobox"], [role="textbox"]';
+    const hasOpenOverlay = () => {
+        // A control whose popup is open says so (aria-haspopup with aria-expanded="true"), whatever the popup is built
+        // with: the filter button's popover isn't a native popover, and focus stays on the button after clicking it.
+        // A tree toggle has aria-expanded but no popup, so it doesn't count.
+        if (document.querySelector('[aria-haspopup]:not([aria-haspopup="false"])[aria-expanded="true"]')) {
+            return true;
+        }
+        // A shown tooltip is dismissed by Escape (see app-tooltips.js), and the same key mustn't also close the content.
+        // https://www.w3.org/WAI/WCAG22/Understanding/content-on-hover-or-focus.html
+        if (document.querySelector('aspire-tooltip-provider fluent-tooltip:not([aria-hidden="true"])')) {
+            return true;
+        }
+        // A FluentPopover's dialog is in its shadow root, out of reach of the query below, and the button opening it
+        // doesn't always say so, like the URLs column's +N button. Its host says whether it's open:
+        //   <fluent-popover-b class="content-list-popover url-overflow-popover" anchor-id="…-more" opened="true">
+        if (document.querySelector('fluent-popover-b[opened="true"]')) {
+            return true;
+        }
+        try {
+            // Hidden tooltips can stay in the popover layer, so they're left to the check above.
+            return [...document.querySelectorAll(':popover-open, dialog[open]')]
+                .some(element => element.localName !== 'fluent-tooltip' && !element.closest('aspire-tooltip-provider'));
+        }
+        catch {
+            // Browsers without the popover API have no open popovers to protect.
+            return false;
+        }
+    };
+    const onEscapeCapture = event => {
+        escapeIsFree = event.key === 'Escape' && !event.isComposing && !event.repeat &&
+            !event.ctrlKey && !event.altKey && !event.metaKey && !event.shiftKey &&
+            !event.composedPath().some(target => target instanceof Element && target.matches(escapeOwnerSelector)) &&
+            !hasOpenOverlay();
+    };
+    const onEscape = event => {
+        const isFree = escapeIsFree;
+        escapeIsFree = false;
+        // Fluent's tab list cancels the keys it receives, Escape included, without doing anything with Escape. So a
+        // focused tab, for example the one just clicked to open the content, doesn't keep Escape from closing it.
+        const isFromTabList = event.composedPath().some(target => target instanceof Element && target.matches('[role="tablist"]'));
+        if (!isFree || (event.defaultPrevented && !isFromTabList)) {
+            return;
+        }
+        // The header renders the button only while there's content to close (see DetailPageCloseButton).
+        const close = layoutElement.querySelector('.resource-header-controls .detail-page-close');
+        if (close && close.getClientRects().length > 0 && !close.closest('[inert]')) {
+            event.preventDefault();
+            close.click();
+        }
+    };
+
+    // While the resource list fills the page, no tab is shown selected, and choosing the current tab opens its content.
+    // The tab list can't report that choice (see OpenTabFromFullCanvasAsync), so a click, Enter or Space on a tab is
+    // passed on. The tabs are in the page header, outside the layout, so this listens on the document.
+    const onTabActivate = event => {
+        if (!layoutElement.classList.contains('pane-full-canvas') ||
+            (event.type === 'keydown' && (event.isComposing || (event.key !== 'Enter' && event.key !== ' ')))) {
+            return;
+        }
+        const tab = event.target instanceof Element ? event.target.closest('.resources-tab-header fluent-tab[id^="tab-"]') : null;
+        if (tab) {
+            dotNetRef.invokeMethodAsync('OpenTabFromFullCanvasAsync', tab.id).catch(() => { });
+        }
+    };
+
+    const onTabUserActivation = event => {
+        if (event.type === 'keydown' && (event.isComposing || (event.key !== 'Enter' && event.key !== ' '))) {
+            return;
+        }
+        const tab = event.target instanceof Element ? event.target.closest('.resources-tab-header fluent-tab[id^="tab-"]') : null;
+        if (tab) {
+            recentTabActivation = { id: tab.id, time: performance.now() };
+        }
+    };
+
     layoutElement.addEventListener('contextmenu', onContextMenu);
     layoutElement.addEventListener('pointerdown', onShiftPointerDown, true);
+    document.addEventListener('pointerdown', onTabUserActivation, true);
+    document.addEventListener('keydown', onTabUserActivation, true);
     layoutElement.addEventListener('mousedown', onShiftPointerDown, true);
     document.addEventListener('keydown', onContextMenuDismiss, true);
+    window.addEventListener('keydown', onEscapeCapture, true);
+    document.addEventListener('keydown', onEscape);
+    document.addEventListener('click', onTabActivate);
+    document.addEventListener('keydown', onTabActivate);
     layoutElement.addEventListener('click', onClick);
     layoutElement.addEventListener('keydown', onKeyDown);
     layoutElement.addEventListener('mouseover', onIdentityInteraction);
@@ -743,8 +901,14 @@ export function registerResourceContextMenu(layoutElement, dotNetRef) {
         state.disposed = true;
         layoutElement.removeEventListener('contextmenu', onContextMenu);
         layoutElement.removeEventListener('pointerdown', onShiftPointerDown, true);
+        document.removeEventListener('pointerdown', onTabUserActivation, true);
+        document.removeEventListener('keydown', onTabUserActivation, true);
         layoutElement.removeEventListener('mousedown', onShiftPointerDown, true);
         document.removeEventListener('keydown', onContextMenuDismiss, true);
+        window.removeEventListener('keydown', onEscapeCapture, true);
+        document.removeEventListener('keydown', onEscape);
+        document.removeEventListener('click', onTabActivate);
+        document.removeEventListener('keydown', onTabActivate);
         layoutElement.removeEventListener('click', onClick);
         layoutElement.removeEventListener('keydown', onKeyDown);
         layoutElement.removeEventListener('mouseover', onIdentityInteraction);

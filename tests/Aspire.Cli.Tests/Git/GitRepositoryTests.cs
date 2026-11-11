@@ -13,6 +13,7 @@ using Microsoft.DotNet.RemoteExecutor;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging.Testing;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
@@ -21,6 +22,41 @@ namespace Aspire.Cli.Tests.Git;
 
 public class GitRepositoryTests(ITestOutputHelper outputHelper)
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task GetIncludedFilesAsync_LogsGitOutput(bool initialized)
+    {
+        await GitTestHelper.EnsureGitAvailableAsync(outputHelper);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        if (initialized)
+        {
+            await workspace.InitializeGitAsync();
+            await File.WriteAllTextAsync(Path.Combine(workspace.Path, "example.txt"), "example");
+        }
+        using var profilingTelemetry = CreateProfilingTelemetry();
+        var logger = new FakeLogger<GitRepository>();
+        var repo = new GitRepository(workspace.CreateExecutionContext(), new TestEnvironment(), logger, profilingTelemetry);
+
+        var result = await repo.GetIncludedFilesAsync(workspace.WorkspaceRoot, TestContext.Current.CancellationToken).DefaultTimeout();
+
+        var stdout = Assert.Single(logger.Collector.GetSnapshot(), entry => entry.Message.StartsWith("Git stdout: ", StringComparison.Ordinal));
+        var stderr = Assert.Single(logger.Collector.GetSnapshot(), entry => entry.Message.StartsWith("Git stderr: ", StringComparison.Ordinal));
+        if (initialized)
+        {
+            Assert.Equal([Path.Combine(workspace.Path, "example.txt")], Assert.IsAssignableFrom<IReadOnlySet<string>>(result));
+            Assert.Equal("Git stdout: example.txt\0", stdout.Message);
+            Assert.Equal("Git stderr: ", stderr.Message);
+        }
+        else
+        {
+            Assert.Null(result);
+            Assert.Equal("Git stdout: ", stdout.Message);
+            Assert.StartsWith("Git stderr: fatal: not a git repository", stderr.Message, StringComparison.Ordinal);
+            Assert.Equal(stderr.Message.TrimEnd(), stderr.Message);
+        }
+    }
+
     [Fact]
     [PlatformSpecific(TestPlatforms.Windows)]
     public async Task GetRootAsync_WhileMcpReadsStandardInput_Completes()

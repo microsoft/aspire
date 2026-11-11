@@ -3,6 +3,7 @@
 
 using System.Diagnostics;
 using Aspire.Cli.Telemetry;
+using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Git;
@@ -133,7 +134,7 @@ internal sealed class GitRepository(CliExecutionContext executionContext, IEnvir
             CreateNoWindow = true
         };
 
-    private static async Task<ProcessTextOutput> RunGitAsync(ProcessStartInfo startInfo, ProfilingTelemetry.ActivityScope activity, CancellationToken cancellationToken)
+    private async Task<ProcessTextOutput> RunGitAsync(ProcessStartInfo startInfo, ProfilingTelemetry.ActivityScope activity, CancellationToken cancellationToken)
     {
         // Git can block on Windows if it inherits the MCP stdin pipe while the server is reading it.
         // https://github.com/microsoft/aspire/issues/21877
@@ -143,6 +144,8 @@ internal sealed class GitRepository(CliExecutionContext executionContext, IEnvir
         // RunAndCaptureTextAsync drains stdout and stderr concurrently, and kills git when
         // cancellationToken fires so Ctrl+C doesn't leave `git ls-files` walking a large repo.
         var result = await Process.RunAndCaptureTextAsync(startInfo, cancellationToken).ConfigureAwait(false);
+        logger.LogDebug("Git stdout: {Output}", result.StandardOutput.TrimEndLine());
+        logger.LogDebug("Git stderr: {Output}", result.StandardError.TrimEndLine());
         activity.SetProcessId(result.ProcessId);
         activity.SetProcessExitCode(result.ExitStatus.ExitCode);
         activity.SetGitOutputLengths(result.StandardOutput.Length, result.StandardError.Length);

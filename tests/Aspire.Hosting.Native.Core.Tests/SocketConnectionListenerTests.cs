@@ -77,6 +77,28 @@ public class SocketConnectionListenerTests
     }
 
     [Fact]
+    public async Task ClientThatObservedCloseCanReconnectAtCapacity()
+    {
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        await using var host = new NativeSocketTestHost(async (stream, cancellationToken) =>
+        {
+            await stream.WriteAsync("x"u8.ToArray(), cancellationToken);
+            await stream.ReadExactlyAsync(new byte[1], cancellationToken);
+        }, 1);
+        var buffer = new byte[1];
+        // The handler completes on an I/O continuation, racing the accept loop that receives the reconnect.
+        for (var i = 0; i < 2000; i++)
+        {
+            using var client = new NativeSocketTestClient(host.EndPoint);
+            Assert.True(await client.Socket.ReceiveAsync(buffer, SocketFlags.None, timeout.Token) == 1,
+                $"Connection {i} was rejected after the previous connection's close was observed.");
+            await client.Socket.SendAsync(buffer, SocketFlags.None, timeout.Token);
+            Assert.Equal(0, await client.Socket.ReceiveAsync(buffer, SocketFlags.None, timeout.Token));
+        }
+        Assert.False(host.Completion.IsCompleted);
+    }
+
+    [Fact]
     public async Task HandlerFailureCancelsAndDrainsOtherConnectionsWithoutWaitingForAnotherClient()
     {
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));

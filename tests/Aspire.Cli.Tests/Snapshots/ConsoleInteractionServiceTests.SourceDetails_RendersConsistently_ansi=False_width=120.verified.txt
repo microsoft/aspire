@@ -1,0 +1,18 @@
+﻿
+         Git source:  https://example.test/config
+            Git ref:  release/[team]
+
+               Name:  Company [templates]
+         Git source:  https://example.test/templates
+           Git path:  templates
+            Git ref:  release/[team]
+
+               Name:  company
+       Package feed:  https://example.test/nuget
+   Package patterns:  Acme.Hosting.*
+
+               Name:  company
+         Git source:  https://example.test/skills
+        Marketplace:  company-skills
+            Plugins:  aspire@company-skills
+

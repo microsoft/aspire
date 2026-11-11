@@ -68,7 +68,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("BuiltInTemplates", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Channel to use for templates (stable, daily).
         /// </summary>
@@ -84,15 +84,6 @@ namespace Aspire.Cli.Resources {
         internal static string ChannelOptionDescriptionWithStaging {
             get {
                 return ResourceManager.GetString("ChannelOptionDescriptionWithStaging", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Cloning template repository....
-        /// </summary>
-        internal static string CloningTemplateRepository {
-            get {
-                return ResourceManager.GetString("CloningTemplateRepository", resourceCulture);
             }
         }
         
@@ -313,29 +304,11 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Resolving template repository ref....
-        /// </summary>
-        internal static string ResolvingTemplateRepository {
-            get {
-                return ResourceManager.GetString("ResolvingTemplateRepository", resourceCulture);
-            }
-        }
-        
-        /// <summary>
         ///   Looks up a localized string similar to Resolving template version....
         /// </summary>
         internal static string ResolvingTemplateVersion {
             get {
                 return ResourceManager.GetString("ResolvingTemplateVersion", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Searching template source &apos;{0}&apos;....
-        /// </summary>
-        internal static string SearchingTemplateSource {
-            get {
-                return ResourceManager.GetString("SearchingTemplateSource", resourceCulture);
             }
         }
         
@@ -563,7 +536,16 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("TemplateSourceDisplayNameInvalid", resourceCulture);
             }
         }
-
+        
+        /// <summary>
+        ///   Looks up a localized string similar to One or more template sources are configured. A template source lets an organization share Aspire templates to customize your development experience..
+        /// </summary>
+        internal static string TemplateSourceExplanation {
+            get {
+                return ResourceManager.GetString("TemplateSourceExplanation", resourceCulture);
+            }
+        }
+        
         /// <summary>
         ///   Looks up a localized string similar to Expected an HTTPS or SSH Git repository URL without passwords, tokens, queries, or fragments. SSH usernames are allowed..
         /// </summary>
@@ -615,15 +597,6 @@ namespace Aspire.Cli.Resources {
         internal static string TemplateSourceNameDescription {
             get {
                 return ResourceManager.GetString("TemplateSourceNameDescription", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Name.
-        /// </summary>
-        internal static string TemplateSourceNameHeader {
-            get {
-                return ResourceManager.GetString("TemplateSourceNameHeader", resourceCulture);
             }
         }
         

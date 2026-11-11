@@ -27,7 +27,7 @@ func main() {
 		RunAsEmulator(&aspire.RunAsEmulatorOptions{
 			ConfigureContainer: func(emulator aspire.AzureServiceBusEmulatorResource) {
 				emulator.WithConfigurationFile("./servicebus-config.json")
-				emulator.WithHostPort(aspire.Float64Ptr(5672))
+				emulator.WithHostPort(aspire.IntPtr(5672))
 			},
 		})
 	if emulatorBus.Err() != nil {
@@ -90,7 +90,7 @@ func main() {
 		q.SetForwardDeadLetteredMessagesTo(aspire.StringPtr("dead-letter-queue"))
 		q.SetForwardTo(aspire.StringPtr("forwarding-queue"))
 		q.SetLockDuration(aspire.Float64Ptr(300000000)) // 30 seconds in ticks
-		q.SetMaxDeliveryCount(aspire.Float64Ptr(10))
+		q.SetMaxDeliveryCount(aspire.IntPtr(10))
 		q.SetRequiresDuplicateDetection(aspire.BoolPtr(true))
 		q.SetRequiresSession(aspire.BoolPtr(false))
 
@@ -115,7 +115,7 @@ func main() {
 		s.SetForwardDeadLetteredMessagesTo(aspire.StringPtr("sub-dlq"))
 		s.SetForwardTo(aspire.StringPtr("sub-forward"))
 		s.SetLockDuration(aspire.Float64Ptr(600000000)) // 1 min in ticks
-		s.SetMaxDeliveryCount(aspire.Float64Ptr(5))
+		s.SetMaxDeliveryCount(aspire.IntPtr(5))
 		s.SetRequiresSession(aspire.BoolPtr(false))
 
 		// Read back a subscription property

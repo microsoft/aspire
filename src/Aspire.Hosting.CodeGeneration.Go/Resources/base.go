@@ -26,17 +26,20 @@ import (
 //
 // Callers retrieve the chain's error with Err() at any logical boundary
 // (typically once at the end of a builder chain or before using the result of
-// a value-returning method).
+// a value-returning method). Every wrapper also reports the error it owns to
+// the client, and the builder's Err() and Build() combine the errors from all
+// failed handles, so failed children that were never checked still stop Build().
 //
-// Wrappers are not synchronized: err is read and written without a lock. The
-// AppHost runs each callback on its own goroutine, so a callback should use the
-// wrappers it receives as arguments, not a wrapper that the goroutine running
-// the builder chain (or another callback) uses at the same time.
+// Callbacks run on separate goroutines and can capture a wrapper also used by
+// the builder chain. The sticky error and lazy collection accessors are
+// synchronized; concurrent capability calls still run independently.
 
 type handleWrapperBase struct {
-	handle *handle
-	err    error
-	client *client
+	handle       *handle
+	errMu        sync.RWMutex
+	err          error
+	client       *client
+	collectionMu sync.Mutex
 }
 
 func newHandleWrapperBase(h *handle, c *client) *handleWrapperBase {
@@ -44,6 +47,11 @@ func newHandleWrapperBase(h *handle, c *client) *handleWrapperBase {
 }
 
 func newErroredHandleWrapperBase(err error, c *client) *handleWrapperBase {
+	c.recordErr(err)
+	return &handleWrapperBase{err: err, client: c}
+}
+
+func newPropagatedErroredHandleWrapperBase(err error, c *client) *handleWrapperBase {
 	return &handleWrapperBase{err: err, client: c}
 }
 
@@ -57,14 +65,40 @@ func (h *handleWrapperBase) getClient() *client { return h.client }
 
 // Err returns the first error recorded on this wrapper. Returns nil if the
 // wrapper resolved successfully and no chained operation has failed.
-func (h *handleWrapperBase) Err() error { return h.err }
+func (h *handleWrapperBase) Err() error {
+	h.errMu.RLock()
+	defer h.errMu.RUnlock()
+	return h.err
+}
 
-// setErr records an error on this wrapper. The first non-nil error wins;
-// later errors are dropped to keep failure causality clear in chains.
+// setErr records an error owned by this wrapper and reports it to the client.
+// The first non-nil error wins; later errors are dropped to keep failure
+// causality clear in chains.
 func (h *handleWrapperBase) setErr(err error) {
+	if err == nil {
+		return
+	}
+	h.errMu.Lock()
+	if h.err != nil {
+		h.errMu.Unlock()
+		return
+	}
+	h.err = err
+	h.errMu.Unlock()
+	h.client.recordErr(err)
+}
+
+// setPropagatedErr short-circuits this wrapper with an error already owned by
+// another handle without reporting the same failure to the client again.
+func (h *handleWrapperBase) setPropagatedErr(err error) {
+	if err == nil {
+		return
+	}
+	h.errMu.Lock()
 	if h.err == nil {
 		h.err = err
 	}
+	h.errMu.Unlock()
 }
 
 // ── resourceBuilderBase ───────────────────────────────────────────────────────
@@ -79,6 +113,10 @@ func newResourceBuilderBase(h *handle, c *client) *resourceBuilderBase {
 
 func newErroredResourceBuilder(err error, c *client) *resourceBuilderBase {
 	return &resourceBuilderBase{handleWrapperBase: newErroredHandleWrapperBase(err, c)}
+}
+
+func newPropagatedErroredResourceBuilder(err error, c *client) *resourceBuilderBase {
+	return &resourceBuilderBase{handleWrapperBase: newPropagatedErroredHandleWrapperBase(err, c)}
 }
 
 // ── ReferenceExpression ───────────────────────────────────────────────────────
@@ -255,8 +293,8 @@ func newListWithGetter[T any](parent *handleWrapperBase, getterCapabilityID stri
 }
 
 func (l *List[T]) resolveListHandle(ctx context.Context) (*handle, error) {
-	if l.parent.err != nil {
-		return nil, l.parent.err
+	if err := l.parent.Err(); err != nil {
+		return nil, err
 	}
 	l.handleMu.Lock()
 	cached := l.resolvedHandle
@@ -284,10 +322,20 @@ func (l *List[T]) resolveListHandle(ctx context.Context) (*handle, error) {
 	return listHandle, nil
 }
 
-// ToJSON returns the list handle as a JSON-serializable map.
+// Err returns the first error on the list's parent, including handle resolution
+// failures recorded by ToJSON.
+func (l *List[T]) Err() error { return l.parent.Err() }
+
+// ToJSON returns the list handle as a JSON-serializable map, or nil on failure.
+// Consult Err before using the result.
 func (l *List[T]) ToJSON() map[string]any {
 	h, err := l.resolveListHandle(context.Background())
-	if err != nil || h == nil {
+	if err != nil {
+		l.parent.setErr(err)
+		return nil
+	}
+	if h == nil {
+		l.parent.setErr(errors.New("aspire: list getter returned a nil handle"))
 		return nil
 	}
 	out := h.ToJSON()
@@ -306,10 +354,7 @@ func (l *List[T]) Count() (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	if n, ok := result.(float64); ok {
-		return int(n), nil
-	}
-	return 0, nil
+	return decodeAs[int](result)
 }
 
 func (l *List[T]) Get(index int) (T, error) {
@@ -416,8 +461,8 @@ func newDictWithGetter[K comparable, V any](parent *handleWrapperBase, getterCap
 }
 
 func (d *Dict[K, V]) resolveDictHandle(ctx context.Context) (*handle, error) {
-	if d.parent.err != nil {
-		return nil, d.parent.err
+	if err := d.parent.Err(); err != nil {
+		return nil, err
 	}
 	d.handleMu.Lock()
 	cached := d.resolvedHandle
@@ -445,9 +490,20 @@ func (d *Dict[K, V]) resolveDictHandle(ctx context.Context) (*handle, error) {
 	return dictHandle, nil
 }
 
+// Err returns the first error on the dictionary's parent, including handle
+// resolution failures recorded by ToJSON.
+func (d *Dict[K, V]) Err() error { return d.parent.Err() }
+
+// ToJSON returns the dictionary handle as a JSON-serializable map, or nil on
+// failure. Consult Err before using the result.
 func (d *Dict[K, V]) ToJSON() map[string]any {
 	h, err := d.resolveDictHandle(context.Background())
-	if err != nil || h == nil {
+	if err != nil {
+		d.parent.setErr(err)
+		return nil
+	}
+	if h == nil {
+		d.parent.setErr(errors.New("aspire: dictionary getter returned a nil handle"))
 		return nil
 	}
 	out := h.ToJSON()
@@ -466,10 +522,7 @@ func (d *Dict[K, V]) Count() (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	if n, ok := result.(float64); ok {
-		return int(n), nil
-	}
-	return 0, nil
+	return decodeAs[int](result)
 }
 
 func (d *Dict[K, V]) Get(key K) (V, error) {
@@ -632,6 +685,7 @@ func (d *Dict[K, V]) Clear() error {
 
 func StringPtr(s string) *string    { return &s }
 func IntPtr(i int) *int             { return &i }
+func Int64Ptr(i int64) *int64       { return &i }
 func BoolPtr(b bool) *bool          { return &b }
 func Float64Ptr(f float64) *float64 { return &f }
 
@@ -654,6 +708,8 @@ func serializeValue(value any) any {
 	}
 
 	switch v := value.(type) {
+	case json.Number:
+		return v
 	case *handle:
 		return v.ToJSON()
 	case *ReferenceExpression:
@@ -706,6 +762,11 @@ func isNil(value any) bool {
 	}
 }
 
+func isValidJSONNumber(value json.Number) bool {
+	_, err := json.Marshal(value)
+	return err == nil
+}
+
 func serializeReflectedCollection(value any) (any, bool) {
 	reflectedValue := reflect.ValueOf(value)
 	switch reflectedValue.Kind() {
@@ -739,21 +800,38 @@ func serializeReflectedCollection(value any) (any, bool) {
 }
 
 // callbackArg fetches a positional argument from the slice and decodes it
-// to T. Returns the zero value if the index is out of range or the value
-// cannot be decoded. Used by generated callback shim wrappers that adapt
-// the transport's positional `[]any` invocation back to the user's typed
-// callback signature.
+// to T. Invalid arguments panic with a private error that the callback
+// dispatcher translates into a JSON-RPC invalid-params response, before the
+// user's typed callback can run with a silently substituted zero value.
 func callbackArg[T any](args []any, idx int) T {
-	var zero T
-	if idx >= len(args) {
-		return zero
+	if idx < 0 || idx >= len(args) {
+		panic(&callbackArgumentError{fmt.Errorf("aspire: callback argument %d is missing", idx)})
 	}
 	v, err := decodeAs[T](args[idx])
 	if err != nil {
-		return zero
+		panic(&callbackArgumentError{fmt.Errorf("aspire: callback argument %d: %w", idx, err)})
 	}
+
 	return v
 }
+
+// callbackCancellationTokenArg handles the callback wire representation for
+// CancellationToken. The host sends a token ID for cancellable tokens and omits
+// the positional argument for CancellationToken.None.
+func callbackCancellationTokenArg(c *client, args []any, idx int) *CancellationToken {
+	if idx < 0 || idx >= len(args) || args[idx] == nil {
+		return nil
+	}
+	if token, ok := args[idx].(*CancellationToken); ok {
+		return token
+	}
+	if id, ok := args[idx].(string); ok && id != "" {
+		return newRemoteCancellationToken(c, id)
+	}
+	panic(&callbackArgumentError{fmt.Errorf("aspire: callback argument %d: expected a cancellation token ID", idx)})
+}
+
+type callbackArgumentError struct{ error }
 
 // decodeAs converts an arbitrary RPC result into a typed value via JSON
 // round-trip. Used by typed read methods on List/Dict and by value-returning
@@ -874,13 +952,13 @@ func decodeStructFields[T any](raw any) (T, bool) {
 		if !ok {
 			continue
 		}
-
-		bytes, err := json.Marshal(rawFieldValue)
-		if err != nil {
+		// Callback IDs cannot become Go func values. Other fields must decode
+		// successfully; a malformed DTO must not reach user code as zero values.
+		if fieldValue.Kind() == reflect.Func {
 			continue
 		}
-		if err := json.Unmarshal(bytes, fieldValue.Addr().Interface()); err != nil {
-			continue
+		if err := decodeInto(fieldValue, rawFieldValue); err != nil {
+			return zero, false
 		}
 	}
 

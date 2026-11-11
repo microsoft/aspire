@@ -1380,7 +1380,9 @@ builder.Build().Run();
         assert.ok(runner.includes('<WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>'));
         assert.ok(runner.includes('<PackageReference Include="Microsoft.WindowsAppSDK" Version="1.8.260209005" />'));
         assert.ok(runner.includes('<PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.7175" />'));
-        assert.ok(runner.includes('File.WriteAllText(readyFile, $"ready:{Environment.ProcessId}");'));
+        assert.ok(runner.includes('File.WriteAllText(pendingReadyFile, $"ready:{Environment.ProcessId}");'));
+        assert.ok(runner.includes('File.Move(pendingReadyFile, readyFile, overwrite: true);'));
+        assert.ok(!runner.includes('File.WriteAllText(readyFile,'));
         assert.ok(spec.includes('this.timeout(1_200_000);'));
         assert.ok(spec.includes("const symbol = 'InitializeComponent';"));
         assert.ok(spec.includes("name: 'getDefinitions'"));
@@ -1861,6 +1863,100 @@ builder.Build().Run();
         });
     }
 
+    test('reports the Java debug startup timeout failure separately from its cleanup failure', async () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const specSource = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'javaAppHostDebugStartupTimeout.e2e.test.ts'), 'utf8');
+        const fixturesSource = ts.createSourceFile(
+            'fixtures.ts',
+            fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'fixtures.ts'), 'utf8'),
+            ts.ScriptTarget.Latest,
+            true);
+        const cleanupFunctionNames = new Set(['runE2eTeardown', 'formatE2eTeardownFailureMessage', 'redactE2eTeardownFailure']);
+        const cleanupDeclarations = fixturesSource.statements.filter((statement): statement is ts.FunctionDeclaration =>
+            ts.isFunctionDeclaration(statement) && statement.name !== undefined && cleanupFunctionNames.has(statement.name.text));
+        assert.strictEqual(cleanupDeclarations.length, cleanupFunctionNames.size);
+        const compilerOptions = { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 };
+        const runE2eTeardown = vm.runInNewContext(
+            `${ts.transpileModule(cleanupDeclarations.map(declaration => declaration.getText(fixturesSource)).join('\n'), { compilerOptions }).outputText}\nrunE2eTeardown;`,
+            { exports: {}, Error, AggregateError });
+
+        // Mirrors https://github.com/microsoft/aspire/issues/21411: the Java debug launch never
+        // reaches the AppHost, then stopDebugging fails because the session never started.
+        const launchFailure = new Error('Timed out waiting for Debug Console output JAVA_TIMEOUT_E2E_DELAY_START.');
+        const stopFailure = new Error('Failed to apply E2E control revision 1: E2E control command failed.');
+        const appHostSourcePath = '/workspace/JavaSpringBoot.AppHost.Java/AppHost.java';
+        const originalSource = '    var builder = DistributedApplication.CreateBuilder();\n';
+        const writes: string[] = [];
+        const cleanups: string[] = [];
+        const noOperation = () => undefined;
+        const helpers = {
+            runE2eTeardown,
+            getCommandInvocationCount: () => 0,
+            waitForCommandOutcome: noOperation,
+            waitForDebugConsoleOutput: async () => { throw launchFailure; },
+            waitForDebugSessionStartup: noOperation,
+            waitForNoDebugSessions: async () => { cleanups.push('waitForNoDebugSessions'); },
+            waitForNoRunningAppHost: async () => { cleanups.push('waitForNoRunningAppHost'); },
+            waitForRepositoryIdle: async () => { cleanups.push('waitForRepositoryIdle'); },
+            executeE2eControlCommand: async (command: { name: string }) => {
+                if (command.name === 'stopDebugging') {
+                    cleanups.push('stopDebugging');
+                    throw stopFailure;
+                }
+            },
+            writeFileWithRetry: (filePath: string, contents: string) => {
+                assert.strictEqual(filePath, appHostSourcePath);
+                writes.push(contents);
+            },
+            getJavaAppHostSourcePath: () => appHostSourcePath,
+            prepareJavaWorkspace: noOperation,
+            waitForJavaLanguageServerImport: noOperation,
+            readCliLogs: () => '',
+            readExtensionLogs: () => '',
+        };
+        const modules = new Map<string, unknown>([
+            ['assert', assert],
+            ['fs', { readFileSync: () => originalSource }],
+            ['./helpers/assertions', helpers],
+            ['./helpers/fixtures', helpers],
+            ['./helpers/java', helpers],
+            ['./helpers/logs', helpers],
+        ]);
+        const context = {
+            timeout: noOperation,
+            skip: () => assert.fail('The Java startup timeout proof must execute.'),
+        };
+        type E2eCallback = (this: typeof context) => Promise<void>;
+        const tests = new Map<string, E2eCallback>();
+        const teardowns: E2eCallback[] = [];
+        vm.runInNewContext(ts.transpileModule(specSource, { compilerOptions }).outputText, {
+            exports: {},
+            Error,
+            AggregateError,
+            process: { env: { ASPIRE_EXTENSION_E2E_UNSET_CLI_START_TIMEOUT: 'true' } },
+            require: (name: string) => {
+                assert.ok(modules.has(name), `Unexpected E2E import: ${name}`);
+                return modules.get(name);
+            },
+            suite: (_name: string, body: () => void) => body.call(context),
+            suiteSetup: noOperation,
+            test: (name: string, body: E2eCallback) => tests.set(name, body),
+            teardown: (body: E2eCallback) => teardowns.push(body),
+        });
+
+        const javaTest = tests.get('debug startup waits past the old 60 second guest backchannel timeout');
+        assert.ok(javaTest);
+        await assert.rejects(javaTest.call(context), error => error === launchFailure);
+        assert.strictEqual(teardowns.length, 1, 'Cleanup must run in a teardown hook so its failure cannot replace the test failure.');
+        await assert.rejects(teardowns[0].call(context), (error: unknown) => {
+            assert.ok(error instanceof AggregateError);
+            assert.deepStrictEqual(Array.from(error.errors), [`Error: ${stopFailure.message}`]);
+            return true;
+        });
+        assert.strictEqual(writes.at(-1), originalSource, 'Teardown must restore the original AppHost source.');
+        assert.deepStrictEqual(cleanups, ['stopDebugging', 'waitForNoDebugSessions', 'waitForNoRunningAppHost', 'waitForRepositoryIdle']);
+    });
+
     test('keeps CLI status surface coverage in the deterministic ProgressNotifier unit test', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
         const debugDashboard = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'debugDashboard.e2e.test.ts'), 'utf8');
@@ -2185,6 +2281,26 @@ builder.Build().Run();
         const workspaceCollision = getTestBlock(workspaceTargetProofSource, 'reopens the project folder picker after a colliding selection');
         assert.ok(!workspaceCollision.includes('await openAspireView();'));
         assert.ok(workspaceCollision.includes('await waitForRepositoryIdle();'));
+    });
+
+    test('keeps the debugger install hint fixture under the run root and defers its deletion to the runner', () => {
+        // The fixture AppHost starts DCP with --detach in its directory, and DCP can outlive a
+        // successful `aspire stop`. Deleting that directory inside the VS Code session failed with
+        // EBUSY on Windows, so run-e2e.js owns the deletion after the session's processes exit.
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const edgeCasesSource = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'edgeCases.e2e.test.ts'), 'utf8');
+        const fixtures = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'fixtures.ts'), 'utf8');
+        const hintTest = getTestBlock(edgeCasesSource, 'shows debugger install guidance while the Aspire panel and AppHost source are closed');
+
+        assert.ok(fixtures.includes('export async function createEmptyAppHostProject(projectName: string, outputPath = getGeneratedProjectRoot(projectName)): Promise<string>'));
+        assert.ok(hintTest.includes("const projectRoot = path.join(runRoot, `.e2e-debugger-install-hint-${++debuggerInstallHintFixtureIndex}`, 'DebuggerInstallHintApp');"));
+        assert.ok(hintTest.includes("await createEmptyAppHostProject('DebuggerInstallHintApp', projectRoot);"));
+        assert.ok(!hintTest.includes('getGeneratedAppHostPath('));
+        assert.ok(!hintTest.includes('getGeneratedProjectRoot('));
+        assert.ok(edgeCasesSource.includes('() => debuggerInstallHintAppHostPath ? stopAppHostIfRunning(debuggerInstallHintAppHostPath) : undefined,'));
+        assert.ok(!edgeCasesSource.includes('removeGeneratedProject('));
+        assert.ok(!/removePath\([^)]*debuggerInstallHint/.test(edgeCasesSource));
+        assert.ok(!/fs\.rm(Sync)?\([^)]*(debuggerInstallHint|projectRoot)/.test(edgeCasesSource));
     });
 
     test('waits for CLI-independent settings command outcomes instead of the control apply timeout', () => {
