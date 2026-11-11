@@ -202,7 +202,6 @@ public class AddQdrantTests(ITestOutputHelper testOutputHelper)
             await callback.Callback(context);
         }
 
-#pragma warning disable ASPIRECONNECTIONSTRINGS001
         Assert.Collection(
             context.EnvironmentVariables.Values.OfType<ConnectionStringReference>().Distinct(),
             reference =>
@@ -229,7 +228,6 @@ public class AddQdrantTests(ITestOutputHelper testOutputHelper)
                         isExplicit: false),
                     reference.EnvironmentVariableNames);
             });
-#pragma warning restore ASPIRECONNECTIONSTRINGS001
 
         var httpReference = Assert.IsType<ConnectionStringReference>(context.EnvironmentVariables["ConnectionStrings__my-qdrant_http"]);
         Assert.Equal("Endpoint=http://localhost:6333;Key=pass",
