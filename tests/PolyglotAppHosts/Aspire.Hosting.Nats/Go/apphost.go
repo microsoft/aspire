@@ -19,7 +19,7 @@ func main() {
 		log.Fatal(aspire.FormatError(err))
 	}
 
-	nats2 := builder.AddNats("messaging2", &aspire.AddNatsOptions{Port: aspire.Float64Ptr(4223)})
+	nats2 := builder.AddNats("messaging2", &aspire.AddNatsOptions{Port: aspire.IntPtr(4223)})
 	nats2.WithJetStream()
 	nats2.WithDataVolume(&aspire.WithDataVolumeOptions{
 		Name:       aspire.StringPtr("nats-data"),
