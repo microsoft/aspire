@@ -56,6 +56,50 @@ public sealed class ParameterInteractionStateTests
     }
 
     [Fact]
+    public void TrySetCurrent_InputNamedAfterAnotherParameter_MatchedToItsOwnParameter()
+    {
+        var state = new ParameterInteractionState();
+        using var panel = state.RegisterPanel();
+        panel.SetParameterNames(["Value"]);
+        var inputsDialog = new InteractionInputsDialog();
+        inputsDialog.InputItems.Add(new InteractionInput { Name = "Value", InputType = InputType.Text, RelatedResourceName = "region" });
+        var interaction = CreateInputsInteraction(1, inputsDialog);
+
+        // The input is named after the resolved parameter the form shows, but it's for region, which the form doesn't
+        // show. The prompt must stay in the dialog.
+        Assert.False(state.TrySetCurrent(interaction));
+
+        panel.SetParameterNames(["Value", "region"]);
+        Assert.True(state.TrySetCurrent(interaction));
+        Assert.Equal(["region"], ParameterInteractionState.GetParameterInputs(interaction)!.Keys);
+    }
+
+    [Fact]
+    public void TrySetCurrent_InputWithoutParameter_NotShownInline()
+    {
+        var state = new ParameterInteractionState();
+        using var panel = state.RegisterPanel();
+        panel.SetParameterNames(["first"]);
+        var inputsDialog = new InteractionInputsDialog();
+        inputsDialog.InputItems.Add(new InteractionInput { Name = "first", InputType = InputType.Text });
+
+        Assert.False(state.TrySetCurrent(CreateInputsInteraction(1, inputsDialog)));
+    }
+
+    [Fact]
+    public void TrySetCurrent_ParameterNamedLikeSaveInput_ShownInline()
+    {
+        var state = new ParameterInteractionState();
+        using var panel = state.RegisterPanel();
+        panel.SetParameterNames([ParameterInteractionState.SaveToUserSecretsInputName]);
+        var inputsDialog = new InteractionInputsDialog();
+        inputsDialog.InputItems.Add(new InteractionInput { Name = "SaveToUserSecrets2", InputType = InputType.Text, RelatedResourceName = ParameterInteractionState.SaveToUserSecretsInputName });
+        inputsDialog.InputItems.Add(new InteractionInput { Name = ParameterInteractionState.SaveToUserSecretsInputName, InputType = InputType.Boolean });
+
+        Assert.True(state.TrySetCurrent(CreateInputsInteraction(1, inputsDialog)));
+    }
+
+    [Fact]
     public void PanelDisposed_CurrentReleased()
     {
         var state = new ParameterInteractionState();
@@ -271,8 +315,19 @@ public sealed class ParameterInteractionStateTests
     private static InteractionsInputsDialogViewModel CreateInputsInteraction(int interactionId, params string[] inputNames)
     {
         var inputsDialog = new InteractionInputsDialog();
-        inputsDialog.InputItems.AddRange(inputNames.Select(name => new InteractionInput { Name = name, InputType = InputType.Text }));
+        // Every input is for the parameter it's named after, except the save-values checkbox.
+        inputsDialog.InputItems.AddRange(inputNames.Select(name => new InteractionInput
+        {
+            Name = name,
+            InputType = InputType.Text,
+            RelatedResourceName = name == ParameterInteractionState.SaveToUserSecretsInputName ? string.Empty : name
+        }));
 
+        return CreateInputsInteraction(interactionId, inputsDialog);
+    }
+
+    private static InteractionsInputsDialogViewModel CreateInputsInteraction(int interactionId, InteractionInputsDialog inputsDialog)
+    {
         return new InteractionsInputsDialogViewModel
         {
             Interaction = new WatchInteractionsResponseUpdate { InteractionId = interactionId, InputsDialog = inputsDialog },

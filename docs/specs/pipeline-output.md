@@ -218,7 +218,7 @@ is retained between steps. A comparer is resolved after the second capture. Both
 normal host DI ownership: DI-created services are disposed with the host; pre-instantiated services remain caller-owned.
 Default capture configuration and Git are not required by custom implementations.
 
-See the [diffing integration](../../src/Aspire.Hosting/Pipelines/PipelineOutputDiffingExtensions.cs),
+See the [diffing integration](../../src/Aspire.Hosting/PipelineOutputDiffingExtensions.cs),
 [default snapshotter](../../src/Aspire.Hosting/Pipelines/DefaultPipelineOutputSnapshotter.cs),
 [default comparer](../../src/Aspire.Hosting/Pipelines/DefaultPipelineOutputComparer.cs),
 [artifact integration tests](../../tests/Aspire.Hosting.Tests/Pipelines/PipelineOutputDiffingTests.cs), and

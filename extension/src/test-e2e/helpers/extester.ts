@@ -74,6 +74,7 @@ export interface Menu {
 }
 
 export interface InputBox {
+    getText(): Promise<string>;
     setText(text: string): Promise<void>;
     getPlaceHolder(): Promise<string>;
     getTitle(): Promise<string | undefined>;

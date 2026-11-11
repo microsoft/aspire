@@ -15,6 +15,54 @@ namespace Aspire.Hosting.RemoteHost.Tests;
 
 public class CapabilityDispatcherTests
 {
+    [Theory]
+    [InlineData("project")]
+    [InlineData("csharp")]
+    [InlineData("dotnet")]
+    public async Task Invoke_RadiusWithContainerImage_PreservesBuilderAndReplacesImage(string resourceKind)
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        IResourceBuilder<IDotnetProgramResource> resource = resourceKind switch
+        {
+            "project" => builder.AddResource(new ProjectResource("api")),
+            "csharp" => builder.AddResource(new CSharpAppResource("api")),
+            "dotnet" => builder.AddResource(new global::Aspire.Hosting.Dotnet.DotnetProjectResource("api", ".")),
+            _ => throw new ArgumentOutOfRangeException(nameof(resourceKind))
+        };
+        await using var handles = new HandleRegistry();
+        var dispatcher = new CapabilityDispatcher(handles, CreateTestMarshaller(handles),
+            [typeof(DistributedApplication).Assembly, typeof(RadiusExtensions).Assembly, typeof(DotnetProjectHostingExtensions).Assembly]);
+        var handleId = handles.Register(resource, AtsTypeMapping.DeriveTypeId(resource.Resource.GetType()));
+
+        foreach (var image in new[] { "localhost:5001/api:v1", "ghcr.io/owner/api:v2" })
+        {
+            var result = await dispatcher.InvokeAsync("Aspire.Hosting.Radius/withContainerImage", new JsonObject
+            {
+                ["builder"] = new JsonObject { ["$handle"] = handleId },
+                ["image"] = image
+            });
+
+            Assert.NotNull(result);
+            var returnedHandleId = result["$handle"]!.GetValue<string>();
+            Assert.True(handles.TryGet(returnedHandleId, out var returnedBuilder, out _));
+            Assert.Same(resource, returnedBuilder);
+            Assert.Same(resource.Resource, Assert.IsAssignableFrom<IResourceBuilder<IResource>>(returnedBuilder).Resource);
+            var annotation = Assert.Single(resource.Resource.Annotations.OfType<ContainerImageAnnotation>());
+            if (image == "localhost:5001/api:v1")
+            {
+                Assert.Equal("localhost:5001", annotation.Registry);
+                Assert.Equal("api", annotation.Image);
+                Assert.Equal("v1", annotation.Tag);
+            }
+            else
+            {
+                Assert.Equal("ghcr.io", annotation.Registry);
+                Assert.Equal("owner/api", annotation.Image);
+                Assert.Equal("v2", annotation.Tag);
+            }
+        }
+    }
+
     [Fact]
     [RequiresTools(["python3"])]
     [SkipOnPlatform(TestPlatforms.Windows, "Uses the Unix Python executable.")]

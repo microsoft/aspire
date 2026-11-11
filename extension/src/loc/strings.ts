@@ -208,6 +208,7 @@ export const updateAspireCliAction = vscode.l10n.t({ message: 'Update Aspire CLI
 export const invalidLaunchConfiguration = (projectPath: string) => vscode.l10n.t('Invalid launch configuration for {0}.', projectPath);
 export const denoInspectorAddressUnavailable = vscode.l10n.t('Could not reserve a loopback address for the Deno inspector.');
 export const denoAppHostRunCommandMissing = vscode.l10n.t("The Deno AppHost command does not contain the required 'run' subcommand.");
+export const denoAppHostInspectorNotReady = (inspectorAddress: string, timeoutSeconds: number, reason: string) => vscode.l10n.t('The Deno AppHost inspector at {0} did not become ready within {1} seconds, so the debugger could not attach: {2}', inspectorAddress, timeoutSeconds, reason);
 export const failedToCleanUpMsBuildTemporaryDirectory = (directoryPath: string, error: string) => vscode.l10n.t("Failed to clean up temporary MSBuild directory '{0}': {1}", directoryPath, error);
 export const browserDisplayName = (url: string) => vscode.l10n.t('Browser: {0}', url);
 export const browserLabel = vscode.l10n.t('Browser');
@@ -242,6 +243,7 @@ export const nodeLabel = 'Node.js';
 // vscode.extensions, so we cannot tell missing from disabled until the action runs.
 export const debuggerSetupAction = vscode.l10n.t({ message: 'Set Up', comment: 'Button label; "Set Up" is an imperative verb.' });
 export const debuggerSetupNotification = (debuggerName: string) => vscode.l10n.t('Set up {0} debugging support to debug resources in this app.', debuggerName);
+export const appHostDebuggerSetupRequired = (debuggerName: string) => vscode.l10n.t('Set up {0} debugging support before debugging this AppHost. You can run it without debugging instead.', debuggerName);
 export const debuggerExtensionDisabled = (debuggerName: string) => vscode.l10n.t('One or more extensions required for {0} debugging did not become available. They may be disabled or require a window reload. Open the Extensions view to continue setup.', debuggerName);
 export const debuggerInstalledRestartAppHost = (debuggerName: string) => vscode.l10n.t('The extensions required for {0} debugging are installed. Restart the AppHost to enable debugging.', debuggerName);
 export const openExtensionsLabel = vscode.l10n.t('Open Extensions');

@@ -50,10 +50,11 @@ resource pg_kv_connectionstrings__db 'Microsoft.KeyVault/vaults/secrets@2024-11-
   parent: pg_kv
 }
 
-resource api 'Microsoft.App/containerApps@2025-10-02-preview' = {
+resource api 'Microsoft.App/containerApps@2026-03-02-preview' = {
   name: 'api'
   location: location
   properties: {
+    environmentId: env_outputs_azure_container_apps_environment_id
     configuration: {
       secrets: [
         {
@@ -110,7 +111,6 @@ resource api 'Microsoft.App/containerApps@2025-10-02-preview' = {
         }
       }
     }
-    environmentId: env_outputs_azure_container_apps_environment_id
     template: {
       containers: [
         {

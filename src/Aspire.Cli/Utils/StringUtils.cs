@@ -7,6 +7,8 @@ namespace Aspire.Cli.Utils;
 
 internal static class StringUtils
 {
+    public static string TrimEndLine(this string value) => value.TrimEnd('\r', '\n');
+
     public static string RemoveMarkup(string input)
     {
         if (string.IsNullOrEmpty(input))

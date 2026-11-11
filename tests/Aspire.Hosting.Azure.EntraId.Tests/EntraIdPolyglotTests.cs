@@ -361,6 +361,7 @@ public class EntraIdPolyglotTests
         var environment = builder.AddAzureContainerAppEnvironment("env");
         var web = builder.AddContainer("web", "image")
             .WithHttpsEndpoint(targetPort: 8080)
+            .WithExternalHttpEndpoints()
             .WithComputeEnvironment(environment);
         var entra = builder.AddEntraIdApplication("entra")
             .WithRedirectUrisForExport(web.GetEndpoint("https"), ["/signin"]);

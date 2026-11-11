@@ -108,11 +108,9 @@
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_ConfiguredTargets">
-        <source>Configured Aspire plugin:
-  {0}</source>
-        <target state="new">Configured Aspire plugin:
-  {0}</target>
-        <note>{0} lists one agent per line, with that agent's configuration paths comma-separated.</note>
+        <source>Configured sources in {0}</source>
+        <target state="new">Configured sources in {0}</target>
+        <note>{0} lists the configuration file paths with their agent names in parentheses, separated by commas.</note>
       </trans-unit>
       <trans-unit id="InitCommand_Description">
         <source>Initialize configuration and skills for selected agent clients</source>
@@ -147,8 +145,8 @@
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_GlobalScope">
-        <source>Global (Install in your home directory; available across all projects)</source>
-        <target state="translated">Globální (instalace do vašeho domovského adresáře; k dispozici ve všech projektech)</target>
+        <source>Global (In your home directory, available across all projects)</source>
+        <target state="needs-review-translation">Globální (instalace do vašeho domovského adresáře; k dispozici ve všech projektech)</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_InstallationLocations">
@@ -162,8 +160,8 @@
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_InstalledSkillsSummary">
-        <source>Installed Aspire agent skills:</source>
-        <target state="translated">Nainstalované dovednosti agentů Aspire:</target>
+        <source>Installed skills:</source>
+        <target state="needs-review-translation">Nainstalované dovednosti agentů Aspire:</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_InstalledSkillsSummaryLocations">
@@ -192,11 +190,16 @@
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_LocalSkillsConflict">
-        <source>Local Aspire skill files may override plugin skills:
+        <source>Local Aspire skill files may override plugin skills
 {0}</source>
-        <target state="new">Local Aspire skill files may override plugin skills:
+        <target state="new">Local Aspire skill files may override plugin skills
 {0}</target>
         <note>{0} lists the local skill entry-point paths, one per line.</note>
+      </trans-unit>
+      <trans-unit id="InitCommand_LocationWithAgents">
+        <source>{0} ({1})</source>
+        <target state="new">{0} ({1})</target>
+        <note>{0} is a location, and {1} lists the agents that use it, separated by commas.</note>
       </trans-unit>
       <trans-unit id="InitCommand_McpConfigurationDescription">
         <source>Configure Aspire MCP for {0} at {1}</source>
@@ -224,8 +227,8 @@
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_ProjectScope">
-        <source>Project (Install in your workspace root; committed with your project)</source>
-        <target state="translated">Projekt (instalace do kořenového adresáře vašeho pracovního prostoru; zahrnutí do potvrzení spolu s projektem)</target>
+        <source>This project (In your workspace, ready to commit with your project)</source>
+        <target state="needs-review-translation">Projekt (instalace do kořenového adresáře vašeho pracovního prostoru; zahrnutí do potvrzení spolu s projektem)</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_ScopeOptionDescription">
@@ -239,8 +242,8 @@
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_SelectScopePrompt">
-        <source>Installation scope</source>
-        <target state="translated">Obor instalace</target>
+        <source>Where should skills and tools be installed?</source>
+        <target state="needs-review-translation">Obor instalace</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_SharedLocation">
@@ -260,14 +263,19 @@
 {0}</target>
         <note>{0} lists the configured skill source repository and/or catalog URLs for the selected agent clients, one per line.</note>
       </trans-unit>
+      <trans-unit id="InitCommand_SkillSourcesExplanation">
+        <source>One or more skill sources are configured. A skill source lets an organization share skills to customize your development experience.</source>
+        <target state="new">One or more skill sources are configured. A skill source lets an organization share skills to customize your development experience.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="InitCommand_SkillsLocationHint">
         <source>Skills: {0}</source>
         <target state="translated">Dovednosti: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_SkillsOptionDescription">
-        <source>Comma-separated skill/tool IDs ({0}), '{1}', or '{2}' (default: aspire)</source>
-        <target state="new">Comma-separated skill/tool IDs ({0}), '{1}', or '{2}' (default: aspire)</target>
+        <source>Comma-separated skill/tool IDs ({0}), '{1}', or '{2}' (default: aspire). The 'dotnet-inspect' skill requires a C# AppHost in the workspace</source>
+        <target state="new">Comma-separated skill/tool IDs ({0}), '{1}', or '{2}' (default: aspire). The 'dotnet-inspect' skill requires a C# AppHost in the workspace</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_TelemetryHookSkippedMalformedConfig">

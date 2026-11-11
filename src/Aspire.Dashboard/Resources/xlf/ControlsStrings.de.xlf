@@ -167,6 +167,11 @@
         <target state="translated">.env exportieren</target>
         <note />
       </trans-unit>
+      <trans-unit id="OverviewGraphAccessibleLabel">
+        <source>Resource graph. The resource list shows the same resources in an accessible format</source>
+        <target state="new">Resource graph. The resource list shows the same resources in an accessible format</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ParameterDeleteValueAction">
         <source>Delete value</source>
         <target state="new">Delete value</target>
@@ -196,6 +201,11 @@
         <source>Scroll to bottom</source>
         <target state="translated">Nach unten scrollen</target>
         <note>Accessible name and tooltip for the floating button that jumps a large scroll region to the bottom.</note>
+      </trans-unit>
+      <trans-unit id="SummaryDetailsViewCloseViewWithShortcut">
+        <source>Close (Esc)</source>
+        <target state="new">Close (Esc)</target>
+        <note>Tooltip of a close button that the Escape key also triggers. Esc is the label of the Escape key on keyboards.</note>
       </trans-unit>
       <trans-unit id="TextVisualizerContentLabel">
         <source>Text content</source>

@@ -487,6 +487,77 @@ public class AzureFrontDoorPrivateLinkTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task WithAzureFrontDoorPrivateLinkKeepsDistinctOutputsOfOneTargetSeparate()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
+
+        var target = builder.AddResource(new TestPrivateLinkTarget("target") { PerOrigin = true });
+        var frontDoor = builder.AddAzureFrontDoor("frontdoor");
+        target.WithAzureFrontDoorPrivateLink(frontDoor);
+
+        var api = builder.AddDotnetProject("api", "api.csproj", options => options.ExcludeLaunchProfile = true)
+            .WithHttpsEndpoint()
+            .WithExternalHttpEndpoints()
+            .WithComputeEnvironment(target);
+        var web = builder.AddDotnetProject("web", "web.csproj", options => options.ExcludeLaunchProfile = true)
+            .WithHttpsEndpoint()
+            .WithExternalHttpEndpoints()
+            .WithComputeEnvironment(target);
+        frontDoor.WithOrigin(api).WithOrigin(web);
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var (_, bicep) = await GetManifestWithBicep(frontDoor.Resource);
+
+        Assert.Contains("id: target_environment_id", bicep);
+        Assert.Contains("id: target_webId_environment_id", bicep);
+        Assert.Contains("privateLinkLocation: (privateLinkRegions[?target_location] ?? target_location)", bicep);
+        Assert.Contains("privateLinkLocation: (privateLinkRegions[?target_webId_location] ?? target_webId_location)", bicep);
+    }
+
+    [Fact]
+    public async Task WithAzureFrontDoorPrivateLinkReservesUniqueFallbackParameterNames()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
+
+        var target = builder.AddResource(new TestPrivateLinkTarget("target") { PerOrigin = true });
+        var other = builder.AddResource(new TestPrivateLinkTarget("target-webId"));
+        var frontDoor = builder.AddAzureFrontDoor("frontdoor");
+        target.WithAzureFrontDoorPrivateLink(frontDoor);
+        other.WithAzureFrontDoorPrivateLink(frontDoor);
+
+        var api = builder.AddDotnetProject("api", "api.csproj", options => options.ExcludeLaunchProfile = true)
+            .WithHttpsEndpoint()
+            .WithExternalHttpEndpoints()
+            .WithComputeEnvironment(target);
+        var middle = builder.AddDotnetProject("middle", "middle.csproj", options => options.ExcludeLaunchProfile = true)
+            .WithHttpsEndpoint()
+            .WithExternalHttpEndpoints()
+            .WithComputeEnvironment(other);
+        var web = builder.AddDotnetProject("web", "web.csproj", options => options.ExcludeLaunchProfile = true)
+            .WithHttpsEndpoint()
+            .WithExternalHttpEndpoints()
+            .WithComputeEnvironment(target);
+        frontDoor.WithOrigin(api).WithOrigin(middle).WithOrigin(web);
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var (_, bicep) = await GetManifestWithBicep(frontDoor.Resource);
+
+        var parameterNames = bicep.Split('\n')
+            .Select(line => line.Trim())
+            .Where(line => line.StartsWith("param ", StringComparison.Ordinal) && line.EndsWith("_environment_id string", StringComparison.Ordinal))
+            .ToList();
+
+        Assert.Equal(3, parameterNames.Count);
+        Assert.Equal(3, parameterNames.Distinct().Count());
+    }
+
+    [Fact]
     public void AzureContainerAppEnvironmentIsAPrivateLinkTarget()
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
@@ -495,8 +566,8 @@ public class AzureFrontDoorPrivateLinkTests(ITestOutputHelper testOutputHelper)
 
         var target = Assert.IsAssignableFrom<IAzureCdnPrivateLinkTarget>(environment.Resource);
         Assert.Equal("managedEnvironments", target.PrivateLinkGroupId);
-        Assert.Equal("AZURE_CONTAINER_APPS_ENVIRONMENT_ID", target.Id.Name);
-        Assert.Equal("AZURE_CONTAINER_APPS_ENVIRONMENT_LOCATION", target.Location.Name);
+        Assert.Equal("AZURE_CONTAINER_APPS_ENVIRONMENT_ID", target.GetPrivateLinkResourceId(environment.Resource).Name);
+        Assert.Equal("AZURE_CONTAINER_APPS_ENVIRONMENT_LOCATION", target.GetPrivateLinkLocation(environment.Resource).Name);
     }
 
     private static IResource GetContainerApp(IResource resource)
@@ -521,9 +592,11 @@ public class AzureFrontDoorPrivateLinkTests(ITestOutputHelper testOutputHelper)
     private sealed class TestPrivateLinkTarget(string name)
         : AzureProvisioningResource(name, _ => { }), IAzureCdnPrivateLinkTarget
     {
-        public BicepOutputReference Id => new("id", this);
+        public BicepOutputReference GetPrivateLinkResourceId(IResource origin) => new(PerOrigin ? $"{origin.Name}Id" : "id", this);
 
-        public BicepOutputReference Location => new("location", this);
+        public BicepOutputReference GetPrivateLinkLocation(IResource origin) => new(PerOrigin ? $"{origin.Name}Location" : "location", this);
+
+        public bool PerOrigin { get; init; }
 
         public string PrivateLinkGroupId => "sites";
 

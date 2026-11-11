@@ -23,6 +23,7 @@ import type {
     SessionTerminatedNotification,
 } from '../dcp/types';
 import { extensionLogOutputChannel } from '../utils/logging';
+import { certificateBase64ToPem } from '../utils/security';
 import { __resetCommonPropertiesForTests, __setReporterForTests } from '../utils/telemetry';
 
 interface DcpServerInternals {
@@ -1389,7 +1390,7 @@ async function openNotificationClient(harness: Harness, dcpId = harness.dcpId): 
         resolve: (notification: WireNotification) => void;
     }[] = [];
     const socket = new WebSocket(`wss://${harness.dcpServer.connectionInfo.address}/run_session/notify`, {
-        rejectUnauthorized: false,
+        ca: getServerCertificate(harness),
         headers: getHeaders(harness, dcpId),
     });
     harness.sockets.push(socket);
@@ -1436,7 +1437,7 @@ async function request(harness: Harness, method: string, path: string, body?: un
             port: Number(port),
             path,
             method,
-            rejectUnauthorized: false,
+            ca: getServerCertificate(harness),
             headers: {
                 ...getHeaders(harness, dcpId),
                 ...(payload === undefined ? {} : {
@@ -1459,6 +1460,12 @@ async function request(harness: Harness, method: string, path: string, body?: un
         }
         request.end();
     });
+}
+
+function getServerCertificate(harness: Harness): string {
+    // The server uses a per-session self-signed certificate for `localhost`. Trusting exactly that
+    // certificate keeps TLS validation (chain and hostname) enabled for the loopback client.
+    return certificateBase64ToPem(harness.dcpServer.connectionInfo.certificate);
 }
 
 function getHeaders(harness: Harness, dcpId = harness.dcpId): Record<string, string> {

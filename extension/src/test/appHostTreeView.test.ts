@@ -28,9 +28,10 @@ import { ResourceState, HealthStatus, StateStyle } from '../editor/resourceConst
 import type { AspireSubcommand } from '../utils/AspireTerminalProvider';
 import { AspireTerminalProvider, shellArg } from '../utils/AspireTerminalProvider';
 import { AppHostLaunchService, type AppHostOperationState } from '../services/AppHostLaunchService';
-import { terminalCommandArgumentControlCharacters, appHostPathCopiedToClipboard, appHostPathInvalid, appHostSourceNotFound, loadingPipelineSteps, resourceSourceNotFound, resourceSourceOpenFailed, resourceSourceOutsideWorkspace } from '../loc/strings';
+import { AspireDebugConfigurationProvider } from '../debugger/AspireDebugConfigurationProvider';
+import { terminalCommandArgumentControlCharacters, appHostPathCopiedToClipboard, appHostPathInvalid, appHostSourceNotFound, debuggerSetupAction, loadingPipelineSteps, resourceSourceNotFound, resourceSourceOpenFailed, resourceSourceOutsideWorkspace } from '../loc/strings';
 import { onDidInvokeCommand, withCommandTelemetry } from '../utils/telemetry';
-import type { CandidateAppHostDisplayInfo } from '../utils/appHostDiscovery';
+import type { AppHostDiscoveryService, CandidateAppHostDisplayInfo } from '../utils/appHostDiscovery';
 import {
     lsJsonStreamCapability,
     pipelineInteractionCapability,
@@ -1153,6 +1154,56 @@ suite('AspireAppHostTreeProvider', () => {
 
         assert.strictEqual(showErrorStub.callCount, 0);
     });
+
+    for (const action of ['setup', 'dismiss'] as const) {
+        test(`public Debug command handles missing Go debugger ${action} without an error notification`, async () => {
+            const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-debugger-setup-'));
+            const appHostPath = path.join(directory, 'apphost.go');
+            fs.writeFileSync(appHostPath, '');
+            const launchService = makeLaunchService();
+            const treeProvider = makeTreeProviderWithLaunchService([], launchService);
+            const configurationProvider = new AspireDebugConfigurationProvider({
+                resolveDebugTarget: async (filePath: string) => filePath,
+                tryFindWorkspaceDefaultCandidate: async () => undefined,
+            } as unknown as AppHostDiscoveryService, launchService, {
+                get: () => undefined, keys: () => [], update: async () => { },
+            });
+            sandbox.stub(cliPathModule, 'resolveCliPath').resolves({ cliPath: 'aspire', available: true, source: 'path' });
+            sandbox.stub(vscode.extensions, 'getExtension').returns(undefined);
+            const warning = sandbox.stub(vscode.window, 'showWarningMessage').resolves(
+                action === 'setup' ? debuggerSetupAction as never : undefined);
+            const error = sandbox.stub(vscode.window, 'showErrorMessage').resolves(undefined);
+            const execute = sandbox.stub(vscode.commands, 'executeCommand').resolves();
+            sandbox.stub(vscode.debug, 'startDebugging').callsFake(async (_folder, configuration) => {
+                assert.ok(typeof configuration !== 'string');
+                const resolved = await configurationProvider.resolveDebugConfigurationWithSubstitutedVariables(
+                    undefined, { ...configuration });
+                return resolved !== undefined && resolved !== null;
+            });
+            const callbacks = registerTreeCommandCallbacks(sandbox, treeProvider, {} as AppHostDataRepository);
+            const outcomes: string[] = [];
+            const subscription = onDidInvokeCommand(event => {
+                if (event.command === 'aspire-vscode.debugAppHost') {
+                    outcomes.push(event.outcome);
+                }
+            });
+            try {
+                await callbacks.get('aspire-vscode.debugAppHost')!({ appHostPath });
+
+                assert.deepStrictEqual(outcomes, ['canceled']);
+                sinon.assert.calledOnce(warning);
+                sinon.assert.notCalled(error);
+                assert.strictEqual(execute.calledWith('aspire-vscode.installDebuggerExtension'), action === 'setup');
+                assert.strictEqual(launchService.isLaunching(appHostPath), false);
+            }
+            finally {
+                subscription.dispose();
+                treeProvider.dispose();
+                launchService.dispose();
+                removeDirectorySafely(directory);
+            }
+        });
+    }
 
     test('dashboard quick pick labels add enough parent folders to disambiguate duplicate filenames', async () => {
         const appHosts = [

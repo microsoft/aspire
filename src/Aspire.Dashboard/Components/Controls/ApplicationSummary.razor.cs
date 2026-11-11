@@ -1,4 +1,4 @@
-// Licensed to the .NET Foundation under one or more agreements.
+﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Concurrent;
@@ -46,6 +46,7 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
     private readonly ConcurrentDictionary<string, ResourceViewModel> _resourceByName = new(StringComparers.ResourceName);
     private readonly CancellationTokenSource _cts = new();
     private Task? _resourceSubscriptionTask;
+    private Task? _activityRefreshTask;
     private Subscription? _logsSubscription;
     private Subscription? _tracesSubscription;
     private Subscription? _metricsSubscription;
@@ -120,8 +121,8 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
     private IReadOnlyList<IconToggleOption<GroupOverview>> OverviewOptions =>
         new IconToggleOption<GroupOverview>[]
         {
-            new(GroupOverview.Summary, new Icons.Regular.Size20.DataBarVertical(), DialogsLoc[nameof(Dashboard.Resources.Dialogs.SettingsDialogGroupOverviewSummary)]),
-            new(GroupOverview.Graph, new Icons.Regular.Size20.ShareAndroid(), Loc[nameof(Dashboard.Resources.Resources.GraphPageTitle)])
+            new(GroupOverview.Summary, new Icons.Regular.Size20.DataUsage(), DialogsLoc[nameof(Dashboard.Resources.Dialogs.SettingsDialogGroupOverviewSummary)]),
+            new(GroupOverview.Graph, new Icons.Regular.Size20.Flow(), Loc[nameof(Dashboard.Resources.Resources.GraphPageTitle)])
         }
         .Where(option => option.Value != GroupOverview.Graph || ViewPreferences.IsGraphEnabled)
         .ToList();
@@ -136,6 +137,8 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
                 .Where(resource => resource.HasMissingParameterValueState() && IsInScope(resource))
                 .OrderBy(resource => resource.DisplayName, StringComparers.ResourceName)
                 .Select(resource => resource.Name));
+
+    private bool ShowsMovingActivityWindow => ViewPreferences.GroupOverview == GroupOverview.Summary && !TelemetryRepository.IsReadOnly;
 
     protected override async Task OnInitializedAsync()
     {
@@ -152,6 +155,7 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
         _tracesSubscription = TelemetryRepository.OnNewTraces(null, SubscriptionType.Other, OnTelemetryChanged);
         _metricsSubscription = TelemetryRepository.OnNewMetrics(null, SubscriptionType.Other, OnTelemetryChanged);
         QueueTelemetryRefresh();
+        _activityRefreshTask = RefreshActivityPeriodicallyAsync(_cts.Token);
 
         var (snapshot, subscription) = await DataSource.ResourceRepository.SubscribeResourcesAsync(_cts.Token);
         foreach (var resource in snapshot)
@@ -204,7 +208,8 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
                     LabelFormat: Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphResourceActionsButton)].Value),
                 new GraphHiddenIconDto(
                     Path: ResourceGraphMapper.GetIconPathData(new Icons.Regular.Size16.EyeOff()),
-                    Tooltip: ColumnsLoc[nameof(Dashboard.Resources.Columns.HiddenResourceIconTooltip)].Value));
+                    Tooltip: ColumnsLoc[nameof(Dashboard.Resources.Columns.HiddenResourceIconTooltip)].Value),
+                ResourceGraphMapper.GetGameStrings(Loc));
 
             await _jsModule.InvokeVoidAsync("initializeResourcesGraph", _resourcesInteropReference, graphIcons);
             _graphInitialized = true;
@@ -370,7 +375,7 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
     private async Task<HomeActivity> LoadActivityAsync(ITelemetryRepository repository, List<OtlpResource> telemetryResources, List<ResourceKey> resourceKeys, int errorLogCount, CancellationToken cancellationToken)
     {
         // Align the window to bucket boundaries so bars don't shift between refreshes.
-        var now = TimeProvider.GetUtcNow().UtcDateTime;
+        var now = await GetActivityTimeAsync(repository, resourceKeys, errorLogCount, cancellationToken).ConfigureAwait(false);
         var windowEnd = new DateTime(((now.Ticks / s_activityBucketSize.Ticks) + 1) * s_activityBucketSize.Ticks, DateTimeKind.Utc);
         var windowStart = windowEnd - (s_activityBucketSize * ActivityBucketCount);
 
@@ -431,18 +436,26 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
             endpointDurations.Add(durationMs);
         }
 
-        // Error logs count toward a resource's hotspot score alongside failed requests.
-        var logCount = Math.Min(errorLogCount, MaxActivityErrorLogs);
-        if (logCount > 0)
+        // Error logs count toward a resource's hotspot score alongside failed requests. The query filters by the window
+        // before limiting the count: a recording's window can end before its last error logs, which would otherwise use
+        // up the limit and hide the ones in the window.
+        if (errorLogCount > 0)
         {
-            var errorLogs = await repository.GetLogSummariesAsync(new GetLogsContext { ResourceKeys = resourceKeys, StartIndex = errorLogCount - logCount, Count = logCount, Filters = s_errorLogFilters }, cancellationToken).ConfigureAwait(false);
+            var errorLogs = await repository.GetLogSummariesAsync(new GetLogsContext
+            {
+                ResourceKeys = resourceKeys,
+                StartIndex = 0,
+                Count = MaxActivityErrorLogs,
+                LatestItemCount = MaxActivityErrorLogs,
+                Filters =
+                [
+                    .. s_errorLogFilters,
+                    CreateLogTimeFilter(FilterCondition.GreaterThanOrEqual, windowStart),
+                    CreateLogTimeFilter(FilterCondition.LessThan, windowEnd)
+                ]
+            }, cancellationToken).ConfigureAwait(false);
             foreach (var log in errorLogs.Items)
             {
-                if (log.TimeStamp < windowStart)
-                {
-                    continue;
-                }
-
                 if (!byResource.TryGetValue(log.Resource.ResourceKey, out var resourceActivity))
                 {
                     resourceActivity = new ResourceActivity(GetName(log.Resource));
@@ -492,6 +505,55 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
                 .Take(InsightItemCount)
                 .ToList()
         };
+    }
+
+    // The value is parsed without converting between time zones, so it keeps the UTC time of the stored ticks.
+    private static FieldTelemetryFilter CreateLogTimeFilter(FilterCondition condition, DateTime time) => new()
+    {
+        Field = nameof(OtlpLogEntry.TimeStamp),
+        Condition = condition,
+        Value = time.ToString("yyyy-MM-ddTHH:mm:ss.fffffff", CultureInfo.InvariantCulture)
+    };
+
+    // A recording ended some time ago, so a window ending at the current time would show it as empty. Its activity window
+    // ends at its last request instead, or at its last error log when it has no requests, so error hotspots still show.
+    // Only that one item needs to be read, and a recording doesn't get new ones.
+    private async Task<DateTime> GetActivityTimeAsync(ITelemetryRepository repository, List<ResourceKey> resourceKeys, int errorLogCount, CancellationToken cancellationToken)
+    {
+        var now = TimeProvider.GetUtcNow().UtcDateTime;
+        if (!repository.IsReadOnly)
+        {
+            return now;
+        }
+
+        var latest = await repository.GetRequestSpansAsync(new GetRequestSpansRequest
+        {
+            ResourceKeys = resourceKeys,
+            StartTime = DateTime.MinValue,
+            EndTime = DateTime.MaxValue,
+            MaxCount = 1
+        }, cancellationToken).ConfigureAwait(false);
+
+        if (latest.Items is [var span, ..])
+        {
+            return span.StartTime;
+        }
+
+        if (errorLogCount == 0)
+        {
+            return now;
+        }
+
+        // Results are ordered oldest first.
+        var latestError = await repository.GetLogSummariesAsync(new GetLogsContext
+        {
+            ResourceKeys = resourceKeys,
+            StartIndex = errorLogCount - 1,
+            Count = 1,
+            Filters = s_errorLogFilters
+        }, cancellationToken).ConfigureAwait(false);
+
+        return latestError.Items is [var log, ..] ? log.TimeStamp : now;
     }
 
     // Prefer the low-cardinality route template ("GET /api/catalog/{id}") over the span name.
@@ -658,7 +720,14 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
         {
             "state-success" => HealthBucket.Running,
             "state-pending" => HealthBucket.Pending,
-            _ => HealthBucket.Inactive
+            // "Inactive" hid real differences: a job that finished, a resource that was never started, and one the
+            // dashboard can't tell. They're counted apart so the legend says which.
+            _ => resource.KnownState switch
+            {
+                KnownResourceState.Finished or KnownResourceState.Exited => HealthBucket.Finished,
+                KnownResourceState.NotStarted => HealthBucket.NotStarted,
+                _ => HealthBucket.Unknown
+            }
         };
 
     private bool NeedsAttention(ResourceViewModel resource)
@@ -680,7 +749,7 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
     /// </summary>
     private HealthSummary GetHealthSummary(List<ResourceViewModel> resources)
     {
-        int running = 0, pending = 0, attention = 0, inactive = 0;
+        int running = 0, pending = 0, attention = 0, finished = 0, notStarted = 0, unknown = 0;
         DateTime? startedAt = null;
         foreach (var resource in resources)
         {
@@ -695,8 +764,14 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
                 case HealthBucket.Pending:
                     pending++;
                     break;
+                case HealthBucket.Finished:
+                    finished++;
+                    break;
+                case HealthBucket.NotStarted:
+                    notStarted++;
+                    break;
                 default:
-                    inactive++;
+                    unknown++;
                     break;
             }
 
@@ -706,7 +781,7 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
             }
         }
 
-        return new HealthSummary(resources.Count, running, pending, attention, inactive, startedAt);
+        return new HealthSummary(resources.Count, running, pending, attention, finished, notStarted, unknown, startedAt, GetMissingParameterCount());
     }
 
     private string GetHeadline(HealthSummary summary)
@@ -721,6 +796,15 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
             return summary.Total == 1
                 ? Loc[nameof(Dashboard.Resources.Resources.HomeHeadlineSingleAttention)]
                 : Loc[nameof(Dashboard.Resources.Resources.HomeHeadlineAttention), summary.Attention, summary.Total];
+        }
+
+        // Missing parameter values keep resources from starting, so the headline says so rather than reporting that
+        // nothing needs attention. Parameters aren't counted as resources, so they have their own headline.
+        if (summary.MissingParameters > 0)
+        {
+            return Loc[summary.MissingParameters == 1
+                ? nameof(Dashboard.Resources.Resources.MissingParameterCount)
+                : nameof(Dashboard.Resources.Resources.MissingParametersCount), summary.MissingParameters];
         }
 
         if (summary.Pending > 0)
@@ -743,6 +827,7 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
     private static string GetHeroStateClass(HealthSummary summary) => summary switch
     {
         { Attention: > 0 } => "state-error",
+        { MissingParameters: > 0 } => "state-warning",
         { Pending: > 0 } => "state-pending",
         { Total: > 0 } => "state-success",
         _ => "state-neutral"
@@ -759,9 +844,36 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
     // The settings panel changes what the overview shows while it's displayed.
     private void OnViewPreferencesChanged() => _ = InvokeAsync(async () =>
     {
+        // The window isn't refreshed while another layout is showing.
+        if (ShowsMovingActivityWindow)
+        {
+            QueueTelemetryRefresh();
+        }
+
         StateHasChanged();
         await UpdateResourceGraphResourcesAsync();
     });
+
+    // The activity window moves with time: once telemetry stops nothing else queues a refresh, and old requests would stay
+    // "last 15 min" indefinitely. The interval matches the window's bucket size, so each refresh can move it by a bucket.
+    // Only the summary layout shows the window, and a recording's window doesn't move, so the others skip these queries.
+    private async Task RefreshActivityPeriodicallyAsync(CancellationToken cancellationToken)
+    {
+        using var timer = new PeriodicTimer(s_activityBucketSize, TimeProvider);
+        try
+        {
+            while (await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false))
+            {
+                if (ShowsMovingActivityWindow)
+                {
+                    QueueTelemetryRefresh();
+                }
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
+    }
 
     public async ValueTask DisposeAsync()
     {
@@ -772,6 +884,7 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
         _tracesSubscription?.Dispose();
         _metricsSubscription?.Dispose();
         await TaskHelpers.WaitIgnoreCancelAsync(_resourceSubscriptionTask);
+        await TaskHelpers.WaitIgnoreCancelAsync(_activityRefreshTask);
         _resourcesInteropReference?.Dispose();
         if (_jsModule is not null)
         {
@@ -788,6 +901,12 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
         [JSInvokable]
         public Task ResourceContextMenu(string id, int clientX, int clientY, string? _) =>
             summary.ShowContextMenuAsync(id, clientX, clientY);
+
+        [JSInvokable]
+        public Task<bool?> ExecuteGraphGameCommand(string id, string commandName) =>
+            summary._resourceByName.TryGetValue(id, out var resource)
+                ? summary.DashboardCommandExecutor.ExecuteGraphGameCommandAsync(resource, commandName, summary.GetResourceName)
+                : Task.FromResult<bool?>(null);
     }
 
     private async Task SelectResourceAsync(string id)
@@ -803,14 +922,17 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
         Attention,
         Pending,
         Running,
-        Inactive
+        Finished,
+        NotStarted,
+        Unknown
     }
 
-    private readonly record struct HealthSummary(int Total, int Running, int Pending, int Attention, int Inactive, DateTime? StartedAt);
+    private readonly record struct HealthSummary(int Total, int Running, int Pending, int Attention, int Finished, int NotStarted, int Unknown, DateTime? StartedAt, int MissingParameters);
 
     private sealed class HomeActivity
     {
         public required DateTime WindowStart { get; init; }
+        public DateTime WindowEnd => WindowStart + (s_activityBucketSize * ActivityBucketCount);
         public required int[] OkBuckets { get; init; }
         public required int[] ErrorBuckets { get; init; }
         public required int TotalRequests { get; init; }

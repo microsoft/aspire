@@ -1,0 +1,45 @@
+﻿{
+  "resources": {
+    "frontend": {
+      "type": "container.v0",
+      "image": "image:latest",
+      "bindings": {
+        "http": {
+          "scheme": "http",
+          "protocol": "tcp",
+          "transport": "http",
+          "targetPort": 8080
+        }
+      }
+    },
+    "backend": {
+      "type": "container.v0",
+      "image": "image:latest",
+      "env": {
+        "RESULT": "{cond-frontend-bindings-http-tlsenabled-dd3f8c54.connectionString}"
+      }
+    },
+    "unselected-condition": {
+      "type": "parameter.v0",
+      "value": "{unselected-condition.inputs.value}",
+      "inputs": {
+        "value": {
+          "type": "string"
+        }
+      }
+    },
+    "selected-value": {
+      "type": "parameter.v0",
+      "value": "{selected-value.inputs.value}",
+      "inputs": {
+        "value": {
+          "type": "string"
+        }
+      }
+    },
+    "cond-frontend-bindings-http-tlsenabled-dd3f8c54": {
+      "type": "value.v0",
+      "connectionString": "{selected-value.value}"
+    }
+  }
+}

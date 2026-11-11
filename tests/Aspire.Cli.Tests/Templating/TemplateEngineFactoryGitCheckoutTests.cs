@@ -2,9 +2,11 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Git;
+using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Templating;
 using Aspire.Cli.Tests.Utils;
+using Aspire.Cli.Tests.TestServices;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Testing;
@@ -13,6 +15,23 @@ namespace Aspire.Cli.Tests.Templating;
 
 public class TemplateEngineFactoryGitCheckoutTests(ITestOutputHelper outputHelper)
 {
+    [Fact]
+    public async Task RepositoryTemplate_QuietAcquisitionDoesNotDisplayRoutineGitOutput()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var (repository, commit) = await CreateRepositoryAsync(workspace, "content", [1, 2, 3]);
+        var interaction = new TestInteractionService();
+        var services = CreateServices(workspace);
+        services.AddSingleton<IInteractionService>(interaction);
+        using var provider = services.BuildServiceProvider();
+
+        Assert.Single(await GetFactory(provider).GetTemplatesAsync(
+            new TemplateSource(".", repository.FullName, "main"), TestContext.Current.CancellationToken));
+
+        Assert.Equal(new byte[] { 1, 2, 3 }, await File.ReadAllBytesAsync(Path.Combine(GetCheckout(workspace, commit), "content")));
+        Assert.Empty(interaction.DisplayedRawText);
+    }
+
     [Theory]
     [InlineData("sha1", "settings[1].json")]
     [InlineData("sha256", "settings with spaces.json")]
@@ -71,28 +90,35 @@ public class TemplateEngineFactoryGitCheckoutTests(ITestOutputHelper outputHelpe
     }
 
     [Fact]
-    public async Task RepositoryTemplate_FailureDoesNotLogPrivateRepositoryOrDiagnostics()
+    public async Task RepositoryTemplate_FailureLogsDiagnosticsWithoutExposingThemInException()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         await GitTestHelper.EnsureGitAvailableAsync(outputHelper);
         var logger = new FakeLogger<GitCommandRunner>();
+        var interaction = new TestInteractionService();
         var services = CreateServices(workspace);
         services.AddSingleton<ILogger<GitCommandRunner>>(logger);
+        services.AddSingleton<IInteractionService>(interaction);
         using var provider = services.BuildServiceProvider();
 
         var exception = await Assert.ThrowsAsync<TemplateDiscoveryException>(() => GetFactory(provider).GetTemplatesAsync(
-            new TemplateSource(".", Path.Combine(workspace.Path, "private-repository-secret-marker"), null), TestContext.Current.CancellationToken));
+            new TemplateSource(".", Path.Combine(workspace.Path, "repository-diagnostic-marker"), null), TestContext.Current.CancellationToken));
 
         Assert.Equal(CliExitCodes.FailedToInstallTemplates, exception.ExitCode);
         Assert.Equal(string.Format(NewCommandStrings.TemplateRepositoryGitExited, 128, ErrorStrings.GitRepositoryUnavailable), exception.Message);
         Assert.Null(exception.InnerException);
         var logs = logger.Collector.GetSnapshot();
-        Assert.Collection(logs,
+        var diagnostics = string.Concat(logs
+            .Where(entry => entry.Message.StartsWith("Git stderr: ", StringComparison.Ordinal))
+            .Select(entry => entry.Message["Git stderr: ".Length..]));
+        Assert.StartsWith("fatal:", diagnostics, StringComparison.Ordinal);
+        Assert.Equal(string.Concat(interaction.DisplayedRawText.Select(entry => entry.Text)).ReplaceLineEndings(string.Empty),
+            diagnostics.ReplaceLineEndings(string.Empty));
+        Assert.Collection(logs.Where(entry => !entry.Message.StartsWith("Git stderr: ", StringComparison.Ordinal)),
             entry => Assert.Equal("Starting Git process.", entry.Message),
             entry => Assert.StartsWith("Git process ", entry.Message),
             entry => Assert.StartsWith("Git process ", entry.Message),
             entry => Assert.StartsWith("Git process completed after ", entry.Message));
-        Assert.All(logs, entry => Assert.False(entry.Message.Contains("private-repository-secret-marker", StringComparison.Ordinal)));
     }
 
     [Fact]

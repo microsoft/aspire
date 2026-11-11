@@ -278,7 +278,6 @@ internal static class CliE2EAutomatorHelpers
             projectName,
             "C#",
             counter,
-            AppHostLanguagePromptSelection.DefaultCSharp,
             effectiveTimeout);
     }
 
@@ -308,13 +307,11 @@ internal static class CliE2EAutomatorHelpers
             projectName,
             "TypeScript",
             counter,
-            AppHostLanguagePromptSelection.TypeScript,
             effectiveTimeout);
     }
 
     /// <summary>
     /// Creates a Go empty AppHost using the direct <c>aspire new aspire-go-empty</c> command.
-    /// Requires <see cref="EnableExperimentalGoSupportAsync"/> to have run first.
     /// </summary>
     internal static async Task AspireNewGoEmptyAppHostAsync(
         this Hex1bTerminalAutomator auto,
@@ -339,7 +336,6 @@ internal static class CliE2EAutomatorHelpers
             projectName,
             "Go",
             counter,
-            AppHostLanguagePromptSelection.Go,
             effectiveTimeout);
     }
 
@@ -368,7 +364,6 @@ internal static class CliE2EAutomatorHelpers
         string projectName,
         string languageDisplayName,
         SequenceCounter counter,
-        AppHostLanguagePromptSelection languagePromptSelection,
         TimeSpan effectiveTimeout)
     {
         var languagePrompt = new CellPatternSearcher()
@@ -415,7 +410,7 @@ internal static class CliE2EAutomatorHelpers
         switch (result)
         {
             case AspireNewEmptyAppHostResult.LanguagePrompt:
-                await auto.SelectAppHostLanguageAsync(languagePromptSelection);
+                await auto.SelectAppHostLanguageAsync(languageDisplayName);
                 await auto.DeclineAgentInitPromptAsync(counter, effectiveTimeout);
                 return;
 
@@ -435,38 +430,16 @@ internal static class CliE2EAutomatorHelpers
         }
     }
 
-    private static async Task SelectAppHostLanguageAsync(
+    internal static async Task SelectAppHostLanguageAsync(
         this Hex1bTerminalAutomator auto,
-        AppHostLanguagePromptSelection languagePromptSelection)
+        string languageDisplayName)
     {
-        switch (languagePromptSelection)
-        {
-            case AppHostLanguagePromptSelection.DefaultCSharp:
-                await auto.EnterAsync();
-                return;
-
-            case AppHostLanguagePromptSelection.TypeScript:
-                await auto.DownAsync();
-                await auto.WaitUntilAsync(
-                    s => new CellPatternSearcher().Find("> TypeScript (Node.js)").Search(s).Count > 0,
-                    timeout: TimeSpan.FromSeconds(5),
-                    description: "TypeScript AppHost language selected");
-                await auto.EnterAsync();
-                return;
-
-            case AppHostLanguagePromptSelection.Go:
-                // Search by text so the selection does not depend on which other languages the picker lists.
-                await auto.TypeAsync("Go");
-                await auto.WaitUntilAsync(
-                    s => new CellPatternSearcher().Find("> Go").Search(s).Count > 0,
-                    timeout: TimeSpan.FromSeconds(5),
-                    description: "Go AppHost language selected");
-                await auto.EnterAsync();
-                return;
-
-            default:
-                throw new InvalidOperationException($"Unexpected AppHost language prompt selection: {languagePromptSelection}.");
-        }
+        await auto.TypeAsync(languageDisplayName);
+        await auto.WaitUntilAsync(
+            snapshot => new CellPatternSearcher().Find($"> {languageDisplayName}").Search(snapshot).Count > 0,
+            timeout: TimeSpan.FromSeconds(5),
+            description: $"{languageDisplayName} AppHost language selected");
+        await auto.EnterAsync();
     }
 
     /// <summary>
@@ -840,25 +813,7 @@ internal static class CliE2EAutomatorHelpers
     }
 
     /// <summary>
-    /// Enables experimental Go polyglot support for CLI tests.
-    /// </summary>
-    /// <remarks>
-    /// Go AppHosts are gated behind the <c>experimentalPolyglotGo</c> feature, which hides both the Go starter template
-    /// and the Go entry in the language picker. Every Go test goes through this helper so that dropping the gate only
-    /// requires turning this method into a no-op like <see cref="EnablePolyglotSupportAsync"/>.
-    /// </remarks>
-    internal static async Task EnableExperimentalGoSupportAsync(
-        this Hex1bTerminalAutomator auto,
-        SequenceCounter counter)
-    {
-        await auto.TypeAsync("aspire config set features:experimentalPolyglotGo true --global --non-interactive");
-        await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
-    }
-
-    /// <summary>
     /// Creates a Go AppHost in the current directory through the interactive <c>aspire init</c> language picker.
-    /// Requires <see cref="EnableExperimentalGoSupportAsync"/> to have run first.
     /// </summary>
     internal static async Task AspireInitGoAppHostAsync(
         this Hex1bTerminalAutomator auto,
@@ -867,7 +822,7 @@ internal static class CliE2EAutomatorHelpers
         await auto.TypeAsync("aspire init");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("Which language would you like to use?", timeout: TimeSpan.FromSeconds(30));
-        await auto.SelectAppHostLanguageAsync(AppHostLanguagePromptSelection.Go);
+        await auto.SelectAppHostLanguageAsync("Go");
         await auto.WaitUntilTextAsync("Created apphost.go", timeout: TimeSpan.FromMinutes(2));
         await auto.DeclineAgentInitPromptAsync(counter);
     }
@@ -1198,11 +1153,71 @@ internal static class CliE2EAutomatorHelpers
             return;
         }
 
-        var containerWorkspace = $"/workspace/{workspace.WorkspaceRoot.Name}";
-
-        await auto.TypeAsync(BuildAspireDiagnosticsCaptureCommand(containerWorkspace) + "echo done");
+        await auto.TypeAsync(BuildAspireDiagnosticsCaptureCommand(GetContainerWorkspacePath(workspace)) + "echo done");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(15));
+    }
+
+    /// <summary>
+    /// Gets the path at which the workspace is mounted inside the Docker test container.
+    /// </summary>
+    internal static string GetContainerWorkspacePath(TemporaryWorkspace workspace)
+        => $"/workspace/{workspace.WorkspaceRoot.Name}";
+
+    /// <summary>
+    /// The file, under <see cref="DiagnosticsDirectoryName"/>, that records the process table and shell jobs
+    /// captured by <see cref="SuspendHungCommandAndCaptureDiagnosticsAsync"/>.
+    /// </summary>
+    internal const string HungCommandProcessesFileName = "hung-command-processes.txt";
+
+    /// <summary>
+    /// Returns the shell to a usable state when its foreground command stopped making progress, capturing the
+    /// process table and Aspire diagnostics for that command before killing it.
+    /// </summary>
+    /// <remarks>
+    /// When a CLI command hangs, the command typed by <see cref="CaptureAspireDiagnosticsAsync"/> is queued behind
+    /// the hung process and never runs, so the uploaded artifacts contain no CLI logs for the failure. Ctrl+Z
+    /// suspends the foreground job (keeping its process tree alive) and returns control to bash. The process
+    /// snapshot is written before the suspended jobs are killed so it shows which command and child processes
+    /// were stuck and for how long. If the shell was already idle, Ctrl+Z is a no-op and only the capture runs.
+    /// </remarks>
+    /// <param name="auto">The terminal automator.</param>
+    /// <param name="diagnosticsDestination">
+    /// The shell path under which <see cref="DiagnosticsDirectoryName"/> is written, or <see langword="null"/> to
+    /// only recover the shell.
+    /// </param>
+    /// <param name="timeout">How long to wait for the shell to run the capture command.</param>
+    internal static async Task SuspendHungCommandAndCaptureDiagnosticsAsync(
+        this Hex1bTerminalAutomator auto,
+        string? diagnosticsDestination,
+        TimeSpan? timeout = null)
+    {
+        await auto.Ctrl().KeyAsync(Hex1b.Input.Hex1bKey.Z);
+
+        var capture = diagnosticsDestination is null
+            ? string.Empty
+            : BuildHungCommandSnapshotCommand(diagnosticsDestination) + BuildAspireDiagnosticsCaptureCommand(diagnosticsDestination);
+
+        // The prompt counter is unreliable after a hang (the hung command's prompt was never consumed), so wait for
+        // a unique marker instead. The marker is split in the typed command so the echoed command line cannot match.
+        var markerId = Guid.NewGuid().ToString("N");
+        // Each job runs in its own process group, so signal the whole group to also stop pipeline members and children.
+        await auto.TypeAsync(capture + $"for pgid in $(jobs -p); do kill -KILL -- -$pgid; done 2>/dev/null; echo \"hung-command-\"\"recovered-{markerId}\"");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync($"hung-command-recovered-{markerId}", timeout: timeout ?? TimeSpan.FromSeconds(15));
+    }
+
+    private static string BuildHungCommandSnapshotCommand(string destinationExpression)
+    {
+        var diag = $"{destinationExpression}/{DiagnosticsDirectoryName}";
+
+        // procps is not guaranteed in every test image, so fall back to reading /proc directly.
+        return
+            $"mkdir -p \"{diag}\"; " +
+            "{ date -u; jobs -l; " +
+            "ps -eo pid,ppid,pgid,stat,etime,args 2>/dev/null || " +
+            "for p in /proc/[0-9]*; do echo \"${p#/proc/} $(tr '\\0' ' ' < \"$p/cmdline\" 2>/dev/null)\"; done; " +
+            $"}} > \"{diag}/{HungCommandProcessesFileName}\" 2>&1; ";
     }
 
     /// <summary>
@@ -1360,10 +1375,4 @@ internal static class CliE2EAutomatorHelpers
         ErrorPrompt
     }
 
-    private enum AppHostLanguagePromptSelection
-    {
-        DefaultCSharp,
-        TypeScript,
-        Go
-    }
 }

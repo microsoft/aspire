@@ -18,6 +18,10 @@ public class FallbackProjectParserTests(ITestOutputHelper output)
     [InlineData("/* example */\n#:package Aspire.Hosting.AppHost@17.0.0", true)]
     [InlineData("#:package Aspire.Hosting.AppHost@17.0.0 unexpected", false)]
     [InlineData("  #:package Aspire.Hosting.AppHost@17.0.0+build.1  \r\n", true)]
+    [InlineData("#:package Aspire.Hosting.AppHost", true)]
+    [InlineData("  #:package Aspire.Hosting.AppHost  \r\n", true)]
+    [InlineData("// #:package Aspire.Hosting.AppHost", false)]
+    [InlineData("#:package Aspire.Hosting.AppHost unexpected", false)]
     public void ParseProject_OnlyUsesCompletePackageDirectiveLines(string content, bool expected)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(output);
@@ -29,6 +33,37 @@ public class FallbackProjectParserTests(ITestOutputHelper output)
 
         Assert.Equal(expected, FallbackProjectParser.HasAppHostPackageDirective(content));
         Assert.Equal(expected ? 1 : 0, result.RootElement.GetProperty("Items").GetProperty("PackageReference").GetArrayLength());
+    }
+
+    [Fact]
+    public void ParseProject_VersionlessPackageDirectiveHasEmptyVersion()
+    {
+        const string content = "#:package Aspire.Hosting.AppHost\n#:package Aspire.Hosting.Redis\n";
+        using var workspace = TemporaryWorkspace.CreateForCli(output);
+        var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs"));
+        File.WriteAllText(projectFile.FullName, content);
+        var parser = new FallbackProjectParser(NullLogger<FallbackProjectParser>.Instance);
+
+        using var result = parser.ParseProject(projectFile);
+
+        Assert.Collection(
+            result.RootElement.GetProperty("Items").GetProperty("PackageReference").EnumerateArray(),
+            pkg =>
+            {
+                Assert.Equal("Aspire.Hosting.AppHost", pkg.GetProperty("Identity").GetString());
+                Assert.Equal(string.Empty, pkg.GetProperty("Version").GetString());
+            },
+            pkg =>
+            {
+                Assert.Equal("Aspire.Hosting.Redis", pkg.GetProperty("Identity").GetString());
+                Assert.Equal(string.Empty, pkg.GetProperty("Version").GetString());
+            });
+    }
+
+    [Fact]
+    public void HasAppHostPackageDirective_IgnoresOtherVersionlessPackages()
+    {
+        Assert.False(FallbackProjectParser.HasAppHostPackageDirective("#:package Aspire.Hosting.Redis\n#:package Aspire.Hosting.AppHost.Extra"));
     }
 
     [Theory]

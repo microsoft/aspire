@@ -1,0 +1,22 @@
+﻿
+Aspire Environment Check
+========================
+
+AppHost
+  🚨 Local Aspire skill files may override plugin skills
+       Delete these files, then run 'aspire agent init --skills aspire'.
+       Files:
+         .agents/skills/aspire/SKILL.md
+         ~/.agents/skills/aspire/SKILL.md
+
+Summary: 0 passed, 1 warnings, 0 failed
+For detailed prerequisites: https://aka.ms/aspire-prerequisites
+
+Aspire CLI Installations
+========================
+
+╭────────────────────────┬─────────┬─────────┬────────┬─────────────╮
+│ Path                   │ Version │ Channel │ Route  │ PATH status │
+├────────────────────────┼─────────┼─────────┼────────┼─────────────┤
+│ /test/aspire (current) │ 13.0.0  │ stable  │ script │ active      │
+╰────────────────────────┴─────────┴─────────┴────────┴─────────────╯

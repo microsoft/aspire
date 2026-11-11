@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Security.Cryptography;
+using System.Text.Json;
 using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage;
 using Microsoft.JSInterop;
 
@@ -44,13 +46,30 @@ public abstract class BrowserStorageBase : IBrowserStorage
         catch (JSDisconnectedException)
         {
             // A disconnected circuit cannot read browser storage; avoid recording it as a storage error.
-            return new StorageResult<TValue>(false, default);
+            return new StorageResult<TValue>(false, default) { ReadFailed = true };
+        }
+        catch (Exception ex) when (ex is JSException or OperationCanceledException)
+        {
+            // The browser failed or didn't answer in time. Reading again later can succeed.
+            Logger.LogInformation(ex, "Error when reading '{Key}' as {ValueType}.", key, typeof(TValue).Name);
+
+            return new StorageResult<TValue>(false, default) { ReadFailed = true };
+        }
+        catch (Exception ex) when (ex is JsonException or CryptographicException)
+        {
+            // The stored value can't be deserialized, or was protected with another data protection key.
+            Logger.LogInformation(ex, "Error when reading '{Key}' as {ValueType}.", key, typeof(TValue).Name);
+
+            return new StorageResult<TValue>(false, default) { InvalidValue = true };
         }
         catch (Exception ex)
         {
-            Logger.LogInformation(ex, "Error when reading '{Key}' as {ValueType}.", key, typeof(TValue).Name);
+            // Anything else, such as a type missing from the JSON serializer context, fails the same way on every read.
+            // It's reported as an invalid value rather than a transient failure so it isn't retried, and logged as a
+            // warning because it's a bug rather than something about the stored value.
+            Logger.LogWarning(ex, "Error when reading '{Key}' as {ValueType}.", key, typeof(TValue).Name);
 
-            return new StorageResult<TValue>(false, default);
+            return new StorageResult<TValue>(false, default) { InvalidValue = true };
         }
     }
 

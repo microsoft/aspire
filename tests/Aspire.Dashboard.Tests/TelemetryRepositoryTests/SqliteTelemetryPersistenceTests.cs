@@ -24,6 +24,35 @@ namespace Aspire.Dashboard.Tests.TelemetryRepositoryTests;
 public sealed class SqliteTelemetryPersistenceTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
+    public async Task ResourceSignalAvailability_UsesIndexedExistenceProbes()
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        using var repositoryContext = await CreateRepositoryAsync(workspace.Path);
+        using var connection = repositoryContext.Database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = "EXPLAIN QUERY PLAN " + SqliteTelemetryRepository.ResourceSignalAvailabilitySql;
+        using var reader = command.ExecuteReader();
+        var probes = new List<string>();
+        while (reader.Read())
+        {
+            var detail = reader.GetString(3);
+            if (detail.Contains("telemetry_logs", StringComparison.Ordinal) ||
+                detail.Contains("telemetry_spans", StringComparison.Ordinal) ||
+                detail.Contains("telemetry_metric_instruments", StringComparison.Ordinal))
+            {
+                probes.Add(detail);
+            }
+        }
+
+        Assert.Equal(4, probes.Count);
+        Assert.All(probes, probe =>
+        {
+            Assert.StartsWith("SEARCH ", probe);
+            Assert.Contains("USING COVERING INDEX", probe);
+        });
+    }
+
+    [Fact]
     public async Task RunReadAsync_CancellationInterruptsLongRunningQuery()
     {
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);

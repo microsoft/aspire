@@ -149,8 +149,12 @@ public static class RedisBuilderExtensions
                 }
                 else
                 {
+                    // Arguments added after this callback (for example by WithArgs) follow the script, where
+                    // `sh -c` binds them to positional parameters. Forward them to redis-server via "$@";
+                    // the argument after the script becomes $0, so pass a placeholder for it.
                     context.Args.Add("-c");
-                    context.Args.Add(string.Join(' ', additionalArgs));
+                    context.Args.Add(string.Join(' ', additionalArgs) + " \"$@\"");
+                    context.Args.Add("redis-server");
                 }
 
                 return Task.CompletedTask;

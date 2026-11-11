@@ -5,10 +5,12 @@ using System.Globalization;
 using Aspire.Hosting;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Docker;
+using Aspire.Hosting.Utils;
+using Microsoft.Extensions.Configuration;
 
 internal static class DockerComposeServiceResourceExtensions
 {
-    internal static async Task<object> ProcessValueAsync(this DockerComposeServiceResource resource, object value)
+    internal static async Task<object> ProcessValueAsync(this DockerComposeServiceResource resource, object value, IConfiguration configuration)
     {
         while (true)
         {
@@ -57,9 +59,12 @@ internal static class DockerComposeServiceResourceExtensions
 
                 var mapping = referencedResource.EndpointMappings[epExpr.Endpoint.EndpointName];
 
-                var val = GetValue(mapping, epExpr.Property);
-
-                return val;
+                return epExpr.Property switch
+                {
+                    EndpointProperty.BrowserOrigins or EndpointProperty.PrimaryBrowserOrigin =>
+                        GetEndpointInput(epExpr, mapping).AsEnvironmentPlaceholder(resource),
+                    _ => GetValue(mapping, epExpr.Property)
+                };
             }
 
             if (value is ReferenceExpression expr)
@@ -74,12 +79,12 @@ internal static class DockerComposeServiceResourceExtensions
                     var branch = string.Equals(conditionStr, expr.MatchValue, StringComparison.OrdinalIgnoreCase)
                         ? expr.WhenTrue!
                         : expr.WhenFalse!;
-                    return await resource.ProcessValueAsync(branch).ConfigureAwait(false);
+                    return await resource.ProcessValueAsync(branch, configuration).ConfigureAwait(false);
                 }
 
                 if (expr is { Format: "{0}", ValueProviders.Count: 1 })
                 {
-                    return (await resource.ProcessValueAsync(expr.ValueProviders[0]).ConfigureAwait(false)).ToString() ?? string.Empty;
+                    return (await resource.ProcessValueAsync(expr.ValueProviders[0], configuration).ConfigureAwait(false)).ToString() ?? string.Empty;
                 }
 
                 var args = new object[expr.ValueProviders.Count];
@@ -87,7 +92,7 @@ internal static class DockerComposeServiceResourceExtensions
 
                 foreach (var vp in expr.ValueProviders)
                 {
-                    var val = await resource.ProcessValueAsync(vp).ConfigureAwait(false);
+                    var val = await resource.ProcessValueAsync(vp, configuration).ConfigureAwait(false);
                     args[index++] = val ?? throw new InvalidOperationException("Value is null");
                 }
 
@@ -101,6 +106,29 @@ internal static class DockerComposeServiceResourceExtensions
             }
 
             return value; // todo: we need to never get here really...
+        }
+
+        ParameterResource GetEndpointInput(EndpointReferenceExpression reference, DockerComposeServiceResource.EndpointMapping mapping)
+        {
+            if (!mapping.IsExternal || mapping.Scheme is not ("http" or "https"))
+            {
+                throw new NotSupportedException(
+                    $"Docker Compose cannot provide browser origins for endpoint '{reference.Endpoint.EndpointName}' on resource '{reference.Endpoint.Resource.Name}' because it is not an external HTTP(S) endpoint. " +
+                    "Reference an external HTTP(S) endpoint or supply an explicit origin parameter.");
+            }
+
+            return resource.Parent.EndpointInputs.GetOrAdd(reference, configuration, () => GetOriginDefault(mapping));
+        }
+
+        static string? GetOriginDefault(DockerComposeServiceResource.EndpointMapping mapping)
+        {
+            if (mapping.IsExternal && mapping.ExposedPort is int port && mapping.Scheme is "http" or "https")
+            {
+                var origin = BrowserOriginHelpers.GetOrigin(new UriBuilder(mapping.Scheme, "localhost", port).Uri);
+                return origin;
+            }
+
+            return null;
         }
     }
 

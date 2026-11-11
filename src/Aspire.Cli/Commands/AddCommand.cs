@@ -128,7 +128,7 @@ internal sealed class AddCommand : BaseCommand
                 : PackageSourceOverrideMappings.ResolveForWorkingDirectory(
                     source,
                     ExecutionContext.WorkingDirectory);
-            if (source is not null)
+            if (source is not null && !PackageSourceIdentity.Comparer.Equals(source, PackageSources.NuGetOrg))
             {
                 InteractionService.DisplaySourceTrustWarning(ExecutionContext);
             }
@@ -335,8 +335,7 @@ internal sealed class AddCommand : BaseCommand
             // If we didn't match any, show a complete list. If we matched one, and it's
             // an exact match, then we still prompt, but it will only prompt for
             // the version. If there is more than one match then we prompt.
-            (string FriendlyName, NuGetPackage Package, PackageChannel Channel) selectedNuGetPackage;
-            selectedNuGetPackage = filteredPackagesWithShortName.Count switch
+            var selection = filteredPackagesWithShortName.Count switch
             {
                 0 => await GetPackageByInteractiveFlowWithNoMatchesMessage(
                     effectiveAppHostProjectFile.Directory!,
@@ -349,7 +348,7 @@ internal sealed class AddCommand : BaseCommand
                     promptForSinglePackage: true),
                 1 when packageMatchKind == ProfilingTelemetry.Values.AddPackageMatchKindExact
                     && filteredPackagesWithShortName[0].Package.Version == version
-                    => filteredPackagesWithShortName[0],
+                    => new IntegrationSelection(filteredPackagesWithShortName[0], null),
                 _ => await GetPackageByInteractiveFlow(
                     effectiveAppHostProjectFile.Directory!,
                     filteredPackagesWithShortName,
@@ -359,6 +358,13 @@ internal sealed class AddCommand : BaseCommand
                     cancellationToken,
                     promptForSingleFuzzyPackage)
             };
+            var selectedNuGetPackage = selection.Package;
+            var selectedSource = source ?? selection.SourceOverride;
+            if (selectedSource is not null && PackageSourceOverrideMappings.HasCredentialMaterial(selectedSource))
+            {
+                InteractionService.DisplayError(AddCommandStrings.SourceWithCredentialsNotSupported);
+                return CommandResult.Failure(CliExitCodes.InvalidCommand);
+            }
             using (var selectPackageActivity = _profilingTelemetry.StartAddSelectPackage(integrationName, version))
             {
                 selectPackageActivity.SetAddPackageMatch(filteredPackagesWithShortName.Count, packageMatchKind);
@@ -402,6 +408,9 @@ internal sealed class AddCommand : BaseCommand
                 }
             }
 
+            // Native --source excludes other SDK and dependency feeds. Named picker selections instead
+            // use persistent NuGet configuration; polyglot restores already compose exact overrides.
+            var restoreSource = source ?? (project.LanguageId == KnownLanguageId.CSharp ? null : selection.SourceOverride);
             DotNetAppHostNuGetConfigMergerCandidate? configurationCandidate = null;
             if (source is null && selectedNuGetPackage.Channel.IntegrationSource?.Source is { } integrationSource)
             {
@@ -435,9 +444,9 @@ internal sealed class AddCommand : BaseCommand
                 RequestedChannel = GetRequestedRestoreChannel(
                     selectedNuGetPackage.Channel,
                     selectedNuGetPackage.Package.Id,
-                    source),
-                Source = source,
-                SourcePackagePattern = source is null
+                    selectedSource),
+                Source = restoreSource,
+                SourcePackagePattern = restoreSource is null
                     ? null
                     : selectedNuGetPackage.Package.Id
             };
@@ -684,7 +693,7 @@ internal sealed class AddCommand : BaseCommand
         return versions;
     }
 
-    private async Task<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> GetPackageByInteractiveFlow(
+    private async Task<IntegrationSelection> GetPackageByInteractiveFlow(
         DirectoryInfo workingDirectory,
         IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> possiblePackages,
         string? preferredVersion,
@@ -693,20 +702,33 @@ internal sealed class AddCommand : BaseCommand
         CancellationToken cancellationToken,
         bool promptForSinglePackage = false)
     {
-        var distinctPackages = possiblePackages.DistinctBy(p => p.Package.Id).ToArray();
+        // Choosing a source group constrains later version selection, so honor the pinned
+        // channel before the package prompt as well as before the version prompt.
+        var candidates = possiblePackages
+            .OrderByDescending(package => MatchesConfiguredChannel(package.Channel, configuredChannel))
+            .ToArray();
+        var distinctPackages = candidates.DistinctBy(p => p.Package.Id, StringComparer.OrdinalIgnoreCase).ToArray();
+        var promptForPackage = _hostEnvironment.SupportsInteractiveInput &&
+            (distinctPackages.Length > 1 || promptForSinglePackage);
 
         // Only exact matches can skip the package prompt. Discovery and fuzzy/no-match
         // fallbacks require confirmation even when other feeds failed and one package remains.
         var selectedPackage = distinctPackages.Length switch
         {
-            1 when promptForSinglePackage && _hostEnvironment.SupportsInteractiveInput => await PromptForIntegrationAsync(distinctPackages, cancellationToken),
+            1 when promptForSinglePackage && _hostEnvironment.SupportsInteractiveInput => await PromptForIntegrationAsync(candidates, cancellationToken),
             1 => distinctPackages.First(),
             > 1 when !_hostEnvironment.SupportsInteractiveInput => distinctPackages.First(),
-            > 1 => await PromptForIntegrationAsync(distinctPackages, cancellationToken),
+            > 1 => await PromptForIntegrationAsync(candidates, cancellationToken),
             _ => throw new InvalidOperationException(AddCommandStrings.UnexpectedNumberOfPackagesFound)
         };
 
-        var packageVersions = possiblePackages.Where(p => p.Package.Id == selectedPackage.Package.Id).ToArray();
+        var selectedSource = promptForPackage && candidates.Select(AddCommandPrompter.GetSourceIdentity).Distinct().Skip(1).Any()
+            ? selectedPackage.Package.Source
+            : null;
+        // A source group is a real choice of feed, not just decoration. Keep both discovery
+        // and explicit-version lookup within it, and carry the exact feed into package restore.
+        var packageVersions = candidates.Where(p => string.Equals(p.Package.Id, selectedPackage.Package.Id, StringComparison.OrdinalIgnoreCase) &&
+            (selectedSource is null || PackageSourceIdentity.Comparer.Equals(p.Package.Source, selectedSource))).ToArray();
 
         // If any of the package versions are an exact match for the preferred version
         // then we can skip the version prompt and just use that version.
@@ -715,16 +737,16 @@ internal sealed class AddCommand : BaseCommand
             if (packageVersions.Any(p => p.Package.Version == preferredVersion))
             {
                 var preferredVersionPackage = packageVersions.First(p => p.Package.Version == preferredVersion);
-                return preferredVersionPackage;
+                return new(preferredVersionPackage, selectedSource);
             }
 
             var allVersions = await InteractionService.ShowStatusAsync(
                 string.Format(CultureInfo.CurrentCulture, AddCommandStrings.SearchingForSpecifiedPackageVersion, selectedPackage.Package.Id, preferredVersion),
-                async () => await GetAllPackageVersions(workingDirectory, packageVersions, source, cancellationToken));
+                async () => await GetAllPackageVersions(workingDirectory, packageVersions, source ?? selectedSource, cancellationToken));
             var matchedPreferredVersionPackage = allVersions.FirstOrDefault(packageVersion => packageVersion.Package.Version == preferredVersion);
             if (matchedPreferredVersionPackage.Package is not null)
             {
-                return matchedPreferredVersionPackage;
+                return new(matchedPreferredVersionPackage, selectedSource);
             }
 
             throw new EmptyChoicesException(string.Format(CultureInfo.CurrentCulture, AddCommandStrings.SpecifiedVersionNotFoundForPackage, selectedPackage.Package.Id, preferredVersion));
@@ -746,7 +768,7 @@ internal sealed class AddCommand : BaseCommand
             channelName: null,
             hasPrHives: ExecutionContext.GetHiveCount() > 0 || ExecutionContext.IdentityPackagesDirectory is not null))
         {
-            return cliVersionPackage;
+            return new(cliVersionPackage, selectedSource);
         }
 
         // In non-interactive mode, prefer the channel the apphost has pinned (e.g. a polyglot
@@ -764,13 +786,14 @@ internal sealed class AddCommand : BaseCommand
             .ThenByDescending(p => SemVersion.Parse(p.Package.Version), SemVersion.PrecedenceComparer);
         if (!_hostEnvironment.SupportsInteractiveInput)
         {
-            return orderedPackageVersions.First();
+            return new(orderedPackageVersions.First(), selectedSource);
         }
 
         // ... otherwise we had better prompt.
         var version = await PromptForIntegrationVersionAsync(orderedPackageVersions, configuredChannel, cancellationToken);
 
-        return version;
+        return new(version, selectedSource ??
+            (packageVersions.Select(AddCommandPrompter.GetSourceIdentity).Distinct().Skip(1).Any() ? version.Package.Source : null));
     }
 
     // A package "matches" the pinned channel when the apphost pinned an explicit channel name and the
@@ -795,7 +818,7 @@ internal sealed class AddCommand : BaseCommand
         return await _prompter.PromptForIntegrationVersionAsync(packages, configuredChannel, cancellationToken);
     }
 
-    private async Task<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> GetPackageByInteractiveFlowWithNoMatchesMessage(
+    private async Task<IntegrationSelection> GetPackageByInteractiveFlowWithNoMatchesMessage(
         DirectoryInfo workingDirectory,
         IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> possiblePackages,
         string? searchTerm,
@@ -820,6 +843,9 @@ internal sealed class AddCommand : BaseCommand
             promptForSinglePackage);
     }
 
+    private readonly record struct IntegrationSelection(
+        (string FriendlyName, NuGetPackage Package, PackageChannel Channel) Package,
+        string? SourceOverride);
 }
 
 internal interface IAddCommandPrompter
@@ -828,152 +854,118 @@ internal interface IAddCommandPrompter
     Task<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> PromptForIntegrationVersionAsync(IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> packages, string? configuredChannel, CancellationToken cancellationToken);
 }
 
-internal class AddCommandPrompter(IInteractionService interactionService) : IAddCommandPrompter
+internal class AddCommandPrompter(IInteractionService interactionService, CliExecutionContext executionContext) : IAddCommandPrompter
 {
     public virtual async Task<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> PromptForIntegrationVersionAsync(IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> packages, string? configuredChannel, CancellationToken cancellationToken)
     {
-        var firstPackage = packages.First();
-
-        // Helper to keep labels consistently formatted: "Version (source)"
-        static string FormatVersionLabel((string FriendlyName, NuGetPackage Package, PackageChannel Channel) item)
-        {
-            return $"{item.Package.Version.EscapeMarkup()} ({item.Channel.SourceDetails.EscapeMarkup()})";
-        }
-
-        async Task<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> PromptForChannelPackagesAsync(
-            PackageChannel channel,
-            IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> items,
-            CancellationToken ct)
-        {
-            var choices = items
-                .Select(i => (
-                    Label: FormatVersionLabel(i),
-                    Result: i
-                ))
-                .ToArray();
-
-            // Auto-select when there's only one version in the channel
-            if (choices.Length == 1)
-            {
-                return choices[0].Result;
-            }
-
-            var selection = await interactionService.PromptForSelectionAsync(
-                string.Format(CultureInfo.CurrentCulture, AddCommandStrings.SelectAVersionOfPackage, firstPackage.Package.Id),
-                choices,
-                c => c.Label,
-                cancellationToken: ct);
-
-            return selection.Result;
-        }
-
-        // Group the incoming package versions by channel and filter to highest version per channel
-        var byChannel = packages
-            .GroupBy(p => p.Channel)
-            .Select(g => new
-            {
-                Channel = g.Key,
-                // Keep only the highest version in each channel
-                HighestVersion = g.OrderByDescending(p => SemVersion.Parse(p.Package.Version), SemVersion.PrecedenceComparer).First()
-            })
+        // Preserve the pinned-channel default, while separating feeds within the implicit
+        // channel instead of silently choosing one of several ambient NuGet sources.
+        var candidates = packages.ToArray();
+        var choices = candidates
+            .GroupBy(package => (package.Channel, Source: GetSourceIdentity(package)))
+            .Select(group => group.OrderByDescending(package => SemVersion.Parse(package.Package.Version), SemVersion.PrecedenceComparer).First())
+            .OrderByDescending(package => package.Channel.Type is PackageChannelType.Explicit &&
+                string.Equals(package.Channel.Name, configuredChannel, StringComparisons.ChannelName))
+            .ThenByDescending(package => package.Channel.Type is PackageChannelType.Implicit)
+            .GroupBy(package => (Source: GetSourceIdentity(package), package.Package.Version))
+            // Retain configured provenance without reordering distinct feeds or changing pinned defaults.
+            .Select(group => group
+                .OrderByDescending(package => package.Channel.Type is PackageChannelType.Explicit &&
+                    string.Equals(package.Channel.Name, configuredChannel, StringComparisons.ChannelName))
+                .ThenByDescending(package => package.Channel.IntegrationSource is not null)
+                .First())
             .ToArray();
-
-        var implicitGroup = byChannel.FirstOrDefault(g => g.Channel.Type is Packaging.PackageChannelType.Implicit);
-        var explicitGroups = byChannel
-            .Where(g => g.Channel.Type is Packaging.PackageChannelType.Explicit)
-            .ToArray();
-
-        // If there are no explicit channels, automatically select from the implicit channel
-        if (explicitGroups.Length == 0 && implicitGroup is not null)
+        if (choices.Length == 1)
         {
-            return implicitGroup.HighestVersion;
+            return choices[0];
         }
 
-        // Build the root menu. When the apphost has pinned a channel (e.g. a polyglot apphost that
-        // persists `channel: daily` in aspire.config.json), surface that channel's package as the first
-        // option so it becomes the default selection — the pinned channel reflects explicit user intent
-        // and its feed is the one the project will actually restore from. Otherwise the implicit/ambient
-        // channel can shadow the pinned feed and offer a version the project can't restore. See
-        // https://github.com/microsoft/aspire/issues/18114.
-        var rootChoices = new List<(string Label, Func<CancellationToken, Task<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)>> Action)>();
-
-        var configuredGroup = string.IsNullOrEmpty(configuredChannel)
-            ? null
-            : explicitGroups.FirstOrDefault(g => string.Equals(g.Channel.Name, configuredChannel, StringComparisons.ChannelName));
-
-        if (configuredGroup is not null)
-        {
-            var channel = configuredGroup.Channel;
-            var item = configuredGroup.HighestVersion;
-
-            rootChoices.Add((
-                Label: channel.Name.EscapeMarkup(),
-                Action: ct => PromptForChannelPackagesAsync(channel, new[] { item }, ct)
-            ));
-        }
-
-        if (implicitGroup is not null)
-        {
-            var captured = implicitGroup.HighestVersion;
-            rootChoices.Add((
-                Label: FormatVersionLabel(captured),
-                Action: ct => Task.FromResult(captured)
-            ));
-        }
-
-        foreach (var channelGroup in explicitGroups)
-        {
-            // The pinned channel (if any) was already added above as the first/default choice.
-            if (ReferenceEquals(channelGroup, configuredGroup))
-            {
-                continue;
-            }
-
-            var channel = channelGroup.Channel;
-            var item = channelGroup.HighestVersion;
-
-            rootChoices.Add((
-                Label: channel.Name.EscapeMarkup(),
-                // For explicit channels, we still show submenu but with only the highest version
-                Action: ct => PromptForChannelPackagesAsync(channel, new[] { item }, ct)
-            ));
-        }
-
-        // Fallback if no choices for some reason
-        if (rootChoices.Count == 0)
-        {
-            return firstPackage;
-        }
-
-        // Auto-select when there's only one option (e.g., single explicit channel)
-        if (rootChoices.Count == 1)
-        {
-            return await rootChoices[0].Action(cancellationToken);
-        }
-
-        var topSelection = await interactionService.PromptForSelectionAsync(
-            string.Format(CultureInfo.CurrentCulture, AddCommandStrings.SelectAVersionOfPackage, firstPackage.Package.Id),
-            rootChoices,
-            c => c.Label,
+        DisplaySources(candidates);
+        var showGroups = choices.Select(GetSourceIdentity).Distinct().Skip(1).Any();
+        HashSet<string> usedLabels = [];
+        var labels = choices.ToDictionary(package => package, package =>
+            ConsoleHelpers.GetUniqueSelectionLabel($"{package.Package.Version} ({GetSourceGroup(package).Label})", usedLabels).EscapeMarkup());
+        return await interactionService.PromptForSelectionAsync(
+            string.Format(CultureInfo.CurrentCulture, AddCommandStrings.SelectAVersionOfPackage, choices[0].Package.Id),
+            choices,
+            package => labels[package],
+            package => showGroups ? GetSourceGroup(package) : null,
+            package => package.Package.Version.EscapeMarkup(),
             cancellationToken: cancellationToken);
-
-        return await topSelection.Action(cancellationToken);
     }
 
     public virtual async Task<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> PromptForIntegrationAsync(IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> packages, CancellationToken cancellationToken)
     {
-        // Filter to show only the highest version for each package ID
-        var filteredPackages = packages
-            .GroupBy(p => p.Package.Id)
-            .Select(g => g.OrderByDescending(p => SemVersion.Parse(p.Package.Version), SemVersion.PrecedenceComparer).First())
+        // Keep each source's highest version so identical package IDs remain selectable
+        // from every feed rather than inheriting whichever source happened to finish first.
+        var candidates = packages.ToArray();
+        var filteredPackages = candidates
+            .GroupBy(package => (Id: package.Package.Id.ToUpperInvariant(), Source: GetSourceIdentity(package)))
+            .Select(group => group
+                .OrderByDescending(package => SemVersion.Parse(package.Package.Version), SemVersion.PrecedenceComparer)
+                .ThenByDescending(package => package.Channel.IntegrationSource is not null)
+                .First())
             .ToArray();
 
+        DisplaySources(candidates);
+        var showGroups = filteredPackages.Select(GetSourceIdentity).Distinct().Skip(1).Any();
+        HashSet<string> usedLabels = [];
+        var labels = filteredPackages.ToDictionary(package => package, package =>
+        {
+            var name = package.FriendlyName is { } friendlyName ? $"{friendlyName} ({package.Package.Id})" : package.Package.Id;
+            return ConsoleHelpers.GetUniqueSelectionLabel($"{name} - {GetSourceGroup(package).Label}", usedLabels).EscapeMarkup();
+        });
         var selectedIntegration = await interactionService.PromptForSelectionAsync(
             AddCommandStrings.SelectAnIntegrationToAdd,
             filteredPackages,
+            package => showGroups
+                ? labels[package]
+                : PackageNameWithFriendlyNameIfAvailable(package),
+            package => showGroups ? GetSourceGroup(package) : null,
             PackageNameWithFriendlyNameIfAvailable,
             cancellationToken: cancellationToken);
         return selectedIntegration;
+    }
+
+    internal static string GetSourceIdentity((string FriendlyName, NuGetPackage Package, PackageChannel Channel) package) =>
+        PackageSourceIdentity.Normalize(package.Package.Source);
+
+    private static SelectionChoiceGroup GetSourceGroup((string FriendlyName, NuGetPackage Package, PackageChannel Channel) package)
+    {
+        var isNuGetOrg = PackageSourceIdentity.Comparer.Equals(package.Package.Source, PackageSources.NuGetOrg);
+        var name = package.Channel.IntegrationSource?.Name ??
+            (isNuGetOrg ? "nuget.org" : package.Channel.Type is PackageChannelType.Explicit
+                ? PackageSourceRedactor.RedactForDisplay(package.Channel.Name)
+                : PackageSourceRedactor.RedactForDisplay(package.Package.Source));
+        var group = new SelectionChoiceGroup(GetSourceIdentity(package), name);
+        return isNuGetOrg ? group : group with { Style = new Style(Color.Green) };
+    }
+
+    private void DisplaySources(IReadOnlyList<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> packages)
+    {
+        var sources = packages.Where(package => package.Channel.IntegrationSource is not null)
+            .DistinctBy(GetSourceIdentity).ToArray();
+        if (sources.Length > 0)
+        {
+            interactionService.DisplayMessage(KnownEmojis.Information, AddCommandStrings.IntegrationSourceExplanation);
+            interactionService.DisplaySourceDetails(sources.Select(package =>
+            {
+                List<(string Label, string Value)> details =
+                [
+                    (SharedCommandStrings.SourceName, GetSourceGroup(package).Label),
+                    (SharedCommandStrings.SourceFeed, PackageSourceRedactor.RedactForDisplay(package.Package.Source))
+                ];
+                if (package.Channel.IntegrationSource?.Patterns is { } patterns)
+                {
+                    details.Add((SharedCommandStrings.SourcePatterns, string.Join(", ", patterns)));
+                }
+                return details;
+            }));
+        }
+        if (packages.Any(package => !PackageSourceIdentity.Comparer.Equals(package.Package.Source, PackageSources.NuGetOrg)))
+        {
+            interactionService.DisplaySourceTrustWarning(executionContext);
+        }
     }
 
     private static string PackageNameWithFriendlyNameIfAvailable((string FriendlyName, NuGetPackage Package, PackageChannel Channel) packageWithFriendlyName)

@@ -27,7 +27,6 @@ public sealed class GoPublishTests(ITestOutputHelper output)
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);
-        await auto.EnableExperimentalGoSupportAsync(counter);
 
         await auto.AspireInitGoAppHostAsync(counter);
         await auto.AspireAddPackageAsync("Aspire.Hosting.Docker", counter);
@@ -58,7 +57,6 @@ public sealed class GoPublishTests(ITestOutputHelper output)
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);
-        await auto.EnableExperimentalGoSupportAsync(counter);
 
         await auto.AspireInitGoAppHostAsync(counter);
         await auto.AspireAddPackageAsync("Aspire.Hosting.Docker", counter);
@@ -91,7 +89,6 @@ public sealed class GoPublishTests(ITestOutputHelper output)
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);
-        await auto.EnableExperimentalGoSupportAsync(counter);
 
         const string projectName = "GoPublishApp";
         await auto.AspireNewAsync(projectName, counter, template: AspireTemplate.GoStarter);
@@ -110,17 +107,17 @@ public sealed class GoPublishTests(ITestOutputHelper output)
         var artifactsPath = Path.Combine(workspace.WorkspaceRoot.FullName, projectName, "artifacts");
         var composeContent = await File.ReadAllTextAsync(Path.Combine(artifactsPath, "docker-compose.yaml"));
 
-        Assert.Contains("api:", composeContent);
+        Assert.Contains("app:", composeContent);
         Assert.Contains("cache:", composeContent);
 
         // The Go version in the FROM line comes from api/go.mod, so only the stable parts are asserted.
         AssertDockerfileContains(
             artifactsPath,
-            "api",
+            "app",
             "FROM golang:",
             " AS build",
             "USER app",
-            "ENTRYPOINT [\"/app/api\"]");
+            "ENTRYPOINT [\"/app/app\"]");
     }
 
     private static void WriteDockerComposeContainerAppHost(TemporaryWorkspace workspace)
