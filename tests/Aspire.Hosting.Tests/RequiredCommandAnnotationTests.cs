@@ -1,11 +1,12 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIRECOMMAND001
-
 using Aspire.Hosting.Eventing;
 using Aspire.Hosting.Lifecycle;
+using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Testing;
 
 namespace Aspire.Hosting.Tests;
 
@@ -245,15 +246,21 @@ public class RequiredCommandAnnotationTests
     }
 
     [Fact]
-    public async Task RequiredCommandValidationEventingSubscriber_LogsWarningOnFailedValidationCallback()
+    public async Task RequiredCommandValidationEventingSubscriber_FailedValidationDoesNotBlockStartupOrWaitForNotification()
     {
         var builder = DistributedApplication.CreateBuilder();
         var command = OperatingSystem.IsWindows() ? "cmd" : "sh";
+        var callbackInvoked = false;
+        var testSink = new TestSink();
+        var interactionService = new TestInteractionService { IsAvailable = true };
+        builder.Services.AddLogging(logging => logging.AddProvider(new TestLoggerProvider(testSink)));
+        builder.Services.AddSingleton<IInteractionService>(interactionService);
 
         builder.AddContainer("test", "image")
             .WithRequiredCommand(command, ctx =>
             {
-                return Task.FromResult(RequiredCommandValidationResult.Failure("Custom validation failed"));
+                callbackInvoked = true;
+                return Task.FromResult(ctx.Failure("Custom validation failed"));
             });
 
         await using var app = builder.Build();
@@ -263,8 +270,16 @@ public class RequiredCommandAnnotationTests
         var resource = appModel.Resources.Single(r => r.Name == "test");
         var eventing = app.Services.GetRequiredService<IDistributedApplicationEventing>();
 
-        // Should not throw - just logs a warning and allows the resource to attempt start
-        await eventing.PublishAsync(new BeforeResourceStartedEvent(resource, app.Services));
+        await eventing.PublishAsync(new BeforeResourceStartedEvent(resource, app.Services))
+            .WaitAsync(TestConstants.DefaultTimeoutTimeSpan);
+
+        Assert.True(callbackInvoked);
+        var warning = Assert.Single(testSink.Writes, w => w.LogLevel == LogLevel.Warning);
+        Assert.Equal("Resource 'test' may fail to start: Custom validation failed", warning.Message);
+        Assert.True(interactionService.Interactions.Reader.TryRead(out var notification));
+        Assert.Equal("Custom validation failed", notification.Message);
+        Assert.False(notification.CompletionTcs.Task.IsCompleted);
+        notification.CompletionTcs.SetResult(InteractionResult.Ok(true));
     }
 
     [Fact]
