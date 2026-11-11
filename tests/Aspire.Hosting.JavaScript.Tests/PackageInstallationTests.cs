@@ -725,6 +725,83 @@ public class PackageInstallationTests(ITestOutputHelper outputHelper)
         Assert.Equal(0, installerStarts);
     }
 
+    [Fact]
+    public async Task StartingParentDoesNotStartManualInstallerTheParentWaitsFor()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        var nodeApp = builder.AddJavaScriptApp("test-app", "./test-app")
+            .WithNpm(install: false)
+            .WithExplicitStart();
+
+        var installerResource = Assert.Single(builder.Resources.OfType<JavaScriptInstallerResource>());
+        var installerBuilder = builder.CreateResourceBuilder(installerResource);
+
+        // The app author left the installer manual but still wants the app to wait for it.
+        nodeApp.WaitForCompletion(installerBuilder);
+
+        var installerStarts = 0;
+        installerBuilder.WithCommand(
+            KnownResourceCommands.StartCommand,
+            "Start",
+            _ =>
+            {
+                Interlocked.Increment(ref installerStarts);
+                return Task.FromResult(CommandResults.Success());
+            });
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, CancellationToken.None);
+
+        var notificationService = app.Services.GetRequiredService<ResourceNotificationService>();
+        var eventing = app.Services.GetRequiredService<IDistributedApplicationEventing>();
+
+        await notificationService.PublishUpdateAsync(installerResource, s => s with { State = KnownResourceStates.NotStarted });
+        await eventing.PublishAsync(new BeforeResourceStartedEvent(nodeApp.Resource, app.Services));
+
+        Assert.True(installerResource.TryGetLastAnnotation<ExplicitStartupAnnotation>(out _));
+        Assert.Equal(0, installerStarts);
+    }
+
+    [Fact]
+    public async Task InstallerIsDeferredWhenParentUsesExplicitStartInLaterBeforeStartCallback()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        var nodeApp = builder.AddJavaScriptApp("test-app", "./test-app")
+            .WithNpm(install: true);
+
+        // Registered after WithNpm, so it runs after the installer's own OnBeforeStart callback.
+        builder.OnBeforeStart((_, _) =>
+        {
+            nodeApp.WithExplicitStart();
+            return Task.CompletedTask;
+        });
+
+        var installerResource = Assert.Single(builder.Resources.OfType<JavaScriptInstallerResource>());
+        var installerStarts = 0;
+        builder.CreateResourceBuilder(installerResource).WithCommand(
+            KnownResourceCommands.StartCommand,
+            "Start",
+            _ =>
+            {
+                Interlocked.Increment(ref installerStarts);
+                return Task.FromResult(CommandResults.Success());
+            });
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, CancellationToken.None);
+
+        Assert.True(installerResource.TryGetLastAnnotation<ExplicitStartupAnnotation>(out _));
+
+        var notificationService = app.Services.GetRequiredService<ResourceNotificationService>();
+        var eventing = app.Services.GetRequiredService<IDistributedApplicationEventing>();
+
+        await notificationService.PublishUpdateAsync(installerResource, s => s with { State = KnownResourceStates.NotStarted });
+        await eventing.PublishAsync(new BeforeResourceStartedEvent(nodeApp.Resource, app.Services));
+        Assert.Equal(1, installerStarts);
+    }
+
     [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "ExecuteBeforeStartHooksAsync")]
     private static extern Task ExecuteBeforeStartHooksAsync(DistributedApplication app, CancellationToken cancellationToken);
 }

@@ -3052,16 +3052,27 @@ public static partial class JavaScriptHostingExtensions
                     .WithWorkingDirectory(resource.Resource.WorkingDirectory)
                     .WithArgs(installCommand.Args);
 
-                // An explicitly started app must not start its installer during AppHost startup. Evaluate this
-                // here rather than when the installer is created because WithExplicitStart() can be called after
-                // the package manager method.
-                if (ShouldDeferInstallerWithParent(resource.Resource, installer))
-                {
-                    installerBuilder.WithExplicitStart();
-                }
-
                 return Task.CompletedTask;
             });
+
+            // An explicitly started app must not start its installer during AppHost startup. WithExplicitStart()
+            // can be applied after the package manager method, including from BeforeStartEvent callbacks registered
+            // later, so decide in a before-start pipeline step, which runs after every BeforeStartEvent subscriber
+            // and lifecycle hook but before DCP creates the installer.
+            resource.ApplicationBuilder.Pipeline.AddStep(
+                $"{installerName}-defer-with-explicit-start-parent",
+                _ =>
+                {
+                    if (ShouldDeferInstallerWithParent(resource.Resource, installer))
+                    {
+                        installerBuilder
+                            .WithExplicitStart()
+                            .WithAnnotation(new InstallerDeferredWithParentAnnotation());
+                    }
+
+                    return Task.CompletedTask;
+                },
+                requiredBy: WellKnownPipelineSteps.BeforeStart);
 
             // When the deferred installer's parent is started, start the installer too so the parent's
             // WaitForCompletion dependency can be satisfied. Builder-time subscriptions run before the
@@ -3069,8 +3080,10 @@ public static partial class JavaScriptHostingExtensions
             var installerStartLock = new SemaphoreSlim(1, 1);
             resource.OnBeforeResourceStarted(async (parent, e, cancellationToken) =>
             {
+                // Only start installers this integration deferred. An installer the app author made explicit-start,
+                // for example with WithNpm(install: false), stays manual even if the app waits for it.
                 if (!ParentWaitsForInstaller(parent, installer) ||
-                    !installer.TryGetLastAnnotation<ExplicitStartupAnnotation>(out _))
+                    !installer.TryGetLastAnnotation<InstallerDeferredWithParentAnnotation>(out _))
                 {
                     return;
                 }
@@ -3126,6 +3139,9 @@ public static partial class JavaScriptHostingExtensions
         parent.TryGetLastAnnotation<ExplicitStartupAnnotation>(out _) &&
         ParentWaitsForInstaller(parent, installer) &&
         !installer.TryGetLastAnnotation<ExplicitStartupAnnotation>(out _);
+
+    // Marks an installer that was made explicit-start only because its explicit-start parent waits for it.
+    private sealed class InstallerDeferredWithParentAnnotation : IResourceAnnotation;
 
     private static void DisableExistingInstaller<TResource>(IResourceBuilder<TResource> resource) where TResource : JavaScriptAppResource
     {
