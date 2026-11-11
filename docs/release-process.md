@@ -166,7 +166,9 @@ To publish only the VS Code extension after merging an extension release PR, run
 
 For a full Aspire release that should also publish the extension, keep the normal NuGet/channel/GitHub task settings and set `SkipVSCodeExtensionPublish` to `false`. `IsPrerelease` also controls whether extension publishing passes `--pre-release` to `vsce`; for a pre-release extension, the selected source build must also have been queued with `Package VS Code Extension as Pre-Release=true`.
 
-The npm release path validates Windows, Linux, and macOS install summaries, publishes the seven RID packages first, waits for ESRP completion, waits for the configured propagation delay, and then publishes the top-level `@microsoft/aspire-cli` pointer package. After the pointer package publishes, the pipeline installs it from the live npm registry and runs `aspire --version` before channel promotion. This avoids installing a pointer package whose optional RID dependencies are not visible yet and catches registry propagation issues before the release is promoted. For prereleases, set `SkipNpmRidPublish=true` and `SkipNpmPointerPublish=true` unless the npm publishing path has gained explicit non-`latest` dist-tag support.
+The npm release path validates Windows, Linux, and macOS install summaries, publishes the seven RID packages first, waits for ESRP completion, waits for the configured propagation delay, verifies that every RID dependency is visible on npm, and then publishes the top-level `@microsoft/aspire-cli` pointer package. ESRP handles already-published versions and publish completion; the pipeline does not reject duplicates or run a post-publish registry install. The RID dependency check prevents publishing a pointer package whose optional native dependencies are not visible yet. Re-runs can keep both npm publishing steps enabled; the skip flags are optional controls for deliberately omitting a submission, not prerequisites for retrying it.
+
+> **npm `latest` safety:** Published versions and dist-tags are separate. Existing-version handling does not establish whether ESRP preserves the current `latest` tag. The pipeline no longer rejects publishing an older version than `latest`, and it does not explicitly select a non-`latest` tag. Keep both npm publish steps skipped for older servicing releases until tag behavior is verified or explicit servicing tags are supported. For prereleases, set `SkipNpmRidPublish=true` and `SkipNpmPointerPublish=true` unless the npm publishing path has gained explicit non-`latest` dist-tag support.
 
 `commit_sha` and `release_branch` for the GitHub workflow are derived automatically from the source build resource, so there is no need to copy them by hand.
 
@@ -264,8 +266,8 @@ These automations are designed to be idempotent and safe to re-run.
 | Prepare/List/Verify NuGet Packages | Check that the selected source build produced `PackageArtifacts`. |
 | Prepare/List npm Packages | Check that the selected source build produced all eight `microsoft-aspire-cli*.tgz` tarballs and matching `.tgz.sig` sidecars in `BlobArtifacts`. |
 | Push Packages to NuGet.org | Check NuGet.org for partial success, then re-run with already-completed steps skipped as needed. |
-| MicroBuild npm Publish | Check the ESRP release result. If RID packages published but the pointer package did not, re-run with `SkipNuGetPublish: true`, `SkipNpmRidPublish: true`, `SkipNpmPointerPublish: false`, and `SkipChannelPromotion: true`; do not set `SkipNpmPointerPublish` until the pointer package is published. |
-| Validate Published npm Package from Registry | Confirm the pointer package is visible on npm and that `npm install -g @microsoft/aspire-cli@<version>` works. If registry propagation is slow, re-run with completed publish steps skipped after the package is visible. |
+| MicroBuild npm Publish | Check the ESRP release result, then re-run with completed non-npm steps skipped. Leave both npm publish steps enabled so ESRP handles existing versions and submits any remaining packages. |
+| Verify npm RID Packages Present Before Pointer Publish | Confirm all RID dependencies for the pointer package version are visible on npm, then re-run after propagation. It is not necessary to skip already-published npm packages. |
 | Promote Build to Channel | Re-run with completed publish steps skipped. |
 | WinGet publishing | Re-run with the corresponding skip flag for completed work. |
 | Publish VS Code Extension to Marketplace | Check that `aspire-vscode-extension` contains one `.vsix`, `.manifest`, and `.signature.p7s`; verify the `AspireSecurePublishPipelineMarketplaceConnectionWithManagedIdentity` service connection identity is a Contributor on the Visual Studio Marketplace `microsoft-aspire` publisher; re-run with the already-completed `Skip*` flags set to `true`. |
@@ -362,10 +364,9 @@ If ESRP published the RID packages but failed before publishing `@microsoft/aspi
 
 1. Verify the RID packages are visible on npm.
 2. Re-run the release pipeline with completed non-npm steps skipped.
-3. Set `SkipNpmRidPublish: true` and keep `SkipNpmPointerPublish: false` so only the pointer package is submitted.
-4. Set `SkipNpmPointerPublish: true` only after the pointer package is visible.
+3. Keep `SkipNpmRidPublish: false` and `SkipNpmPointerPublish: false`. ESRP handles existing versions, so a partially published RID batch does not require per-package filtering.
 
-If the pointer package published but the live npm registry validation failed afterward, re-run with `SkipNpmRidPublish: true` and `SkipNpmPointerPublish: true` so the pipeline retries the install smoke without resubmitting already-published packages.
+If ESRP completed publishing both RID and pointer packages but a later release step failed, the npm submissions can be repeated. Setting both npm skip flags to `true` is optional if you want to avoid waiting for those submissions again. For an older servicing version, follow the `latest` safety restriction above rather than assuming a duplicate submission preserves dist-tags.
 
 ### Tag already exists but points to different commit
 
@@ -412,8 +413,8 @@ Azure DevOps release-publish-nuget.yml
      -> publish NuGet through 1ES.PublishNuget@1
      -> publish npm RID packages through MicroBuild.Publish
      -> wait for npm propagation
+     -> verify every RID dependency is visible on npm
      -> publish npm pointer package through MicroBuild.Publish
-     -> install the pointer package from npm and run aspire --version
      -> promote BAR build to GA channel
   -> WinGetJob
   -> GitHubTasks
