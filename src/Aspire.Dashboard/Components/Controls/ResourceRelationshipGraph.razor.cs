@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
+using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
 
@@ -112,11 +113,16 @@ public sealed partial class ResourceRelationshipGraph : ComponentBase
     }
 
     /// <summary>
-    /// Shortens a long name by replacing its middle with an ellipsis. Keeping the end distinguishes names that only
-    /// differ by a suffix, such as replicas: <c>catalogservice-kpjvzdsd</c> becomes <c>catalog…kpjvzdsd</c>.
+    /// Shortens long names at the end, except for replicas whose suffixes distinguish their instances.
     /// </summary>
-    private string GetLabel(string name)
+    private string GetLabel(RelationshipGraphNode resource)
     {
+        var name = resource.Name;
+        if (!resource.IsReplica)
+        {
+            return FormatHelpers.TruncateText(name, _maximumLabelLength);
+        }
+
         if (name.Length <= _maximumLabelLength)
         {
             return name;
@@ -140,4 +146,5 @@ public sealed partial class ResourceRelationshipGraph : ComponentBase
 /// <param name="Name">The resource name displayed in the graph.</param>
 /// <param name="Type">The relationship type, such as <c>Reference</c>, or the resource type for the center resource.</param>
 /// <param name="Url">The URL the node links to, or <c>null</c> for the center resource.</param>
-public sealed record RelationshipGraphNode(string Name, string Type, string? Url);
+/// <param name="IsReplica">Whether multiple resource instances share a display name, requiring their suffixes to remain visible.</param>
+public sealed record RelationshipGraphNode(string Name, string Type, string? Url, bool IsReplica);
