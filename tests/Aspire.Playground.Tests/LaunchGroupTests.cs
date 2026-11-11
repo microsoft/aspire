@@ -30,8 +30,10 @@ public class LaunchGroupTests(ITestOutputHelper output)
         AssertLaunchGroups(pgAdmin, "catalog");
         Assert.IsNotAssignableFrom<IResourceWithParent>(pgAdmin);
 
-        AssertLaunchGroups(GetResource(builder, "rediscommander"), "basket");
-        AssertLaunchGroups(GetResource(builder, "redisinsight"), "basket");
+        foreach (var name in GetDashboardDevelopmentResourceNames(builder.Resources))
+        {
+            AssertLaunchGroups(GetResource(builder, name), "basket");
+        }
 
         await using var app = await builder.BuildAsync();
     }
@@ -76,7 +78,7 @@ public class LaunchGroupTests(ITestOutputHelper output)
             ["basketservice", "orderprocessor"]);
         await AssertLaunchGroupSelectionAsync(
             "basket",
-            ["rediscommander", "basketservice", "messaging"],
+            ["rediscommander", "redisinsight", "basketservice", "messaging"],
             ["catalogservice", "orderprocessor"]);
         await AssertLaunchGroupSelectionAsync(
             "frontend",
@@ -109,6 +111,11 @@ public class LaunchGroupTests(ITestOutputHelper output)
         var app = await applicationTask;
         await ExecuteBeforeStartHooksAsync(app, TestContext.Current.CancellationToken);
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var omittedResourceNames = s_dashboardDevelopmentResourceNames
+            .Except(GetDashboardDevelopmentResourceNames(model.Resources))
+            .ToArray();
+        selectedResourceNames = selectedResourceNames.Except(omittedResourceNames).ToArray();
+        excludedResourceNames = excludedResourceNames.Except(omittedResourceNames).ToArray();
 
         Assert.Multiple(
             () => Assert.All(selectedResourceNames, name =>
@@ -119,6 +126,24 @@ public class LaunchGroupTests(ITestOutputHelper output)
                 Assert.True(
                     GetResource(model, name).HasAnnotationOfType<ExplicitStartupAnnotation>(),
                     $"Resource '{name}' should be excluded by launch group '{launchGroup}'.")));
+    }
+
+    // TestShop adds the Redis tools inside `#if !SKIP_DASHBOARD_REFERENCE`. CI builds playground AppHosts with
+    // SkipDashboardProjectReference=true (see playground/Directory.Build.targets), so they exist only in local builds.
+    // Both tools come from the same block, so either both exist or neither does.
+    private static readonly string[] s_dashboardDevelopmentResourceNames = ["rediscommander", "redisinsight"];
+
+    private static string[] GetDashboardDevelopmentResourceNames(IEnumerable<IResource> resources)
+    {
+        var resourceList = resources.ToList();
+        var presentNames = s_dashboardDevelopmentResourceNames
+            .Where(name => resourceList.Any(resource => resource.Name == name))
+            .ToArray();
+
+        Assert.True(
+            presentNames.Length is 0 || presentNames.Length == s_dashboardDevelopmentResourceNames.Length,
+            $"Expected all or none of the dashboard-development resources, found: {string.Join(", ", presentNames)}.");
+        return presentNames;
     }
 
     private static IResource GetResource(IDistributedApplicationTestingBuilder builder, string name) =>
