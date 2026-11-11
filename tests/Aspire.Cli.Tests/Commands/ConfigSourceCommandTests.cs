@@ -4,6 +4,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Agents;
+using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Git;
@@ -1375,13 +1376,13 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
     [InlineData("update --config-source --yes", false, true)]
     [InlineData("update --config-source --yes", true, false)]
     [InlineData("update --config-source --yes", true, true)]
-    public async Task ConfigSource_AcquisitionFailureDisplaysReadmeHelpAfterExistingError(
+    public async Task ConfigSource_AcquisitionFailureIncludesReadmeHelpInSingleError(
         string commandLine, bool microsoftDefault, bool supportsLinks)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         const string customReadmeUrl = "https://docs.example/config-source?team=[platform]";
         var readmeUrl = microsoftDefault ? ConfigSourceService.MicrosoftReadmeUrl : customReadmeUrl;
-        var errorMessage = microsoftDefault ? ConfigSourceStrings.GitTimeout : ConfigSourceStrings.AuthenticationFailed;
+        var errorMessage = microsoftDefault ? ConfigSourceStrings.GitTimeout : $"{ConfigSourceStrings.AuthenticationFailed} [credential-helper]";
         var interaction = new TestInteractionService { SupportsLinks = supportsLinks };
         var services = CreateCreationServices(workspace);
         services.AddSingleton<IInteractionService>(interaction);
@@ -1411,11 +1412,61 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.InvalidCommand, await result.InvokeAsync().DefaultTimeout());
 
         var expectedLink = supportsLinks ? $"[link]{readmeUrl.EscapeMarkup()}[/]" : readmeUrl.EscapeMarkup();
-        Assert.Collection(interaction.DisplayedErrors,
-            error => Assert.Equal(errorMessage, error),
-            error => Assert.Equal(string.Format(System.Globalization.CultureInfo.CurrentCulture,
-                ConfigSourceStrings.AccessHelp, expectedLink), error));
+        Assert.Equal(errorMessage.EscapeMarkup() + Environment.NewLine
+            + string.Format(System.Globalization.CultureInfo.CurrentCulture, ConfigSourceStrings.AccessHelp, expectedLink),
+            Assert.Single(interaction.DisplayedErrors));
         Assert.Equal(1, git.Calls);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ConfigSource_AcquisitionFailureIncludesReadmeHelpInSingleExtensionError(bool messageActions)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        const string readmeUrl = "https://docs.example/config-source?team=[platform]";
+        var errorMessage = $"{ConfigSourceStrings.GitTimeout} [credential-helper]";
+        var expectedError = errorMessage + Environment.NewLine + string.Format(System.Globalization.CultureInfo.CurrentCulture,
+            ConfigSourceStrings.AccessHelp, readmeUrl);
+        var capturedErrors = new List<(string? Message, bool AllowMarkup)>();
+        var services = CreateCreationServices(workspace);
+        services.AddSingleton<IExtensionBackchannel>(new TestExtensionBackchannel());
+        services.AddSingleton<IInteractionService>(serviceProvider => new TestExtensionInteractionService(serviceProvider)
+        {
+            TryDisplayCommandFailureAsyncCallback = (message, _, _, allowMarkup, _) =>
+            {
+                if (messageActions)
+                {
+                    capturedErrors.Add((message, allowMarkup));
+                }
+                return Task.FromResult(messageActions);
+            }
+        });
+        services.AddSingleton<IEnvironment>(new TestEnvironment(new Dictionary<string, string?>
+        {
+            [CliConfigNames.InitSourceUrl] = s_source.Repository,
+            [CliConfigNames.InitSourceReadmeUrl] = readmeUrl
+        }));
+        using var provider = services.BuildServiceProvider();
+        var git = Assert.IsType<TestConfigSourceRepository>(provider.GetRequiredService<IGitClient>());
+        git.ReadConfiguration = (_, _) => throw new ConfigSourceException(errorMessage);
+
+        var exitCode = await provider.GetRequiredService<RootCommand>()
+            .Parse("new aspire-empty --language csharp --use-config-source true --non-interactive")
+            .InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+        var interaction = Assert.IsType<TestExtensionInteractionService>(provider.GetRequiredService<IInteractionService>());
+        if (messageActions)
+        {
+            Assert.Equal((expectedError.EscapeMarkup(), true), Assert.Single(capturedErrors));
+            Assert.Empty(interaction.DisplayedErrors);
+        }
+        else
+        {
+            Assert.Empty(capturedErrors);
+            Assert.Equal(expectedError.EscapeMarkup(), Assert.Single(interaction.DisplayedErrors));
+        }
     }
 
     [Theory]
