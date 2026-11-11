@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
 
 namespace Aspire.Hosting;
@@ -34,12 +33,10 @@ public static class RequiredCommandResourceExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(command);
 
-#pragma warning disable ASPIRECOMMAND001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
         builder.WithAnnotation(new RequiredCommandAnnotation(command)
         {
             HelpLink = helpLink
         });
-#pragma warning restore ASPIRECOMMAND001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
         return builder;
     }
@@ -60,7 +57,6 @@ public static class RequiredCommandResourceExtensions
     /// which can be created via <see cref="RequiredCommandValidationContext.Success"/> or <see cref="RequiredCommandValidationContext.Failure(string)"/>.
     /// If the command is not found or fails validation, a warning message will be logged but the resource will be allowed to attempt to start.
     /// </remarks>
-    [Experimental("ASPIRECOMMAND001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExport("withRequiredCommandValidation", MethodName = "withRequiredCommandValidation")]
     public static IResourceBuilder<T> WithRequiredCommand<T>(
         this IResourceBuilder<T> builder,

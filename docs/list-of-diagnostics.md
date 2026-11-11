@@ -23,6 +23,9 @@ When automatic CLI bundle setup fails, `ASPIRE009` includes the setup command's 
 
 ## Experimental API Warnings
 
+`ASPIRECOMMAND001` is no longer produced. Required-command custom validation APIs are stable.
+Failed validation remains advisory: a warning is logged, but the resource is allowed to attempt to start.
+
 | Diagnostic ID | Severity | Description | Location |
 | ------------- | -------- | ----------- | -------- |
 | `ASPIREAZUREPROVISIONING001` | Warning | The polyglot Azure Provisioning proxy packages are experimental and may change or be removed in future releases. | [src/Aspire.Hosting.Azure.Provisioning/ExperimentalAssemblyInfo.cs](../src/Aspire.Hosting.Azure.Provisioning/ExperimentalAssemblyInfo.cs) |

@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
-using System.Diagnostics.CodeAnalysis;
 
 namespace Aspire.Hosting.ApplicationModel;
 
@@ -11,7 +10,6 @@ namespace Aspire.Hosting.ApplicationModel;
 /// </summary>
 /// <param name="command">The command string (file name or path) that should be validated.</param>
 [DebuggerDisplay("Type = {GetType().Name,nq}, Command = {Command}")]
-[Experimental("ASPIRECOMMAND001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public class RequiredCommandAnnotation(string command) : IResourceAnnotation
 {
     /// <summary>
@@ -30,6 +28,7 @@ public class RequiredCommandAnnotation(string command) : IResourceAnnotation
     /// <remarks>
     /// The callback receives a <see cref="RequiredCommandValidationContext"/> containing the resolved path and service provider.
     /// It should return a <see cref="RequiredCommandValidationResult"/> indicating whether the command is valid.
+    /// Failed validation logs a warning but does not prevent the resource from attempting to start.
     /// </remarks>
     public Func<RequiredCommandValidationContext, Task<RequiredCommandValidationResult>>? ValidationCallback { get; init; }
 }
