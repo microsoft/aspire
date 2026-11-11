@@ -771,9 +771,10 @@ internal sealed class AgentInitCommand : BaseCommand
                 }
             }
         }
-        catch (Exception ex) when (ex is InvalidOperationException or IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is InvalidOperationException or IOException or UnauthorizedAccessException or ArgumentException)
         {
             // Unreadable config is not evidence of Aspire setup, and hook installation is best effort.
+            // The plugin registration parser rejects JSON nulls with ArgumentNullException.
         }
 
         return false;
