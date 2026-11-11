@@ -280,13 +280,22 @@ output before cancellation. Arguments and exception details remain excluded from
 process diagnostics. Git output can contain private repository information,
 configuration-file contents, or credentials emitted by Git or its helpers; review
 logs before sharing them. Output is not copied into exception messages or telemetry.
+Git child processes set `GCM_TRACE=1` and `GCM_TRACE_SECRETS=0`, overriding inherited
+values to capture Git Credential Manager diagnostics on stderr while disabling
+secret tracing. This retains GCM's masking of explicitly marked secrets, not
+general-purpose redaction of all sensitive output. The parent environment and Git
+configuration are unchanged.
 The runner classifies failures and exposes localized messages through `GitFailure`;
 callers translate them into command errors.
 
-The template factory owns separate two-minute deadlines for ref resolution and
-checkout acquisition. Initialization, fetching, checkout, and verification share
-one deadline within a checkout operation. Caller cancellation remains cancellation;
-expiry of the factory's Git deadline becomes a classified timeout.
+The template factory uses the same five-minute Git timeout as configuration
+sources, with separate deadlines for ref resolution and checkout acquisition.
+The overall budget allows time for browser sign-in, MFA, and other
+credential-helper interaction because Git does not expose a portable signal
+distinguishing authentication waits from other work. Initialization, fetching,
+checkout, and verification share one deadline within a checkout operation.
+Caller cancellation remains cancellation; expiry of the factory's Git deadline
+becomes a classified timeout.
 
 ## Template parameters and generation
 

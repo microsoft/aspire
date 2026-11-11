@@ -7,12 +7,41 @@ using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.TestUtilities;
 using Microsoft.AspNetCore.InternalTesting;
+using Microsoft.DotNet.RemoteExecutor;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Git;
 
 public partial class GitCommandRunnerTests
 {
+    [Theory]
+    [InlineData(nameof(GitCommandMode.Captured), false)]
+    [InlineData(nameof(GitCommandMode.Interactive), false)]
+    [InlineData(nameof(GitCommandMode.Interactive), true)]
+    [InlineData(nameof(GitCommandMode.Unattended), true)]
+    public void CreateStartInfo_CredentialManagerTracingOverridesInheritedSettingsOnlyForChild(string mode, bool interactiveHost)
+    {
+        using var remote = RemoteExecutor.Invoke(static (commandMode, supportsInteractiveInput) =>
+        {
+            Environment.SetEnvironmentVariable("GCM_TRACE", "0");
+            Environment.SetEnvironmentVariable("GCM_TRACE_SECRETS", "1");
+            var host = bool.Parse(supportsInteractiveInput)
+                ? TestHelpers.CreateInteractiveHostEnvironment()
+                : TestHelpers.CreateNonInteractiveHostEnvironment();
+            var runner = new GitCommandRunner(host, new TestInteractionService(),
+                TestHelpers.CreateConsoleEnvironment(TextWriter.Null, TextWriter.Null), NullLogger<GitCommandRunner>.Instance);
+
+            var info = runner.CreateStartInfo(Environment.CurrentDirectory, ["ls-remote", "--", "repository"],
+                Enum.Parse<GitCommandMode>(commandMode));
+
+            Assert.Equal("1", info.Environment["GCM_TRACE"]);
+            Assert.Equal("0", info.Environment["GCM_TRACE_SECRETS"]);
+            Assert.Equal("0", Environment.GetEnvironmentVariable("GCM_TRACE"));
+            Assert.Equal("1", Environment.GetEnvironmentVariable("GCM_TRACE_SECRETS"));
+        }, mode, interactiveHost.ToString());
+    }
+
     [Theory]
     [InlineData(nameof(GitCommandMode.Unattended), true, true)]
     [InlineData(nameof(GitCommandMode.Interactive), false, true)]
