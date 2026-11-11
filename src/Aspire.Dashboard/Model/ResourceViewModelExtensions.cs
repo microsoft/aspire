@@ -170,6 +170,19 @@ internal static class ResourceViewModelExtensions
 
     public static ImmutableArray<string> GetMissingParameterDependencies(this ResourceViewModel resource, IEnumerable<ResourceViewModel> allResources)
     {
+        var resourcesByName = new Dictionary<string, ResourceViewModel>(StringComparers.ResourceName);
+        var resourcesByDisplayName = new Dictionary<string, List<ResourceViewModel>>(StringComparers.ResourceName);
+        foreach (var candidate in allResources)
+        {
+            resourcesByName.TryAdd(candidate.Name, candidate);
+            if (!resourcesByDisplayName.TryGetValue(candidate.DisplayName, out var replicas))
+            {
+                replicas = [];
+                resourcesByDisplayName.Add(candidate.DisplayName, replicas);
+            }
+            replicas.Add(candidate);
+        }
+
         var missingParameters = new SortedSet<string>(StringComparers.ResourceName);
         var visited = new HashSet<string>(StringComparers.ResourceName);
         var pending = new Stack<ResourceViewModel>();
@@ -194,27 +207,37 @@ internal static class ResourceViewModelExtensions
                     continue;
                 }
 
-                var matchingResource = FindResourceByName(relationship.ResourceName, allResources);
-                if (matchingResource is not null)
+                PushDependency(relationship.ResourceName);
+            }
+
+            if (current.KnownState is KnownResourceState.Waiting && current.TryGetWaitingForDependencies(out var dependencies))
+            {
+                // Active waits include implicit parents that have no WaitFor relationship.
+                foreach (var dependency in dependencies)
                 {
-                    pending.Push(matchingResource);
-                }
-                else
-                {
-                    // Relationships can name the logical resource rather than a DCP replica.
-                    // Follow every replica, since each can reference different parameters.
-                    foreach (var candidate in allResources)
-                    {
-                        if (string.Equals(candidate.DisplayName, relationship.ResourceName, StringComparisons.ResourceName))
-                        {
-                            pending.Push(candidate);
-                        }
-                    }
+                    PushDependency(dependency);
                 }
             }
         }
 
         return [.. missingParameters];
+
+        void PushDependency(string name)
+        {
+            if (resourcesByName.TryGetValue(name, out var matchingResource))
+            {
+                pending.Push(matchingResource);
+            }
+            else if (resourcesByDisplayName.TryGetValue(name, out var replicas))
+            {
+                // Relationships can name the logical resource rather than a DCP replica.
+                // Follow every replica, since each can reference different parameters.
+                foreach (var replica in replicas)
+                {
+                    pending.Push(replica);
+                }
+            }
+        }
     }
 
     private static ResourceViewModel? FindResourceByName(string name, IEnumerable<ResourceViewModel> allResources)

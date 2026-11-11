@@ -207,6 +207,42 @@ public class ResourceStateViewModelTests
         Assert.Equal(
             $"Localized:{nameof(Columns.StateColumnResourceWaiting)} Localized:{nameof(Columns.StateColumnResourceMissingParameters)}:first-selector, second-selector",
             tooltip);
+
+        var resources = new CopyToThrowingResourceCollection(frontend, firstApi, secondApi, secondParameter, firstParameter);
+        Assert.Equal(["first-selector", "second-selector"], frontend.GetMissingParameterDependencies(resources));
+        Assert.Equal(1, resources.EnumerationCount);
+    }
+
+    [Fact]
+    public void WaitingResourceTooltipIncludesMissingParameterOnImplicitParentDependency()
+    {
+        var parameter = ModelTestHelpers.CreateResource(
+            resourceName: "password", resourceType: KnownResourceTypes.Parameter,
+            state: KnownResourceState.ValueMissing);
+        var server = ModelTestHelpers.CreateResource(
+            resourceName: "server-abcxyz", displayName: "server", state: KnownResourceState.Starting,
+            relationships: [new(parameter.Name, KnownRelationshipTypes.Reference)]);
+        var database = ModelTestHelpers.CreateResource(
+            resourceName: "database", state: KnownResourceState.Waiting,
+            relationships: [new(server.Name, KnownRelationshipTypes.Parent)]);
+        var consumer = ModelTestHelpers.CreateResource(
+            resourceName: "api", state: KnownResourceState.Waiting,
+            relationships: [new(database.Name, KnownRelationshipTypes.WaitFor)],
+            properties: new Dictionary<string, ResourcePropertyViewModel>
+            {
+                [KnownProperties.Resource.WaitingFor] = new(
+                    KnownProperties.Resource.WaitingFor,
+                    Value.ForList(Value.ForString(database.Name), Value.ForString(server.Name)),
+                    isValueSensitive: false, knownProperty: null, sortOrder: 0,
+                    displayName: null, isHighlighted: false)
+            });
+
+        var tooltip = ResourceStateViewModel.GetResourceStateTooltip(
+            consumer, new TestStringLocalizer<Columns>(), [consumer, database, server, parameter]);
+
+        Assert.Equal(
+            $"Localized:{nameof(Columns.StateColumnResourceWaitingFor)}:database, server Localized:{nameof(Columns.StateColumnResourceMissingParameters)}:password",
+            tooltip);
     }
 
     [Theory]
@@ -318,6 +354,8 @@ public class ResourceStateViewModelTests
 
     private sealed class CopyToThrowingResourceCollection(params ResourceViewModel[] resources) : ICollection<ResourceViewModel>, IReadOnlyCollection<ResourceViewModel>
     {
+        public int EnumerationCount { get; private set; }
+
         public int Count => resources.Length;
 
         public bool IsReadOnly => true;
@@ -330,7 +368,11 @@ public class ResourceStateViewModelTests
 
         public void CopyTo(ResourceViewModel[] array, int arrayIndex) => throw new InvalidOperationException("The resources collection should not be copied.");
 
-        public IEnumerator<ResourceViewModel> GetEnumerator() => resources.AsEnumerable().GetEnumerator();
+        public IEnumerator<ResourceViewModel> GetEnumerator()
+        {
+            EnumerationCount++;
+            return resources.AsEnumerable().GetEnumerator();
+        }
 
         public bool Remove(ResourceViewModel item) => throw new NotSupportedException();
 
