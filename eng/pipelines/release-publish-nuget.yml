@@ -1375,6 +1375,57 @@ extends:
                     Write-Host "All staged npm tarballs match validated version '$validatedVersion'."
                   displayName: 'Verify Staged npm Package Versions'
 
+                # npm publish moves the `latest` dist-tag to the published version, and the
+                # MicroBuild npm publish template has no dist-tag input. Publishing an older
+                # servicing version would make `npm install @microsoft/aspire-cli` resolve
+                # to it. Equal versions are allowed so a re-run of an already-published
+                # release proceeds; ESRP treats existing versions as already published.
+                - pwsh: |
+                    $ErrorActionPreference = 'Stop'
+                    $isDryRun = "${{ parameters.DryRun }}" -eq "true"
+                    $validatedVersion = "$(NpmValidatedExpectedVersion)"
+                    $candidate = $null
+                    if (-not [System.Management.Automation.SemanticVersion]::TryParse($validatedVersion, [ref] $candidate)) {
+                      Write-Error "NpmValidatedExpectedVersion '$validatedVersion' is not a valid SemVer version."
+                      exit 1
+                    }
+
+                    # `npm view <pkg>@latest version` prints the bare version, e.g. `13.4.0`.
+                    # A package with no published versions fails with an E404 error.
+                    $latestOutput = & npm view @microsoft/aspire-cli@latest version --registry=https://registry.npmjs.org/ --loglevel=warn 2>&1
+                    $latestExitCode = $LASTEXITCODE
+                    $latestText = ($latestOutput | ForEach-Object { "$_" }) -join "`n"
+                    if ($latestExitCode -ne 0) {
+                      if ($latestText -match '(?i)(\bE404\b|404 Not Found)') {
+                        Write-Host "@microsoft/aspire-cli has no latest dist-tag yet; nothing to compare."
+                        exit 0
+                      }
+
+                      Write-Error "Unable to query @microsoft/aspire-cli@latest before publishing. Output: $latestText"
+                      exit 1
+                    }
+
+                    $latest = $null
+                    $latestVersion = ($latestOutput | ForEach-Object { "$_".Trim() } | Where-Object { $_ } | Select-Object -Last 1)
+                    if (-not [System.Management.Automation.SemanticVersion]::TryParse($latestVersion, [ref] $latest)) {
+                      Write-Error "Unable to parse @microsoft/aspire-cli@latest as SemVer. Output: $latestText"
+                      exit 1
+                    }
+
+                    if ($candidate -lt $latest) {
+                      $message = "Publishing @microsoft/aspire-cli@$validatedVersion would move the npm latest dist-tag backward from $latestVersion. For an older servicing release, set SkipNpmRidPublish=true and SkipNpmPointerPublish=true."
+                      if ($isDryRun) {
+                        Write-Host "##vso[task.logissue type=warning]$message"
+                        exit 0
+                      }
+
+                      Write-Error $message
+                      exit 1
+                    }
+
+                    Write-Host "npm latest is $latestVersion; publishing $validatedVersion will not move it backward."
+                  displayName: 'Verify npm latest Dist-Tag Is Not Moved Backward'
+
               - ${{ if and(eq(parameters.DryRun, true), or(eq(parameters.SkipNpmRidPublish, false), eq(parameters.SkipNpmPointerPublish, false))) }}:
                 - powershell: |
                     Write-Host "=== DRY RUN MODE ==="

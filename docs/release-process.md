@@ -168,7 +168,7 @@ For a full Aspire release that should also publish the extension, keep the norma
 
 The npm release path validates Windows, Linux, and macOS install summaries, publishes the seven RID packages first, waits for ESRP completion, waits for the configured propagation delay, verifies that every RID dependency is visible on npm, and then publishes the top-level `@microsoft/aspire-cli` pointer package. ESRP handles already-published versions and publish completion; the pipeline does not reject duplicates or run a post-publish registry install. The RID dependency check prevents publishing a pointer package whose optional native dependencies are not visible yet. Re-runs can keep both npm publishing steps enabled; the skip flags are optional controls for deliberately omitting a submission, not prerequisites for retrying it.
 
-> **npm `latest` safety:** Published versions and dist-tags are separate. Existing-version handling does not establish whether ESRP preserves the current `latest` tag. The pipeline no longer rejects publishing an older version than `latest`, and it does not explicitly select a non-`latest` tag. Keep both npm publish steps skipped for older servicing releases until tag behavior is verified or explicit servicing tags are supported. For prereleases, set `SkipNpmRidPublish=true` and `SkipNpmPointerPublish=true` unless the npm publishing path has gained explicit non-`latest` dist-tag support.
+> **npm `latest` safety:** npm moves the `latest` dist-tag to whatever version is published, and the MicroBuild npm publish template has no dist-tag input. Before any npm submission, the pipeline compares the release version with `@microsoft/aspire-cli@latest`. A lower version fails the run (a warning in dry runs) so an older servicing release cannot replace `latest`; set `SkipNpmRidPublish=true` and `SkipNpmPointerPublish=true` for those releases. An equal version passes, so re-running an already-published release works. For prereleases, set both npm skip flags to `true` unless the npm publishing path has gained explicit non-`latest` dist-tag support.
 
 `commit_sha` and `release_branch` for the GitHub workflow are derived automatically from the source build resource, so there is no need to copy them by hand.
 
@@ -266,6 +266,7 @@ These automations are designed to be idempotent and safe to re-run.
 | Prepare/List/Verify NuGet Packages | Check that the selected source build produced `PackageArtifacts`. |
 | Prepare/List npm Packages | Check that the selected source build produced all eight `microsoft-aspire-cli*.tgz` tarballs and matching `.tgz.sig` sidecars in `BlobArtifacts`. |
 | Push Packages to NuGet.org | Check NuGet.org for partial success, then re-run with already-completed steps skipped as needed. |
+| Verify npm latest Dist-Tag Is Not Moved Backward | The release version is older than npm `latest`. For a servicing release, re-run with `SkipNpmRidPublish: true` and `SkipNpmPointerPublish: true`. |
 | MicroBuild npm Publish | Check the ESRP release result, then re-run with completed non-npm steps skipped. Leave both npm publish steps enabled so ESRP handles existing versions and submits any remaining packages. |
 | Verify npm RID Packages Present Before Pointer Publish | Confirm all RID dependencies for the pointer package version are visible on npm, then re-run after propagation. It is not necessary to skip already-published npm packages. |
 | Promote Build to Channel | Re-run with completed publish steps skipped. |
@@ -366,7 +367,7 @@ If ESRP published the RID packages but failed before publishing `@microsoft/aspi
 2. Re-run the release pipeline with completed non-npm steps skipped.
 3. Keep `SkipNpmRidPublish: false` and `SkipNpmPointerPublish: false`. ESRP handles existing versions, so a partially published RID batch does not require per-package filtering.
 
-If ESRP completed publishing both RID and pointer packages but a later release step failed, the npm submissions can be repeated. Setting both npm skip flags to `true` is optional if you want to avoid waiting for those submissions again. For an older servicing version, follow the `latest` safety restriction above rather than assuming a duplicate submission preserves dist-tags.
+If ESRP completed publishing both RID and pointer packages but a later release step failed, the npm submissions can be repeated. Setting both npm skip flags to `true` is optional if you want to avoid waiting for those submissions again. The `latest` check passes for the same version, so it does not block the re-run.
 
 ### Tag already exists but points to different commit
 
@@ -411,6 +412,7 @@ Azure DevOps release-publish-nuget.yml
   -> ReleaseJob
      -> verify NuGet signatures
      -> publish NuGet through 1ES.PublishNuget@1
+     -> check the release version does not move npm latest backward
      -> publish npm RID packages through MicroBuild.Publish
      -> wait for npm propagation
      -> verify every RID dependency is visible on npm
