@@ -74,7 +74,8 @@ internal static class McpConfigFileHelper
         string configFilePath)
     {
         var servers = GetServerContainer(config, configuration.ServersPropertyName, configFilePath);
-        if (servers?.ContainsKey("aspire") is true)
+        // A null or non-object "aspire" entry is not a usable server, so it is replaced.
+        if (servers?["aspire"] is JsonObject)
         {
             return false;
         }

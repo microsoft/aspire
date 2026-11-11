@@ -1419,6 +1419,36 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
         Assert.Equal(expectHooks ? ["claude"] : [], hooks.SelectedClientIds);
     }
 
+    [Theory]
+    [InlineData("claude")]
+    [InlineData("copilot")]
+    public async Task AgentInit_NullAspireMcpEntry_IsReplacedAndInstallsHook(string clientId)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var homeDirectory = workspace.CreateDirectory("fake-home");
+        var environment = new TestEnvironment();
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(workspace.WorkspaceRoot, homeDirectory: homeDirectory);
+        var hooks = new TestTelemetryHookConfigurator();
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => executionContext;
+            options.TelemetryHookConfiguratorFactory = _ => hooks;
+        });
+        services.AddSingleton<IEnvironment>(environment);
+        using var provider = services.BuildServiceProvider();
+        var client = provider.GetServices<IAgentClient>().Single(client => string.Equals(client.Id, clientId, StringComparisons.AgentClientId));
+        var path = client.GetMcpConfigPath(AgentConfigurationScope.Global, workspace.WorkspaceRoot);
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        await File.WriteAllTextAsync(path, """{"mcpServers":{"aspire":null}}""");
+
+        var result = provider.GetRequiredService<RootCommand>().Parse(
+            $"agent init --agents {clientId} --scope global --skills none --mcp");
+        Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
+        using var config = JsonDocument.Parse(await File.ReadAllTextAsync(path));
+        Assert.Equal(JsonValueKind.Object, config.RootElement.GetProperty("mcpServers").GetProperty("aspire").ValueKind);
+        Assert.Equal([clientId], hooks.SelectedClientIds);
+    }
+
     [Fact]
     public async Task McpInit_LegacyDelegation_UsesClientScopeAndRemoteSkillOptions()
     {
