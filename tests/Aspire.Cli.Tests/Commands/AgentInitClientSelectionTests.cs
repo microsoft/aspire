@@ -1453,6 +1453,8 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
     [InlineData("claude", "plugin", true)]
     [InlineData("copilot", "plugin", true)]
     [InlineData("claude", "disabled-plugin", false)]
+    [InlineData("claude", "null-plugins", false)]
+    [InlineData("claude", "null-plugin-value", false)]
     [InlineData("claude", "malformed-mcp", false)]
     [InlineData("claude", "none", false)]
     public async Task AgentInit_ExistingAspireSetupWithoutSelection_RefreshesHook(string clientId, string existing, bool expectHook)
@@ -1481,6 +1483,8 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
             "malformed-mcp" => (client.GetMcpConfigPath(AgentConfigurationScope.Global, workspace.WorkspaceRoot), "{broken"),
             "plugin" => (client.GetIntegrationConfigPath(AgentConfigurationScope.Global, workspace.WorkspaceRoot), """{"enabledPlugins":{"aspire@aspire-skills":true}}"""),
             "disabled-plugin" => (client.GetIntegrationConfigPath(AgentConfigurationScope.Global, workspace.WorkspaceRoot), """{"enabledPlugins":{"aspire@aspire-skills":false}}"""),
+                        "null-plugins" => (client.GetIntegrationConfigPath(AgentConfigurationScope.Global, workspace.WorkspaceRoot), """{"enabledPlugins":null}"""),
+                        "null-plugin-value" => (client.GetIntegrationConfigPath(AgentConfigurationScope.Global, workspace.WorkspaceRoot), """{"enabledPlugins":{"aspire@aspire-skills":null}}"""),
             _ => ((string?)null, (string?)null)
         };
         if (path is not null)
