@@ -1,0 +1,28 @@
+{
+  "id": "vscode-extension-e2e-notification-element-not-interactable",
+  "type": "flaky-test",
+  "title": "Flaky: VS Code extension E2E cli-path-rejection notification action fails with element not interactable",
+  "error_pattern": "ElementNotInteractableError: element not interactable\n  at StandaloneNotification.takeAction (cliPathRejectionNotification.e2e.test.js)",
+  "occurrences": [
+    {
+      "run_id": 43106710028,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/43106710028",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, cli-path-rejection)",
+      "observed_at": "2026-11-11T22:28:41Z",
+      "pr_number": 0,
+      "tests": [
+        {
+          "name": "Configured CLI path rejection E2E warns and opens the setting when the configured path is invalid",
+          "job_id": 130821080826,
+          "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, cli-path-rejection)",
+          "error": "element not interactable\n  (Session info: chrome=148.0.7778.280)",
+          "stack_trace": "ElementNotInteractableError: element not interactable\n  (Session info: chrome=148.0.7778.280)\n    at Object.throwDecodedError (node_modules/selenium-webdriver/lib/error.js:523:15)\n    at parseHttpResponse (node_modules/selenium-webdriver/lib/http.js:526:13)\n    at Executor.execute (node_modules/selenium-webdriver/lib/http.js:458:28)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async Driver.execute (node_modules/selenium-webdriver/lib/webdriver.js:745:17)\n    at async StandaloneNotification.takeAction (node_modules/@redhat-developer/page-objects/out/components/workbench/Notification.js:119:9)\n    at async Context.<anonymous> (out/test-e2e/test-e2e/cliPathRejectionNotification.e2e.test.js:93:9)",
+          "standard_output": "",
+          "standard_error": "",
+          "result_file": "00001.json",
+          "result_format": "mocha"
+        }
+      ]
+    }
+  ]
+}
