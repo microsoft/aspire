@@ -41,7 +41,7 @@ Deno.serve({ hostname: "127.0.0.1", port: Number(Deno.env.get("PORT") ?? "8000")
   </ItemGroup>
 </Project>
 `);
-        const appHostWithLocalJavaScriptHosting = `#:property NoWarn=ASPIREDENO001\n#:project ${javascriptHostingProject}\n${originalAppHostSource}`;
+        const appHostWithLocalJavaScriptHosting = `#:project ${javascriptHostingProject}\n${originalAppHostSource}`;
 
         const appHostSource = appHostWithLocalJavaScriptHosting.replace(
             'builder.Build().Run();',

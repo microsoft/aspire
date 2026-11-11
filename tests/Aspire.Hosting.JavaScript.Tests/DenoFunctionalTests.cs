@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREDENO001 // Type is for evaluation purposes only
-
 using System.Net;
 using System.Text.Json;
 using Aspire.TestUtilities;

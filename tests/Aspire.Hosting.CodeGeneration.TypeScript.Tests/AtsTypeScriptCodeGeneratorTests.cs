@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREDENO001 // Type is for evaluation purposes only
 #pragma warning disable ASPIREBROWSERLOGS001 // Type is for evaluation purposes only
 #pragma warning disable ASPIRECOMPUTE002
 
@@ -2908,7 +2907,7 @@ public class AtsTypeScriptCodeGeneratorTests
     }
 
     [Fact]
-    public void DenoPublicApis_AreExperimental()
+    public void DenoPublicApis_AreStable()
     {
         var denoMethods = typeof(JavaScriptHostingExtensions)
             .GetMethods(BindingFlags.Public | BindingFlags.Static)
@@ -2920,11 +2919,7 @@ public class AtsTypeScriptCodeGeneratorTests
         Assert.Contains(denoMethods, method => method.Name == nameof(JavaScriptHostingExtensions.AddDenoApp));
         Assert.Contains(denoMethods, method => method.Name.StartsWith("WithDeno", StringComparison.Ordinal));
 
-        Assert.All(denoMethods, method =>
-        {
-            var experimental = Assert.Single(method.GetCustomAttributes<ExperimentalAttribute>());
-            Assert.Equal("ASPIREDENO001", experimental.DiagnosticId);
-        });
+        Assert.All(denoMethods, method => Assert.Empty(method.GetCustomAttributes<ExperimentalAttribute>()));
 
         foreach (var type in new[]
         {
@@ -2934,9 +2929,18 @@ public class AtsTypeScriptCodeGeneratorTests
             typeof(Aspire.Hosting.JavaScript.DenoPermissionKind),
         })
         {
-            var experimental = Assert.Single(type.GetCustomAttributes<ExperimentalAttribute>());
-            Assert.Equal("ASPIREDENO001", experimental.DiagnosticId);
+            Assert.Empty(type.GetCustomAttributes<ExperimentalAttribute>());
         }
+
+        var result = AtsCapabilityScanner.ScanAssemblies(
+            [typeof(DistributedApplication).Assembly, typeof(Aspire.Hosting.JavaScript.DenoAppResource).Assembly]);
+        var denoCapabilities = result.Capabilities
+            .Where(capability => capability.CapabilityId == "Aspire.Hosting.JavaScript/addDenoApp" ||
+                capability.CapabilityId.StartsWith("Aspire.Hosting.JavaScript/withDeno", StringComparison.Ordinal))
+            .ToList();
+
+        Assert.Equal(denoMethods.Count, denoCapabilities.Count);
+        Assert.All(denoCapabilities, capability => Assert.False(capability.IsExperimental));
     }
 
     private const string ApiExportPackageName = "Aspire.Hosting.CodeGeneration.TypeScript.Tests";
