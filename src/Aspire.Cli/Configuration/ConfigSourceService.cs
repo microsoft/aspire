@@ -33,7 +33,7 @@ internal sealed class ConfigSourceService(
     ILogger<ConfigSourceService> logger) : IDisposable
 {
     internal const string MicrosoftRepository = "https://msft.ghe.com/coreai/aspire-1p-init";
-    internal const string MicrosoftReadmeUrl = $"{MicrosoftRepository}/blob/HEAD/README.md";
+    internal const string MicrosoftReadmeUrl = MicrosoftRepository;
     private static readonly string[] s_allowedSettings = [SkillSource.SectionName, IntegrationSourceConfiguration.SectionName];
     private readonly Dictionary<ConfigSourceIdentity, ConfigSourceSnapshot> _snapshots = [];
     private string? _projectDirectory;
