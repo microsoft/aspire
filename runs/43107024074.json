@@ -1,0 +1,63 @@
+{
+  "run_id": 43107024074,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/43107024074",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-11T23:22:44Z",
+  "verdict": "transient-infra",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 21927,
+    "title": "Scope E2E state file bridge fake timers to each test's async context",
+    "author": "davidfowl",
+    "state": "closed",
+    "head_branch": "aspireagent/vscode-bridge-scoped-fake-timers",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/21927",
+    "merged_at": "2026-11-11T21:53:30Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "4857b691ece0d355e78e886556a986d84ce1ae9d",
+    "failed_sha": "9bc7ff4d0315b692cfc3c62bce21a26224da60b3",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "394b247894d5f1ee95f6eadfbaaead87311c506a",
+        "message": "Scope VS Code extension spawnCli fake timers to the test's async context (#21922) ## Description **What failed.** The Windows VS Code extension unit job intermittently fails `spawnCliProcess tests` on `assert.strictEqual(clock.countTimers(), 0)` (actual 1–2), e.g. [42116644663](https://github.com/microsoft/aspire/actions/runs/42116644663), [42147483007](https://github.com/microsoft/aspire/actions/runs/42147483007), [42153240896](https://github.com/microsoft/aspire/actions/runs/42153240896), [422",
+        "html_url": "https://github.com/microsoft/aspire/commit/394b247894d5f1ee95f6eadfbaaead87311c506a",
+        "pull_request": {
+          "number": 21922,
+          "title": "Scope VS Code extension spawnCli fake timers to the test's async context",
+          "url": "https://github.com/microsoft/aspire/pull/21922",
+          "merged_at": "2026-11-11T21:51:19Z"
+        }
+      },
+      {
+        "sha": "9bc7ff4d0315b692cfc3c62bce21a26224da60b3",
+        "message": "Scope E2E state file bridge fake timers to each test's async context (#21927) ## Description **What failed.** The Windows VS Code extension unit job intermittently fails `E2E state file bridge > bounds the natural-close connection and releases its socket on timeout` on `assert.strictEqual(clock.countTimers(), 0)` with `1 !== 0`: [42338413245](https://github.com/microsoft/aspire/actions/runs/42338413245), [42289556640](https://github.com/microsoft/aspire/actions/runs/42289556640), [42137910318](h",
+        "html_url": "https://github.com/microsoft/aspire/commit/9bc7ff4d0315b692cfc3c62bce21a26224da60b3",
+        "pull_request": {
+          "number": 21927,
+          "title": "Scope E2E state file bridge fake timers to each test's async context",
+          "url": "https://github.com/microsoft/aspire/pull/21927",
+          "merged_at": "2026-11-11T21:53:30Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (windows-latest)",
+      "id": 130828871331,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/43107024074/job/130828871331",
+      "classification": "transient-infra",
+      "reason": "Hosted runner lost communication with the server; no structured test failures observed.",
+      "failed_steps": []
+    }
+  ],
+  "failed_tests": [],
+  "causes": [
+    "hosted-runner-lost-communication-windows-template-tests"
+  ]
+}
