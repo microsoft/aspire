@@ -24,7 +24,7 @@ namespace Aspire.Hosting.Blazor.Tests;
 public class AddBlazorGatewayTests(ITestOutputHelper testOutputHelper)
 {
     private const string GatewayPackageId = "Microsoft.AspNetCore.Components.Gateway.Cli";
-    private const string GatewayPackageVersion = "11.0.0-rc.1.26425.128";
+    private const string GatewayPackageVersion = "11.0.0";
 
     [Theory]
     [InlineData(true)]
@@ -147,7 +147,7 @@ public class AddBlazorGatewayTests(ITestOutputHelper testOutputHelper)
             "Blazor/Blazor.csproj",
             ".aspire/scripts/PrefixEndpoints.cs",
             "app",
-            "11.0.100-rc.2.26504.105",
+            "11.0.100",
             "net11.0");
 
         await Verify(dockerfile, extension: "Dockerfile")
@@ -160,7 +160,7 @@ public class AddBlazorGatewayTests(ITestOutputHelper testOutputHelper)
     [InlineData("8.0.408", "net8.0")]
     [InlineData("9.0.203", "net9.0")]
     [InlineData("10.0.201", "net10.0")]
-    [InlineData("11.0.100-rc.2.26504.105", "net11.0")]
+    [InlineData("11.0.100", "net11.0")]
     public void BlazorWasmPublishCompanion_InstallsClientSdkAlongsideGatewaySdk(string sdkVersion, string framework)
     {
         var dockerfile = BlazorGatewayExtensions.BuildBlazorWasmPublishDockerfile(
