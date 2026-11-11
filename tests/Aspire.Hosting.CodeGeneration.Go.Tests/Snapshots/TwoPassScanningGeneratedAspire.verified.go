@@ -2885,15 +2885,6 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	// WithCreatedAt sets the created timestamp
 	WithCreatedAt(createdAt string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 
-	// WithDashboardPosition sets the default resource position in the dashboard.
-	// Saved dashboard ordering takes precedence.
-	//
-	// Parameters:
-	//   - position: The default position. Lower values appear first.
-	//
-	// Returns: The resource builder.
-	WithDashboardPosition(position int) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
-
 	// WithDependency adds a dependency on another resource
 	WithDependency(dependency ResourceWithConnectionString) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 
@@ -2927,6 +2918,18 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	//
 	// Returns: The resource builder.
 	WithDeveloperCertificateTrust(trust bool) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+
+	// WithDisplayOrder sets the default display order of the resource in lists of
+	// resources, such as the dashboard's. A saved ordering takes precedence.
+	// Repeated calls replace the order.
+	//
+	// Parameters:
+	//   - order: A relative sort key. Higher values appear first, consistent with
+	//     DisplayOrder. Resources without a display order are treated as having an
+	//     order of 0, so a negative value moves a resource after them.
+	//
+	// Returns: The resource builder.
+	WithDisplayOrder(order int) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 
 	// WithDockerfile - Causes Aspire to build the specified container image from a
 	// Dockerfile.
@@ -4708,23 +4711,6 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithCreatedAt(
 	return s
 }
 
-// WithDashboardPosition sets the default resource position in the dashboard.
-// Saved dashboard ordering takes precedence.
-func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithDashboardPosition(position int) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.Err() != nil {
-		return s
-	}
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["position"] = serializeValue(position)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withDashboardPosition", reqArgs); err != nil {
-		s.setErr(err)
-	}
-	return s
-}
-
 // WithDependency adds a dependency on another resource
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithDependency(dependency ResourceWithConnectionString) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.Err() != nil {
@@ -4763,6 +4749,24 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithDeveloperC
 	}
 	reqArgs["trust"] = serializeValue(trust)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withDeveloperCertificateTrust", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
+}
+
+// WithDisplayOrder sets the default display order of the resource in lists of
+// resources, such as the dashboard's. A saved ordering takes precedence.
+// Repeated calls replace the order.
+func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithDisplayOrder(order int) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
+	if s.Err() != nil {
+		return s
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["order"] = serializeValue(order)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withDisplayOrder", reqArgs); err != nil {
 		s.setErr(err)
 	}
 	return s
@@ -7117,15 +7121,6 @@ type CSharpAppResource interface {
 	// WithCreatedAt sets the created timestamp
 	WithCreatedAt(createdAt string) CSharpAppResource
 
-	// WithDashboardPosition sets the default resource position in the dashboard.
-	// Saved dashboard ordering takes precedence.
-	//
-	// Parameters:
-	//   - position: The default position. Lower values appear first.
-	//
-	// Returns: The resource builder.
-	WithDashboardPosition(position int) CSharpAppResource
-
 	// WithDependency adds a dependency on another resource
 	WithDependency(dependency ResourceWithConnectionString) CSharpAppResource
 
@@ -7159,6 +7154,18 @@ type CSharpAppResource interface {
 	//
 	// Returns: The resource builder.
 	WithDeveloperCertificateTrust(trust bool) CSharpAppResource
+
+	// WithDisplayOrder sets the default display order of the resource in lists of
+	// resources, such as the dashboard's. A saved ordering takes precedence.
+	// Repeated calls replace the order.
+	//
+	// Parameters:
+	//   - order: A relative sort key. Higher values appear first, consistent with
+	//     DisplayOrder. Resources without a display order are treated as having an
+	//     order of 0, so a negative value moves a resource after them.
+	//
+	// Returns: The resource builder.
+	WithDisplayOrder(order int) CSharpAppResource
 
 	// WithDockerfileBaseImage configures custom base images for generated
 	// Dockerfiles.
@@ -8654,23 +8661,6 @@ func (s *cSharpAppResource) WithCreatedAt(createdAt string) CSharpAppResource {
 	return s
 }
 
-// WithDashboardPosition sets the default resource position in the dashboard.
-// Saved dashboard ordering takes precedence.
-func (s *cSharpAppResource) WithDashboardPosition(position int) CSharpAppResource {
-	if s.Err() != nil {
-		return s
-	}
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["position"] = serializeValue(position)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withDashboardPosition", reqArgs); err != nil {
-		s.setErr(err)
-	}
-	return s
-}
-
 // WithDependency adds a dependency on another resource
 func (s *cSharpAppResource) WithDependency(dependency ResourceWithConnectionString) CSharpAppResource {
 	if s.Err() != nil {
@@ -8709,6 +8699,24 @@ func (s *cSharpAppResource) WithDeveloperCertificateTrust(trust bool) CSharpAppR
 	}
 	reqArgs["trust"] = serializeValue(trust)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withDeveloperCertificateTrust", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
+}
+
+// WithDisplayOrder sets the default display order of the resource in lists of
+// resources, such as the dashboard's. A saved ordering takes precedence.
+// Repeated calls replace the order.
+func (s *cSharpAppResource) WithDisplayOrder(order int) CSharpAppResource {
+	if s.Err() != nil {
+		return s
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["order"] = serializeValue(order)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withDisplayOrder", reqArgs); err != nil {
 		s.setErr(err)
 	}
 	return s
@@ -12197,17 +12205,20 @@ type ContainerRegistryResource interface {
 	// WithCreatedAt sets the created timestamp
 	WithCreatedAt(createdAt string) ContainerRegistryResource
 
-	// WithDashboardPosition sets the default resource position in the dashboard.
-	// Saved dashboard ordering takes precedence.
-	//
-	// Parameters:
-	//   - position: The default position. Lower values appear first.
-	//
-	// Returns: The resource builder.
-	WithDashboardPosition(position int) ContainerRegistryResource
-
 	// WithDependency adds a dependency on another resource
 	WithDependency(dependency ResourceWithConnectionString) ContainerRegistryResource
+
+	// WithDisplayOrder sets the default display order of the resource in lists of
+	// resources, such as the dashboard's. A saved ordering takes precedence.
+	// Repeated calls replace the order.
+	//
+	// Parameters:
+	//   - order: A relative sort key. Higher values appear first, consistent with
+	//     DisplayOrder. Resources without a display order are treated as having an
+	//     order of 0, so a negative value moves a resource after them.
+	//
+	// Returns: The resource builder.
+	WithDisplayOrder(order int) ContainerRegistryResource
 
 	// WithDockerfileBaseImage configures custom base images for generated
 	// Dockerfiles.
@@ -13001,23 +13012,6 @@ func (s *containerRegistryResource) WithCreatedAt(createdAt string) ContainerReg
 	return s
 }
 
-// WithDashboardPosition sets the default resource position in the dashboard.
-// Saved dashboard ordering takes precedence.
-func (s *containerRegistryResource) WithDashboardPosition(position int) ContainerRegistryResource {
-	if s.Err() != nil {
-		return s
-	}
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["position"] = serializeValue(position)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withDashboardPosition", reqArgs); err != nil {
-		s.setErr(err)
-	}
-	return s
-}
-
 // WithDependency adds a dependency on another resource
 func (s *containerRegistryResource) WithDependency(dependency ResourceWithConnectionString) ContainerRegistryResource {
 	if s.Err() != nil {
@@ -13035,6 +13029,24 @@ func (s *containerRegistryResource) WithDependency(dependency ResourceWithConnec
 	}
 	reqArgs["dependency"] = serializeValue(dependency)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withDependency", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
+}
+
+// WithDisplayOrder sets the default display order of the resource in lists of
+// resources, such as the dashboard's. A saved ordering takes precedence.
+// Repeated calls replace the order.
+func (s *containerRegistryResource) WithDisplayOrder(order int) ContainerRegistryResource {
+	if s.Err() != nil {
+		return s
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["order"] = serializeValue(order)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withDisplayOrder", reqArgs); err != nil {
 		s.setErr(err)
 	}
 	return s
@@ -14402,15 +14414,6 @@ type ContainerResource interface {
 	// WithCreatedAt sets the created timestamp
 	WithCreatedAt(createdAt string) ContainerResource
 
-	// WithDashboardPosition sets the default resource position in the dashboard.
-	// Saved dashboard ordering takes precedence.
-	//
-	// Parameters:
-	//   - position: The default position. Lower values appear first.
-	//
-	// Returns: The resource builder.
-	WithDashboardPosition(position int) ContainerResource
-
 	// WithDependency adds a dependency on another resource
 	WithDependency(dependency ResourceWithConnectionString) ContainerResource
 
@@ -14444,6 +14447,18 @@ type ContainerResource interface {
 	//
 	// Returns: The resource builder.
 	WithDeveloperCertificateTrust(trust bool) ContainerResource
+
+	// WithDisplayOrder sets the default display order of the resource in lists of
+	// resources, such as the dashboard's. A saved ordering takes precedence.
+	// Repeated calls replace the order.
+	//
+	// Parameters:
+	//   - order: A relative sort key. Higher values appear first, consistent with
+	//     DisplayOrder. Resources without a display order are treated as having an
+	//     order of 0, so a negative value moves a resource after them.
+	//
+	// Returns: The resource builder.
+	WithDisplayOrder(order int) ContainerResource
 
 	// WithDockerfile - Causes Aspire to build the specified container image from a
 	// Dockerfile.
@@ -16222,23 +16237,6 @@ func (s *containerResource) WithCreatedAt(createdAt string) ContainerResource {
 	return s
 }
 
-// WithDashboardPosition sets the default resource position in the dashboard.
-// Saved dashboard ordering takes precedence.
-func (s *containerResource) WithDashboardPosition(position int) ContainerResource {
-	if s.Err() != nil {
-		return s
-	}
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["position"] = serializeValue(position)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withDashboardPosition", reqArgs); err != nil {
-		s.setErr(err)
-	}
-	return s
-}
-
 // WithDependency adds a dependency on another resource
 func (s *containerResource) WithDependency(dependency ResourceWithConnectionString) ContainerResource {
 	if s.Err() != nil {
@@ -16277,6 +16275,24 @@ func (s *containerResource) WithDeveloperCertificateTrust(trust bool) ContainerR
 	}
 	reqArgs["trust"] = serializeValue(trust)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withDeveloperCertificateTrust", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
+}
+
+// WithDisplayOrder sets the default display order of the resource in lists of
+// resources, such as the dashboard's. A saved ordering takes precedence.
+// Repeated calls replace the order.
+func (s *containerResource) WithDisplayOrder(order int) ContainerResource {
+	if s.Err() != nil {
+		return s
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["order"] = serializeValue(order)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withDisplayOrder", reqArgs); err != nil {
 		s.setErr(err)
 	}
 	return s
@@ -20735,15 +20751,6 @@ type DotnetToolResource interface {
 	// WithCreatedAt sets the created timestamp
 	WithCreatedAt(createdAt string) DotnetToolResource
 
-	// WithDashboardPosition sets the default resource position in the dashboard.
-	// Saved dashboard ordering takes precedence.
-	//
-	// Parameters:
-	//   - position: The default position. Lower values appear first.
-	//
-	// Returns: The resource builder.
-	WithDashboardPosition(position int) DotnetToolResource
-
 	// WithDependency adds a dependency on another resource
 	WithDependency(dependency ResourceWithConnectionString) DotnetToolResource
 
@@ -20777,6 +20784,18 @@ type DotnetToolResource interface {
 	//
 	// Returns: The resource builder.
 	WithDeveloperCertificateTrust(trust bool) DotnetToolResource
+
+	// WithDisplayOrder sets the default display order of the resource in lists of
+	// resources, such as the dashboard's. A saved ordering takes precedence.
+	// Repeated calls replace the order.
+	//
+	// Parameters:
+	//   - order: A relative sort key. Higher values appear first, consistent with
+	//     DisplayOrder. Resources without a display order are treated as having an
+	//     order of 0, so a negative value moves a resource after them.
+	//
+	// Returns: The resource builder.
+	WithDisplayOrder(order int) DotnetToolResource
 
 	// WithDockerfileBaseImage configures custom base images for generated
 	// Dockerfiles.
@@ -22304,23 +22323,6 @@ func (s *dotnetToolResource) WithCreatedAt(createdAt string) DotnetToolResource 
 	return s
 }
 
-// WithDashboardPosition sets the default resource position in the dashboard.
-// Saved dashboard ordering takes precedence.
-func (s *dotnetToolResource) WithDashboardPosition(position int) DotnetToolResource {
-	if s.Err() != nil {
-		return s
-	}
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["position"] = serializeValue(position)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withDashboardPosition", reqArgs); err != nil {
-		s.setErr(err)
-	}
-	return s
-}
-
 // WithDependency adds a dependency on another resource
 func (s *dotnetToolResource) WithDependency(dependency ResourceWithConnectionString) DotnetToolResource {
 	if s.Err() != nil {
@@ -22359,6 +22361,24 @@ func (s *dotnetToolResource) WithDeveloperCertificateTrust(trust bool) DotnetToo
 	}
 	reqArgs["trust"] = serializeValue(trust)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withDeveloperCertificateTrust", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
+}
+
+// WithDisplayOrder sets the default display order of the resource in lists of
+// resources, such as the dashboard's. A saved ordering takes precedence.
+// Repeated calls replace the order.
+func (s *dotnetToolResource) WithDisplayOrder(order int) DotnetToolResource {
+	if s.Err() != nil {
+		return s
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["order"] = serializeValue(order)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withDisplayOrder", reqArgs); err != nil {
 		s.setErr(err)
 	}
 	return s
@@ -25909,15 +25929,6 @@ type ExecutableResource interface {
 	// WithCreatedAt sets the created timestamp
 	WithCreatedAt(createdAt string) ExecutableResource
 
-	// WithDashboardPosition sets the default resource position in the dashboard.
-	// Saved dashboard ordering takes precedence.
-	//
-	// Parameters:
-	//   - position: The default position. Lower values appear first.
-	//
-	// Returns: The resource builder.
-	WithDashboardPosition(position int) ExecutableResource
-
 	// WithDependency adds a dependency on another resource
 	WithDependency(dependency ResourceWithConnectionString) ExecutableResource
 
@@ -25951,6 +25962,18 @@ type ExecutableResource interface {
 	//
 	// Returns: The resource builder.
 	WithDeveloperCertificateTrust(trust bool) ExecutableResource
+
+	// WithDisplayOrder sets the default display order of the resource in lists of
+	// resources, such as the dashboard's. A saved ordering takes precedence.
+	// Repeated calls replace the order.
+	//
+	// Parameters:
+	//   - order: A relative sort key. Higher values appear first, consistent with
+	//     DisplayOrder. Resources without a display order are treated as having an
+	//     order of 0, so a negative value moves a resource after them.
+	//
+	// Returns: The resource builder.
+	WithDisplayOrder(order int) ExecutableResource
 
 	// WithDockerfileBaseImage configures custom base images for generated
 	// Dockerfiles.
@@ -27405,23 +27428,6 @@ func (s *executableResource) WithCreatedAt(createdAt string) ExecutableResource 
 	return s
 }
 
-// WithDashboardPosition sets the default resource position in the dashboard.
-// Saved dashboard ordering takes precedence.
-func (s *executableResource) WithDashboardPosition(position int) ExecutableResource {
-	if s.Err() != nil {
-		return s
-	}
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["position"] = serializeValue(position)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withDashboardPosition", reqArgs); err != nil {
-		s.setErr(err)
-	}
-	return s
-}
-
 // WithDependency adds a dependency on another resource
 func (s *executableResource) WithDependency(dependency ResourceWithConnectionString) ExecutableResource {
 	if s.Err() != nil {
@@ -27460,6 +27466,24 @@ func (s *executableResource) WithDeveloperCertificateTrust(trust bool) Executabl
 	}
 	reqArgs["trust"] = serializeValue(trust)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withDeveloperCertificateTrust", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
+}
+
+// WithDisplayOrder sets the default display order of the resource in lists of
+// resources, such as the dashboard's. A saved ordering takes precedence.
+// Repeated calls replace the order.
+func (s *executableResource) WithDisplayOrder(order int) ExecutableResource {
+	if s.Err() != nil {
+		return s
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["order"] = serializeValue(order)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withDisplayOrder", reqArgs); err != nil {
 		s.setErr(err)
 	}
 	return s
@@ -29669,17 +29693,20 @@ type ExternalServiceResource interface {
 	// WithCreatedAt sets the created timestamp
 	WithCreatedAt(createdAt string) ExternalServiceResource
 
-	// WithDashboardPosition sets the default resource position in the dashboard.
-	// Saved dashboard ordering takes precedence.
-	//
-	// Parameters:
-	//   - position: The default position. Lower values appear first.
-	//
-	// Returns: The resource builder.
-	WithDashboardPosition(position int) ExternalServiceResource
-
 	// WithDependency adds a dependency on another resource
 	WithDependency(dependency ResourceWithConnectionString) ExternalServiceResource
+
+	// WithDisplayOrder sets the default display order of the resource in lists of
+	// resources, such as the dashboard's. A saved ordering takes precedence.
+	// Repeated calls replace the order.
+	//
+	// Parameters:
+	//   - order: A relative sort key. Higher values appear first, consistent with
+	//     DisplayOrder. Resources without a display order are treated as having an
+	//     order of 0, so a negative value moves a resource after them.
+	//
+	// Returns: The resource builder.
+	WithDisplayOrder(order int) ExternalServiceResource
 
 	// WithDockerfileBaseImage configures custom base images for generated
 	// Dockerfiles.
@@ -30480,23 +30507,6 @@ func (s *externalServiceResource) WithCreatedAt(createdAt string) ExternalServic
 	return s
 }
 
-// WithDashboardPosition sets the default resource position in the dashboard.
-// Saved dashboard ordering takes precedence.
-func (s *externalServiceResource) WithDashboardPosition(position int) ExternalServiceResource {
-	if s.Err() != nil {
-		return s
-	}
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["position"] = serializeValue(position)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withDashboardPosition", reqArgs); err != nil {
-		s.setErr(err)
-	}
-	return s
-}
-
 // WithDependency adds a dependency on another resource
 func (s *externalServiceResource) WithDependency(dependency ResourceWithConnectionString) ExternalServiceResource {
 	if s.Err() != nil {
@@ -30514,6 +30524,24 @@ func (s *externalServiceResource) WithDependency(dependency ResourceWithConnecti
 	}
 	reqArgs["dependency"] = serializeValue(dependency)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withDependency", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
+}
+
+// WithDisplayOrder sets the default display order of the resource in lists of
+// resources, such as the dashboard's. A saved ordering takes precedence.
+// Repeated calls replace the order.
+func (s *externalServiceResource) WithDisplayOrder(order int) ExternalServiceResource {
+	if s.Err() != nil {
+		return s
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["order"] = serializeValue(order)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withDisplayOrder", reqArgs); err != nil {
 		s.setErr(err)
 	}
 	return s
@@ -34249,15 +34277,6 @@ type ParameterResource interface {
 	// Returns: Resource builder for the parameter.
 	WithCustomInput(options *ParameterCustomInputOptions) ParameterResource
 
-	// WithDashboardPosition sets the default resource position in the dashboard.
-	// Saved dashboard ordering takes precedence.
-	//
-	// Parameters:
-	//   - position: The default position. Lower values appear first.
-	//
-	// Returns: The resource builder.
-	WithDashboardPosition(position int) ParameterResource
-
 	// WithDependency adds a dependency on another resource
 	WithDependency(dependency ResourceWithConnectionString) ParameterResource
 
@@ -34269,6 +34288,18 @@ type ParameterResource interface {
 	//
 	// Returns: Resource builder for the parameter.
 	WithDescription(description string, options ...WithDescriptionOption) ParameterResource
+
+	// WithDisplayOrder sets the default display order of the resource in lists of
+	// resources, such as the dashboard's. A saved ordering takes precedence.
+	// Repeated calls replace the order.
+	//
+	// Parameters:
+	//   - order: A relative sort key. Higher values appear first, consistent with
+	//     DisplayOrder. Resources without a display order are treated as having an
+	//     order of 0, so a negative value moves a resource after them.
+	//
+	// Returns: The resource builder.
+	WithDisplayOrder(order int) ParameterResource
 
 	// WithDockerfileBaseImage configures custom base images for generated
 	// Dockerfiles.
@@ -35149,23 +35180,6 @@ func (s *parameterResource) WithCustomInput(options *ParameterCustomInputOptions
 	return s
 }
 
-// WithDashboardPosition sets the default resource position in the dashboard.
-// Saved dashboard ordering takes precedence.
-func (s *parameterResource) WithDashboardPosition(position int) ParameterResource {
-	if s.Err() != nil {
-		return s
-	}
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["position"] = serializeValue(position)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withDashboardPosition", reqArgs); err != nil {
-		s.setErr(err)
-	}
-	return s
-}
-
 // WithDependency adds a dependency on another resource
 func (s *parameterResource) WithDependency(dependency ResourceWithConnectionString) ParameterResource {
 	if s.Err() != nil {
@@ -35210,6 +35224,24 @@ func (s *parameterResource) WithDescription(description string, options ...WithD
 		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withDescription", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
+}
+
+// WithDisplayOrder sets the default display order of the resource in lists of
+// resources, such as the dashboard's. A saved ordering takes precedence.
+// Repeated calls replace the order.
+func (s *parameterResource) WithDisplayOrder(order int) ParameterResource {
+	if s.Err() != nil {
+		return s
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["order"] = serializeValue(order)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withDisplayOrder", reqArgs); err != nil {
 		s.setErr(err)
 	}
 	return s
@@ -37486,15 +37518,6 @@ type ProjectResource interface {
 	// WithCreatedAt sets the created timestamp
 	WithCreatedAt(createdAt string) ProjectResource
 
-	// WithDashboardPosition sets the default resource position in the dashboard.
-	// Saved dashboard ordering takes precedence.
-	//
-	// Parameters:
-	//   - position: The default position. Lower values appear first.
-	//
-	// Returns: The resource builder.
-	WithDashboardPosition(position int) ProjectResource
-
 	// WithDependency adds a dependency on another resource
 	WithDependency(dependency ResourceWithConnectionString) ProjectResource
 
@@ -37528,6 +37551,18 @@ type ProjectResource interface {
 	//
 	// Returns: The resource builder.
 	WithDeveloperCertificateTrust(trust bool) ProjectResource
+
+	// WithDisplayOrder sets the default display order of the resource in lists of
+	// resources, such as the dashboard's. A saved ordering takes precedence.
+	// Repeated calls replace the order.
+	//
+	// Parameters:
+	//   - order: A relative sort key. Higher values appear first, consistent with
+	//     DisplayOrder. Resources without a display order are treated as having an
+	//     order of 0, so a negative value moves a resource after them.
+	//
+	// Returns: The resource builder.
+	WithDisplayOrder(order int) ProjectResource
 
 	// WithDockerfileBaseImage configures custom base images for generated
 	// Dockerfiles.
@@ -39023,23 +39058,6 @@ func (s *projectResource) WithCreatedAt(createdAt string) ProjectResource {
 	return s
 }
 
-// WithDashboardPosition sets the default resource position in the dashboard.
-// Saved dashboard ordering takes precedence.
-func (s *projectResource) WithDashboardPosition(position int) ProjectResource {
-	if s.Err() != nil {
-		return s
-	}
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["position"] = serializeValue(position)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withDashboardPosition", reqArgs); err != nil {
-		s.setErr(err)
-	}
-	return s
-}
-
 // WithDependency adds a dependency on another resource
 func (s *projectResource) WithDependency(dependency ResourceWithConnectionString) ProjectResource {
 	if s.Err() != nil {
@@ -39078,6 +39096,24 @@ func (s *projectResource) WithDeveloperCertificateTrust(trust bool) ProjectResou
 	}
 	reqArgs["trust"] = serializeValue(trust)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withDeveloperCertificateTrust", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
+}
+
+// WithDisplayOrder sets the default display order of the resource in lists of
+// resources, such as the dashboard's. A saved ordering takes precedence.
+// Repeated calls replace the order.
+func (s *projectResource) WithDisplayOrder(order int) ProjectResource {
+	if s.Err() != nil {
+		return s
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["order"] = serializeValue(order)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withDisplayOrder", reqArgs); err != nil {
 		s.setErr(err)
 	}
 	return s
@@ -43439,15 +43475,6 @@ type TestDatabaseResource interface {
 	// WithCreatedAt sets the created timestamp
 	WithCreatedAt(createdAt string) TestDatabaseResource
 
-	// WithDashboardPosition sets the default resource position in the dashboard.
-	// Saved dashboard ordering takes precedence.
-	//
-	// Parameters:
-	//   - position: The default position. Lower values appear first.
-	//
-	// Returns: The resource builder.
-	WithDashboardPosition(position int) TestDatabaseResource
-
 	// WithDependency adds a dependency on another resource
 	WithDependency(dependency ResourceWithConnectionString) TestDatabaseResource
 
@@ -43481,6 +43508,18 @@ type TestDatabaseResource interface {
 	//
 	// Returns: The resource builder.
 	WithDeveloperCertificateTrust(trust bool) TestDatabaseResource
+
+	// WithDisplayOrder sets the default display order of the resource in lists of
+	// resources, such as the dashboard's. A saved ordering takes precedence.
+	// Repeated calls replace the order.
+	//
+	// Parameters:
+	//   - order: A relative sort key. Higher values appear first, consistent with
+	//     DisplayOrder. Resources without a display order are treated as having an
+	//     order of 0, so a negative value moves a resource after them.
+	//
+	// Returns: The resource builder.
+	WithDisplayOrder(order int) TestDatabaseResource
 
 	// WithDockerfile - Causes Aspire to build the specified container image from a
 	// Dockerfile.
@@ -45259,23 +45298,6 @@ func (s *testDatabaseResource) WithCreatedAt(createdAt string) TestDatabaseResou
 	return s
 }
 
-// WithDashboardPosition sets the default resource position in the dashboard.
-// Saved dashboard ordering takes precedence.
-func (s *testDatabaseResource) WithDashboardPosition(position int) TestDatabaseResource {
-	if s.Err() != nil {
-		return s
-	}
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["position"] = serializeValue(position)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withDashboardPosition", reqArgs); err != nil {
-		s.setErr(err)
-	}
-	return s
-}
-
 // WithDependency adds a dependency on another resource
 func (s *testDatabaseResource) WithDependency(dependency ResourceWithConnectionString) TestDatabaseResource {
 	if s.Err() != nil {
@@ -45314,6 +45336,24 @@ func (s *testDatabaseResource) WithDeveloperCertificateTrust(trust bool) TestDat
 	}
 	reqArgs["trust"] = serializeValue(trust)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withDeveloperCertificateTrust", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
+}
+
+// WithDisplayOrder sets the default display order of the resource in lists of
+// resources, such as the dashboard's. A saved ordering takes precedence.
+// Repeated calls replace the order.
+func (s *testDatabaseResource) WithDisplayOrder(order int) TestDatabaseResource {
+	if s.Err() != nil {
+		return s
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["order"] = serializeValue(order)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withDisplayOrder", reqArgs); err != nil {
 		s.setErr(err)
 	}
 	return s
@@ -47900,15 +47940,6 @@ type TestRedisResource interface {
 	// WithCreatedAt sets the created timestamp
 	WithCreatedAt(createdAt string) TestRedisResource
 
-	// WithDashboardPosition sets the default resource position in the dashboard.
-	// Saved dashboard ordering takes precedence.
-	//
-	// Parameters:
-	//   - position: The default position. Lower values appear first.
-	//
-	// Returns: The resource builder.
-	WithDashboardPosition(position int) TestRedisResource
-
 	// WithDataVolume adds a data volume with persistence
 	//
 	// Parameters:
@@ -47948,6 +47979,18 @@ type TestRedisResource interface {
 	//
 	// Returns: The resource builder.
 	WithDeveloperCertificateTrust(trust bool) TestRedisResource
+
+	// WithDisplayOrder sets the default display order of the resource in lists of
+	// resources, such as the dashboard's. A saved ordering takes precedence.
+	// Repeated calls replace the order.
+	//
+	// Parameters:
+	//   - order: A relative sort key. Higher values appear first, consistent with
+	//     DisplayOrder. Resources without a display order are treated as having an
+	//     order of 0, so a negative value moves a resource after them.
+	//
+	// Returns: The resource builder.
+	WithDisplayOrder(order int) TestRedisResource
 
 	// WithDockerfile - Causes Aspire to build the specified container image from a
 	// Dockerfile.
@@ -50057,23 +50100,6 @@ func (s *testRedisResource) WithCreatedAt(createdAt string) TestRedisResource {
 	return s
 }
 
-// WithDashboardPosition sets the default resource position in the dashboard.
-// Saved dashboard ordering takes precedence.
-func (s *testRedisResource) WithDashboardPosition(position int) TestRedisResource {
-	if s.Err() != nil {
-		return s
-	}
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["position"] = serializeValue(position)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withDashboardPosition", reqArgs); err != nil {
-		s.setErr(err)
-	}
-	return s
-}
-
 // WithDataVolume adds a data volume with persistence
 func (s *testRedisResource) WithDataVolume(options ...WithDataVolumeOption) TestRedisResource {
 	if s.Err() != nil {
@@ -50138,6 +50164,24 @@ func (s *testRedisResource) WithDeveloperCertificateTrust(trust bool) TestRedisR
 	}
 	reqArgs["trust"] = serializeValue(trust)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withDeveloperCertificateTrust", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
+}
+
+// WithDisplayOrder sets the default display order of the resource in lists of
+// resources, such as the dashboard's. A saved ordering takes precedence.
+// Repeated calls replace the order.
+func (s *testRedisResource) WithDisplayOrder(order int) TestRedisResource {
+	if s.Err() != nil {
+		return s
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["order"] = serializeValue(order)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withDisplayOrder", reqArgs); err != nil {
 		s.setErr(err)
 	}
 	return s

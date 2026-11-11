@@ -59,6 +59,33 @@ namespace Aspire.Dashboard.Resources {
                 resourceCulture = value;
             }
         }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Incoming requests · last 15 min of this run.
+        /// </summary>
+        public static string HomeActivityHistoricalCaption {
+            get {
+                return ResourceManager.GetString("HomeActivityHistoricalCaption", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Activity.
+        /// </summary>
+        public static string HomeActivityHistoricalTitle {
+            get {
+                return ResourceManager.GetString("HomeActivityHistoricalTitle", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to No requests were recorded in this run..
+        /// </summary>
+        public static string HomeActivityNoRecordedRequests {
+            get {
+                return ResourceManager.GetString("HomeActivityNoRecordedRequests", resourceCulture);
+            }
+        }
         
         /// <summary>
         ///   Looks up a localized string similar to Graph.
@@ -1355,6 +1382,15 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ResourcePersistentType", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Display order.
+        /// </summary>
+        public static string ResourceDisplayOrder {
+            get {
+                return ResourceManager.GetString("ResourceDisplayOrder", resourceCulture);
+            }
+        }
         
         /// <summary>
         ///   Looks up a localized string similar to Actions.
@@ -1824,14 +1860,6 @@ namespace Aspire.Dashboard.Resources {
             }
         }
         
-        /// <summary>
-        ///   Looks up a localized string similar to Dashboard position.
-        /// </summary>
-        public static string ResourceTraitDashboardPosition {
-            get {
-                return ResourceManager.GetString("ResourceTraitDashboardPosition", resourceCulture);
-            }
-        }
         
         /// <summary>
         ///   Looks up a localized string similar to Dashboard tags.

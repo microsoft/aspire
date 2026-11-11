@@ -582,7 +582,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    public async Task WatchInteractions_PromptNotificationAsync_SendsUnresolvedParameterNames()
+    public async Task WatchInteractions_PromptNotificationAsync_SendsRelatedResourceNames()
     {
         var interactionService = new InteractionService(
             NullLogger<InteractionService>.Instance,
@@ -606,14 +606,14 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
             new NotificationInteractionOptions
             {
                 PrimaryButtonText = "Enter values",
-                UnresolvedParameterNames = ["first", "second"]
+                RelatedResourceNames = ["first", "second"]
             });
 
         var update = await writer.ReadNextAsync().DefaultTimeout();
 
         Assert.Equal(WatchInteractionsResponseUpdate.KindOneofCase.Notification, update.KindCase);
         Assert.Equal("Enter values", update.PrimaryButtonText);
-        Assert.Equal(["first", "second"], update.Notification.UnresolvedParameterNames);
+        Assert.Equal(["first", "second"], update.Notification.RelatedResourceNames);
 
         await CancelTokenAndAwaitTask(cts, task).DefaultTimeout();
     }

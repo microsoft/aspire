@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Dashboard.Model.Interaction;
+using Aspire.DashboardService.Proto.V1;
 
 namespace Aspire.Dashboard.Model;
 
@@ -12,7 +13,8 @@ namespace Aspire.Dashboard.Model;
 /// <remarks>
 /// The AppHost first shows a notification, and prompts for the values with an inputs interaction once the
 /// notification is accepted. A form accepts the notification when it can show every parameter the notification is
-/// about, and the inputs interaction is shown in a form only while a mounted form shows all of its inputs. Otherwise
+/// about, and the inputs interaction is shown in a form only while a mounted form shows the parameters of all of its
+/// inputs. Otherwise
 /// the interaction is shown as the usual dialog, so the AppHost is never left waiting on a prompt nobody can see.
 /// All members are called from the circuit's renderer dispatcher.
 /// </remarks>
@@ -88,8 +90,7 @@ public sealed class ParameterInteractionState
             return false;
         }
 
-        var inputNames = GetParameterInputNames(current);
-        if (inputNames.Count == 0 || !_panels.Any(panel => panel.Shows(inputNames)))
+        if (GetParameterNames(current) is not { Count: > 0 } parameterNames || !_panels.Any(panel => panel.Shows(parameterNames)))
         {
             return false;
         }
@@ -156,11 +157,49 @@ public sealed class ParameterInteractionState
         }
     }
 
-    private static List<string> GetParameterInputNames(InteractionsInputsDialogViewModel interaction) =>
-        interaction.Inputs
-            .Select(input => input.Name)
-            .Where(name => !string.Equals(name, SaveToUserSecretsInputName, StringComparisons.InteractionInputName))
-            .ToList();
+    /// <summary>
+    /// Gets the parameter each input of the interaction is for, keyed by the parameter's name.
+    /// </summary>
+    /// <returns>
+    /// The inputs by parameter name, or <c>null</c> when an input other than the save-values checkbox doesn't name a
+    /// parameter, so the interaction can't be shown in a form.
+    /// </returns>
+    /// <remarks>
+    /// Inputs are matched by the parameter the AppHost says they're for, not by their names. An input keeps the name
+    /// its generator chose when another input's load callback may read it, and that name can be the name of a different
+    /// parameter: matching by name would show that parameter's editor in place of the input the prompt is waiting for.
+    /// </remarks>
+    internal static Dictionary<string, InteractionInput>? GetParameterInputs(InteractionsInputsDialogViewModel interaction)
+    {
+        var inputs = new Dictionary<string, InteractionInput>(StringComparers.ResourceName);
+        foreach (var input in interaction.Inputs)
+        {
+            if (!string.IsNullOrEmpty(input.RelatedResourceName))
+            {
+                if (!inputs.TryAdd(input.RelatedResourceName, input))
+                {
+                    return null;
+                }
+            }
+            else if (!IsSaveToUserSecretsInput(input))
+            {
+                return null;
+            }
+        }
+
+        return inputs;
+    }
+
+    /// <summary>
+    /// Gets a value indicating whether the input is the save-values checkbox the AppHost adds to the prompt. A parameter
+    /// can share its name, but the parameter's input names the parameter it's for.
+    /// </summary>
+    internal static bool IsSaveToUserSecretsInput(InteractionInput input) =>
+        string.IsNullOrEmpty(input.RelatedResourceName) &&
+        string.Equals(input.Name, SaveToUserSecretsInputName, StringComparisons.InteractionInputName);
+
+    private static IReadOnlyCollection<string>? GetParameterNames(InteractionsInputsDialogViewModel interaction) =>
+        GetParameterInputs(interaction)?.Keys;
 
     private void OnPanelsChanged()
     {
@@ -170,7 +209,7 @@ public sealed class ParameterInteractionState
             return;
         }
 
-        if (_panels.Any(panel => panel.Shows(GetParameterInputNames(current))))
+        if (GetParameterNames(current) is { } parameterNames && _panels.Any(panel => panel.Shows(parameterNames)))
         {
             return;
         }
@@ -226,7 +265,7 @@ public sealed class ParameterInteractionState
         /// <summary>
         /// Gets a value indicating whether the form shows every input of the given interaction.
         /// </summary>
-        public bool Shows(InteractionsInputsDialogViewModel interaction) => Shows(GetParameterInputNames(interaction));
+        public bool Shows(InteractionsInputsDialogViewModel interaction) => GetParameterNames(interaction) is { } parameterNames && Shows(parameterNames);
 
         public void Dispose()
         {
