@@ -371,7 +371,7 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
     }
 
     [Theory]
-    [InlineData("default", true)]
+    [InlineData("default", false)]
     [InlineData("true", true)]
     [InlineData("false", false)]
     public async Task GoStarterHonorsRedisChoice(string choice, bool usesRedis)
@@ -393,7 +393,9 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
             });
 
         Assert.Equal(
-            usesRedis ? ["Aspire.Hosting.Go", "Aspire.Hosting.Redis"] : ["Aspire.Hosting.Go"],
+            usesRedis
+                ? ["Aspire.Hosting.Go", "Aspire.Hosting.JavaScript", "Aspire.Hosting.Redis"]
+                : ["Aspire.Hosting.Go", "Aspire.Hosting.JavaScript"],
             packages);
         await Verify(appHost, "go").UseParameters(choice);
     }

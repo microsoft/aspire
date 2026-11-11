@@ -23,39 +23,10 @@ internal sealed class AgentTelemetryHook(IEnvironment environment)
     private const string ContinueResponse = """{"continue":true}""";
     private static readonly string[] s_mcpPrefixes = ["aspire-", "mcp__aspire__", "mcp_aspire_"];
 
-    /// <summary>
-    /// Copilot user-level <c>postToolUse</c> <c>matcher</c> for the skill and Aspire MCP tools.
-    /// </summary>
-    /// <remarks>
-    /// Copilot matchers see only the tool name, so matching file-read tools would launch the CLI for every
-    /// read in every repository. Copilot anchors the pattern itself, and the explicit anchors keep it identical
-    /// in shape to the Claude patterns (https://docs.github.com/en/copilot/reference/hooks-reference).
-    /// </remarks>
-    internal static string CopilotToolMatcher { get; } = $"^(?:[Ss]kill|{McpMatcher})$";
-
-    /// <summary>
-    /// Claude Code <c>PostToolUse</c> <c>matcher</c> for the Skill and Aspire MCP tools. Reads use <see cref="ClaudeReadIf"/>.
-    /// </summary>
-    /// <remarks>
-    /// Claude Code matches unanchored, so the explicit anchors keep <c>Skill</c> from matching other tool names
-    /// (https://code.claude.com/docs/en/hooks#matcher-patterns).
-    /// </remarks>
-    internal static string ClaudeToolMatcher { get; } = $"^(?:Skill|{McpMatcher})$";
-
-    internal const string ClaudeReadMatcher = "^Read$";
-
-    /// <summary>
-    /// Claude Code handler <c>if</c> rule that limits Read hooks to files under an Aspire skill directory.
-    /// </summary>
-    /// <remarks>
-    /// Every canonical skill name starts with <c>aspire</c>. <c>//**/</c> matches at any absolute depth, so this covers
-    /// plugin, user, and project skill installs (https://code.claude.com/docs/en/hooks#filter-by-tool-name-and-arguments-with-the-if-field).
-    /// </remarks>
-    internal const string ClaudeReadIf = "Read(//**/skills/aspire*/**)";
-
     // Matches the tool names Classify recognizes through s_mcpPrefixes, for example aspire-list_resources
     // (Copilot), mcp__aspire__list_resources (Claude Code), and mcp_aspire_list_resources (VS Code).
-    private static string McpMatcher => string.Join('|', s_mcpPrefixes.Select(prefix => prefix + ".+"));
+    // Clients build their hook matchers from this so they cannot drift from the classifier.
+    internal static string McpMatcher => string.Join('|', s_mcpPrefixes.Select(prefix => prefix + ".+"));
 
     internal static (string Command, string[] Args) GetCommand(string mode)
     {
