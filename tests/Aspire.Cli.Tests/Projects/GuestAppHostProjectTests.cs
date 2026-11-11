@@ -2180,6 +2180,118 @@ public class GuestAppHostProjectTests : IDisposable
     }
 
     [Theory]
+    [InlineData(0, 0, false, true)]
+    [InlineData(0, 37, false, true)]
+    [InlineData(0, -1, false, true)]
+    [InlineData(0, 137, false, true)]
+    [InlineData(7, 37, false, true)]
+    [InlineData(0, 0, true, true)]
+    [InlineData(0, 37, false, false)]
+    public async Task RunAsync_NonWatchTestingDrainsServerWithoutChangingOrdinaryRun(int guestExitCode, int serverExitCode, bool cancelShutdown, bool isTestRun)
+    {
+        var appHostFile = new FileInfo(Path.Combine(_workspace.WorkspaceRoot.FullName, "apphost.ts"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "// test apphost");
+        var properties = _workspace.CreateDirectory("Properties");
+        await File.WriteAllTextAsync(Path.Combine(properties.FullName, "launchSettings.json"), """
+            { "profiles": { "default": { "environmentVariables": { "ASPIRE_TEST_OUTPUT_PATH": "stale-run" } } } }
+            """);
+        var outputPath = _workspace.CreateDirectory("test results").FullName;
+        var command = OperatingSystem.IsWindows() ? "cmd.exe" : "/bin/sh";
+        var runtime = new RuntimeSpec
+        {
+            Language = "typescript/nodejs",
+            DisplayName = "Test",
+            CodeGenLanguage = "TypeScript",
+            DetectionPatterns = ["apphost.ts"],
+            Execute = new CommandSpec
+            {
+                Command = command,
+                Args = OperatingSystem.IsWindows() ? ["/c", $"exit /b {guestExitCode}"] : ["-c", $"exit {guestExitCode}"]
+            },
+            WatchExecute = new CommandSpec
+            {
+                Command = command,
+                Args = OperatingSystem.IsWindows() ? ["/c", "exit /b 42"] : ["-c", "exit 42"]
+            },
+            ExtensionLaunchCapability = isTestRun ? "node" : null
+        };
+        using var extensionServices = new ServiceCollection()
+            .AddSingleton<IExtensionBackchannel>(new TestExtensionBackchannel
+            {
+                HasCapabilityAsyncCallback = (_, _) => Task.FromResult(true)
+            }).BuildServiceProvider();
+        var interaction = new TestExtensionInteractionService(extensionServices)
+        {
+            LaunchAppHostCallback = () => throw new InvalidOperationException("Tests must not use the extension launcher.")
+        };
+        var stopRequested = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var serverSession = new FakeAppHostServerSession(new FakeAppHostRpcClient { RuntimeSpec = runtime })
+        {
+            ShutdownExitCode = serverExitCode,
+            StopRequestedCallback = () => stopRequested.TrySetResult()
+        };
+        var sessionFactory = new FakeAppHostServerSessionFactory
+        {
+            Session = serverSession
+        };
+        var project = CreateGuestAppHostProject(
+            interactionService: interaction,
+            configuration: new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [$"features:{KnownFeatures.DefaultWatchEnabled}"] = isTestRun ? "true" : "false"
+            }).Build(),
+            appHostServerProjectFactory: new TestAppHostServerProjectFactory
+            {
+                CreateAsyncCallback = (path, _) =>
+                    Task.FromResult<IAppHostServerProject>(new FakeSucceedingAppHostServerProject(path))
+            },
+            serverSessionFactory: sessionFactory);
+
+        using var cancellationSource = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        var run = project.RunAsync(new AppHostProjectContext
+        {
+            AppHostFile = appHostFile,
+            WorkingDirectory = _workspace.WorkspaceRoot,
+            IsTestRun = isTestRun,
+            EnvironmentVariables = new Dictionary<string, string>
+            {
+                [KnownConfigNames.TestOutputPath] = outputPath
+            }
+        }, cancellationSource.Token);
+
+        try
+        {
+            if (isTestRun && guestExitCode == 0)
+            {
+                Assert.Same(stopRequested.Task, await Task.WhenAny(stopRequested.Task, run).DefaultTimeout());
+                await stopRequested.Task.DefaultTimeout();
+                Assert.False(run.IsCompleted);
+                if (cancelShutdown)
+                {
+                    await cancellationSource.CancelAsync();
+                }
+                else
+                {
+                    serverSession.Complete(serverExitCode);
+                }
+            }
+
+            var expected = cancelShutdown ? CliExitCodes.Cancelled : guestExitCode != 0 ? guestExitCode : isTestRun ? serverExitCode : 0;
+            Assert.Equal(expected, await run.DefaultTimeout());
+        }
+        finally
+        {
+            serverSession.Complete(serverExitCode);
+            await cancellationSource.CancelAsync();
+            await run.DefaultTimeout();
+        }
+
+        Assert.True(serverSession.Disposed);
+        Assert.NotNull(sessionFactory.CapturedEnvironmentVariables);
+        Assert.Equal(isTestRun ? outputPath : "stale-run", sessionFactory.CapturedEnvironmentVariables[KnownConfigNames.TestOutputPath]);
+    }
+
+    [Theory]
     [InlineData("publish", null, "publish")]
     [InlineData("deploy", null, "publish")]
     [InlineData("publish", "--operation", "inspect")]

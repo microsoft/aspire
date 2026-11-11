@@ -13,6 +13,67 @@ namespace Aspire.Hosting.RemoteHost.Tests;
 public class CallbackProxyTests
 {
     [Theory]
+    [InlineData(Timeout.Infinite)]
+    [InlineData(1)]
+    [InlineData(int.MaxValue)]
+    public void CallbackTimeoutAttributeAcceptsPositiveOrInfiniteTimeout(int millisecondsTimeout)
+    {
+        Assert.Equal(millisecondsTimeout, new AspireCallbackTimeoutAttribute(millisecondsTimeout).MillisecondsTimeout);
+    }
+
+    [Theory]
+    [InlineData(-2)]
+    [InlineData(0)]
+    public void CallbackTimeoutAttributeRejectsInvalidTimeout(int millisecondsTimeout)
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => new AspireCallbackTimeoutAttribute(millisecondsTimeout));
+    }
+
+    [Fact]
+    public async Task CreateProxy_CachesTimeoutPoliciesSeparately()
+    {
+        var invoker = new TestCallbackInvoker();
+        using var factory = CreateFactory(invoker);
+        var normal = Assert.IsType<Func<Task>>(factory.CreateProxy("shared", typeof(Func<Task>)));
+        var extended = Assert.IsType<Func<Task>>(factory.CreateProxy("shared", typeof(Func<Task>), TimeSpan.FromSeconds(2)));
+        var infinite = Assert.IsType<Func<Task>>(factory.CreateProxy("shared", typeof(Func<Task>), Timeout.InfiniteTimeSpan));
+
+        Assert.Same(normal, factory.CreateProxy("shared", typeof(Func<Task>)));
+        Assert.Same(extended, factory.CreateProxy("shared", typeof(Func<Task>), TimeSpan.FromSeconds(2)));
+        Assert.Same(infinite, factory.CreateProxy("shared", typeof(Func<Task>), Timeout.InfiniteTimeSpan));
+        Assert.NotSame(normal, extended);
+        Assert.NotSame(extended, infinite);
+        await extended();
+        Assert.Equal(TimeSpan.FromSeconds(2), invoker.LastTimeout);
+        await infinite();
+        Assert.Equal(Timeout.InfiniteTimeSpan, invoker.LastTimeout);
+        await normal();
+        Assert.Null(invoker.LastTimeout);
+    }
+
+    [Fact]
+    public async Task TimeoutOverrideAppliesToAllDelegateReturnShapes()
+    {
+        var invoker = new TestCallbackInvoker { ResultToReturn = JsonValue.Create("result") };
+        using var factory = CreateFactory(invoker, registerDtoTypes: true);
+        var timeout = TimeSpan.FromSeconds(2);
+        Assert.IsType<Action>(factory.CreateProxy("sync", typeof(Action), timeout))();
+        Assert.Equal(timeout, invoker.LastTimeout);
+        Assert.Equal("result", Assert.IsType<Func<string>>(factory.CreateProxy("sync-result", typeof(Func<string>), timeout))());
+        Assert.Equal(timeout, invoker.LastTimeout);
+        await Assert.IsType<Func<Task>>(factory.CreateProxy("async", typeof(Func<Task>), timeout))();
+        Assert.Equal(timeout, invoker.LastTimeout);
+        Assert.Equal("result", await Assert.IsType<Func<Task<string>>>(factory.CreateProxy("async-result", typeof(Func<Task<string>>), timeout))());
+        Assert.Equal(timeout, invoker.LastTimeout);
+        invoker.ResultToReturn = null;
+        var dto = new TestCallbackDto();
+        Assert.IsType<TestSyncVoidCallbackWithDto>(factory.CreateProxy("sync-dto", typeof(TestSyncVoidCallbackWithDto), timeout))(dto);
+        Assert.Equal(timeout, invoker.LastTimeout);
+        await Assert.IsType<TestAsyncVoidCallbackWithDto>(factory.CreateProxy("async-dto", typeof(TestAsyncVoidCallbackWithDto), timeout))(dto);
+        Assert.Equal(timeout, invoker.LastTimeout);
+    }
+
+    [Theory]
     [InlineData("system", AksNodePoolMode.System, AksNodePoolMode.User)]
     [InlineData("workers", AksNodePoolMode.User, AksNodePoolMode.System)]
     public async Task InvokedSyncVoidProxy_AksNodePoolWritebackPreservesIdentity(
@@ -529,9 +590,19 @@ internal sealed class TestCallbackInvoker : ICallbackInvoker
     public JsonNode? ResultToReturn { get; set; }
     public Exception? ExceptionToThrow { get; set; }
     public bool IsConnected => true;
+    public TimeSpan? LastTimeout { get; private set; }
+    public CancellationToken LastCancellationToken { get; private set; }
 
-    public Task<TResult> InvokeAsync<TResult>(string callbackId, JsonNode? args, CancellationToken cancellationToken = default)
+    public Task<TResult> InvokeAsync<TResult>(string callbackId, JsonNode? args, CancellationToken cancellationToken = default) =>
+        InvokeCoreAsync<TResult>(callbackId, args, cancellationToken, null);
+
+    public Task<TResult> InvokeAsync<TResult>(string callbackId, JsonNode? args, CancellationToken cancellationToken, TimeSpan timeout) =>
+        InvokeCoreAsync<TResult>(callbackId, args, cancellationToken, timeout);
+
+    private Task<TResult> InvokeCoreAsync<TResult>(string callbackId, JsonNode? args, CancellationToken cancellationToken, TimeSpan? timeout)
     {
+        LastTimeout = timeout;
+        LastCancellationToken = cancellationToken;
         Invocations.Add((callbackId, args));
         if (ExceptionToThrow != null)
         {

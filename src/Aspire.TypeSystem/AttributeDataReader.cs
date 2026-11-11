@@ -102,6 +102,34 @@ public static class AttributeDataReader
     public static AspireUnionData? GetAspireUnionData(PropertyInfo property)
         => FindSingleAttribute<AspireUnionData>(property.GetCustomAttributesData(), AspireUnionAttributeFullName, ParseAspireUnionData);
 
+    // --- Callback timeout lookup ---
+
+    /// <summary>
+    /// Gets the remote callback timeout override declared on a parameter.
+    /// </summary>
+    /// <param name="parameter">The callback parameter to inspect.</param>
+    /// <returns>The declared timeout, or null when the configured default should be used.</returns>
+    /// <exception cref="InvalidOperationException">The attribute does not declare a positive or infinite timeout.</exception>
+    public static TimeSpan? GetAspireCallbackTimeout(ParameterInfo parameter)
+    {
+        var attribute = parameter.GetCustomAttributesData()
+            .FirstOrDefault(data => IsMatch(data, HostingTypeNames.AspireCallbackTimeoutAttribute));
+        if (attribute is null)
+        {
+            return null;
+        }
+
+        // Read metadata rather than constructing the attribute: integrations can load a
+        // different Aspire.Hosting assembly or provide the same full-name ATS attribute.
+        if (attribute.ConstructorArguments is not [{ Value: int millisecondsTimeout }] ||
+            millisecondsTimeout is < Timeout.Infinite or 0)
+        {
+            throw new InvalidOperationException($"The callback timeout on parameter '{parameter.Name}' must be a positive number of milliseconds or Timeout.Infinite.");
+        }
+
+        return TimeSpan.FromMilliseconds(millisecondsTimeout);
+    }
+
     // --- Experimental lookup ---
 
     /// <summary>
