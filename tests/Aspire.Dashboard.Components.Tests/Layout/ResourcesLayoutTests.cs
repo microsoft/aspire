@@ -2688,6 +2688,32 @@ public class ResourcesLayoutTests : DashboardTestContext
     }
 
     [Fact]
+    public async Task ModifierClickAfterSelectAll_DoesNotAddHiddenTelemetrySources()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources:
+            [
+                ModelTestHelpers.CreateResource("api", resourceType: "Project", state: KnownResourceState.Running),
+                ModelTestHelpers.CreateResource("worker", resourceType: "Project", state: KnownResourceState.Running)
+            ],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        await AddTelemetryAsync("browser");
+        // Telemetry sources are filtered out, as they stay for someone who never turned on the pane's old toggle.
+        var storage = Assert.IsType<TestLocalStorage>(Services.GetRequiredService<ILocalStorage>());
+        storage.OnGetUnprotectedAsync = key => key == BrowserStorageKeys.ResourcePaneKinds ? (true, "Resources,Parameters") : (false, null);
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.MetricsUrl());
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.Equal(["api", "worker"], cut.FindAll(".resource-row:not(.resource-row-all) .resource-row-link").Select(link => link.GetAttribute("aria-label"))));
+
+        cut.FindAll(".resource-row:not(.resource-row-all) .resource-row-link").Single(link => link.GetAttribute("aria-label") == "api")
+            .Click(new Microsoft.AspNetCore.Components.Web.MouseEventArgs { CtrlKey = true });
+        cut.Render();
+
+        Assert.Equal(["worker"], cut.Instance.SelectedResourceNames);
+    }
+
+    [Fact]
     public async Task Standalone_RemovedTelemetrySource_DropsItsRowHandler()
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
