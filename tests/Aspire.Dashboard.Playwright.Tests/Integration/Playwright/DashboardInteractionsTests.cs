@@ -34,8 +34,10 @@ public class DashboardInteractionsTests : PlaywrightTestsBase<DashboardInteracti
             await page.EvaluateAsync("""
                 tagName => {
                     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+                    svg.id = 'svg-tooltip-graph';
                     svg.style.cssText = 'position:fixed;left:600px;top:250px;width:200px;height:80px;z-index:1000;';
                     svg.setAttribute('viewBox', '0 0 200 80');
+                    const group = document.createElementNS(svg.namespaceURI, 'g');
                     const anchor = document.createElementNS(svg.namespaceURI, tagName);
                     anchor.id = 'svg-tooltip-probe';
                     anchor.setAttribute('tabindex', '0');
@@ -48,7 +50,8 @@ public class DashboardInteractionsTests : PlaywrightTestsBase<DashboardInteracti
                         rect.setAttribute('height', '40');
                         anchor.appendChild(rect);
                     }
-                    svg.appendChild(anchor);
+                    group.appendChild(anchor);
+                    svg.appendChild(group);
                     document.body.appendChild(svg);
                     const button = document.createElement('button');
                     button.id = 'html-tooltip-probe';
@@ -72,6 +75,40 @@ public class DashboardInteractionsTests : PlaywrightTestsBase<DashboardInteracti
             await Assertions.Expect(tooltip).ToHaveCountAsync(0);
             await Assertions.Expect(positioningAnchor).ToHaveCountAsync(0);
 
+            foreach (var mutation in new[]
+            {
+                "anchor => anchor.setAttribute('transform', 'translate(15,0)')",
+                "anchor => anchor.parentElement.setAttribute('transform', 'translate(30,0)')",
+                "anchor => anchor.ownerSVGElement.setAttribute('viewBox', '0 0 240 96')",
+                "anchor => anchor.ownerSVGElement.style.transform = 'translateX(10px)'",
+                """
+                anchor => {
+                    const style = document.createElement('style');
+                    style.textContent = '.svg-tooltip-shifted { margin-left: 15px; }';
+                    anchor.ownerSVGElement.appendChild(style);
+                    anchor.ownerSVGElement.classList.add('svg-tooltip-shifted');
+                }
+                """
+            })
+            {
+                await anchor.BlurAsync();
+                await anchor.FocusAsync();
+                await AssertPositionedAboveAsync(anchor);
+                var before = await anchor.BoundingBoxAsync();
+                Assert.NotNull(before);
+
+                await anchor.EvaluateAsync(mutation);
+
+                await Assertions.Expect(tooltip).ToHaveCountAsync(0);
+                await Assertions.Expect(positioningAnchor).ToHaveCountAsync(0);
+                await Assertions.Expect(anchor).ToBeFocusedAsync();
+                await Assertions.Expect(anchor).ToBeVisibleAsync();
+                var after = await anchor.BoundingBoxAsync();
+                Assert.NotNull(after);
+                Assert.True(before.X != after.X || before.Y != after.Y || before.Width != after.Width || before.Height != after.Height);
+            }
+
+            await anchor.BlurAsync();
             await anchor.FocusAsync();
             await Assertions.Expect(tooltip).ToHaveTextAsync("Graph resource");
             await AssertPositionedAboveAsync(anchor);
@@ -91,6 +128,9 @@ public class DashboardInteractionsTests : PlaywrightTestsBase<DashboardInteracti
             await Assertions.Expect(tooltip).ToHaveTextAsync("HTML control");
             await AssertPositionedAboveAsync(button);
             await Assertions.Expect(positioningAnchor).ToHaveCountAsync(0);
+            await page.Locator("#svg-tooltip-graph").EvaluateAsync("svg => svg.setAttribute('viewBox', '0 0 200 80')");
+            await Assertions.Expect(tooltip).ToHaveTextAsync("HTML control");
+            await AssertPositionedAboveAsync(button);
 
             async Task AssertPositionedAboveAsync(ILocator target)
             {
