@@ -28,10 +28,10 @@ internal sealed class AgentTelemetryHook(IEnvironment environment)
     // Clients build their hook matchers from this so they cannot drift from the classifier.
     internal static string McpMatcher => string.Join('|', s_mcpPrefixes.Select(prefix => prefix + ".+"));
 
-    internal static (string Command, string[] Args) GetCommand(string mode, params string[] options)
+    internal static (string Command, string[] Args) GetCommand(string mode)
     {
         var command = Environment.ProcessPath ?? throw new InvalidOperationException("Could not resolve the CLI executable.");
-        string[] args = [AgentTelemetryProtocol.AgentCommandName, AgentTelemetryProtocol.TelemetryCommandName, mode, .. options];
+        string[] args = [AgentTelemetryProtocol.AgentCommandName, AgentTelemetryProtocol.TelemetryCommandName, mode];
         if (Path.GetFileNameWithoutExtension(command).Equals("dotnet", StringComparison.OrdinalIgnoreCase))
         {
             args = [Path.Combine(AppContext.BaseDirectory, "aspire.dll"), .. args];
@@ -206,22 +206,12 @@ internal sealed class AgentTelemetryHook(IEnvironment environment)
         }
     }
 
-    /// <summary>
-    /// Gets the client name when the hook runs inside a GitHub Copilot runtime, or <see langword="null"/> otherwise.
-    /// </summary>
     // The app also sets COPILOT_CLI, so its specific runtime marker must take precedence.
-    internal static string? GetCopilotRuntimeName(IEnvironment environment) =>
+    private static string GetClientName(JsonElement data, IEnvironment environment) =>
         environment.GetEnvironmentVariable(CopilotAppInstallationDetector.AgentEnvironmentVariable) switch
         {
             CopilotAppInstallationDetector.AgentEnvironmentValue => "copilot-app",
             _ when environment.IsFlagEnabled("COPILOT_CLI") => "copilot-cli",
-            _ => null
-        };
-
-    private static string GetClientName(JsonElement data, IEnvironment environment) =>
-        GetCopilotRuntimeName(environment) switch
-        {
-            { } copilotRuntimeName => copilotRuntimeName,
             _ when Property(data, "hook_event_name") is not null => IsVsCode(data) ? "vscode" : "claude-code",
             _ when Property(data, "toolArgs") is not null => "copilot-cli",
             _ => "unknown"

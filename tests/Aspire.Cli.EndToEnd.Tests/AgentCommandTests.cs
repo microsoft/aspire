@@ -499,36 +499,31 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
               }
             }
             """;
-        // Opt-out suppresses emission, but setup still registers the CLI hook at the selected scope.
-        // The existing .claude directory makes Claude Code detectable for project scope.
+        // Opt-out suppresses emission, but global setup still registers the CLI hook.
+        var expectedClaudeGlobalSettings = JsonNode.Parse(expectedPluginSettings)!;
         var hookExecutable = JsonSerializer.Serialize(executablePath);
-        string GetExpectedClaudeSettings(string hookScope)
-        {
-            var expected = JsonNode.Parse(expectedPluginSettings)!;
-            expected["hooks"] = JsonNode.Parse($$"""
-                {
-                  "PostToolUse": [{
-                    "matcher": "^(?:Skill|aspire-.+|mcp__aspire__.+|mcp_aspire_.+)$",
-                    "hooks": [{
-                      "type": "command",
-                      "command": {{hookExecutable}},
-                      "args": ["agent", "telemetry", "--hook", "--source", "claude", "--scope", "{{hookScope}}"],
-                      "timeout": 30
-                    }]
-                  }, {
-                    "matcher": "^Read$",
-                    "hooks": [{
-                      "type": "command",
-                      "command": {{hookExecutable}},
-                      "args": ["agent", "telemetry", "--hook", "--source", "claude", "--scope", "{{hookScope}}"],
-                      "timeout": 30,
-                      "if": "Read(//**/skills/aspire*/**)"
-                    }]
-                  }]
-                }
-                """);
-            return expected.ToJsonString();
-        }
+        expectedClaudeGlobalSettings["hooks"] = JsonNode.Parse($$"""
+            {
+              "PostToolUse": [{
+                "matcher": "^(?:Skill|aspire-.+|mcp__aspire__.+|mcp_aspire_.+)$",
+                "hooks": [{
+                  "type": "command",
+                  "command": {{hookExecutable}},
+                  "args": ["agent", "telemetry", "--hook"],
+                  "timeout": 30
+                }]
+              }, {
+                "matcher": "^Read$",
+                "hooks": [{
+                  "type": "command",
+                  "command": {{hookExecutable}},
+                  "args": ["agent", "telemetry", "--hook"],
+                  "timeout": 30,
+                  "if": "Read(//**/skills/aspire*/**)"
+                }]
+              }]
+            }
+            """);
         const string openCodeSettings = """
             {"theme":"dark","mcp":{"custom":{"type":"remote","url":"https://example.test/mcp"}},"skills":{"paths":["./team-skills"],"urls":["https://example.test/skills/"]}}
             """;
@@ -551,7 +546,7 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
             [
                 (Path.Combine(copilotDirectory, "settings.json"), pluginSettings, expectedPluginSettings),
                 (Path.Combine(root, ".claude", "settings.json"), pluginSettings,
-                    GetExpectedClaudeSettings(scope == "project" ? "project" : "user")),
+                    scope == "global" ? expectedClaudeGlobalSettings.ToJsonString() : expectedPluginSettings),
                 (Path.Combine(scope == "project" ? root : Path.Combine(root, ".config", "opencode"), "opencode.jsonc"),
                     openCodeSettings, expectedOpenCodeSettings)
             ];

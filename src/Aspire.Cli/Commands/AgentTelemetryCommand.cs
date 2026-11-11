@@ -3,7 +3,6 @@
 
 using System.CommandLine;
 using System.Globalization;
-using Aspire.Cli.Agents;
 using Aspire.Cli.Agents.Hooks;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
@@ -35,14 +34,11 @@ internal sealed class AgentTelemetryCommand : BaseCommand
 
     private readonly TelemetryManager _telemetryManager;
     private readonly AgentTelemetryHook _hook;
-    private readonly IEnumerable<IAgentClient> _agentClients;
     private readonly IEnvironment _environment;
     private readonly ConsoleEnvironment _console;
     private readonly ILogger _logger;
     private readonly Option<bool> _hookOption = new(AgentTelemetryProtocol.HookOptionName) { Hidden = true };
     private readonly Option<bool> _drainOption = new(AgentTelemetryProtocol.DrainOptionName) { Hidden = true };
-    private readonly Option<string?> _sourceOption = new(AgentTelemetryProtocol.SourceOptionName) { Hidden = true };
-    private readonly Option<string?> _scopeOption = new(AgentTelemetryProtocol.ScopeOptionName) { Hidden = true };
 
     // Defensive cap so a malformed or hostile hook payload cannot push oversized or
     // high-cardinality values into the telemetry backend. Real values (skill names, tool names,
@@ -94,12 +90,11 @@ internal sealed class AgentTelemetryCommand : BaseCommand
     };
 
     public AgentTelemetryCommand(CommonCommandServices services, TelemetryManager telemetryManager,
-        AgentTelemetryHook hook, IEnumerable<IAgentClient> agentClients, IEnvironment environment, ConsoleEnvironment console)
+        AgentTelemetryHook hook, IEnvironment environment, ConsoleEnvironment console)
         : base(AgentTelemetryProtocol.TelemetryCommandName, AgentCommandStrings.AgentTelemetryCommand_Description, services)
     {
         _telemetryManager = telemetryManager;
         _hook = hook;
-        _agentClients = agentClients;
         _environment = environment;
         _console = console;
         _logger = services.LoggerFactory.CreateLogger<AgentTelemetryCommand>();
@@ -120,8 +115,6 @@ internal sealed class AgentTelemetryCommand : BaseCommand
         Options.Add(_timestampOption);
         Options.Add(_hookOption);
         Options.Add(_drainOption);
-        Options.Add(_sourceOption);
-        Options.Add(_scopeOption);
     }
 
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
@@ -132,12 +125,6 @@ internal sealed class AgentTelemetryCommand : BaseCommand
             {
                 await _hook.RunAsync(_console.Input, _console.Out.Profile.Out.Writer, _console.Error.Profile.Out.Writer, async args =>
                 {
-                    // Check after classification so tool calls that record nothing never read user settings.
-                    if (!ShouldRecord(parseResult.GetValue(_sourceOption), parseResult.GetValue(_scopeOption)))
-                    {
-                        return CliExitCodes.Success;
-                    }
-
                     // Classification produces the same options as legacy script invocations. Parse
                     // those options on this command, without invoking another CLI or handler.
                     await RecordAsync(Parse(args[2..])).ConfigureAwait(false);
@@ -169,13 +156,6 @@ internal sealed class AgentTelemetryCommand : BaseCommand
 
         return CommandResult.Success();
     }
-
-    // Hooks installed without --source and --scope, or with values this CLI does not know, always record.
-    private bool ShouldRecord(string? source, string? scope)
-        => !Enum.TryParse<AgentConfigurationScope>(scope, ignoreCase: true, out var parsedScope)
-            || !Enum.IsDefined(parsedScope)
-            || _agentClients.FirstOrDefault(client => client.Id == source) is not { SupportsTelemetryHooks: true } client
-            || client.ShouldRecordTelemetryHook(parsedScope);
 
     private bool IsOptedOut()
         => _environment.IsFlagEnabled(AspireCliTelemetry.TelemetryOptOutConfigKey);

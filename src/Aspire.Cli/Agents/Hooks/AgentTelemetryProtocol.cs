@@ -13,8 +13,6 @@ internal static class AgentTelemetryProtocol
 
     internal const string HookOptionName = "--hook";
     internal const string DrainOptionName = "--drain";
-    internal const string SourceOptionName = "--source";
-    internal const string ScopeOptionName = "--scope";
     internal const string EventTypeOptionName = "--event-type";
     internal const string ClientNameOptionName = "--client-name";
     internal const string SessionIdOptionName = "--session-id";
@@ -26,7 +24,4 @@ internal static class AgentTelemetryProtocol
     internal const string SkillInvocationEventType = "skill_invocation";
     internal const string ToolInvocationEventType = "tool_invocation";
     internal const string ReferenceFileReadEventType = "reference_file_read";
-
-    // --source is the IAgentClient.Id whose hook configuration invoked the hook.
-    // --scope is the AgentConfigurationScope the hook configuration was installed at.
 }

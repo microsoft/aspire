@@ -16,8 +16,6 @@ internal sealed class CopilotAgentClient(
 {
     public const string ClientId = "copilot";
 
-    private const string TelemetryHookFileName = "aspire-telemetry.json";
-
     private static readonly McpConfigFileHelper.Configuration s_mcp = new()
     {
         ServersPropertyName = "mcpServers",
@@ -113,31 +111,22 @@ internal sealed class CopilotAgentClient(
     }
 
     // VS Code, the Copilot App, and the Copilot CLI share the Copilot harness, which reads user hooks from
-    // ~/.copilot/hooks and repository hooks from .github/hooks, so one registration covers all of them:
+    // ~/.copilot/hooks, so one registration covers all of them:
     // https://code.visualstudio.com/docs/agent-customization/hooks#_choose-a-hook-source
     public bool SupportsTelemetryHooks => true;
 
-    public async Task<TelemetryHookStatus> ConfigureTelemetryHookAsync(
-        AgentConfigurationScope scope, DirectoryInfo workspaceRoot, CancellationToken cancellationToken)
+    public async Task<TelemetryHookStatus> ConfigureTelemetryHookAsync(CancellationToken cancellationToken)
     {
         try
         {
-            // Project hooks live in .github/hooks so they can be committed. Direct exec avoids a shell launch
-            // and shell quoting, and the matcher keeps Copilot from launching the CLI for tool calls the
-            // classifier would discard.
-            // Copilot cloud agent honors only bash or command entries, so it ignores this hook; its sandbox
-            // has no Aspire CLI at this path and a restricted network.
-            // https://docs.github.com/en/copilot/reference/hooks-reference#hooks-locations
-            // https://docs.github.com/en/copilot/reference/hooks-reference#cloud-agent-execution-environment
-            var hooksDirectory = scope is AgentConfigurationScope.Project
-                ? Path.Combine(workspaceRoot.FullName, ".github", "hooks")
-                : GetUserHooksDirectory();
+            // Copilot reads Claude settings only at project scope, so these user hooks cannot
+            // duplicate Claude's user hook. Direct exec avoids a shell launch, and the matcher keeps
+            // Copilot from launching the CLI for tool calls the classifier would discard.
+            // https://docs.github.com/en/copilot/reference/hooks-reference#command-hooks
+            var hooksDirectory = Path.Combine(GetSettingsDirectory(), "hooks");
             Directory.CreateDirectory(hooksDirectory);
-            var filePath = Path.Combine(hooksDirectory, TelemetryHookFileName);
-            var (command, args) = AgentTelemetryHook.GetCommand(
-                AgentTelemetryProtocol.HookOptionName,
-                AgentTelemetryProtocol.SourceOptionName, ClientId,
-                AgentTelemetryProtocol.ScopeOptionName, scope.ToString());
+            var filePath = Path.Combine(hooksDirectory, "aspire-telemetry.json");
+            var (command, args) = AgentTelemetryHook.GetCommand(AgentTelemetryProtocol.HookOptionName);
             var config = new JsonObject
             {
                 ["version"] = 1,
@@ -167,18 +156,10 @@ internal sealed class CopilotAgentClient(
         }
     }
 
-    // Copilot runs user hooks in every folder but repository hooks only in trusted repositories, so the user
-    // hook records the call when both are installed. Aspire owns the user hook file, so its presence is enough.
-    public bool ShouldRecordTelemetryHook(AgentConfigurationScope scope)
-        => scope is not AgentConfigurationScope.Project
-            || !File.Exists(Path.Combine(GetUserHooksDirectory(), TelemetryHookFileName));
-
     public override string ToString() => Id;
 
     private string GetSettingsDirectory()
         => AgentPath.Expand(CopilotPaths.GetConfigDirectory(context.HomeDirectory, environment), context);
-
-    private string GetUserHooksDirectory() => Path.Combine(GetSettingsDirectory(), "hooks");
 
     private IEnumerable<string> GetSettingsFiles(DirectoryInfo workspaceRoot, AgentConfigurationScope scope)
     {

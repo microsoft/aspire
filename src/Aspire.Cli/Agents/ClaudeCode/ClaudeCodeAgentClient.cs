@@ -111,12 +111,10 @@ internal sealed class ClaudeCodeAgentClient(
 
     public override string ToString() => Id;
 
-    public async Task<TelemetryHookStatus> ConfigureTelemetryHookAsync(
-        AgentConfigurationScope scope, DirectoryInfo workspaceRoot, CancellationToken cancellationToken)
+    public async Task<TelemetryHookStatus> ConfigureTelemetryHookAsync(CancellationToken cancellationToken)
     {
-        // Project hooks go in the shared settings.json, not settings.local.json, so they can be committed.
-        // https://code.claude.com/docs/en/settings#settings-files
-        var settingsPath = GetIntegrationConfigPath(scope, workspaceRoot);
+        var claudeDirectory = ClaudeCodePaths.GetConfigDirectory(context, environment);
+        var settingsPath = Path.Combine(claudeDirectory, "settings.json");
         var edit = new AgentConfiguration();
         byte[]? bytes;
         try
@@ -197,13 +195,13 @@ internal sealed class ClaudeCodeAgentClient(
         // Run directly, without a shell, and only for tools or skill file reads the classifier can
         // track so Claude does not launch the CLI on every tool call or read.
         // https://docs.claude.com/en/docs/claude-code/hooks
-        postToolUse.Add(CreateHookGroup(TelemetryHookSkillMatcher, condition: null, scope));
-        postToolUse.Add(CreateHookGroup(TelemetryHookMcpMatcher, condition: null, scope));
-        postToolUse.Add(CreateHookGroup(TelemetryHookReadMatcher, TelemetryHookReadIf, scope));
+        postToolUse.Add(CreateHookGroup(TelemetryHookSkillMatcher, condition: null));
+        postToolUse.Add(CreateHookGroup(TelemetryHookMcpMatcher, condition: null));
+        postToolUse.Add(CreateHookGroup(TelemetryHookReadMatcher, TelemetryHookReadIf));
 
         try
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(settingsPath)!);
+            Directory.CreateDirectory(claudeDirectory);
             await edit.PublishAsync(settingsPath, settings, cancellationToken);
             return TelemetryHookStatus.Configured;
         }
@@ -214,12 +212,9 @@ internal sealed class ClaudeCodeAgentClient(
         }
     }
 
-    private static JsonNode CreateHookGroup(string matcher, string? condition, AgentConfigurationScope scope)
+    private static JsonNode CreateHookGroup(string matcher, string? condition)
     {
-        var (command, args) = AgentTelemetryHook.GetCommand(
-            AgentTelemetryProtocol.HookOptionName,
-            AgentTelemetryProtocol.SourceOptionName, ClientId,
-            AgentTelemetryProtocol.ScopeOptionName, scope.ToString());
+        var (command, args) = AgentTelemetryHook.GetCommand(AgentTelemetryProtocol.HookOptionName);
         var hook = new JsonObject
         {
             ["type"] = "command",
@@ -263,59 +258,9 @@ internal sealed class ClaudeCodeAgentClient(
         }
     }
 
-    // Copilot runs repository .claude/settings.json hooks but never Claude user settings, so inside Copilot this
-    // hook sits next to Copilot's own hook. Claude runs both user and project hooks, so the user hook records the
-    // call when both are installed.
-    // https://docs.github.com/en/copilot/reference/hooks-reference#hooks-locations
-    // https://code.claude.com/docs/en/settings#settings-files
-    public bool ShouldRecordTelemetryHook(AgentConfigurationScope scope)
-    {
-        if (AgentTelemetryHook.GetCopilotRuntimeName(environment) is not null)
-        {
-            return false;
-        }
-        if (scope is not AgentConfigurationScope.Project)
-        {
-            return true;
-        }
-
-        var settingsPath = Path.Combine(ClaudeCodePaths.GetConfigDirectory(context, environment), "settings.json");
-        try
-        {
-            return !HasUserTelemetryHook(settingsPath);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
-        {
-            logger.LogDebug(ex, "Failed to read Claude settings at {Path}.", settingsPath);
-            return true;
-        }
-    }
-
-    // Settings shape: {"hooks":{"PostToolUse":[{"matcher":"^Skill$","hooks":[{"command":"/path/to/aspire","args":[...]}]}]}}
-    // A project hook installed in the home directory shares this file, so it does not count as the user hook.
-    private static bool HasUserTelemetryHook(string settingsPath)
-        => File.Exists(settingsPath)
-            && JsonNode.Parse(File.ReadAllText(settingsPath)) is JsonObject settings
-            && settings["hooks"] is JsonObject hooks
-            && hooks["PostToolUse"] is JsonArray postToolUse
-            && postToolUse.OfType<JsonObject>()
-                .SelectMany(group => group["hooks"] as JsonArray ?? [])
-                .OfType<JsonObject>()
-                .Any(hook => IsAspireHook(hook) && !IsProjectHook(hook));
-
-    // Current hook args end with: ... --source claude --scope Project
-    private static bool IsProjectHook(JsonObject hook)
-        => hook["args"] is JsonArray args
-            && args.Select(arg => arg is JsonValue value && value.TryGetValue<string>(out var text) ? text : null)
-                .SkipWhile(arg => arg != AgentTelemetryProtocol.ScopeOptionName)
-                .Skip(1)
-                .FirstOrDefault() is { } scope
-            && string.Equals(scope, nameof(AgentConfigurationScope.Project), StringComparison.OrdinalIgnoreCase);
-
     private static bool IsAspireHook(JsonNode? node)
     {
-        // Match legacy scripts or our exact CLI invocation, not arbitrary Aspire commands. Trailing
-        // arguments are allowed because current hooks append --source and --scope.
+        // Match legacy scripts or our exact CLI invocation, not arbitrary Aspire commands.
         if (node is not JsonObject hook)
         {
             return false;
@@ -335,10 +280,10 @@ internal sealed class ClaudeCodeAgentClient(
             var executableName = Path.GetFileNameWithoutExtension(executable);
             var isDotnet = string.Equals(executableName, "dotnet", StringComparison.OrdinalIgnoreCase);
             var isDirectAspireInvocation = !isDotnet
-                && values is [AgentTelemetryProtocol.AgentCommandName, AgentTelemetryProtocol.TelemetryCommandName, AgentTelemetryProtocol.HookOptionName, ..]
+                && values is [AgentTelemetryProtocol.AgentCommandName, AgentTelemetryProtocol.TelemetryCommandName, AgentTelemetryProtocol.HookOptionName]
                 && (executable == currentCommand || string.Equals(executableName, "aspire", StringComparison.OrdinalIgnoreCase));
             var isManagedAspireInvocation = isDotnet
-                && values is [var assemblyPath, AgentTelemetryProtocol.AgentCommandName, AgentTelemetryProtocol.TelemetryCommandName, AgentTelemetryProtocol.HookOptionName, ..]
+                && values is [var assemblyPath, AgentTelemetryProtocol.AgentCommandName, AgentTelemetryProtocol.TelemetryCommandName, AgentTelemetryProtocol.HookOptionName]
                 && string.Equals(Path.GetFileName(assemblyPath), "aspire.dll", StringComparison.OrdinalIgnoreCase);
 
             return isDirectAspireInvocation || isManagedAspireInvocation || values.Any(ReferencesTelemetryScript);

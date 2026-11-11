@@ -696,31 +696,6 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             message => message.Message.Contains("for: GitHub Copilot.", StringComparison.Ordinal));
     }
 
-    [Fact]
-    public async Task AgentInitCommand_ProjectScope_InstallsTelemetryHook_InRepository()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var homeDirectory = workspace.CreateDirectory("fake-home");
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
-        {
-            options.CliExecutionContextFactory = _ => CreateExecutionContext(workspace.WorkspaceRoot, homeDirectory);
-            options.AgentEnvironmentDetectorFactory = _ => new TestAgentEnvironmentDetector { DetectedEnvironments = AgentEnvironment.CopilotCli };
-        });
-
-        using var provider = services.BuildServiceProvider();
-        var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse($"agent init --workspace-root {workspace.WorkspaceRoot.FullName} --agents copilot --scope project --skills aspire");
-
-        Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
-        var hookFile = Path.Combine(workspace.WorkspaceRoot.FullName, ".github", "hooks", "aspire-telemetry.json");
-        Assert.True(File.Exists(hookFile), $"Expected telemetry hook at {hookFile}");
-        Assert.False(Directory.Exists(Path.Combine(homeDirectory.FullName, ".copilot", "hooks")));
-        var handler = Assert.Single(JsonNode.Parse(await File.ReadAllTextAsync(hookFile))!["hooks"]!["postToolUse"]!.AsArray())!;
-        Assert.Equal(
-            AgentTelemetryHook.GetCommand("--hook", "--source", "copilot", "--scope", nameof(AgentConfigurationScope.Project)).Args,
-            handler["args"]!.AsArray().Select(value => (string?)value));
-    }
-
     [Theory]
     [InlineData(nameof(TelemetryHookStatus.MalformedConfig))]
     [InlineData(nameof(TelemetryHookStatus.UnexpectedConfigShape))]
@@ -1077,8 +1052,6 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(original, await File.ReadAllTextAsync(path));
         Assert.True(File.Exists(context.Copilot.GetMcpConfigPath(scope, context.Project)));
         Assert.Equal([CopilotAgentClient.ClientId], hooks.SelectedClientIds);
-        Assert.Equal(scope, hooks.Scope);
-        Assert.Equal(context.Project.FullName, hooks.WorkspaceRoot?.FullName);
         Assert.Equal(string.Format(CultureInfo.CurrentCulture,
             AgentCommandStrings.McpServerContainerMustBeJsonObject, "mcp.servers", path), Assert.Single(interaction.DisplayedErrors));
     }
@@ -1097,6 +1070,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         var services = context.CreateServiceCollection(outputHelper, options =>
         {
             options.InteractionServiceFactory = _ => interaction;
+            options.TelemetryHookConfiguratorFactory = _ => new TestTelemetryHookConfigurator();
         });
         using var provider = services.BuildServiceProvider();
 
@@ -1125,8 +1099,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             Assert.Equal("aspire", (string?)server["command"]);
             Assert.Equal(["agent", "mcp"], server["args"]!.AsArray().Select(value => (string?)value));
         }
-        // Project-scope hooks register in the repository; only the shared compatibility scripts land under ~/.aspire.
-        Assert.Equal([".aspire"], context.Home.EnumerateFileSystemInfos().Select(info => info.Name));
+        Assert.Empty(context.Home.EnumerateFileSystemInfos());
     }
 
 }

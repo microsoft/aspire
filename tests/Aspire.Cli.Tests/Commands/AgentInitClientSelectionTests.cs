@@ -120,7 +120,6 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
         Assert.Equal(
             configureAspire || configureMcp ? expectedClients.Split(',') : [],
             hooks.SelectedClientIds);
-        Assert.Equal(configureAspire || configureMcp ? selectedScope : null, hooks.Scope);
     }
 
     [Theory]
@@ -740,7 +739,6 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.InteractionServiceFactory = _ => interaction;
-            // Isolate the MCP description from the telemetry hook summary, which project-scope MCP now also triggers.
             options.TelemetryHookConfiguratorFactory = _ => new TestTelemetryHookConfigurator();
         });
         using var provider = services.BuildServiceProvider();
@@ -1380,7 +1378,6 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
         var result = provider.GetRequiredService<RootCommand>().Parse($"agent init --agents claude --scope {scope} --skills aspire");
         Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
         Assert.Equal(["claude"], hooks.SelectedClientIds);
-        Assert.Equal(scope == "project" ? AgentConfigurationScope.Project : AgentConfigurationScope.Global, hooks.Scope);
     }
 
     [Theory]
