@@ -31,6 +31,14 @@ of the old version throughout the repository.
 4. Confirm the exact target milestone exists and is open in GitHub. If it is
    missing or closed, ask before creating or reopening it; do not leave the policy
    pointing at a milestone the bot cannot assign.
+5. Determine whether the bump advances `main` because a new release branch was
+   just created (for example, main moves to 17.1 after `release/17.0` is
+   branched, as in #21850). If so, confirm that branch exists with
+   `git ls-remote --heads origin release/<X.Y>`. The scheduled API and ATS diff
+   workflows must follow it; otherwise they keep generating baseline PRs for the
+   previous release, and the new release's shipped API surface is never captured.
+   Servicing bumps and other bumps that do not follow a new release branch skip
+   this.
 
 ## Run the deterministic edit
 
@@ -43,17 +51,34 @@ confirmed open milestone:
 dotnet run --file .agents/skills/bump-aspire-version/BumpVersion.cs -- 17.0 --branch main --milestone 17.0
 ```
 
+When the bump follows a newly created release branch, add
+`--api-diff-release-branch release/<X.Y>` to the same command:
+
+```bash
+dotnet run --file .agents/skills/bump-aspire-version/BumpVersion.cs -- 17.1 --branch main --milestone 17.1 --api-diff-release-branch release/17.0
+```
+
 `--branch` is the PR's target branch, not the feature branch. `--milestone` is
 explicit because servicing milestones can differ from product versions (for
 example, product `13.6.1` can use milestone `13.6.x`). The script does not create,
 reopen, or query GitHub milestones; confirm availability in the previous step.
 
 The script updates all three version components (`X.Y` means `X.Y.0`) and exactly
-one matching branch's milestone rule. It validates the expected file structure
-before writing either file and fails on missing or ambiguous matches. It preserves
-formatting, line endings, unrelated rules, and all other properties. Repeating the
-same command makes no further changes. If the file layout changes, update the
-script rather than bypassing its checks.
+one matching branch's milestone rule. With `--api-diff-release-branch`, it also
+replaces the previous release branch in the scheduled `target_branch` matrix of
+`.github/workflows/generate-api-diffs.yml` and
+`.github/workflows/generate-ats-diffs.yml`. It validates the expected file
+structure before writing any file and fails on missing or ambiguous matches. It
+preserves formatting, line endings, unrelated rules, and all other properties.
+Repeating the same command makes no further changes. If the file layout changes,
+update the script rather than bypassing its checks. Precedent: #22172 retargeted
+both workflows from `release/13.6` to `release/17.0`.
+
+When retargeting, also check whether the previous release's shipped baselines
+reached `main`. Those are the `src/**/api/*.cs` and `src/**/api/*.ats.txt` files
+from the automated API/ATS diff PRs against `release/<old>`; #22152 merged the
+13.6 baselines. Report any baselines still missing to the user. Do not import them
+in the bump PR unless asked.
 
 Prerelease/stabilization settings and the dashboard-image pin remain unchanged:
 a product version bump neither stabilizes packages nor publishes a dashboard image.
@@ -61,38 +86,6 @@ Review any version-specific comments separately. Do not change other release-bra
 rules, dependencies, SDKs, generated APIs, or sample versions without explicit scope.
 The old `.github/workflows/milestone-assignment.yml` was removed in #20390 in favor
 of the policy bot; do not recreate it.
-
-## Retarget scheduled API diffs after a new release branch
-
-When the bump advances `main` because a new release branch was just created (for
-example, main moves to 17.1 after `release/17.0` is branched, as in #21850), the
-scheduled API and ATS diff workflows must also follow that release branch.
-Otherwise they keep generating baseline PRs for the previous release, and the new
-release's shipped API surface is never captured. Skip this section for servicing
-bumps or any bump that does not follow a newly created release branch.
-
-1. Confirm the new release branch exists:
-   `git ls-remote --heads origin release/<X.Y>`.
-2. Add `--api-diff-release-branch release/<X.Y>` to the edit command, for example:
-
-   ```bash
-   dotnet run --file .agents/skills/bump-aspire-version/BumpVersion.cs -- 17.1 --branch main --milestone 17.1 --api-diff-release-branch release/17.0
-   ```
-
-   The script replaces the previous release branch in the scheduled
-   `target_branch` matrix of `.github/workflows/generate-api-diffs.yml` and
-   `.github/workflows/generate-ats-diffs.yml`. It fails unless each workflow has
-   exactly one match.
-3. Check whether the previous release's shipped baselines reached `main`. Those are
-   the `src/**/api/*.cs` and `src/**/api/*.ats.txt` files from the automated
-   API/ATS diff PRs against `release/<old>`; #22152 merged the 13.6 baselines.
-   Report any baselines still missing to the user. Do not import them in the bump
-   PR unless asked.
-
-Precedent: #22172 retargeted both workflows from `release/13.6` to `release/17.0`.
-Include the retarget in the bump PR. When the bump has already merged, rerun the
-same command with the current version and milestone; it leaves those files
-unchanged and retargets only the API diff files.
 
 ## Validate
 
