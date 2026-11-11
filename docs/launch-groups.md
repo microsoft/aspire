@@ -51,6 +51,10 @@ group. Definitions added to the builder's configuration before
 Use `--launch-group` with `aspire run` or `aspire start`. The option works with C#
 and polyglot AppHosts, including detached runs and AppHost watch mode.
 
+C# AppHosts require Aspire.Hosting 17.1 or later, including 17.1 previews.
+The CLI rejects an explicit selector for older AppHosts before starting them,
+rather than silently starting the full application.
+
 ```powershell
 aspire start --apphost playground\TestShop\TestShop.AppHost\TestShop.AppHost.csproj --launch-group catalog --isolated
 aspire run --apphost .\apphost.mts --launch-group basket

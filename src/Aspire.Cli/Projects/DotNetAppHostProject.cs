@@ -57,6 +57,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
     private readonly AppHostConfigurationProjector _appHostConfigurationProjector;
 
     private static readonly string[] s_detectionPatterns = ["*.csproj", "*.fsproj", "*.vbproj", "apphost.cs"];
+    private static readonly SemVersion s_minimumLaunchGroupHostingVersion = SemVersion.Parse("17.1.0-0");
     private const string DirectLaunchDisabledConfigKey = "dotnetAppHostDirectLaunchDisabled";
 
     private const string AspireAppHostSdkName = "Aspire.AppHost.Sdk";
@@ -1740,6 +1741,18 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
             var compatibilityCheck = await CheckAppHostCompatibilityAsync(effectiveAppHostFile, isSingleFileAppHost, cancellationToken);
             if (!compatibilityCheck.IsCompatibleAppHost)
             {
+                context.BuildCompletionSource?.TrySetResult(false);
+                return (CliExitCodes.FailedToDotnetRunAppHost, builtByCli, deferBuildCompletion);
+            }
+
+            // Older Hosting ignores the selector and would start the full application. Check before
+            // either launch path can create a process, including when the AppHost build was skipped.
+            if (context.LaunchGroup is not null &&
+                (!SemVersion.TryParse(compatibilityCheck.AspireHostingVersion, out var hostingVersion) ||
+                 hostingVersion.ComparePrecedenceTo(s_minimumLaunchGroupHostingVersion) < 0))
+            {
+                _interactionService.DisplayError(string.Format(System.Globalization.CultureInfo.CurrentCulture,
+                    ErrorStrings.AppHostIncompatibleWithCli, AuxiliaryBackchannelCapabilities.LaunchGroups_V1));
                 context.BuildCompletionSource?.TrySetResult(false);
                 return (CliExitCodes.FailedToDotnetRunAppHost, builtByCli, deferBuildCompletion);
             }

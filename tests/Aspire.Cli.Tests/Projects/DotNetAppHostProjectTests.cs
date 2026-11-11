@@ -1676,6 +1676,74 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
     }
 
     [Theory]
+    [InlineData("9.2.0", "catalog", false, false, false)]
+    [InlineData("13.6.0", "catalog", false, true, false)]
+    [InlineData("17.0.0", "catalog", true, false, false)]
+    [InlineData("17.0.0", "catalog", false, true, false)]
+    [InlineData("17.1.0-preview.1", "catalog", false, false, true)]
+    [InlineData("17.1.0-preview.1", "catalog", true, false, true)]
+    [InlineData("17.1.0", "catalog", false, true, true)]
+    [InlineData("13.6.0", null, false, false, true)]
+    [InlineData("13.6.0", null, true, true, true)]
+    public async Task RunAsync_LaunchGroupRejectsUnsupportedHostingBeforeStartingAppHost(
+        string hostingVersion, string? launchGroup, bool watch, bool noBuild, bool expectedSuccess)
+    {
+        var appHostFile = CreateProjectAppHost();
+        var appHostCommand = CreateBuiltAppHostCommand("AppHost");
+        if (noBuild)
+        {
+            WriteAspireConfigJson(appHostFile.DirectoryName!, """{ "dotnetAppHostDirectLaunchDisabled": "true" }""");
+        }
+
+        var launchCount = 0;
+        var runner = new TestDotNetCliRunner
+        {
+            BuildAsyncCallback = (_, _, _, _) => 0,
+            RunAppHostCommandAsyncCallback = (_, _, _, _, _, _, _, _) =>
+            {
+                launchCount++;
+                return Task.FromResult(0);
+            },
+            RunAsyncCallback = (_, _, _, _, _, _, _, _, _) =>
+            {
+                launchCount++;
+                return Task.FromResult(0);
+            }
+        };
+        var resolver = new TestAppHostInfoResolver
+        {
+            GetAppHostInfoAsyncCallback = (_, _) => Task.FromResult(new AppHostProjectInfo(
+                ExitCode: 0,
+                IsAspireHost: true,
+                AspireHostingVersion: hostingVersion,
+                IsUsingCliBundle: false,
+                UserSecretsId: null,
+                RunCommand: appHostCommand.FullName,
+                TargetPath: null,
+                RunWorkingDirectory: null,
+                RunArguments: null,
+                TargetFramework: "net10.0",
+                TargetFrameworks: null))
+        };
+        var project = CreateDotNetAppHostProject(runner, appHostInfoResolver: resolver,
+            configureServices: options => options.EnabledFeatures = watch ? [KnownFeatures.DefaultWatchEnabled] : []);
+        var buildCompletion = new TaskCompletionSource<bool>();
+
+        var exitCode = await project.RunAsync(new AppHostProjectContext
+        {
+            AppHostFile = appHostFile,
+            LaunchGroup = launchGroup,
+            NoBuild = noBuild,
+            BuildCompletionSource = buildCompletion,
+            WorkingDirectory = _workspace.WorkspaceRoot
+        }, TestContext.Current.CancellationToken);
+
+        Assert.Equal(expectedSuccess ? 0 : CliExitCodes.FailedToDotnetRunAppHost, exitCode);
+        Assert.Equal(expectedSuccess ? 1 : 0, launchCount);
+        Assert.Equal(expectedSuccess, await buildCompletion.Task.DefaultTimeout());
+    }
+
+    [Theory]
     [InlineData("Project", false, false)]
     [InlineData("Project", false, true)]
     [InlineData("Project", true, false)]
