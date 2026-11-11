@@ -4,6 +4,7 @@
 using System.Collections.Concurrent;
 using System.Collections.Immutable;
 using Aspire.DashboardService.Proto.V1;
+using Google.Protobuf.WellKnownTypes;
 using Microsoft.Extensions.Localization;
 
 namespace Aspire.Dashboard.Model;
@@ -131,6 +132,39 @@ internal sealed record ResourceLaunchGroupViewModel(
 
 internal static class LaunchGroupDisplayHelpers
 {
+    internal static IEnumerable<ResourcePropertyViewModel> GetProperties(ResourceLaunchGroupViewModel? launchGroup, IStringLocalizer<Resources.Resources> loc)
+    {
+        if (launchGroup is null)
+        {
+            return [];
+        }
+
+        var sortOrder = int.MaxValue - 7;
+        return
+        [
+            CreateProperty("selected-group", nameof(Resources.Resources.ResourceLaunchGroupsSelectedGroup), GetSelectedGroupText(launchGroup, loc), sortOrder++),
+            CreateProperty("effective-membership", nameof(Resources.Resources.ResourceLaunchGroupsEffectiveMembership), GetGroupsText(launchGroup, loc), sortOrder++),
+            CreateProperty("inherited-from", nameof(Resources.Resources.ResourceLaunchGroupsInheritedFrom), GetInheritedFromText(launchGroup, loc), sortOrder++),
+            CreateProperty("explicit-start", nameof(Resources.Resources.ResourceLaunchGroupsExplicitStart), GetBooleanText(launchGroup.ExplicitStart, loc), sortOrder++),
+            CreateProperty("excluded-by-group", nameof(Resources.Resources.ResourceLaunchGroupsExcludedByGroup), GetBooleanText(launchGroup.ExcludedByGroup, loc), sortOrder++),
+            CreateProperty("excluded-from-selection", nameof(Resources.Resources.ResourceLaunchGroupsExcludedFromSelection), GetBooleanText(launchGroup.ExcludedFromSelection, loc), sortOrder++),
+            CreateProperty("build-disposition", nameof(Resources.Resources.ResourceLaunchGroupsBuildDisposition), GetBuildDispositionText(launchGroup.BuildDisposition, loc), sortOrder)
+        ];
+    }
+
+    private static ResourcePropertyViewModel CreateProperty(string name, string displayNameResourceName, string value, int sortOrder)
+    {
+        var key = "resource-launch-group-" + name;
+        return new ResourcePropertyViewModel(
+            name: key,
+            value: Value.ForString(value),
+            isValueSensitive: false,
+            knownProperty: new KnownProperty(key, localizer => localizer[displayNameResourceName]),
+            sortOrder: sortOrder,
+            displayName: null,
+            isHighlighted: false);
+    }
+
     internal static string GetSelectedGroupText(ResourceLaunchGroupViewModel launchGroup, IStringLocalizer<Resources.Resources> loc)
     {
         return launchGroup.SelectedGroup ?? loc[nameof(Resources.Resources.ResourceLaunchGroupsNone)];
