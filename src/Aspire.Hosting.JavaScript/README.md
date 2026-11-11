@@ -67,8 +67,7 @@ Next.js hosting and the JavaScript publishing helpers are stable APIs and do not
 | `PublishAsPackageScript` | The configured package manager running a production script, with its runtime dependencies. |
 
 `AddNextJsApp` requires `output: "standalone"` in the Next.js configuration and a `public/` directory
-for the generated Dockerfile. Its configuration check runs before the image build during publish/deploy;
-excluded resources are not checked. Use `DisableBuildValidation()` only when the configuration is
+for the generated Dockerfile. Use `DisableBuildValidation()` only when the configuration is
 provided dynamically and cannot be statically inspected; it does not change the required build output.
 User-authored Dockerfiles are preserved rather than replaced by generated Dockerfiles.
 
