@@ -28,6 +28,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using PathNormalizer = HostingDotnet::Aspire.Hosting.Utils.PathNormalizer;
+using DotnetWatchConfiguration = HostingDotnet::Aspire.Shared.DotnetWatchConfiguration;
 
 namespace Aspire.Hosting.Dotnet.Tests;
 
@@ -289,6 +290,44 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             KnownLaunchConfigurationTypes.Project,
             Assert.Single(project.Resource.Annotations.OfType<SupportsDebuggingAnnotation>()).LaunchConfigurationType);
         Assert.True(project.Resource.SupportsDebugging(builder.Configuration, out _));
+    }
+
+    [Theory]
+    [InlineData("true", "aspire", true)]
+    [InlineData("true", null, false)]
+    [InlineData("true", "ide", false)]
+    [InlineData("false", "aspire", false)]
+    [InlineData(null, "aspire", false)]
+    [InlineData(null, null, false)]
+    public void CliOwnedWatchCoordinatesBuildDespiteLegacyIdeSession(string? watch, string? owner, bool coordinated)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path, outputHelper);
+        builder.Configuration["DEBUG_SESSION_PORT"] = "localhost:12345";
+        builder.Configuration[DotnetWatchConfiguration.WatchEnabled] = watch;
+        builder.Configuration[DotnetWatchConfiguration.LaunchOwner] = owner;
+        var path = CreateProject(workspace.Path, "Api", "Api.csproj");
+
+        var project = builder.AddDotnetProject("api", path, options => options.ExcludeLaunchProfile = true);
+        using var app = builder.Build();
+
+        Assert.Equal(coordinated, Assert.Single(project.Resource.Annotations.OfType<DotnetProjectMetadata>()).SuppressBuild);
+        Assert.Equal(coordinated ? 1 : 0, project.Resource.Annotations.OfType<DotnetProgramBuildCompletionAnnotation>().Count());
+        Assert.Equal(coordinated ? KnownLaunchConfigurationTypes.ProjectWithExternalBuild : KnownLaunchConfigurationTypes.Project,
+            Assert.Single(project.Resource.Annotations.OfType<SupportsDebuggingAnnotation>()).LaunchConfigurationType);
+        if (coordinated)
+        {
+            var build = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
+            Assert.Equal([NormalizeProjectPath(path)], build.ProjectPaths);
+            AssertBuildDependency(project.Resource, build);
+            Assert.Equal([project.Resource], app.Services.GetRequiredService<DotnetProjectBuildCoordinator.CoordinatorState>().Resources);
+        }
+        else
+        {
+            Assert.Empty(builder.Resources.OfType<DotnetProjectBuildResource>());
+            Assert.Null(app.Services.GetService<DotnetProjectBuildCoordinator.CoordinatorState>());
+        }
     }
 
     [Fact]

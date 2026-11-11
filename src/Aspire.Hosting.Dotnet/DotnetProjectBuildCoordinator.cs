@@ -388,6 +388,11 @@ internal static partial class DotnetProjectBuildCoordinator
 
     private static bool ShouldCoordinateBuild(IDistributedApplicationBuilder builder)
     {
+        if (Aspire.Shared.DotnetWatchConfiguration.IsCliOwned(builder.Configuration))
+        {
+            return true;
+        }
+
         if (string.IsNullOrEmpty(builder.Configuration[DebugSessionPortConfigurationKey]))
         {
             return true;

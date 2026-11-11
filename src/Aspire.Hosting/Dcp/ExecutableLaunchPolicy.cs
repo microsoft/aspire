@@ -7,6 +7,7 @@
 using System.Diagnostics;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Utils;
+using Aspire.Shared;
 using Microsoft.Extensions.Configuration;
 
 namespace Aspire.Hosting.Dcp;
@@ -82,7 +83,8 @@ internal sealed class ExecutableLaunchPolicy(IConfiguration configuration)
         IResource resource,
         SupportsDebuggingAnnotation? debugSupport)
     {
-        if (string.IsNullOrEmpty(_configuration[DcpExecutor.DebugSessionPortVar]))
+        if (string.IsNullOrEmpty(_configuration[DcpExecutor.DebugSessionPortVar]) ||
+            DotnetWatchConfiguration.IsCliOwned(_configuration))
         {
             return false;
         }

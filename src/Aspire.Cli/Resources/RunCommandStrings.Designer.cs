@@ -484,11 +484,113 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Start project resources in watch mode.
+        ///   Looks up a localized string similar to Enable experimental package-backed .NET service and C# AppHost watching (preview).
         /// </summary>
         internal static string WatchArgumentDescription {
             get {
                 return ResourceManager.GetString("WatchArgumentDescription", resourceCulture);
+            }
+        }
+
+        internal static string ExperimentalWatchNotice {
+            get {
+                return ResourceManager.GetString("ExperimentalWatchNotice", resourceCulture);
+            }
+        }
+
+        internal static string WatchNotSupportedWithDebugger {
+            get {
+                return ResourceManager.GetString("WatchNotSupportedWithDebugger", resourceCulture);
+            }
+        }
+
+        internal static string WatchUnavailable {
+            get {
+                return ResourceManager.GetString("WatchUnavailable", resourceCulture);
+            }
+        }
+
+        internal static string WatchBootstrapUnavailable {
+            get {
+                return ResourceManager.GetString("WatchBootstrapUnavailable", resourceCulture);
+            }
+        }
+
+        internal static string WatchBootstrapInvalid {
+            get {
+                return ResourceManager.GetString("WatchBootstrapInvalid", resourceCulture);
+            }
+        }
+
+        internal static string WatchAppHostFallback {
+            get {
+                return ResourceManager.GetString("WatchAppHostFallback", resourceCulture);
+            }
+        }
+
+        internal static string WatchAppHostSdkIncompatible {
+            get {
+                return ResourceManager.GetString("WatchAppHostSdkIncompatible", resourceCulture);
+            }
+        }
+
+        internal static string WatchAppHostRuntimeMissing {
+            get {
+                return ResourceManager.GetString("WatchAppHostRuntimeMissing", resourceCulture);
+            }
+        }
+
+        internal static string WatchAppHostProjectRequired {
+            get {
+                return ResourceManager.GetString("WatchAppHostProjectRequired", resourceCulture);
+            }
+        }
+
+        internal static string WatchAppHostDefaultBuildRequired {
+            get {
+                return ResourceManager.GetString("WatchAppHostDefaultBuildRequired", resourceCulture);
+            }
+        }
+
+        internal static string WatchAppHostProfileUnsupported {
+            get {
+                return ResourceManager.GetString("WatchAppHostProfileUnsupported", resourceCulture);
+            }
+        }
+
+        internal static string WatchAppHostGenerationRequired {
+            get {
+                return ResourceManager.GetString("WatchAppHostGenerationRequired", resourceCulture);
+            }
+        }
+
+        internal static string WatchAppHostInitializationFailed {
+            get {
+                return ResourceManager.GetString("WatchAppHostInitializationFailed", resourceCulture);
+            }
+        }
+
+        internal static string WatchAppHostRestarting {
+            get {
+                return ResourceManager.GetString("WatchAppHostRestarting", resourceCulture);
+            }
+        }
+
+        internal static string WatchDcpUnavailable {
+            get {
+                return ResourceManager.GetString("WatchDcpUnavailable", resourceCulture);
+            }
+        }
+
+        internal static string WatchDcpShutdownFailed {
+            get {
+                return ResourceManager.GetString("WatchDcpShutdownFailed", resourceCulture);
+            }
+        }
+
+        internal static string WatchNativeServerUnsupported {
+            get {
+                return ResourceManager.GetString("WatchNativeServerUnsupported", resourceCulture);
             }
         }
     }

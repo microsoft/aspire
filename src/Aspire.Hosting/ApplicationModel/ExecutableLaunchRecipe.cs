@@ -612,7 +612,8 @@ internal sealed class ProjectExecutableLaunchRecipe : IExecutableLaunchRecipe
         string? appHostGlobalArtifactsPath)
     {
         // `dotnet watch` does not work with file-based apps yet, so use `dotnet run` in that case.
-        if (configuration.GetBool("DOTNET_WATCH") is not true || projectMetadata.IsFileBasedApp)
+        if (configuration.GetBool("DOTNET_WATCH") is not true || projectMetadata.IsFileBasedApp ||
+            Aspire.Shared.DotnetWatchConfiguration.IsCliOwned(configuration))
         {
             projectArguments.Add("run");
             projectArguments.Add(projectMetadata.IsFileBasedApp ? "--file" : "--project");

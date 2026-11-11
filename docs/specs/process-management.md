@@ -95,6 +95,33 @@ Cleanup failures are logged and propagated. Cancellation plus failed termination
 
 ## Output and diagnostics
 
+The CLI-owned C# SDK watcher uses DCP's opt-in `fork-process --enable-child-cleanup
+--skip-descendants` outside ordinary `OwnedTree` containment. DCP monitors the long-lived CLI before
+creating the SDK root. The factory preserves the already-resolved muxer, SDK/runtime environment,
+profile and argument boundaries, consumes the initial PID line, and forwards application output.
+A bounded real `dotnet --version` fork checks PID framing and output support before watcher launch;
+the pinned DCP 0.27.3 and PID-only cleanup prototypes are explicitly rejected.
+
+On Unix the cleanup-enabled helper establishes a new private session before SDK creation. During
+owner-loss or cancellation cleanup, DCP stops the original SDK root through its retained handle
+first, then sends one graceful TERM to the still-helper-owned group. This reaches SDK-run/AppHost
+children even before Hosting's orphan detector starts, without signaling a remembered SDK PGID or
+adding force-tree cleanup. Natural child exits do not trigger this group broadcast.
+
+Unix cancellation signals the fork helper and waits for this cleanup and bounded output drain.
+On Windows the CLI validates and retains the SDK handle/parent/creation identity at handoff,
+then stops only that SDK root: an outer stopper aimed at the fork helper could force it down before
+its nested cleanup completes. Cancellation cleanup status 130 is distinct from cleanup/output
+failure status 1. Failed retirement is surfaced even through cancellation drains and cannot
+authorize a replacement generation. The managed AppHost's orphan detector and DCP cleanup are unchanged.
+No helper-hard-kill survival guarantee or new status/control protocol is implied.
+
+The long-lived explicit `run --watch` owner gives its first-signal handler a 30-second graceful
+window so it can observe this retirement before the command's final drain. SDK-root stopping and
+fork/output completion share that single cleanup deadline. Ordinary runs, legacy default watch,
+and the foreground detached launcher retain their existing budgets. A second signal still expires
+the graceful window immediately and leaves only the existing bounded final drain.
+
 Children receive null input or an immediately closed redirected input writer, so package-manager lifecycle scripts see EOF rather than inheriting a terminal and blocking. Output pumps read stdout and stderr concurrently. Root-exit observation is separate from output drain because a surviving descendant can hold inherited pipes open.
 
 Output drain uses an idle budget: progressing output resets the clock. A throwing consumer callback does not stop the pump and back-pressure the runtime; its failure is logged during drain. Idle-budget exhaustion produces a warning rather than an unbounded wait.

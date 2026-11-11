@@ -20,6 +20,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="$(TestsSharedDir)AsyncTestHelpers.cs" Link="shared/AsyncTestHelpers.cs" />
+    <Compile Include="$(TestsSharedDir)DotnetWatchToolTestPayload.cs" Link="shared/DotnetWatchToolTestPayload.cs" />
     <Compile Include="$(TestsSharedDir)\TestModuleInitializer.cs" />
   </ItemGroup>
 

@@ -13,6 +13,11 @@ public class DcpEnvironmentTests
     [InlineData("ASPNETCORE_ENVIRONMENT")]
     [InlineData("DOTNET_ENVIRONMENT")]
     [InlineData("ASPIRE_LOGLEVEL")]
+    [InlineData("AppHost:Run:WatchEnabled")]
+    [InlineData("AppHost__Run__WatchEnabled")]
+    [InlineData("ASPIRE_DOTNET_WATCH_LAUNCH_OWNER")]
+    [InlineData("ASPIRE_DOTNET_WATCH_HOST_CONTROL")]
+    [InlineData("ASPIRE_DOTNET_WATCH_HOST_SESSION")]
     public void ExcludesOnlyExactHostRuntimeNamesUsingHostingComparisonRules(string name)
     {
         Assert.True(DcpEnvironmentVariables.IsExcluded(name));
@@ -27,6 +32,9 @@ public class DcpEnvironmentTests
     [InlineData("ASPIRE_NATIVE_RPC_TOKEN")]
     [InlineData("ASPIRE_REMOTE_APPHOST_TOKEN")]
     [InlineData("AppHost__BrowserToken")]
+    [InlineData("ASPIRE_DOTNET_WATCH_RESOLVED_TOOL")]
+    [InlineData("ASPIRE_DOTNET_WATCH_RESOURCE_PIPE")]
+    [InlineData("ASPIRE_DOTNET_WATCH_SCOPE_COMPLETION")]
     public void PreservesAmbientEnvironmentWithinTheSameUserTrustBoundary(string name)
     {
         Assert.False(DcpEnvironmentVariables.IsExcluded(name));

@@ -1,0 +1,1 @@
+﻿{"EntryPoint":"/service/Service.csproj","ApplicationArguments":["--project","/service/Service.csproj","--","--configuration","application-only","two words"],"EnvironmentVariables":{"INTENDED":"value","EMPTY":""},"LaunchProfileName":{"HasValue":true,"Value":"https"}}

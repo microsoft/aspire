@@ -4,6 +4,7 @@
 using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.Dcp;
 using Aspire.Hosting.Utils;
+using Aspire.Shared;
 using Microsoft.Extensions.Configuration;
 
 namespace Aspire.Hosting.ApplicationModel;
@@ -51,6 +52,7 @@ public static class DebugSupportExtensions
 
         if (!resource.TryGetLastAnnotation(out supportsDebuggingAnnotation)
             || string.IsNullOrEmpty(configuration[DcpExecutor.DebugSessionPortVar])
+            || DotnetWatchConfiguration.IsCliOwned(configuration)
             || resource.HasAnnotationOfType<ForceProcessExecutionAnnotation>()
             || resource.HasPersistentLifetime()
             || (supportsDebuggingAnnotation.RequiresDebugMode &&

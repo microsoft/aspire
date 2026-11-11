@@ -372,27 +372,17 @@ internal sealed class AppHostLauncher(
             args.Add(token);
         }
 
-        var dotnetPath = Environment.ProcessPath ?? "dotnet";
-        var isDotnetHost = dotnetPath.EndsWith("dotnet", StringComparison.OrdinalIgnoreCase) ||
-                           dotnetPath.EndsWith("dotnet.exe", StringComparison.OrdinalIgnoreCase);
-
-        var entryAssemblyPath = Environment.GetCommandLineArgs().FirstOrDefault();
-
-        var childArgs = new List<string>();
-        if (isDotnetHost && !string.IsNullOrEmpty(entryAssemblyPath) && entryAssemblyPath.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
-        {
-            childArgs.Add(entryAssemblyPath);
-        }
-
+        var invocation = CliSelfInvocation.Current();
+        var childArgs = new List<string>(invocation.Arguments);
         childArgs.AddRange(args);
 
         // childArgs ends with the caller's "-- <appHostArgs>" tail, which is user-supplied AppHost
         // input rather than CLI options, so it must not be written to the log verbatim.
         logger.LogDebug("Spawning child CLI: {Executable} (isDotnetHost={IsDotnetHost}) with args: {Args}",
-            dotnetPath, isDotnetHost, AppHostArgumentRedactor.RedactToString(childArgs));
+            invocation.ExecutablePath, invocation.Arguments.Length > 0, AppHostArgumentRedactor.RedactToString(childArgs));
         logger.LogDebug("Working directory: {WorkingDirectory}", executionContext.WorkingDirectory.FullName);
 
-        return (dotnetPath, childArgs);
+        return (invocation.ExecutablePath, childArgs);
     }
 
     /// <summary>

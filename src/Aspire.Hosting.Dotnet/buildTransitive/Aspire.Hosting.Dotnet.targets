@@ -1,0 +1,22 @@
+<Project>
+  <UsingTask TaskName="Aspire.Hosting.Dotnet.Tasks.EnsureDotnetWatchTool"
+             AssemblyFile="$(MSBuildThisFileDirectory)..\tools\net10.0\Aspire.Hosting.Dotnet.Tasks.dll" />
+
+  <!-- Explicit CLI-only entry point: never attach acquisition to Restore, Build, Run, or Publish. -->
+  <Target Name="EnsureAspireDotnetWatchTool" Returns="@(AspireDotnetWatchTool)">
+    <Aspire.Hosting.Dotnet.Tasks.EnsureDotnetWatchTool AppHostDirectory="$(MSBuildProjectDirectory)"
+                                                     DotnetPath="$(DOTNET_HOST_PATH)">
+      <Output TaskParameter="ToolDllPath" PropertyName="_AspireDotnetWatchToolPath" />
+      <Output TaskParameter="ToolVersion" PropertyName="_AspireDotnetWatchToolVersion" />
+      <Output TaskParameter="RuntimeMajor" PropertyName="_AspireDotnetWatchRuntimeMajor" />
+    </Aspire.Hosting.Dotnet.Tasks.EnsureDotnetWatchTool>
+    <ItemGroup>
+      <AspireDotnetWatchTool Include="$(_AspireDotnetWatchToolPath)">
+        <Version>$(_AspireDotnetWatchToolVersion)</Version>
+        <RuntimeMajor>$(_AspireDotnetWatchRuntimeMajor)</RuntimeMajor>
+        <SdkDirectory>$(MSBuildToolsPath)</SdkDirectory>
+        <DotnetPath>$(DOTNET_HOST_PATH)</DotnetPath>
+      </AspireDotnetWatchTool>
+    </ItemGroup>
+  </Target>
+</Project>
