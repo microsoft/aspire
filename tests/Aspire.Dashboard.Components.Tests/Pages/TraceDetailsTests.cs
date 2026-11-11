@@ -5,9 +5,11 @@ using System.Text;
 using Aspire.Dashboard.Components.Pages;
 using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Components.Tests.Shared;
+using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Otlp;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
+using Aspire.Dashboard.Utils;
 using Bunit;
 using Google.Protobuf.Collections;
 using Microsoft.AspNetCore.InternalTesting;
@@ -36,8 +38,10 @@ public partial class TraceDetailsTests : DashboardTestContext
         _testOutputHelper = testOutputHelper;
     }
 
-    [Fact]
-    public async Task Render_ManySpanLogs_RendersButtonsWithoutTooltipText()
+    [Theory]
+    [InlineData("Test event", "Test event")]
+    [InlineData(null, "Log entry details")]
+    public async Task Render_ManySpanLogs_RendersHiddenTooltipContent(string? eventName, string expectedEventName)
     {
         SetupTraceDetailsServices();
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
@@ -61,7 +65,7 @@ public partial class TraceDetailsTests : DashboardTestContext
         var logs = new ScopeLogs { Scope = CreateScope(name: "test-scope") };
         logs.LogRecords.Add(Enumerable.Range(0, 501).Select(index =>
             CreateLogRecord(time: s_testTime.AddMilliseconds(index), traceId: "1", spanId: "1-1",
-                eventName: "Test event", message: "Test message")));
+                eventName: eventName, message: "Test <message>\nwith details")));
         await repository.AddLogsAsync(new AddContext(),
         [
             new ResourceLogs { Resource = CreateResource(), ScopeLogs = { logs } }
@@ -75,13 +79,27 @@ public partial class TraceDetailsTests : DashboardTestContext
         {
             var buttons = cut.FindAll(".span-log-entry-button");
             Assert.Equal(501, buttons.Count);
-            // Span logs can number in the thousands, so their buttons carry no tooltip text. The log's details open
-            // on click instead.
-            Assert.All(buttons, button =>
+            var tooltipSources = cut.FindAll(".log-tooltip-table").Select(table => table.ParentElement!).ToDictionary(source => source.Id!);
+            Assert.Equal(501, tooltipSources.Count);
+            var timeProvider = Services.GetRequiredService<BrowserTimeProvider>();
+            Assert.All(buttons, (button, index) =>
             {
-                Assert.Null(button.GetAttribute("data-tooltip"));
+                var source = tooltipSources[button.GetAttribute("data-tooltip-content")!];
+                Assert.Equal($"{button.Id}-tooltip", source.Id);
+                Assert.True(source.HasAttribute("hidden"));
+                Assert.Equal(["DIV", "TABLE"], source.Children.Select(child => child.TagName));
+                Assert.Equal(expectedEventName, source.QuerySelector(".log-tooltip-title")!.TextContent);
+                Assert.Equal("test-scope", source.QuerySelector(".log-tooltip-subtitle")!.TextContent);
+                Assert.Equal(["SPAN", "SPAN", "BR"], source.QuerySelector(".log-tooltip-title-container")!.Children.Select(child => child.TagName));
+                Assert.Collection(source.QuerySelectorAll("tr"),
+                    row => Assert.Equal(["Level", "Information"], row.QuerySelectorAll("td").Select(cell => cell.TextContent)),
+                    row => Assert.Equal(["Timestamp", FormatHelpers.FormatTimeWithOptionalDate(timeProvider, s_testTime.AddMilliseconds(index), MillisecondsDisplay.Truncated)], row.QuerySelectorAll("td").Select(cell => cell.TextContent)),
+                    row => Assert.Equal(["Message", "Test <message>\nwith details"], row.QuerySelectorAll("td").Select(cell => cell.TextContent)));
                 Assert.Equal("Log entry details", button.GetAttribute("aria-label"));
             });
+            Assert.Equal(
+                cut.Find(".resource-name").TextContent.Trim(),
+                cut.Find("[data-tooltip-cell]").GetAttribute("data-tooltip-cell"));
             // Only the bounded trace header keeps its rich Fluent tooltip.
             Assert.Single(cut.FindComponents<FluentTooltip>());
         });
@@ -200,8 +218,7 @@ public partial class TraceDetailsTests : DashboardTestContext
             var spanContainers = cut.FindAll(".span-button-container");
             Assert.Equal(2, spanContainers.Count);
 
-            // Every log marker is rendered on each span. They carry no tooltip, so there's no per-span limit to apply:
-            // the log's details open on click.
+            // Shared tooltip metadata does not require limiting the number of log markers per span.
             Assert.All(spanContainers, container =>
             {
                 var buttons = container.QuerySelectorAll(".span-log-entry-button");
@@ -209,7 +226,7 @@ public partial class TraceDetailsTests : DashboardTestContext
                 Assert.All(buttons, button =>
                 {
                     Assert.Null(button.GetAttribute("title"));
-                    Assert.Null(button.GetAttribute("data-tooltip"));
+                    Assert.NotNull(button.GetAttribute("data-tooltip-content"));
                 });
             });
         });

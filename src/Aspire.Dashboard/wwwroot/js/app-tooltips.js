@@ -1,8 +1,9 @@
-// Share one on-demand Fluent tooltip across text-only anchors. Creating a Blazor tooltip per
+// Share one on-demand Fluent tooltip across anchors. Creating a Blazor tooltip per
 // log entry or grid cell would add thousands of components to high-throughput telemetry views.
 class AspireTooltipProvider extends HTMLElement {
     #controller = null;
     #tooltip = null;
+    #content = null;
     #anchor = null;
     #positioningAnchor = null;
     #timer = null;
@@ -69,9 +70,10 @@ class AspireTooltipProvider extends HTMLElement {
             return null;
         }
 
-        const anchor = element.closest("[data-tooltip]");
+        const anchor = element.closest("[data-tooltip], [data-tooltip-content]");
         if (anchor) {
-            return { anchor, text: anchor.getAttribute("data-tooltip") };
+            const contentId = anchor.getAttribute("data-tooltip-content");
+            return { anchor, text: anchor.getAttribute("data-tooltip"), content: contentId ? document.getElementById(contentId) : null };
         }
 
         const option = element.closest("fluent-option");
@@ -93,12 +95,12 @@ class AspireTooltipProvider extends HTMLElement {
         }
 
         const target = this.#getTarget(element);
-        if (!target?.text) {
+        if (!target?.text && !target?.content) {
             this.#clear();
             return;
         }
 
-        if (this.#anchor === target.anchor && this.#tooltip?.textContent === target.text) {
+        if (this.#anchor === target.anchor && this.#content?.text === target.text && this.#content?.content === target.content) {
             return;
         }
 
@@ -113,7 +115,7 @@ class AspireTooltipProvider extends HTMLElement {
             }
 
             const current = this.#getTarget(target.anchor);
-            if (!current?.text) {
+            if (!current?.text && !current?.content) {
                 this.#clear();
                 return;
             }
@@ -141,10 +143,7 @@ class AspireTooltipProvider extends HTMLElement {
             }
             positioning ??= bounds.top < 48 ? "below" : "above";
             tooltip.setAttribute("positioning", positioning);
-            tooltip.className = "dashboard-tooltip";
-            const content = document.createElement("span");
-            content.textContent = current.text;
-            tooltip.appendChild(content);
+            this.#setContent(tooltip, current);
             this.#tooltip = tooltip;
             this.appendChild(tooltip);
             if (target.anchor instanceof SVGElement) {
@@ -164,20 +163,33 @@ class AspireTooltipProvider extends HTMLElement {
             // tooltip never light-dismisses an open menu or select popover.
             tooltip.setAttribute("popover", "manual");
             tooltip.showTooltip(0);
+            const observe = current => {
+                this.#observer.disconnect();
+                this.#observer.observe(target.anchor, {
+                    attributes: true,
+                    attributeFilter: ["data-tooltip", "data-tooltip-content", "data-tooltip-cell", "data-tooltip-option"],
+                    childList: true,
+                    subtree: true
+                });
+                if (current.content) {
+                    this.#observer.observe(current.content, {
+                        attributes: true,
+                        childList: true,
+                        characterData: true,
+                        subtree: true
+                    });
+                }
+            };
             this.#observer = new MutationObserver(() => {
                 const updated = this.#getTarget(target.anchor);
-                if (target.anchor.isConnected && updated?.text) {
-                    content.textContent = updated.text;
+                if (target.anchor.isConnected && (updated?.text || updated?.content)) {
+                    this.#setContent(tooltip, updated);
+                    observe(updated);
                 } else {
                     this.#clear();
                 }
             });
-            this.#observer.observe(target.anchor, {
-                attributes: true,
-                attributeFilter: ["data-tooltip", "data-tooltip-cell", "data-tooltip-option"],
-                childList: true,
-                subtree: true
-            });
+            observe(current);
             // Observing the anchor itself for mutations doesn't detect its removal or an ancestor
             // becoming hidden, for example when a virtualized row or open menu disappears.
             this.#visibilityObserver = new IntersectionObserver(entries => {
@@ -187,6 +199,22 @@ class AspireTooltipProvider extends HTMLElement {
             });
             this.#visibilityObserver.observe(target.anchor);
         }, delay);
+    }
+
+    #setContent(tooltip, target) {
+        tooltip.className = "dashboard-tooltip";
+        if (target.content) {
+            // Clone display-only markup so Blazor keeps ownership of the hidden source nodes.
+            // Apply source classes to the popup too, so page-owned CSS controls its layout and width.
+            tooltip.classList.add(...target.content.classList);
+            const content = target.content.cloneNode(true);
+            tooltip.replaceChildren(...content.childNodes);
+        } else {
+            const content = document.createElement("span");
+            content.textContent = target.text;
+            tooltip.replaceChildren(content);
+        }
+        this.#content = target;
     }
 
     #leave(element) {
@@ -208,6 +236,7 @@ class AspireTooltipProvider extends HTMLElement {
         this.#tooltip?.remove();
         this.#tooltip?.anchorPositioningStyleElement?.remove();
         this.#tooltip = null;
+        this.#content = null;
         this.#positioningAnchor?.remove();
         this.#positioningAnchor = null;
         this.#anchor = null;
