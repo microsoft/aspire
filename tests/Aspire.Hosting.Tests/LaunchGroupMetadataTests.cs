@@ -46,14 +46,13 @@ public class LaunchGroupMetadataTests
         Assert.Equal(["frontend"], database.Groups);
         Assert.Equal("server", database.InheritedFrom);
         Assert.False(database.ExplicitStart);
-        Assert.False(database.ExcludedByGroup);
+        Assert.Equal(LaunchGroupExclusionReason.None, database.ExclusionReason);
         var explicitResource = Assert.Single(info.Resources, r => r.Name == "explicit");
         Assert.True(explicitResource.ExplicitStart);
-        Assert.True(explicitResource.ExcludedByGroup);
+        Assert.Equal(LaunchGroupExclusionReason.NotInSelectedGroup, explicitResource.ExclusionReason);
         var helper = Assert.Single(info.Resources, r => r.Name == "helper");
-        Assert.True(helper.ExcludedFromSelection);
-        Assert.False(helper.ExcludedByGroup);
-        Assert.Equal(LaunchGroupBuildDisposition.NotCoordinated, helper.BuildDisposition);
+        Assert.Equal(LaunchGroupExclusionReason.ExemptFromSelection, helper.ExclusionReason);
+        Assert.Equal(LaunchGroupBuildType.NotCoordinated, helper.BuildType);
         Assert.Equal(0, callbacks);
     }
 
@@ -73,7 +72,7 @@ public class LaunchGroupMetadataTests
         Assert.Equal(["automatic", "explicit"], info.Resources.Select(r => r.Name));
         Assert.False(info.Resources[0].ExplicitStart);
         Assert.True(info.Resources[1].ExplicitStart);
-        Assert.All(info.Resources, resource => Assert.False(resource.ExcludedByGroup));
+        Assert.All(info.Resources, resource => Assert.Equal(LaunchGroupExclusionReason.None, resource.ExclusionReason));
     }
 
     [Fact]

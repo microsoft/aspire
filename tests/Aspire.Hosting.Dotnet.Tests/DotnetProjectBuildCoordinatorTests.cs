@@ -100,13 +100,13 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
         var resources = app.Services.GetRequiredService<LaunchGroupMetadataService>().GetInformation().Resources;
 
-        Assert.Equal(LaunchGroupBuildDisposition.Initial, Assert.Single(resources, resource => resource.Name == "selected").BuildDisposition);
-        Assert.Equal(LaunchGroupBuildDisposition.InitialShared, Assert.Single(resources, resource => resource.Name == "shared").BuildDisposition);
-        Assert.Equal(LaunchGroupBuildDisposition.Deferred, Assert.Single(resources, resource => resource.Name == "deferred").BuildDisposition);
+        Assert.Equal(LaunchGroupBuildType.Initial, Assert.Single(resources, resource => resource.Name == "selected").BuildType);
+        Assert.Equal(LaunchGroupBuildType.InitialShared, Assert.Single(resources, resource => resource.Name == "shared").BuildType);
+        Assert.Equal(LaunchGroupBuildType.Deferred, Assert.Single(resources, resource => resource.Name == "deferred").BuildType);
         var persistent = Assert.Single(resources, resource => resource.Name == "persistent");
-        Assert.Equal(LaunchGroupBuildDisposition.InitialPersistent, persistent.BuildDisposition);
+        Assert.Equal(LaunchGroupBuildType.InitialPersistent, persistent.BuildType);
         Assert.True(persistent.ExplicitStart);
-        Assert.True(persistent.ExcludedByGroup);
+        Assert.Equal(LaunchGroupExclusionReason.NotInSelectedGroup, persistent.ExclusionReason);
     }
 
     [Theory]
@@ -138,14 +138,14 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         Assert.True(build.HasAnnotationOfType<ExplicitStartupAnnotation>());
         var metadata = app.Services.GetRequiredService<LaunchGroupMetadataService>();
         var initialInfo = Assert.Single(metadata.GetInformation().Resources, resource => resource.Name == build.Name);
-        Assert.Equal(LaunchGroupBuildDisposition.Deferred, initialInfo.BuildDisposition);
+        Assert.Equal(LaunchGroupBuildType.Deferred, initialInfo.BuildType);
         Assert.False(initialInfo.ExplicitStart);
 
         await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
 
         var repeatedInfo = Assert.Single(metadata.GetInformation().Resources, resource => resource.Name == build.Name);
         Assert.True(build.HasAnnotationOfType<ExplicitStartupAnnotation>());
-        Assert.Equal(LaunchGroupBuildDisposition.Deferred, repeatedInfo.BuildDisposition);
+        Assert.Equal(LaunchGroupBuildType.Deferred, repeatedInfo.BuildType);
         Assert.False(repeatedInfo.ExplicitStart);
     }
 
@@ -272,8 +272,8 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         AssertBuildDependency(project.Resource, build);
         var information = app.Services.GetRequiredService<LaunchGroupMetadataService>().GetInformation().Resources;
         var projectInfo = Assert.Single(information, resource => resource.Name == "worker");
-        Assert.Equal(selected ? LaunchGroupBuildDisposition.Initial : LaunchGroupBuildDisposition.Deferred, projectInfo.BuildDisposition);
-        Assert.Equal(!selected, projectInfo.ExcludedByGroup);
+        Assert.Equal(selected ? LaunchGroupBuildType.Initial : LaunchGroupBuildType.Deferred, projectInfo.BuildType);
+        Assert.Equal(!selected ? LaunchGroupExclusionReason.NotInSelectedGroup : LaunchGroupExclusionReason.None, projectInfo.ExclusionReason);
     }
 
     [Theory]
@@ -309,13 +309,13 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         var initialInfo = Assert.Single(metadata.GetInformation().Resources, resource => resource.Name == "worker");
         var initiallyExcluded = initialGroup != "selected";
         var initialDisposition = initiallyExcluded || initiallyExplicit
-            ? LaunchGroupBuildDisposition.Deferred
-            : LaunchGroupBuildDisposition.Initial;
+            ? LaunchGroupBuildType.Deferred
+            : LaunchGroupBuildType.Initial;
         Assert.Equal([initialGroup], initialInfo.Groups);
-        Assert.Equal(initiallyExcluded, initialInfo.ExcludedByGroup);
+        Assert.Equal(initiallyExcluded ? LaunchGroupExclusionReason.NotInSelectedGroup : LaunchGroupExclusionReason.None, initialInfo.ExclusionReason);
         Assert.Equal(initiallyExplicit, initialInfo.ExplicitStart);
-        Assert.Equal(initialDisposition, initialInfo.BuildDisposition);
-        Assert.Equal(initialDisposition == LaunchGroupBuildDisposition.Deferred, build.HasAnnotationOfType<ExplicitStartupAnnotation>());
+        Assert.Equal(initialDisposition, initialInfo.BuildType);
+        Assert.Equal(initialDisposition == LaunchGroupBuildType.Deferred, build.HasAnnotationOfType<ExplicitStartupAnnotation>());
         AssertBuildDependency(project.Resource, build);
 
         if (initialGroup != finalGroup)
@@ -352,9 +352,9 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         AssertBuildDependency(project.Resource, build);
         var retainedInfo = Assert.Single(metadata.GetInformation().Resources, resource => resource.Name == "worker");
         Assert.Equal([initialGroup], retainedInfo.Groups);
-        Assert.Equal(initiallyExcluded, retainedInfo.ExcludedByGroup);
+        Assert.Equal(initiallyExcluded ? LaunchGroupExclusionReason.NotInSelectedGroup : LaunchGroupExclusionReason.None, retainedInfo.ExclusionReason);
         Assert.Equal(initiallyExplicit, retainedInfo.ExplicitStart);
-        Assert.Equal(initialDisposition, retainedInfo.BuildDisposition);
+        Assert.Equal(initialDisposition, retainedInfo.BuildType);
     }
 
     [Theory]
@@ -412,10 +412,10 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         Assert.Equal(changeSelection ? "second" : "first", information.SelectedGroup);
         var firstInfo = Assert.Single(information.Resources, resource => resource.Name == "first");
         var secondInfo = Assert.Single(information.Resources, resource => resource.Name == "second");
-        Assert.Equal(LaunchGroupBuildDisposition.Deferred, firstInfo.BuildDisposition);
-        Assert.True(firstInfo.ExcludedByGroup);
-        Assert.Equal(LaunchGroupBuildDisposition.Initial, secondInfo.BuildDisposition);
-        Assert.False(secondInfo.ExcludedByGroup);
+        Assert.Equal(LaunchGroupBuildType.Deferred, firstInfo.BuildType);
+        Assert.Equal(LaunchGroupExclusionReason.NotInSelectedGroup, firstInfo.ExclusionReason);
+        Assert.Equal(LaunchGroupBuildType.Initial, secondInfo.BuildType);
+        Assert.Equal(LaunchGroupExclusionReason.None, secondInfo.ExclusionReason);
     }
 
     [Fact]
@@ -1989,13 +1989,13 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         void AssertSelectionState(int selectedBuilds, int deferredBuilds)
         {
             var resources = app.Services.GetRequiredService<LaunchGroupMetadataService>().GetInformation().Resources;
-            Assert.Equal(LaunchGroupBuildDisposition.Initial, Assert.Single(resources, resource => resource.Name == "selected").BuildDisposition);
+            Assert.Equal(LaunchGroupBuildType.Initial, Assert.Single(resources, resource => resource.Name == "selected").BuildType);
             var deferredInfo = Assert.Single(resources, resource => resource.Name == "deferred");
-            Assert.Equal(LaunchGroupBuildDisposition.Deferred, deferredInfo.BuildDisposition);
-            Assert.True(deferredInfo.ExcludedByGroup);
+            Assert.Equal(LaunchGroupBuildType.Deferred, deferredInfo.BuildType);
+            Assert.Equal(LaunchGroupExclusionReason.NotInSelectedGroup, deferredInfo.ExclusionReason);
             var unrelatedInfo = Assert.Single(resources, resource => resource.Name == "unrelated");
-            Assert.Equal(LaunchGroupBuildDisposition.Deferred, unrelatedInfo.BuildDisposition);
-            Assert.True(unrelatedInfo.ExcludedByGroup);
+            Assert.Equal(LaunchGroupBuildType.Deferred, unrelatedInfo.BuildType);
+            Assert.Equal(LaunchGroupExclusionReason.NotInSelectedGroup, unrelatedInfo.ExclusionReason);
             Assert.Equal(selectedBuilds, File.ReadAllLines(GetBuildCountPath(selectedProject)).Length);
             Assert.Equal(deferredBuilds, File.Exists(GetBuildCountPath(deferredProject))
                 ? File.ReadAllLines(GetBuildCountPath(deferredProject)).Length

@@ -165,7 +165,6 @@ public sealed class LaunchGroupRealAppHostTests(PlaywrightFixture playwrightFixt
             await AssertOverviewPropertyAbsentAsync(page, Resources.Resources.ResourceLaunchGroupsInheritedFrom);
             await AssertOverviewPropertyAbsentAsync(page, Resources.Resources.ResourceLaunchGroupsExplicitStart);
             await AssertOverviewPropertyAbsentAsync(page, Resources.Resources.ResourceLaunchGroupsExclusionReason);
-            await AssertOverviewPropertyAbsentAsync(page, Resources.Resources.ResourceLaunchGroupsBuildDisposition);
 
             var statusGroup = page.Locator("[aria-labelledby='overview-status-title'] .launch-group-value").First;
             var propertiesGroup = page.Locator("[aria-labelledby='overview-properties-title'] .launch-group-value").First;
@@ -215,8 +214,7 @@ public sealed class LaunchGroupRealAppHostTests(PlaywrightFixture playwrightFixt
             await OpenResourceAsync(page, DeferredResourceName);
             await AssertOverviewPropertyAsync(page, Resources.Resources.ResourceLaunchGroupsEffectiveMembership, Resources.Resources.ResourceLaunchGroupsUngrouped);
             await AssertOverviewPropertyAsync(page, Resources.Resources.ResourceLaunchGroupsExplicitStart, Resources.Resources.ResourceLaunchGroupsYes);
-            await AssertOverviewPropertyAsync(page, Resources.Resources.ResourceLaunchGroupsExclusionReason, Resources.Resources.ResourceLaunchGroupsExcludedByGroup);
-            await AssertOverviewPropertyAsync(page, Resources.Resources.ResourceLaunchGroupsBuildDisposition, Resources.Resources.ResourceLaunchGroupsBuildDeferred);
+            await AssertOverviewPropertyAsync(page, Resources.Resources.ResourceLaunchGroupsExclusionReason, Resources.Resources.ResourceLaunchGroupsExcludedByGroupDeferred);
 
             await OpenResourceAsync(page, ChildResourceName);
             await filterTrigger.ClickAsync();

@@ -315,15 +315,24 @@ internal sealed class LaunchGroupResourceInfo
     public required string[] Groups { get; init; }
     public string? InheritedFrom { get; init; }
     public bool ExplicitStart { get; init; }
-    public bool ExcludedByGroup { get; init; }
-    public bool ExcludedFromSelection { get; init; }
-    public LaunchGroupBuildDisposition BuildDisposition { get; init; }
+    public LaunchGroupExclusionReason ExclusionReason { get; init; }
+    public LaunchGroupBuildType BuildType { get; init; }
+}
+
+/// <summary>
+/// Describes why a resource is excluded by or exempt from launch-group selection.
+/// </summary>
+internal enum LaunchGroupExclusionReason
+{
+    None,
+    NotInSelectedGroup,
+    ExemptFromSelection
 }
 
 /// <summary>
 /// Describes how a coordinated project build participates in initial startup.
 /// </summary>
-internal enum LaunchGroupBuildDisposition
+internal enum LaunchGroupBuildType
 {
     NotCoordinated,
     Pending,

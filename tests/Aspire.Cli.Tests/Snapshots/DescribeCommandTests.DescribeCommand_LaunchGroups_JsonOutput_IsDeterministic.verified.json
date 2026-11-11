@@ -14,9 +14,8 @@
       ],
       "inheritedFrom": "frontend",
       "explicitStart": false,
-      "excludedByGroup": false,
-      "excludedFromSelection": false,
-      "buildDisposition": "Initial"
+      "exclusionReason": "None",
+      "buildType": "Initial"
     },
     {
       "name": "cache",
@@ -24,9 +23,8 @@
         "catalog"
       ],
       "explicitStart": true,
-      "excludedByGroup": true,
-      "excludedFromSelection": false,
-      "buildDisposition": "InitialPersistent"
+      "exclusionReason": "NotInSelectedGroup",
+      "buildType": "InitialPersistent"
     },
     {
       "name": "database",
@@ -34,17 +32,15 @@
         "shared"
       ],
       "explicitStart": false,
-      "excludedByGroup": true,
-      "excludedFromSelection": false,
-      "buildDisposition": "InitialShared"
+      "exclusionReason": "NotInSelectedGroup",
+      "buildType": "InitialShared"
     },
     {
       "name": "helper",
       "groups": [],
       "explicitStart": false,
-      "excludedByGroup": false,
-      "excludedFromSelection": true,
-      "buildDisposition": "NotCoordinated"
+      "exclusionReason": "ExemptFromSelection",
+      "buildType": "NotCoordinated"
     },
     {
       "name": "migration",
@@ -52,9 +48,8 @@
         "catalog"
       ],
       "explicitStart": true,
-      "excludedByGroup": false,
-      "excludedFromSelection": true,
-      "buildDisposition": "Pending"
+      "exclusionReason": "ExemptFromSelection",
+      "buildType": "Pending"
     },
     {
       "name": "worker",
@@ -62,9 +57,8 @@
         "shared"
       ],
       "explicitStart": false,
-      "excludedByGroup": false,
-      "excludedFromSelection": false,
-      "buildDisposition": "Deferred"
+      "exclusionReason": "None",
+      "buildType": "Deferred"
     }
   ]
 }

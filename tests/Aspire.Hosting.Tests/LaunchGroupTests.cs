@@ -10,6 +10,7 @@ using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using Aspire.Dashboard.Model;
+using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Orchestrator;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Utils;
@@ -97,6 +98,27 @@ public class LaunchGroupTests(ITestOutputHelper outputHelper)
         Assert.True(resource.Resource.HasAnnotationOfType<ExplicitStartupAnnotation>());
     }
 
+    [Theory]
+    [InlineData("backend", false)]
+    [InlineData("frontend", true)]
+    public async Task LegacyProjectRespectsLaunchGroupSelection(string selectedGroup, bool explicitStart)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        builder.Configuration["Aspire:LaunchGroup"] = selectedGroup;
+#pragma warning disable CS0618 // Exercise the legacy ProjectResource path.
+        var legacy = builder.AddProject<Projects.ServiceA>("legacy").WithLaunchGroup("backend");
+#pragma warning restore CS0618
+        builder.AddExecutable("frontend", "unused", ".").WithLaunchGroup("frontend");
+        var rebuilder = Assert.Single(builder.Resources.OfType<ProjectRebuilderResource>());
+        await using var app = builder.Build();
+
+        await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(explicitStart, legacy.Resource.HasAnnotationOfType<ExplicitStartupAnnotation>());
+        Assert.Same(legacy.Resource, rebuilder.Parent);
+        Assert.True(rebuilder.HasAnnotationOfType<ExplicitStartupAnnotation>());
+    }
+
     [Fact]
     public async Task BeforeStartMembershipsAreIncludedInSelectionAndMetadata()
     {
@@ -124,10 +146,10 @@ public class LaunchGroupTests(ITestOutputHelper outputHelper)
             () => Assert.Equal(["frontend", "late-group"], info.Groups),
             () => Assert.Equal(["frontend", "late-group"], frontendInfo.Groups),
             () => Assert.Equal(["frontend"], earlyInfo.Groups),
-            () => Assert.False(earlyInfo.ExcludedByGroup),
+            () => Assert.Equal(LaunchGroupExclusionReason.None, earlyInfo.ExclusionReason),
             () => Assert.False(early.Resource.HasAnnotationOfType<ExplicitStartupAnnotation>()),
             () => Assert.Equal(["late-group"], otherInfo.Groups),
-            () => Assert.True(otherInfo.ExcludedByGroup),
+            () => Assert.Equal(LaunchGroupExclusionReason.NotInSelectedGroup, otherInfo.ExclusionReason),
             () => Assert.True(other.Resource.HasAnnotationOfType<ExplicitStartupAnnotation>()));
     }
 
@@ -159,10 +181,10 @@ public class LaunchGroupTests(ITestOutputHelper outputHelper)
             () => Assert.Equal(["frontend", "late-group"], info.Groups),
             () => Assert.Equal(["frontend", "late-group"], frontendInfo.Groups),
             () => Assert.Equal(["frontend"], earlyInfo.Groups),
-            () => Assert.False(earlyInfo.ExcludedByGroup),
+            () => Assert.Equal(LaunchGroupExclusionReason.None, earlyInfo.ExclusionReason),
             () => Assert.False(early.Resource.HasAnnotationOfType<ExplicitStartupAnnotation>()),
             () => Assert.Equal(["late-group"], lateInfo.Groups),
-            () => Assert.True(lateInfo.ExcludedByGroup),
+            () => Assert.Equal(LaunchGroupExclusionReason.NotInSelectedGroup, lateInfo.ExclusionReason),
             () => Assert.True(late.HasAnnotationOfType<ExplicitStartupAnnotation>()));
     }
 
@@ -189,9 +211,9 @@ public class LaunchGroupTests(ITestOutputHelper outputHelper)
             () => Assert.Equal("frontend", info.SelectedGroup),
             () => Assert.Equal(["frontend"], info.Groups),
             () => Assert.Equal(["frontend"], frontendInfo.Groups),
-            () => Assert.False(frontendInfo.ExcludedByGroup),
+            () => Assert.Equal(LaunchGroupExclusionReason.None, frontendInfo.ExclusionReason),
             () => Assert.False(frontend.Resource.HasAnnotationOfType<ExplicitStartupAnnotation>()),
-            () => Assert.True(otherInfo.ExcludedByGroup),
+            () => Assert.Equal(LaunchGroupExclusionReason.NotInSelectedGroup, otherInfo.ExclusionReason),
             () => Assert.True(other.Resource.HasAnnotationOfType<ExplicitStartupAnnotation>()));
     }
 
@@ -257,7 +279,7 @@ public class LaunchGroupTests(ITestOutputHelper outputHelper)
         var backendInfo = Assert.Single(info.Resources, resource => resource.Name == "backend");
         Assert.Multiple(
             () => Assert.Equal(becomesSelected ? new[] { "backend", "frontend" } : ["backend"], backendInfo.Groups),
-            () => Assert.Equal(!becomesSelected, backendInfo.ExcludedByGroup),
+            () => Assert.Equal(!becomesSelected ? LaunchGroupExclusionReason.NotInSelectedGroup : LaunchGroupExclusionReason.None, backendInfo.ExclusionReason),
             () => Assert.True(backendInfo.ExplicitStart),
             () => Assert.Contains(explicitStart, backend.Resource.Annotations));
     }
@@ -283,10 +305,10 @@ public class LaunchGroupTests(ITestOutputHelper outputHelper)
         var manualInfo = Assert.Single(information.Resources, resource => resource.Name == "manual");
         Assert.Multiple(
             () => Assert.False(promoted.Resource.HasAnnotationOfType<ExplicitStartupAnnotation>()),
-            () => Assert.False(promotedInfo.ExcludedByGroup),
+            () => Assert.Equal(LaunchGroupExclusionReason.None, promotedInfo.ExclusionReason),
             () => Assert.False(promotedInfo.ExplicitStart),
             () => Assert.Same(explicitStart, Assert.Single(manual.Resource.Annotations.OfType<ExplicitStartupAnnotation>())),
-            () => Assert.False(manualInfo.ExcludedByGroup),
+            () => Assert.Equal(LaunchGroupExclusionReason.None, manualInfo.ExclusionReason),
             () => Assert.True(manualInfo.ExplicitStart));
     }
 
@@ -336,7 +358,7 @@ public class LaunchGroupTests(ITestOutputHelper outputHelper)
         Assert.Multiple(
             () => Assert.Null(information.SelectedGroup),
             () => Assert.False(automatic.Resource.HasAnnotationOfType<ExplicitStartupAnnotation>()),
-            () => Assert.False(automaticInfo.ExcludedByGroup),
+            () => Assert.Equal(LaunchGroupExclusionReason.None, automaticInfo.ExclusionReason),
             () => Assert.False(automaticInfo.ExplicitStart),
             () => Assert.Same(explicitStart, Assert.Single(manual.Resource.Annotations.OfType<ExplicitStartupAnnotation>())),
             () => Assert.True(manualInfo.ExplicitStart));

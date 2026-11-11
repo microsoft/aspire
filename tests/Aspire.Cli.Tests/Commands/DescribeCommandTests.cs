@@ -1111,7 +1111,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, exitCode);
         var jsonOutput = string.Join("", outputWriter.Logs);
         using var document = JsonDocument.Parse(jsonOutput);
-        Assert.Equal(JsonValueKind.String, document.RootElement.GetProperty("resources")[0].GetProperty("buildDisposition").ValueKind);
+        Assert.Equal(JsonValueKind.String, document.RootElement.GetProperty("resources")[0].GetProperty("buildType").ValueKind);
 
         await Verify(jsonOutput, "json");
     }
@@ -1572,9 +1572,8 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
                     Groups = ["shared"],
                     InheritedFrom = null,
                     ExplicitStart = false,
-                    ExcludedByGroup = false,
-                    ExcludedFromSelection = false,
-                    BuildDisposition = LaunchGroupBuildDisposition.Deferred
+                    ExclusionReason = LaunchGroupExclusionReason.None,
+                    BuildType = LaunchGroupBuildType.Deferred
                 },
                 new LaunchGroupResourceInfo
                 {
@@ -1582,9 +1581,8 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
                     Groups = ["shared", "catalog"],
                     InheritedFrom = "frontend",
                     ExplicitStart = false,
-                    ExcludedByGroup = false,
-                    ExcludedFromSelection = false,
-                    BuildDisposition = LaunchGroupBuildDisposition.Initial
+                    ExclusionReason = LaunchGroupExclusionReason.None,
+                    BuildType = LaunchGroupBuildType.Initial
                 },
                 new LaunchGroupResourceInfo
                 {
@@ -1592,9 +1590,8 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
                     Groups = ["catalog"],
                     InheritedFrom = null,
                     ExplicitStart = true,
-                    ExcludedByGroup = true,
-                    ExcludedFromSelection = false,
-                    BuildDisposition = LaunchGroupBuildDisposition.InitialPersistent
+                    ExclusionReason = LaunchGroupExclusionReason.NotInSelectedGroup,
+                    BuildType = LaunchGroupBuildType.InitialPersistent
                 },
                 new LaunchGroupResourceInfo
                 {
@@ -1602,9 +1599,8 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
                     Groups = [],
                     InheritedFrom = null,
                     ExplicitStart = false,
-                    ExcludedByGroup = false,
-                    ExcludedFromSelection = true,
-                    BuildDisposition = LaunchGroupBuildDisposition.NotCoordinated
+                    ExclusionReason = LaunchGroupExclusionReason.ExemptFromSelection,
+                    BuildType = LaunchGroupBuildType.NotCoordinated
                 },
                 new LaunchGroupResourceInfo
                 {
@@ -1612,9 +1608,8 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
                     Groups = ["shared"],
                     InheritedFrom = null,
                     ExplicitStart = false,
-                    ExcludedByGroup = true,
-                    ExcludedFromSelection = false,
-                    BuildDisposition = LaunchGroupBuildDisposition.InitialShared
+                    ExclusionReason = LaunchGroupExclusionReason.NotInSelectedGroup,
+                    BuildType = LaunchGroupBuildType.InitialShared
                 },
                 new LaunchGroupResourceInfo
                 {
@@ -1622,9 +1617,8 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
                     Groups = ["catalog"],
                     InheritedFrom = null,
                     ExplicitStart = true,
-                    ExcludedByGroup = false,
-                    ExcludedFromSelection = true,
-                    BuildDisposition = LaunchGroupBuildDisposition.Pending
+                    ExclusionReason = LaunchGroupExclusionReason.ExemptFromSelection,
+                    BuildType = LaunchGroupBuildType.Pending
                 }
             ]
         };

@@ -143,10 +143,10 @@
     <value>Launch groups</value>
   </data>
   <data name="ResourceLaunchGroupsSelectedGroup" xml:space="preserve">
-    <value>Selected group</value>
+    <value>Launch group</value>
   </data>
   <data name="ResourceLaunchGroupsEffectiveMembership" xml:space="preserve">
-    <value>Effective membership</value>
+    <value>Launch groups</value>
   </data>
   <data name="ResourceLaunchGroupsInheritedFrom" xml:space="preserve">
     <value>Inherited from</value>
@@ -160,26 +160,8 @@
   <data name="ResourceLaunchGroupsExclusionReason" xml:space="preserve">
     <value>Exclusion reason</value>
   </data>
-  <data name="ResourceLaunchGroupsBuildDisposition" xml:space="preserve">
-    <value>Build disposition</value>
-  </data>
-  <data name="ResourceLaunchGroupsBuildNotCoordinated" xml:space="preserve">
-    <value>Not coordinated</value>
-  </data>
-  <data name="ResourceLaunchGroupsBuildPending" xml:space="preserve">
-    <value>Pending</value>
-  </data>
-  <data name="ResourceLaunchGroupsBuildInitial" xml:space="preserve">
-    <value>Initial</value>
-  </data>
-  <data name="ResourceLaunchGroupsBuildInitialPersistent" xml:space="preserve">
-    <value>Initial (persistent)</value>
-  </data>
-  <data name="ResourceLaunchGroupsBuildInitialShared" xml:space="preserve">
-    <value>Initial (shared)</value>
-  </data>
-  <data name="ResourceLaunchGroupsBuildDeferred" xml:space="preserve">
-    <value>Deferred</value>
+  <data name="ResourceLaunchGroupsExcludedByGroupDeferred" xml:space="preserve">
+    <value>Not in selected group, deferred build</value>
   </data>
   <data name="ResourceLaunchGroupsNone" xml:space="preserve">
     <value>None</value>

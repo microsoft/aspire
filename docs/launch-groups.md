@@ -210,7 +210,7 @@ aspire describe --launch-groups
 
 The output includes the selected group, known groups, each resource's effective
 memberships and inheritance source, pre-existing explicit-start and group-exclusion
-reasons, and its coordinated build disposition. It also includes hidden framework
+reasons, and its coordinated build type. It also includes hidden framework
 helpers; some, such as project rebuilders, have their own explicit-start setting.
 `Default startup` means there is no direct launch-group or explicit-start
 restriction; passive structural children still follow their lifetime owner.
@@ -231,11 +231,19 @@ direct memberships, and a resource with multiple memberships can match each grou
 Filtering only changes the visible rows. It does not change automatic startup,
 lifecycle controls, or the AppHost's selected group.
 
-Resource details show the selection and effective memberships in both Status and
-Properties. Hover over or focus a group to see its effective members, including
+Resource details show **Launch group** (the selected group) and **Launch groups**
+(the resource's effective memberships) in both Status and Properties.
+Hover over or focus a group to see its effective members, including
 resources that inherit membership. Hidden members appear when **Show hidden resources**
 is enabled. Details also show the inheritance source,
-explicit-start setting, exclusion reason, and build disposition when relevant.
+explicit-start setting, and exclusion reason when relevant. If an excluded
+resource's build is deferred, the exclusion reason reads
+**Not in selected group, deferred build** rather than showing a separate build row.
+
+The JSON metadata uses one `exclusionReason` enum: `None`, `NotInSelectedGroup`,
+or `ExemptFromSelection`. Exempt resources retain their ordinary startup behavior.
+`explicitStart` remains independent, and `buildType` reports the coordinated build
+classification.
 
 ## Project builds
 

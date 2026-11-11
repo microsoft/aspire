@@ -420,9 +420,8 @@ machine-readable snapshot:
       ],
       "inheritedFrom": "frontend",
       "explicitStart": false,
-      "excludedByGroup": false,
-      "excludedFromSelection": false,
-      "buildDisposition": "Initial"
+      "exclusionReason": "None",
+      "buildType": "Initial"
     },
     {
       "name": "worker",
@@ -430,9 +429,8 @@ machine-readable snapshot:
         "shared"
       ],
       "explicitStart": true,
-      "excludedByGroup": true,
-      "excludedFromSelection": false,
-      "buildDisposition": "Deferred"
+      "exclusionReason": "NotInSelectedGroup",
+      "buildType": "Deferred"
     }
   ]
 }
@@ -457,13 +455,12 @@ Each resource has the following fields:
 | `groups` | Effective launch-group memberships. Empty when the resource has no memberships. |
 | `inheritedFrom` | Resource that supplied inherited memberships. Omitted for direct memberships or no memberships. |
 | `explicitStart` | Whether the resource was configured for explicit startup. |
-| `excludedByGroup` | Whether the selected group excludes the resource from automatic startup. |
-| `excludedFromSelection` | Whether the resource keeps its ordinary startup behavior instead of participating in launch-group selection. |
-| `buildDisposition` | Coordinated build decision: `NotCoordinated`, `Pending`, `Initial`, `InitialPersistent`, `InitialShared`, or `Deferred`. |
+| `exclusionReason` | `None`, `NotInSelectedGroup` (excluded from automatic startup by the selected group), or `ExemptFromSelection` (keeps ordinary startup behavior instead of participating in group filtering). |
+| `buildType` | Coordinated build type: `NotCoordinated`, `Pending`, `Initial`, `InitialPersistent`, `InitialShared`, or `Deferred`. |
 
-The startup booleans describe separate reasons, and more than one can be true.
-Consumers should not collapse `explicitStart`, `excludedByGroup`, and
-`excludedFromSelection` into a single status.
+`explicitStart` is independent of `exclusionReason`: a resource can require explicit
+startup and also be outside the selected group or exempt from group filtering.
+Exemption and exclusion by the selected group are mutually exclusive.
 
 This command reads metadata already captured by the running AppHost. It does not
 evaluate another application model, invoke environment or argument callbacks,

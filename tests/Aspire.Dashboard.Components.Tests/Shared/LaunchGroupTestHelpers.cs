@@ -32,17 +32,15 @@ internal static class LaunchGroupTestHelpers
         IReadOnlyList<string>? groups = null,
         string? inheritedFrom = null,
         bool explicitStart = false,
-        bool excludedByGroup = false,
-        bool excludedFromSelection = false,
-        LaunchGroupBuildDisposition buildDisposition = LaunchGroupBuildDisposition.NotCoordinated)
+        LaunchGroupExclusionReason exclusionReason = LaunchGroupExclusionReason.None,
+        LaunchGroupBuildType buildType = LaunchGroupBuildType.NotCoordinated)
     {
         var resource = new LaunchGroupResourceInfo
         {
             Name = name,
             ExplicitStart = explicitStart,
-            ExcludedByGroup = excludedByGroup,
-            ExcludedFromSelection = excludedFromSelection,
-            BuildDisposition = buildDisposition
+            ExclusionReason = exclusionReason,
+            BuildType = buildType
         };
         resource.Groups.AddRange(groups ?? []);
         if (inheritedFrom is not null)

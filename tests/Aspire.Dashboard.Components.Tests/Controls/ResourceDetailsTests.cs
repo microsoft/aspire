@@ -19,7 +19,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Xunit;
-using LaunchGroupBuildDisposition = Aspire.DashboardService.Proto.V1.LaunchGroupBuildDisposition;
+using LaunchGroupBuildType = Aspire.DashboardService.Proto.V1.LaunchGroupBuildType;
+using LaunchGroupExclusionReason = Aspire.DashboardService.Proto.V1.LaunchGroupExclusionReason;
 
 namespace Aspire.Dashboard.Components.Tests.Controls;
 
@@ -452,8 +453,10 @@ public class ResourceDetailsTests : DashboardTestContext
         Assert.Contains(Columns.StateColumnResourceNotStarted, resourcePropertyGrid.TextContent);
     }
 
-    [Fact]
-    public void Render_LaunchGroupMetadataShowsDistinctReadOnlyProperties()
+    [Theory]
+    [InlineData(LaunchGroupBuildType.InitialShared, "Not in selected group")]
+    [InlineData(LaunchGroupBuildType.Deferred, "Not in selected group, deferred build")]
+    public void Render_LaunchGroupMetadataShowsDistinctReadOnlyProperties(LaunchGroupBuildType buildType, string exclusionReason)
     {
         ResourceSetupHelpers.SetupResourceDetails(this);
         var resource = ModelTestHelpers.CreateResource("app1", state: KnownResourceState.NotStarted);
@@ -467,8 +470,8 @@ public class ResourceDetailsTests : DashboardTestContext
                     groups: ["Web", "Shared"],
                     inheritedFrom: "parent",
                     explicitStart: true,
-                    excludedByGroup: true,
-                    buildDisposition: LaunchGroupBuildDisposition.InitialShared),
+                    exclusionReason: LaunchGroupExclusionReason.NotInSelectedGroup,
+                    buildType: buildType),
                 LaunchGroupTestHelpers.CreateResource("worker", groups: ["Web"], inheritedFrom: "app1"),
                 LaunchGroupTestHelpers.CreateResource("app1-rebuilder", groups: ["Web"], inheritedFrom: "app1"),
                 LaunchGroupTestHelpers.CreateResource("cache", groups: ["Shared"])
@@ -489,11 +492,11 @@ public class ResourceDetailsTests : DashboardTestContext
         var properties = cut.Instance.FilteredResourceProperties.ToDictionary(
             property => property.DisplayName,
             property => property.Value.StringValue);
-        Assert.Equal("Web", properties["Selected group"]);
-        Assert.Equal("Web, Shared", properties["Effective membership"]);
+        Assert.Equal("Web", properties["Launch group"]);
+        Assert.Equal("Web, Shared", properties["Launch groups"]);
         Assert.Equal("parent", properties["Inherited from"]);
         Assert.Equal("Yes", properties["Explicit start"]);
-        Assert.Equal("Not in selected group", properties["Exclusion reason"]);
+        Assert.Equal(exclusionReason, properties["Exclusion reason"]);
         Assert.False(properties.ContainsKey("Build disposition"));
         Assert.False(properties.ContainsKey("Excluded from selection"));
 

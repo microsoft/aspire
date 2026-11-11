@@ -224,9 +224,13 @@ public class BackchannelJsonSerializerContextTests
         Assert.Equal(CompletionStates.InProgress, activity.Data.CompletionState);
     }
 
-    [Fact]
-    public void LaunchGroupResponse_RoundTripsThroughSerializer()
+    [Theory]
+    [InlineData(LaunchGroupExclusionReason.None)]
+    [InlineData(LaunchGroupExclusionReason.NotInSelectedGroup)]
+    [InlineData(LaunchGroupExclusionReason.ExemptFromSelection)]
+    public void LaunchGroupResponse_RoundTripsThroughSerializer(object exclusionReasonValue)
     {
+        var exclusionReason = Assert.IsType<LaunchGroupExclusionReason>(exclusionReasonValue);
         var options = BackchannelJsonSerializerContext.CreateJsonSerializerOptions();
         var response = new GetLaunchGroupsResponse
         {
@@ -240,9 +244,8 @@ public class BackchannelJsonSerializerContextTests
                     Groups = ["shared", "catalog"],
                     InheritedFrom = "parent",
                     ExplicitStart = true,
-                    ExcludedByGroup = true,
-                    ExcludedFromSelection = true,
-                    BuildDisposition = LaunchGroupBuildDisposition.InitialShared
+                    ExclusionReason = exclusionReason,
+                    BuildType = LaunchGroupBuildType.InitialShared
                 }
             ]
         };
@@ -258,9 +261,8 @@ public class BackchannelJsonSerializerContextTests
         Assert.Equal(["shared", "catalog"], resource.Groups);
         Assert.Equal("parent", resource.InheritedFrom);
         Assert.True(resource.ExplicitStart);
-        Assert.True(resource.ExcludedByGroup);
-        Assert.True(resource.ExcludedFromSelection);
-        Assert.Equal(LaunchGroupBuildDisposition.InitialShared, resource.BuildDisposition);
+        Assert.Equal(exclusionReason, resource.ExclusionReason);
+        Assert.Equal(LaunchGroupBuildType.InitialShared, resource.BuildType);
     }
 
     [Fact]

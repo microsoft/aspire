@@ -943,70 +943,7 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Deferred.
-        /// </summary>
-        public static string ResourceLaunchGroupsBuildDeferred {
-            get {
-                return ResourceManager.GetString("ResourceLaunchGroupsBuildDeferred", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Build disposition.
-        /// </summary>
-        public static string ResourceLaunchGroupsBuildDisposition {
-            get {
-                return ResourceManager.GetString("ResourceLaunchGroupsBuildDisposition", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Initial.
-        /// </summary>
-        public static string ResourceLaunchGroupsBuildInitial {
-            get {
-                return ResourceManager.GetString("ResourceLaunchGroupsBuildInitial", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Initial (persistent).
-        /// </summary>
-        public static string ResourceLaunchGroupsBuildInitialPersistent {
-            get {
-                return ResourceManager.GetString("ResourceLaunchGroupsBuildInitialPersistent", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Initial (shared).
-        /// </summary>
-        public static string ResourceLaunchGroupsBuildInitialShared {
-            get {
-                return ResourceManager.GetString("ResourceLaunchGroupsBuildInitialShared", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Not coordinated.
-        /// </summary>
-        public static string ResourceLaunchGroupsBuildNotCoordinated {
-            get {
-                return ResourceManager.GetString("ResourceLaunchGroupsBuildNotCoordinated", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Pending.
-        /// </summary>
-        public static string ResourceLaunchGroupsBuildPending {
-            get {
-                return ResourceManager.GetString("ResourceLaunchGroupsBuildPending", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Effective membership.
+        ///   Looks up a localized string similar to Launch groups.
         /// </summary>
         public static string ResourceLaunchGroupsEffectiveMembership {
             get {
@@ -1020,6 +957,15 @@ namespace Aspire.Dashboard.Resources {
         public static string ResourceLaunchGroupsExcludedByGroup {
             get {
                 return ResourceManager.GetString("ResourceLaunchGroupsExcludedByGroup", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Not in selected group, deferred build.
+        /// </summary>
+        public static string ResourceLaunchGroupsExcludedByGroupDeferred {
+            get {
+                return ResourceManager.GetString("ResourceLaunchGroupsExcludedByGroupDeferred", resourceCulture);
             }
         }
 
@@ -1069,7 +1015,7 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Selected group.
+        ///   Looks up a localized string similar to Launch group.
         /// </summary>
         public static string ResourceLaunchGroupsSelectedGroup {
             get {

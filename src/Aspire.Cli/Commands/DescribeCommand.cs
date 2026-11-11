@@ -74,7 +74,8 @@ internal sealed partial class ResourcesCommandJsonContext : JsonSerializerContex
 [JsonSerializable(typeof(GetLaunchGroupsResponse))]
 [JsonSerializable(typeof(LaunchGroupResourceInfo))]
 [JsonSerializable(typeof(LaunchGroupResourceInfo[]))]
-[JsonSerializable(typeof(LaunchGroupBuildDisposition))]
+[JsonSerializable(typeof(LaunchGroupBuildType))]
+[JsonSerializable(typeof(LaunchGroupExclusionReason))]
 [JsonSourceGenerationOptions(
     WriteIndented = true,
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
@@ -331,7 +332,7 @@ internal sealed class DescribeCommand : BaseCommand
                 resourceGroups,
                 inheritedFrom,
                 GetStartupDescription(resource),
-                GetBuildDescription(resource.BuildDisposition));
+                GetBuildDescription(resource.BuildType));
         }
 
         InteractionService.DisplayRenderable(table);
@@ -344,11 +345,11 @@ internal sealed class DescribeCommand : BaseCommand
         {
             reasons.Add(DescribeCommandStrings.StartupExplicitStart);
         }
-        if (resource.ExcludedByGroup)
+        if (resource.ExclusionReason == LaunchGroupExclusionReason.NotInSelectedGroup)
         {
             reasons.Add(DescribeCommandStrings.StartupExcludedBySelectedGroup);
         }
-        if (resource.ExcludedFromSelection)
+        if (resource.ExclusionReason == LaunchGroupExclusionReason.ExemptFromSelection)
         {
             reasons.Add(DescribeCommandStrings.StartupExcludedFromSelection);
         }
@@ -358,14 +359,14 @@ internal sealed class DescribeCommand : BaseCommand
             : string.Join("; ", reasons);
     }
 
-    private static string GetBuildDescription(LaunchGroupBuildDisposition disposition) => disposition switch
+    private static string GetBuildDescription(LaunchGroupBuildType disposition) => disposition switch
     {
-        LaunchGroupBuildDisposition.NotCoordinated => DescribeCommandStrings.BuildNotCoordinated,
-        LaunchGroupBuildDisposition.Pending => DescribeCommandStrings.BuildPending,
-        LaunchGroupBuildDisposition.Initial => DescribeCommandStrings.BuildInitial,
-        LaunchGroupBuildDisposition.InitialPersistent => DescribeCommandStrings.BuildInitialPersistent,
-        LaunchGroupBuildDisposition.InitialShared => DescribeCommandStrings.BuildInitialShared,
-        LaunchGroupBuildDisposition.Deferred => DescribeCommandStrings.BuildDeferred,
+        LaunchGroupBuildType.NotCoordinated => DescribeCommandStrings.BuildNotCoordinated,
+        LaunchGroupBuildType.Pending => DescribeCommandStrings.BuildPending,
+        LaunchGroupBuildType.Initial => DescribeCommandStrings.BuildInitial,
+        LaunchGroupBuildType.InitialPersistent => DescribeCommandStrings.BuildInitialPersistent,
+        LaunchGroupBuildType.InitialShared => DescribeCommandStrings.BuildInitialShared,
+        LaunchGroupBuildType.Deferred => DescribeCommandStrings.BuildDeferred,
         _ => disposition.ToString()
     };
 
@@ -384,9 +385,8 @@ internal sealed class DescribeCommand : BaseCommand
                     Groups = OrderNames(resource.Groups).ToArray(),
                     InheritedFrom = resource.InheritedFrom,
                     ExplicitStart = resource.ExplicitStart,
-                    ExcludedByGroup = resource.ExcludedByGroup,
-                    ExcludedFromSelection = resource.ExcludedFromSelection,
-                    BuildDisposition = resource.BuildDisposition
+                    ExclusionReason = resource.ExclusionReason,
+                    BuildType = resource.BuildType
                 })
                 .ToArray()
         };

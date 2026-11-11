@@ -22,7 +22,7 @@ internal sealed class LaunchGroupMetadataService(ILogger<LaunchGroupMetadataServ
     internal const string BuildPlanStartupKey = "Aspire.Hosting.LaunchGroups.BuildPlanStartup";
 
     private readonly Dictionary<IResource, ResourceSelection> _selection = new(ReferenceEqualityComparer.Instance);
-    private readonly Dictionary<IResource, LaunchGroupBuildDisposition> _builds = new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<IResource, LaunchGroupBuildType> _builds = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<IResource> _generatedBuilds = new(ReferenceEqualityComparer.Instance);
     private string? _selectedGroup;
     private string[]? _groups;
@@ -66,10 +66,13 @@ internal sealed class LaunchGroupMetadataService(ILogger<LaunchGroupMetadataServ
             }
 
             var excludedFromSelection = resource.HasAnnotationOfType<ExcludeFromLaunchGroupSelectionAnnotation>();
-            var excludedByGroup = !excludedFromSelection && !LaunchGroupService.BelongsToLaunchGroup(resource, selectedGroup);
+            var exclusionReason = excludedFromSelection
+                ? LaunchGroupExclusionReason.ExemptFromSelection
+                : !LaunchGroupService.BelongsToLaunchGroup(resource, selectedGroup)
+                    ? LaunchGroupExclusionReason.NotInSelectedGroup
+                    : LaunchGroupExclusionReason.None;
             if (previous.ExplicitStart != hasUserExplicitStart(resource) ||
-                previous.ExcludedByGroup != excludedByGroup ||
-                previous.ExcludedFromSelection != excludedFromSelection)
+                previous.ExclusionReason != exclusionReason)
             {
                 throw new DistributedApplicationException(
                     $"The launch eligibility for resource '{resource.Name}' changed after the coordinated .NET build plan was materialized. " +
@@ -94,9 +97,11 @@ internal sealed class LaunchGroupMetadataService(ILogger<LaunchGroupMetadataServ
             Groups: groups,
             InheritedFrom: source is not null && !ReferenceEquals(source, resource) ? source.Name : null,
             ExplicitStart: !_generatedBuilds.Contains(resource) && resource.HasAnnotationOfType<ExplicitStartupAnnotation>(),
-            ExcludedByGroup: _selectedGroup is not null && !excludedFromSelection &&
-                !groups.Contains(_selectedGroup, StringComparer.OrdinalIgnoreCase),
-            ExcludedFromSelection: excludedFromSelection));
+            ExclusionReason: excludedFromSelection
+                ? LaunchGroupExclusionReason.ExemptFromSelection
+                : _selectedGroup is not null && !groups.Contains(_selectedGroup, StringComparer.OrdinalIgnoreCase)
+                    ? LaunchGroupExclusionReason.NotInSelectedGroup
+                    : LaunchGroupExclusionReason.None));
     }
 
     internal void RecordBuild(IResource resource, bool? isInitial, bool hasPersistentLifetime, bool isGeneratedBuild)
@@ -110,11 +115,11 @@ internal sealed class LaunchGroupMetadataService(ILogger<LaunchGroupMetadataServ
         var selection = _selection[resource];
         _builds[resource] = isInitial switch
         {
-            null => LaunchGroupBuildDisposition.Pending,
-            false => LaunchGroupBuildDisposition.Deferred,
-            true when _selectedGroup is not null && (selection.ExplicitStart || selection.ExcludedByGroup) =>
-                hasPersistentLifetime ? LaunchGroupBuildDisposition.InitialPersistent : LaunchGroupBuildDisposition.InitialShared,
-            true => LaunchGroupBuildDisposition.Initial
+            null => LaunchGroupBuildType.Pending,
+            false => LaunchGroupBuildType.Deferred,
+            true when _selectedGroup is not null && (selection.ExplicitStart || selection.ExclusionReason == LaunchGroupExclusionReason.NotInSelectedGroup) =>
+                hasPersistentLifetime ? LaunchGroupBuildType.InitialPersistent : LaunchGroupBuildType.InitialShared,
+            true => LaunchGroupBuildType.Initial
         };
     }
 
@@ -138,9 +143,8 @@ internal sealed class LaunchGroupMetadataService(ILogger<LaunchGroupMetadataServ
                     Groups = selection.Groups,
                     InheritedFrom = selection.InheritedFrom,
                     ExplicitStart = selection.ExplicitStart,
-                    ExcludedByGroup = selection.ExcludedByGroup,
-                    ExcludedFromSelection = selection.ExcludedFromSelection,
-                    BuildDisposition = _builds.GetValueOrDefault(resource, LaunchGroupBuildDisposition.NotCoordinated)
+                    ExclusionReason = selection.ExclusionReason,
+                    BuildType = _builds.GetValueOrDefault(resource, LaunchGroupBuildType.NotCoordinated)
                 };
             })
             .ToArray();
@@ -164,16 +168,16 @@ internal sealed class LaunchGroupMetadataService(ILogger<LaunchGroupMetadataServ
             logger.LogInformation(
                 "Launch group '{LaunchGroup}' (visible resources): eligible for automatic startup: {Eligible}; excluded by group: {Excluded}; explicit start: {Explicit}.",
                 _selectedGroup,
-                FormatNames(localResources.Where(resource => !resource.ExplicitStart && !resource.ExcludedByGroup &&
-                    resource.BuildDisposition is not LaunchGroupBuildDisposition.Deferred)),
-                FormatNames(localResources.Where(resource => resource.ExcludedByGroup)),
+                FormatNames(localResources.Where(resource => !resource.ExplicitStart && resource.ExclusionReason != LaunchGroupExclusionReason.NotInSelectedGroup &&
+                    resource.BuildType is not LaunchGroupBuildType.Deferred)),
+                FormatNames(localResources.Where(resource => resource.ExclusionReason == LaunchGroupExclusionReason.NotInSelectedGroup)),
                 FormatNames(localResources.Where(resource => resource.ExplicitStart)));
             logger.LogInformation(
                 "Coordinated builds: initial: {Initial}; eager for persistent resources: {Persistent}; shared with initial builds: {Shared}; deferred: {Deferred}. AppHost project-reference builds may also run eagerly.",
-                FormatNames(localResources.Where(resource => resource.BuildDisposition is LaunchGroupBuildDisposition.Initial)),
-                FormatNames(localResources.Where(resource => resource.BuildDisposition is LaunchGroupBuildDisposition.InitialPersistent)),
-                FormatNames(localResources.Where(resource => resource.BuildDisposition is LaunchGroupBuildDisposition.InitialShared)),
-                FormatNames(localResources.Where(resource => resource.BuildDisposition is LaunchGroupBuildDisposition.Deferred)));
+                FormatNames(localResources.Where(resource => resource.BuildType is LaunchGroupBuildType.Initial)),
+                FormatNames(localResources.Where(resource => resource.BuildType is LaunchGroupBuildType.InitialPersistent)),
+                FormatNames(localResources.Where(resource => resource.BuildType is LaunchGroupBuildType.InitialShared)),
+                FormatNames(localResources.Where(resource => resource.BuildType is LaunchGroupBuildType.Deferred)));
         }
         else if (groups.Length > 0)
         {
@@ -202,6 +206,5 @@ internal sealed class LaunchGroupMetadataService(ILogger<LaunchGroupMetadataServ
         string[] Groups,
         string? InheritedFrom,
         bool ExplicitStart,
-        bool ExcludedByGroup,
-        bool ExcludedFromSelection);
+        LaunchGroupExclusionReason ExclusionReason);
 }

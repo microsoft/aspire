@@ -345,20 +345,18 @@ public sealed class DescribeCommandTests(ITestOutputHelper output)
         Assert.Equal(["frontend"], selectedChild.GetProperty("groups").EnumerateArray().Select(group => group.GetString()));
         Assert.False(selectedChild.TryGetProperty("inheritedFrom", out _));
         Assert.False(selectedChild.GetProperty("explicitStart").GetBoolean());
-        Assert.False(selectedChild.GetProperty("excludedByGroup").GetBoolean());
-        Assert.False(selectedChild.GetProperty("excludedFromSelection").GetBoolean());
+        Assert.Equal("None", selectedChild.GetProperty("exclusionReason").GetString());
         var manual = Assert.Single(groupResources, resource => resource.GetProperty("name").GetString() == "manual");
         Assert.True(manual.GetProperty("explicitStart").GetBoolean());
-        Assert.False(manual.GetProperty("excludedByGroup").GetBoolean());
+        Assert.Equal("None", manual.GetProperty("exclusionReason").GetString());
         var deferred = Assert.Single(groupResources, resource => resource.GetProperty("name").GetString() == "deferred");
-        Assert.True(deferred.GetProperty("excludedByGroup").GetBoolean());
-        Assert.Equal("Deferred", deferred.GetProperty("buildDisposition").GetString());
+        Assert.Equal("NotInSelectedGroup", deferred.GetProperty("exclusionReason").GetString());
+        Assert.Equal("Deferred", deferred.GetProperty("buildType").GetString());
         var coordinatedBuild = Assert.Single(groupResources, resource => resource.GetProperty("name").GetString() == "__dotnet-project-build");
         Assert.Empty(coordinatedBuild.GetProperty("groups").EnumerateArray());
         Assert.False(coordinatedBuild.GetProperty("explicitStart").GetBoolean());
-        Assert.False(coordinatedBuild.GetProperty("excludedByGroup").GetBoolean());
-        Assert.True(coordinatedBuild.GetProperty("excludedFromSelection").GetBoolean());
-        Assert.Equal("Deferred", coordinatedBuild.GetProperty("buildDisposition").GetString());
+        Assert.Equal("ExemptFromSelection", coordinatedBuild.GetProperty("exclusionReason").GetString());
+        Assert.Equal("Deferred", coordinatedBuild.GetProperty("buildType").GetString());
 
         foreach (var fileName in new[] { "resources-before.json", "resources-after.json" })
         {

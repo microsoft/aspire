@@ -74,7 +74,7 @@ public class AppHostAuxiliaryBackchannelTests
         var resource = Assert.Single(response.Resources);
         Assert.Equal("api", resource.Name);
         Assert.Equal(["catalog"], resource.Groups);
-        Assert.Equal(LaunchGroupBuildDisposition.Initial, resource.BuildDisposition);
+        Assert.Equal(LaunchGroupBuildType.Initial, resource.BuildType);
         Assert.Equal(1, server.Target.GetLaunchGroupsCallCount);
     }
 
@@ -288,7 +288,7 @@ public class AppHostAuxiliaryBackchannelTests
                     {
                         Name = "api",
                         Groups = ["catalog"],
-                        BuildDisposition = LaunchGroupBuildDisposition.Initial
+                        BuildType = LaunchGroupBuildType.Initial
                     }
                 ]
             });

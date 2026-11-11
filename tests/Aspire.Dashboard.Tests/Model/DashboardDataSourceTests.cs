@@ -309,7 +309,7 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
                     Groups = { "frontend" },
                     InheritedFrom = "frontend-parent",
                     ExplicitStart = true,
-                    BuildDisposition = LaunchGroupBuildDisposition.Initial
+                    BuildType = LaunchGroupBuildType.Initial
                 }
             }
         });
@@ -375,7 +375,7 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
             Assert.Equal(["frontend"], launchGroup.Groups);
             Assert.Equal("frontend-parent", launchGroup.InheritedFrom);
             Assert.True(launchGroup.ExplicitStart);
-            Assert.Equal(LaunchGroupBuildDisposition.Initial, launchGroup.BuildDisposition);
+            Assert.Equal(LaunchGroupBuildType.Initial, launchGroup.BuildType);
         }
     }
 

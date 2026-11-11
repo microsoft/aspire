@@ -23,12 +23,11 @@ public class ResourceOverviewLaunchGroupTests : DashboardTestContext
 {
     private static readonly (string Name, string Value)[] s_expectedProperties =
     [
-        ("Selected group", "Web"),
-        ("Effective membership", "Web, Shared"),
+        ("Launch group", "Web"),
+        ("Launch groups", "Web, Shared"),
         ("Inherited from", "parent"),
         ("Explicit start", "Yes"),
-        ("Exclusion reason", "Not in selected group"),
-        ("Build disposition", "Deferred")
+        ("Exclusion reason", "Not in selected group, deferred build")
     ];
 
     [Fact]
@@ -39,12 +38,11 @@ public class ResourceOverviewLaunchGroupTests : DashboardTestContext
         cut.WaitForAssertion(() => Assert.Equal(["api"], cut.Instance.SelectedResourceNames));
         var values = GetStatusValues(cut);
 
-        Assert.Equal("Web", values["Selected group"]);
-        Assert.Equal("Web, Shared", values["Effective membership"]);
+        Assert.Equal("Web", values["Launch group"]);
+        Assert.Equal("Web, Shared", values["Launch groups"]);
         Assert.Equal("parent", values["Inherited from"]);
         Assert.Equal("Yes", values["Explicit start"]);
-        Assert.Equal("Not in selected group", values["Exclusion reason"]);
-        Assert.Equal("Deferred", values["Build disposition"]);
+        Assert.Equal("Not in selected group, deferred build", values["Exclusion reason"]);
         Assert.Equal("Running", values["State"]);
     }
 
@@ -68,7 +66,7 @@ public class ResourceOverviewLaunchGroupTests : DashboardTestContext
         cut.WaitForAssertion(() =>
         {
             var properties = GetPropertyValues(cut);
-            Assert.Equal(17, properties.Length);
+            Assert.Equal(16, properties.Length);
             Assert.Equal(s_expectedProperties, properties.Skip(11));
         });
 
@@ -77,10 +75,13 @@ public class ResourceOverviewLaunchGroupTests : DashboardTestContext
     }
 
     [Theory]
-    [InlineData(LaunchGroupBuildDisposition.Initial)]
-    [InlineData(LaunchGroupBuildDisposition.InitialPersistent)]
-    [InlineData(LaunchGroupBuildDisposition.InitialShared)]
-    public void Overview_DefaultMetadataDoesNotShowExtraRows(LaunchGroupBuildDisposition buildDisposition)
+    [InlineData(LaunchGroupBuildType.Initial)]
+    [InlineData(LaunchGroupBuildType.InitialPersistent)]
+    [InlineData(LaunchGroupBuildType.InitialShared)]
+    [InlineData(LaunchGroupBuildType.Pending)]
+    [InlineData(LaunchGroupBuildType.NotCoordinated)]
+    [InlineData(LaunchGroupBuildType.Deferred)]
+    public void Overview_DefaultMetadataDoesNotShowExtraRows(LaunchGroupBuildType buildType)
     {
         var cut = RenderOverview(
             withLaunchGroups: true,
@@ -88,14 +89,14 @@ public class ResourceOverviewLaunchGroupTests : DashboardTestContext
             launchGroup: LaunchGroupTestHelpers.CreateResource(
                 "api",
                 groups: ["Web"],
-                excludedFromSelection: true,
-                buildDisposition: buildDisposition));
+                exclusionReason: LaunchGroupExclusionReason.ExemptFromSelection,
+                buildType: buildType));
 
         cut.WaitForAssertion(() =>
         {
             var status = GetStatusValues(cut);
-            Assert.Equal(["Selected group", "Effective membership"], status.Keys.TakeLast(2));
-            Assert.Equal([("Selected group", "Web"), ("Effective membership", "Web")], GetPropertyValues(cut));
+            Assert.Equal(["Launch group", "Launch groups"], status.Keys.TakeLast(2));
+            Assert.Equal([("Launch group", "Web"), ("Launch groups", "Web")], GetPropertyValues(cut));
         });
     }
 
@@ -187,8 +188,8 @@ public class ResourceOverviewLaunchGroupTests : DashboardTestContext
                             groups: ["Web", "Shared"],
                             inheritedFrom: "parent",
                             explicitStart: true,
-                            excludedByGroup: true,
-                            buildDisposition: LaunchGroupBuildDisposition.Deferred),
+                            exclusionReason: LaunchGroupExclusionReason.NotInSelectedGroup,
+                            buildType: LaunchGroupBuildType.Deferred),
                         LaunchGroupTestHelpers.CreateResource("worker", groups: ["Web"], inheritedFrom: "api"),
                         LaunchGroupTestHelpers.CreateResource("api-rebuilder", groups: ["Web"], inheritedFrom: "api"),
                         LaunchGroupTestHelpers.CreateResource("cache", groups: ["Shared"])

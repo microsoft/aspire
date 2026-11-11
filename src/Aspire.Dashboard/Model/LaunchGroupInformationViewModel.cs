@@ -40,9 +40,8 @@ public sealed class LaunchGroupInformationViewModel
                 DistinctNames(resource.Groups),
                 resource.HasInheritedFrom ? resource.InheritedFrom : null,
                 resource.ExplicitStart,
-                resource.ExcludedByGroup,
-                resource.ExcludedFromSelection,
-                resource.BuildDisposition);
+                resource.ExclusionReason,
+                resource.BuildType);
         }
 
         return new LaunchGroupInformationViewModel(
@@ -171,9 +170,8 @@ internal sealed record ResourceLaunchGroupViewModel(
     ImmutableArray<string> Groups,
     string? InheritedFrom,
     bool ExplicitStart,
-    bool ExcludedByGroup,
-    bool ExcludedFromSelection,
-    LaunchGroupBuildDisposition BuildDisposition);
+    LaunchGroupExclusionReason ExclusionReason,
+    LaunchGroupBuildType BuildType);
 
 internal static class LaunchGroupDisplayHelpers
 {
@@ -201,13 +199,12 @@ internal static class LaunchGroupDisplayHelpers
         {
             properties.Add(CreateProperty("resource-launch-group-explicit-start", nameof(Resources.Resources.ResourceLaunchGroupsExplicitStart), loc[nameof(Resources.Resources.ResourceLaunchGroupsYes)], sortOrder++));
         }
-        if (launchGroup.ExcludedByGroup)
+        if (launchGroup.ExclusionReason == LaunchGroupExclusionReason.NotInSelectedGroup)
         {
-            properties.Add(CreateProperty("resource-launch-group-exclusion-reason", nameof(Resources.Resources.ResourceLaunchGroupsExclusionReason), loc[nameof(Resources.Resources.ResourceLaunchGroupsExcludedByGroup)], sortOrder++));
-        }
-        if (launchGroup.BuildDisposition is not (LaunchGroupBuildDisposition.Initial or LaunchGroupBuildDisposition.InitialPersistent or LaunchGroupBuildDisposition.InitialShared))
-        {
-            properties.Add(CreateProperty("resource-launch-group-build-disposition", nameof(Resources.Resources.ResourceLaunchGroupsBuildDisposition), GetBuildDispositionText(launchGroup.BuildDisposition, loc), sortOrder));
+            var exclusionReason = launchGroup.BuildType == LaunchGroupBuildType.Deferred
+                ? loc[nameof(Resources.Resources.ResourceLaunchGroupsExcludedByGroupDeferred)]
+                : loc[nameof(Resources.Resources.ResourceLaunchGroupsExcludedByGroup)];
+            properties.Add(CreateProperty("resource-launch-group-exclusion-reason", nameof(Resources.Resources.ResourceLaunchGroupsExclusionReason), exclusionReason, sortOrder));
         }
 
         return properties;
@@ -240,18 +237,5 @@ internal static class LaunchGroupDisplayHelpers
         return launchGroup.Groups.IsEmpty
             ? loc[nameof(Resources.Resources.ResourceLaunchGroupsUngrouped)]
             : string.Join(", ", launchGroup.Groups);
-    }
-
-    internal static string GetBuildDispositionText(LaunchGroupBuildDisposition disposition, IStringLocalizer<Resources.Resources> loc)
-    {
-        return loc[disposition switch
-        {
-            LaunchGroupBuildDisposition.Pending => nameof(Resources.Resources.ResourceLaunchGroupsBuildPending),
-            LaunchGroupBuildDisposition.Initial => nameof(Resources.Resources.ResourceLaunchGroupsBuildInitial),
-            LaunchGroupBuildDisposition.InitialPersistent => nameof(Resources.Resources.ResourceLaunchGroupsBuildInitialPersistent),
-            LaunchGroupBuildDisposition.InitialShared => nameof(Resources.Resources.ResourceLaunchGroupsBuildInitialShared),
-            LaunchGroupBuildDisposition.Deferred => nameof(Resources.Resources.ResourceLaunchGroupsBuildDeferred),
-            _ => nameof(Resources.Resources.ResourceLaunchGroupsBuildNotCoordinated)
-        }];
     }
 }

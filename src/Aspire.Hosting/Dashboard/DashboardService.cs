@@ -93,9 +93,8 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
             {
                 Name = resource.Name,
                 ExplicitStart = resource.ExplicitStart,
-                ExcludedByGroup = resource.ExcludedByGroup,
-                ExcludedFromSelection = resource.ExcludedFromSelection,
-                BuildDisposition = (LaunchGroupBuildDisposition)resource.BuildDisposition
+                ExclusionReason = (LaunchGroupExclusionReason)resource.ExclusionReason,
+                BuildType = (LaunchGroupBuildType)resource.BuildType
             };
             if (resource.InheritedFrom is not null)
             {

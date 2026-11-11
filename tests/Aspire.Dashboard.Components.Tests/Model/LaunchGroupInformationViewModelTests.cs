@@ -24,9 +24,8 @@ public class LaunchGroupInformationViewModelTests
             groups: ["Web", "Shared", "shared"],
             inheritedFrom: "parent",
             explicitStart: true,
-            excludedByGroup: false,
-            excludedFromSelection: true,
-            buildDisposition: LaunchGroupBuildDisposition.InitialShared));
+            exclusionReason: LaunchGroupExclusionReason.ExemptFromSelection,
+            buildType: LaunchGroupBuildType.InitialShared));
 
         var model = LaunchGroupInformationViewModel.Create(information);
 
@@ -38,9 +37,8 @@ public class LaunchGroupInformationViewModelTests
         Assert.Equal(["Web", "Shared"], resource.Groups);
         Assert.Equal("parent", resource.InheritedFrom);
         Assert.True(resource.ExplicitStart);
-        Assert.False(resource.ExcludedByGroup);
-        Assert.True(resource.ExcludedFromSelection);
-        Assert.Equal(LaunchGroupBuildDisposition.InitialShared, resource.BuildDisposition);
+        Assert.Equal(LaunchGroupExclusionReason.ExemptFromSelection, resource.ExclusionReason);
+        Assert.Equal(LaunchGroupBuildType.InitialShared, resource.BuildType);
     }
 
     [Fact]
@@ -120,17 +118,15 @@ public class LaunchGroupInformationViewModelTests
         IReadOnlyList<string> groups,
         string? inheritedFrom = null,
         bool explicitStart = false,
-        bool excludedByGroup = false,
-        bool excludedFromSelection = false,
-        LaunchGroupBuildDisposition buildDisposition = LaunchGroupBuildDisposition.NotCoordinated)
+        LaunchGroupExclusionReason exclusionReason = LaunchGroupExclusionReason.None,
+        LaunchGroupBuildType buildType = LaunchGroupBuildType.NotCoordinated)
     {
         var information = new LaunchGroupResourceInfo
         {
             Name = name,
             ExplicitStart = explicitStart,
-            ExcludedByGroup = excludedByGroup,
-            ExcludedFromSelection = excludedFromSelection,
-            BuildDisposition = buildDisposition
+            ExclusionReason = exclusionReason,
+            BuildType = buildType
         };
         information.Groups.AddRange(groups);
         if (inheritedFrom is not null)

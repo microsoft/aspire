@@ -84,7 +84,7 @@ namespace Aspire.Cli.Backchannel;
 [JsonSerializable(typeof(GetLaunchGroupsResponse))]
 [JsonSerializable(typeof(LaunchGroupResourceInfo))]
 [JsonSerializable(typeof(LaunchGroupResourceInfo[]))]
-[JsonSerializable(typeof(LaunchGroupBuildDisposition))]
+[JsonSerializable(typeof(LaunchGroupBuildType))]
 [JsonSerializable(typeof(WatchResourcesRequest))]
 [JsonSerializable(typeof(GetConsoleLogsRequest))]
 [JsonSerializable(typeof(CallMcpToolRequest))]
