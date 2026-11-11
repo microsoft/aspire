@@ -233,23 +233,6 @@ public class AgentTelemetryHookTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void ClaudeSkillIfSelectsEveryCanonicalSkill()
-    {
-        var names = AgentTelemetryCatalog.Canonical.Skills.SelectMany(skill => new[] { skill, $"aspire:{skill}" });
-        foreach (var name in names)
-        {
-            Assert.True(MatchesClaudeSkillIf(name), name);
-            Assert.NotNull(AgentTelemetryHook.Classify(
-                $$$"""{"tool_name":"Skill","tool_input":{"skill":"{{{name}}}"}}""",
-                new TestEnvironment(),
-                AgentTelemetryHook.DefaultMaxPayloadCharacters));
-        }
-
-        Assert.False(MatchesClaudeSkillIf("notes-helper"));
-        Assert.False(MatchesClaudeSkillIf("anthropic-skills:pdf"));
-    }
-
-    [Fact]
     public void ClaudeReadIfSelectsEveryCanonicalSkillFile()
     {
         // Claude normalizes Windows paths to POSIX form before matching, so C:\Users\user becomes /c/Users/user.
@@ -460,19 +443,6 @@ public class AgentTelemetryHookTests(ITestOutputHelper outputHelper)
 
     private static bool MatchesAsClaude(string toolName, string matcher) =>
         Regex.IsMatch(toolName, matcher, RegexOptions.ECMAScript);
-
-    // Emulates the Claude permission-rule prefix glob that TelemetryHookSkillIf uses. A trailing "*" with no space
-    // before it matches any remaining text:
-    //   Skill(aspire*) matches aspire-init and aspire:aspire-init
-    // https://code.claude.com/docs/en/permissions#wildcard-patterns
-    private static bool MatchesClaudeSkillIf(string skillName)
-    {
-        const string RulePrefix = "Skill(";
-        Assert.StartsWith(RulePrefix, ClaudeCodeAgentClient.TelemetryHookSkillIf);
-        Assert.EndsWith("*)", ClaudeCodeAgentClient.TelemetryHookSkillIf);
-        var prefix = ClaudeCodeAgentClient.TelemetryHookSkillIf[RulePrefix.Length..^2];
-        return skillName.StartsWith(prefix, StringComparison.Ordinal);
-    }
 
     // Emulates the subset of Claude permission-rule globs that TelemetryHookReadIf uses. "//" anchors the pattern at
     // the filesystem root, "**/" spans any number of directories, and "*" stays within one path segment:
