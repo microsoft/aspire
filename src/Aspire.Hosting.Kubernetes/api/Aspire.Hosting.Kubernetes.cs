@@ -751,18 +751,18 @@ namespace Aspire.Hosting.Kubernetes.Resources
     }
 
     [YamlDotNet.Serialization.YamlSerializable]
-    public sealed partial class CrossVersionObjectReferenceV1 : BaseKubernetesResource
+    public sealed partial class CrossVersionObjectReferenceV1 : BaseKubernetesObject
     {
-        public CrossVersionObjectReferenceV1() : base(default!, default!) { }
+        public CrossVersionObjectReferenceV1() : base(default, default) { }
 
         [YamlDotNet.Serialization.YamlMember(Alias = "name")]
         public string Name { get { throw null; } set { } }
     }
 
     [YamlDotNet.Serialization.YamlSerializable]
-    public sealed partial class CrossVersionObjectReferenceV2 : BaseKubernetesResource
+    public sealed partial class CrossVersionObjectReferenceV2 : BaseKubernetesObject
     {
-        public CrossVersionObjectReferenceV2() : base(default!, default!) { }
+        public CrossVersionObjectReferenceV2() : base(default, default) { }
 
         [YamlDotNet.Serialization.YamlMember(Alias = "name")]
         public string Name { get { throw null; } set { } }

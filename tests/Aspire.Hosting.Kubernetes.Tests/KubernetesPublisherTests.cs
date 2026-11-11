@@ -292,6 +292,84 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task PublishAsync_HorizontalPodAutoscalerObjectReferencesMatchKubernetesSchema()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        builder.AddKubernetesEnvironment("env");
+
+        builder.AddContainer("myapp", "nginx:alpine")
+            .PublishAsKubernetesService(serviceResource =>
+            {
+                var scaler = new HorizontalPodAutoscalerV2
+                {
+                    Metadata = { Name = "myapp-hpa" },
+                    Spec =
+                    {
+                        ScaleTargetRef =
+                        {
+                            ApiVersion = "apps/v1",
+                            Kind = "Deployment",
+                            Name = serviceResource.Workload!.Metadata.Name
+                        },
+                        MinReplicas = 1,
+                        MaxReplicas = 3
+                    }
+                };
+
+                scaler.Spec.Metrics.Add(new MetricSpecV2
+                {
+                    Type = "Object",
+                    Object = new()
+                    {
+                        Metric = { Name = "requests-per-second" },
+                        DescribedObject =
+                        {
+                            ApiVersion = "networking.k8s.io/v1",
+                            Kind = "Ingress",
+                            Name = "main-route"
+                        },
+                        Target = { Type = "Value", Value = "2k" }
+                    }
+                });
+
+                serviceResource.AdditionalResources.Add(scaler);
+            });
+
+        using var app = builder.Build();
+        app.Run();
+
+        var hpaFile = Assert.Single(
+            Directory.GetFiles(Path.Combine(workspace.Path, "templates", "myapp"), "*.yaml"),
+            f => File.ReadAllText(f).Contains("kind: \"HorizontalPodAutoscaler\"", StringComparison.Ordinal));
+
+        var yaml = new YamlStream();
+        yaml.Load(new StringReader(await File.ReadAllTextAsync(hpaFile)));
+
+        var root = (YamlMappingNode)yaml.Documents[0].RootNode;
+        var spec = (YamlMappingNode)root.Children[new YamlScalarNode("spec")];
+        var metric = (YamlMappingNode)Assert.Single(((YamlSequenceNode)spec.Children[new YamlScalarNode("metrics")]).Children);
+        var objectSource = (YamlMappingNode)metric.Children[new YamlScalarNode("object")];
+
+        // CrossVersionObjectReference only allows apiVersion, kind and name; strict validation rejects 'metadata'.
+        AssertCrossVersionObjectReference(
+            (YamlMappingNode)spec.Children[new YamlScalarNode("scaleTargetRef")], "apps/v1", "Deployment", "myapp-deployment");
+        AssertCrossVersionObjectReference(
+            (YamlMappingNode)objectSource.Children[new YamlScalarNode("describedObject")], "networking.k8s.io/v1", "Ingress", "main-route");
+
+        static void AssertCrossVersionObjectReference(YamlMappingNode reference, string apiVersion, string kind, string name)
+        {
+            Assert.Equal(
+                ["apiVersion", "kind", "name"],
+                reference.Children.Keys.Select(k => ((YamlScalarNode)k).Value!).Order(StringComparer.Ordinal));
+            Assert.Equal(apiVersion, ((YamlScalarNode)reference.Children[new YamlScalarNode("apiVersion")]).Value);
+            Assert.Equal(kind, ((YamlScalarNode)reference.Children[new YamlScalarNode("kind")]).Value);
+            Assert.Equal(name, ((YamlScalarNode)reference.Children[new YamlScalarNode("name")]).Value);
+        }
+    }
+
+    [Fact]
     public async Task PublishAsync_CustomManifestResource()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
