@@ -2,13 +2,13 @@
 
 @inject IStringLocalizer<ControlsStrings> Loc
 
-<div class="block-warning pause-warning">
-    <div class="block-warning-icon">
-        <FluentIcon Value="new Icons.Filled.Size16.Warning()" Color="Color.Warning" />
+<div class="pause-warning">
+    <div class="pause-warning-icon">
+        <FluentIcon Value="new Icons.Filled.Size16.Warning()" Width="12px" Color="Color.Custom" CustomColor="currentColor" />
     </div>
 
-    <div class="block-warning-message">
-        <span class="title">@Loc[nameof(ControlsStrings.PauseWarningTitle)]</span>
+    <div class="pause-warning-message">
+        <span class="pause-warning-title">@Loc[nameof(ControlsStrings.PauseWarningTitle)]</span>
         @PauseText
     </div>
 </div>
