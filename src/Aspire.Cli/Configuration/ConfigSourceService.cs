@@ -35,7 +35,6 @@ internal sealed class ConfigSourceService(
     internal const string MicrosoftRepository = "https://msft.ghe.com/coreai/aspire-1p-init";
     internal const string MicrosoftReadmeUrl = $"{MicrosoftRepository}/blob/HEAD/README.md";
     private static readonly string[] s_allowedSettings = [SkillSource.SectionName, IntegrationSourceConfiguration.SectionName];
-    private static readonly TimeSpan s_gitTimeout = TimeSpan.FromSeconds(30);
     private readonly Dictionary<ConfigSourceIdentity, ConfigSourceSnapshot> _snapshots = [];
     private string? _projectDirectory;
     private bool _projectChecked;
@@ -708,7 +707,7 @@ internal sealed class ConfigSourceService(
     private async Task<(string Commit, string Version, JsonObject Configuration)> AcquireRepositoryAsync(
         ConfigSource source, string directory, bool allowInteractiveInput, CancellationToken cancellationToken)
     {
-        using var deadline = new CancellationTokenSource(s_gitTimeout, timeProvider);
+        using var deadline = new CancellationTokenSource(GitClient.OperationTimeout, timeProvider);
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
         try
         {
@@ -757,7 +756,7 @@ internal sealed class ConfigSourceService(
 
     private async Task<(string Commit, string Version)> CheckRepositoryAsync(ConfigSource source, string directory, CancellationToken cancellationToken)
     {
-        using var deadline = new CancellationTokenSource(s_gitTimeout, timeProvider);
+        using var deadline = new CancellationTokenSource(GitClient.OperationTimeout, timeProvider);
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
         try
         {
