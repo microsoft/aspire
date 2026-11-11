@@ -685,7 +685,7 @@ internal sealed class AgentInitCommand : BaseCommand
         // --- Phase 6: Install agent telemetry hooks (default-on, parity with azure-skills) ---
         // Registers one hook per selected client at the chosen scope. Project hooks are written to committable
         // repository files and run the same CLI command as user hooks. Each hook carries its source and scope so
-        // `aspire agent telemetry` can skip a call another installed hook records (see AgentTelemetryHook.ShouldRecord).
+        // `aspire agent telemetry` can skip a call another installed hook records (see IAgentClient.ShouldRecordTelemetryHook).
         // Whether telemetry is actually transmitted stays gated by the single ASPIRE_CLI_TELEMETRY_OPTOUT
         // opt-out, which both the hook scripts and the `aspire agent telemetry` command path re-check at runtime.
         // The hooks only report aspire@aspire-skills skills and Aspire MCP tool usage, so a client gets a

@@ -263,7 +263,56 @@ internal sealed class ClaudeCodeAgentClient(
         }
     }
 
-    internal static bool IsAspireHook(JsonNode? node)
+    // Copilot runs repository .claude/settings.json hooks but never Claude user settings, so inside Copilot this
+    // hook sits next to Copilot's own hook. Claude runs both user and project hooks, so the user hook records the
+    // call when both are installed.
+    // https://docs.github.com/en/copilot/reference/hooks-reference#hooks-locations
+    // https://code.claude.com/docs/en/settings#settings-files
+    public bool ShouldRecordTelemetryHook(AgentConfigurationScope scope)
+    {
+        if (AgentTelemetryHook.GetCopilotRuntimeName(environment) is not null)
+        {
+            return false;
+        }
+        if (scope is not AgentConfigurationScope.Project)
+        {
+            return true;
+        }
+
+        var settingsPath = Path.Combine(ClaudeCodePaths.GetConfigDirectory(context, environment), "settings.json");
+        try
+        {
+            return !HasUserTelemetryHook(settingsPath);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+        {
+            logger.LogDebug(ex, "Failed to read Claude settings at {Path}.", settingsPath);
+            return true;
+        }
+    }
+
+    // Settings shape: {"hooks":{"PostToolUse":[{"matcher":"^Skill$","hooks":[{"command":"/path/to/aspire","args":[...]}]}]}}
+    // A project hook installed in the home directory shares this file, so it does not count as the user hook.
+    private static bool HasUserTelemetryHook(string settingsPath)
+        => File.Exists(settingsPath)
+            && JsonNode.Parse(File.ReadAllText(settingsPath)) is JsonObject settings
+            && settings["hooks"] is JsonObject hooks
+            && hooks["PostToolUse"] is JsonArray postToolUse
+            && postToolUse.OfType<JsonObject>()
+                .SelectMany(group => group["hooks"] as JsonArray ?? [])
+                .OfType<JsonObject>()
+                .Any(hook => IsAspireHook(hook) && !IsProjectHook(hook));
+
+    // Current hook args end with: ... --source claude --scope Project
+    private static bool IsProjectHook(JsonObject hook)
+        => hook["args"] is JsonArray args
+            && args.Select(arg => arg is JsonValue value && value.TryGetValue<string>(out var text) ? text : null)
+                .SkipWhile(arg => arg != AgentTelemetryProtocol.ScopeOptionName)
+                .Skip(1)
+                .FirstOrDefault() is { } scope
+            && string.Equals(scope, nameof(AgentConfigurationScope.Project), StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsAspireHook(JsonNode? node)
     {
         // Match legacy scripts or our exact CLI invocation, not arbitrary Aspire commands. Trailing
         // arguments are allowed because current hooks append --source and --scope.
