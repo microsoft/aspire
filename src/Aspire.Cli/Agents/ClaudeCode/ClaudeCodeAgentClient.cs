@@ -100,7 +100,7 @@ internal sealed class ClaudeCodeAgentClient(
         // https://code.claude.com/docs/en/settings#settings-files
         var claudeDirectory = ClaudeCodePaths.GetConfigDirectory(scope, workspaceRoot, context, environment);
         var settingsPath = Path.Combine(claudeDirectory, "settings.json");
-        var (command, args) = AgentTelemetryHook.GetHookCommand(AgentTelemetryProtocol.ClaudeSource, scope);
+        var (command, args) = AgentTelemetryHook.GetHookCommand(Id, scope);
         var edit = new AgentConfiguration();
         byte[]? bytes;
         try
@@ -250,9 +250,9 @@ internal sealed class ClaudeCodeAgentClient(
     /// I/O and JSON failures. Claude nests handlers in matcher groups:
     /// <c>{"hooks":{"PostToolUse":[{"matcher":"...","hooks":[{"command":"/path/to/aspire","args":[...,"--scope","project"]}]}]}}</c>
     /// </remarks>
-    internal static bool HasProjectTelemetryHook(string repositoryRoot)
+    public bool HasProjectTelemetryHook(DirectoryInfo repositoryRoot)
     {
-        var settingsPath = Path.Combine(repositoryRoot, ClaudeCodePaths.ConfigDirectoryName, "settings.json");
+        var settingsPath = Path.Combine(repositoryRoot.FullName, ClaudeCodePaths.ConfigDirectoryName, "settings.json");
 
         return File.Exists(settingsPath)
             && JsonNode.Parse(File.ReadAllText(settingsPath)) is JsonObject settings

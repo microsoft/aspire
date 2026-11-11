@@ -27,10 +27,7 @@ internal static class AgentTelemetryProtocol
     internal const string ToolInvocationEventType = "tool_invocation";
     internal const string ReferenceFileReadEventType = "reference_file_read";
 
-    // Values for --source: the hook configuration format that invoked the hook.
-    internal const string CopilotSource = "copilot";
-    internal const string ClaudeSource = "claude";
-
+    // --source is the IAgentClient.Id whose hook configuration invoked the hook.
     // Values for --scope: where the hook configuration was installed.
     internal const string UserScope = "user";
     internal const string ProjectScope = "project";

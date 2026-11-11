@@ -4,7 +4,6 @@
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using Aspire.Cli.Agents.ClaudeCode;
 using Aspire.Cli.Agents.Copilot;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
@@ -44,38 +43,24 @@ internal sealed class AgentTelemetryHook(IEnvironment environment)
     /// <summary>
     /// Gets the hook command written into an agent's hook configuration.
     /// </summary>
-    /// <param name="source">The hook configuration format, <see cref="AgentTelemetryProtocol.CopilotSource"/> or <see cref="AgentTelemetryProtocol.ClaudeSource"/>.</param>
+    /// <param name="clientId">The <see cref="IAgentClient.Id"/> whose hook configuration runs the command.</param>
     /// <param name="scope">Where the hook configuration is installed.</param>
     /// <remarks>
-    /// User and project hooks run the same CLI invocation. <c>--source</c> and <c>--scope</c> let the hook detect
-    /// when another installed hook owns the same event (see <see cref="ShouldSkip"/>).
+    /// User and project hooks run the same CLI invocation. <c>--source</c> and <c>--scope</c> let
+    /// <see cref="TelemetryHookSkipPolicy"/> detect when another installed hook records the same event.
     /// </remarks>
-    internal static (string Command, string[] Args) GetHookCommand(string source, AgentConfigurationScope scope)
+    internal static (string Command, string[] Args) GetHookCommand(string clientId, AgentConfigurationScope scope)
     {
         var (command, args) = GetCommand(AgentTelemetryProtocol.HookOptionName);
         return (command,
         [
             .. args,
-            AgentTelemetryProtocol.SourceOptionName, source,
+            AgentTelemetryProtocol.SourceOptionName, clientId,
             AgentTelemetryProtocol.ScopeOptionName, scope == AgentConfigurationScope.Project ? AgentTelemetryProtocol.ProjectScope : AgentTelemetryProtocol.UserScope
         ]);
     }
 
-    /// <param name="input">The hook payload.</param>
-    /// <param name="output">Receives the hook response.</param>
-    /// <param name="error">Receives diagnostics.</param>
-    /// <param name="source">The <c>--source</c> value, or <see langword="null"/> for hooks installed without one.</param>
-    /// <param name="scope">The <c>--scope</c> value, or <see langword="null"/> for hooks installed without one.</param>
-    /// <param name="workingDirectory">The directory the agent ran the hook in, used to find project hooks.</param>
-    /// <param name="execute">Records the classified event.</param>
-    internal async Task<int> RunAsync(
-        TextReader input,
-        TextWriter output,
-        TextWriter error,
-        string? source,
-        string? scope,
-        string workingDirectory,
-        Func<string[], Task<int>> execute)
+    internal async Task<int> RunAsync(TextReader input, TextWriter output, TextWriter error, Func<string[], Task<int>> execute)
     {
         try
         {
@@ -107,7 +92,7 @@ internal sealed class AgentTelemetryHook(IEnvironment environment)
             }
 
             var args = Classify(new string(buffer, 0, length), environment, maxPayloadCharacters);
-            if (args is not null && !ShouldSkip(source, scope, workingDirectory))
+            if (args is not null)
             {
                 await execute(args).ConfigureAwait(false);
             }
@@ -124,57 +109,6 @@ internal sealed class AgentTelemetryHook(IEnvironment environment)
         }
 
         return 0;
-    }
-
-    /// <summary>
-    /// Determines whether another installed hook owns this event, so recording it here would double count.
-    /// </summary>
-    /// <remarks>
-    /// Copilot CLI runs the repository's <c>.claude/settings.json</c> hooks alongside its own, so a Claude hook
-    /// defers to the Copilot hook inside Copilot. A user hook defers to a project hook for the same source because
-    /// agents run both without deduplication (https://docs.github.com/en/copilot/reference/hooks-reference#hooks-locations).
-    /// Hooks installed without <c>--source</c> or <c>--scope</c> never skip. Failures fall back to recording.
-    /// </remarks>
-    private bool ShouldSkip(string? source, string? scope, string workingDirectory)
-    {
-        try
-        {
-            if (source == AgentTelemetryProtocol.ClaudeSource && GetCopilotHostClientName(environment) is not null)
-            {
-                return true;
-            }
-
-            if (scope != AgentTelemetryProtocol.UserScope || FindRepositoryRoot(workingDirectory) is not { } root)
-            {
-                return false;
-            }
-
-            return source switch
-            {
-                AgentTelemetryProtocol.CopilotSource => CopilotAgentClient.HasProjectTelemetryHook(root),
-                AgentTelemetryProtocol.ClaudeSource => ClaudeCodeAgentClient.HasProjectTelemetryHook(root),
-                _ => false,
-            };
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or ArgumentException)
-        {
-            return false;
-        }
-    }
-
-    // A worktree or submodule has a .git file instead of a directory.
-    private static string? FindRepositoryRoot(string workingDirectory)
-    {
-        for (var directory = new DirectoryInfo(workingDirectory); directory is not null; directory = directory.Parent)
-        {
-            var gitPath = Path.Combine(directory.FullName, ".git");
-            if (Directory.Exists(gitPath) || File.Exists(gitPath))
-            {
-                return directory.FullName;
-            }
-        }
-
-        return null;
     }
 
     /// <summary>
@@ -345,23 +279,25 @@ internal sealed class AgentTelemetryHook(IEnvironment environment)
         }
     }
 
-    private static string GetClientName(JsonElement data, IEnvironment environment) =>
-        GetCopilotHostClientName(environment) switch
-        {
-            { } copilotClientName => copilotClientName,
-            _ when Property(data, "hook_event_name") is not null => IsVsCode(data) ? "vscode" : "claude-code",
-            _ when Property(data, "toolArgs") is not null => "copilot-cli",
-            _ => "unknown"
-        };
-
-    // Gets the Copilot host running the hook, or null outside Copilot. The app also sets COPILOT_CLI, so its
-    // specific runtime marker must take precedence.
-    private static string? GetCopilotHostClientName(IEnvironment environment)
-        => environment.GetEnvironmentVariable(CopilotAppInstallationDetector.AgentEnvironmentVariable) switch
+    /// <summary>
+    /// Gets the client name when the hook runs inside a GitHub Copilot runtime, or <see langword="null"/> otherwise.
+    /// </summary>
+    // The app also sets COPILOT_CLI, so its specific runtime marker must take precedence.
+    internal static string? GetCopilotRuntimeName(IEnvironment environment) =>
+        environment.GetEnvironmentVariable(CopilotAppInstallationDetector.AgentEnvironmentVariable) switch
         {
             CopilotAppInstallationDetector.AgentEnvironmentValue => "copilot-app",
             _ when environment.IsFlagEnabled("COPILOT_CLI") => "copilot-cli",
             _ => null
+        };
+
+    private static string GetClientName(JsonElement data, IEnvironment environment) =>
+        GetCopilotRuntimeName(environment) switch
+        {
+            { } copilotRuntimeName => copilotRuntimeName,
+            _ when Property(data, "hook_event_name") is not null => IsVsCode(data) ? "vscode" : "claude-code",
+            _ when Property(data, "toolArgs") is not null => "copilot-cli",
+            _ => "unknown"
         };
 
     private static bool IsVsCode(JsonElement data)

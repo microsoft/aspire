@@ -34,6 +34,7 @@ internal sealed class AgentTelemetryCommand : BaseCommand
 
     private readonly TelemetryManager _telemetryManager;
     private readonly AgentTelemetryHook _hook;
+    private readonly TelemetryHookSkipPolicy _skipPolicy;
     private readonly IEnvironment _environment;
     private readonly ConsoleEnvironment _console;
     private readonly ILogger _logger;
@@ -92,11 +93,12 @@ internal sealed class AgentTelemetryCommand : BaseCommand
     };
 
     public AgentTelemetryCommand(CommonCommandServices services, TelemetryManager telemetryManager,
-        AgentTelemetryHook hook, IEnvironment environment, ConsoleEnvironment console)
+        AgentTelemetryHook hook, TelemetryHookSkipPolicy skipPolicy, IEnvironment environment, ConsoleEnvironment console)
         : base(AgentTelemetryProtocol.TelemetryCommandName, AgentCommandStrings.AgentTelemetryCommand_Description, services)
     {
         _telemetryManager = telemetryManager;
         _hook = hook;
+        _skipPolicy = skipPolicy;
         _environment = environment;
         _console = console;
         _logger = services.LoggerFactory.CreateLogger<AgentTelemetryCommand>();
@@ -131,11 +133,14 @@ internal sealed class AgentTelemetryCommand : BaseCommand
                     _console.Input,
                     _console.Out.Profile.Out.Writer,
                     _console.Error.Profile.Out.Writer,
-                    parseResult.GetValue(_sourceOption),
-                    parseResult.GetValue(_scopeOption),
-                    ExecutionContext.WorkingDirectory.FullName,
                     async args =>
                     {
+                        // Check after classification so tool calls that record nothing never read project settings.
+                        if (_skipPolicy.ShouldSkip(parseResult.GetValue(_sourceOption), parseResult.GetValue(_scopeOption)))
+                        {
+                            return CliExitCodes.Success;
+                        }
+
                         // Classification produces the same options as legacy script invocations. Parse
                         // those options on this command, without invoking another CLI or handler.
                         await RecordAsync(Parse(args[2..])).ConfigureAwait(false);

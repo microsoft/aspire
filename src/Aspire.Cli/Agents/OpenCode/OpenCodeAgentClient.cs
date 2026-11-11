@@ -198,6 +198,8 @@ internal sealed class OpenCodeAgentClient(CliExecutionContext context, IEnvironm
         AgentConfigurationScope scope, DirectoryInfo workspaceRoot, CancellationToken cancellationToken)
         => throw new NotSupportedException();
 
+    public bool HasProjectTelemetryHook(DirectoryInfo repositoryRoot) => false;
+
     public override string ToString() => Id;
 
     private static (JsonObject? Servers, bool Native) GetMcpServerContainer(JsonObject root, string path)

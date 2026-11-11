@@ -48,6 +48,10 @@ internal interface IAgentClient
 
     Task<TelemetryHookStatus> ConfigureTelemetryHookAsync(
         AgentConfigurationScope scope, DirectoryInfo workspaceRoot, CancellationToken cancellationToken);
+
+    // Lets a user-scope hook defer to this client's project-scope hook so a tool call is counted once.
+    // Runs on every hook invocation, so it reads only the repository's files and never starts a process.
+    bool HasProjectTelemetryHook(DirectoryInfo repositoryRoot);
 }
 
 internal enum AgentConfigurationScope

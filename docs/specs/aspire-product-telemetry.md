@@ -211,9 +211,11 @@ Client attribution checks `AI_AGENT=github_copilot_app_agent` first and reports 
 
 An eligible invocation initializes providers before metadata enrichment and records `aspire/cli/agent_telemetry` as a reported span. Agent telemetry invocations suppress the generic `aspire/cli/main` span and the first-run notice, and disable the reported internal-Microsoft detector diagnostic. This avoids counting a background hook as an ordinary CLI invocation.
 
-Clients run every matching hook from user and project sources without merging them, and Copilot CLI and [VS Code](https://code.visualstudio.com/docs/agent-customization/hooks) also read the repository's Claude settings. [AgentTelemetryHook](../../src/Aspire.Cli/Agents/Hooks/AgentTelemetryHook.cs) therefore drops an eligible event without recording it when another installed hook owns it:
+Clients run every matching hook from user and project sources without merging them, and Copilot CLI and [VS Code](https://code.visualstudio.com/docs/agent-customization/hooks) also read the repository's Claude settings. Copilot CLI runs hooks from `~/.copilot/hooks`, the repository's `.github/hooks`, and the repository's `.claude/settings.json` once each per tool call, with the same `toolCallId` and no deduplication; it reads repository hooks only after the user trusts the folder, and never reads `~/.claude/settings.json` ([hook locations](https://docs.github.com/en/copilot/reference/hooks-reference#hooks-locations)). Without a skip rule, one Copilot tool call in a project-initialized repository would be recorded three times.
 
-- A `--scope user` hook skips when the enclosing repository (the nearest directory with `.git`) has an Aspire `--scope project` hook for the same source.
+[AgentTelemetryCommand](../../src/Aspire.Cli/Commands/AgentTelemetryCommand.cs) asks [TelemetryHookSkipPolicy](../../src/Aspire.Cli/Agents/Hooks/TelemetryHookSkipPolicy.cs) after classification, and drops an eligible event without recording it when another installed hook owns it:
+
+- A `--scope user` hook skips when the enclosing repository (the nearest directory with `.git`) has an Aspire `--scope project` hook for the same source. Each agent client reads its own project hook file through `IAgentClient.HasProjectTelemetryHook`.
 - A `--source claude` hook skips when `COPILOT_CLI` is enabled or `AI_AGENT=github_copilot_app_agent`, because the Copilot hook receives the same event.
 
 Hooks registered without `--source` and `--scope` never skip. Unreadable or malformed hook files count as no project hook.

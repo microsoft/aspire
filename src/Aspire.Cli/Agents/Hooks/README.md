@@ -13,7 +13,9 @@ and CLI releases, without relying on Aspire-skills bundles or caches.
 `aspire agent init` writes hooks at the selected scope: user files for global
 scope, and committable `.github/hooks/aspire-telemetry.json` and
 `.claude/settings.json` files for project scope. Each hook passes `--source`
-and `--scope` so a user hook can defer to a project hook for the same client.
+and `--scope` so `TelemetryHookSkipPolicy` can let a user hook defer to a
+project hook for the same client. Agents run every installed hook without
+deduplicating them.
 
 Keep the managed classifier and both scripts behaviorally aligned, with focused
 tests for recognized skills, references, and first-party MCP tools.
