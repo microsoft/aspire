@@ -9960,6 +9960,13 @@ export interface DistributedApplicationBuilder {
      */
     addConnectionString(name: string, options?: AddConnectionStringOptions): ResourceWithConnectionStringPromise;
     /**
+     * Adds an opt-in target that checks for stale generated pipeline output.
+     * @param options Additional options.
+     * @returns The `IDistributedApplicationBuilder` for chaining.
+     * @experimental
+     */
+    withOutputDiffing(options?: WithOutputDiffingOptions): DistributedApplicationBuilderPromise;
+    /**
      * Adds a .NET project resource
      * @param options Additional options.
      * @deprecated Use addDotnetProject from the Aspire.Hosting.Dotnet package instead.
@@ -9971,13 +9978,6 @@ export interface DistributedApplicationBuilder {
      * @deprecated Use addDotnetProject from the Aspire.Hosting.Dotnet package instead.
      */
     addCSharpApp(name: string, path: string, options?: AddCSharpAppOptions): CSharpAppResourcePromise;
-    /**
-     * Adds an opt-in target that checks for stale generated pipeline output.
-     * @param options Additional options.
-     * @returns The `IDistributedApplicationBuilder` for chaining.
-     * @experimental
-     */
-    withOutputDiffing(options?: WithOutputDiffingOptions): DistributedApplicationBuilderPromise;
     /**
      * Gets the application configuration.
      * @returns The configuration handle.
@@ -10184,6 +10184,13 @@ export interface DistributedApplicationBuilderPromise extends PromiseLike<Distri
      */
     addConnectionString(name: string, options?: AddConnectionStringOptions): ResourceWithConnectionStringPromise;
     /**
+     * Adds an opt-in target that checks for stale generated pipeline output.
+     * @param options Additional options.
+     * @returns The `IDistributedApplicationBuilder` for chaining.
+     * @experimental
+     */
+    withOutputDiffing(options?: WithOutputDiffingOptions): DistributedApplicationBuilderPromise;
+    /**
      * Adds a .NET project resource
      * @param options Additional options.
      * @deprecated Use addDotnetProject from the Aspire.Hosting.Dotnet package instead.
@@ -10195,13 +10202,6 @@ export interface DistributedApplicationBuilderPromise extends PromiseLike<Distri
      * @deprecated Use addDotnetProject from the Aspire.Hosting.Dotnet package instead.
      */
     addCSharpApp(name: string, path: string, options?: AddCSharpAppOptions): CSharpAppResourcePromise;
-    /**
-     * Adds an opt-in target that checks for stale generated pipeline output.
-     * @param options Additional options.
-     * @returns The `IDistributedApplicationBuilder` for chaining.
-     * @experimental
-     */
-    withOutputDiffing(options?: WithOutputDiffingOptions): DistributedApplicationBuilderPromise;
     /**
      * Gets the application configuration.
      * @returns The configuration handle.
@@ -10660,6 +10660,32 @@ class DistributedApplicationBuilderImpl implements DistributedApplicationBuilder
     }
 
     /** @internal */
+    async _withOutputDiffingInternal(targetStep?: string, diffStepName?: string, description?: string): Promise<DistributedApplicationBuilder> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        if (targetStep !== undefined) rpcArgs.targetStep = targetStep;
+        if (diffStepName !== undefined) rpcArgs.diffStepName = diffStepName;
+        if (description !== undefined) rpcArgs.description = description;
+        const result = await this._client.invokeCapability<IDistributedApplicationBuilderHandle>(
+            'Aspire.Hosting/withOutputDiffing',
+            rpcArgs
+        );
+        return new DistributedApplicationBuilderImpl(result, this._client);
+    }
+
+    /**
+     * Adds an opt-in target that checks for stale generated pipeline output.
+     * @param options Additional options.
+     * @returns The `IDistributedApplicationBuilder` for chaining.
+     * @experimental
+     */
+    withOutputDiffing(options?: WithOutputDiffingOptions): DistributedApplicationBuilderPromise {
+        const targetStep = options?.targetStep;
+        const diffStepName = options?.diffStepName;
+        const description = options?.description;
+        return new DistributedApplicationBuilderPromiseImpl(this._withOutputDiffingInternal(targetStep, diffStepName, description), this._client);
+    }
+
+    /** @internal */
     async _addProjectInternal(name: string, projectPath: string, launchProfileOrOptions?: string | ProjectResourceOptions | Awaitable<ProjectResourceOptions>): Promise<ProjectResource> {
         launchProfileOrOptions = isPromiseLike(launchProfileOrOptions) ? await launchProfileOrOptions : launchProfileOrOptions;
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, projectPath };
@@ -10701,32 +10727,6 @@ class DistributedApplicationBuilderImpl implements DistributedApplicationBuilder
     addCSharpApp(name: string, path: string, optionsBag?: AddCSharpAppOptions): CSharpAppResourcePromise {
         let options = optionsBag?.options;
         return new CSharpAppResourcePromiseImpl(this._addCSharpAppInternal(name, path, options), this._client);
-    }
-
-    /** @internal */
-    async _withOutputDiffingInternal(targetStep?: string, diffStepName?: string, description?: string): Promise<DistributedApplicationBuilder> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle };
-        if (targetStep !== undefined) rpcArgs.targetStep = targetStep;
-        if (diffStepName !== undefined) rpcArgs.diffStepName = diffStepName;
-        if (description !== undefined) rpcArgs.description = description;
-        const result = await this._client.invokeCapability<IDistributedApplicationBuilderHandle>(
-            'Aspire.Hosting/withOutputDiffing',
-            rpcArgs
-        );
-        return new DistributedApplicationBuilderImpl(result, this._client);
-    }
-
-    /**
-     * Adds an opt-in target that checks for stale generated pipeline output.
-     * @param options Additional options.
-     * @returns The `IDistributedApplicationBuilder` for chaining.
-     * @experimental
-     */
-    withOutputDiffing(options?: WithOutputDiffingOptions): DistributedApplicationBuilderPromise {
-        const targetStep = options?.targetStep;
-        const diffStepName = options?.diffStepName;
-        const description = options?.description;
-        return new DistributedApplicationBuilderPromiseImpl(this._withOutputDiffingInternal(targetStep, diffStepName, description), this._client);
     }
 
     /** @internal */
@@ -10978,9 +10978,9 @@ const DistributedApplicationBuilderPromiseImpl = $aspireCreateFluentPromiseClass
     ["addParameterFromConfiguration"]: () => ParameterResourcePromiseImpl,
     ["addParameterWithGeneratedValue"]: () => ParameterResourcePromiseImpl,
     ["addConnectionString"]: () => ResourceWithConnectionStringPromiseImpl,
+    ["withOutputDiffing"]: () => DistributedApplicationBuilderPromiseImpl,
     ["addProject"]: () => ProjectResourcePromiseImpl,
     ["addCSharpApp"]: () => CSharpAppResourcePromiseImpl,
-    ["withOutputDiffing"]: () => DistributedApplicationBuilderPromiseImpl,
     ["getConfiguration"]: () => ConfigurationPromiseImpl,
     ["subscribeBeforeStart"]: null,
     ["subscribeBeforePublish"]: null,

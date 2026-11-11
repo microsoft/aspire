@@ -45066,6 +45066,27 @@ func (o *AddConnectionStringOptions) ToMap() map[string]any {
 	return m
 }
 
+// WithOutputDiffingOptions carries optional parameters for WithOutputDiffing.
+type WithOutputDiffingOptions struct {
+	// TargetStep is the step whose completed output is compared. Defaults to
+	// publish.
+	TargetStep *string `json:"targetStep,omitempty"`
+	// DiffStepName is the comparison target name. When null, uses the target name
+	// followed by -and-diff.
+	DiffStepName *string `json:"diffStepName,omitempty"`
+	// Description is an optional description of the comparison target.
+	Description *string `json:"description,omitempty"`
+}
+
+func (o *WithOutputDiffingOptions) ToMap() map[string]any {
+	m := map[string]any{}
+	if o == nil { return m }
+	if o.TargetStep != nil { m["targetStep"] = serializeValue(o.TargetStep) }
+	if o.DiffStepName != nil { m["diffStepName"] = serializeValue(o.DiffStepName) }
+	if o.Description != nil { m["description"] = serializeValue(o.Description) }
+	return m
+}
+
 // AddProjectOptions carries optional parameters for AddProject.
 type AddProjectOptions struct {
 	LaunchProfileOrOptions any `json:"launchProfileOrOptions,omitempty"`
@@ -45466,27 +45487,6 @@ type SetCancellationTokenOptions struct {
 func (o *SetCancellationTokenOptions) ToMap() map[string]any {
 	m := map[string]any{}
 	if o == nil { return m }
-	return m
-}
-
-// WithOutputDiffingOptions carries optional parameters for WithOutputDiffing.
-type WithOutputDiffingOptions struct {
-	// TargetStep is the step whose completed output is compared. Defaults to
-	// publish.
-	TargetStep *string `json:"targetStep,omitempty"`
-	// DiffStepName is the comparison target name. When null, uses the target name
-	// followed by -and-diff.
-	DiffStepName *string `json:"diffStepName,omitempty"`
-	// Description is an optional description of the comparison target.
-	Description *string `json:"description,omitempty"`
-}
-
-func (o *WithOutputDiffingOptions) ToMap() map[string]any {
-	m := map[string]any{}
-	if o == nil { return m }
-	if o.TargetStep != nil { m["targetStep"] = serializeValue(o.TargetStep) }
-	if o.DiffStepName != nil { m["diffStepName"] = serializeValue(o.DiffStepName) }
-	if o.Description != nil { m["description"] = serializeValue(o.Description) }
 	return m
 }
 
