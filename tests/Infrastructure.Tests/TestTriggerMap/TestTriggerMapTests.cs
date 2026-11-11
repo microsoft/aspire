@@ -15,6 +15,19 @@ namespace Infrastructure.Tests.TestTriggerMap;
 [Collection("GraphAffectedProjects")] // MSBuildLocator registers process-wide; keep graph use serialized.
 public sealed class TestTriggerMapTests
 {
+    [Theory]
+    [InlineData("Aspire.Hosting.CodeGeneration.Go")]
+    [InlineData("Aspire.Hosting.Go")]
+    [InlineData("Aspire.Hosting.Redis")]
+    public void GoStarterRuntimePackagesSelectRealRunnerValidation(string project)
+    {
+        var result = SelectWithRealMap($"src/{project}/{project}.csproj", project);
+
+        Assert.False(result.SelectsAll);
+        Assert.Empty(result.UnmatchedFiles);
+        Assert.Contains("job:cli-starter-validation", result.Jobs);
+    }
+
     [Fact]
     public void IndependentNativeWorkflowSelectsInfrastructureWithoutExtraJobs()
     {
@@ -811,15 +824,15 @@ public sealed class TestTriggerMapTests
     public void CliStarterValidationDoesNotRunForUnrelatedHostingIntegrationChange()
     {
         var result = SelectWithRealMap(
-            "src/Aspire.Hosting.Redis/RedisBuilderExtensions.cs",
-            "Aspire.Hosting.Redis",
-            "Aspire.Hosting.Redis.Tests",
+            "src/Aspire.Hosting.RabbitMQ/RabbitMQBuilderExtensions.cs",
+            "Aspire.Hosting.RabbitMQ",
+            "Aspire.Hosting.RabbitMQ.Tests",
             "Aspire.Hosting.Tests");
 
         Assert.False(result.SelectsAll);
         Assert.False(
             result.Jobs.Contains("job:cli-starter-validation", StringComparer.Ordinal),
-            "Aggregate tests selected by Redis changes must not pull in all six starter-validation jobs.");
+            "Aggregate tests selected by RabbitMQ changes must not pull in all six starter-validation jobs.");
     }
 
     [Fact]
