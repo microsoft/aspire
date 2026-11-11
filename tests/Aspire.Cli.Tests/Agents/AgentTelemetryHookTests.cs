@@ -147,24 +147,6 @@ public class AgentTelemetryHookTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData("toolu_01ABC.def-9", true)]
-    [InlineData("call 1", false)]
-    [InlineData("", false)]
-    public void ToolUseIdIsForwardedOnlyWhenSafe(string toolUseId, bool expected)
-    {
-        var args = AgentTelemetryHook.Classify(
-            $$"""{"hook_event_name":"PostToolUse","tool_name":"mcp__aspire__list_resources","session_id":"11111111-2222-3333-4444-555555555555","tool_use_id":"{{toolUseId}}"}""",
-            new TestEnvironment(), AgentTelemetryHook.DefaultMaxPayloadCharacters);
-        Assert.NotNull(args);
-        var index = Array.IndexOf(args, "--tool-use-id");
-        Assert.Equal(expected, index >= 0);
-        if (expected)
-        {
-            Assert.Equal(toolUseId, args[index + 1]);
-        }
-    }
-
-    [Theory]
     [InlineData("1", null, "copilot-cli")]
     [InlineData("TrUe", null, "copilot-cli")]
     [InlineData(null, "github_copilot_app_agent", "copilot-app")]

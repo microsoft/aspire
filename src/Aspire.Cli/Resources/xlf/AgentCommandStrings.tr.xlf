@@ -42,11 +42,6 @@
         <target state="translated">Bir tool_invocation olayı için Aspire MCP araç adı</target>
         <note />
       </trans-unit>
-      <trans-unit id="AgentTelemetryCommand_ToolUseIdDescription">
-        <source>The opaque tool call identifier used to skip duplicate hook deliveries</source>
-        <target state="new">The opaque tool call identifier used to skip duplicate hook deliveries</target>
-        <note />
-      </trans-unit>
       <trans-unit id="ConfigUpdatesSelectPrompt">
         <source>The following agent configurations use the deprecated 'mcp start' command. Update them?</source>
         <target state="translated">Aşağıdaki aracı yapılandırmaları, kullanımdan kaldırılmış olan 'mcp start' komutunu kullanmaktadır. Güncellensin mi?</target>

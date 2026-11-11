@@ -260,9 +260,6 @@
   <data name="AgentTelemetryCommand_SessionIdDescription" xml:space="preserve">
     <value>The opaque AI agent session identifier</value>
   </data>
-  <data name="AgentTelemetryCommand_ToolUseIdDescription" xml:space="preserve">
-    <value>The opaque tool call identifier used to skip duplicate hook deliveries</value>
-  </data>
   <data name="AgentTelemetryCommand_SkillNameDescription" xml:space="preserve">
     <value>The Aspire skill name for a skill_invocation event</value>
   </data>

@@ -218,8 +218,6 @@ Clients run every matching hook from user and project sources without merging th
 
 Hooks registered without `--source` and `--scope` never skip. Unreadable or malformed hook files count as no project hook.
 
-As a backstop, one tool call can still reach two installed hooks, for example in VS Code. When the payload has a GUID session ID and a tool-use ID (1 to 128 ASCII letters, digits, `.`, `_`, or `-`), the classifier forwards the tool-use ID as `--tool-use-id`. [AgentTelemetryDeduplicator](../../src/Aspire.Cli/Telemetry/AgentTelemetryDeduplicator.cs) atomically creates a marker file named by an XxHash3 of the session and tool-use IDs, next to the CLI telemetry storage, and drops any later delivery that finds the marker. Markers expire after one hour. The tool-use ID is never recorded. If markers cannot be written, the event is recorded rather than lost. Deliveries without both IDs are always recorded.
-
 The hook emits its continuation response and the command returns success even when telemetry processing fails. Caught processing failures are reported through local diagnostics without including the raw payload.
 
 ### Durable delivery

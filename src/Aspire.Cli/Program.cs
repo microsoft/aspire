@@ -742,7 +742,6 @@ public class Program
         builder.Services.AddTransient<AgentInitCommand>();
         builder.Services.AddTransient<AgentTelemetryCommand>();
         builder.Services.AddSingleton<Agents.Hooks.AgentTelemetryHook>();
-        builder.Services.AddSingleton(sp => new AgentTelemetryDeduplicator(sp.GetRequiredService<TimeProvider>()));
         builder.Services.AddTransient<TelemetryCommand>();
         builder.Services.AddTransient<TelemetryLogsCommand>();
         builder.Services.AddTransient<TelemetrySpansCommand>();
