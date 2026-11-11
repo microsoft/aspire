@@ -3005,16 +3005,17 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	//
 	// This method adds an McpServerEndpointAnnotation to the resource, enabling the
 	// Aspire tooling to discover and proxy the MCP server exposed by the resource.
+	// It does not create an endpoint, start an MCP server, or configure its
+	// transport or authentication. The resource must already expose an MCP server
+	// at the selected endpoint and path. Endpoint selection and URL resolution
+	// occur when tooling consumes the annotation, not when this method is called. A
+	// missing selected endpoint causes resolution to throw a
+	// DistributedApplicationException.
 	//
 	// Parameters:
 	//   - options: Optional parameters; see [WithMcpServerOptions].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithMcpServer(options ...*WithMcpServerOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 
 	// WithMergeEndpoint configures a named endpoint
@@ -6428,16 +6429,17 @@ type CSharpAppResource interface {
 	//
 	// This method adds an McpServerEndpointAnnotation to the resource, enabling the
 	// Aspire tooling to discover and proxy the MCP server exposed by the resource.
+	// It does not create an endpoint, start an MCP server, or configure its
+	// transport or authentication. The resource must already expose an MCP server
+	// at the selected endpoint and path. Endpoint selection and URL resolution
+	// occur when tooling consumes the annotation, not when this method is called. A
+	// missing selected endpoint causes resolution to throw a
+	// DistributedApplicationException.
 	//
 	// Parameters:
 	//   - options: Optional parameters; see [WithMcpServerOptions].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithMcpServer(options ...*WithMcpServerOptions) CSharpAppResource
 
 	// WithMergeEndpoint configures a named endpoint
@@ -12755,16 +12757,17 @@ type ContainerResource interface {
 	//
 	// This method adds an McpServerEndpointAnnotation to the resource, enabling the
 	// Aspire tooling to discover and proxy the MCP server exposed by the resource.
+	// It does not create an endpoint, start an MCP server, or configure its
+	// transport or authentication. The resource must already expose an MCP server
+	// at the selected endpoint and path. Endpoint selection and URL resolution
+	// occur when tooling consumes the annotation, not when this method is called. A
+	// missing selected endpoint causes resolution to throw a
+	// DistributedApplicationException.
 	//
 	// Parameters:
 	//   - options: Optional parameters; see [WithMcpServerOptions].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithMcpServer(options ...*WithMcpServerOptions) ContainerResource
 
 	// WithMergeEndpoint configures a named endpoint
@@ -18110,16 +18113,17 @@ type DotnetToolResource interface {
 	//
 	// This method adds an McpServerEndpointAnnotation to the resource, enabling the
 	// Aspire tooling to discover and proxy the MCP server exposed by the resource.
+	// It does not create an endpoint, start an MCP server, or configure its
+	// transport or authentication. The resource must already expose an MCP server
+	// at the selected endpoint and path. Endpoint selection and URL resolution
+	// occur when tooling consumes the annotation, not when this method is called. A
+	// missing selected endpoint causes resolution to throw a
+	// DistributedApplicationException.
 	//
 	// Parameters:
 	//   - options: Optional parameters; see [WithMcpServerOptions].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithMcpServer(options ...*WithMcpServerOptions) DotnetToolResource
 
 	// WithMergeEndpoint configures a named endpoint
@@ -22487,16 +22491,17 @@ type ExecutableResource interface {
 	//
 	// This method adds an McpServerEndpointAnnotation to the resource, enabling the
 	// Aspire tooling to discover and proxy the MCP server exposed by the resource.
+	// It does not create an endpoint, start an MCP server, or configure its
+	// transport or authentication. The resource must already expose an MCP server
+	// at the selected endpoint and path. Endpoint selection and URL resolution
+	// occur when tooling consumes the annotation, not when this method is called. A
+	// missing selected endpoint causes resolution to throw a
+	// DistributedApplicationException.
 	//
 	// Parameters:
 	//   - options: Optional parameters; see [WithMcpServerOptions].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithMcpServer(options ...*WithMcpServerOptions) ExecutableResource
 
 	// WithMergeEndpoint configures a named endpoint
@@ -32254,16 +32259,17 @@ type ProjectResource interface {
 	//
 	// This method adds an McpServerEndpointAnnotation to the resource, enabling the
 	// Aspire tooling to discover and proxy the MCP server exposed by the resource.
+	// It does not create an endpoint, start an MCP server, or configure its
+	// transport or authentication. The resource must already expose an MCP server
+	// at the selected endpoint and path. Endpoint selection and URL resolution
+	// occur when tooling consumes the annotation, not when this method is called. A
+	// missing selected endpoint causes resolution to throw a
+	// DistributedApplicationException.
 	//
 	// Parameters:
 	//   - options: Optional parameters; see [WithMcpServerOptions].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithMcpServer(options ...*WithMcpServerOptions) ProjectResource
 
 	// WithMergeEndpoint configures a named endpoint
@@ -37469,16 +37475,17 @@ type TestDatabaseResource interface {
 	//
 	// This method adds an McpServerEndpointAnnotation to the resource, enabling the
 	// Aspire tooling to discover and proxy the MCP server exposed by the resource.
+	// It does not create an endpoint, start an MCP server, or configure its
+	// transport or authentication. The resource must already expose an MCP server
+	// at the selected endpoint and path. Endpoint selection and URL resolution
+	// occur when tooling consumes the annotation, not when this method is called. A
+	// missing selected endpoint causes resolution to throw a
+	// DistributedApplicationException.
 	//
 	// Parameters:
 	//   - options: Optional parameters; see [WithMcpServerOptions].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithMcpServer(options ...*WithMcpServerOptions) TestDatabaseResource
 
 	// WithMergeEndpoint configures a named endpoint
@@ -41236,16 +41243,17 @@ type TestRedisResource interface {
 	//
 	// This method adds an McpServerEndpointAnnotation to the resource, enabling the
 	// Aspire tooling to discover and proxy the MCP server exposed by the resource.
+	// It does not create an endpoint, start an MCP server, or configure its
+	// transport or authentication. The resource must already expose an MCP server
+	// at the selected endpoint and path. Endpoint selection and URL resolution
+	// occur when tooling consumes the annotation, not when this method is called. A
+	// missing selected endpoint causes resolution to throw a
+	// DistributedApplicationException.
 	//
 	// Parameters:
 	//   - options: Optional parameters; see [WithMcpServerOptions].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithMcpServer(options ...*WithMcpServerOptions) TestRedisResource
 
 	// WithMergeEndpoint configures a named endpoint
@@ -44972,10 +44980,13 @@ func (o *WithHttpHealthCheckOptions) ToMap() map[string]any {
 // WithMcpServerOptions carries optional parameters for WithMcpServer.
 type WithMcpServerOptions struct {
 	// Path is an optional path to append to the endpoint URL when forming the MCP
-	// server address. Defaults to "/mcp".
+	// server address. Defaults to "/mcp". A leading slash is added if missing. A
+	// null or empty value uses the endpoint URL without an additional path.
 	Path *string `json:"path,omitempty"`
 	// EndpointName is an optional name of the endpoint that hosts the MCP server.
-	// If not specified, defaults to the first HTTPS or HTTP endpoint.
+	// If not specified, selects the endpoint named https, falling back to the
+	// endpoint named http. Names are matched case-insensitively; endpoints with
+	// other names must be selected explicitly, regardless of their URI scheme.
 	EndpointName *string `json:"endpointName,omitempty"`
 }
 
