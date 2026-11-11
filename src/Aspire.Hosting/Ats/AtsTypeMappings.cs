@@ -1,4 +1,3 @@
-#pragma warning disable ASPIREINTERACTION001
 #pragma warning disable ASPIREPROJECTS001
 
 // Licensed to the .NET Foundation under one or more agreements.

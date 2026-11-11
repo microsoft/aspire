@@ -6,7 +6,6 @@ using Aspire.Hosting.ApplicationModel;
 
 namespace Aspire.Hosting.Tests;
 
-#pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates.
 #pragma warning disable ASPIRETERMINAL001 // Test consumer of the experimental AppHost terminal API.
 
 internal enum InteractionType

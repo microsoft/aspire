@@ -23,6 +23,10 @@ When automatic CLI bundle setup fails, `ASPIRE009` includes the setup command's 
 
 ## Experimental API Warnings
 
+`ASPIREINTERACTION001` is no longer emitted: `IInteractionService.PromptProgressAsync`,
+`ProgressInteractionOptions`, and `ProgressContext` are stable. Existing suppressions
+for this diagnostic can be removed. This does not change the status of other interaction APIs.
+
 | Diagnostic ID | Severity | Description | Location |
 | ------------- | -------- | ----------- | -------- |
 | `ASPIREAZUREPROVISIONING001` | Warning | The polyglot Azure Provisioning proxy packages are experimental and may change or be removed in future releases. | [src/Aspire.Hosting.Azure.Provisioning/ExperimentalAssemblyInfo.cs](../src/Aspire.Hosting.Azure.Provisioning/ExperimentalAssemblyInfo.cs) |

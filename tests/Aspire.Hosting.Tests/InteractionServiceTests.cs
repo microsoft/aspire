@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
 using System.Threading.Channels;
 using Aspire.Hosting.Dashboard;
 using Aspire.Hosting.Utils;
@@ -9,8 +11,6 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using static Aspire.Hosting.Dashboard.DashboardServiceData;
-
-#pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates.
 
 namespace Aspire.Hosting.Tests;
 
@@ -1228,6 +1228,113 @@ public class InteractionServiceTests
 
         // Assert
         Assert.NotNull(ex);
+    }
+
+    [Fact]
+    public void ProgressApis_AreStable()
+    {
+        var method = typeof(IInteractionService).GetMethod(nameof(IInteractionService.PromptProgressAsync));
+
+        Assert.NotNull(method);
+        Assert.Null(method.GetCustomAttribute<ExperimentalAttribute>());
+        Assert.Null(typeof(ProgressInteractionOptions).GetCustomAttribute<ExperimentalAttribute>());
+        Assert.Null(typeof(ProgressContext).GetCustomAttribute<ExperimentalAttribute>());
+    }
+
+    [Theory]
+    [InlineData("dashboard-disabled")]
+    [InlineData("non-interactive")]
+    [InlineData("consumers-not-ready")]
+    public async Task PromptProgressAsync_Unavailable_DoesNotStartWork(string scenario)
+    {
+        var interactionService = CreateInteractionService(
+            options: new DistributedApplicationOptions { DisableDashboard = scenario == "dashboard-disabled" },
+            consumerState: new InteractionServiceConsumerState { Ready = scenario != "consumers-not-ready" });
+        using var scope = scenario == "non-interactive" ? InteractionService.StartNonInteractiveScope() : null;
+        var workExecuted = false;
+
+        Assert.False(interactionService.IsAvailable);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => interactionService.PromptProgressAsync("Please wait", new ProgressInteractionOptions
+        {
+            Work = _ =>
+            {
+                workExecuted = true;
+                return Task.CompletedTask;
+            }
+        })).DefaultTimeout();
+
+        Assert.False(workExecuted);
+        Assert.Empty(interactionService.GetCurrentInteractions());
+    }
+
+    [Fact]
+    public async Task PromptProgressAsync_PreCanceled_DoesNotStartWork()
+    {
+        var interactionService = CreateInteractionService();
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+        var workExecuted = false;
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => interactionService.PromptProgressAsync("Please wait", new ProgressInteractionOptions
+        {
+            Work = _ =>
+            {
+                workExecuted = true;
+                return Task.CompletedTask;
+            }
+        }, cts.Token)).DefaultTimeout();
+
+        Assert.False(workExecuted);
+        Assert.Empty(interactionService.GetCurrentInteractions());
+    }
+
+    [Fact]
+    public async Task PromptProgressAsync_DisconnectedSubscriber_WorkContinuesAndReconnectReplays()
+    {
+        var interactionService = CreateInteractionService();
+        using var viewerCts = new CancellationTokenSource();
+        await using var viewer = interactionService.SubscribeInteractionUpdates(viewerCts.Token).GetAsyncEnumerator();
+        var firstUpdate = viewer.MoveNextAsync().AsTask();
+        var finishWork = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        CancellationToken workToken = default;
+        var prompt = interactionService.PromptProgressAsync("Please wait", new ProgressInteractionOptions
+        {
+            Work = context =>
+            {
+                workToken = context.CancellationToken;
+                return finishWork.Task;
+            }
+        });
+
+        try
+        {
+            Assert.True(await firstUpdate.DefaultTimeout());
+            var interaction = viewer.Current;
+            viewerCts.Cancel();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => viewer.MoveNextAsync().AsTask()).DefaultTimeout();
+
+            Assert.False(workToken.IsCancellationRequested);
+            Assert.False(prompt.IsCompleted);
+            Assert.Same(interaction, Assert.Single(interactionService.GetCurrentInteractions()));
+
+            await using var reconnected = interactionService.SubscribeInteractionUpdates().GetAsyncEnumerator();
+            Assert.True(await reconnected.MoveNextAsync().AsTask().DefaultTimeout());
+            Assert.Same(interaction, reconnected.Current);
+
+            finishWork.SetResult();
+            var result = await prompt.DefaultTimeout();
+            Assert.False(result.Canceled);
+            Assert.True(result.Data);
+            Assert.True(await reconnected.MoveNextAsync().AsTask().DefaultTimeout());
+            Assert.Equal(interaction.InteractionId, reconnected.Current.InteractionId);
+            Assert.Equal(Interaction.InteractionState.Complete, reconnected.Current.State);
+            Assert.Empty(interactionService.GetCurrentInteractions());
+        }
+        finally
+        {
+            finishWork.TrySetResult();
+            await prompt.DefaultTimeout();
+        }
     }
 
     [Fact]

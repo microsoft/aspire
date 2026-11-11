@@ -75,7 +75,6 @@ public class AtsExportsTests(ITestOutputHelper outputHelper)
     // Polyglot callers cannot mutate the input handles they pass to PromptInputs (those handles live on the
     // server and only the data fields cross the wire), so submitted values must travel back through the result.
     // This round-trips a prompt to prove the result carries the values keyed by input name.
-#pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates.
     [Fact]
     public async Task PromptInputs_ResultCarriesSubmittedValuesByName()
     {
@@ -179,7 +178,6 @@ public class AtsExportsTests(ITestOutputHelper outputHelper)
         Assert.Equal(InputType.File, input.InputType);
         Assert.Equal(2048, input.MaxFileSize);
     }
-#pragma warning restore ASPIREINTERACTION001
 
     private sealed class TestHostEnvironment : IHostEnvironment
     {

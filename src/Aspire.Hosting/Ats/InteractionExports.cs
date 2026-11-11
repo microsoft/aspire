@@ -5,8 +5,6 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Ats;
 
-#pragma warning disable ASPIREINTERACTION001 // IInteractionService and related types are experimental.
-
 /// <summary>
 /// ATS exports for the interaction service.
 /// </summary>

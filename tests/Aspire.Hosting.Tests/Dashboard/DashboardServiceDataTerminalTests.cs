@@ -13,8 +13,6 @@ using Resource = Aspire.Hosting.ApplicationModel.Resource;
 
 namespace Aspire.Hosting.Tests.Dashboard;
 
-#pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates.
-
 /// <summary>
 /// Guards the resource-snapshot stamping path in <see cref="DashboardServiceData"/>
 /// that flows terminal availability and per-replica UDS path from the AppHost model into

@@ -117,7 +117,18 @@ public interface IInteractionService
     /// </para>
     /// <para>
     /// When a button is shown (via <see cref="InteractionOptions.PrimaryButtonText"/>), clicking it signals cancellation
-    /// through the <see cref="ProgressContext.CancellationToken"/> provided to the work callback.
+    /// through the <see cref="ProgressContext.CancellationToken"/> provided to the work callback. The prompt waits
+    /// for the callback to finish, including cancellation cleanup. The callback must observe the token;
+    /// cancellation does not force it to stop. Exceptions from the callback propagate to the caller.
+    /// </para>
+    /// <para>
+    /// Progress is indeterminate; the context does not provide percentage or message updates.
+    /// Disconnecting a dashboard client does not cancel the interaction or its work. A reconnecting client sees
+    /// any interaction that is still in progress. Supply a cancellation token to bound work or prompts without a callback.
+    /// </para>
+    /// <para>
+    /// Check <see cref="IsAvailable"/> before prompting. The service is unavailable when the dashboard or interactivity
+    /// is disabled, before consumers are ready, or in a non-interactive command.
     /// </para>
     /// </remarks>
     /// <param name="message">The message to display in the progress dialog.</param>
@@ -125,9 +136,26 @@ public interface IInteractionService
     /// <param name="cancellationToken">A token to cancel the operation and close the dialog.</param>
     /// <returns>
     /// An <see cref="InteractionResult{T}"/> containing <c>true</c> if the operation completed successfully,
-    /// or a canceled result if the user clicked the cancel button.
+    /// or a canceled result if the user or caller canceled the interaction after it began.
     /// </returns>
-    [Experimental("ASPIREINTERACTION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    /// <exception cref="InvalidOperationException">The interaction service is unavailable.</exception>
+    /// <exception cref="OperationCanceledException">
+    /// <paramref name="cancellationToken"/> was canceled before the interaction began, or the work callback throws
+    /// an <see cref="OperationCanceledException"/> without the interaction being canceled.
+    /// </exception>
+    /// <example>
+    /// <code>
+    /// if (interactionService.IsAvailable)
+    /// {
+    ///     var result = await interactionService.PromptProgressAsync("Processing...", new ProgressInteractionOptions
+    ///     {
+    ///         Title = "Processing",
+    ///         PrimaryButtonText = "Cancel",
+    ///         Work = context => Task.Delay(TimeSpan.FromSeconds(5), context.CancellationToken)
+    ///     }, cancellationToken);
+    /// }
+    /// </code>
+    /// </example>
     Task<InteractionResult<bool>> PromptProgressAsync(string message, ProgressInteractionOptions? options = null, CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -984,7 +1012,6 @@ public class NotificationInteractionOptions : InteractionOptions
 /// <summary>
 /// Options for configuring a progress interaction.
 /// </summary>
-[Experimental("ASPIREINTERACTION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public class ProgressInteractionOptions : InteractionOptions
 {
     internal static ProgressInteractionOptions CreateDefault() => new();
@@ -1001,6 +1028,7 @@ public class ProgressInteractionOptions : InteractionOptions
     /// When provided, the progress dialog remains open while this callback executes and closes automatically
     /// when the callback completes. The <see cref="ProgressContext.CancellationToken"/> passed to the callback
     /// is triggered when the user clicks the cancel button or the operation is externally canceled.
+    /// The prompt waits for the callback to finish after cancellation, and exceptions propagate to the caller.
     /// When not provided, the dialog remains open until the <see cref="CancellationToken"/> passed to
     /// <see cref="IInteractionService.PromptProgressAsync"/> is canceled.
     /// </remarks>
@@ -1010,7 +1038,6 @@ public class ProgressInteractionOptions : InteractionOptions
 /// <summary>
 /// Provides context to the work callback of a progress interaction.
 /// </summary>
-[Experimental("ASPIREINTERACTION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public sealed class ProgressContext
 {
     /// <summary>
