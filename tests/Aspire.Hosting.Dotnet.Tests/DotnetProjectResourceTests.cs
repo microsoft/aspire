@@ -808,8 +808,8 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AddDotnetProject_InDebugSession_OmitsDotnetRunScaffoldingWhenLegacyProjectLaunchIsSupported()
     {
-        // An IDE that supports only ordinary project launch owns both building and launching the resource. The
-        // coordinated-build path is disabled for this session, so only the user's program arguments are emitted.
+        // A legacy project-only IDE owns the launch request, so only the user's program arguments are emitted.
+        // Aspire can still prebuild the project through the build-only coordinator.
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
 
         builder.Configuration["DEBUG_SESSION_PORT"] = "5678";
