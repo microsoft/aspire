@@ -28,3 +28,4 @@ Aspire.Hosting.SqlServer/withDataBindMount(source: string, isReadOnly?: boolean)
 Aspire.Hosting.SqlServer/withDataVolume(name?: string, isReadOnly?: boolean) -> Aspire.Hosting.SqlServer/Aspire.Hosting.ApplicationModel.SqlServerServerResource
 Aspire.Hosting.SqlServer/withHostPort(port: number) -> Aspire.Hosting.SqlServer/Aspire.Hosting.ApplicationModel.SqlServerServerResource
 Aspire.Hosting.SqlServer/withPassword(password: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource) -> Aspire.Hosting.SqlServer/Aspire.Hosting.ApplicationModel.SqlServerServerResource
+Aspire.Hosting.SqlServer/withRepl() -> Aspire.Hosting.SqlServer/Aspire.Hosting.ApplicationModel.SqlServerServerResource
