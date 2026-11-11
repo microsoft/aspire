@@ -15,49 +15,22 @@ namespace Aspire.Hosting;
 public static class LaunchGroupExtensions
 {
     /// <summary>
-    /// Adds a resource to a launch group.
-    /// </summary>
-    /// <typeparam name="T">The resource type.</typeparam>
-    /// <param name="builder">The resource builder.</param>
-    /// <param name="launchGroupName">The case-insensitive launch group name.</param>
-    /// <returns>The resource builder.</returns>
-    /// <remarks>
-    /// Membership is additive. Select one group with the <c>Aspire:LaunchGroup</c> configuration setting.
-    /// Selecting a group marks resources without that membership for explicit start, including ungrouped resources,
-    /// unless they have an <see cref="ExcludeFromLaunchGroupSelectionAnnotation"/>.
-    /// Structural children without their own memberships inherit their parent's memberships. Their own memberships
-    /// override that default. Display relationships and references do not inherit membership or select dependencies.
-    /// Selection does not change lifecycle commands.
-    /// Valid group names are inferred from membership unless explicitly defined in <c>Aspire:LaunchGroups</c>.
-    /// Use the <c>Aspire__LaunchGroup</c> environment variable or <c>dotnet run -- Aspire:LaunchGroup=catalog</c>
-    /// to select a group. No selection preserves normal startup, and publishing is unaffected.
-    /// </remarks>
-    /// <example>
-    /// <code lang="csharp">
-    /// builder.AddExecutable("worker", "worker", ".").WithLaunchGroup("background");
-    /// </code>
-    /// </example>
-    /// <exception cref="ArgumentNullException">The builder or group name is null.</exception>
-    /// <exception cref="ArgumentException">The group name is invalid.</exception>
-    [AspireExport]
-    [Experimental("ASPIRELAUNCHGROUPS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    public static IResourceBuilder<T> WithLaunchGroup<T>(this IResourceBuilder<T> builder, string launchGroupName) where T : IResource
-    {
-        ArgumentNullException.ThrowIfNull(builder);
-        LaunchGroupAnnotation.ValidateName(launchGroupName, nameof(launchGroupName));
-
-        return builder.WithLaunchGroups(launchGroupName);
-    }
-
-    /// <summary>
-    /// Adds a resource to multiple launch groups.
+    /// Adds a resource to one or more launch groups.
     /// </summary>
     /// <typeparam name="T">The resource type.</typeparam>
     /// <param name="builder">The resource builder.</param>
     /// <param name="launchGroupNames">The case-insensitive launch group names.</param>
     /// <returns>The resource builder.</returns>
     /// <remarks>
-    /// Repeated calls add membership rather than replacing it. No selection preserves normal startup.
+    /// Repeated calls add membership rather than replacing it. Select one group with the <c>Aspire:LaunchGroup</c>
+    /// configuration setting. Selecting a group marks resources without that membership for explicit start,
+    /// including ungrouped resources, unless they have an <see cref="ExcludeFromLaunchGroupSelectionAnnotation"/>.
+    /// Structural children without their own memberships inherit their parent's memberships. Their own memberships
+    /// override that default. Display relationships and references do not inherit membership or select dependencies.
+    /// Valid group names are inferred from membership unless explicitly defined in <c>Aspire:LaunchGroups</c>.
+    /// Use the <c>Aspire__LaunchGroup</c> environment variable or <c>dotnet run -- Aspire:LaunchGroup=catalog</c>
+    /// to select a group. No selection preserves normal startup, and publishing is unaffected.
+    /// Selection does not change lifecycle commands.
     /// Unselected resources can be started later from the dashboard or resource commands.
     /// </remarks>
     /// <example>
@@ -107,7 +80,7 @@ public static class LaunchGroupExtensions
     /// <example>
     /// <code lang="csharp">
     /// var frontend = builder.AddProject("frontend", "../Frontend/Frontend.csproj")
-    ///     .WithLaunchGroup("frontend")
+    ///     .WithLaunchGroups("frontend")
     ///     .WithOptionalLaunchGroupReference(metrics);
     /// </code>
     /// </example>

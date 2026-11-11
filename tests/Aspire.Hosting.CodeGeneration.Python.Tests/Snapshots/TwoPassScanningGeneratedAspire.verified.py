@@ -7661,12 +7661,8 @@ class AbstractResource(abc.ABC):
         """Configures custom base images for generated Dockerfiles."""
 
     @abc.abstractmethod
-    def with_launch_group(self, launch_group_name: str) -> typing.Self:
-        """Adds a resource to a launch group."""
-
-    @abc.abstractmethod
     def with_launch_groups(self, launch_group_names: typing.Iterable[str]) -> typing.Self:
-        """Adds a resource to multiple launch groups."""
+        """Adds a resource to one or more launch groups."""
 
     @abc.abstractmethod
     def with_optional_launch_group_reference(self, dependency: AbstractResource) -> typing.Self:
@@ -8178,7 +8174,6 @@ class _BaseResourceKwargs(typing.TypedDict, total=False):
 
     container_registry: AbstractResource
     dockerfile_base_image: DockerfileBaseImageParameters | typing.Literal[True]
-    launch_group: str
     launch_groups: typing.Iterable[str]
     optional_launch_group_reference: AbstractResource
     required_command: str | tuple[str, str]
@@ -8273,19 +8268,8 @@ class _BaseResource(AbstractResource):
         self._handle = self._wrap_builder(result)
         return self
 
-    def with_launch_group(self, launch_group_name: str) -> typing.Self:
-        """Adds a resource to a launch group."""
-        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
-        rpc_args['launchGroupName'] = launch_group_name
-        result = self._client.invoke_capability(
-            'Aspire.Hosting/withLaunchGroup',
-            rpc_args,
-        )
-        self._handle = self._wrap_builder(result)
-        return self
-
     def with_launch_groups(self, launch_group_names: typing.Iterable[str]) -> typing.Self:
-        """Adds a resource to multiple launch groups."""
+        """Adds a resource to one or more launch groups."""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['launchGroupNames'] = _normalize_argument(launch_group_names, typing.Iterable[str])
         result = self._client.invoke_capability(
@@ -9012,14 +8996,6 @@ class _BaseResource(AbstractResource):
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withDockerfileBaseImage', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'dockerfile_base_image'. Expected: DockerfileBaseImageParameters or Literal[True]")
-        if (_launch_group := kwargs.pop("launch_group", None)) is not None:
-            _launch_group = _normalize_constructor_value(_launch_group)
-            if _validate_type(_launch_group, str):
-                rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["launchGroupName"] = typing.cast(str, _launch_group)
-                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withLaunchGroup', rpc_args))
-            else:
-                raise TypeError("Invalid type for option 'launch_group'. Expected: str")
         if (_launch_groups := kwargs.pop("launch_groups", None)) is not None:
             _launch_groups = _normalize_constructor_value(_launch_groups)
             if _validate_type(_launch_groups, typing.Iterable[str]):

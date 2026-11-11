@@ -24,7 +24,6 @@ public class AtsTypeScriptCodeGeneratorTests
     private readonly AtsTypeScriptCodeGenerator _generator = new();
 
     [Theory]
-    [InlineData("withLaunchGroup")]
     [InlineData("withLaunchGroups")]
     [InlineData("withOptionalLaunchGroupReference")]
     public void Scanner_LaunchGroupCapabilities_AreExperimental(string methodName)

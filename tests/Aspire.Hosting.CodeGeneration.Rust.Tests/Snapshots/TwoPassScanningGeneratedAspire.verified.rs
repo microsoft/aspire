@@ -2350,17 +2350,7 @@ impl CSharpAppResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
-    /// Adds a resource to a launch group.
-    pub fn with_launch_group(&self, launch_group_name: &str) -> Result<IResource, Box<dyn std::error::Error>> {
-        let mut args: HashMap<String, Value> = HashMap::new();
-        args.insert("builder".to_string(), self.handle.to_json());
-        args.insert("launchGroupName".to_string(), serde_json::to_value(&launch_group_name).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/withLaunchGroup", args)?;
-        let handle: Handle = serde_json::from_value(result)?;
-        Ok(IResource::new(handle, self.client.clone()))
-    }
-
-    /// Adds a resource to multiple launch groups.
+    /// Adds a resource to one or more launch groups.
     pub fn with_launch_groups(&self, launch_group_names: Vec<String>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -4450,17 +4440,7 @@ impl ContainerRegistryResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
-    /// Adds a resource to a launch group.
-    pub fn with_launch_group(&self, launch_group_name: &str) -> Result<IResource, Box<dyn std::error::Error>> {
-        let mut args: HashMap<String, Value> = HashMap::new();
-        args.insert("builder".to_string(), self.handle.to_json());
-        args.insert("launchGroupName".to_string(), serde_json::to_value(&launch_group_name).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/withLaunchGroup", args)?;
-        let handle: Handle = serde_json::from_value(result)?;
-        Ok(IResource::new(handle, self.client.clone()))
-    }
-
-    /// Adds a resource to multiple launch groups.
+    /// Adds a resource to one or more launch groups.
     pub fn with_launch_groups(&self, launch_group_names: Vec<String>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5474,17 +5454,7 @@ impl ContainerResource {
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
 
-    /// Adds a resource to a launch group.
-    pub fn with_launch_group(&self, launch_group_name: &str) -> Result<IResource, Box<dyn std::error::Error>> {
-        let mut args: HashMap<String, Value> = HashMap::new();
-        args.insert("builder".to_string(), self.handle.to_json());
-        args.insert("launchGroupName".to_string(), serde_json::to_value(&launch_group_name).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/withLaunchGroup", args)?;
-        let handle: Handle = serde_json::from_value(result)?;
-        Ok(IResource::new(handle, self.client.clone()))
-    }
-
-    /// Adds a resource to multiple launch groups.
+    /// Adds a resource to one or more launch groups.
     pub fn with_launch_groups(&self, launch_group_names: Vec<String>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7487,17 +7457,7 @@ impl DotnetToolResource {
         Ok(ExecutableResource::new(handle, self.client.clone()))
     }
 
-    /// Adds a resource to a launch group.
-    pub fn with_launch_group(&self, launch_group_name: &str) -> Result<IResource, Box<dyn std::error::Error>> {
-        let mut args: HashMap<String, Value> = HashMap::new();
-        args.insert("builder".to_string(), self.handle.to_json());
-        args.insert("launchGroupName".to_string(), serde_json::to_value(&launch_group_name).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/withLaunchGroup", args)?;
-        let handle: Handle = serde_json::from_value(result)?;
-        Ok(IResource::new(handle, self.client.clone()))
-    }
-
-    /// Adds a resource to multiple launch groups.
+    /// Adds a resource to one or more launch groups.
     pub fn with_launch_groups(&self, launch_group_names: Vec<String>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -9498,17 +9458,7 @@ impl ExecutableResource {
         Ok(ExecutableResource::new(handle, self.client.clone()))
     }
 
-    /// Adds a resource to a launch group.
-    pub fn with_launch_group(&self, launch_group_name: &str) -> Result<IResource, Box<dyn std::error::Error>> {
-        let mut args: HashMap<String, Value> = HashMap::new();
-        args.insert("builder".to_string(), self.handle.to_json());
-        args.insert("launchGroupName".to_string(), serde_json::to_value(&launch_group_name).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/withLaunchGroup", args)?;
-        let handle: Handle = serde_json::from_value(result)?;
-        Ok(IResource::new(handle, self.client.clone()))
-    }
-
-    /// Adds a resource to multiple launch groups.
+    /// Adds a resource to one or more launch groups.
     pub fn with_launch_groups(&self, launch_group_names: Vec<String>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -10918,17 +10868,7 @@ impl ExternalServiceResource {
         Ok(ExternalServiceResource::new(handle, self.client.clone()))
     }
 
-    /// Adds a resource to a launch group.
-    pub fn with_launch_group(&self, launch_group_name: &str) -> Result<IResource, Box<dyn std::error::Error>> {
-        let mut args: HashMap<String, Value> = HashMap::new();
-        args.insert("builder".to_string(), self.handle.to_json());
-        args.insert("launchGroupName".to_string(), serde_json::to_value(&launch_group_name).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/withLaunchGroup", args)?;
-        let handle: Handle = serde_json::from_value(result)?;
-        Ok(IResource::new(handle, self.client.clone()))
-    }
-
-    /// Adds a resource to multiple launch groups.
+    /// Adds a resource to one or more launch groups.
     pub fn with_launch_groups(&self, launch_group_names: Vec<String>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14557,17 +14497,7 @@ impl ParameterResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
-    /// Adds a resource to a launch group.
-    pub fn with_launch_group(&self, launch_group_name: &str) -> Result<IResource, Box<dyn std::error::Error>> {
-        let mut args: HashMap<String, Value> = HashMap::new();
-        args.insert("builder".to_string(), self.handle.to_json());
-        args.insert("launchGroupName".to_string(), serde_json::to_value(&launch_group_name).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/withLaunchGroup", args)?;
-        let handle: Handle = serde_json::from_value(result)?;
-        Ok(IResource::new(handle, self.client.clone()))
-    }
-
-    /// Adds a resource to multiple launch groups.
+    /// Adds a resource to one or more launch groups.
     pub fn with_launch_groups(&self, launch_group_names: Vec<String>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15906,17 +15836,7 @@ impl ProjectResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
-    /// Adds a resource to a launch group.
-    pub fn with_launch_group(&self, launch_group_name: &str) -> Result<IResource, Box<dyn std::error::Error>> {
-        let mut args: HashMap<String, Value> = HashMap::new();
-        args.insert("builder".to_string(), self.handle.to_json());
-        args.insert("launchGroupName".to_string(), serde_json::to_value(&launch_group_name).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/withLaunchGroup", args)?;
-        let handle: Handle = serde_json::from_value(result)?;
-        Ok(IResource::new(handle, self.client.clone()))
-    }
-
-    /// Adds a resource to multiple launch groups.
+    /// Adds a resource to one or more launch groups.
     pub fn with_launch_groups(&self, launch_group_names: Vec<String>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -18342,17 +18262,7 @@ impl TestDatabaseResource {
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
 
-    /// Adds a resource to a launch group.
-    pub fn with_launch_group(&self, launch_group_name: &str) -> Result<IResource, Box<dyn std::error::Error>> {
-        let mut args: HashMap<String, Value> = HashMap::new();
-        args.insert("builder".to_string(), self.handle.to_json());
-        args.insert("launchGroupName".to_string(), serde_json::to_value(&launch_group_name).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/withLaunchGroup", args)?;
-        let handle: Handle = serde_json::from_value(result)?;
-        Ok(IResource::new(handle, self.client.clone()))
-    }
-
-    /// Adds a resource to multiple launch groups.
+    /// Adds a resource to one or more launch groups.
     pub fn with_launch_groups(&self, launch_group_names: Vec<String>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -20044,17 +19954,7 @@ impl TestRedisResource {
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
 
-    /// Adds a resource to a launch group.
-    pub fn with_launch_group(&self, launch_group_name: &str) -> Result<IResource, Box<dyn std::error::Error>> {
-        let mut args: HashMap<String, Value> = HashMap::new();
-        args.insert("builder".to_string(), self.handle.to_json());
-        args.insert("launchGroupName".to_string(), serde_json::to_value(&launch_group_name).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/withLaunchGroup", args)?;
-        let handle: Handle = serde_json::from_value(result)?;
-        Ok(IResource::new(handle, self.client.clone()))
-    }
-
-    /// Adds a resource to multiple launch groups.
+    /// Adds a resource to one or more launch groups.
     pub fn with_launch_groups(&self, launch_group_names: Vec<String>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -22006,17 +21906,7 @@ impl TestVaultResource {
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
 
-    /// Adds a resource to a launch group.
-    pub fn with_launch_group(&self, launch_group_name: &str) -> Result<IResource, Box<dyn std::error::Error>> {
-        let mut args: HashMap<String, Value> = HashMap::new();
-        args.insert("builder".to_string(), self.handle.to_json());
-        args.insert("launchGroupName".to_string(), serde_json::to_value(&launch_group_name).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/withLaunchGroup", args)?;
-        let handle: Handle = serde_json::from_value(result)?;
-        Ok(IResource::new(handle, self.client.clone()))
-    }
-
-    /// Adds a resource to multiple launch groups.
+    /// Adds a resource to one or more launch groups.
     pub fn with_launch_groups(&self, launch_group_names: Vec<String>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());

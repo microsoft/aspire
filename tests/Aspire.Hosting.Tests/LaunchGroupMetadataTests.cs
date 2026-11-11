@@ -25,12 +25,12 @@ public class LaunchGroupMetadataTests
         builder.Configuration["Aspire:LaunchGroup"] = "FRONTEND";
         var callbacks = 0;
         builder.AddExecutable("frontend", "unused", ".")
-            .WithLaunchGroup("Frontend")
+            .WithLaunchGroups("Frontend")
             .WithEnvironment(_ => callbacks++);
-        var server = builder.AddPostgres("server").WithLaunchGroup("frontend");
+        var server = builder.AddPostgres("server").WithLaunchGroups("frontend");
         server.AddDatabase("database");
         builder.AddExecutable("explicit", "unused", ".")
-            .WithLaunchGroup("backend")
+            .WithLaunchGroups("backend")
             .WithExplicitStart();
         builder.AddExecutable("helper", "unused", ".")
             .WithAnnotation(new ExcludeFromLaunchGroupSelectionAnnotation());
@@ -84,11 +84,11 @@ public class LaunchGroupMetadataTests
             new TestLogger<LaunchGroupMetadataService>(new TestLoggerFactory(sink, enabled: true)));
         builder.Configuration["Aspire:LaunchGroup"] = "frontend";
         builder.AddExecutable("frontend", "unused", ".")
-            .WithLaunchGroup("frontend")
+            .WithLaunchGroups("frontend")
             .WithArgs("argument-secret")
             .WithEnvironment("PASSWORD", "environment-secret");
-        builder.AddExecutable("backend", "unused", ".").WithLaunchGroup("backend");
-        builder.AddExecutable("manual", "unused", ".").WithLaunchGroup("backend").WithExplicitStart();
+        builder.AddExecutable("backend", "unused", ".").WithLaunchGroups("backend");
+        builder.AddExecutable("manual", "unused", ".").WithLaunchGroups("backend").WithExplicitStart();
         builder.AddExecutable("hidden", "unused", ".")
             .WithAnnotation(new HiddenAnnotation(HiddenBehavior.Always));
         await using var app = builder.Build();

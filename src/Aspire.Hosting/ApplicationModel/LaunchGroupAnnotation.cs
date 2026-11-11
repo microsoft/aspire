@@ -10,8 +10,7 @@ namespace Aspire.Hosting.ApplicationModel;
 /// </summary>
 /// <param name="launchGroupName">The launch group name. Names are compared case-insensitively.</param>
 /// <remarks>
-/// A resource can have multiple launch group annotations. Use <c>WithLaunchGroup</c> or
-/// <c>WithLaunchGroups</c> to configure membership.
+/// A resource can have multiple launch group annotations. Use <c>WithLaunchGroups</c> to configure membership.
 /// </remarks>
 /// <exception cref="ArgumentNullException"><paramref name="launchGroupName"/> is null.</exception>
 /// <exception cref="ArgumentException">

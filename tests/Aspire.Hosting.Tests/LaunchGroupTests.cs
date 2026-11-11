@@ -29,7 +29,6 @@ public class LaunchGroupTests(ITestOutputHelper outputHelper)
         var methods = typeof(LaunchGroupExtensions).GetMethods(BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly);
         Assert.Equal(
             [
-                nameof(LaunchGroupExtensions.WithLaunchGroup),
                 nameof(LaunchGroupExtensions.WithLaunchGroups),
                 nameof(LaunchGroupExtensions.WithOptionalLaunchGroupReference)
             ],
@@ -106,9 +105,9 @@ public class LaunchGroupTests(ITestOutputHelper outputHelper)
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.Configuration["Aspire:LaunchGroup"] = selectedGroup;
 #pragma warning disable CS0618 // Exercise the legacy ProjectResource path.
-        var legacy = builder.AddProject<Projects.ServiceA>("legacy").WithLaunchGroup("backend");
+        var legacy = builder.AddProject<Projects.ServiceA>("legacy").WithLaunchGroups("backend");
 #pragma warning restore CS0618
-        builder.AddExecutable("frontend", "unused", ".").WithLaunchGroup("frontend");
+        builder.AddExecutable("frontend", "unused", ".").WithLaunchGroups("frontend");
         var rebuilder = Assert.Single(builder.Resources.OfType<ProjectRebuilderResource>());
         await using var app = builder.Build();
 
@@ -124,14 +123,14 @@ public class LaunchGroupTests(ITestOutputHelper outputHelper)
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.Configuration["Aspire:LaunchGroup"] = "frontend";
-        var frontend = builder.AddExecutable("frontend", "unused", ".").WithLaunchGroup("frontend");
+        var frontend = builder.AddExecutable("frontend", "unused", ".").WithLaunchGroups("frontend");
         var early = builder.AddExecutable("early", "unused", ".");
         var other = builder.AddExecutable("other", "unused", ".");
         builder.OnBeforeStart((_, _) =>
         {
-            frontend.WithLaunchGroup("late-group");
-            early.WithLaunchGroup("frontend");
-            other.WithLaunchGroup("late-group");
+            frontend.WithLaunchGroups("late-group");
+            early.WithLaunchGroups("frontend");
+            other.WithLaunchGroups("late-group");
             return Task.CompletedTask;
         });
         await using var app = builder.Build();
@@ -158,14 +157,14 @@ public class LaunchGroupTests(ITestOutputHelper outputHelper)
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.Configuration["Aspire:LaunchGroup"] = "frontend";
-        var frontend = builder.AddExecutable("frontend", "unused", ".").WithLaunchGroup("frontend");
+        var frontend = builder.AddExecutable("frontend", "unused", ".").WithLaunchGroups("frontend");
         var early = builder.AddExecutable("early", "unused", ".");
         var late = new ExecutableResource("late", "unused", ".");
         late.Annotations.Add(new LaunchGroupAnnotation("late-group"));
         builder.Pipeline.WithFinalAction(WellKnownPipelineSteps.BeforeStart, context =>
         {
-            frontend.WithLaunchGroup("late-group");
-            early.WithLaunchGroup("frontend");
+            frontend.WithLaunchGroups("late-group");
+            early.WithLaunchGroups("frontend");
             context.Model.Resources.Add(late);
             return Task.CompletedTask;
         });
@@ -197,7 +196,7 @@ public class LaunchGroupTests(ITestOutputHelper outputHelper)
         var other = builder.AddExecutable("other", "unused", ".");
         builder.Pipeline.WithFinalAction(WellKnownPipelineSteps.BeforeStart, _ =>
         {
-            frontend.WithLaunchGroup("frontend");
+            frontend.WithLaunchGroups("frontend");
             return Task.CompletedTask;
         });
         await using var app = builder.Build();
@@ -222,8 +221,8 @@ public class LaunchGroupTests(ITestOutputHelper outputHelper)
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.Configuration["Aspire:LaunchGroup"] = "frontend";
-        var frontend = builder.AddExecutable("frontend", "unused", ".").WithLaunchGroup("frontend");
-        var backend = builder.AddExecutable("backend", "unused", ".").WithLaunchGroup("backend");
+        var frontend = builder.AddExecutable("frontend", "unused", ".").WithLaunchGroups("frontend");
+        var backend = builder.AddExecutable("backend", "unused", ".").WithLaunchGroups("backend");
         var argumentCallbacks = 0;
         var environmentCallbacks = 0;
         var finalActionRan = false;
@@ -259,15 +258,15 @@ public class LaunchGroupTests(ITestOutputHelper outputHelper)
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.Configuration["Aspire:LaunchGroup"] = "frontend";
-        builder.AddExecutable("frontend", "unused", ".").WithLaunchGroup("frontend");
-        var backend = builder.AddExecutable("backend", "unused", ".").WithLaunchGroup("backend");
+        builder.AddExecutable("frontend", "unused", ".").WithLaunchGroups("frontend");
+        var backend = builder.AddExecutable("backend", "unused", ".").WithLaunchGroups("backend");
         var explicitStart = new ExplicitStartupAnnotation();
         builder.Pipeline.WithFinalAction(WellKnownPipelineSteps.BeforeStart, _ =>
         {
             backend.WithAnnotation(explicitStart);
             if (becomesSelected)
             {
-                backend.WithLaunchGroup("frontend");
+                backend.WithLaunchGroups("frontend");
             }
             return Task.CompletedTask;
         });
@@ -289,15 +288,15 @@ public class LaunchGroupTests(ITestOutputHelper outputHelper)
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.Configuration["Aspire:LaunchGroup"] = "frontend";
-        builder.AddExecutable("frontend", "unused", ".").WithLaunchGroup("frontend");
-        var promoted = builder.AddExecutable("promoted", "unused", ".").WithLaunchGroup("backend");
-        var manual = builder.AddExecutable("manual", "unused", ".").WithLaunchGroup("backend");
+        builder.AddExecutable("frontend", "unused", ".").WithLaunchGroups("frontend");
+        var promoted = builder.AddExecutable("promoted", "unused", ".").WithLaunchGroups("backend");
+        var manual = builder.AddExecutable("manual", "unused", ".").WithLaunchGroups("backend");
         await using var app = builder.Build();
 
         await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
         var explicitStart = new ExplicitStartupAnnotation();
-        promoted.WithLaunchGroup("frontend");
-        manual.WithLaunchGroup("frontend").WithAnnotation(explicitStart);
+        promoted.WithLaunchGroups("frontend");
+        manual.WithLaunchGroups("frontend").WithAnnotation(explicitStart);
         await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
 
         var information = app.Services.GetRequiredService<LaunchGroupMetadataService>().GetInformation();
@@ -317,8 +316,8 @@ public class LaunchGroupTests(ITestOutputHelper outputHelper)
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.Configuration["Aspire:LaunchGroup"] = "frontend";
-        var frontend = builder.AddExecutable("frontend", "unused", ".").WithLaunchGroup("frontend");
-        var backend = builder.AddExecutable("backend", "unused", ".").WithLaunchGroup("backend");
+        var frontend = builder.AddExecutable("frontend", "unused", ".").WithLaunchGroups("frontend");
+        var backend = builder.AddExecutable("backend", "unused", ".").WithLaunchGroups("backend");
         await using var app = builder.Build();
 
         await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
@@ -341,9 +340,9 @@ public class LaunchGroupTests(ITestOutputHelper outputHelper)
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.Configuration["Aspire:LaunchGroup"] = "frontend";
-        builder.AddExecutable("frontend", "unused", ".").WithLaunchGroup("frontend");
-        var automatic = builder.AddExecutable("automatic", "unused", ".").WithLaunchGroup("backend");
-        var manual = builder.AddExecutable("manual", "unused", ".").WithLaunchGroup("backend");
+        builder.AddExecutable("frontend", "unused", ".").WithLaunchGroups("frontend");
+        var automatic = builder.AddExecutable("automatic", "unused", ".").WithLaunchGroups("backend");
+        var manual = builder.AddExecutable("manual", "unused", ".").WithLaunchGroups("backend");
         var explicitStart = new ExplicitStartupAnnotation();
         manual.WithAnnotation(explicitStart);
         await using var app = builder.Build();
@@ -439,7 +438,7 @@ public class LaunchGroupTests(ITestOutputHelper outputHelper)
         var resource = builder.AddExecutable("catalog", "unused", ".");
         if (useMembershipApi)
         {
-            resource.WithLaunchGroup("catalog");
+            resource.WithLaunchGroups("catalog");
         }
         await using var app = builder.Build();
 
@@ -461,7 +460,7 @@ public class LaunchGroupTests(ITestOutputHelper outputHelper)
         var resource = builder.AddExecutable("catalog", "unused", ".");
         if (useMembershipApi)
         {
-            resource.WithLaunchGroup("catalog");
+            resource.WithLaunchGroups("catalog");
         }
         await using var app = builder.Build();
 
@@ -518,10 +517,10 @@ public class LaunchGroupTests(ITestOutputHelper outputHelper)
         builder.Configuration["Aspire:LaunchGroups:1"] = "backend";
         builder.Configuration["Aspire:LaunchGroup"] = "frontend";
         var dependency = builder.AddExecutable("backend", "unused", ".")
-            .WithHttpEndpoint().WithLaunchGroup("backend");
+            .WithHttpEndpoint().WithLaunchGroups("backend");
         var endpoint = dependency.GetEndpoint("http");
         object argument = expression ? ReferenceExpression.Create($"--server={endpoint}") : endpoint;
-        var frontend = builder.AddExecutable("frontend", "unused", ".", new object[] { argument }).WithLaunchGroup("frontend");
+        var frontend = builder.AddExecutable("frontend", "unused", ".", new object[] { argument }).WithLaunchGroups("frontend");
         var callbacks = 0;
         frontend.WithArgs(context => { Interlocked.Increment(ref callbacks); });
         await using var app = builder.Build();
@@ -546,8 +545,8 @@ public class LaunchGroupTests(ITestOutputHelper outputHelper)
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.Configuration["Aspire:LaunchGroup"] = "frontend";
         var backend = builder.AddExecutable("backend", "unused", ".")
-            .WithHttpEndpoint().WithLaunchGroup("backend");
-        var frontend = builder.AddExecutable("frontend", "unused", ".").WithLaunchGroup("frontend");
+            .WithHttpEndpoint().WithLaunchGroups("backend");
+        var frontend = builder.AddExecutable("frontend", "unused", ".").WithLaunchGroups("frontend");
         var callbacks = 0;
         if (argumentCallback)
         {
@@ -595,10 +594,10 @@ public class LaunchGroupTests(ITestOutputHelper outputHelper)
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.Configuration["Aspire:LaunchGroup"] = "frontend";
         var backend = builder.AddExecutable("backend", "unused", ".")
-            .WithHttpEndpoint().WithLaunchGroup("frontend");
+            .WithHttpEndpoint().WithLaunchGroups("frontend");
         var endpoint = backend.GetEndpoint("http");
         object argument = expression ? ReferenceExpression.Create($"--server={endpoint}") : endpoint;
-        var frontend = builder.AddExecutable("frontend", "unused", ".", new object[] { argument }).WithLaunchGroup("frontend");
+        var frontend = builder.AddExecutable("frontend", "unused", ".", new object[] { argument }).WithLaunchGroups("frontend");
         var callbacks = 0;
         frontend.WithArgs(context => Interlocked.Increment(ref callbacks));
         await using var app = builder.Build();
@@ -619,9 +618,9 @@ public class LaunchGroupTests(ITestOutputHelper outputHelper)
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.Configuration["Aspire:LaunchGroup"] = "frontend";
-        var backend = builder.AddExecutable("backend", "unused", ".").WithLaunchGroup("backend");
+        var backend = builder.AddExecutable("backend", "unused", ".").WithLaunchGroups("backend");
         var frontend = builder.AddExecutable("frontend", "unused", ".")
-            .WithLaunchGroup("frontend")
+            .WithLaunchGroups("frontend")
             .WithOptionalLaunchGroupReference(backend);
         var callbacks = 0;
         frontend.WithArgs(_ => Interlocked.Increment(ref callbacks));
@@ -644,9 +643,9 @@ public class LaunchGroupTests(ITestOutputHelper outputHelper)
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.Configuration["Aspire:LaunchGroup"] = "frontend";
         var backend = builder.AddExecutable("backend", "unused", ".")
-            .WithLaunchGroup("frontend").WithExplicitStart();
+            .WithLaunchGroups("frontend").WithExplicitStart();
         var frontend = builder.AddExecutable("frontend", "unused", ".")
-            .WithLaunchGroup("frontend").WithReferenceRelationship(backend);
+            .WithLaunchGroups("frontend").WithReferenceRelationship(backend);
         await using var app = builder.Build();
 
         var exception = await Assert.ThrowsAsync<DistributedApplicationException>(
@@ -667,8 +666,8 @@ public class LaunchGroupTests(ITestOutputHelper outputHelper)
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.Configuration["Aspire:LaunchGroup"] = "frontend";
-        var backend = builder.AddExecutable("backend", "unused", ".").WithLaunchGroup("backend");
-        var frontend = builder.AddExecutable("frontend", "unused", ".").WithLaunchGroup("frontend");
+        var backend = builder.AddExecutable("backend", "unused", ".").WithLaunchGroups("backend");
+        var frontend = builder.AddExecutable("frontend", "unused", ".").WithLaunchGroups("frontend");
         switch (waitType)
         {
             case WaitType.WaitUntilHealthy:
@@ -697,11 +696,11 @@ public class LaunchGroupTests(ITestOutputHelper outputHelper)
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.Configuration["Aspire:LaunchGroup"] = "frontend";
-        var database = builder.AddContainer("database", "image").WithLaunchGroup("backend")
+        var database = builder.AddContainer("database", "image").WithLaunchGroups("backend")
             .WithEndpoint(name: "tcp", scheme: "tcp", targetPort: 1234);
         var connection = builder.AddConnectionString("connection", ReferenceExpression.Create($"{database.GetEndpoint("tcp")}"));
         var frontend = builder.AddExecutable("frontend", "unused", ".")
-            .WithLaunchGroup("frontend").WithReference(connection, optional: true);
+            .WithLaunchGroups("frontend").WithReference(connection, optional: true);
         await using var app = builder.Build();
 
         var exception = await Assert.ThrowsAsync<DistributedApplicationException>(
@@ -723,8 +722,8 @@ public class LaunchGroupTests(ITestOutputHelper outputHelper)
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.Configuration["Aspire:LaunchGroup"] = selection;
-        var catalog = builder.AddContainer("catalog", "image").WithLaunchGroup("catalog");
-        var basket = builder.AddExecutable("basket", "unused", ".").WithLaunchGroup("basket");
+        var catalog = builder.AddContainer("catalog", "image").WithLaunchGroups("catalog");
+        var basket = builder.AddExecutable("basket", "unused", ".").WithLaunchGroups("basket");
         var shared = builder.AddExecutable("shared", "unused", ".").WithLaunchGroups("basket", "catalog");
         var ungrouped = builder.AddExecutable("ungrouped", "unused", ".");
         await using var app = builder.Build();
@@ -742,12 +741,12 @@ public class LaunchGroupTests(ITestOutputHelper outputHelper)
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.Configuration["Aspire:LaunchGroup"] = "catalog";
-        builder.AddExecutable("catalog", "unused", ".").WithLaunchGroup("catalog");
+        builder.AddExecutable("catalog", "unused", ".").WithLaunchGroups("catalog");
         var automatic = builder.AddExecutable("automatic", "unused", ".")
             .WithAnnotation(new ExcludeFromLaunchGroupSelectionAnnotation());
         var manual = builder.AddExecutable("manual", "unused", ".").WithExplicitStart()
             .WithAnnotation(new ExcludeFromLaunchGroupSelectionAnnotation());
-        var differentGroup = builder.AddExecutable("different-group", "unused", ".").WithLaunchGroup("basket")
+        var differentGroup = builder.AddExecutable("different-group", "unused", ".").WithLaunchGroups("basket")
             .WithAnnotation(new ExcludeFromLaunchGroupSelectionAnnotation());
         var ungrouped = builder.AddExecutable("ungrouped", "unused", ".");
         await using var app = builder.Build();
@@ -770,7 +769,7 @@ public class LaunchGroupTests(ITestOutputHelper outputHelper)
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.Configuration["Aspire:LaunchGroup"] = "second";
         var resource = builder.AddExecutable("worker", "unused", ".")
-            .WithLaunchGroup("first")
+            .WithLaunchGroups("first")
             .WithLaunchGroups("FIRST", "second");
         await using var app = builder.Build();
 
@@ -797,7 +796,7 @@ public class LaunchGroupTests(ITestOutputHelper outputHelper)
                 builder.Configuration["Aspire:LaunchGroups:1"] = "fıle";
             }
             var selected = builder.AddExecutable("selected", "unused", ".").WithLaunchGroups("file", "FILE");
-            var other = builder.AddExecutable("other", "unused", ".").WithLaunchGroup("fıle");
+            var other = builder.AddExecutable("other", "unused", ".").WithLaunchGroups("fıle");
             await using var app = builder.Build();
 
             await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
@@ -817,16 +816,16 @@ public class LaunchGroupTests(ITestOutputHelper outputHelper)
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.Configuration["Aspire:LaunchGroup"] = "frontend";
-        var database = builder.AddContainer("database", "image").WithLaunchGroup("backend");
+        var database = builder.AddContainer("database", "image").WithLaunchGroups("backend");
         var child = builder.AddConnectionString("connection", ReferenceExpression.Create($"{database.GetEndpoint("tcp")}"));
         database.WithEndpoint(name: "tcp", scheme: "tcp", targetPort: 1234);
         var migration = builder.AddExecutable("migration", "unused", ".")
-            .WithLaunchGroup("backend").WaitFor(database);
+            .WithLaunchGroups("backend").WaitFor(database);
         var api = builder.AddExecutable("api", "unused", ".")
-            .WithLaunchGroup("backend").WaitForCompletion(migration).WithReference(child);
+            .WithLaunchGroups("backend").WaitForCompletion(migration).WithReference(child);
         var frontend = builder.AddExecutable("frontend", "unused", ".")
-            .WithLaunchGroup("frontend").WithReferenceRelationship(api);
-        var unrelated = builder.AddContainer("unrelated", "image").WithLaunchGroup("backend");
+            .WithLaunchGroups("frontend").WithReferenceRelationship(api);
+        var unrelated = builder.AddContainer("unrelated", "image").WithLaunchGroups("backend");
         await using var app = builder.Build();
 
         var exception = await Assert.ThrowsAsync<DistributedApplicationException>(
@@ -848,10 +847,10 @@ public class LaunchGroupTests(ITestOutputHelper outputHelper)
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.Configuration["Aspire:LaunchGroup"] = "catalog";
-        var parent = builder.AddContainer("cache", "image").WithLaunchGroup(parentGroup);
+        var parent = builder.AddContainer("cache", "image").WithLaunchGroups(parentGroup);
         var child = builder.AddExecutable("admin", "unused", ".").WithParentRelationship(parent);
         var overrideChild = builder.AddExecutable("other-admin", "unused", ".")
-            .WithParentRelationship(parent).WithLaunchGroup("catalog");
+            .WithParentRelationship(parent).WithLaunchGroups("catalog");
         var reference = builder.AddExecutable("reference", "unused", ".").WithReferenceRelationship(parent);
         await using var app = builder.Build();
 
@@ -870,9 +869,9 @@ public class LaunchGroupTests(ITestOutputHelper outputHelper)
         builder.Configuration["Aspire:LaunchGroup"] = "catalog";
         builder.Configuration["Aspire:LaunchGroups:0"] = "catalog";
         builder.Configuration["Aspire:LaunchGroups:1"] = "basket";
-        var dependency = builder.AddContainer("cache", "image").WithLaunchGroup("basket");
+        var dependency = builder.AddContainer("cache", "image").WithLaunchGroups("basket");
         var explicitResource = builder.AddExecutable("explicit", "unused", ".")
-            .WithLaunchGroup("catalog").WithExplicitStart().WaitFor(dependency);
+            .WithLaunchGroups("catalog").WithExplicitStart().WaitFor(dependency);
         await using var app = builder.Build();
 
         await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
@@ -888,7 +887,7 @@ public class LaunchGroupTests(ITestOutputHelper outputHelper)
         builder.Configuration["Aspire:LaunchGroups:0"] = "catalog";
         builder.Configuration["Aspire:LaunchGroup"] = "BASKET";
         builder.Configuration["Aspire:LaunchGroups:1"] = "basket";
-        var resource = builder.AddExecutable("catalog", "unused", ".").WithLaunchGroup("catalog");
+        var resource = builder.AddExecutable("catalog", "unused", ".").WithLaunchGroups("catalog");
         await using var app = builder.Build();
 
         await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
@@ -907,7 +906,7 @@ public class LaunchGroupTests(ITestOutputHelper outputHelper)
         builder.Configuration["Aspire:LaunchGroup"] = selection;
         builder.Configuration["Aspire:LaunchGroups:0"] = "catalog";
         builder.Configuration["Aspire:LaunchGroups:1"] = "basket";
-        var resource = builder.AddExecutable("catalog", "unused", ".").WithLaunchGroup("catalog");
+        var resource = builder.AddExecutable("catalog", "unused", ".").WithLaunchGroups("catalog");
         await using var app = builder.Build();
 
         await Assert.ThrowsAsync<DistributedApplicationException>(
@@ -921,7 +920,7 @@ public class LaunchGroupTests(ITestOutputHelper outputHelper)
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.Configuration["Aspire:LaunchGroups:0"] = "catalog";
-        builder.AddExecutable("basket", "unused", ".").WithLaunchGroup("basket");
+        builder.AddExecutable("basket", "unused", ".").WithLaunchGroups("basket");
         await using var app = builder.Build();
 
         await Assert.ThrowsAsync<DistributedApplicationException>(
@@ -942,11 +941,11 @@ public class LaunchGroupTests(ITestOutputHelper outputHelper)
         var resource = builder.AddExecutable("worker", "unused", ".");
 
         var annotationException = Assert.ThrowsAny<ArgumentException>(() => new LaunchGroupAnnotation(name!));
-        var singleGroupException = Assert.ThrowsAny<ArgumentException>(() => resource.WithLaunchGroup(name!));
+        var singleGroupException = Assert.ThrowsAny<ArgumentException>(() => resource.WithLaunchGroups([name!]));
         var multipleGroupsException = Assert.ThrowsAny<ArgumentException>(() => resource.WithLaunchGroups("valid", name!));
 
         Assert.Equal("launchGroupName", annotationException.ParamName);
-        Assert.Equal("launchGroupName", singleGroupException.ParamName);
+        Assert.Equal("launchGroupNames", singleGroupException.ParamName);
         Assert.Equal("launchGroupNames", multipleGroupsException.ParamName);
         Assert.All(new[] { annotationException, singleGroupException, multipleGroupsException },
             exception => Assert.Equal(name is null ? typeof(ArgumentNullException) : typeof(ArgumentException), exception.GetType()));
@@ -958,7 +957,7 @@ public class LaunchGroupTests(ITestOutputHelper outputHelper)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         builder.Configuration["Aspire:LaunchGroup"] = "invalid";
-        var resource = builder.AddContainer("catalog", "image").WithLaunchGroup("catalog");
+        var resource = builder.AddContainer("catalog", "image").WithLaunchGroups("catalog");
         await using var app = builder.Build();
 
         app.Services.GetRequiredService<LaunchGroupService>().Configure(app.Services.GetRequiredService<DistributedApplicationModel>());
@@ -971,7 +970,7 @@ public class LaunchGroupTests(ITestOutputHelper outputHelper)
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.Configuration["Aspire:LaunchGroup"] = "selected";
-        var first = builder.AddExecutable("first", "unused", ".").WithLaunchGroup("selected");
+        var first = builder.AddExecutable("first", "unused", ".").WithLaunchGroups("selected");
         var second = builder.AddExecutable("second", "unused", ".");
         first.WithReferenceRelationship(second);
         second.WithReferenceRelationship(first);
@@ -991,8 +990,8 @@ public class LaunchGroupTests(ITestOutputHelper outputHelper)
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.Configuration["Aspire:LaunchGroup"] = "selected";
-        var first = builder.AddExecutable("first", "unused", ".").WithLaunchGroup("selected");
-        var second = builder.AddExecutable("second", "unused", ".").WithLaunchGroup("selected");
+        var first = builder.AddExecutable("first", "unused", ".").WithLaunchGroups("selected");
+        var second = builder.AddExecutable("second", "unused", ".").WithLaunchGroups("selected");
         first.WithReferenceRelationship(second);
         second.WithReferenceRelationship(first);
         await using var app = builder.Build();
@@ -1014,8 +1013,8 @@ public class LaunchGroupTests(ITestOutputHelper outputHelper)
         builder.Configuration["Aspire:LaunchGroups:0"] = "catalog";
         builder.Configuration["Aspire:LaunchGroups:1"] = "basket";
         var started = new ConcurrentQueue<string>();
-        var dependency = builder.AddExecutable("dependency", "unused", ".").WithLaunchGroup("basket");
-        var resource = builder.AddExecutable("worker", "unused", ".").WithLaunchGroup("basket").WaitFor(dependency);
+        var dependency = builder.AddExecutable("dependency", "unused", ".").WithLaunchGroups("basket");
+        var resource = builder.AddExecutable("worker", "unused", ".").WithLaunchGroups("basket").WaitFor(dependency);
         foreach (var member in new[] { dependency, resource })
         {
             member.WithCommand(KnownResourceCommands.StartCommand, "Start", _ =>

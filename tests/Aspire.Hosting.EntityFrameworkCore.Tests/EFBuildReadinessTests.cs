@@ -44,10 +44,10 @@ public class EFBuildReadinessTests(ITestOutputHelper output)
             options => options.ProjectDirectory = workspace.Path,
             output).WithResourceCleanUp(true);
         builder.Configuration["Aspire:LaunchGroup"] = "selected";
-        builder.AddParameter("selected", "value").WithLaunchGroup("selected");
+        builder.AddParameter("selected", "value").WithLaunchGroups("selected");
         var project = builder.AddDotnetProject("api", projectPath, options => options.ExcludeLaunchProfile = true)
             .WithArgs(startupMarker)
-            .WithLaunchGroup("other");
+            .WithLaunchGroups("other");
         var migrations = project.AddEFMigrations("migrations");
         project.WaitFor(migrations);
         var tool = new TestEfTool

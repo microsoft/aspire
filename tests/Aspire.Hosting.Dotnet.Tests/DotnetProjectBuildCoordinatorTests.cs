@@ -53,14 +53,14 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             options => options.ProjectDirectory = workspace.Path,
             outputHelper);
         builder.Configuration["Aspire:LaunchGroup"] = "selected";
-        builder.AddParameter("selected").WithLaunchGroup("selected");
+        builder.AddParameter("selected").WithLaunchGroups("selected");
         var filePath = Path.Combine(workspace.Path, "worker.cs");
         File.WriteAllText(filePath, "System.Console.WriteLine(\"Started\");");
         var first = builder.AddDotnetProject("first", filePath, options => options.ExcludeLaunchProfile = true);
         var second = builder.AddDotnetProject("second", filePath, options => options.ExcludeLaunchProfile = true);
         if (initiallySelected)
         {
-            first.WithLaunchGroup("selected");
+            first.WithLaunchGroups("selected");
         }
 
         await using var app = builder.Build();
@@ -86,13 +86,13 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         var deferredPath = CreateProject(workspace.Path, "Deferred", "Deferred.csproj");
         var persistentPath = CreateProject(workspace.Path, "Persistent", "Persistent.csproj");
         builder.AddDotnetProject("selected", sharedPath, options => options.ExcludeLaunchProfile = true)
-            .WithLaunchGroup("selected");
+            .WithLaunchGroups("selected");
         builder.AddDotnetProject("shared", sharedPath, options => options.ExcludeLaunchProfile = true)
-            .WithLaunchGroup("other");
+            .WithLaunchGroups("other");
         builder.AddDotnetProject("deferred", deferredPath, options => options.ExcludeLaunchProfile = true)
-            .WithLaunchGroup("other");
+            .WithLaunchGroups("other");
         builder.AddDotnetProject("persistent", persistentPath, options => options.ExcludeLaunchProfile = true)
-            .WithLaunchGroup("other")
+            .WithLaunchGroups("other")
             .WithPersistentLifetime()
             .WithExplicitStart();
         await using var app = builder.Build();
@@ -119,16 +119,16 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             options => options.ProjectDirectory = workspace.Path,
             outputHelper);
         builder.Configuration["Aspire:LaunchGroup"] = "selected";
-        builder.AddParameter("anchor", "value").WithLaunchGroup("selected");
+        builder.AddParameter("anchor", "value").WithLaunchGroups("selected");
         if (hasInitialProject)
         {
             var selectedPath = CreateProject(workspace.Path, "Selected", "Selected.csproj");
             builder.AddDotnetProject("selected", selectedPath, options => options.ExcludeLaunchProfile = true)
-                .WithLaunchGroup("selected");
+                .WithLaunchGroups("selected");
         }
         var deferredPath = CreateProject(workspace.Path, "Deferred", "Deferred.csproj");
         builder.AddDotnetProject("deferred", deferredPath, options => options.ExcludeLaunchProfile = true)
-            .WithLaunchGroup("other");
+            .WithLaunchGroups("other");
         await using var app = builder.Build();
 
         await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
@@ -162,7 +162,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         File.WriteAllText(filePath, "System.Console.WriteLine(\"Started\");");
         var aliasPath = CreateFileAppPathAlias(filePath, "symlink");
         var selected = builder.AddDotnetProject("selected", filePath, options => options.ExcludeLaunchProfile = true)
-            .WithLaunchGroup("selected");
+            .WithLaunchGroups("selected");
         var deferred = builder.AddDotnetProject("deferred", aliasPath, options => options.ExcludeLaunchProfile = true);
         await using var app = builder.Build();
 
@@ -191,7 +191,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         var projectPath = CreateProject(workspace.Path, "Worker", "Worker.csproj");
         builder.Configuration["AppHost:BuildConfiguration"] = "Debug";
         var selected = builder.AddDotnetProject("selected", projectPath, options => options.ExcludeLaunchProfile = true)
-            .WithLaunchGroup("selected");
+            .WithLaunchGroups("selected");
         builder.Configuration["AppHost:BuildConfiguration"] = "Release";
         var deferred = builder.AddDotnetProject("deferred", projectPath, options => options.ExcludeLaunchProfile = true);
         await using var app = builder.Build();
@@ -220,9 +220,9 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         builder.Configuration["Aspire:LaunchGroup"] = "selected";
         var projectPath = CreateProject(workspace.Path, "Worker", "Worker.csproj");
         var selected = builder.AddDotnetProject("selected", projectPath, options => options.ExcludeLaunchProfile = true)
-            .WithLaunchGroup("selected");
+            .WithLaunchGroups("selected");
         var excluded = builder.AddDotnetProject("excluded", projectPath, options => options.ExcludeLaunchProfile = true)
-            .WithLaunchGroup("other");
+            .WithLaunchGroups("other");
         (selectedHasBuildEnvironment ? selected : excluded).WithBuildEnvironment("BUILD_FLAVOR", "custom");
         await using var app = builder.Build();
 
@@ -249,17 +249,17 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             options => options.ProjectDirectory = workspace.Path,
             outputHelper);
         builder.Configuration["Aspire:LaunchGroup"] = "selected";
-        builder.AddParameter("anchor", "value").WithLaunchGroup("selected");
+        builder.AddParameter("anchor", "value").WithLaunchGroups("selected");
         var projectPath = CreateProject(workspace.Path, "Worker", "Worker.csproj");
         var project = builder.AddDotnetProject("worker", projectPath, options => options.ExcludeLaunchProfile = true)
-            .WithLaunchGroup(initialGroup);
+            .WithLaunchGroups(initialGroup);
         builder.Pipeline.WithFinalAction(
             WellKnownPipelineSteps.BeforeStart,
             _ =>
             {
                 var previous = Assert.Single(project.Resource.Annotations.OfType<LaunchGroupAnnotation>());
                 project.Resource.Annotations.Remove(previous);
-                project.WithLaunchGroup(finalGroup);
+                project.WithLaunchGroups(finalGroup);
                 return Task.CompletedTask;
             });
         await using var app = builder.Build();
@@ -292,10 +292,10 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             options => options.ProjectDirectory = workspace.Path,
             outputHelper);
         builder.Configuration["Aspire:LaunchGroup"] = "selected";
-        builder.AddParameter("anchor", "value").WithLaunchGroup("selected");
+        builder.AddParameter("anchor", "value").WithLaunchGroups("selected");
         var projectPath = CreateProject(workspace.Path, "Worker", "Worker.csproj");
         var project = builder.AddDotnetProject("worker", projectPath, options => options.ExcludeLaunchProfile = true)
-            .WithLaunchGroup(initialGroup);
+            .WithLaunchGroups(initialGroup);
         if (initiallyExplicit)
         {
             project.WithExplicitStart();
@@ -322,7 +322,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         {
             var membership = Assert.Single(project.Resource.Annotations.OfType<LaunchGroupAnnotation>());
             project.Resource.Annotations.Remove(membership);
-            project.WithLaunchGroup(finalGroup);
+            project.WithLaunchGroups(finalGroup);
         }
         if (initiallyExplicit != finallyExplicit)
         {
@@ -370,9 +370,9 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         var firstPath = CreateProject(workspace.Path, "First", "First.csproj");
         var secondPath = CreateProject(workspace.Path, "Second", "Second.csproj");
         var first = builder.AddDotnetProject("first", firstPath, options => options.ExcludeLaunchProfile = true)
-            .WithLaunchGroup("first");
+            .WithLaunchGroups("first");
         var second = builder.AddDotnetProject("second", secondPath, options => options.ExcludeLaunchProfile = true)
-            .WithLaunchGroup("second");
+            .WithLaunchGroups("second");
         var conflict = new ParameterResource($"{DotnetProjectBuildCoordinator.BuildResourceName}-2", _ => "conflict");
         conflict.Annotations.Add(NameValidationPolicyAnnotation.None);
         builder.AddResource(conflict);
@@ -392,8 +392,8 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         {
             first.Resource.Annotations.Remove(Assert.Single(first.Resource.Annotations.OfType<LaunchGroupAnnotation>()));
             second.Resource.Annotations.Remove(Assert.Single(second.Resource.Annotations.OfType<LaunchGroupAnnotation>()));
-            first.WithLaunchGroup("second");
-            second.WithLaunchGroup("first");
+            first.WithLaunchGroups("second");
+            second.WithLaunchGroups("first");
         }
 
         await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
@@ -429,9 +429,9 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         var selectedPath = CreateProject(workspace.Path, "Selected", "Selected.csproj");
         var otherPath = CreateProject(workspace.Path, "Other", "Other.csproj");
         builder.AddDotnetProject("selected", selectedPath, options => options.ExcludeLaunchProfile = true)
-            .WithLaunchGroup("selected");
+            .WithLaunchGroups("selected");
         builder.AddDotnetProject("other", otherPath, options => options.ExcludeLaunchProfile = true)
-            .WithLaunchGroup("other");
+            .WithLaunchGroups("other");
         var selectionChangedAfterMaterialization = false;
         builder.Pipeline.WithFinalAction(
             WellKnownPipelineSteps.BeforeStart,
@@ -470,7 +470,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         builder.Configuration["Aspire:LaunchGroup"] = "selected";
         builder.AddDotnetProject("selected", filePath, options => options.ExcludeLaunchProfile = true)
             .WithArgs(selectedSentinel)
-            .WithLaunchGroup("selected");
+            .WithLaunchGroups("selected");
         builder.AddDotnetProject("deferred", aliasPath, options => options.ExcludeLaunchProfile = true)
             .WithArgs(deferredSentinel);
         await using var app = builder.Build();
@@ -505,7 +505,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         builder.Configuration["AppHost:BuildConfiguration"] = "Debug";
         builder.AddDotnetProject("selected", projectPath, options => options.ExcludeLaunchProfile = true)
             .WithArgs(selectedSentinel)
-            .WithLaunchGroup("selected");
+            .WithLaunchGroups("selected");
         builder.Configuration["AppHost:BuildConfiguration"] = "Release";
         builder.AddDotnetProject("deferred", projectPath, options => options.ExcludeLaunchProfile = true)
             .WithArgs(deferredSentinel);
@@ -540,7 +540,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             options => options.ProjectDirectory = workspace.Path,
             outputHelper).WithResourceCleanUp(true);
         builder.Configuration["Aspire:LaunchGroup"] = "selected";
-        builder.AddParameter("selected", "value").WithLaunchGroup("selected");
+        builder.AddParameter("selected", "value").WithLaunchGroups("selected");
         var worker = builder.AddDotnetProject("worker", projectPath, options => options.ExcludeLaunchProfile = true)
             .WithArgs(sentinel);
         await using var app = builder.Build();
@@ -574,9 +574,9 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             options => options.ProjectDirectory = workspace.Path, outputHelper).WithResourceCleanUp(true);
         builder.Configuration["Aspire:LaunchGroup"] = "catalog";
         var api = builder.AddDotnetProject("api", apiProject, options => options.ExcludeLaunchProfile = true)
-            .WithArgs(apiSentinel).WithLaunchGroup("catalog");
+            .WithArgs(apiSentinel).WithLaunchGroups("catalog");
         var worker = builder.AddDotnetProject("worker", workerProject, options => options.ExcludeLaunchProfile = true)
-            .WithArgs(workerSentinel).WithLaunchGroup("basket");
+            .WithArgs(workerSentinel).WithLaunchGroups("basket");
         if (separateBuildEnvironment)
         {
             worker.WithBuildEnvironment("BUILD_FLAVOR", "worker");
@@ -637,10 +637,10 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         builder.Configuration["Aspire:LaunchGroup"] = "catalog";
         builder.AddDotnetProject("api", apiProject, options => options.ExcludeLaunchProfile = true)
             .WithArgs(apiSentinel)
-            .WithLaunchGroup("catalog");
+            .WithLaunchGroups("catalog");
         builder.AddDotnetProject("worker", workerProject, options => options.ExcludeLaunchProfile = true)
             .WithArgs(workerSentinel)
-            .WithLaunchGroup("basket");
+            .WithLaunchGroups("basket");
         await using var app = builder.Build();
 
         using (var startup = new CancellationTokenSource(TestConstants.LongTimeoutTimeSpan))
@@ -704,13 +704,13 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         builder.Configuration["Aspire:LaunchGroup"] = "catalog";
         builder.AddDotnetProject("api", apiProject, options => options.ExcludeLaunchProfile = true)
             .WithArgs(apiSentinel)
-            .WithLaunchGroup("catalog");
+            .WithLaunchGroups("catalog");
         builder.AddDotnetProject("worker1", workerProject, options => options.ExcludeLaunchProfile = true)
             .WithArgs(firstSentinel)
-            .WithLaunchGroup("basket");
+            .WithLaunchGroups("basket");
         builder.AddDotnetProject("worker2", workerProject, options => options.ExcludeLaunchProfile = true)
             .WithArgs(secondSentinel)
-            .WithLaunchGroup("basket");
+            .WithLaunchGroups("basket");
         await using var app = builder.Build();
 
         using var timeout = new CancellationTokenSource(TestConstants.LongTimeoutTimeSpan);
@@ -738,12 +738,12 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             options => options.ProjectDirectory = workspace.Path,
             outputHelper);
         builder.Configuration["Aspire:LaunchGroup"] = "selected";
-        builder.AddParameter("selected", "value").WithLaunchGroup("selected");
+        builder.AddParameter("selected", "value").WithLaunchGroups("selected");
         var projectPath = CreateProject(workspace.Path, "Worker", "Worker.csproj");
         var first = builder.AddDotnetProject("first", projectPath, options => options.ExcludeLaunchProfile = true)
-            .WithLaunchGroup("other");
+            .WithLaunchGroups("other");
         var second = builder.AddDotnetProject("second", projectPath, options => options.ExcludeLaunchProfile = true)
-            .WithLaunchGroup("other");
+            .WithLaunchGroups("other");
         TaskCompletionSource[] started =
         [
             new(TaskCreationOptions.RunContinuationsAsynchronously),
@@ -886,12 +886,12 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             options => options.ProjectDirectory = workspace.Path,
             outputHelper);
         builder.Configuration["Aspire:LaunchGroup"] = "selected";
-        builder.AddParameter("selected", "value").WithLaunchGroup("selected");
+        builder.AddParameter("selected", "value").WithLaunchGroups("selected");
         var projectPath = CreateProject(workspace.Path, "Worker", "Worker.csproj");
         var first = builder.AddDotnetProject("first", projectPath, options => options.ExcludeLaunchProfile = true)
-            .WithLaunchGroup("other");
+            .WithLaunchGroups("other");
         var second = builder.AddDotnetProject("second", projectPath, options => options.ExcludeLaunchProfile = true)
-            .WithLaunchGroup("other");
+            .WithLaunchGroups("other");
         var buildStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var releaseBuild = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var starts = 0;
@@ -994,7 +994,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         builder.Configuration["Aspire:LaunchGroup"] = "catalog";
         builder.AddDotnetProject("api", apiProject, options => options.ExcludeLaunchProfile = true)
             .WithArgs(apiSentinel)
-            .WithLaunchGroup("catalog");
+            .WithLaunchGroups("catalog");
         builder.AddDotnetProject("worker1", filePath, options => options.ExcludeLaunchProfile = true)
             .WithArgs(firstSentinel);
         builder.AddDotnetProject("worker2", filePath, options => options.ExcludeLaunchProfile = true)
@@ -1034,13 +1034,13 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         builder.Configuration["Aspire:LaunchGroup"] = "catalog";
         builder.AddDotnetProject("api", apiProject, options => options.ExcludeLaunchProfile = true)
             .WithArgs(apiSentinel)
-            .WithLaunchGroup("catalog");
+            .WithLaunchGroups("catalog");
         builder.AddDotnetProject("basket", basketProject, options => options.ExcludeLaunchProfile = true)
             .WithArgs(basketSentinel)
-            .WithLaunchGroup("basket");
+            .WithLaunchGroups("basket");
         builder.AddDotnetProject("orders", ordersProject, options => options.ExcludeLaunchProfile = true)
             .WithArgs(ordersSentinel)
-            .WithLaunchGroup("orders");
+            .WithLaunchGroups("orders");
         await using var app = builder.Build();
 
         using var timeout = new CancellationTokenSource(TestConstants.LongTimeoutTimeSpan);
@@ -1076,9 +1076,9 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             outputHelper);
         builder.Configuration["Aspire:LaunchGroup"] = "selected";
         var selected = builder.AddDotnetProject("selected", selectedProject, options => options.ExcludeLaunchProfile = true)
-            .WithLaunchGroup("selected");
+            .WithLaunchGroups("selected");
         builder.AddDotnetProject("deferred", deferredProject, options => options.ExcludeLaunchProfile = true)
-            .WithLaunchGroup("other");
+            .WithLaunchGroups("other");
         await using var app = builder.Build();
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
         timeout.CancelAfter(TestConstants.DefaultTimeoutTimeSpan);
@@ -1140,9 +1140,9 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         builder.Configuration["Aspire:LaunchGroup"] = "selected";
         var projectPath = CreateProject(workspace.Path, "Worker", "Worker.csproj");
         var selected = builder.AddDotnetProject("selected", projectPath, options => options.ExcludeLaunchProfile = true)
-            .WithLaunchGroup("selected");
+            .WithLaunchGroups("selected");
         var duplicate = builder.AddDotnetProject("duplicate", projectPath, options => options.ExcludeLaunchProfile = true)
-            .WithLaunchGroup("other");
+            .WithLaunchGroups("other");
         await using var app = builder.Build();
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
         timeout.CancelAfter(TestConstants.DefaultTimeoutTimeSpan);
@@ -1215,12 +1215,12 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             options => options.ProjectDirectory = workspace.Path,
             outputHelper);
         builder.Configuration["Aspire:LaunchGroup"] = "selected";
-        builder.AddParameter("selected", "value").WithLaunchGroup("selected");
+        builder.AddParameter("selected", "value").WithLaunchGroups("selected");
         var projectPath = CreateProject(workspace.Path, "Worker", "Worker.csproj");
         var first = builder.AddDotnetProject("first", projectPath, options => options.ExcludeLaunchProfile = true)
-            .WithLaunchGroup("other");
+            .WithLaunchGroups("other");
         var second = builder.AddDotnetProject("second", projectPath, options => options.ExcludeLaunchProfile = true)
-            .WithLaunchGroup("other");
+            .WithLaunchGroups("other");
         var startCount = 0;
         builder.Services.AddKeyedSingleton<Func<IResource, CancellationToken, Task>>(
             DistributedApplicationBuilder.ResourceStarterServiceKey,
@@ -1330,9 +1330,9 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         builder.Configuration["Aspire:LaunchGroup"] = "selected";
         var projectPath = CreateProject(workspace.Path, "Worker", "Worker.csproj");
         var selected = builder.AddDotnetProject("selected", projectPath, options => options.ExcludeLaunchProfile = true)
-            .WithLaunchGroup("selected");
+            .WithLaunchGroups("selected");
         var duplicate = builder.AddDotnetProject("duplicate", projectPath, options => options.ExcludeLaunchProfile = true)
-            .WithLaunchGroup("other");
+            .WithLaunchGroups("other");
         await using var app = builder.Build();
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
         timeout.CancelAfter(TestConstants.DefaultTimeoutTimeSpan);
@@ -1406,10 +1406,10 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         });
         var selected = builder.AddDotnetProject("selected", projectPath, options => options.ExcludeLaunchProfile = true)
             .WithArgs(selectedSentinel)
-            .WithLaunchGroup("selected");
+            .WithLaunchGroups("selected");
         var duplicate = builder.AddDotnetProject("duplicate", projectPath, options => options.ExcludeLaunchProfile = true)
             .WithArgs(duplicateSentinel)
-            .WithLaunchGroup("other");
+            .WithLaunchGroups("other");
         await using var app = builder.Build();
 
         try
@@ -1498,7 +1498,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             options => options.ProjectDirectory = workspace.Path,
             outputHelper).WithResourceCleanUp(true);
         builder.Configuration["Aspire:LaunchGroup"] = "selected";
-        builder.AddParameter("selected", "value").WithLaunchGroup("selected");
+        builder.AddParameter("selected", "value").WithLaunchGroups("selected");
         builder.Eventing.Subscribe<BeforeResourceStartedEvent>((@event, _) =>
         {
             if (@event.Resource is DotnetProjectBuildResource)
@@ -1514,10 +1514,10 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         });
         var first = builder.AddDotnetProject("first", projectPath, options => options.ExcludeLaunchProfile = true)
             .WithArgs(firstSentinel)
-            .WithLaunchGroup("other");
+            .WithLaunchGroups("other");
         var second = builder.AddDotnetProject("second", projectPath, options => options.ExcludeLaunchProfile = true)
             .WithArgs(secondSentinel)
-            .WithLaunchGroup("other");
+            .WithLaunchGroups("other");
         await using var app = builder.Build();
 
         try
@@ -1606,7 +1606,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         builder.Configuration["Aspire:LaunchGroup"] = "selected";
         var selected = builder.AddDotnetProject("selected", selectedProject, options => options.ExcludeLaunchProfile = true)
             .WithArgs(selectedSentinel)
-            .WithLaunchGroup("selected")
+            .WithLaunchGroups("selected")
             .WithBuildEnvironment(async context =>
             {
                 if (Volatile.Read(ref blockRebuild) != 0)
@@ -1619,7 +1619,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             });
         builder.AddDotnetProject("deferred", deferredProject, options => options.ExcludeLaunchProfile = true)
             .WithArgs(deferredSentinel)
-            .WithLaunchGroup("other");
+            .WithLaunchGroups("other");
         builder.Eventing.Subscribe<BeforeResourceStartedEvent>((@event, _) =>
         {
             if (@event.Resource is DotnetProjectBuildResource build &&
@@ -1736,10 +1736,10 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         builder.Configuration["Aspire:LaunchGroup"] = "catalog";
         builder.AddDotnetProject("api", apiProject, options => options.ExcludeLaunchProfile = true)
             .WithArgs(apiSentinel)
-            .WithLaunchGroup("catalog");
+            .WithLaunchGroups("catalog");
         builder.AddDotnetProject("worker", workerProject, options => options.ExcludeLaunchProfile = true)
             .WithArgs(workerSentinel)
-            .WithLaunchGroup("basket")
+            .WithLaunchGroups("basket")
             .WithBuildEnvironment(context =>
             {
                 if (Interlocked.Increment(ref buildEvaluations) == 2)
@@ -1814,10 +1814,10 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         builder.Configuration["Aspire:LaunchGroup"] = "catalog";
         builder.AddDotnetProject("api", apiProject, options => options.ExcludeLaunchProfile = true)
             .WithArgs(Path.Combine(workspace.Path, "api-ran.txt"))
-            .WithLaunchGroup("catalog");
+            .WithLaunchGroups("catalog");
         builder.AddDotnetProject("worker", workerProject, options => options.ExcludeLaunchProfile = true)
             .WithArgs(workerSentinel)
-            .WithLaunchGroup("basket")
+            .WithLaunchGroups("basket")
             .WithBuildEnvironment(context =>
             {
                 if (Interlocked.Increment(ref evaluations) == 1)
@@ -1881,10 +1881,10 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         builder.Configuration["Aspire:LaunchGroup"] = "catalog";
         builder.AddDotnetProject("api", apiProject, options => options.ExcludeLaunchProfile = true)
             .WithArgs(Path.Combine(workspace.Path, "api-ran.txt"))
-            .WithLaunchGroup("catalog");
+            .WithLaunchGroups("catalog");
         builder.AddDotnetProject("worker", workerProject, options => options.ExcludeLaunchProfile = true)
             .WithArgs(workerSentinel)
-            .WithLaunchGroup("basket");
+            .WithLaunchGroups("basket");
         await using var app = builder.Build();
 
         using var timeout = new CancellationTokenSource(TestConstants.LongTimeoutTimeSpan);
@@ -1932,11 +1932,11 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             outputHelper).WithResourceCleanUp(true);
         builder.Configuration["Aspire:LaunchGroup"] = "selected";
         var selected = builder.AddDotnetProject("selected", selectedProject, options => options.ExcludeLaunchProfile = true)
-            .WithLaunchGroup("selected");
+            .WithLaunchGroups("selected");
         var deferred = builder.AddDotnetProject("deferred", deferredProject, options => options.ExcludeLaunchProfile = true)
-            .WithLaunchGroup("other");
+            .WithLaunchGroups("other");
         builder.AddDotnetProject("unrelated", unrelatedProject, options => options.ExcludeLaunchProfile = true)
-            .WithLaunchGroup("other");
+            .WithLaunchGroups("other");
         await using var app = builder.Build();
 
         using (var startup = new CancellationTokenSource(TestConstants.LongTimeoutTimeSpan))
@@ -2047,10 +2047,10 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         builder.Configuration["Aspire:LaunchGroup"] = "catalog";
         builder.AddDotnetProject("api", apiProject, options => options.ExcludeLaunchProfile = true)
             .WithArgs(Path.Combine(workspace.Path, "api-ran.txt"))
-            .WithLaunchGroup("catalog");
+            .WithLaunchGroups("catalog");
         var worker = builder.AddDotnetProject("worker", workerProject, options => options.ExcludeLaunchProfile = true)
             .WithArgs(workerSentinel)
-            .WithLaunchGroup("basket");
+            .WithLaunchGroups("basket");
         await using var app = builder.Build();
 
         using var timeout = new CancellationTokenSource(TestConstants.LongTimeoutTimeSpan);
@@ -2098,7 +2098,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             options => options.ProjectDirectory = workspace.Path,
             outputHelper);
         builder.Configuration["Aspire:LaunchGroup"] = "catalog";
-        builder.AddParameter("selected").WithLaunchGroup("catalog");
+        builder.AddParameter("selected").WithLaunchGroups("catalog");
         var projectPath = CreateProject(workspace.Path, "Worker", "Worker.csproj");
         var project = builder.AddDotnetProject("worker", projectPath, options => options.ExcludeLaunchProfile = true);
         await using var app = builder.Build();
@@ -2125,7 +2125,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             options => options.ProjectDirectory = workspace.Path,
             outputHelper);
         builder.Configuration["Aspire:LaunchGroup"] = "catalog";
-        builder.AddParameter("selected").WithLaunchGroup("catalog");
+        builder.AddParameter("selected").WithLaunchGroups("catalog");
         var projectPath = CreateProject(workspace.Path, "Worker", "Worker.csproj");
         var project = builder.AddDotnetProject("worker", projectPath, options => options.ExcludeLaunchProfile = true)
             .WithExplicitStart();
@@ -6449,10 +6449,10 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             options => options.ProjectDirectory = workspace.Path,
             outputHelper);
         builder.Configuration["Aspire:LaunchGroup"] = "selected";
-        builder.AddParameter("selected", "value").WithLaunchGroup("selected");
+        builder.AddParameter("selected", "value").WithLaunchGroups("selected");
         var projectPath = CreateProject(workspace.Path, "Worker", "Worker.csproj");
         var project = builder.AddDotnetProject("worker", projectPath, options => options.ExcludeLaunchProfile = true)
-            .WithLaunchGroup("other");
+            .WithLaunchGroups("other");
         var dcpExecutor = new TestDcpExecutor();
         var starterEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var starterCompleted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -6610,7 +6610,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         builder.Configuration["Aspire:LaunchGroup"] = materializeBeforeFailure ? "selected" : "missing";
         var projectPath = CreateProject(workspace.Path, "Api", "Api.csproj");
         var project = builder.AddDotnetProject("api", projectPath, options => options.ExcludeLaunchProfile = true)
-            .WithLaunchGroup("selected");
+            .WithLaunchGroups("selected");
         var completion = Assert.Single(project.Resource.Annotations.OfType<DotnetProgramBuildCompletionAnnotation>());
         using var waitCancellation = new CancellationTokenSource();
         var waits = new List<Task>();
@@ -6741,7 +6741,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         builder.Configuration["Aspire:LaunchGroup"] = "selected";
         var projectPath = CreateProject(workspace.Path, "Api", "Api.csproj");
         var project = builder.AddDotnetProject("api", projectPath, options => options.ExcludeLaunchProfile = true)
-            .WithLaunchGroup("selected");
+            .WithLaunchGroups("selected");
         var completion = Assert.Single(project.Resource.Annotations.OfType<DotnetProgramBuildCompletionAnnotation>());
         using var waitCancellation = new CancellationTokenSource();
         var waits = new List<Task>();

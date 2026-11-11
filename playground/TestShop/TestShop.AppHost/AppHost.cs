@@ -12,7 +12,7 @@ var builder = DistributedApplication.CreateBuilder(args);
 // together: Frontend/Storefront for the frontend, Backend/API for the catalog service, and Backend/Checkout for the
 // basket service.
 var storefrontPromotion = builder.AddParameter("storefront-promotion", "Free shipping over $50")
-                                .WithLaunchGroup("frontend")
+                                .WithLaunchGroups("frontend")
                                 .WithTags("Frontend", "Storefront");
 var lowStockThreshold = builder.AddParameter("low-stock-threshold", "5")
                          .WithLaunchGroups("catalog", "frontend")
@@ -102,7 +102,7 @@ var postgres = builder.AddPostgres("postgres")
                       .WithPgAdmin(resource =>
                       {
                           // Management relationships don't inherit launch groups, so pgAdmin opts into catalog directly.
-                          resource.WithLaunchGroup("catalog");
+                          resource.WithLaunchGroups("catalog");
                           resource.WithUrlForEndpoint("http", u => u.DisplayText = "PG Admin");
                       });
 
@@ -116,13 +116,13 @@ var basketCache = builder.AddRedis("basketcache")
 #if !SKIP_DASHBOARD_REFERENCE
 basketCache.WithRedisCommander(c =>
             {
-                c.WithLaunchGroup("basket");
+                c.WithLaunchGroups("basket");
                 c.WithHostPort(33801);
                 c.WithUrlForEndpoint("http", u => u.DisplayText = "Redis Commander");
             })
            .WithRedisInsight(c =>
             {
-                c.WithLaunchGroup("basket");
+                c.WithLaunchGroups("basket");
                 c.WithHostPort(33802);
                 c.WithUrlForEndpoint("http", u => u.DisplayText = "Redis Insight");
             });
@@ -197,7 +197,7 @@ var basketService = builder.AddDotnetProject("basketservice", "../BasketService/
                            .WaitFor(messaging);
 
 var frontend = builder.AddDotnetProject("frontend", "../MyFrontend/MyFrontend.csproj")
-    .WithLaunchGroup("frontend")
+    .WithLaunchGroups("frontend")
     .WithTags("Frontend", "Storefront")
     .WithEnvironment("Storefront__Promotion", storefrontPromotion)
     .WithDisplayOrder(30)
@@ -236,11 +236,11 @@ else
 }
 
 builder.AddDotnetProject("orderprocessor", "../OrderProcessor/OrderProcessor.csproj", options => options.LaunchProfileName = "OrderProcessor")
-    .WithLaunchGroup("orders")
+    .WithLaunchGroups("orders")
     .WithReference(messaging)
     .WaitFor(messaging);
 
-var yarp = builder.AddYarp("apigateway").WithLaunchGroup("frontend");
+var yarp = builder.AddYarp("apigateway").WithLaunchGroups("frontend");
 #if YARP_USE_CONFIG_FILE
 yarp.WithConfigFile("yarp.json")
     .WithReference(basketService)
@@ -266,7 +266,7 @@ yarp.WithConfiguration(builder =>
 
 // Membership describes where this resource belongs, while explicit start remains authoritative.
 builder.AddDotnetProject("activity-generator", "../ActivityGenerator/ActivityGenerator.csproj")
-    .WithLaunchGroup("frontend")
+    .WithLaunchGroups("frontend")
     .WithReference(frontend)
     .WaitFor(frontend)
     .WithReference(yarp)

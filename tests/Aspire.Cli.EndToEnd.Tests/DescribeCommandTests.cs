@@ -276,17 +276,17 @@ public sealed class DescribeCommandTests(ITestOutputHelper output)
                 .WithEnvironment("LAUNCH_GROUP_TEST_SECRET", "launch-group-secret-value");
             builder.AddResource(new ChildResource("child", active.Resource));
             builder.AddExecutable("manual", "sh", builder.AppHostDirectory, "-c", "sleep 600")
-                .WithLaunchGroup("frontend")
+                .WithLaunchGroups("frontend")
                 .WithExplicitStart();
             var deferred = builder.AddDotnetProject("deferred", Path.Combine(builder.AppHostDirectory, "DeferredProbe", "DeferredProbe.csproj"))
-                .WithLaunchGroup("backend")
+                .WithLaunchGroups("backend")
                 .WithEnvironment(context =>
                 {
                     File.WriteAllText(Path.Combine(builder.AppHostDirectory, "callback-probe.txt"), "called");
                     context.EnvironmentVariables["DEFERRED_PROBE"] = "called";
                 });
             builder.AddResource(new ChildResource("selected-child", deferred.Resource))
-                .WithLaunchGroup("frontend");
+                .WithLaunchGroups("frontend");
             builder.Build().Run();
 
             sealed class ChildResource(string name, IResource parent) : Resource(name), IResourceWithParent

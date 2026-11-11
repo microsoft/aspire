@@ -31,7 +31,7 @@ public class AzureStorageExtensionsTests(ITestOutputHelper output)
 
         var blobs = storage.AddBlobs("blobs");
         var frontend = builder.AddExecutable("frontend", "unused", ".")
-            .WithLaunchGroup("frontend")
+            .WithLaunchGroups("frontend")
             .WithReference(blobs);
         await using var app = builder.Build();
 

@@ -18,14 +18,14 @@ public class LaunchGroupDependencyOwnershipTests
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.Configuration["Aspire:LaunchGroup"] = "frontend";
-        var server = builder.AddPostgres("server").WithLaunchGroup("backend");
+        var server = builder.AddPostgres("server").WithLaunchGroups("backend");
         var database = server.AddDatabase("database");
         if (childSelected)
         {
-            database.WithLaunchGroup("frontend");
+            database.WithLaunchGroups("frontend");
         }
         builder.AddExecutable("frontend", "unused", ".")
-            .WithLaunchGroup("frontend")
+            .WithLaunchGroups("frontend")
             .WithReference(database);
         await using var app = builder.Build();
 
@@ -45,10 +45,10 @@ public class LaunchGroupDependencyOwnershipTests
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.Configuration["Aspire:LaunchGroup"] = "frontend";
-        var server = builder.AddPostgres("server").WithLaunchGroup("frontend");
+        var server = builder.AddPostgres("server").WithLaunchGroups("frontend");
         var database = server.AddDatabase("database");
         builder.AddExecutable("frontend", "unused", ".")
-            .WithLaunchGroup("frontend")
+            .WithLaunchGroups("frontend")
             .WithReference(database);
         await using var app = builder.Build();
 
@@ -66,14 +66,14 @@ public class LaunchGroupDependencyOwnershipTests
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.Configuration["Aspire:LaunchGroup"] = "frontend";
-        var server = builder.AddPostgres("server").WithLaunchGroup("frontend").WithExplicitStart();
+        var server = builder.AddPostgres("server").WithLaunchGroups("frontend").WithExplicitStart();
         if (excludedFromSelection)
         {
             server.WithAnnotation(new ExcludeFromLaunchGroupSelectionAnnotation());
         }
         var database = server.AddDatabase("database");
         builder.AddExecutable("frontend", "unused", ".")
-            .WithLaunchGroup("frontend")
+            .WithLaunchGroups("frontend")
             .WithReference(database);
         await using var app = builder.Build();
 
@@ -98,7 +98,7 @@ public class LaunchGroupDependencyOwnershipTests
             .WithAnnotation(new ExcludeFromLaunchGroupSelectionAnnotation());
         var database = server.AddDatabase("database");
         builder.AddExecutable("frontend", "unused", ".")
-            .WithLaunchGroup("frontend")
+            .WithLaunchGroups("frontend")
             .WithReference(database);
         await using var app = builder.Build();
 
@@ -113,12 +113,12 @@ public class LaunchGroupDependencyOwnershipTests
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.Configuration["Aspire:LaunchGroup"] = "frontend";
-        var server = builder.AddPostgres("server").WithLaunchGroup("backend");
-        var dependency = builder.AddExecutable("dependency", "unused", ".").WithLaunchGroup("backend");
+        var server = builder.AddPostgres("server").WithLaunchGroups("backend");
+        var dependency = builder.AddExecutable("dependency", "unused", ".").WithLaunchGroups("backend");
         server.AddDatabase("database")
-            .WithLaunchGroup("frontend")
+            .WithLaunchGroups("frontend")
             .WithReferenceRelationship(dependency);
-        builder.AddExecutable("frontend", "unused", ".").WithLaunchGroup("frontend");
+        builder.AddExecutable("frontend", "unused", ".").WithLaunchGroups("frontend");
         await using var app = builder.Build();
 
         await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
@@ -132,11 +132,11 @@ public class LaunchGroupDependencyOwnershipTests
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.Configuration["Aspire:LaunchGroup"] = "frontend";
-        var server = builder.AddPostgres("server").WithLaunchGroup("frontend");
-        var dependency = builder.AddExecutable("dependency", "unused", ".").WithLaunchGroup("backend");
+        var server = builder.AddPostgres("server").WithLaunchGroups("frontend");
+        var dependency = builder.AddExecutable("dependency", "unused", ".").WithLaunchGroups("backend");
         var database = server.AddDatabase("database").WithReferenceRelationship(dependency);
         builder.AddExecutable("frontend", "unused", ".")
-            .WithLaunchGroup("frontend")
+            .WithLaunchGroups("frontend")
             .WithReference(database);
         await using var app = builder.Build();
 
@@ -158,9 +158,9 @@ public class LaunchGroupDependencyOwnershipTests
         builder.Configuration["Aspire:LaunchGroup"] = "frontend";
         var parent = builder.AddExecutable("parent", "unused", ".");
         var child = builder.AddResource(new ChildExecutableResource("child", parent.Resource))
-            .WithLaunchGroup("frontend");
+            .WithLaunchGroups("frontend");
         builder.AddExecutable("frontend", "unused", ".")
-            .WithLaunchGroup("frontend")
+            .WithLaunchGroups("frontend")
             .WithReferenceRelationship(child);
         await using var app = builder.Build();
 
@@ -175,10 +175,10 @@ public class LaunchGroupDependencyOwnershipTests
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.Configuration["Aspire:LaunchGroup"] = "frontend";
-        var parent = builder.AddExecutable("parent", "unused", ".").WithLaunchGroup("frontend");
+        var parent = builder.AddExecutable("parent", "unused", ".").WithLaunchGroups("frontend");
         var child = builder.AddResource(new ChildExecutableResource("child", parent.Resource));
         builder.AddExecutable("frontend", "unused", ".")
-            .WithLaunchGroup("frontend")
+            .WithLaunchGroups("frontend")
             .WithReferenceRelationship(child);
         await using var app = builder.Build();
 
@@ -200,7 +200,7 @@ public class LaunchGroupDependencyOwnershipTests
         {
             builder.Configuration["Aspire:LaunchGroups:0"] = "catalog";
         }
-        var parent = builder.AddExecutable("parent", "unused", ".").WithLaunchGroup("catalog");
+        var parent = builder.AddExecutable("parent", "unused", ".").WithLaunchGroups("catalog");
         var child = builder.AddResource(new ChildExecutableResource("child", parent.Resource));
         builder.Resources.Remove(parent.Resource);
         await using var app = builder.Build();
@@ -222,10 +222,10 @@ public class LaunchGroupDependencyOwnershipTests
         IResource childResource = passive
             ? new ChildWithoutLifetime("child", owner.Resource)
             : new ChildExecutableResource("child", owner.Resource);
-        var child = builder.AddResource(childResource).WithLaunchGroup("frontend");
+        var child = builder.AddResource(childResource).WithLaunchGroups("frontend");
         builder.Resources.Remove(owner.Resource);
         var frontend = builder.AddExecutable("frontend", "unused", ".")
-            .WithLaunchGroup("frontend")
+            .WithLaunchGroups("frontend")
             .WithReferenceRelationship(child);
         await using var app = builder.Build();
 
@@ -255,7 +255,7 @@ public class LaunchGroupDependencyOwnershipTests
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.Configuration["Aspire:LaunchGroup"] = selection;
         builder.Configuration["Aspire:LaunchGroups:0"] = "other";
-        var parent = builder.AddExecutable("parent", "unused", ".").WithLaunchGroup("catalog");
+        var parent = builder.AddExecutable("parent", "unused", ".").WithLaunchGroups("catalog");
         var child = builder.AddResource(new ChildExecutableResource("child", parent.Resource));
         builder.Resources.Remove(parent.Resource);
         await using var app = builder.Build();
@@ -286,10 +286,10 @@ public class LaunchGroupDependencyOwnershipTests
         var child = builder.AddResource(new ChildExecutableResource("child", parent.Resource));
         var grandchild = builder.AddResource(new ChildExecutableResource("grandchild", child.Resource));
         var overridden = builder.AddResource(new ChildExecutableResource("overridden", parent.Resource))
-            .WithLaunchGroups("basket", "shared").WithLaunchGroup("BASKET");
+            .WithLaunchGroups("basket", "shared").WithLaunchGroups("BASKET");
         var overrideChild = builder.AddResource(new ChildExecutableResource("override-child", overridden.Resource));
         var explicitLeaf = builder.AddResource(new ChildExecutableResource("explicit-leaf", overridden.Resource))
-            .WithLaunchGroup("catalog");
+            .WithLaunchGroups("catalog");
         await using var app = builder.Build();
 
         await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
@@ -319,10 +319,10 @@ public class LaunchGroupDependencyOwnershipTests
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.Configuration["Aspire:LaunchGroup"] = selection;
-        var root = builder.AddExecutable("root", "unused", ".").WithLaunchGroup("catalog");
+        var root = builder.AddExecutable("root", "unused", ".").WithLaunchGroups("catalog");
         var nearest = builder.AddResource(new ChildExecutableResource("nearest", root.Resource))
-            .WithLaunchGroup("backend");
-        var displayParent = builder.AddExecutable("display", "unused", ".").WithLaunchGroup("catalog");
+            .WithLaunchGroups("backend");
+        var displayParent = builder.AddExecutable("display", "unused", ".").WithLaunchGroups("catalog");
         var child = builder.AddResource(new ChildExecutableResource("child", nearest.Resource))
             .WithParentRelationship(displayParent);
         await using var app = builder.Build();
@@ -341,8 +341,8 @@ public class LaunchGroupDependencyOwnershipTests
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.Configuration["Aspire:LaunchGroup"] = "frontend";
-        var parent = builder.AddExecutable("parent", "unused", ".").WithLaunchGroup("frontend");
-        var dependency = builder.AddExecutable("dependency", "unused", ".").WithLaunchGroup("backend");
+        var parent = builder.AddExecutable("parent", "unused", ".").WithLaunchGroups("frontend");
+        var dependency = builder.AddExecutable("dependency", "unused", ".").WithLaunchGroups("backend");
         var child = builder.AddResource(new ChildExecutableResource("child", parent.Resource))
             .WithReferenceRelationship(dependency);
         await using var app = builder.Build();
@@ -365,9 +365,9 @@ public class LaunchGroupDependencyOwnershipTests
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.Configuration["Aspire:LaunchGroup"] = "frontend";
-        var selectedParent = builder.AddExecutable("selected-parent", "unused", ".").WithLaunchGroup("frontend");
-        var otherParent = builder.AddExecutable("other-parent", "unused", ".").WithLaunchGroup("backend");
-        var dependency = builder.AddExecutable("dependency", "unused", ".").WithLaunchGroup("backend");
+        var selectedParent = builder.AddExecutable("selected-parent", "unused", ".").WithLaunchGroups("frontend");
+        var otherParent = builder.AddExecutable("other-parent", "unused", ".").WithLaunchGroups("backend");
+        var dependency = builder.AddExecutable("dependency", "unused", ".").WithLaunchGroups("backend");
         var explicitChild = builder.AddResource(new ChildExecutableResource("explicit-child", selectedParent.Resource))
             .WithExplicitStart().WithReferenceRelationship(dependency);
         var excludedChild = builder.AddResource(new ChildExecutableResource("excluded-child", otherParent.Resource))
@@ -388,7 +388,7 @@ public class LaunchGroupDependencyOwnershipTests
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.Configuration["Aspire:LaunchGroup"] = "frontend";
-        var parent = builder.AddExecutable("parent", "unused", ".").WithLaunchGroup("frontend");
+        var parent = builder.AddExecutable("parent", "unused", ".").WithLaunchGroups("frontend");
         var first = builder.AddResource(new ChildExecutableResource("first", parent.Resource));
         var second = builder.AddResource(new ChildExecutableResource("second", first.Resource));
         first.Resource.Parent = second.Resource;
@@ -409,9 +409,9 @@ public class LaunchGroupDependencyOwnershipTests
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.Configuration["Aspire:LaunchGroup"] = "frontend";
-        var backend = builder.AddExecutable("backend", "unused", ".").WithLaunchGroup("backend");
+        var backend = builder.AddExecutable("backend", "unused", ".").WithLaunchGroups("backend");
         var frontend = builder.AddExecutable("frontend", "unused", ".")
-            .WithLaunchGroup("frontend")
+            .WithLaunchGroups("frontend")
             .WaitFor(backend);
         if (alsoReferenced)
         {
@@ -434,10 +434,10 @@ public class LaunchGroupDependencyOwnershipTests
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.Configuration["Aspire:LaunchGroup"] = "frontend";
-        var server = builder.AddPostgres("server").WithLaunchGroup("backend");
-        var database = server.AddDatabase("database").WithLaunchGroup("frontend");
+        var server = builder.AddPostgres("server").WithLaunchGroups("backend");
+        var database = server.AddDatabase("database").WithLaunchGroups("frontend");
         builder.AddExecutable("frontend", "unused", ".")
-            .WithLaunchGroup("frontend")
+            .WithLaunchGroups("frontend")
             .WithReference(database)
             .WaitFor(server);
         await using var app = builder.Build();
@@ -460,10 +460,10 @@ public class LaunchGroupDependencyOwnershipTests
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.Configuration["Aspire:LaunchGroup"] = "frontend";
-        var server = builder.AddExecutable("server", "unused", ".").WithLaunchGroup("backend");
+        var server = builder.AddExecutable("server", "unused", ".").WithLaunchGroups("backend");
         var child = builder.AddResource(new ChildWithoutLifetime("child", server.Resource));
         var frontend = builder.AddExecutable("frontend", "unused", ".")
-            .WithLaunchGroup("frontend")
+            .WithLaunchGroups("frontend")
             .WaitForCompletion(child);
         if (alsoReferenced)
         {
@@ -497,9 +497,9 @@ public class LaunchGroupDependencyOwnershipTests
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.Configuration["Aspire:LaunchGroup"] = "frontend";
-        var server = builder.AddExecutable("server", "unused", ".").WithLaunchGroup("backend");
+        var server = builder.AddExecutable("server", "unused", ".").WithLaunchGroups("backend");
         var child = builder.AddResource(new ChildWithoutLifetime("child", server.Resource));
-        var frontend = builder.AddExecutable("frontend", "unused", ".").WithLaunchGroup("frontend");
+        var frontend = builder.AddExecutable("frontend", "unused", ".").WithLaunchGroups("frontend");
         if (waitForStart)
         {
             frontend.WaitForStart(child);
@@ -525,10 +525,10 @@ public class LaunchGroupDependencyOwnershipTests
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.Configuration["Aspire:LaunchGroup"] = "frontend";
-        var target = builder.AddRedis("target").WithLaunchGroup("backend");
-        var redirect = builder.AddRedis("redirect").WithLaunchGroup("frontend")
+        var target = builder.AddRedis("target").WithLaunchGroups("backend");
+        var redirect = builder.AddRedis("redirect").WithLaunchGroups("frontend")
             .WithConnectionStringRedirection(target.Resource);
-        builder.AddExecutable("frontend", "unused", ".").WithLaunchGroup("frontend").WithReference(redirect);
+        builder.AddExecutable("frontend", "unused", ".").WithLaunchGroups("frontend").WithReference(redirect);
         await using var app = builder.Build();
 
         var exception = await Assert.ThrowsAsync<DistributedApplicationException>(
@@ -544,11 +544,11 @@ public class LaunchGroupDependencyOwnershipTests
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.Configuration["Aspire:LaunchGroup"] = "frontend";
-        var target = builder.AddRedis("target").WithLaunchGroup("backend");
-        var redirect = builder.AddRedis("redirect").WithLaunchGroup("frontend")
+        var target = builder.AddRedis("target").WithLaunchGroups("backend");
+        var redirect = builder.AddRedis("redirect").WithLaunchGroups("frontend")
             .WithOptionalLaunchGroupReference(target)
             .WithConnectionStringRedirection(target.Resource);
-        builder.AddExecutable("frontend", "unused", ".").WithLaunchGroup("frontend").WithReference(redirect);
+        builder.AddExecutable("frontend", "unused", ".").WithLaunchGroups("frontend").WithReference(redirect);
         await using var app = builder.Build();
 
         var exception = await Assert.ThrowsAsync<DistributedApplicationException>(
@@ -569,9 +569,9 @@ public class LaunchGroupDependencyOwnershipTests
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.Configuration["Aspire:LaunchGroup"] = "frontend";
         var dependency = builder.AddExecutable("dependency", "unused", ".")
-            .WithLaunchGroup("frontend").WithExplicitStart();
+            .WithLaunchGroups("frontend").WithExplicitStart();
         var frontend = builder.AddExecutable("frontend", "unused", ".")
-            .WithLaunchGroup("frontend").WithReferenceRelationship(dependency);
+            .WithLaunchGroups("frontend").WithReferenceRelationship(dependency);
         if (wait)
         {
             frontend.WaitFor(dependency);
@@ -597,12 +597,12 @@ public class LaunchGroupDependencyOwnershipTests
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.Configuration["Aspire:LaunchGroup"] = "frontend";
-        var database = builder.AddExecutable("database", "unused", ".").WithLaunchGroup("backend");
+        var database = builder.AddExecutable("database", "unused", ".").WithLaunchGroups("backend");
         var api = builder.AddExecutable("api", "unused", ".")
-            .WithLaunchGroup("frontend")
+            .WithLaunchGroups("frontend")
             .WithReferenceRelationship(database);
         builder.AddExecutable("frontend", "unused", ".")
-            .WithLaunchGroup("frontend")
+            .WithLaunchGroups("frontend")
             .WithReferenceRelationship(api);
         await using var app = builder.Build();
 
@@ -619,13 +619,13 @@ public class LaunchGroupDependencyOwnershipTests
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.Configuration["Aspire:LaunchGroup"] = "frontend";
-        var target = builder.AddExecutable("target", "unused", ".").WithLaunchGroup("backend");
+        var target = builder.AddExecutable("target", "unused", ".").WithLaunchGroups("backend");
         var api = builder.AddExecutable("api", "unused", ".")
-            .WithLaunchGroup("frontend")
+            .WithLaunchGroups("frontend")
             .WithOptionalLaunchGroupReference(target)
             .WaitFor(target);
         builder.AddExecutable("frontend", "unused", ".")
-            .WithLaunchGroup("frontend")
+            .WithLaunchGroups("frontend")
             .WithReferenceRelationship(api);
         await using var app = builder.Build();
 
@@ -642,13 +642,13 @@ public class LaunchGroupDependencyOwnershipTests
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.Configuration["Aspire:LaunchGroup"] = "frontend";
-        var cache = builder.AddExecutable("cache", "unused", ".").WithLaunchGroup("backend");
+        var cache = builder.AddExecutable("cache", "unused", ".").WithLaunchGroups("backend");
         var server = builder.AddPostgres("server")
-            .WithLaunchGroup("frontend")
+            .WithLaunchGroups("frontend")
             .WithReferenceRelationship(cache);
         var database = server.AddDatabase("database");
         builder.AddExecutable("frontend", "unused", ".")
-            .WithLaunchGroup("frontend")
+            .WithLaunchGroups("frontend")
             .WithReference(database);
         await using var app = builder.Build();
 
@@ -664,9 +664,9 @@ public class LaunchGroupDependencyOwnershipTests
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.Configuration["Aspire:LaunchGroup"] = "frontend";
-        var frontend = builder.AddExecutable("frontend", "unused", ".").WithLaunchGroup("frontend");
-        var api = builder.AddExecutable("api", "unused", ".").WithLaunchGroup("frontend");
-        var database = builder.AddExecutable("database", "unused", ".").WithLaunchGroup("backend");
+        var frontend = builder.AddExecutable("frontend", "unused", ".").WithLaunchGroups("frontend");
+        var api = builder.AddExecutable("api", "unused", ".").WithLaunchGroups("frontend");
+        var database = builder.AddExecutable("database", "unused", ".").WithLaunchGroups("backend");
         frontend.WithReferenceRelationship(api);
         api.WithReferenceRelationship(frontend).WithReferenceRelationship(database);
         await using var app = builder.Build();
@@ -682,11 +682,11 @@ public class LaunchGroupDependencyOwnershipTests
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.Configuration["Aspire:LaunchGroup"] = "frontend";
-        var frontend = builder.AddExecutable("frontend", "unused", ".").WithLaunchGroup("frontend");
-        var left = builder.AddExecutable("left", "unused", ".").WithLaunchGroup("frontend");
-        var right = builder.AddExecutable("right", "unused", ".").WithLaunchGroup("frontend");
-        var shared = builder.AddExecutable("shared", "unused", ".").WithLaunchGroup("frontend");
-        var missing = builder.AddExecutable("missing", "unused", ".").WithLaunchGroup("backend");
+        var frontend = builder.AddExecutable("frontend", "unused", ".").WithLaunchGroups("frontend");
+        var left = builder.AddExecutable("left", "unused", ".").WithLaunchGroups("frontend");
+        var right = builder.AddExecutable("right", "unused", ".").WithLaunchGroups("frontend");
+        var shared = builder.AddExecutable("shared", "unused", ".").WithLaunchGroups("frontend");
+        var missing = builder.AddExecutable("missing", "unused", ".").WithLaunchGroups("backend");
         frontend.WithReferenceRelationship(left).WithReferenceRelationship(right);
         left.WithReferenceRelationship(shared);
         shared.WithReferenceRelationship(left);
@@ -729,12 +729,12 @@ public class LaunchGroupDependencyOwnershipTests
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.Configuration["Aspire:LaunchGroup"] = "frontend";
-        var parent = builder.AddExecutable("parent", "unused", ".").WithLaunchGroup("frontend");
-        var first = builder.AddResource(new ChildWithoutLifetime("first", parent.Resource)).WithLaunchGroup("frontend");
-        var second = builder.AddResource(new ChildWithoutLifetime("second", first.Resource)).WithLaunchGroup("frontend");
+        var parent = builder.AddExecutable("parent", "unused", ".").WithLaunchGroups("frontend");
+        var first = builder.AddResource(new ChildWithoutLifetime("first", parent.Resource)).WithLaunchGroups("frontend");
+        var second = builder.AddResource(new ChildWithoutLifetime("second", first.Resource)).WithLaunchGroups("frontend");
         first.Resource.Parent = second.Resource;
         builder.AddExecutable("frontend", "unused", ".")
-            .WithLaunchGroup("frontend")
+            .WithLaunchGroups("frontend")
             .WithReferenceRelationship(first);
         await using var app = builder.Build();
 

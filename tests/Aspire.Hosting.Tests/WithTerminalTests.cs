@@ -32,7 +32,7 @@ public class WithTerminalTests : IAsyncLifetime
         builder.Configuration["Aspire:LaunchGroup"] = "catalog";
         var shell = OperatingSystem.IsWindows() ? "cmd.exe" : "/bin/sh";
         var selected = builder.AddExecutable("selected", shell, ".")
-            .WithTerminal().WithAnnotation(new ReplicaAnnotation(replicas)).WithLaunchGroup("catalog");
+            .WithTerminal().WithAnnotation(new ReplicaAnnotation(replicas)).WithLaunchGroups("catalog");
         var excluded = builder.AddExecutable("excluded", shell, ".").WithTerminal();
         await using var app = builder.Build();
 
