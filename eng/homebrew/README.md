@@ -50,7 +50,6 @@ the initial/upstream cask change must include the generation stanza, not just a 
 | `validate-cask-artifact.sh` | Runs shared cask syntax, style, audit, and install validation used by GitHub Actions and Azure DevOps |
 | `dogfood.sh` | Installs a generated cask locally, optionally using downloaded native archive artifacts |
 | `publish-cask.py` | Validates, reconciles and proposes stable cask updates; dry run by default |
-| `capture-dotnet.py` | Forwards SDK execution and preserves bounded failure diagnostics outside the validator's temporary HOME |
 
 ### Pipeline templates
 
@@ -75,7 +74,7 @@ python3 eng/homebrew/publish-cask.py \
 ```
 
 Validation requires disposable macOS equipment and a clean validator checkout
-at `f17f51b14acbf17f6a29db1cae91a8f92fe63369`. It downloads both public stable
+at `6221135ffc2bba7f92186154d2ef4cbeaf705ec1`. It downloads both public stable
 archives, compares the immutable candidate snapshot to the source release-tag
 template with the tap's non-executing Ripper checker, then runs the isolated
 tap validator. Draft and prerelease releases, placeholder hashes, template
@@ -83,22 +82,17 @@ drift and substantive validation failures are not publishable. Full execution
 on one architecture does not establish install/notarization on the other.
 The tap validator runs from its own checkout so released-CLI smoke tests use
 the agent's SDK, not the Aspire source checkout's development `global.json`.
-SDK commands still run through the same installed `dotnet` executable with
-unchanged arguments and exit status. Failed SDK commands retain their last
-1 MiB of combined stdout/stderr in `dotnet-failures/` under the diagnostic
-output directory, surviving the pinned validator's temporary-HOME cleanup.
-Known credential environment values and credential-bearing feed URLs are
-redacted in these retained files. Diagnostic-write failures are reported without
-replacing the original SDK failure; successful commands create no failure log.
-Failed `restore` commands also retain a JSON summary of NuGet's
-`project.assets.json` log entries and effective HTTP feed endpoints for the
-current project and immediate sibling projects, before cleanup removes them.
-These summaries omit package contents, configuration files, URL credentials,
-queries, fragments and non-HTTP source paths. Collection is limited to 16
-projects, 8 MiB per assets input, 16 sources and 32 log entries per project,
-2,048 characters per log field and 1 MiB per summary; truncated or unreadable
-inputs are identified explicitly. This does not retry restore, add SDK
-arguments, or replace its failure status.
+The publisher passes `--diagnostics-dir` to retain failure evidence in
+`validator-diagnostics/` under its output directory before tap cleanup.
+The tap owns collection and redaction: it retains the existing CLI trace files
+(`cli-new.log`, `cli-restore.log`) and selected NuGet assets-file errors
+(`nuget-summary.json`), not whole HOME, caches or configuration files.
+The pinned tap's `scripts/collect-validation-diagnostics.rb` bounds each output
+to 128 KiB and reads at most 16 assets files, each no larger than 2 MiB.
+Collection errors are reported without replacing the validation failure.
+SDK commands use the installed `dotnet` directly; the publisher does not
+intercept them, retry restore or alter SDK arguments. The contained pipeline
+retains the output directory even on failure.
 
 `--publish` explicitly opts into writes after validation and requires
 `HOMEBREW_TAP_WRITE_TOKEN`; the independent `HOMEBREW_READ_TOKEN` is only for

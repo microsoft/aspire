@@ -16,8 +16,6 @@ import os
 from pathlib import Path
 import platform
 import re
-import shlex
-import shutil
 import socket
 import subprocess
 import tempfile
@@ -29,7 +27,7 @@ import urllib.parse
 TAP = "microsoft/homebrew-aspire"
 SOURCE = "microsoft/aspire"
 CASK = "Casks/a/aspire.rb"
-VALIDATOR_REVISION = "f17f51b14acbf17f6a29db1cae91a8f92fe63369"
+VALIDATOR_REVISION = "6221135ffc2bba7f92186154d2ef4cbeaf705ec1"
 PREFIX = f"/repos/{TAP}"
 
 
@@ -346,19 +344,6 @@ def run(command, log=None, cwd=None, env=None):
     return process.stdout.strip()
 
 
-def dotnet_diagnostic_environment(work, output):
-    executable = shutil.which("dotnet")
-    if executable is None:
-        raise PublicationError("An installed .NET SDK is required for the released CLI smoke test")
-    wrapper = work / "bin" / "dotnet"
-    wrapper.parent.mkdir()
-    command = [sys.executable, str(Path(__file__).with_name("capture-dotnet.py").resolve()),
-               str(Path(executable).resolve()), str((output / "dotnet-failures").resolve())]
-    wrapper.write_text("#!/bin/sh\nexec " + shlex.join(command) + ' "$@"\n')
-    wrapper.chmod(0o700)
-    return {**os.environ, "PATH": str(wrapper.parent) + os.pathsep + os.environ.get("PATH", os.defpath)}
-
-
 def verify_source_artifact(data, metadata, build_id, source_commit, version):
     build = metadata["build"]
     artifact = metadata["artifact"]
@@ -447,10 +432,10 @@ def validate_release(candidate, version, client, tap_checkout, output, source_co
              str(metadata_file), str(template_file)], output / "consistency.log")
         # The released CLI smoke test must not inherit Aspire's global.json:
         # it pins a development SDK that disposable release validators may lack.
-        # The pinned validator removes temporary HOME, including CLI logs.
-        # Capture SDK failures outside it without changing checks or exit codes.
-        run(["bash", str(tap / "scripts/validate-cask.sh"), "--cask-file", str(candidate)],
-            output / "validation.log", cwd=tap, env=dotnet_diagnostic_environment(work, output))
+        # Retain tap-owned restore evidence outside its disposable workspace.
+        run(["bash", str(tap / "scripts/validate-cask.sh"), "--cask-file", str(candidate),
+             "--diagnostics-dir", str((output / "validator-diagnostics").resolve())],
+            output / "validation.log", cwd=tap)
 
 
 def main(argv=None):

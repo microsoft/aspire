@@ -559,7 +559,6 @@ path_rules:
       - eng/Publishing.props
       # Script behavior and packaging fixtures.
       - eng/homebrew/publish-cask.py
-      - eng/homebrew/capture-dotnet.py
       - eng/scripts/download-native-archives.ps1
       - eng/scripts/stage-native-cli-tool-packages.ps1
       - eng/scripts/validate-npm-package-signatures.ps1

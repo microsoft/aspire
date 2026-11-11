@@ -558,10 +558,7 @@ class PublisherTests(unittest.TestCase):
                 self.module.validate_release(self.candidate, VERSION, self.fake, output, output)
         self.assertEqual([], self.fake.calls)
 
-    def test_validation_runs_from_tap_not_checkout_sdk_context(self):
-        output = Path(self.temp.name)
-        tap = output / "tap"
-        tap.mkdir()
+    def test_validation_retains_tap_diagnostics_and_status_outside_cleaned_workspace(self):
         version = VERSION
 
         class ReleaseClient:
@@ -587,221 +584,70 @@ class PublisherTests(unittest.TestCase):
                 return {"content": base64.b64encode(b"template").decode()}
 
         actual_run = self.module.run
+        validator = """
+import argparse, json, os, shutil, sys
+from pathlib import Path
+parser = argparse.ArgumentParser()
+parser.add_argument("--cask-file", required=True, type=Path)
+parser.add_argument("--diagnostics-dir", required=True, type=Path)
+args = parser.parse_args(sys.argv[3:])
+assert os.environ["PATH"] == sys.argv[2]
+status = int(sys.argv[1])
+assert args.cask_file.is_file()
+work = Path.cwd() / "workspace"
+work.mkdir()
+try:
+    if status:
+        args.diagnostics_dir.mkdir()
+        (args.diagnostics_dir / "cli-restore.log").write_text("error MSB4181\\n")
+        (args.diagnostics_dir / "nuget-summary.json").write_text(json.dumps([
+            {"file": "smoke/obj/project.assets.json", "errors": [
+                {"code": "NU1105", "message": "'auto' is not a valid version string"}
+            ]}
+        ]))
+    print(Path.cwd())
+finally:
+    shutil.rmtree(work)
+sys.exit(status)
+"""
+        for status in (0, 6):
+            with self.subTest(status=status), tempfile.TemporaryDirectory(dir=self.temp.name) as temporary:
+                output = Path(temporary).resolve()
+                tap = output / "tap"
+                tap.mkdir()
 
-        def fixture_run(command, log=None, cwd=None, env=None):
-            if command[0] == "curl":
-                Path(command[-1]).write_bytes(b"archive")
-            if command[0] == "bash":
-                return actual_run(
-                    [sys.executable, "-c", "from pathlib import Path; print(Path.cwd())"],
-                    log, cwd=cwd,
-                )
-            return self.module.VALIDATOR_REVISION if "rev-parse" in command else ""
+                def fixture_run(command, log=None, cwd=None, env=None):
+                    if command[0] == "curl":
+                        Path(command[-1]).write_bytes(b"archive")
+                    if command[0] == "bash":
+                        self.assertIsNone(env)
+                        return actual_run(
+                            [sys.executable, "-c", validator, str(status),
+                             os.environ["PATH"], *command[2:]],
+                            log, cwd=cwd,
+                        )
+                    return self.module.VALIDATOR_REVISION if "rev-parse" in command else ""
 
-        with patch.object(self.module.platform, "system", return_value="Darwin"), \
-                patch.object(self.module, "run", side_effect=fixture_run), \
-                patch.object(self.module.shutil, "which", return_value=sys.executable), \
-                contextlib.redirect_stdout(io.StringIO()):
-            self.module.validate_release(self.candidate, VERSION, ReleaseClient(), tap, output)
-        self.assertEqual(str(tap.resolve()), (output / "validation.log").read_text().strip())
-        self.assertEqual(cask(VERSION), self.candidate.read_bytes())
-
-    @unittest.skipIf(os.name == "nt", "The macOS validator's PATH wrapper requires a POSIX shell")
-    def test_sdk_failure_diagnostics_survive_validator_home_cleanup(self):
-        output = Path(self.temp.name)
-        with tempfile.TemporaryDirectory() as work:
-            work = Path(work)
-            home = work / "home"
-            home.mkdir()
-            fake_sdk = work / "sdk"
-            fake_sdk.write_text(
-                f"#!{sys.executable}\n"
-                "import os, sys\n"
-                "print('restore progress', flush=True)\n"
-                "print('error NU1301: failed source https://user:password@feed.test/index?sig=signed-secret', file=sys.stderr)\n"
-                "print('token: ' + os.environ['TEST_SECRET_TOKEN'], file=sys.stderr)\n"
-                "sys.exit(17)\n"
-            )
-            fake_sdk.chmod(0o700)
-            with patch.object(self.module.shutil, "which", return_value=str(fake_sdk)):
-                env = self.module.dotnet_diagnostic_environment(work, output)
-            env.update(HOME=str(home), TEST_SECRET_TOKEN="fixture-credential")
-            # The validator exits with its original status after deleting HOME.
-            result = subprocess.run(
-                [sys.executable, "-c",
-                 "import shutil, subprocess, sys; "
-                 "status = subprocess.run(['dotnet', 'restore']).returncode; "
-                 f"shutil.rmtree({str(home)!r}); sys.exit(status)"],
-                env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=15,
-            )
-            self.assertEqual(17, result.returncode)
-            self.assertFalse(home.exists())
-        logs = list((output / "dotnet-failures").glob("*.log"))
-        self.assertEqual(1, len(logs))
-        self.assertEqual(
-            "dotnet restore failed (exit 17).\n"
-            "restore progress\n"
-            "error NU1301: failed source https://[REDACTED]@feed.test/index?sig=[REDACTED]\n"
-            "token: [REDACTED]\n",
-            logs[0].read_text(),
-        )
-        self.assertIn("SDK failure diagnostics:", result.stdout)
-
-    @unittest.skipIf(os.name == "nt", "The macOS validator's PATH wrapper requires a POSIX shell")
-    def test_failed_restore_assets_summary_survives_home_cleanup_without_credentials(self):
-        output = Path(self.temp.name)
-        with tempfile.TemporaryDirectory() as work:
-            work = Path(work)
-            home = work / "home"
-            project = home / "smoke" / "AppHost"
-            project.mkdir(parents=True)
-            for name in ("AppHost", "ApiService"):
-                assets = home / "smoke" / name / "obj" / "project.assets.json"
-                assets.parent.mkdir(parents=True)
-                assets.write_text(json.dumps({
-                    "version": 3,
-                    "project": {"restore": {"sources": {
-                        "https://user:password@feed.test/v3/index.json?custom=private#secret": {},
-                        "https://api.nuget.org/v3/index.json": {},
-                        "/private/package/cache": {},
-                    }}},
-                    "logs": [{
-                        "code": "NU1301", "level": "Error",
-                        "message": "Source https://user:password@feed.test/v3/index.json?custom=private "
-                                   "failed: fixture-credential",
-                    }],
-                    "libraries": {"must-not-be-retained": {}},
-                }))
-            sdk = work / "sdk"
-            invocations = work / "invocations"
-            sdk.write_text(
-                f"#!{sys.executable}\n"
-                "import sys\n"
-                "from pathlib import Path\n"
-                f"with Path({str(invocations)!r}).open('a') as log: log.write(repr(sys.argv[1:]) + '\\n')\n"
-                "print('MSB4181: RestoreTask returned false')\n"
-                "sys.exit(17)\n"
-            )
-            sdk.chmod(0o700)
-            with patch.object(self.module.shutil, "which", return_value=str(sdk)):
-                env = self.module.dotnet_diagnostic_environment(work, output)
-            env.update(HOME=str(home), TEST_SECRET_TOKEN="fixture-credential")
-            result = subprocess.run(
-                [sys.executable, "-c",
-                 "import shutil, subprocess, sys; "
-                 "status = subprocess.run(['dotnet', 'restore', 'AppHost.csproj']).returncode; "
-                 f"shutil.rmtree({str(home)!r}); sys.exit(status)"],
-                cwd=project, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                text=True, timeout=15,
-            )
-            self.assertEqual(17, result.returncode)
-            self.assertFalse(home.exists())
-            self.assertEqual("['restore', 'AppHost.csproj']\n", invocations.read_text())
-        summaries = list((output / "dotnet-failures").glob("*.json"))
-        self.assertEqual(1, len(summaries))
-        self.assertEqual({
-            "projects": [{
-                "project": name,
-                "sources": [
-                    "[non-HTTP source omitted]",
-                    "https://api.nuget.org/v3/index.json",
-                    "https://feed.test/v3/index.json",
-                ],
-                "logs": [{
-                    "code": "NU1301", "level": "Error",
-                    "message": "Source https://[REDACTED]@feed.test/v3/index.json "
-                               "failed: [REDACTED]",
-                }],
-            } for name in ("ApiService", "AppHost")],
-        }, json.loads(summaries[0].read_text()))
-        self.assertIn("NuGet failure details:", result.stdout)
-
-    def test_failed_restore_assets_invalid_or_oversized_input_preserves_sdk_status(self):
-        output = Path(self.temp.name)
-        with tempfile.TemporaryDirectory() as work:
-            project = Path(work) / "AppHost"
-            assets = project / "obj" / "project.assets.json"
-            assets.parent.mkdir(parents=True)
-            for label, content in (("malformed", "{"), ("oversized", "x" * (8 * 1024 * 1024 + 1))):
-                with self.subTest(label=label):
-                    assets.write_text(content)
-                    result = subprocess.run(
-                        [sys.executable, str(SCRIPT.with_name("capture-dotnet.py")),
-                         sys.executable, str(output / label),
-                         "restore"],
-                        cwd=project, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                        text=True, timeout=15,
-                    )
-                    self.assertEqual(2, result.returncode)
-                    summaries = list((output / label).glob("*.json"))
-                    self.assertEqual(1, len(summaries))
-                    summary = summaries[0]
-                    details = json.loads(summary.read_text())
-                    self.assertEqual("AppHost", details["projects"][0]["project"])
-                    self.assertTrue(details["projects"][0]["diagnostic_error"])
-                    self.assertLess(summary.stat().st_size, 4096)
-
-    @unittest.skipIf(os.name == "nt", "Assets collection runs in the POSIX macOS validator")
-    def test_failed_restore_assets_summary_bounds_projects_sources_and_messages(self):
-        output = Path(self.temp.name)
-        with tempfile.TemporaryDirectory() as work:
-            for index in range(20):
-                assets = Path(work) / f"Project{index:02}" / "obj" / "project.assets.json"
-                assets.parent.mkdir(parents=True)
-                assets.write_text(json.dumps({
-                    "project": {"restore": {"sources": {
-                        f"https://feed{source}.test/index.json?custom=credential": {}
-                        for source in range(20)
-                    }}},
-                    "logs": [{"code": "NU1301", "level": "Error", "message": "x" * 10000}] * 40,
-                }))
-            result = subprocess.run(
-                [sys.executable, str(SCRIPT.with_name("capture-dotnet.py")),
-                 sys.executable, str(output / "bounded"), "restore"],
-                cwd=Path(work) / "Project00", stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                text=True, timeout=15,
-            )
-        self.assertEqual(2, result.returncode)
-        summary = next((output / "bounded").glob("*.json"))
-        self.assertLessEqual(summary.stat().st_size, 1024 * 1024)
-        details = json.loads(summary.read_text())
-        self.assertTrue(details["truncated"])
-        self.assertTrue(0 < len(details["projects"]) <= 16)
-        for project in details["projects"]:
-            self.assertTrue(project["truncated"])
-            self.assertEqual(16, len(project["sources"]))
-            self.assertTrue(all(source.endswith("/index.json") for source in project["sources"]))
-            self.assertEqual(32, len(project["logs"]))
-            self.assertTrue(all(len(item["message"]) == 2048 for item in project["logs"]))
-
-    def test_sdk_diagnostics_bound_output_and_do_not_mask_failure_when_log_write_fails(self):
-        output = Path(self.temp.name)
-        capture = SCRIPT.with_name("capture-dotnet.py")
-        command = [sys.executable, str(capture), sys.executable, str(output / "logs"),
-                   "-c", "import sys; print('x' * (2 * 1024 * 1024)); print('original failure'); sys.exit(23)"]
-        result = subprocess.run(command, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, timeout=15)
-        self.assertEqual(23, result.returncode)
-        log = next((output / "logs").glob("*.log")).read_text()
-        self.assertLess(len(log), 1024 * 1024 + 200)
-        self.assertTrue(log.endswith("original failure\n"))
-        self.assertIn("Output truncated to the last", log)
-        blocked = output / "blocked"
-        blocked.write_text("not a directory")
-        command[3] = str(blocked)
-        result = subprocess.run(command, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, timeout=15)
-        self.assertEqual(23, result.returncode)
-        self.assertIn("Could not retain SDK failure diagnostics:", result.stderr)
-
-    def test_successful_sdk_command_creates_no_failure_diagnostic(self):
-        output = Path(self.temp.name) / "success"
-        result = subprocess.run(
-            [sys.executable, str(SCRIPT.with_name("capture-dotnet.py")), sys.executable, str(output),
-             "-c", "print('successful SDK operation')"],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=15,
-        )
-        self.assertEqual(0, result.returncode)
-        self.assertEqual("successful SDK operation\n", result.stdout)
-        self.assertFalse(output.exists())
+                with patch.object(self.module.platform, "system", return_value="Darwin"), \
+                        patch.object(self.module, "run", side_effect=fixture_run), \
+                        contextlib.redirect_stdout(io.StringIO()):
+                    if status:
+                        with self.assertRaisesRegex(self.module.PublicationError, "exit 6"):
+                            self.module.validate_release(self.candidate, VERSION, ReleaseClient(), tap, output)
+                    else:
+                        self.module.validate_release(self.candidate, VERSION, ReleaseClient(), tap, output)
+                self.assertEqual(str(tap), (output / "validation.log").read_text().strip())
+                self.assertFalse((tap / "workspace").exists())
+                diagnostics = output / "validator-diagnostics"
+                if status:
+                    self.assertEqual("error MSB4181\n", (diagnostics / "cli-restore.log").read_text())
+                    self.assertEqual([{
+                        "file": "smoke/obj/project.assets.json",
+                        "errors": [{"code": "NU1105", "message": "'auto' is not a valid version string"}],
+                    }], json.loads((diagnostics / "nuget-summary.json").read_text()))
+                else:
+                    self.assertFalse(diagnostics.exists())
+                self.assertEqual(cask(VERSION), self.candidate.read_bytes())
 
 
 if __name__ == "__main__":
