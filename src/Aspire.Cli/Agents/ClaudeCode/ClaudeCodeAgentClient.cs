@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Agents.AspireSkills;
 using Aspire.Cli.Agents.Hooks;
@@ -16,6 +17,26 @@ internal sealed class ClaudeCodeAgentClient(
     public const string ClientId = "claude";
 
     private static readonly McpConfigFileHelper.Configuration s_mcp = new() { ServersPropertyName = "mcpServers" };
+
+    /// <summary>
+    /// <c>PostToolUse</c> <c>matcher</c> for the Skill and Aspire MCP tools. Reads use <see cref="TelemetryHookReadIf"/>.
+    /// </summary>
+    /// <remarks>
+    /// Claude Code matches unanchored, so the explicit anchors keep <c>Skill</c> from matching other tool names
+    /// (https://code.claude.com/docs/en/hooks#matcher-patterns).
+    /// </remarks>
+    internal static string TelemetryHookToolMatcher { get; } = $"^(?:Skill|{AgentTelemetryHook.McpMatcher})$";
+
+    internal const string TelemetryHookReadMatcher = "^Read$";
+
+    /// <summary>
+    /// Handler <c>if</c> rule that limits Read hooks to files under an Aspire skill directory.
+    /// </summary>
+    /// <remarks>
+    /// Every canonical skill name starts with <c>aspire</c>. <c>//**/</c> matches at any absolute depth, so this covers
+    /// plugin, user, and project skill installs (https://code.claude.com/docs/en/hooks#filter-by-tool-name-and-arguments-with-the-if-field).
+    /// </remarks>
+    internal const string TelemetryHookReadIf = "Read(//**/skills/aspire*/**)";
 
     public string Id => ClientId;
     public string DisplayName { get; } = AgentCommandStrings.Environment_ClaudeCode;
@@ -80,70 +101,190 @@ internal sealed class ClaudeCodeAgentClient(
 
     public override string ToString() => Id;
 
-    public Task<TelemetryHookStatus> ConfigureTelemetryHookAsync(CancellationToken cancellationToken)
+    public async Task<TelemetryHookStatus> ConfigureTelemetryHookAsync(CancellationToken cancellationToken)
     {
-        var settingsPath = Path.Combine(ClaudeCodePaths.GetConfigDirectory(context, environment), "settings.json");
-        return TelemetryHookSettings.UpdateAsync(settingsPath, logger, hooks =>
+        var claudeDirectory = ClaudeCodePaths.GetConfigDirectory(context, environment);
+        var settingsPath = Path.Combine(claudeDirectory, "settings.json");
+        var edit = new AgentConfiguration();
+        byte[]? bytes;
+        try
         {
-            if (!TelemetryHookSettings.TryGetEventArray(hooks, "PostToolUse", out var postToolUse))
+            bytes = await edit.ReadBytesForEditAsync(settingsPath, cancellationToken);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            logger.LogDebug(ex, "Failed to read Claude settings at {Path}.", settingsPath);
+            return TelemetryHookStatus.WriteFailed;
+        }
+
+        JsonObject settings;
+        if (bytes is not null)
+        {
+            using var reader = new StreamReader(new MemoryStream(bytes));
+            var content = await reader.ReadToEndAsync(cancellationToken);
+            JsonNode? parsed;
+            try
             {
-                return false;
+                parsed = JsonNode.Parse(content);
+            }
+            catch (JsonException ex)
+            {
+                // Preserve malformed settings rather than replacing content we cannot merge.
+                logger.LogDebug(ex, "Claude settings at {Path} contained malformed JSON; skipping hook registration.", settingsPath);
+                return TelemetryHookStatus.MalformedConfig;
             }
 
-            // Run directly, without a shell, and only for tools or skill file reads the classifier can
-            // track so Claude does not launch the CLI on every tool call or read.
-            // https://code.claude.com/docs/en/hooks
-            RemoveExistingAspireHooks(postToolUse);
-            AddAspireHook(postToolUse, AgentTelemetryHook.ClaudeToolMatcher, condition: null);
-            AddAspireHook(postToolUse, AgentTelemetryHook.ClaudeReadMatcher, AgentTelemetryHook.ClaudeReadIf);
-            return true;
-        }, cancellationToken);
+            switch (parsed)
+            {
+                case null:
+                    settings = new JsonObject();
+                    break;
+                case JsonObject existing:
+                    settings = existing;
+                    break;
+                default:
+                    return TelemetryHookStatus.UnexpectedConfigShape;
+            }
+        }
+        else
+        {
+            settings = new JsonObject();
+        }
+
+        JsonObject hooks;
+        if (settings.TryGetPropertyValue("hooks", out var hooksNode))
+        {
+            if (hooksNode is not JsonObject hooksObject)
+            {
+                return TelemetryHookStatus.UnexpectedConfigShape;
+            }
+            hooks = hooksObject;
+        }
+        else
+        {
+            hooks = new JsonObject();
+            settings["hooks"] = hooks;
+        }
+
+        JsonArray postToolUse;
+        if (hooks.TryGetPropertyValue("PostToolUse", out var postToolUseNode))
+        {
+            if (postToolUseNode is not JsonArray postToolUseArray)
+            {
+                return TelemetryHookStatus.UnexpectedConfigShape;
+            }
+            postToolUse = postToolUseArray;
+        }
+        else
+        {
+            postToolUse = new JsonArray();
+            hooks["PostToolUse"] = postToolUse;
+        }
+
+        RemoveExistingAspireHooks(postToolUse);
+        // Run directly, without a shell, and only for tools or skill file reads the classifier can
+        // track so Claude does not launch the CLI on every tool call or read.
+        // https://docs.claude.com/en/docs/claude-code/hooks
+        postToolUse.Add(CreateHookGroup(TelemetryHookToolMatcher, condition: null));
+        postToolUse.Add(CreateHookGroup(TelemetryHookReadMatcher, TelemetryHookReadIf));
+
+        try
+        {
+            Directory.CreateDirectory(claudeDirectory);
+            await edit.PublishAsync(settingsPath, settings, cancellationToken);
+            return TelemetryHookStatus.Configured;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            logger.LogDebug(ex, "Failed to write Claude settings at {Path}.", settingsPath);
+            return TelemetryHookStatus.WriteFailed;
+        }
     }
 
-    private static void AddAspireHook(JsonArray groups, string matcher, string? condition)
+    private static JsonNode CreateHookGroup(string matcher, string? condition)
     {
         var (command, args) = AgentTelemetryHook.GetCommand(AgentTelemetryProtocol.HookOptionName);
         var hook = new JsonObject
         {
             ["type"] = "command",
             ["command"] = command,
-            ["args"] = TelemetryHookSettings.CreateArgs(args),
+            ["args"] = new JsonArray(args.Select(arg => (JsonNode?)JsonValue.Create(arg)).ToArray()),
             ["timeout"] = 30,
         };
         if (condition is not null)
         {
             hook["if"] = condition;
         }
-        groups.Add((JsonNode)new JsonObject
+
+        return new JsonObject
         {
             ["matcher"] = matcher,
             ["hooks"] = new JsonArray(hook),
-        });
+        };
     }
 
-    private static void RemoveExistingAspireHooks(JsonArray groups)
+    private static void RemoveExistingAspireHooks(JsonArray postToolUse)
     {
         // Remove individual Aspire hooks, preserving user hooks that share the same matcher group.
-        for (var groupIndex = groups.Count - 1; groupIndex >= 0; groupIndex--)
+        for (var groupIndex = postToolUse.Count - 1; groupIndex >= 0; groupIndex--)
         {
-            if (groups[groupIndex] is not JsonObject group
+            if (postToolUse[groupIndex] is not JsonObject group
                 || group["hooks"] is not JsonArray hooks)
             {
                 continue;
             }
             for (var hookIndex = hooks.Count - 1; hookIndex >= 0; hookIndex--)
             {
-                if (TelemetryHookSettings.IsAspireHook(hooks[hookIndex], "command"))
+                if (IsAspireHook(hooks[hookIndex]))
                 {
                     hooks.RemoveAt(hookIndex);
                 }
             }
             if (hooks.Count == 0)
             {
-                groups.RemoveAt(groupIndex);
+                postToolUse.RemoveAt(groupIndex);
             }
         }
     }
+
+    private static bool IsAspireHook(JsonNode? node)
+    {
+        // Match legacy scripts or our exact CLI invocation, not arbitrary Aspire commands.
+        if (node is not JsonObject hook)
+        {
+            return false;
+        }
+        if (hook["command"] is JsonValue commandValue
+            && commandValue.TryGetValue<string>(out var command)
+            && ReferencesTelemetryScript(command))
+        {
+            return true;
+        }
+        if (hook["args"] is JsonArray args)
+        {
+            var values = args.Select(arg => arg is JsonValue value && value.TryGetValue<string>(out var text) ? text : null).ToArray();
+            var executable = hook["command"] is JsonValue executableValue && executableValue.TryGetValue<string>(out var executableText)
+                ? executableText : null;
+            var (currentCommand, _) = AgentTelemetryHook.GetCommand(AgentTelemetryProtocol.HookOptionName);
+            var executableName = Path.GetFileNameWithoutExtension(executable);
+            var isDotnet = string.Equals(executableName, "dotnet", StringComparison.OrdinalIgnoreCase);
+            var isDirectAspireInvocation = !isDotnet
+                && values is [AgentTelemetryProtocol.AgentCommandName, AgentTelemetryProtocol.TelemetryCommandName, AgentTelemetryProtocol.HookOptionName]
+                && (executable == currentCommand || string.Equals(executableName, "aspire", StringComparison.OrdinalIgnoreCase));
+            var isManagedAspireInvocation = isDotnet
+                && values is [var assemblyPath, AgentTelemetryProtocol.AgentCommandName, AgentTelemetryProtocol.TelemetryCommandName, AgentTelemetryProtocol.HookOptionName]
+                && string.Equals(Path.GetFileName(assemblyPath), "aspire.dll", StringComparison.OrdinalIgnoreCase);
+
+            return isDirectAspireInvocation || isManagedAspireInvocation || values.Any(ReferencesTelemetryScript);
+        }
+
+        return false;
+    }
+
+    private static bool ReferencesTelemetryScript(string? value)
+        => value is not null
+            && (value.Contains(TelemetryHookInstaller.ShellResourceName, StringComparison.OrdinalIgnoreCase)
+                || value.Contains(TelemetryHookInstaller.PowerShellResourceName, StringComparison.OrdinalIgnoreCase));
 
     private string ManagedSettingsDirectory
         => AgentPath.GetManagedSettingsDirectory(context, environment, "ClaudeCode", "claude-code");
