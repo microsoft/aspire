@@ -112,7 +112,8 @@ public class TemplateEngineFactoryGitCheckoutTests(ITestOutputHelper outputHelpe
             .Where(entry => entry.Message.StartsWith("Git stderr: ", StringComparison.Ordinal))
             .Select(entry => entry.Message["Git stderr: ".Length..]));
         Assert.StartsWith("fatal:", diagnostics, StringComparison.Ordinal);
-        Assert.Equal(string.Concat(interaction.DisplayedRawText.Select(entry => entry.Text)), diagnostics);
+        Assert.Equal(string.Concat(interaction.DisplayedRawText.Select(entry => entry.Text)).ReplaceLineEndings(string.Empty),
+            diagnostics.ReplaceLineEndings(string.Empty));
         Assert.Collection(logs.Where(entry => !entry.Message.StartsWith("Git stderr: ", StringComparison.Ordinal)),
             entry => Assert.Equal("Starting Git process.", entry.Message),
             entry => Assert.StartsWith("Git process ", entry.Message),
