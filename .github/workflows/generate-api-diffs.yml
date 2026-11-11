@@ -61,9 +61,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Exclude projects that do not generate a release API baseline. The non-packable
-          # Aspire.Hosting.Native.* projects only target net11.0, so they cannot build for the
-          # release branch's DefaultTargetFramework.
+          # Exclude projects that do not generate a release API baseline.
           find src -name '*.csproj' | grep -Ev '/(Aspire.ProjectTemplates|Aspire.Cli|Aspire.Dashboard|Aspire.Hosting.Analyzers|Aspire.Hosting.Azure.Provisioning.Generators|Aspire.Hosting.Integration.Analyzers|Aspire.Hosting.RemoteHost|Aspire.Hosting.Native\.[^/]+|Aspire.Managed|Aspire.AppHost.Sdk|Aspire.TerminalHost|Tools)/' | while IFS= read -r proj; do
             ./dotnet.sh build "$proj" -f "$API_TARGET_FRAMEWORK" --configuration Release --no-incremental /t:"Build;GenAPIGenerateReferenceAssemblySource"
           done
