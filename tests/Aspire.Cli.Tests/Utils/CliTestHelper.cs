@@ -466,7 +466,7 @@ internal sealed class CliServiceCollectionTestOptions
     public Func<IServiceProvider, IAddCommandPrompter> AddCommandPrompterFactory { get; set; } = (IServiceProvider serviceProvider) =>
     {
         var interactionService = serviceProvider.GetRequiredService<IInteractionService>();
-        return new AddCommandPrompter(interactionService);
+        return new AddCommandPrompter(interactionService, serviceProvider.GetRequiredService<CliExecutionContext>());
     };
 
     public Func<IServiceProvider, IPublishCommandPrompter> PublishCommandPrompterFactory { get; set; } = (IServiceProvider serviceProvider) =>
@@ -619,7 +619,7 @@ internal sealed class CliServiceCollectionTestOptions
         var features = serviceProvider.GetRequiredService<IFeatures>();
         var nuGetService = serviceProvider.GetRequiredService<BundleNuGetService>();
         var logger = serviceProvider.GetRequiredService<ILogger<NuGetPackageCache>>();
-        return new NuGetPackageCache(cliRunner, cache, telemetry, features, nuGetService, logger);
+        return new NuGetPackageCache(cliRunner, cache, telemetry, features, nuGetService, serviceProvider.GetRequiredService<INuGetClient>(), logger);
     };
 
     public Func<IServiceProvider, INuGetClient> NuGetClientFactory { get; set; } = _ => new FakeNuGetClient();
