@@ -191,7 +191,7 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task ConfigureAsync_ReplacesPreviousClaudeHookArguments()
+    public async Task ConfigureAsync_MigratesAllToolClaudeHookToScopedGroups()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var home = workspace.CreateDirectory("home");
