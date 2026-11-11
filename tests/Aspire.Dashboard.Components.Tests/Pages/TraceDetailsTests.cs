@@ -2,9 +2,11 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text;
+using Aspire.Dashboard.Components.Controls;
 using Aspire.Dashboard.Components.Pages;
 using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Components.Tests.Shared;
+using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Otlp;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
@@ -625,7 +627,7 @@ public partial class TraceDetailsTests : DashboardTestContext
         });
 
         cut.WaitForAssertion(() => Assert.NotNull(cut.Instance.PageViewModel.SpanWaterfallViewModels));
-        var data = await cut.Instance.GetData(new GridItemsProviderRequest<SpanWaterfallViewModel>());
+        var data = await cut.InvokeAsync(() => cut.Instance.GetData(new GridItemsProviderRequest<SpanWaterfallViewModel>()).AsTask());
 
         // Assert
         Assert.Collection(data.Items,
@@ -721,7 +723,7 @@ public partial class TraceDetailsTests : DashboardTestContext
         });
 
         cut.WaitForAssertion(() => Assert.NotNull(cut.Instance.PageViewModel.SpanWaterfallViewModels));
-        var unfilteredData = await cut.Instance.GetData(new GridItemsProviderRequest<SpanWaterfallViewModel>());
+        var unfilteredData = await cut.InvokeAsync(() => cut.Instance.GetData(new GridItemsProviderRequest<SpanWaterfallViewModel>()).AsTask());
 
         // Duration >= 10ms only matches 1-3. Its parent chain (1-1, 1-2) stays visible
         // as ancestors so the matching span remains navigable in the waterfall, even
@@ -848,7 +850,7 @@ public partial class TraceDetailsTests : DashboardTestContext
         });
 
         cut.WaitForAssertion(() => Assert.NotNull(cut.Instance.PageViewModel.SpanWaterfallViewModels));
-        var unfilteredData = await cut.Instance.GetData(new GridItemsProviderRequest<SpanWaterfallViewModel>());
+        var unfilteredData = await cut.InvokeAsync(() => cut.Instance.GetData(new GridItemsProviderRequest<SpanWaterfallViewModel>()).AsTask());
 
         var durationMatches = await GetMatchingSpanIdsAsync(
             telemetryRepository,
@@ -915,6 +917,7 @@ public partial class TraceDetailsTests : DashboardTestContext
                 }
             });
 
+        Services.GetRequiredService<PauseManager>().SetTracesPaused(true);
         var traceId = Convert.ToHexString(Encoding.UTF8.GetBytes("1"));
         var cut = Render<TraceDetail>(builder =>
         {
@@ -922,7 +925,12 @@ public partial class TraceDetailsTests : DashboardTestContext
             builder.AddCascadingValue(viewport);
         });
 
-        cut.WaitForAssertion(() => Assert.Equal(2, cut.FindAll(".main-grid-expand-button").Count));
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal(2, cut.FindAll(".main-grid-expand-button").Count);
+            Assert.Equal("Showing 3 spans", cut.Find(".result-count").TextContent.Trim());
+            Assert.Single(cut.FindComponents<PauseWarning>());
+        });
         // Act and assert
 
         // Collapse the middle span
@@ -935,6 +943,7 @@ public partial class TraceDetailsTests : DashboardTestContext
             Assert.Collection(expandContainers,
                 container => Assert.True(container.ClassList.Contains("main-grid-expanded")),
                 container => Assert.True(container.ClassList.Contains("main-grid-collapsed")));
+            Assert.Equal("Showing 2 spans", cut.Find(".result-count").TextContent.Trim());
         });
 
         // Collapse the parent span
@@ -945,6 +954,7 @@ public partial class TraceDetailsTests : DashboardTestContext
             // There should now be one container since the 2nd level element should now be filtered out
             Assert.Collection(expandContainers,
                 container => Assert.True(container.ClassList.Contains("main-grid-collapsed")));
+            Assert.Equal("Showing 1 span", cut.Find(".result-count").TextContent.Trim());
         });
 
         // Expand the parent span, we should now see the same two containers as before
@@ -956,7 +966,16 @@ public partial class TraceDetailsTests : DashboardTestContext
             Assert.Collection(expandContainers,
                 container => Assert.True(container.ClassList.Contains("main-grid-expanded")),
                 container => Assert.True(container.ClassList.Contains("main-grid-collapsed")));
+            Assert.Equal("Showing 2 spans", cut.Find(".result-count").TextContent.Trim());
         });
+
+        await cut.InvokeAsync(async () =>
+        {
+            cut.Instance.PageViewModel.ContextFilterMatches = [];
+            var result = await cut.Instance.GetData(new GridItemsProviderRequest<SpanWaterfallViewModel>());
+            Assert.Equal(0, result.TotalItemCount);
+        });
+        cut.WaitForAssertion(() => Assert.Equal("Showing 0 spans", cut.Find(".result-count").TextContent.Trim()));
     }
 
     [Fact]
