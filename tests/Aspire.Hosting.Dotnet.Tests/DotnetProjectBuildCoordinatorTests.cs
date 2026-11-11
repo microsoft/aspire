@@ -1,11 +1,15 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+extern alias HostingDotnet;
+
 #pragma warning disable ASPIREEXTENSION001, ASPIREPROJECTS001
 
 using System.IO.Compression;
 using System.Reflection;
+using System.Text;
 using System.Text.Json;
+using System.Threading.Channels;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dcp.Model;
 using Aspire.Hosting.Dcp.Process;
@@ -16,11 +20,14 @@ using Aspire.Hosting.Tests.Helpers;
 using Aspire.Hosting.Tests.Dcp;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
+using Aspire.Shared.ConsoleLogs;
 using Aspire.TestUtilities;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using PathNormalizer = HostingDotnet::Aspire.Hosting.Utils.PathNormalizer;
 
 namespace Aspire.Hosting.Dotnet.Tests;
 
@@ -309,6 +316,41 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
+    [InlineData("")]
+    [InlineData("node,browser")]
+    public void DebugSessionWithoutProjectCapabilityCoordinatesBuildForProcessLaunches(string supportedLaunchConfigurations)
+    {
+        // VS Code without the C# extension advertises an explicit capability list without "project". DCP then runs
+        // project resources as processes, so they need the same single coordinated build as outside an IDE. Otherwise
+        // resources that share a project each run an implicit, concurrent `dotnet run` build of it, and one can exit
+        // on files the other holds open in obj/.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path,
+            outputHelper);
+        builder.Configuration["DEBUG_SESSION_PORT"] = "localhost:12345";
+        builder.Configuration[KnownConfigNames.DebugSessionInfo] = JsonSerializer.Serialize(new RunSessionInfo
+        {
+            ProtocolsSupported = ["test"],
+            SupportedLaunchConfigurations = supportedLaunchConfigurations.Split(',', StringSplitOptions.RemoveEmptyEntries)
+        });
+
+        var projectPath = CreateProject(workspace.Path, "Worker", "Worker.csproj");
+        var worker = builder.AddDotnetProject("worker", projectPath, options => options.ExcludeLaunchProfile = true);
+        var terminal = builder.AddDotnetProject("terminal", projectPath, options => options.ExcludeLaunchProfile = true);
+
+        Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
+        Assert.All(
+            new[] { worker, terminal },
+            project =>
+            {
+                Assert.True(Assert.Single(project.Resource.Annotations.OfType<DotnetProjectMetadata>()).SuppressBuild);
+                Assert.Single(project.Resource.Annotations.OfType<DotnetProgramBuildCompletionAnnotation>());
+                Assert.False(project.Resource.SupportsDebugging(builder.Configuration, out _));
+            });
+    }
+
+    [Theory]
     [InlineData("null")]
     [InlineData("[]")]
     [InlineData("42")]
@@ -395,21 +437,85 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData("11.0.100-rc.2.26504.105", false)]
-    [InlineData("11.0.100-rtm.26473.104", true)]
+    [InlineData("case")]
+    [InlineData("normalization")]
+    [InlineData("case-and-normalization")]
+    public async Task FileAppCreatedAfterRegistrationUsesFinalPathSpellingForLaunchAndRebuild(string pathAlias)
+    {
+        Assert.SkipUnless(
+            OperatingSystem.IsWindows() || OperatingSystem.IsMacOS(),
+            "Path spelling resolution is only supported on Windows and macOS.");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var workspaceRoot = PathNormalizer.ResolvePathCasing(workspace.Path);
+        var appDirectory = Directory.CreateDirectory(Path.Combine(workspaceRoot, "worker")).FullName;
+        var filePath = Path.Combine(appDirectory, "Caf\u00e9.cs");
+        var suppliedPath = Path.Combine(appDirectory, pathAlias switch
+        {
+            "case" => "CAF\u00c9.cs",
+            "normalization" => "Cafe\u0301.cs",
+            _ => "CAFE\u0301.cs",
+        });
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspaceRoot,
+            outputHelper);
+        var file = builder.AddDotnetProject("worker", suppliedPath, options => options.ExcludeLaunchProfile = true);
+        var buildResource = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
+        var rebuilder = Assert.Single(builder.Resources.OfType<ProjectRebuilderResource>());
+        var metadata = Assert.Single(file.Resource.Annotations.OfType<DotnetProjectMetadata>());
+        Assert.Equal(suppliedPath, metadata.ProjectPath);
+
+        File.WriteAllText(filePath, "System.Console.WriteLine(\"Hello\");");
+        Assert.SkipUnless(File.Exists(suppliedPath), $"The filesystem does not support the '{pathAlias}' file-app alias.");
+        await using var app = builder.Build();
+        await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
+
+        var expectedPath = PathNormalizer.ResolvePathCasing(suppliedPath);
+        Assert.NotEqual(suppliedPath, expectedPath);
+        Assert.Equal([expectedPath], buildResource.ProjectPaths);
+        Assert.Equal(expectedPath, metadata.ProjectPath);
+        Assert.Equal(appDirectory, file.Resource.WorkingDirectory);
+        Assert.Equal(appDirectory, rebuilder.WorkingDirectory);
+        var launchArgs = await ArgumentEvaluator.GetArgumentListAsync(file.Resource, app.Services);
+        Assert.Contains(expectedPath, launchArgs);
+        var rebuildArgs = await ArgumentEvaluator.GetArgumentListAsync(rebuilder, app.Services);
+        Assert.Equal(expectedPath, rebuildArgs[1]);
+    }
+
+    [Theory]
+    [InlineData("11.0.100-rc.2.26504.105", false, "original")]
+    [InlineData("11.0.100-rc.2.26504.105", false, "case")]
+    [InlineData("11.0.100-rc.2.26504.105", false, "normalization")]
+    [InlineData("11.0.100-rc.2.26504.105", false, "case-and-normalization")]
+    [InlineData("11.0.100-rc.2.26504.105", false, "symlink")]
+    [InlineData("11.0.100-rtm.26473.104", true, "original")]
+    [InlineData("11.0.100-rtm.26473.104", true, "case")]
+    [InlineData("11.0.100-rtm.26473.104", true, "normalization")]
+    [InlineData("11.0.100-rtm.26473.104", true, "case-and-normalization")]
+    [InlineData("11.0.100-rtm.26473.104", true, "symlink")]
     public async Task FileOnlyModelCreatesDirectCoordinatedBuild(
         string sdkVersion,
-        bool supportsFileBasedMultiThreadedBuild)
+        bool supportsFileBasedMultiThreadedBuild,
+        string pathAlias)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var workspaceRoot = PathNormalizer.ResolvePathCasing(workspace.Path);
+        var appDirectory = Directory.CreateDirectory(Path.Combine(workspaceRoot, "Caf\u00e9")).FullName;
+        var filePath = Path.Combine(appDirectory, "worker.cs");
+        File.WriteAllText(filePath, "System.Console.WriteLine(\"Hello\");");
+        var suppliedPath = CreateFileAppPathAlias(filePath, pathAlias);
+        var expectedPath = PathNormalizer.ResolvePathCasing(suppliedPath);
+        if (pathAlias == "case-and-normalization")
+        {
+            // Neither a case-only nor a normalization-only comparison matches this alias.
+            Assert.Equal(filePath, expectedPath);
+        }
+
         using var builder = TestDistributedApplicationBuilder.Create(
-            options => options.ProjectDirectory = workspace.Path,
+            options => options.ProjectDirectory = workspaceRoot,
             outputHelper);
         UseDotnetSdkVersion(builder, sdkVersion);
-        var filePath = Path.Combine(workspace.Path, "worker.cs");
-        File.WriteAllText(filePath, "System.Console.WriteLine(\"Hello\");");
 
-        var file = builder.AddDotnetProject("worker", filePath, options => options.ExcludeLaunchProfile = true);
+        var file = builder.AddDotnetProject("worker", suppliedPath, options => options.ExcludeLaunchProfile = true);
         var buildResource = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
         var rebuilder = Assert.Single(builder.Resources.OfType<ProjectRebuilderResource>());
         AssertBuildDependency(file.Resource, buildResource);
@@ -417,9 +523,12 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
 
         await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
 
-        Assert.Equal([NormalizeProjectPath(filePath)], buildResource.ProjectPaths);
+        Assert.Equal([expectedPath], buildResource.ProjectPaths);
+        Assert.Equal(expectedPath, Assert.Single(file.Resource.Annotations.OfType<DotnetProjectMetadata>()).ProjectPath);
+        Assert.Equal(Path.GetDirectoryName(expectedPath), file.Resource.WorkingDirectory);
+        Assert.Equal(Path.GetDirectoryName(expectedPath), rebuilder.WorkingDirectory);
         Assert.Equal(
-            filePath,
+            expectedPath,
             await buildResource.GetBuildTargetPathAsync(
                 NullLogger.Instance,
                 TestContext.Current.CancellationToken));
@@ -430,7 +539,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             new BeforeResourceStartedEvent(buildResource, app.Services),
             TestContext.Current.CancellationToken);
         var buildArgs = await ArgumentEvaluator.GetArgumentListAsync(buildResource, app.Services);
-        var expectedBuildArgs = new List<string> { "build", filePath };
+        var expectedBuildArgs = new List<string> { "build", expectedPath };
         if (supportsFileBasedMultiThreadedBuild)
         {
             expectedBuildArgs.Add("-mt");
@@ -450,7 +559,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             new BeforeResourceStartedEvent(rebuilder, app.Services),
             TestContext.Current.CancellationToken);
         var rebuildArgs = await ArgumentEvaluator.GetArgumentListAsync(rebuilder, app.Services);
-        var expectedRebuildArgs = new List<string> { "build", filePath };
+        var expectedRebuildArgs = new List<string> { "build", expectedPath };
         if (supportsFileBasedMultiThreadedBuild)
         {
             expectedRebuildArgs.Add("-mt");
@@ -460,10 +569,70 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         Assert.Equal(expectedRebuildArgs, rebuildArgs);
 
         var fileArgs = await ArgumentEvaluator.GetArgumentListAsync(file.Resource, app.Services);
-        var expectedFileArgs = new List<string> { "run", "--file", filePath, "--no-build" };
+        var expectedFileArgs = new List<string> { "run", "--file", expectedPath, "--no-build" };
         AddExpectedConfiguration(builder, expectedFileArgs);
         expectedFileArgs.Add("--no-launch-profile");
         Assert.Equal(expectedFileArgs, fileArgs);
+    }
+
+    [Fact]
+    public async Task RebuilderDoesNotForwardAppHostGlobalArtifactsPath()
+    {
+        // The AppHost's global artifacts path is only forwarded to legacy ProjectResource launches
+        // (https://github.com/microsoft/aspire/issues/6887). The coordinated build and launch of
+        // AddDotnetProject don't use it, so the rebuild must keep writing to the same output.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path,
+            outputHelper);
+        UseDotnetSdkVersion(builder, "11.0.100-rc.2.26504.105");
+        var filePath = Path.Combine(workspace.Path, "worker.cs");
+        File.WriteAllText(filePath, "System.Console.WriteLine(\"Hello\");");
+
+        builder.AddDotnetProject("worker", filePath, options => options.ExcludeLaunchProfile = true);
+        var rebuilder = Assert.Single(builder.Resources.OfType<ProjectRebuilderResource>());
+        await using var app = builder.Build();
+        app.Services.GetRequiredService<DistributedApplicationOptions>().GlobalArtifactsPath =
+            Path.Combine(workspace.Path, "artifacts");
+
+        await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
+        await EventingTestHelpers.SubscribeEventingSubscribersAsync(
+            app,
+            TestContext.Current.CancellationToken);
+        await builder.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(rebuilder, app.Services),
+            TestContext.Current.CancellationToken);
+        var rebuildArgs = await ArgumentEvaluator.GetArgumentListAsync(rebuilder, app.Services);
+
+        var expectedRebuildArgs = new List<string> { "build", filePath };
+        AddExpectedConfiguration(builder, expectedRebuildArgs);
+        Assert.Equal(expectedRebuildArgs, rebuildArgs);
+    }
+
+    [Theory]
+    [InlineData(DistributedApplicationOperation.Run)]
+    [InlineData(DistributedApplicationOperation.Publish)]
+    public void FileAppMetadataPreservesInputPathWithoutCoordination(DistributedApplicationOperation operation)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var workspaceRoot = PathNormalizer.ResolvePathCasing(workspace.Path);
+        var appDirectory = Directory.CreateDirectory(Path.Combine(workspaceRoot, "Caf\u00e9")).FullName;
+        var filePath = Path.Combine(appDirectory, "worker.cs");
+        File.WriteAllText(filePath, "System.Console.WriteLine(\"Hello\");");
+        var suppliedPath = CreateFileAppPathAlias(filePath, "case");
+        using var builder = TestDistributedApplicationBuilder.Create(operation, outputHelper);
+        if (operation == DistributedApplicationOperation.Run)
+        {
+            builder.Configuration["DEBUG_SESSION_PORT"] = "localhost:12345";
+        }
+
+        var file = builder.AddDotnetProject("worker", suppliedPath, options => options.ExcludeLaunchProfile = true);
+        var metadata = Assert.Single(file.Resource.Annotations.OfType<DotnetProjectMetadata>());
+
+        Assert.Equal(suppliedPath, metadata.ProjectPath);
+        Assert.Equal(Path.GetDirectoryName(suppliedPath), file.Resource.WorkingDirectory);
+        Assert.False(metadata.SuppressBuild);
+        Assert.Empty(builder.Resources.OfType<DotnetProjectBuildResource>());
     }
 
     [Theory]
@@ -628,21 +797,28 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         Assert.Equal(2, File.ReadAllLines(GetBuildCountPath(sharedProject)).Length);
     }
 
-    [Fact]
+    [Theory]
+    [InlineData("original")]
+    [InlineData("case")]
+    [InlineData("normalization")]
+    [InlineData("symlink")]
     [RequiresTools(["dotnet"])]
-    public async Task FileAppRebuildCommandBuildsEditedSourceAndRestartsResource()
+    public async Task FileAppRebuildCommandBuildsEditedSourceAndRestartsResource(string pathAlias)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var appPath = Path.Combine(workspace.Path, "worker.cs");
-        var sentinelPath = Path.Combine(workspace.Path, "worker-ran.txt");
+        var workspaceRoot = PathNormalizer.ResolvePathCasing(workspace.Path);
+        var appDirectory = Directory.CreateDirectory(Path.Combine(workspaceRoot, "Caf\u00e9")).FullName;
+        var appPath = Path.Combine(appDirectory, "worker.cs");
+        var sentinelPath = Path.Combine(workspaceRoot, "worker-ran.txt");
         WriteFileApp("initial");
+        var suppliedPath = CreateFileAppPathAlias(appPath, pathAlias);
 
         using var builder = TestDistributedApplicationBuilder.Create(
-            options => options.ProjectDirectory = workspace.Path,
+            options => options.ProjectDirectory = workspaceRoot,
             outputHelper).WithResourceCleanUp(true);
         var resource = builder.AddDotnetProject(
                 "worker",
-                appPath,
+                suppliedPath,
                 options => options.ExcludeLaunchProfile = true)
             .WithEnvironment("SENTINEL_PATH", sentinelPath);
         await using var app = builder.Build();
@@ -1053,17 +1229,18 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
     public void CaseVariantProjectPathsFollowFilesystemIdentity(bool addCaseVariantFirst)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var workspaceRoot = PathNormalizer.ResolvePathCasing(workspace.Path);
         using var buildResource = new DotnetProjectBuildResource(
             DotnetProjectBuildCoordinator.BuildResourceName,
-            workspace.Path,
-            Path.Combine(workspace.Path, "obj", ".aspire", "build"),
+            workspaceRoot,
+            Path.Combine(workspaceRoot, "obj", ".aspire", "build"),
             TimeProvider.System);
-        var projectPath = CreateProject(workspace.Path, "Service", "App.csproj");
-        var caseVariantPath = Path.Combine(workspace.Path, "service", "app.CSPROJ");
+        var projectPath = CreateProject(workspaceRoot, "Service", "App.csproj");
+        var caseVariantPath = Path.Combine(workspaceRoot, "service", "app.CSPROJ");
         var caseInsensitive = File.Exists(caseVariantPath);
         if (!caseInsensitive)
         {
-            CreateProject(workspace.Path, "service", "app.CSPROJ");
+            CreateProject(workspaceRoot, "service", "app.CSPROJ");
         }
 
         var firstPath = addCaseVariantFirst ? caseVariantPath : projectPath;
@@ -1073,7 +1250,8 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
 
         if (caseInsensitive)
         {
-            Assert.Equal([NormalizeProjectPath(firstPath)], buildResource.ProjectPaths);
+            // Both spellings are the same project, and the build only sees its on-disk spelling (#21621).
+            Assert.Equal([NormalizeProjectPath(projectPath)], buildResource.ProjectPaths);
         }
         else
         {
@@ -1085,13 +1263,15 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
     public async Task ProjectWithBuildEnvironmentUsesSerializedDirectBuild()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
+        // Expected build paths use on-disk spelling, even when the temp root does not (for example c:\ on Windows).
+        var workspaceRoot = PathNormalizer.ResolvePathCasing(workspace.Path);
         using var builder = TestDistributedApplicationBuilder.Create(
-            options => options.ProjectDirectory = workspace.Path,
+            options => options.ProjectDirectory = workspaceRoot,
             outputHelper);
-        var aspireStoreRoot = Path.Combine(workspace.Path, "custom-obj");
+        var aspireStoreRoot = Path.Combine(workspaceRoot, "custom-obj");
         builder.Configuration["Aspire:Store:Path"] = aspireStoreRoot;
-        var apiPath = CreateProject(workspace.Path, "Api", "Api.csproj");
-        var workerPath = CreateProject(workspace.Path, "Worker", "Worker.csproj");
+        var apiPath = CreateProject(workspaceRoot, "Api", "Api.csproj");
+        var workerPath = CreateProject(workspaceRoot, "Worker", "Worker.csproj");
         var api = builder.AddDotnetProject("api", apiPath, options => options.ExcludeLaunchProfile = true)
             .WithHttpEndpoint();
         var worker = builder.AddDotnetProject("worker", workerPath, options => options.ExcludeLaunchProfile = true)
@@ -1326,6 +1506,632 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
                 serviceProvider: app.Services));
         Assert.Contains("resource 'worker' changed after the coordinated build plan was materialized", exception.Message);
         Assert.Contains("do not add or remove them after materialization", exception.Message);
+    }
+
+    [Fact]
+    public async Task FailedCoordinatedBuildReportsBuildErrorsToDependentsAndAppHostLogOnce()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path,
+            outputHelper);
+        builder.Services.AddLogging(logging => logging.AddFakeLogging());
+        var apiPath = CreateProject(workspace.Path, "Api", "Api.csproj");
+        var workerPath = CreateProject(workspace.Path, "Worker", "Worker.csproj");
+        var api = builder.AddDotnetProject("api", apiPath, options => options.ExcludeLaunchProfile = true);
+        var worker = builder.AddDotnetProject("worker", workerPath, options => options.ExcludeLaunchProfile = true);
+        await using var app = builder.Build();
+        await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
+
+        var buildResource = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
+        const string compilerError = "/src/Api/Program.cs(3,1): error CS1002: ; expected [/src/Api/Api.csproj]";
+        const string fileInUseError = "C:\\sdk\\Microsoft.NET.Sdk.Razor.StaticWebAssets.targets(1,1): error MSB3026: Could not copy file. The process cannot access the file because it is being used by another process. [/src/Worker/Worker.csproj]";
+        var getReadCount = UseBuildOutput(
+            app,
+            buildResource,
+            "Restore complete (0.5s)",
+            compilerError,
+            fileInUseError,
+            $"2026-01-01T00:00:00.0000000Z {compilerError}",
+            "Build failed with 2 error(s) and 0 warning(s)");
+        await app.ResourceNotifications.PublishUpdateAsync(
+            buildResource,
+            snapshot => snapshot with
+            {
+                State = KnownResourceStates.Finished,
+                ExitCode = 1,
+            });
+
+        foreach (var dependent in new IResource[] { api.Resource, worker.Resource })
+        {
+            var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() =>
+                builder.Eventing.PublishAsync(
+                    new BeforeResourceStartedEvent(dependent, app.Services),
+                    TestContext.Current.CancellationToken));
+            Assert.Contains("The coordinated .NET build failed with exit code 1.", exception.Message);
+            Assert.Contains(compilerError, exception.Message);
+            Assert.Contains(fileInUseError, exception.Message);
+            Assert.DoesNotContain("Restore complete", exception.Message);
+            Assert.Single(exception.Message.Split(Environment.NewLine), line => line == compilerError);
+
+            await app.ResourceNotifications.PublishUpdateAsync(
+                buildResource,
+                snapshot => snapshot with { ResourceReadyEvent = new(Task.FromResult(new object())) });
+        }
+
+        Assert.Equal(1, getReadCount());
+        var appHostError = Assert.Single(
+            app.Services.GetFakeLogCollector().GetSnapshot(),
+            record => record.Level == LogLevel.Error && record.Message.Contains("The coordinated .NET build failed", StringComparison.Ordinal));
+        Assert.Contains(compilerError, appHostError.Message);
+        Assert.Contains(fileInUseError, appHostError.Message);
+    }
+
+    [Fact]
+    public async Task FailedCoordinatedBuildWithoutErrorLinesReportsBuildOutputTail()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path,
+            outputHelper);
+        var projectPath = CreateProject(workspace.Path, "Worker", "Worker.csproj");
+        var project = builder.AddDotnetProject("worker", projectPath, options => options.ExcludeLaunchProfile = true);
+        await using var app = builder.Build();
+        await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
+
+        var buildResource = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
+        UseBuildOutput(
+            app,
+            buildResource,
+            [.. Enumerable.Range(0, 25).Select(i => $"build output line {i:D2}")]);
+
+        await app.ResourceNotifications.PublishUpdateAsync(
+            buildResource,
+            snapshot => snapshot with
+            {
+                State = KnownResourceStates.Finished,
+                ExitCode = -1073741510,
+            });
+
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() =>
+            builder.Eventing.PublishAsync(
+                new BeforeResourceStartedEvent(project.Resource, app.Services),
+                TestContext.Current.CancellationToken));
+        Assert.Contains("exit code -1073741510", exception.Message);
+        Assert.DoesNotContain("build output line 04", exception.Message);
+        Assert.Contains("build output line 05", exception.Message);
+        Assert.Contains("build output line 24", exception.Message);
+    }
+
+    [Fact]
+    public async Task FailedCoordinatedBuildReportsNewestOutputTailByTimestamp()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path,
+            outputHelper);
+        var projectPath = CreateProject(workspace.Path, "Worker", "Worker.csproj");
+        var project = builder.AddDotnetProject("worker", projectPath, options => options.ExcludeLaunchProfile = true);
+        await using var app = builder.Build();
+        await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
+
+        var buildResource = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
+        var start = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        // Concurrently drained streams deliver the newest stdout lines before older stderr lines.
+        string[] lines =
+        [
+            .. Enumerable.Range(5, 20).Select(i => $"{start.AddSeconds(i):O} build output line {i:D2}"),
+            .. Enumerable.Range(0, 5).Select(i => $"{start.AddSeconds(i):O} build output line {i:D2}"),
+        ];
+        UseBuildOutput(app, buildResource, lines);
+
+        await app.ResourceNotifications.PublishUpdateAsync(
+            buildResource,
+            snapshot => snapshot with
+            {
+                State = KnownResourceStates.Finished,
+                ExitCode = 1,
+            });
+
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() =>
+            builder.Eventing.PublishAsync(
+                new BeforeResourceStartedEvent(project.Resource, app.Services),
+                TestContext.Current.CancellationToken));
+        Assert.Equal(
+            [.. Enumerable.Range(5, 20).Select(i => $"build output line {i:D2}")],
+            exception.Message.Split(Environment.NewLine).Skip(1));
+    }
+
+    [Fact]
+    public async Task FailedBuildForExplicitStartProjectReportsToAppHostLogWithoutDependentWait()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path,
+            outputHelper);
+        builder.Services.AddLogging(logging => logging.AddFakeLogging());
+        var projectPath = CreateProject(workspace.Path, "Worker", "Worker.csproj");
+        var project = builder.AddDotnetProject("worker", projectPath, options => options.ExcludeLaunchProfile = true)
+            .WithExplicitStart();
+        await using var app = builder.Build();
+        await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
+
+        var buildResource = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
+        const string compilerError = "/src/Worker/Program.cs(3,1): error CS1002: ; expected [/src/Worker/Worker.csproj]";
+        var getReadCount = UseBuildOutput(app, buildResource, compilerError);
+        await builder.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(buildResource, app.Services),
+            TestContext.Current.CancellationToken);
+        await app.ResourceNotifications.PublishUpdateAsync(
+            buildResource,
+            snapshot => snapshot with
+            {
+                State = KnownResourceStates.Finished,
+                ExitCode = 1,
+            });
+        Assert.True(app.ResourceNotifications.TryGetCurrentState(buildResource.Name, out var stoppedEvent));
+
+        await builder.Eventing.PublishAsync(
+            new ResourceStoppedEvent(buildResource, app.Services, stoppedEvent),
+            TestContext.Current.CancellationToken);
+        var logCollector = app.Services.GetFakeLogCollector();
+        using var reportTimeout = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        reportTimeout.CancelAfter(TimeSpan.FromSeconds(30));
+        while (!logCollector.GetSnapshot().Any(record => record.Level == LogLevel.Error))
+        {
+            await Task.Delay(10, reportTimeout.Token);
+        }
+
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() =>
+            builder.Eventing.PublishAsync(
+                new BeforeResourceStartedEvent(project.Resource, app.Services),
+                TestContext.Current.CancellationToken));
+        Assert.Contains(compilerError, exception.Message);
+        Assert.Equal(1, getReadCount());
+        var appHostError = Assert.Single(logCollector.GetSnapshot(), record => record.Level == LogLevel.Error);
+        Assert.Contains("The coordinated .NET build failed with exit code 1.", appHostError.Message);
+        Assert.Contains(compilerError, appHostError.Message);
+    }
+
+    [Fact]
+    public async Task BuildRestartedByEarlierStoppedHandlerReportsOnlyTheNewAttemptFailure()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path,
+            outputHelper);
+        builder.Services.AddLogging(logging => logging.AddFakeLogging());
+        var projectPath = CreateProject(workspace.Path, "Worker", "Worker.csproj");
+        var project = builder.AddDotnetProject("worker", projectPath, options => options.ExcludeLaunchProfile = true)
+            .WithExplicitStart();
+        await using var app = builder.Build();
+        await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
+
+        var buildResource = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
+        UseBuildOutput(app, buildResource, "/src/Worker/Program.cs(3,1): error CS1002: ; expected [/src/Worker/Worker.csproj]");
+        await builder.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(buildResource, app.Services),
+            TestContext.Current.CancellationToken);
+        await app.ResourceNotifications.PublishUpdateAsync(
+            buildResource,
+            snapshot => snapshot with
+            {
+                State = KnownResourceStates.Finished,
+                ExitCode = 1,
+            });
+        Assert.True(app.ResourceNotifications.TryGetCurrentState(buildResource.Name, out var firstStoppedEvent));
+
+        // Simulate an earlier ResourceStoppedEvent handler restarting the build before the coordinator's handler runs.
+        await app.ResourceNotifications.PublishUpdateAsync(
+            buildResource,
+            snapshot => snapshot with
+            {
+                State = KnownResourceStates.Starting,
+                ExitCode = null,
+            });
+        await builder.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(buildResource, app.Services),
+            TestContext.Current.CancellationToken);
+        await builder.Eventing.PublishAsync(
+            new ResourceStoppedEvent(buildResource, app.Services, firstStoppedEvent),
+            TestContext.Current.CancellationToken);
+
+        await app.ResourceNotifications.PublishUpdateAsync(
+            buildResource,
+            snapshot => snapshot with
+            {
+                State = KnownResourceStates.Finished,
+                ExitCode = 2,
+            });
+        Assert.True(app.ResourceNotifications.TryGetCurrentState(buildResource.Name, out var secondStoppedEvent));
+        await builder.Eventing.PublishAsync(
+            new ResourceStoppedEvent(buildResource, app.Services, secondStoppedEvent),
+            TestContext.Current.CancellationToken);
+
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() =>
+            builder.Eventing.PublishAsync(
+                new BeforeResourceStartedEvent(project.Resource, app.Services),
+                TestContext.Current.CancellationToken));
+        Assert.Contains("The coordinated .NET build failed with exit code 2.", exception.Message);
+        var appHostError = Assert.Single(
+            app.Services.GetFakeLogCollector().GetSnapshot(),
+            record => record.Level == LogLevel.Error);
+        Assert.Contains("The coordinated .NET build failed with exit code 2.", appHostError.Message);
+    }
+
+    [Fact]
+    public async Task CoordinatedBuildPathsUseOnDiskCasing()
+    {
+        // VS Code can launch the AppHost from a lowercase drive letter on Windows. Blazor WebAssembly builds fail when
+        // MSBuild sees that spelling alongside the on-disk spelling (https://github.com/microsoft/aspire/issues/21621).
+        Assert.SkipUnless(
+            OperatingSystem.IsWindows() || OperatingSystem.IsMacOS(),
+            "Path casing resolution is only supported on Windows and macOS.");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var workspaceRoot = PathNormalizer.ResolvePathCasing(workspace.Path);
+        var appHostDirectory = Directory.CreateDirectory(Path.Combine(workspaceRoot, "AppHost")).FullName;
+        var projectPath = CreateProject(workspaceRoot, "Api", "Api.csproj");
+        var buildDirectory = Path.Combine(appHostDirectory, "obj", ".aspire", "build");
+        var caseVariantAppHostDirectory = ChangeCasing(appHostDirectory);
+        var caseVariantProjectPath = ChangeCasing(projectPath);
+        Assert.SkipUnless(
+            Directory.Exists(caseVariantAppHostDirectory) && File.Exists(caseVariantProjectPath),
+            "The test requires case-insensitive lookup of the AppHost directory and project file.");
+
+        using var buildResource = new DotnetProjectBuildResource(
+            "build",
+            caseVariantAppHostDirectory,
+            ChangeCasing(buildDirectory),
+            TimeProvider.System);
+        Assert.Equal(appHostDirectory, buildResource.WorkingDirectory);
+        Assert.Equal(buildDirectory, buildResource.BuildDirectory);
+
+        buildResource.ConfigureTraversalBuild(
+            [caseVariantProjectPath],
+            caseVariantAppHostDirectory,
+            buildConfiguration: null,
+            restoreProjectsIndividually: false);
+        Assert.Equal(projectPath, Assert.Single(buildResource.ProjectPaths));
+        Assert.Equal(appHostDirectory, buildResource.WorkingDirectory);
+
+        var buildProjectPath = await buildResource.WriteBuildProjectAsync(
+            NullLogger.Instance,
+            TestContext.Current.CancellationToken);
+        Assert.StartsWith(buildDirectory + Path.DirectorySeparatorChar, buildProjectPath, StringComparison.Ordinal);
+
+        string ChangeCasing(string path)
+        {
+            var relativePath = Path.GetRelativePath(workspaceRoot, path)
+                .Replace("AppHost", "aPPhOST", StringComparison.Ordinal)
+                .Replace("Api", "aPI", StringComparison.Ordinal);
+            var changedPath = Path.Combine(workspaceRoot, relativePath);
+            return OperatingSystem.IsWindows()
+                ? char.ToLowerInvariant(changedPath[0]) + changedPath[1..]
+                : changedPath;
+        }
+    }
+
+    [Fact]
+    public async Task SuccessfulCoordinatedBuildDoesNotSubscribeToOrReadOutput()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path,
+            outputHelper);
+        var projectPath = CreateProject(workspace.Path, "Worker", "Worker.csproj");
+        var project = builder.AddDotnetProject("worker", projectPath, options => options.ExcludeLaunchProfile = true);
+        await using var app = builder.Build();
+        await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
+
+        var buildResource = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
+        var buildLogName = Assert.Single(buildResource.GetResolvedResourceNames());
+        var loggerService = app.Services.GetRequiredService<ResourceLoggerService>();
+        var getReadCount = UseBuildOutput(app, buildResource, "Build succeeded.");
+        Assert.False(loggerService.HasActiveSubscribers(buildLogName));
+
+        await builder.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(buildResource, app.Services),
+            TestContext.Current.CancellationToken);
+        Assert.False(loggerService.HasActiveSubscribers(buildLogName));
+
+        await app.ResourceNotifications.PublishUpdateAsync(
+            buildResource,
+            snapshot => snapshot with { State = KnownResourceStates.Running });
+        Assert.False(loggerService.HasActiveSubscribers(buildLogName));
+
+        await app.ResourceNotifications.PublishUpdateAsync(
+            buildResource,
+            snapshot => snapshot with
+            {
+                State = KnownResourceStates.Finished,
+                ExitCode = 0,
+            });
+
+        var completion = Assert.Single(project.Resource.Annotations.OfType<DotnetProgramBuildCompletionAnnotation>());
+        await completion.Callback(app.Services, TestContext.Current.CancellationToken);
+        Assert.False(loggerService.HasActiveSubscribers(buildLogName));
+        Assert.Equal(0, getReadCount());
+    }
+
+    [Theory]
+    [InlineData(false, nameof(KnownResourceStates.Finished), 1)]
+    [InlineData(true, nameof(KnownResourceStates.Exited), 1)]
+    [InlineData(false, nameof(KnownResourceStates.FailedToStart), null)]
+    [InlineData(true, nameof(KnownResourceStates.FailedToStart), null)]
+    public async Task FailedBuildDiagnosticsAreSharedPerAttempt(bool useRebuilder, string finalState, int? exitCode)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path,
+            outputHelper);
+        builder.Services.AddLogging(logging => logging.AddFakeLogging());
+        var projectPath = CreateProject(workspace.Path, "Worker", "Worker.csproj");
+        var project = builder.AddDotnetProject("worker", projectPath, options => options.ExcludeLaunchProfile = true);
+        await using var app = builder.Build();
+        await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
+
+        var buildResource = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
+        var completion = Assert.Single(project.Resource.Annotations.OfType<DotnetProgramBuildCompletionAnnotation>());
+        IResource target = buildResource;
+        if (useRebuilder)
+        {
+            await app.ResourceNotifications.PublishUpdateAsync(
+                buildResource,
+                snapshot => snapshot with { State = KnownResourceStates.Finished, ExitCode = 0 });
+            target = Assert.Single(builder.Resources.OfType<ProjectRebuilderResource>());
+        }
+
+        for (var attempt = 1; attempt <= 2; attempt++)
+        {
+            var error = $"Worker.cs(1,1): error CS0103: Build attempt {attempt} failed.";
+            var getReadCount = UseBuildOutput(app, target, error);
+            await app.ResourceNotifications.PublishUpdateAsync(
+                target,
+                snapshot => snapshot with { State = KnownResourceStates.Starting, ExitCode = null });
+            await builder.Eventing.PublishAsync(
+                new BeforeResourceStartedEvent(target, app.Services),
+                TestContext.Current.CancellationToken);
+            var wait = completion.Callback(app.Services, TestContext.Current.CancellationToken);
+            Assert.False(wait.IsCompleted);
+
+            await app.ResourceNotifications.PublishUpdateAsync(
+                target,
+                snapshot => snapshot with { State = finalState, ExitCode = exitCode });
+            var first = await Assert.ThrowsAsync<DistributedApplicationException>(() => wait);
+            await app.ResourceNotifications.PublishUpdateAsync(
+                target,
+                snapshot => snapshot with { ResourceReadyEvent = new(Task.FromResult(new object())) });
+            var second = await Assert.ThrowsAsync<DistributedApplicationException>(() =>
+                completion.Callback(app.Services, TestContext.Current.CancellationToken));
+
+            Assert.Contains(error, first.Message);
+            Assert.Equal(first.Message, second.Message);
+            Assert.Equal(1, getReadCount());
+        }
+
+        Assert.Equal(2, app.Services.GetFakeLogCollector().GetSnapshot().Count(
+            record => record.Level == LogLevel.Error && record.Message.Contains("The coordinated .NET build failed", StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public async Task CancelingOneDiagnosticWaitDoesNotCancelSharedRead()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path,
+            outputHelper);
+        builder.Services.AddLogging(logging => logging.AddFakeLogging());
+        var projectPath = CreateProject(workspace.Path, "Worker", "Worker.csproj");
+        var project = builder.AddDotnetProject("worker", projectPath, options => options.ExcludeLaunchProfile = true);
+        await using var app = builder.Build();
+        await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
+
+        var buildResource = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
+        var completion = Assert.Single(project.Resource.Annotations.OfType<DotnetProgramBuildCompletionAnnotation>());
+        const string error = "Worker.cs(1,1): error CS0103: Shared build failure.";
+        var output = Channel.CreateUnbounded<IReadOnlyList<LogEntry>>();
+        output.Writer.TryWrite([LogEntry.Create(timestamp: null, error, isErrorMessage: false)]);
+        var readStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var readCount = 0;
+        app.Services.GetRequiredService<ResourceLoggerService>().SetConsoleLogsService(
+            new TestConsoleLogsService(_ =>
+            {
+                Interlocked.Increment(ref readCount);
+                readStarted.TrySetResult();
+                return output;
+            }));
+        await app.ResourceNotifications.PublishUpdateAsync(
+            buildResource,
+            snapshot => snapshot with { State = KnownResourceStates.Finished, ExitCode = 1 });
+
+        using var canceled = new CancellationTokenSource();
+        try
+        {
+            var canceledWait = completion.Callback(app.Services, canceled.Token);
+            await readStarted.Task.WaitAsync(TestConstants.LongTimeoutTimeSpan, TestContext.Current.CancellationToken);
+            var firstWait = completion.Callback(app.Services, TestContext.Current.CancellationToken);
+            var secondWait = completion.Callback(app.Services, TestContext.Current.CancellationToken);
+            canceled.Cancel();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => canceledWait);
+            Assert.False(firstWait.IsCompleted);
+            Assert.False(secondWait.IsCompleted);
+
+            output.Writer.Complete();
+            var failures = await Task.WhenAll(
+                Assert.ThrowsAsync<DistributedApplicationException>(() => firstWait),
+                Assert.ThrowsAsync<DistributedApplicationException>(() => secondWait));
+            Assert.All(failures, failure => Assert.Contains(error, failure.Message));
+            Assert.Equal(1, Volatile.Read(ref readCount));
+            Assert.Single(app.Services.GetFakeLogCollector().GetSnapshot(),
+                record => record.Level == LogLevel.Error && record.Message.Contains("The coordinated .NET build failed", StringComparison.Ordinal));
+        }
+        finally
+        {
+            output.Writer.TryComplete();
+        }
+    }
+
+    [Fact]
+    public async Task RestartDoesNotReplaceAnInFlightDiagnosticResult()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path,
+            outputHelper);
+        builder.Services.AddLogging(logging => logging.AddFakeLogging());
+        var projectPath = CreateProject(workspace.Path, "Worker", "Worker.csproj");
+        var project = builder.AddDotnetProject("worker", projectPath, options => options.ExcludeLaunchProfile = true);
+        await using var app = builder.Build();
+        await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
+
+        var buildResource = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
+        var completion = Assert.Single(project.Resource.Annotations.OfType<DotnetProgramBuildCompletionAnnotation>());
+        const string firstError = "Worker.cs(1,1): error CS0103: First attempt failed.";
+        const string secondError = "Worker.cs(1,1): error CS0103: Second attempt failed.";
+        var firstOutput = Channel.CreateUnbounded<IReadOnlyList<LogEntry>>();
+        firstOutput.Writer.TryWrite([LogEntry.Create(timestamp: null, firstError, isErrorMessage: false)]);
+        var firstReadStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        app.Services.GetRequiredService<ResourceLoggerService>().SetConsoleLogsService(
+            new TestConsoleLogsService(_ =>
+            {
+                firstReadStarted.TrySetResult();
+                return firstOutput;
+            }));
+        await app.ResourceNotifications.PublishUpdateAsync(
+            buildResource,
+            snapshot => snapshot with { State = KnownResourceStates.Finished, ExitCode = 1 });
+
+        try
+        {
+            var firstWait = completion.Callback(app.Services, TestContext.Current.CancellationToken);
+            await firstReadStarted.Task.WaitAsync(TestConstants.LongTimeoutTimeSpan, TestContext.Current.CancellationToken);
+            await app.ResourceNotifications.PublishUpdateAsync(
+                buildResource,
+                snapshot => snapshot with { State = KnownResourceStates.Starting, ExitCode = null });
+            await builder.Eventing.PublishAsync(
+                new BeforeResourceStartedEvent(buildResource, app.Services),
+                TestContext.Current.CancellationToken);
+            var getReadCount = UseBuildOutput(app, buildResource, secondError);
+            await app.ResourceNotifications.PublishUpdateAsync(
+                buildResource,
+                snapshot => snapshot with { State = KnownResourceStates.Finished, ExitCode = 1 });
+            var second = await Assert.ThrowsAsync<DistributedApplicationException>(() =>
+                completion.Callback(app.Services, TestContext.Current.CancellationToken));
+            firstOutput.Writer.Complete();
+            var first = await Assert.ThrowsAsync<DistributedApplicationException>(() => firstWait);
+
+            Assert.EndsWith(firstError, first.Message);
+            Assert.EndsWith(secondError, second.Message);
+            Assert.Equal(1, getReadCount());
+            Assert.Equal(2, app.Services.GetFakeLogCollector().GetSnapshot().Count(
+                record => record.Level == LogLevel.Error && record.Message.Contains("The coordinated .NET build failed", StringComparison.Ordinal)));
+        }
+        finally
+        {
+            firstOutput.Writer.TryComplete();
+        }
+    }
+
+    [Fact]
+    [RequiresTools(["dotnet"])]
+    public async Task FailedBuildReportsFinalErrorsWithoutLogSubscribers()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var projectPath = CreateBrokenProject(workspace.Path, "COORDINATED_BUILD_MARKER");
+        const string errorMarker = "CoordinatedBuildFailureMarker";
+        File.WriteAllText(
+            Path.Combine(Path.GetDirectoryName(projectPath)!, "Program.cs"),
+            $"System.Console.WriteLine({errorMarker});");
+        using var builder = TestDistributedApplicationBuilder.Create(options =>
+        {
+            options.ProjectDirectory = workspace.Path;
+            options.DisableDashboard = true;
+            options.EnableResourceLogging = false;
+        }).WithResourceCleanUp(true);
+        builder.Services.AddLogging(logging => logging.AddFakeLogging());
+        var project = builder.AddDotnetProject("broken", projectPath, options => options.ExcludeLaunchProfile = true);
+        var buildResource = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
+        await using var app = builder.Build();
+
+        using (var startCts = new CancellationTokenSource(TestConstants.LongTimeoutTimeSpan))
+        {
+            await app.StartAsync(startCts.Token);
+        }
+
+        using (var completionCts = new CancellationTokenSource(TestConstants.LongTimeoutTimeSpan))
+        {
+            var buildEvent = await app.ResourceNotifications.WaitForResourceAsync(
+                buildResource.Name,
+                resourceEvent => DotnetProjectBuildCoordinator.IsSettledBuildSnapshot(resourceEvent.Snapshot),
+                completionCts.Token);
+            Assert.NotEqual(0, buildEvent.Snapshot.ExitCode);
+            var completion = Assert.Single(project.Resource.Annotations.OfType<DotnetProgramBuildCompletionAnnotation>());
+            var failure = await Assert.ThrowsAsync<DistributedApplicationException>(() =>
+                completion.Callback(app.Services, completionCts.Token));
+            Assert.Contains("error CS0103", failure.Message);
+            Assert.Contains(errorMarker, failure.Message);
+            var loggers = app.Services.GetRequiredService<ResourceLoggerService>();
+            Assert.False(loggers.HasActiveSubscribers(buildEvent.ResourceId));
+        }
+
+        Assert.Single(app.Services.GetFakeLogCollector().GetSnapshot(),
+            record => record.Level == LogLevel.Error &&
+                record.Message.Contains("The coordinated .NET build failed", StringComparison.Ordinal) &&
+                record.Message.Contains(errorMarker, StringComparison.Ordinal));
+        using var stopCts = new CancellationTokenSource(TestConstants.LongTimeoutTimeSpan);
+        await app.StopAsync(stopCts.Token);
+    }
+
+    [Fact]
+    public async Task FailedCoordinatedBuildStillFailsDependentWhenBuildOutputIsUnavailable()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path,
+            outputHelper);
+        var projectPath = CreateProject(workspace.Path, "Worker", "Worker.csproj");
+        var project = builder.AddDotnetProject("worker", projectPath, options => options.ExcludeLaunchProfile = true);
+        await using var app = builder.Build();
+        await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
+
+        var buildResource = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
+        app.Services.GetRequiredService<ResourceLoggerService>().SetConsoleLogsService(
+            new TestConsoleLogsService(_ => throw new InvalidOperationException("Console logs are unavailable.")));
+        await app.ResourceNotifications.PublishUpdateAsync(
+            buildResource,
+            snapshot => snapshot with
+            {
+                State = KnownResourceStates.Finished,
+                ExitCode = 1,
+            });
+
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() =>
+            builder.Eventing.PublishAsync(
+                new BeforeResourceStartedEvent(project.Resource, app.Services),
+                TestContext.Current.CancellationToken));
+        Assert.Equal(
+            $"The coordinated .NET build failed with exit code 1. See resource '{buildResource.Name}' for build output.",
+            exception.Message);
+    }
+
+    private static Func<int> UseBuildOutput(DistributedApplication app, IResource buildResource, params string[] lines)
+    {
+        var buildResourceNames = buildResource.GetResolvedResourceNames();
+        var readCount = 0;
+        app.Services.GetRequiredService<ResourceLoggerService>().SetConsoleLogsService(
+            new TestConsoleLogsService(resourceName =>
+            {
+                var channel = Channel.CreateUnbounded<IReadOnlyList<LogEntry>>();
+                if (buildResourceNames.Contains(resourceName))
+                {
+                    Interlocked.Increment(ref readCount);
+                    channel.Writer.TryWrite([.. lines.Select(line => LogEntry.Create(timestamp: null, line, isErrorMessage: false))]);
+                }
+
+                channel.Writer.Complete();
+                return channel;
+            }));
+        return () => Volatile.Read(ref readCount);
     }
 
     [Fact]
@@ -2015,13 +2821,15 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
     public async Task CustomRuntimeWorkingDirectoryDoesNotChangeBuildWorkingDirectory(bool requiresContextSpecificBuild)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
+        // Expected build paths use on-disk spelling, even when the temp root does not (for example c:\ on Windows).
+        var workspaceRoot = PathNormalizer.ResolvePathCasing(workspace.Path);
         using var builder = TestDistributedApplicationBuilder.Create(
-            options => options.ProjectDirectory = workspace.Path,
+            options => options.ProjectDirectory = workspaceRoot,
             outputHelper);
-        var projectPath = CreateProject(workspace.Path, "Worker", "Worker.csproj");
+        var projectPath = CreateProject(workspaceRoot, "Worker", "Worker.csproj");
         var projectDirectory = Path.GetDirectoryName(projectPath)!;
-        var runtimeWorkingDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "runtime")).FullName;
-        var sdkWorkingDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "sdk-runtime")).FullName;
+        var runtimeWorkingDirectory = Directory.CreateDirectory(Path.Combine(workspaceRoot, "runtime")).FullName;
+        var sdkWorkingDirectory = Directory.CreateDirectory(Path.Combine(workspaceRoot, "sdk-runtime")).FullName;
         var project = builder.AddDotnetProject("worker", projectPath, options => options.ExcludeLaunchProfile = true)
             .WithWorkingDirectory(runtimeWorkingDirectory);
         var metadata = Assert.Single(project.Resource.Annotations.OfType<DotnetProjectMetadata>());
@@ -4066,6 +4874,56 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             System.IO.File.WriteAllText(args[0], Shared.SharedValue.Value);
             """);
         return appPath;
+    }
+
+    private static string CreateFileAppPathAlias(string filePath, string pathAlias)
+    {
+        var directory = Path.GetDirectoryName(filePath)!;
+        string aliasPath;
+        if (pathAlias == "symlink")
+        {
+            var linkDirectory = Path.Combine(Path.GetDirectoryName(directory)!, "FileAppAlias");
+            try
+            {
+                Directory.CreateSymbolicLink(linkDirectory, directory);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                Assert.Skip($"Cannot create symbolic links in this environment: {ex.Message}");
+            }
+
+            aliasPath = Path.Combine(linkDirectory, Path.GetFileName(filePath));
+        }
+        else
+        {
+            if (pathAlias is "case" or "normalization" or "case-and-normalization")
+            {
+                Assert.SkipUnless(
+                    OperatingSystem.IsWindows() || OperatingSystem.IsMacOS(),
+                    "Path spelling resolution is only supported on Windows and macOS.");
+            }
+
+            var composedPath = filePath.Normalize(NormalizationForm.FormC);
+            aliasPath = pathAlias switch
+            {
+                "original" => filePath,
+                "case" => Path.Combine(
+                    Path.GetDirectoryName(directory)!,
+                    Path.GetFileName(directory).ToUpperInvariant(),
+                    Path.GetFileName(filePath)),
+                "normalization" => composedPath.Equals(filePath, StringComparison.Ordinal)
+                    ? filePath.Normalize(NormalizationForm.FormD)
+                    : composedPath,
+                "case-and-normalization" => Path.Combine(
+                    Path.GetDirectoryName(directory)!,
+                    Path.GetFileName(directory).ToUpperInvariant().Normalize(NormalizationForm.FormD),
+                    Path.GetFileName(filePath)),
+                _ => throw new ArgumentOutOfRangeException(nameof(pathAlias), pathAlias, "Unknown path alias."),
+            };
+        }
+
+        Assert.SkipUnless(File.Exists(aliasPath), $"The filesystem does not support the '{pathAlias}' file-app alias.");
+        return aliasPath;
     }
 
     private static string GetBuildCountPath(string projectPath) =>

@@ -11,7 +11,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 8px;
+    gap: var(--aspire-space-2);
     padding: 48px 16px;
     color: var(--colorNeutralForeground2);
 }
@@ -43,7 +43,7 @@
 .overview-grid {
     display: grid;
     grid-template-columns: repeat(12, minmax(0, 1fr));
-    gap: 14px;
+    gap: var(--aspire-space-3);
 }
 
 .overview-card {
@@ -52,8 +52,18 @@
     min-width: 0;
     padding: 14px 16px;
     border: 1px solid var(--colorNeutralStroke3);
-    border-radius: 12px;
+    border-radius: var(--aspire-radius-large);
     background: var(--aspire-control-background);
+}
+
+.overview-card[hidden] {
+    display: none;
+}
+
+@media (max-width: 480px) {
+    .overview-panel-selector ::deep .icon-toggle-label {
+        display: none;
+    }
 }
 
 /* Spans are computed per card from its content (see OverviewCardLayout) and passed in as custom properties. */
@@ -61,17 +71,25 @@
     grid-column: span var(--overview-span, 12);
 }
 
-/* Cards keep their height; what doesn't fit scrolls inside them, below the card's header. The tags card isn't
-   sized: it's one line, and its tag picker opens a popup that a clipped card would cut off. */
+/* Grid rows size to their tallest content and stretch the other cards to match. Keep the tags picker unclipped. */
 .overview-grid > .overview-card:not(.overview-tags-card) {
-    height: var(--overview-card-height, auto);
     overflow: hidden;
 }
 
-.overview-grid > .overview-card:not(.overview-tags-card) > :not(.overview-card-header) {
+.overview-grid > .overview-terminal-card {
+    min-height: var(--overview-card-height, 300px);
+}
+
+/* Child-component roots lack this component's scope attribute, so anchor it on the card. */
+.overview-grid > .overview-card:not(.overview-tags-card) ::deep > :not(.overview-card-header) {
     flex-shrink: 1;
     min-height: 0;
     overflow: auto;
+}
+
+/* Cap the scrollable content, not the card, so different card limits don't leave uneven row bottoms. */
+.overview-grid > .overview-card:not(.overview-tags-card):not(.overview-terminal-card) ::deep > :not(.overview-card-header) {
+    max-height: var(--overview-card-height, none);
 }
 
 .overview-card-empty .overview-empty {
@@ -99,7 +117,7 @@
     flex-direction: row;
     flex-wrap: wrap;
     align-items: center;
-    gap: 8px 16px;
+    gap: var(--aspire-space-2) var(--aspire-space-4);
     padding-block: 10px;
 }
 
@@ -110,31 +128,31 @@
 .overview-card-header {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--aspire-space-2);
     margin-bottom: 10px;
 }
 
 .overview-card-header h2 {
     margin: 0;
-    font-size: 13px;
-    font-weight: 600;
+    font-size: var(--aspire-font-size-body);
+    font-weight: var(--aspire-font-weight-semibold);
     /* Headings inherit a 40px line height from the global styles, which is too tall for a card header. */
     line-height: 20px;
 }
 
 .overview-card-count {
     padding: 0 6px;
-    border-radius: 8px;
+    border-radius: var(--aspire-radius-medium);
     background: var(--colorNeutralBackground3);
     color: var(--colorNeutralForeground2);
-    font-size: 11px;
-    font-weight: 600;
+    font-size: var(--aspire-font-size-caption);
+    font-weight: var(--aspire-font-weight-semibold);
 }
 
 .overview-card-link {
     margin-inline-start: auto;
     color: var(--colorBrandForegroundLink);
-    font-size: 12.5px;
+    font-size: var(--aspire-font-size-body);
     text-decoration: none;
 }
 
@@ -155,7 +173,7 @@
     height: 26px;
     padding: 0;
     border: 1px solid var(--colorNeutralStroke1);
-    border-radius: 6px;
+    border-radius: var(--aspire-radius-small);
     background: var(--colorNeutralBackground1);
 }
 
@@ -175,7 +193,7 @@
 .overview-card-actions {
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: var(--aspire-space-1);
     margin-inline-start: auto;
 }
 
@@ -188,7 +206,7 @@
 .overview-show-more {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: var(--aspire-space-1);
     width: 100%;
     margin-top: 2px;
     padding: 6px 0;
@@ -196,7 +214,7 @@
     background: transparent;
     color: var(--colorBrandForegroundLink);
     font: inherit;
-    font-size: 12.5px;
+    font-size: var(--aspire-font-size-body);
     text-align: start;
     cursor: pointer;
 }
@@ -208,22 +226,22 @@
 .overview-show-more:focus-visible {
     outline: 2px solid var(--colorStrokeFocus2);
     outline-offset: 2px;
-    border-radius: 4px;
+    border-radius: var(--aspire-radius-small);
 }
 
 .overview-badge {
     flex: 0 0 auto;
     padding: 0 6px;
-    border-radius: 8px;
+    border-radius: var(--aspire-radius-medium);
     background: var(--colorNeutralBackground3);
     color: var(--colorNeutralForeground2);
-    font-size: 11px;
+    font-size: var(--aspire-font-size-caption);
 }
 
 .overview-badge.overview-volume-type {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    gap: var(--aspire-space-1);
 }
 
 .overview-muted {
@@ -232,7 +250,7 @@
 
 /* Match the density of the other card lists, and align the first column with the card header. */
 .overview-card ::deep .overview-property-grid td {
-    font-size: 12.5px;
+    font-size: var(--aspire-font-size-body);
 }
 
 .overview-card ::deep .overview-property-grid td:first-child {
@@ -248,10 +266,10 @@
 .overview-console-paused {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: var(--aspire-space-1);
     margin-top: 8px;
     color: var(--colorNeutralForeground2);
-    font-size: 12px;
+    font-size: var(--aspire-font-size-secondary);
 }
 
 .overview-empty {
@@ -260,19 +278,22 @@
     flex: 1 1 auto;
     min-height: 40px;
     color: var(--colorNeutralForeground2);
-    font-size: 12.5px;
+    font-size: var(--aspire-font-size-body);
 }
 
 .overview-properties {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr);
-    gap: 6px 14px;
+    gap: var(--aspire-space-1) var(--aspire-space-3);
     margin: 0;
-    font-size: 13px;
+    font-size: var(--aspire-font-size-body);
 }
 
+/* Labels are regular weight in the secondary grey, so the values beside them are what stands out. Fluent's reboot
+   stylesheet makes <dt> bold. */
 .overview-properties dt {
-    color: var(--colorNeutralForeground2);
+    color: var(--colorNeutralForeground3);
+    font-weight: var(--aspire-font-weight-regular);
 }
 
 .overview-properties dd {
@@ -285,18 +306,18 @@
 
 .overview-mono {
     font-family: var(--aspire-font-mono);
-    font-size: 12px;
+    font-size: var(--aspire-font-size-secondary);
 }
 
 .overview-error-text {
     color: var(--error);
-    font-weight: 600;
+    font-weight: var(--aspire-font-weight-semibold);
 }
 
 .overview-state {
     display: inline-flex;
     align-items: center;
-    gap: 5px;
+    gap: var(--aspire-space-1);
 }
 
 /* Status colors don't reach text contrast on every theme, so only the icon carries the state color. */
@@ -324,11 +345,11 @@
 .overview-list li {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--aspire-space-2);
     min-width: 0;
     padding: 6px 0;
     border-top: 1px solid var(--colorNeutralStroke3);
-    font-size: 12.5px;
+    font-size: var(--aspire-font-size-body);
 }
 
 .overview-list li:first-child {
@@ -356,7 +377,7 @@
     height: 20px;
     padding: 0;
     border: 1px solid var(--colorNeutralStroke1);
-    border-radius: 5px;
+    border-radius: var(--aspire-radius-small);
     background: var(--colorNeutralBackground1);
 }
 
@@ -389,29 +410,43 @@ a.overview-list-value:hover {
     font-variant-numeric: tabular-nums;
 }
 
-/* When a row has supplementary ghost text, the primary link keeps its natural width instead of growing to fill
-   the row, leaving the spare space for the ghost text. */
-.overview-list-value:has(+ .overview-list-ghost) {
-    flex: 0 1 auto;
+.overview-list .overview-endpoint {
+    align-items: flex-start;
 }
 
-/* Supplementary url text (e.g. the internal address of an endpoint already shown as the row's primary link).
-   It takes whatever room the primary link doesn't need, truncating/disappearing first as the card narrows so it
-   never forces the primary link to truncate. */
-.overview-list-ghost {
-    flex: 1 1 0;
+.overview-endpoint-addresses {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: var(--aspire-space-1);
     min-width: 0;
+}
+
+.overview-endpoint-address {
     overflow: hidden;
-    color: var(--colorNeutralForeground3);
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.overview-endpoint-name {
+    color: var(--colorNeutralForeground1);
+    overflow-wrap: anywhere;
+}
+
+a.overview-endpoint-address {
+    color: var(--colorBrandForegroundLink);
+    text-decoration: none;
+}
+
+a.overview-endpoint-address:hover {
+    text-decoration: underline;
 }
 
 .overview-level {
     flex: 0 0 auto;
     min-width: 58px;
-    font-size: 11.5px;
-    font-weight: 600;
+    font-size: var(--aspire-font-size-secondary);
+    font-weight: var(--aspire-font-weight-semibold);
 }
 
 .overview-level.error {
@@ -451,14 +486,14 @@ a.overview-stat:hover .overview-stat-label {
 
 .overview-stat-value {
     font-family: var(--aspire-font-display);
-    font-size: 22px;
+    font-size: var(--aspire-font-size-title);
     line-height: 1.15;
     font-variant-numeric: tabular-nums;
 }
 
 .overview-stat-label {
     color: var(--colorNeutralForeground2);
-    font-size: 11.5px;
+    font-size: var(--aspire-font-size-secondary);
 }
 
 .overview-stat.warning .overview-stat-value {
@@ -474,16 +509,17 @@ a.overview-stat:hover .overview-stat-label {
     flex: 1 1 auto;
     overflow: hidden;
     padding: 8px 10px;
-    border-radius: 8px;
+    border-radius: var(--aspire-radius-medium);
     background: var(--console-background-color, #1b1b1b);
     color: var(--console-foreground-color, #e6e6e6);
     font-family: var(--aspire-font-mono);
-    font-size: 11.5px;
+    font-size: var(--aspire-font-size-secondary);
     line-height: 1.6;
 }
 
 .overview-terminal {
-    flex: 1 1 auto;
+    /* A terminal's canvas must not determine its row height; it fills the row's stable minimum viewport. */
+    flex: 1 1 0;
     min-height: 0;
     overflow: hidden;
     background: var(--terminal-background, var(--colorNeutralBackground1));
@@ -500,7 +536,7 @@ a.overview-stat:hover .overview-stat-label {
 }
 
 .overview-terminal ::deep .terminal-focus-hint {
-    font-size: 11.5px;
+    font-size: var(--aspire-font-size-secondary);
 }
 
 .overview-console-line {
@@ -525,14 +561,14 @@ a.overview-stat:hover .overview-stat-label {
 /* Metric instruments are compact tiles that flow into as many columns as the card width allows. */
 .overview-metrics-empty {
     flex-wrap: wrap;
-    gap: 4px 8px;
+    gap: var(--aspire-space-1) var(--aspire-space-2);
 }
 
 /* ::deep so these also style the live tiles rendered by the LiveMetricTiles component. */
 ::deep .overview-metric-tiles {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-    gap: 8px;
+    gap: var(--aspire-space-2);
     margin: 0;
     padding: 0;
     list-style: none;
@@ -545,7 +581,7 @@ a.overview-stat:hover .overview-stat-label {
     min-width: 0;
     padding: 8px 10px;
     border: 1px solid var(--colorNeutralStroke3);
-    border-radius: 8px;
+    border-radius: var(--aspire-radius-medium);
     color: inherit;
     text-decoration: none;
 }
@@ -563,23 +599,23 @@ a.overview-stat:hover .overview-stat-label {
 
 ::deep .overview-metric-name {
     color: var(--colorBrandForegroundLink);
-    font-size: 12.5px;
+    font-size: var(--aspire-font-size-body);
 }
 
 .overview-selection-groups {
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: var(--aspire-space-5);
 }
 
 .overview-selection-group-title {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--aspire-space-2);
     margin: 0 0 10px;
     color: var(--colorNeutralForeground2);
-    font-size: 12px;
-    font-weight: 600;
+    font-size: var(--aspire-font-size-secondary);
+    font-weight: var(--aspire-font-weight-semibold);
     line-height: 20px;
     text-transform: uppercase;
     letter-spacing: 0.04em;
@@ -589,7 +625,7 @@ a.overview-stat:hover .overview-stat-label {
 .overview-selection-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 12px;
+    gap: var(--aspire-space-3);
 }
 
 .overview-selection-item {
@@ -599,14 +635,14 @@ a.overview-stat:hover .overview-stat-label {
 
 .overview-selection-card {
     flex: 1 1 auto;
-    gap: 6px;
+    gap: var(--aspire-space-1);
     padding: 12px 14px;
 }
 
 .overview-selection-card-header {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--aspire-space-2);
     min-width: 0;
 }
 
@@ -615,8 +651,8 @@ a.overview-stat:hover .overview-stat-label {
     min-width: 0;
     overflow: hidden;
     color: var(--colorNeutralForeground1);
-    font-size: 14px;
-    font-weight: 600;
+    font-size: var(--aspire-font-size-body);
+    font-weight: var(--aspire-font-weight-semibold);
     text-decoration: none;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -629,17 +665,17 @@ a.overview-selection-card-title:hover {
 .overview-selection-meta {
     display: flex;
     flex-wrap: wrap;
-    gap: 4px 12px;
+    gap: var(--aspire-space-1) var(--aspire-space-3);
     min-height: 18px;
     padding-inline-start: 28px;
     color: var(--colorNeutralForeground2);
-    font-size: 12px;
+    font-size: var(--aspire-font-size-secondary);
 }
 
 .overview-selection-footer {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--aspire-space-2);
     min-width: 0;
     margin-top: auto;
     padding-top: 8px;
@@ -650,9 +686,9 @@ a.overview-selection-card-title:hover {
     display: flex;
     flex: 1 1 auto;
     align-items: center;
-    gap: 6px;
+    gap: var(--aspire-space-1);
     min-width: 0;
-    font-size: 12.5px;
+    font-size: var(--aspire-font-size-body);
 }
 
 .overview-selection-url > a,
@@ -675,7 +711,7 @@ a.overview-selection-card-title:hover {
 .overview-selection-actions {
     display: flex;
     flex: 0 0 auto;
-    gap: 4px;
+    gap: var(--aspire-space-1);
 }
 
 .overview-selection-action {
@@ -686,7 +722,7 @@ a.overview-selection-card-title:hover {
     width: 28px;
     height: 28px;
     border: 1px solid var(--colorNeutralStroke1);
-    border-radius: 6px;
+    border-radius: var(--aspire-radius-small);
     background: var(--colorNeutralBackground1);
     color: var(--colorBrandForeground1);
 }
@@ -707,11 +743,11 @@ a.overview-selection-card-title:hover {
     right: -6px;
     min-width: 16px;
     padding: 0 4px;
-    border-radius: 8px;
+    border-radius: var(--aspire-radius-medium);
     background: var(--error);
     color: var(--colorNeutralForegroundOnBrand, #fff);
-    font-size: 10.5px;
-    font-weight: 600;
+    font-size: var(--aspire-font-size-caption);
+    font-weight: var(--aspire-font-weight-semibold);
     line-height: 16px;
     text-align: center;
 }

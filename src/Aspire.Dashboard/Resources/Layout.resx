@@ -225,6 +225,22 @@
   <data name="DashboardRunSelectCurrent" xml:space="preserve">
     <value>Live view</value>
   </data>
+  <data name="ResourceStartedAgeNow" xml:space="preserve">
+    <value>now</value>
+    <comment>Short relative start time shown in a resource row, for a resource started less than a minute ago</comment>
+  </data>
+  <data name="ResourceStartedAgeMinutes" xml:space="preserve">
+    <value>{0}m ago</value>
+    <comment>Short relative start time shown in a resource row. {0} is the number of minutes</comment>
+  </data>
+  <data name="ResourceStartedAgeHours" xml:space="preserve">
+    <value>{0}h ago</value>
+    <comment>Short relative start time shown in a resource row. {0} is the number of hours</comment>
+  </data>
+  <data name="ResourceStartedAgeDays" xml:space="preserve">
+    <value>{0}d ago</value>
+    <comment>Short relative start time shown in a resource row. {0} is the number of days</comment>
+  </data>
   <data name="DashboardRunSelectMomentAgo" xml:space="preserve">
     <value>a moment ago</value>
   </data>
@@ -309,12 +325,6 @@
   <data name="ResourcePaneResourceActions" xml:space="preserve">
     <value>Actions for {0}</value>
   </data>
-  <data name="ResourcePaneSelectAll" xml:space="preserve">
-    <value>Select all</value>
-  </data>
-  <data name="ResourcePaneAllSelected" xml:space="preserve">
-    <value>All selected</value>
-  </data>
   <data name="ResourcePaneUnviewedErrors" xml:space="preserve">
     <value>{0} unviewed error logs</value>
   </data>
@@ -342,8 +352,20 @@
   <data name="ResourceHeaderStarted" xml:space="preserve">
     <value>Started</value>
   </data>
+  <data name="ResourceHeaderStopped" xml:space="preserve">
+    <value>Stopped</value>
+    <comment>Precedes how long ago a stopped resource stopped, such as "Stopped 1 minute ago".</comment>
+  </data>
+  <data name="ResourcePaneNestedCount" xml:space="preserve">
+    <value>Nested resources: {0}</value>
+    <comment>{0} is the number of resources nested under a collapsed resource in the resource list.</comment>
+  </data>
   <data name="ResourceHeaderNotFound" xml:space="preserve">
     <value>Resource not found</value>
+  </data>
+  <data name="ResourceHeaderShowReplacement" xml:space="preserve">
+    <value>Show {0}</value>
+    <comment>{0} is a resource's name. Links from a replica that was replaced, such as after a restart, to the replicas of the same resource that run now.</comment>
   </data>
   <data name="ResourceHeaderAllResources" xml:space="preserve">
     <value>All resources</value>
@@ -372,26 +394,35 @@
   <data name="ResourcePaneFilterReset" xml:space="preserve">
     <value>Reset</value>
   </data>
-  <data name="ResourcePaneKindShow" xml:space="preserve">
-    <value>Select to show {0}</value>
-  </data>
-  <data name="ResourcePaneKindHide" xml:space="preserve">
-    <value>Select to hide {0}</value>
-  </data>
-  <data name="ResourcePaneNoKindsHint" xml:space="preserve">
-    <value>Turn on a type above to list it.</value>
-  </data>
-  <data name="ResourcePaneNoKindsShown" xml:space="preserve">
-    <value>Nothing shown</value>
-  </data>
-  <data name="ResourcePaneKindsLandmark" xml:space="preserve">
-    <value>Types to show</value>
-  </data>
   <data name="ResourceTabsMore" xml:space="preserve">
     <value>More views</value>
   </data>
   <data name="ResourceTabUnavailable" xml:space="preserve">
     <value>Not available for this resource</value>
+  </data>
+  <data name="ResourcePaneNoStructuredLogs" xml:space="preserve">
+    <value>No structured logs are currently available for this resource. Select to open its logs view.</value>
+  </data>
+  <data name="ResourcePaneNoTraces" xml:space="preserve">
+    <value>No traces are currently available for this resource. Select to open its traces view.</value>
+  </data>
+  <data name="ResourcePaneNoMetrics" xml:space="preserve">
+    <value>No metrics are currently available for this resource. Select to open its metrics view.</value>
+  </data>
+  <data name="ResourcePaneParameterNoConsoleLogs" xml:space="preserve">
+    <value>Parameters do not produce console logs. Select to view this parameter's overview.</value>
+  </data>
+  <data name="ResourcePaneParameterNoStructuredLogs" xml:space="preserve">
+    <value>Parameters do not produce structured logs. Select to view this parameter's overview.</value>
+  </data>
+  <data name="ResourcePaneParameterNoTraces" xml:space="preserve">
+    <value>Parameters do not produce traces. Select to view this parameter's overview.</value>
+  </data>
+  <data name="ResourcePaneParameterNoMetrics" xml:space="preserve">
+    <value>Parameters do not produce metrics. Select to view this parameter's overview.</value>
+  </data>
+  <data name="ResourcePaneParameterNoTerminal" xml:space="preserve">
+    <value>Parameters do not support terminal sessions. Select to view this parameter's overview.</value>
   </data>
   <data name="ResourceTabOverview" xml:space="preserve">
     <value>Overview</value>
@@ -439,9 +470,6 @@
   <data name="ResourcePaneReorderUnavailable" xml:space="preserve">
     <value>Clear search, filters and grouping, and move resources within the same parent.</value>
   </data>
-  <data name="ResourcePaneReorderFailed" xml:space="preserve">
-    <value>Unable to save the resource order. Try again.</value>
-  </data>
   <data name="ResourcePaneMovedBefore" xml:space="preserve">
     <value>{0} moved before {1}.</value>
     <comment>{0} is the moved resource name; {1} is the target resource name.</comment>
@@ -453,13 +481,74 @@
   <data name="ResourcePaneGroupReorderUnavailable" xml:space="preserve">
     <value>Clear search and filters, and try reordering groups again.</value>
   </data>
-  <data name="ResourcePaneGroupReorderFailed" xml:space="preserve">
-    <value>Unable to save the group order. Try again.</value>
-  </data>
   <data name="NavMenuToggleExpand" xml:space="preserve">
     <value>Expand navigation labels</value>
   </data>
   <data name="NavMenuToggleCollapse" xml:space="preserve">
     <value>Collapse navigation to icons</value>
+  </data>
+  <data name="ResourcePaneChildOf" xml:space="preserve">
+    <value>Child of {0}</value>
+    <comment>{0} is the parent resource name. This is hierarchy, not a dependency.</comment>
+  </data>
+  <data name="ResourcePaneDependsOn" xml:space="preserve">
+    <value>Depends on {0}</value>
+    <comment>{0} lists logical resource names that this resource waits for.</comment>
+  </data>
+  <data name="ResourcePaneReferences" xml:space="preserve">
+    <value>References {0}</value>
+    <comment>{0} lists logical resource names referenced by this resource. A reference does not imply waiting for startup.</comment>
+  </data>
+  <data name="ResourcePaneActivityCount" xml:space="preserve">
+    <value>{0} incoming</value>
+  </data>
+  <data name="ResourcePaneActivityFailures" xml:space="preserve">
+    <value>{0} failed</value>
+  </data>
+  <data name="ResourcePaneActivityP95" xml:space="preserve">
+    <value>p95 {0}</value>
+  </data>
+  <data name="ResourcePaneActivitySampledCount" xml:space="preserve">
+    <value>{0}+ incoming</value>
+  </data>
+  <data name="ResourcePaneActivitySampledFailures" xml:space="preserve">
+    <value>{0}+ failed</value>
+  </data>
+  <data name="ResourcePaneActivitySampledP95" xml:space="preserve">
+    <value>Sample p95 {0}</value>
+  </data>
+  <data name="ResourcePaneActivityContext" xml:space="preserve">
+    <value>{0}: incoming server and consumer spans in the last 5 minutes ({1} to {2}). Latest span started {3}. Refreshed {4}. Open this resource's traces with the same time window. Trace counts and span kinds can differ.</value>
+    <comment>{0} is the resource name, {1}-{2} the measured window, {3} the latest span start and {4} the refresh time.</comment>
+  </data>
+  <data name="ResourcePaneActivitySampled" xml:space="preserve">
+    <value>Only the newest 5,000 incoming spans across resources were sampled. Counts are minimums and p95 describes this sample.</value>
+  </data>
+  <data name="ResourcePaneActivitySamples" xml:space="preserve">
+    <value>{0} valid duration samples. P95 appears after at least 20 samples.</value>
+  </data>
+  <data name="ResourcePaneSelectionAddHint" xml:space="preserve">
+    <value>Add/remove</value>
+  </data>
+  <data name="ResourcePaneSelectionRangeHint" xml:space="preserve">
+    <value>Select range</value>
+  </data>
+  <data name="ResourcePaneSelectionControlChord" xml:space="preserve">
+    <value>Ctrl + click</value>
+    <comment>Resource selection gesture, displayed in a keycap.</comment>
+  </data>
+  <data name="ResourcePaneSelectionCommandChord" xml:space="preserve">
+    <value>⌘ + click</value>
+    <comment>Resource selection gesture, displayed in a keycap. The symbol refers to the macOS Command key.</comment>
+  </data>
+  <data name="ResourcePaneSelectionRangeChord" xml:space="preserve">
+    <value>Shift + click</value>
+    <comment>Resource range selection gesture, displayed in a keycap.</comment>
+  </data>
+  <data name="ResourcePaneSelectionControlDescription" xml:space="preserve">
+    <value>To add or remove a resource, hold Control while clicking. To select a range, hold Shift while clicking.</value>
+  </data>
+  <data name="ResourcePaneSelectionCommandDescription" xml:space="preserve">
+    <value>To add or remove a resource, hold Command while clicking. To select a range, hold Shift while clicking.</value>
   </data>
 </root>

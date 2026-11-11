@@ -1,0 +1,1 @@
+BREAK capability-return-type-changed Aspire.Hosting.Radius Aspire.Hosting.Radius/withContainerImage -- https://github.com/microsoft/aspire/issues/21803 -- Generalized the retained capability to IDotnetProgramResource while preserving the concrete fluent API for legacy and modern .NET resources.

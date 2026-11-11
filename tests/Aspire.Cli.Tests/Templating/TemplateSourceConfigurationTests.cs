@@ -62,6 +62,10 @@ public class TemplateSourceConfigurationTests(ITestOutputHelper outputHelper)
     [InlineData("""{"repository":"http://example.test/repo"}""", "templateSources.example.repository")]
     [InlineData("""{"repository":"https://example.test/repo","ref":42}""", "templateSources.example.ref")]
     [InlineData("""{"repository":"https://example.test/repo","path":"../escape"}""", "templateSources.example.path")]
+    [InlineData("""{"repository":"https://example.test/repo","displayName":42}""", "templateSources.example.displayName")]
+    [InlineData("""{"repository":"https://example.test/repo","displayName":false}""", "templateSources.example.displayName")]
+    [InlineData("""{"repository":"https://example.test/repo","displayName":{}}""", "templateSources.example.displayName")]
+    [InlineData("""{"repository":"https://example.test/repo","displayName":"Team\nTemplates"}""", "templateSources.example.displayName")]
     public void ParseRejectsInvalidCompleteSourceWithSettingPath(string json, string settingPath)
     {
         using var document = JsonDocument.Parse(json);
@@ -107,9 +111,28 @@ public class TemplateSourceConfigurationTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
+    [InlineData(null, null)]
+    [InlineData("", null)]
+    [InlineData(" ", null)]
+    [InlineData("Company [templates]", "Company [templates]")]
+    public void ParsePreservesOptionalDisplayNameWithoutChangingLocation(string? displayName, string? expected)
+    {
+        using var document = JsonDocument.Parse(JsonSerializer.Serialize(new
+        {
+            repository = "https://example.test/repo",
+            DisplayName = displayName
+        }));
+
+        var source = TemplateSourceConfiguration.Parse(document.RootElement, "templateSources.example", requireComplete: true);
+
+        Assert.Equal(expected, source.DisplayName);
+        Assert.Equal(new TemplateSource(".", "https://example.test/repo", null), source.Template);
+    }
+
+    [Theory]
     [InlineData("")]
     [InlineData(" ")]
-    [InlineData("name.with.dots")]
+    [InlineData(".leading.dot")]
     [InlineData("name:with:colons")]
     [InlineData("name\n")]
     public void ValidateNameRejectsAmbiguousConfigKeys(string name) =>

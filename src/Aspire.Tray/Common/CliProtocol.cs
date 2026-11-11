@@ -51,6 +51,7 @@ internal static class CliProtocol
                     "healthy" => AppHostHealth.Healthy,
                     "warning" => AppHostHealth.Warning,
                     "unhealthy" => AppHostHealth.Unhealthy,
+                    "no_resources" => AppHostHealth.NoResources,
                     _ => AppHostHealth.Unknown
                 }
             };

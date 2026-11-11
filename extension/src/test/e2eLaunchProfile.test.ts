@@ -703,7 +703,7 @@ suite('E2E launch profile', () => {
         const uploadStepIndex = workflow.indexOf('- name: Upload E2E diagnostics');
         const debuggerPrerequisiteStep = workflow.slice(debuggerPrerequisitesIndex, azureFunctionsPrerequisitesIndex);
         const azureFunctionsPrerequisiteStep = workflow.slice(azureFunctionsPrerequisitesIndex, workflow.indexOf('\n      - name:', azureFunctionsPrerequisitesIndex));
-        const runStep = workflow.slice(runStepIndex, uploadStepIndex);
+        const runStep = workflow.slice(runStepIndex, workflow.indexOf('\n      - name:', runStepIndex + 1));
         const uploadStep = workflow.slice(uploadStepIndex, workflow.indexOf('\n      - name:', uploadStepIndex + 1));
         const csharpVersion = /csharp\/([^/]+)\/vspackage\?targetPlatform=linux-x64/.exec(debuggerPrerequisiteStep)?.[1];
         const minimumCsharpVersion = '2.145.15-prerelease';
@@ -1380,7 +1380,9 @@ builder.Build().Run();
         assert.ok(runner.includes('<WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>'));
         assert.ok(runner.includes('<PackageReference Include="Microsoft.WindowsAppSDK" Version="1.8.260209005" />'));
         assert.ok(runner.includes('<PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.7175" />'));
-        assert.ok(runner.includes('File.WriteAllText(readyFile, $"ready:{Environment.ProcessId}");'));
+        assert.ok(runner.includes('File.WriteAllText(pendingReadyFile, $"ready:{Environment.ProcessId}");'));
+        assert.ok(runner.includes('File.Move(pendingReadyFile, readyFile, overwrite: true);'));
+        assert.ok(!runner.includes('File.WriteAllText(readyFile,'));
         assert.ok(spec.includes('this.timeout(1_200_000);'));
         assert.ok(spec.includes("const symbol = 'InitializeComponent';"));
         assert.ok(spec.includes("name: 'getDefinitions'"));
@@ -2185,6 +2187,43 @@ builder.Build().Run();
         const workspaceCollision = getTestBlock(workspaceTargetProofSource, 'reopens the project folder picker after a colliding selection');
         assert.ok(!workspaceCollision.includes('await openAspireView();'));
         assert.ok(workspaceCollision.includes('await waitForRepositoryIdle();'));
+    });
+
+    test('keeps the debugger install hint fixture under the run root and defers its deletion to the runner', () => {
+        // The fixture AppHost starts DCP with --detach in its directory, and DCP can outlive a
+        // successful `aspire stop`. Deleting that directory inside the VS Code session failed with
+        // EBUSY on Windows, so run-e2e.js owns the deletion after the session's processes exit.
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const edgeCasesSource = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'edgeCases.e2e.test.ts'), 'utf8');
+        const fixtures = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'fixtures.ts'), 'utf8');
+        const hintTest = getTestBlock(edgeCasesSource, 'shows debugger install guidance while the Aspire panel and AppHost source are closed');
+
+        assert.ok(fixtures.includes('export async function createEmptyAppHostProject(projectName: string, outputPath = getGeneratedProjectRoot(projectName)): Promise<string>'));
+        assert.ok(hintTest.includes("const projectRoot = path.join(runRoot, `.e2e-debugger-install-hint-${++debuggerInstallHintFixtureIndex}`, 'DebuggerInstallHintApp');"));
+        assert.ok(hintTest.includes("await createEmptyAppHostProject('DebuggerInstallHintApp', projectRoot);"));
+        assert.ok(!hintTest.includes('getGeneratedAppHostPath('));
+        assert.ok(!hintTest.includes('getGeneratedProjectRoot('));
+        assert.ok(edgeCasesSource.includes('() => debuggerInstallHintAppHostPath ? stopAppHostIfRunning(debuggerInstallHintAppHostPath) : undefined,'));
+        assert.ok(!edgeCasesSource.includes('removeGeneratedProject('));
+        assert.ok(!/removePath\([^)]*debuggerInstallHint/.test(edgeCasesSource));
+        assert.ok(!/fs\.rm(Sync)?\([^)]*(debuggerInstallHint|projectRoot)/.test(edgeCasesSource));
+    });
+
+    test('waits for CLI-independent settings command outcomes instead of the control apply timeout', () => {
+        // The first Settings editor open can exceed the 10s control apply wait on Windows CI; the
+        // command outcome wait has the budget for completion.
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const edgeCasesSource = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'edgeCases.e2e.test.ts'), 'utf8');
+        const settingsTest = getTestBlock(edgeCasesSource, 'keeps CLI-independent settings commands available when the CLI is unavailable');
+
+        for (const commandId of ['aspire-vscode.settings', 'aspire-vscode.configureLaunchJson']) {
+            assert.ok(
+                settingsTest.includes(`await executeE2eControlCommand({ name: 'executeAspireCommand', commandId: '${commandId}' }, { waitFor: 'started' });`),
+                `${commandId} must be dispatched with waitFor 'started'.`);
+            assert.ok(
+                new RegExp(`await waitForCommandOutcome\\('${commandId.replace(/\./g, '\\.')}', 'success', 60000, \\w+\\);`).test(settingsTest),
+                `${commandId} must assert a successful command outcome.`);
+        }
     });
 
     test('uses integrated-browser webview text instead of editor title waits', () => {

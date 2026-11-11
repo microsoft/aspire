@@ -16,7 +16,7 @@ func main() {
 		WithPurgeTask("0 1 * * *", &aspire.WithPurgeTaskOptions{
 			Filter:   aspire.StringPtr("samples:*"),
 			Ago:      aspire.Float64Ptr(7),
-			Keep:     aspire.Float64Ptr(5),
+			Keep:     aspire.IntPtr(5),
 			TaskName: aspire.StringPtr("purge-samples"),
 		})
 	_ = registry.ConfigureInfrastructure(func(infrastructure aspire.AzureResourceInfrastructure) {
@@ -41,7 +41,7 @@ func main() {
 	registryFromEnvironment.WithPurgeTask("0 2 * * *", &aspire.WithPurgeTaskOptions{
 		Filter: aspire.StringPtr("environment:*"),
 		Ago:    aspire.Float64Ptr(14),
-		Keep:   aspire.Float64Ptr(2),
+		Keep:   aspire.IntPtr(2),
 	})
 	if err = registryFromEnvironment.Err(); err != nil {
 		log.Fatal(aspire.FormatError(err))

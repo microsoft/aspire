@@ -496,7 +496,7 @@ public class CompletionShellTests(ITestOutputHelper testOutput)
     public async Task InstallCompletions_UnsafeSecondBashProfileDoesNotModifyFirst()
     {
         using var env = new TestEnvironment();
-        var cli = CreateFakeCli(env.MockHome);
+        var cli = await CreateFakeCliAsync(env.MockHome);
         var bashrc = Path.Combine(env.MockHome, ".bashrc");
         var outside = Path.Combine(env.TempDirectory, "outside-profile");
         File.WriteAllText(bashrc, "# existing bashrc");
@@ -519,7 +519,7 @@ public class CompletionShellTests(ITestOutputHelper testOutput)
     public async Task InstallCompletions_CrLfProfilesDoNotAccumulateRegistrations()
     {
         using var env = new TestEnvironment();
-        var cli = CreateFakeCli(env.MockHome);
+        var cli = await CreateFakeCliAsync(env.MockHome);
         var invocation = $"SHELL=/bin/bash; install_completions '{Quote(cli)}' true";
         using (var command = new ScriptFunctionCommand(ScriptPaths.ReleaseShell, invocation, env, testOutput))
         {
@@ -628,7 +628,7 @@ public class CompletionShellTests(ITestOutputHelper testOutput)
         using var env = new TestEnvironment();
         var home = Path.Combine(env.MockHome, "it's $home ` [test]");
         Directory.CreateDirectory(home);
-        var cli = CreateFakeCli(home);
+        var cli = await CreateFakeCliAsync(home);
         var profile = shell switch
         {
             "zsh" => Path.Combine(home, "z dot", ".zshrc"),
@@ -694,7 +694,7 @@ public class CompletionShellTests(ITestOutputHelper testOutput)
     public async Task InstallCompletions_UnsuccessfulOrOptedOut_PreservesExistingFiles(bool dogfood, string mode, bool outsideHome)
     {
         using var env = new TestEnvironment();
-        var cli = CreateFakeCli(outsideHome ? Path.Combine(env.TempDirectory, "custom install") : env.MockHome);
+        var cli = await CreateFakeCliAsync(outsideHome ? Path.Combine(env.TempDirectory, "custom install") : env.MockHome);
         var completion = Path.Combine(dogfood || outsideHome ? Path.GetDirectoryName(cli)! : Path.Combine(env.MockHome, ".aspire"), "completions", "aspire.bash");
         Directory.CreateDirectory(Path.GetDirectoryName(completion)!);
         File.WriteAllText(completion, "# working completions");
@@ -732,7 +732,7 @@ public class CompletionShellTests(ITestOutputHelper testOutput)
     {
         using var env = new TestEnvironment();
         var installRoot = Path.Combine(env.TempDirectory, "custom install");
-        var cli = CreateFakeCli(installRoot);
+        var cli = await CreateFakeCliAsync(installRoot);
         var outside = Path.Combine(installRoot, ".zshrc");
         File.WriteAllText(outside, "# outside profile");
         if (symlink)
@@ -770,7 +770,7 @@ public class CompletionShellTests(ITestOutputHelper testOutput)
     {
         using var env = new TestEnvironment();
         var installRoot = Path.Combine(env.TempDirectory, "it's $install ` [test]");
-        var cli = CreateFakeCli(installRoot);
+        var cli = await CreateFakeCliAsync(installRoot);
         var profile = shell switch
         {
             "zsh" => Path.Combine(env.MockHome, ".zshrc"),
@@ -819,7 +819,7 @@ public class CompletionShellTests(ITestOutputHelper testOutput)
     {
         using var env = new TestEnvironment();
         var installRoot = Path.Combine(env.TempDirectory, "custom install");
-        var cli = CreateFakeCli(installRoot);
+        var cli = await CreateFakeCliAsync(installRoot);
         var profile = Path.Combine(env.MockHome, ".bashrc");
         File.WriteAllText(profile, "# existing profile");
         // A sibling with the same prefix must not be mistaken for a child of the install root.
@@ -903,7 +903,7 @@ public class CompletionShellTests(ITestOutputHelper testOutput)
     public async Task InstallCompletions_Bash_RegistersExistingLoginProfile(string loginProfile)
     {
         using var env = new TestEnvironment();
-        var cli = CreateFakeCli(env.MockHome);
+        var cli = await CreateFakeCliAsync(env.MockHome);
         var profile = Path.Combine(env.MockHome, loginProfile);
         File.WriteAllText(profile, "# login profile");
         using var cmd = new ScriptFunctionCommand(
@@ -931,7 +931,7 @@ public class CompletionShellTests(ITestOutputHelper testOutput)
     public async Task InstallCompletions_NewBashLoginProfile_PreservesPathSetup()
     {
         using var env = new TestEnvironment();
-        var cli = CreateFakeCli(env.MockHome);
+        var cli = await CreateFakeCliAsync(env.MockHome);
         File.WriteAllText(Path.Combine(env.MockHome, ".bashrc"), "export ASPIRE_TEST_BASHRC_LOADED=true\n");
         using var cmd = new ScriptFunctionCommand(
             ScriptPaths.ReleaseShell,
@@ -956,7 +956,7 @@ public class CompletionShellTests(ITestOutputHelper testOutput)
     public async Task InstallCompletions_SkipPath_GeneratesArtifactWithoutProfileMutation(bool dogfood)
     {
         using var env = new TestEnvironment();
-        var cli = CreateFakeCli(env.MockHome);
+        var cli = await CreateFakeCliAsync(env.MockHome);
         var profile = Path.Combine(env.MockHome, ".bashrc");
         File.WriteAllText(profile, "# existing profile");
         using var cmd = new ScriptFunctionCommand(
@@ -982,7 +982,7 @@ public class CompletionShellTests(ITestOutputHelper testOutput)
     public async Task InstallCompletions_Elevated_DoesNotRegisterPathOrCompletions()
     {
         using var env = new TestEnvironment();
-        var cli = CreateFakeCli(env.MockHome);
+        var cli = await CreateFakeCliAsync(env.MockHome);
         var profile = Path.Combine(env.MockHome, ".bashrc");
         File.WriteAllText(profile, "# existing profile");
         using var cmd = new ScriptFunctionCommand(
@@ -1005,11 +1005,11 @@ public class CompletionShellTests(ITestOutputHelper testOutput)
         Assert.Contains("Elevated install", result.Output);
     }
 
-    private static string CreateFakeCli(string home)
+    private static async Task<string> CreateFakeCliAsync(string home)
     {
         Directory.CreateDirectory(home);
         var cli = Path.Combine(home, "fake aspire");
-        File.WriteAllText(cli, ("""
+        await FileHelper.WriteExecutableFileAsync(cli, ("""
             #!/usr/bin/env bash
             [[ "$1 $2" == "completions script" ]] || exit 2
             printf called > "$HOME/called"
@@ -1017,7 +1017,6 @@ public class CompletionShellTests(ITestOutputHelper testOutput)
             if [[ "${FAKE_COMPLETION_MODE:-}" == empty ]]; then exit 0; fi
             echo "ASPIRE_COMPLETION_LOADED=${FAKE_COMPLETION_GENERATION:-loaded}"
             """ + "\n").ReplaceLineEndings("\n"));
-        FileHelper.MakeExecutable(cli);
         return cli;
     }
 

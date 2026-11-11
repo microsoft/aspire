@@ -73,6 +73,11 @@ internal sealed class DcpOptions
     public bool RandomizePorts { get; set; }
 
     /// <summary>
+    /// Whether randomized isolated-mode ports should use the persistent allocation store.
+    /// </summary>
+    public bool PersistPortsInIsolatedMode { get; set; }
+
+    /// <summary>
     /// The first port in the range used to allocate unspecified public ports for proxyless endpoints
     /// and target ports for proxied executable endpoints.
     /// </summary>
@@ -392,6 +397,7 @@ internal class ConfigureDefaultDcpOptions(
         }
 
         options.RandomizePorts = dcpPublisherConfiguration.GetValue(nameof(options.RandomizePorts), options.RandomizePorts);
+        options.PersistPortsInIsolatedMode = configuration.GetValue(KnownConfigNames.PersistPortsInIsolatedMode, options.PersistPortsInIsolatedMode);
         options.ProxylessEndpointPortRangeStart = dcpPublisherConfiguration.GetValue(nameof(options.ProxylessEndpointPortRangeStart), options.ProxylessEndpointPortRangeStart);
         options.ProxylessEndpointPortRangeEnd = dcpPublisherConfiguration.GetValue(nameof(options.ProxylessEndpointPortRangeEnd), options.ProxylessEndpointPortRangeEnd);
         ApplyProxylessEndpointPortRangeOverride(options, configuration);

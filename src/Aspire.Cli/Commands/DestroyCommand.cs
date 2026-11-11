@@ -85,7 +85,7 @@ internal sealed class DestroyCommand : PipelineCommandBase
         return Task.FromResult<string[]>([.. baseArgs]);
     }
 
-    protected override string GetCanceledMessage() => DestroyCommandStrings.DestroyCanceled;
+    protected override string CancellationMessage => DestroyCommandStrings.DestroyCanceled;
 
     protected override string GetProgressMessage(ParseResult parseResult)
     {

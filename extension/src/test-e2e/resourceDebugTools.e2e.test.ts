@@ -1,24 +1,14 @@
 import * as assert from 'assert';
 import * as fs from 'fs';
 import * as path from 'path';
-import { findResource, getCommandInvocationCount, isSamePath, waitForCommandOutcome, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForResourceState, waitForWorkspaceAppHost } from './helpers/assertions';
-import { executeE2eControlCommand, restoreWorkspaceCliPath, runE2eTeardown, stopPrimaryAppHostIfRunning } from './helpers/fixtures';
+import { findResource, getCommandInvocationCount, isSamePath, waitForCommandOutcome, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForResourceState, waitForSelectedWorkspaceAppHost, waitForWorkspaceAppHost } from './helpers/assertions';
+import { executeE2eControlCommand, getGeneratedProjectRoot, removeGeneratedProject, restoreWorkspaceAppHostConfig, restoreWorkspaceCliPath, runE2eTeardown, stopAppHostIfRunning, stopPrimaryAppHostIfRunning, writeFileWithRetry, writeWorkspaceAppHostConfigForPath } from './helpers/fixtures';
 import { invokeLanguageModelTool, prepareLanguageModelToolInvocation } from './helpers/languageModelTools';
-import { getPrimaryAppHostProjectPath, getWorkspaceRoot } from './helpers/paths';
+import { getCliPath, getPrimaryAppHostProjectPath, getWorkspaceRoot } from './helpers/paths';
+import { assertSafeResourceDebugResult, type ResourceDebugToolResult } from './helpers/resourceDebugResult';
 import { openAspireView } from './helpers/vscode';
-
-interface ResourceDebugToolResult {
-    tool: 'aspire_resource_debug';
-    success: boolean;
-    outcome: string;
-    appHost: string;
-    resourceName: string;
-    requestedStrategy: 'auto' | 'attach';
-    effectiveStrategy: 'attach' | 'none';
-    controller: 'editor' | 'none';
-    provider?: 'dotnet' | 'go';
-    debuggerExtensions?: Array<{ id: string; label: string }>;
-}
+import { runProcess } from './helpers/process';
+import type { AspireExtensionE2ECodeLensProbeResult } from '../types/extensionApi';
 
 interface AttachedResourceDebugProof {
     proof: 'aspire-resource-attach-breakpoint-detach';
@@ -63,6 +53,9 @@ suite('Aspire resource debug language model tool E2E', function () {
         await openAspireView();
         await waitForRepositoryIdle();
         const discovered = await waitForWorkspaceAppHost();
+        // The first discovery wait can reopen the E2E workspace folder, which reloads the window and
+        // hides the Aspire view. Reopen it so the extension keeps refreshing AppHost and resource state.
+        await openAspireView();
         const appHostPath = discovered.state.workspaceAppHostPath ?? getPrimaryAppHostProjectPath();
         const relativeAppHostPath = toWorkspaceRelativePath(appHostPath);
 
@@ -78,13 +71,14 @@ suite('Aspire resource debug language model tool E2E', function () {
             confirmationMessage: 'Attach the debugger to the requested Aspire resource?',
         });
 
-        const cases: Array<{ input: Record<string, unknown>; outcome: string }> = [
+        const cases: Array<{ input: Record<string, unknown>; outcome: string; expectedResourceName: string }> = [
             {
                 input: {
                     appHostPath: relativeAppHostPath,
                     resourceName: ' ',
                 },
                 outcome: 'invalidInput',
+                expectedResourceName: '',
             },
             {
                 input: {
@@ -93,6 +87,7 @@ suite('Aspire resource debug language model tool E2E', function () {
                     unexpected: 'value',
                 },
                 outcome: 'invalidInput',
+                expectedResourceName: '',
             },
             {
                 input: {
@@ -100,6 +95,7 @@ suite('Aspire resource debug language model tool E2E', function () {
                     resourceName: 'e2e-worker',
                 },
                 outcome: 'unknownAppHost',
+                expectedResourceName: 'e2e-worker',
             },
         ];
 
@@ -115,7 +111,7 @@ suite('Aspire resource debug language model tool E2E', function () {
             });
             assert.strictEqual(invocation.results.length, 1);
             assert.strictEqual(invocation.results[0].outcome, testCase.outcome);
-            assertSafeResourceDebugResult(invocation.results[0]);
+            assertSafeResourceDebugResult(invocation.results[0], testCase.expectedResourceName);
         }
     });
 
@@ -123,6 +119,7 @@ suite('Aspire resource debug language model tool E2E', function () {
         await openAspireView();
         await waitForRepositoryIdle();
         const discovered = await waitForWorkspaceAppHost();
+        await openAspireView();
         const appHostPath = discovered.state.workspaceAppHostPath ?? getPrimaryAppHostProjectPath();
         const relativeAppHostPath = toWorkspaceRelativePath(appHostPath);
 
@@ -169,7 +166,7 @@ suite('Aspire resource debug language model tool E2E', function () {
                 controller: 'none',
                 debuggerExtensions: [{ id: 'ms-dotnettools.csharp', label: 'C#' }],
             }]);
-            assertSafeResourceDebugResult(invocation.results[0]);
+            assertSafeResourceDebugResult(invocation.results[0], worker.name);
         }
 
         const missingResource = await invokeLanguageModelTool<ResourceDebugToolResult>(
@@ -189,7 +186,7 @@ suite('Aspire resource debug language model tool E2E', function () {
             effectiveStrategy: 'none',
             controller: 'none',
         }]);
-        assertSafeResourceDebugResult(missingResource.results[0]);
+        assertSafeResourceDebugResult(missingResource.results[0], 'missing-resource');
 
         const unsupportedResource = await invokeLanguageModelTool<ResourceDebugToolResult>(
             resourceDebugToolName,
@@ -208,13 +205,14 @@ suite('Aspire resource debug language model tool E2E', function () {
             effectiveStrategy: 'none',
             controller: 'none',
         }]);
-        assertSafeResourceDebugResult(unsupportedResource.results[0]);
+        assertSafeResourceDebugResult(unsupportedResource.results[0], 'e2e-no-commands');
     });
 
     negativePathTest('cancels through the VS Code invocation token and reports a stopped resource without invoking a debugger', async () => {
         await openAspireView();
         await waitForRepositoryIdle();
         const discovered = await waitForWorkspaceAppHost();
+        await openAspireView();
         const appHostPath = discovered.state.workspaceAppHostPath ?? getPrimaryAppHostProjectPath();
         const relativeAppHostPath = toWorkspaceRelativePath(appHostPath);
 
@@ -241,7 +239,9 @@ suite('Aspire resource debug language model tool E2E', function () {
             });
         }
 
-        await executeE2eControlCommand({ name: 'stopResource', appHostPath, resourceName: worker.name });
+        const stopInvocationBefore = getCommandInvocationCount('aspire-vscode.stopResource');
+        await executeE2eControlCommand({ name: 'stopResource', appHostPath, resourceName: worker.name }, { waitFor: 'started' });
+        await waitForCommandOutcome('aspire-vscode.stopResource', 'success', 60000, stopInvocationBefore);
         await waitForResourceState(worker.name, ['Exited', 'Finished', 'Stopped'], 90000);
 
         const stopped = await invokeLanguageModelTool<ResourceDebugToolResult>(
@@ -254,7 +254,7 @@ suite('Aspire resource debug language model tool E2E', function () {
             { expectedConfirmations: 1 });
         assert.strictEqual(stopped.results.length, 1);
         assert.strictEqual(stopped.results[0].outcome, 'resourceNotRunning');
-        assertSafeResourceDebugResult(stopped.results[0]);
+        assertSafeResourceDebugResult(stopped.results[0], worker.name);
     });
 
     test('attaches packaged .NET and Go debuggers, hits breakpoints, detaches, and tears down', async function () {
@@ -266,6 +266,7 @@ suite('Aspire resource debug language model tool E2E', function () {
         await openAspireView();
         await waitForRepositoryIdle();
         const discovered = await waitForWorkspaceAppHost();
+        await openAspireView();
         const appHostPath = discovered.state.workspaceAppHostPath ?? getPrimaryAppHostProjectPath();
 
         const start = (await executeE2eControlCommand({
@@ -325,7 +326,7 @@ suite('Aspire resource debug language model tool E2E', function () {
             assert.strictEqual(proof.proof, 'aspire-resource-attach-breakpoint-detach');
             assert.strictEqual(proof.toolPayload.outcome, 'started');
             assert.strictEqual(proof.toolPayload.provider, scenario.debugType === 'coreclr' ? 'dotnet' : 'go');
-            assertSafeResourceDebugResult(proof.toolPayload);
+            assertSafeResourceDebugResult(proof.toolPayload, scenario.resourceName);
             assert.strictEqual(proof.resourceName, scenario.resourceName);
             assert.strictEqual(proof.debugType, scenario.debugType);
             assert.strictEqual(proof.breakpoint.matchingStackFrame.line, proof.breakpoint.line);
@@ -352,6 +353,7 @@ suite('Aspire resource debug language model tool E2E', function () {
         await openAspireView();
         await waitForRepositoryIdle();
         const discovered = await waitForWorkspaceAppHost();
+        await openAspireView();
         const appHostPath = discovered.state.workspaceAppHostPath ?? getPrimaryAppHostProjectPath();
         const runBefore = getCommandInvocationCount('aspire-vscode.runAppHost');
         await executeE2eControlCommand({ name: 'runAppHost', appHostPath }, { waitFor: 'started' });
@@ -368,7 +370,7 @@ suite('Aspire resource debug language model tool E2E', function () {
         assert.strictEqual(invocation.results.length, 1);
         const result = invocation.results[0];
         assert.strictEqual(result.outcome, 'started');
-        assertSafeResourceDebugResult(result);
+        assertSafeResourceDebugResult(result, worker.name);
 
         await stopPrimaryAppHostIfRunning();
         await waitForNoDebugSessions(120000);
@@ -384,6 +386,7 @@ suite('Aspire resource debug language model tool E2E', function () {
         await openAspireView();
         await waitForRepositoryIdle();
         const discovered = await waitForWorkspaceAppHost();
+        await openAspireView();
         const appHostPath = discovered.state.workspaceAppHostPath ?? getPrimaryAppHostProjectPath();
         const runBefore = getCommandInvocationCount('aspire-vscode.runAppHost');
         await executeE2eControlCommand({ name: 'runAppHost', appHostPath }, { waitFor: 'started' });
@@ -404,12 +407,110 @@ suite('Aspire resource debug language model tool E2E', function () {
             timeoutMs: 300000,
         }, { timeoutMs: 360000 })).result as AttachedResourceDebugProof;
 
-        assertSafeResourceDebugResult(proof.toolPayload);
+        assertSafeResourceDebugResult(proof.toolPayload, go.name);
         assert.deepStrictEqual(proof.debugAdapterResponses, []);
 
         await stopPrimaryAppHostIfRunning();
         await waitForNoDebugSessions(120000);
         await waitForNoRunningAppHost(120000, appHostPath);
+    });
+
+    test('hits source breakpoints in a Go AppHost and its Go resource using packaged Delve', async function () {
+        this.timeout(900000);
+        if (!resourceDebugPrerequisitesInstalled) {
+            this.skip();
+        }
+
+        const sdkVersion = process.env.ASPIRE_EXTENSION_E2E_APPHOST_SDK_VERSION;
+        assert.ok(sdkVersion, 'The runner must provide the built AppHost SDK version.');
+        const projectName = 'AspireE2E.GoAppHost';
+        const projectRoot = getGeneratedProjectRoot(projectName);
+        const appHostPath = path.join(projectRoot, 'apphost.go');
+        const resourceSourcePath = path.join(getWorkspaceRoot(), 'AspireE2E.Go', 'main.go');
+        fs.mkdirSync(projectRoot, { recursive: true });
+        writeFileWithRetry(path.join(projectRoot, 'go.mod'), `module apphost
+
+go 1.26
+
+require apphost/modules/aspire v0.0.0
+replace apphost/modules/aspire => ./.aspire/modules
+`);
+        writeFileWithRetry(path.join(projectRoot, 'aspire.config.json'), JSON.stringify({
+            appHost: { path: 'apphost.go', language: 'go' },
+            sdk: { version: sdkVersion },
+            packages: { 'Aspire.Hosting.Go': sdkVersion },
+        }, undefined, 2));
+        writeFileWithRetry(appHostPath, `package main
+
+import (
+    "log"
+    "apphost/modules/aspire"
+)
+
+func main() {
+    builder, err := aspire.CreateBuilder()
+    if err != nil {
+        log.Fatal(aspire.FormatError(err))
+    }
+    api := builder.AddGoApp("go-api", "../AspireE2E.Go").
+        WithHttpEndpoint(&aspire.WithHttpEndpointOptions{Env: aspire.StringPtr("PORT")})
+    if err := api.Err(); err != nil {
+        log.Fatal(aspire.FormatError(err))
+    }
+    app, err := builder.Build()
+    if err != nil {
+        log.Fatal(aspire.FormatError(err))
+    }
+    if err := app.Run(); err != nil {
+        log.Fatal(aspire.FormatError(err))
+    }
+}
+`);
+        try {
+            // Reuse the resource-debug shard's pinned Go extension, Go toolchain and preinstalled
+            // Delve. The offline extension host must never depend on golang.go downloading tools.
+            await runProcess(getCliPath(), ['restore', '--nologo'], { cwd: projectRoot, timeoutMs: 300000 });
+            writeWorkspaceAppHostConfigForPath(appHostPath);
+            await openAspireView();
+            await executeE2eControlCommand({ name: 'refreshAppHosts' });
+            await waitForSelectedWorkspaceAppHost(appHostPath, 180000);
+            await openAspireView();
+            const capabilities = (await executeE2eControlCommand({ name: 'getSupportedCapabilities' })).result as string[];
+            assert.ok(capabilities.includes('go-apphost.v1'), `Missing Go AppHost capability: ${JSON.stringify(capabilities)}`);
+
+            const proof = (await executeE2eControlCommand({
+                name: 'proveAppHostAndResourceDebugging',
+                appHostPath,
+                resourceName: 'go-api',
+                appHostSourcePath: appHostPath,
+                appHostBreakpointLine: findBreakpointLine(appHostPath, 'api := builder.AddGoApp'),
+                resourceSourcePath,
+                resourceBreakpointLine: findBreakpointLine(resourceSourcePath, 'message := "go-ok"'),
+                timeoutMs: 480000,
+            }, { timeoutMs: 540000 })).result as {
+                proof: string;
+                appHostBreakpoint: { matchingStackFrame: { source?: { path?: string } } };
+                resourceBreakpoint: { matchingStackFrame: { source?: { path?: string } } };
+                appHostCodeLenses: AspireExtensionE2ECodeLensProbeResult;
+                debugSessions: Array<{ type: string }>;
+            };
+            assert.strictEqual(proof.proof, 'aspire-apphost-and-resource-debug-breakpoints-hit');
+            assert.ok(isSamePath(proof.appHostBreakpoint.matchingStackFrame.source?.path ?? '', appHostPath));
+            assert.ok(isSamePath(proof.resourceBreakpoint.matchingStackFrame.source?.path ?? '', resourceSourcePath));
+            assert.strictEqual(proof.debugSessions.filter(session => session.type === 'go').length, 2);
+            assert.strictEqual(proof.appHostCodeLenses.languageId, 'go');
+            assert.ok(proof.appHostCodeLenses.commandTitles.some(title => title.includes('Dashboard')), 'The Go AppHost must expose its dashboard action.');
+            assert.ok(proof.appHostCodeLenses.commandTitles.some(title => title.includes('Running')), 'The Go resource must expose its running state.');
+            await waitForNoDebugSessions(120000);
+            await waitForNoRunningAppHost(120000, appHostPath);
+        }
+        finally {
+            await runE2eTeardown([
+                () => stopAppHostIfRunning(appHostPath),
+                () => restoreWorkspaceAppHostConfig(),
+                () => removeGeneratedProject(projectName),
+            ], 'Go AppHost debug E2E teardown failed.');
+        }
     });
 });
 
@@ -429,13 +530,6 @@ function toWorkspaceRelativePath(filePath: string): string {
     const relativePath = path.relative(getWorkspaceRoot(), filePath);
     assert.ok(relativePath.length > 0 && !relativePath.startsWith('..') && !path.isAbsolute(relativePath));
     return relativePath.split(path.sep).join('/');
-}
-
-function assertSafeResourceDebugResult(result: ResourceDebugToolResult): void {
-    const serialized = JSON.stringify(result);
-    assert.deepStrictEqual(JSON.parse(serialized), result);
-    assert.ok(!path.isAbsolute(result.appHost));
-    assert.doesNotMatch(serialized, /(?:pid|process|configuration|arguments?|args|environment|env|secret|token|executable)|https?:\/\/|\/(?:Users|private|var|tmp)\b/i);
 }
 
 function findBreakpointLine(sourcePath: string, marker: string): number {

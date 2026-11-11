@@ -65,7 +65,7 @@ if [[ "$require_signature" == true ]]; then
     # Verify trust and the stapled ticket after copy/archive extraction, not
     # just on the signing input. Local and GitHub builds remain ad-hoc signed.
     codesign --verify --strict -R="anchor apple generic" "$app"
-    xcrun stapler validate "$app"
+    bash "$root/tools/CreateLayout/macos-stapler-with-retry.sh" validate "$app"
     spctl --assess --type execute --verbose "$app"
 else
     codesign --verify --strict "$app"

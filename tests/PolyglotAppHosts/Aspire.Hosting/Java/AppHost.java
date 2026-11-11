@@ -8,7 +8,7 @@ void main() throws Exception {
         container.withTags(new String[] { "Service" });
         container.withTrait("Owner", "Finance");
         container.withTrait("Owner", "Platform");
-        container.withDashboardPosition(-10);
+        container.withDisplayOrder(10);
         container.withOtlpExporter(OtlpProtocol.HTTP_JSON);
         var dockerContainer = builder.addDockerfile("dockerapp", "./app");
         var dockerfileFactory = (AspireFunc1<DockerfileFactoryContext, String>) (factoryContext) -> {
@@ -166,6 +166,7 @@ void main() throws Exception {
         container.withoutHttpsCertificate();
         container.withChildRelationship(exe);
         container.withIconName("Database", IconVariant.FILLED);
+        container.withResourceTypeDisplayName("Validation Service");
         container.withHttpProbe(ProbeType.LIVENESS, new WithHttpProbeOptions().path("/health"));
         container.withRemoteImageName("myregistry.azurecr.io/myapp");
         container.withRemoteImageTag("latest");
