@@ -1831,6 +1831,32 @@ public static class ResourceExtensions
         return [.. references];
     }
 
+    /// <summary>
+    /// Gets endpoint references from unresolved configuration, normalizing legacy host URLs.
+    /// </summary>
+    internal static IReadOnlyList<EndpointReference> GetEndpointReferences(
+        this IExecutionConfigurationGathererContext context,
+        DistributedApplicationModel model,
+        NetworkIdentifier networkContext)
+    {
+        var references = new List<EndpointReference>();
+        foreach (var reference in context.GetReferences<object>())
+        {
+            if (reference is EndpointReference endpoint)
+            {
+                references.Add(endpoint);
+            }
+            else if (reference is HostUrl hostUrl &&
+                HostUrl.TryGetLocalHostPort(hostUrl.Url, out var port) &&
+                HostUrl.GetEndpointReference(model, port, networkContext) is { } legacyEndpoint)
+            {
+                references.Add(legacyEndpoint);
+            }
+        }
+
+        return references;
+    }
+
     private static IEnumerable<object> GetUnresolvedValues(IExecutionConfigurationGathererContext context)
     {
         foreach (var argument in context.Arguments)

@@ -179,13 +179,14 @@ internal sealed class SdkExportCommand : BaseCommand
         IReadOnlyList<IntegrationReference> integrations,
         CancellationToken cancellationToken)
     {
-        var tempDirectory = Directory.CreateTempSubdirectory("aspire-sdk-export-");
+        var tempDirectory = CliPathHelper.CreateSdkWorkingDirectory(ExecutionContext.AspireHomeDirectory);
         var tempDirectoryPath = tempDirectory.FullName;
 
         try
         {
-            var appHostServerProject = await _appHostServerProjectFactory.CreateAsync(
+            var appHostServerProject = await _appHostServerProjectFactory.CreateForSdkCommandsAsync(
                 tempDirectoryPath,
+                restoreRootConfigDirectory: null,
                 cancellationToken);
 
             var prepareResult = await appHostServerProject.PrepareAsync(
