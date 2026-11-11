@@ -138,6 +138,7 @@ internal abstract class BaseCommand : Command
         }
 
         CommandResult result;
+        string? configSourceReadmeUrl = null;
         var stoppingMessageShown = false;
         try
         {
@@ -194,6 +195,7 @@ internal abstract class BaseCommand : Command
         catch (ConfigSourceException ex)
         {
             ConfigSourceService.DisplayGitOutput(InteractionService, ex.GitOutput);
+            configSourceReadmeUrl = ex.ReadmeUrl;
             result = CommandResult.Failure(CliExitCodes.InvalidCommand, ex.Message);
         }
         catch (NonInteractiveException)
@@ -231,6 +233,14 @@ internal abstract class BaseCommand : Command
         if (!displayedActionableFailure && result.ErrorMessage is not null)
         {
             InteractionService.DisplayError(result.ErrorMessage);
+        }
+
+        if (configSourceReadmeUrl is not null)
+        {
+            InteractionService.DisplayError(
+                string.Format(CultureInfo.CurrentCulture, ConfigSourceStrings.AccessHelp,
+                    MarkupHelpers.SafeLink(InteractionService, configSourceReadmeUrl)),
+                allowMarkup: true);
         }
 
         if (result.ShouldDisplayHelp)

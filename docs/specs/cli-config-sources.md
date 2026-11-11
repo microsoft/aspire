@@ -59,10 +59,17 @@ aspire new
 ```
 
 The README URL override applies to both explicit and employee-detected candidates.
-It is used only when presenting the source for consent, is not fetched by the CLI,
+It is used when presenting the source for consent and when displaying access help
+after an acquisition error. It is not fetched by the CLI
 and is not saved in the application's configuration or source cache. An explicitly
 empty value, a non-HTTP(S) URL, or a value containing control characters is an error
 when a candidate is available. Without a candidate, the override is ignored.
+
+If acquisition fails and a valid README URL is available, retain the existing
+error message and then display a separate error linking to the README for help
+accessing the source. This also applies when explicitly refreshing a saved source
+with `aspire update --config-source`. Invalid README overrides do not replace an
+acquisition error. Background advisory checks retain their existing warning behavior.
 
 When enabled by an explicit source URL, repository-relative paths use `/` separators on every platform. Reject empty or absolute paths, `.` or `..` segments, empty segments, backslashes, and control characters. Git addresses may use HTTPS, SSH URLs, or SCP-style SSH syntax. Absolute local repository paths are also supported, including paths with spaces; they use the current platform's path syntax and remain machine-specific when saved in a binding. Relative repository paths and `file://` URLs are not supported. Git remote-helper syntax, control characters, and remote addresses with embedded passwords/tokens, query strings, or fragments are not supported.
 
@@ -211,8 +218,6 @@ than nuget.org.
 Use the user's Git installation and normal credential helpers or SSH authentication. Do not introduce a separate login flow or reuse credentials from employee detection.
 
 Configuration sources and repository templates share [GitClient](../../src/Aspire.Cli/Git/GitClient.cs) for repository initialization, shallow fetches, commit identification, and Git object access. [GitCommandRunner](../../src/Aspire.Cli/Git/GitCommandRunner.cs) owns process capture, environment isolation, failure classification, and lifecycle diagnostics. It reuses the existing tree-aware process-capture infrastructure and records all Git stdout and stderr in the CLI log at debug level, including output from successful, failed, and canceled operations. Output is logged as it is read, including partial lines, so authentication diagnostics remain available when a command stalls. Command arguments and exception details remain excluded from process diagnostics. Git output can include private repository information, configuration-file contents, or credentials emitted by Git or its helpers; review logs before sharing them. Callers retain their operation-wide timeout budgets and explicitly select interaction policy. Configuration sources use bare repositories and validate blobs without checkout; templates retain their ref-resolution rules, detached checkouts, and immutable cache publication. Template acquisition continues disabling terminal prompts without changing its existing credential-helper policy.
-
-The shared runner sets `GCM_TRACE=1` and `GCM_TRACE_SECRETS=0` for Git child processes, overriding inherited values without changing the parent environment or Git configuration. Git Credential Manager (GCM) tracing writes diagnostics to stderr so the CLI log can include warnings and underlying exceptions that GCM otherwise writes directly to the terminal. Secret tracing is explicitly disabled, retaining GCM's masking of values it identifies as secrets. This is not general-purpose redaction: private URLs, account information, configuration contents, and sensitive output from Git or other helpers can still appear in logs. See [GCM tracing settings](https://github.com/git-ecosystem/git-credential-manager/blob/main/docs/environment.md#gcm_trace).
 
 [ConfigSourceService](../../src/Aspire.Cli/Configuration/ConfigSourceService.cs) owns configuration acquisition and version-check policy directly: each operation uses the five-minute timeout shared with Git-backed templates, versions are blob IDs, and acquisition validates Git blobs and configuration content before publishing a snapshot. The overall budget allows time for browser sign-in, MFA, and other credential-helper interaction because Git does not expose a portable signal distinguishing authentication waits from other work.
 

@@ -114,6 +114,10 @@
   <data name="ReadmeLink" xml:space="preserve">
     <value>Read more about this configuration source</value>
   </data>
+  <data name="AccessHelp" xml:space="preserve">
+    <value>For help accessing this configuration source, see {0}.</value>
+    <comment>{0} is a hyperlink to the configuration source README.</comment>
+  </data>
   <data name="InvalidReadmeUrl" xml:space="preserve">
     <value>{0} must be a nonempty absolute HTTP or HTTPS URL without control characters.</value>
     <comment>{0} is the environment variable name.</comment>

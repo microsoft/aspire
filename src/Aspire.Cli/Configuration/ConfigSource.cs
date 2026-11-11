@@ -82,4 +82,6 @@ internal sealed class ConfigSourceException(string message) : Exception(message)
 {
     // Keep diagnostics available for timeout display without putting them in exception messages.
     public string? GitOutput { get; init; }
+
+    public string? ReadmeUrl { get; set; }
 }

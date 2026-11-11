@@ -61,6 +61,15 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to For help accessing this configuration source, see {0}..
+        /// </summary>
+        internal static string AccessHelp {
+            get {
+                return ResourceManager.GetString("AccessHelp", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to A saved configuration source has no recorded applied version. Run `aspire update --config-source` to save its allowed settings and establish the applied version..
         /// </summary>
         internal static string AppliedVersionMissing {

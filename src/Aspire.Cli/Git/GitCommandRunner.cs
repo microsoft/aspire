@@ -78,11 +78,6 @@ internal sealed class GitCommandRunner(ICliHostEnvironment hostEnvironment, IInt
             CreateNoWindow = !interactive
         };
         startInfo.Environment["GIT_TERMINAL_PROMPT"] = interactive ? "1" : "0";
-        // GCM writes some diagnostics directly to the terminal, bypassing redirected stderr.
-        // Capture its stderr trace instead, but override inherited secret tracing.
-        // https://github.com/git-ecosystem/git-credential-manager/blob/main/docs/environment.md#gcm_trace
-        startInfo.Environment["GCM_TRACE_SECRETS"] = "0";
-        startInfo.Environment["GCM_TRACE"] = "1";
         if (!interactive && mode != GitCommandMode.Captured)
         {
             // GIT_TERMINAL_PROMPT does not govern GCM UI. Keep cached credentials usable.
