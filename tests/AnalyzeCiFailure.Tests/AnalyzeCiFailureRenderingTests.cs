@@ -2,118 +2,14 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
-using System.Collections.Immutable;
 using System.Text.Json.Nodes;
 using AnalyzeCiFailure;
-using VerifyXunit;
-using Xunit;
 
 namespace Infrastructure.Tests;
 
 /// <summary>Exercises production Markdown and metadata projections through shared scenario helpers.</summary>
 public sealed partial class AnalyzeCiFailureWorkflowTests
 {
-    [Theory]
-    [InlineData("41503655043", 570124)]
-    [InlineData("41534093007", 576917)]
-    [InlineData("42879814558", 590033)]
-    public async Task MainIssuePreservesBrowserDebuggerDiagnostic(string runId, int elapsedMilliseconds)
-    {
-        var diagnostic = $"Timed out after {elapsedMilliseconds}ms waiting for resource 'standalone' state Running.\nLast error: <none>";
-        var body = RenderMainDiagnostic(diagnostic, runId, [diagnostic]);
-
-        await Verifier.Verify(body, "md").UseDirectory("Snapshots").UseParameters(runId, elapsedMilliseconds);
-    }
-
-    [Fact]
-    public async Task MainIssueSanitizesAndBoundsMultilineDiagnostic()
-    {
-        var diagnostic = "\u001b[31mResource failed to start.\u001b[0m\r\nAuthorization: Bearer synthetic-secret\r\n" +
-            "token=synthetic-token\r\n" + new string('x', 600);
-        var body = RenderMainDiagnostic(diagnostic, "123", [DiagnosticTextSanitizer.Sanitize(diagnostic, multiline: true)]);
-        var error = body.Split("## Error Message\n\n", StringSplitOptions.None)[1]
-            .Split("\n\n## Description", StringSplitOptions.None)[0];
-
-        Assert.Contains("    Authorization: Bearer [REDACTED]\n    token=[REDACTED]\n", error, StringComparison.Ordinal);
-        Assert.Equal(500, string.Join('\n', error.Split('\n').Select(line => line[4..])).EnumerateRunes().Count());
-        await Verifier.Verify(body, "md").UseDirectory("Snapshots");
-    }
-
-    [Fact]
-    public async Task MainIssueOmitsUnverifiedDiagnostics()
-    {
-        var cases = new (string Name, string Diagnostic, string[] Logs)[]
-        {
-            ("invented-attribution", "Introduced by PR #19999; revert it", ["Build failed."]),
-            ("appended-attribution", "Build failed.\nIntroduced by PR #19999; revert it", ["Build failed."]),
-            ("missing-log", "Build failed.", []),
-            ("reversed-lines", "First error\nSecond error", ["Second error\nFirst error"]),
-            ("different-sources", "First error\nSecond error", ["First error", "Second error"]),
-        };
-        var bodies = new JsonObject(cases.Select(test =>
-        {
-            var body = RenderMainDiagnostic(test.Diagnostic, "123", test.Logs);
-            var error = body.Split("## Error Message\n\n", StringSplitOptions.None)[1]
-                .Split("\n\n## Description", StringSplitOptions.None)[0];
-            return KeyValuePair.Create<string, JsonNode?>(test.Name, JsonValue.Create(error));
-        }));
-
-        await Verifier.Verify(bodies.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }), "json")
-            .UseDirectory("Snapshots");
-    }
-
-    [Fact]
-    public async Task MainIssueVerifiesStructuredDiagnosticWithoutJobLog()
-    {
-        var bundle = AnalyzeCiFailureFixtures.CreateEvidence(RunScope.Main);
-        var failure = RawFailure("result.trx", "execution") with { JobId = 123 };
-        bundle = bundle with
-        {
-            TestEvidence = bundle.TestEvidence with { Failures = TestFailureReader.ConsolidateFailures([failure]) },
-        };
-        var evidence = PublicationEvidence.FromBundle(bundle);
-        var diagnostic = Assert.Single(bundle.TestEvidence.Failures).Diagnostics.Error;
-
-        var body = RenderMainDiagnostic(diagnostic, "123", evidence.JobDiagnostics[123].ToArray());
-
-        await Verifier.Verify(body, "md").UseDirectory("Snapshots");
-    }
-
-    [Fact]
-    public async Task MainIssueMatchesTimestampedDiagnosticLines()
-    {
-        var body = RenderMainDiagnostic("Build failed.\nLast error: <none>", "123",
-            ["2026-11-10T19:24:13Z Build failed.\n2026-11-10T19:24:14Z Last error: <none>"]);
-
-        await Verifier.Verify(body, "md").UseDirectory("Snapshots");
-    }
-
-    private static string RenderMainDiagnostic(string diagnostic, string runId, string[] collectedLogs)
-    {
-        var cause = new JsonObject
-        {
-            ["id"] = "browser-debugger-resource-running-timeout",
-            ["type"] = "main-repository-breakage",
-            ["title"] = "Untrusted attribution must not become the main issue title",
-            ["error_pattern"] = diagnostic,
-        };
-        var evidence = new PublicationEvidence(null, null, null, CandidateHistoryState.Unavailable, null)
-        {
-            JobDiagnostics = ImmutableDictionary<long, ImmutableArray<string>>.Empty.Add(123, [.. collectedLogs]),
-        };
-        var draft = CauseIssueRenderer.RenderCanonicalIssue(
-            cause,
-            CiFailureJson.ToContract<RunContext>(JsonNode.Parse("""{"head_sha":"failed-sha"}""")),
-            evidence,
-            $"https://github.com/microsoft/aspire/actions/runs/{runId}",
-            "main",
-            "0",
-            "Browser debugger",
-            $"| 2026-11-10 | [Build](https://github.com/microsoft/aspire/actions/runs/{runId}) | `Browser debugger` | main |");
-
-        return draft.Body!;
-    }
-
     // The fixtures exercise the production functions, with file I/O kept here only
     // to preserve the representative inputs and independently asserted outputs.
     private static Task<CommandResult> RunFunctionAsync(Func<string> operation, int errorCode = 1)

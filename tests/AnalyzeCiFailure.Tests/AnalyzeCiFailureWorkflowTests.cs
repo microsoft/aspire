@@ -2308,7 +2308,7 @@ public sealed partial class AnalyzeCiFailureWorkflowTests(ITestOutputHelper outp
 
             ## Error Message
 
-                Stored diagnostic could not be verified against current collected evidence. See the linked workflow run for diagnostics.
+                The main branch CI run failed. See the linked workflow run and trusted commit context above for diagnostics.
 
             ## Description
 
@@ -2388,7 +2388,7 @@ public sealed partial class AnalyzeCiFailureWorkflowTests(ITestOutputHelper outp
 
             ## Error Message
 
-                Stored diagnostic could not be verified against current collected evidence. See the linked workflow run for diagnostics.
+                The main branch CI run failed. See the linked workflow run and trusted commit context above for diagnostics.
 
             ## Description
 
@@ -4706,7 +4706,7 @@ public sealed partial class AnalyzeCiFailureWorkflowTests(ITestOutputHelper outp
 
             ## Error Message
 
-                Timed out waiting for resource 'standalone' state Running.
+                The main branch CI run failed. See the linked workflow run and trusted commit context above for diagnostics.
 
             ## Description
 
@@ -4742,7 +4742,7 @@ public sealed partial class AnalyzeCiFailureWorkflowTests(ITestOutputHelper outp
 
             ## Error Message
 
-                Timed out waiting for resource 'standalone' state Running.
+                The main branch CI run failed. See the linked workflow run and trusted commit context above for diagnostics.
 
             ## Description
 

@@ -10,15 +10,10 @@ internal static class EvidencePackageStore
 {
 
     internal static ValidatedAnalysis ReadAndValidate(EvidencePaths paths, string analysisDirectory, string repository)
-    {
-        var analysis = AnalysisValidator.Validate(
+        => AnalysisValidator.Validate(
             TransientJson.ReadUtf8<EvidenceBundle>(File.ReadAllBytes(paths.Bundle)),
             TransientJson.ReadUtf8<AnalysisProposal>(File.ReadAllBytes(Path.Combine(analysisDirectory, "proposal.json"))),
             repository);
-        return analysis.Run.Scope == RunScope.Main
-            ? analysis with { CapturedPublication = analysis.CapturedPublication.WithJobLogs(paths) }
-            : analysis;
-    }
 
     internal static async Task WriteDiagnosisAsync(EvidencePaths paths, DiagnosisInput input, CancellationToken ct)
     {

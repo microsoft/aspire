@@ -82,11 +82,9 @@ internal static partial class CauseIssueRenderer
         {
             error = "No diagnostic pattern recorded.";
         }
-        error = DiagnosticTextSanitizer.Sanitize(error, limit: 500, multiline: true);
-        if (main && !evidence.JobDiagnostics.Values.SelectMany(sources => sources).Any(source => ContainsDiagnostic(source, error)))
-        {
-            error = "Stored diagnostic could not be verified against current collected evidence. See the linked workflow run for diagnostics.";
-        }
+        error = main
+            ? "The main branch CI run failed. See the linked workflow run and trusted commit context above for diagnostics."
+            : DiagnosticTextSanitizer.Sanitize(error, limit: 500, multiline: true);
         var body = MarkdownTemplate.Render(
             "CauseIssue",
             ("CAUSE_ID", id),
@@ -104,25 +102,6 @@ internal static partial class CauseIssueRenderer
         var labels = "ci-failure-cause" + (main ? ",main-ci-break" : type == "flaky-test" ? ",test-failure" : "");
 
         return new IssueDraft(body, issueTitle, labels);
-    }
-
-    private static bool ContainsDiagnostic(string source, string diagnostic)
-    {
-        // Logs can prefix each line, for example "2026-11-10T19:24:14Z Last error: <none>".
-        // Require every nonempty diagnostic line in order in the same collected source.
-        var offset = 0;
-        var lines = diagnostic.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        foreach (var line in lines)
-        {
-            var index = source.IndexOf(line, offset, StringComparison.Ordinal);
-            if (index < 0)
-            {
-                return false;
-            }
-            offset = index + line.Length;
-        }
-
-        return lines.Length > 0;
     }
 
     internal static string AppendOccurrence(string body, string row, int total)

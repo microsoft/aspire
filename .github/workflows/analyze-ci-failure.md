@@ -397,7 +397,7 @@ Reuse an existing cause ID only when category, failing phase, and current diagno
 
 Cause IDs describe the failure mechanism, not a platform, shard, job, or test label. Keep OS and platform differences as context: the same hook or timeout symptom across platforms does not by itself establish a shared root cause, and a platform difference alone does not establish distinct causes. Compare the observed diagnostic and failing phase, and keep causes separate when the logs point to different mechanisms.
 
-For hook/resource-readiness timeouts, inspect the captured last state and earlier launch, build, resource, and transport diagnostics. A canceled launch, a resource reporting `FailedToStart`, and an AppHost whose startup never completed are different observations behind the same timeout wrapper; do not merge them without evidence of a shared mechanism. A retrieval hint or matching job name is not that evidence.
+For hook/resource-readiness timeouts, inspect the captured last state and earlier launch, build, resource, and transport diagnostics. A canceled launch, a resource reporting `FailedToStart`, and an AppHost whose startup never completed are different observations behind the same timeout wrapper; do not merge them without evidence of a shared mechanism. A retrieval hint or matching job name is not that evidence. Differences only in timestamps, IDs, ports or elapsed times do not establish different mechanisms, and a missing diagnostic-match hint does not exclude a prior cause.
 
 When a mechanism matches a stored cause, use the `existing` cause variant with its `id`. Its type and stored descriptive fields are publisher-owned. Scalar `test_name` in history is opaque legacy descriptive metadata. Do not track PR code issues as recurring causes.
 
@@ -460,7 +460,7 @@ Use this alternative inline in the proposal `causes` array (not a separate file)
 - `type` is `flaky-test`, `infra-failure`, or `main-repository-breakage`. Never create a PR code-issue cause.
 - `title` is a single-line description of at most 238 characters.
 - Flaky causes reference the exact bundle-local `test_refs` classified flaky, sharing the same mechanism. Each referenced test belongs to a claimed job, and every claimed job contains a referenced observation. Infrastructure/main causes use an empty `test_refs` array.
-- `error_pattern` is the actual diagnostic from the current trusted evidence, up to 500 characters, optionally LF-delimited. Do not substitute a generic failure summary, diagnosis, or attribution for the observed diagnostic. Do not include styling/unsafe controls.
+- `error_pattern` is a verbatim, contiguous excerpt of the most specific observed diagnostic from one current evidence field or log for the claimed jobs/tests, up to 500 characters, optionally LF-delimited. Prefer text identifying the underlying error or failing operation over a generic timeout or exit-code wrapper. Preserve wording and line breaks; do not add ellipses, placeholders, paraphrases, commentary, diagnosis or attribution. Choose a shorter excerpt to omit volatile values. Put explanations in `title` or `reason`. Do not include styling/unsafe controls.
 - `job_ids` is a nonempty array of unique trusted string IDs, never names. Infrastructure/main causes require compatible classifications.
 - Do not include `occurrences`, issue links or other publisher-owned fields. No transient refs, all-source lists or artifact IDs enter durable history.
 
@@ -468,7 +468,7 @@ Do not merge distinct mechanisms or omit observations to reduce issue count. A s
 
 ## Request effects
 
-Always emit exactly one `publish-data` safe output with `run_id`, including code-issue verdicts and closed/locked PRs. Include `pr_numbers` only when trusted context contains a subject PR; omit it for main runs rather than sending an empty string. Code issues produce a PR report but no recurring history. Main reports use cause issues, not PR comments. Main issue titles and build context derive from trusted context, not agent attribution. Error messages must reproduce observed diagnostics from trusted logs and must not state inferred causes or attribution.
+Always emit exactly one `publish-data` safe output with `run_id`, including code-issue verdicts and closed/locked PRs. Include `pr_numbers` only when trusted context contains a subject PR; omit it for main runs rather than sending an empty string. Code issues produce a PR report but no recurring history. Main reports use cause issues, not PR comments. Main issue titles and public diagnostics derive from trusted context, not agent attribution.
 
 Only emit `rerun-failed-jobs` for pure `transient-infra`, with no failed tests, and only when `ENABLE_RERUN` is `'true'`. Otherwise do not request a rerun. Publication and rerun authorization recheck open/unlocked PR state immediately before PR-directed effects.
 

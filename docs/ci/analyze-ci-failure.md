@@ -485,21 +485,10 @@ PR-directed effects check fresh open/unlocked state. Rendering retains the
 65,000-byte comment budget, issue-body budgets, Markdown inertness, Unicode
 handling and secret redaction.
 
-Main-breakage issues show the stored cause's `error_pattern` only when every
-nonempty line occurs in order in one collected diagnostic source for that
-cause's jobs. Sources include structured test diagnostics and captured job and
-Mocha hook logs, normalized and redacted independently of the agent proposal.
-Missing or mismatched evidence produces an explicit unverified-diagnostic
-message instead of displaying invented attribution or stale legacy prose.
-This check applies to both new issues and migration of existing main issues.
-The displayed text uses the same
-secret redaction, control-character removal and 500-code-point display limit
-as other cause issues. They no longer replace it with generic main-failure
-boilerplate when evidence verifies the pattern. Main titles and build context
-still come from trusted metadata. Stored history is not rewritten: a representative
-pattern containing an earlier elapsed time can fail verification against a later
-occurrence and receive the explicit fallback. Matching source text establishes
-that it was observed, not that any attribution in an upstream log is correct.
+A new cause's `error_pattern` is a verbatim excerpt of one observed diagnostic,
+without added ellipses, placeholders or commentary. Prior-cause retrieval matches
+it with literal substring comparison, so paraphrased or annotated patterns never
+produce a diagnostic-match hint. Explanations belong in the title or reason.
 
 Cause matching must compare the diagnostic and failing phase, not just a shared
 test, job or timeout message. For readiness timeouts, inspect earlier diagnostics
