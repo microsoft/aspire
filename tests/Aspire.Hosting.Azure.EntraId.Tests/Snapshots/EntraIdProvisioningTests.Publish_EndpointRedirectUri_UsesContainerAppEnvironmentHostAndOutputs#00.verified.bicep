@@ -36,7 +36,7 @@ module entra_web 'entra-web/entra-web.bicep' = {
   scope: rg
   params: {
     tenantResourceSuffix: tenantResourceSuffix
-    redirectUri0: 'https://web.${env.outputs.AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN}/signin-oidc'
+    redirectUri0: 'https://web.${env.outputs.AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN}'
   }
 }
 

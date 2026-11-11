@@ -34,7 +34,7 @@ await container.withTags(["Backend", "API"]);
 await container.withTags(["Service"]);
 await container.withTrait("Owner", "Finance");
 await container.withTrait("Owner", "Platform");
-await container.withDashboardPosition(-10);
+await container.withDisplayOrder(10);
 await container.withOtlpExporter({ protocol: OtlpProtocol.HttpJson });
 const taggedContainer = await builder.addContainer("mytaggedcontainer", {
     image: "nginx",
@@ -359,6 +359,7 @@ await project.withReference(cache);
 
 // withIconName
 await container.withIconName("Database", { iconVariant: IconVariant.Filled });
+await container.withResourceTypeDisplayName("Validation Service");
 
 // withHttpProbe
 await container.withHttpProbe(ProbeType.Liveness, { path: "/health" });

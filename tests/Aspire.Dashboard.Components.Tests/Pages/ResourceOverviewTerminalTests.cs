@@ -19,6 +19,33 @@ namespace Aspire.Dashboard.Components.Tests.Pages;
 [UseCulture("en-US")]
 public class ResourceOverviewTerminalTests : DashboardTestContext
 {
+    [Fact]
+    public void Recording_DoesNotMountTerminalAndShowsConsole()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var client = new TestDashboardClient(isEnabled: true,
+            initialResources: [TerminalSetupHelpers.CreateTerminalResource("shell", autoFit: true)],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>,
+            isReadOnly: true);
+        Services.AddSingleton<IVolumePathLauncher, VolumePathLauncher>();
+        Services.AddSingleton<IInstrumentUnitResolver, TestInstrumentUnitResolver>();
+        Services.AddSingleton<ConsoleLogsManager>();
+        TerminalsSetupHelpers.SetupResourcesPage(this, viewport, client);
+        Services.GetRequiredService<NavigationManager>().NavigateTo("/resources/shell?terminal=true");
+
+        var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport).Add(p => p.Body, builder =>
+        {
+            builder.OpenComponent<ResourceOverview>(0);
+            builder.AddAttribute(1, nameof(ResourceOverview.ResourceName), "shell");
+            builder.CloseComponent();
+        }));
+
+        cut.WaitForAssertion(() => Assert.NotEmpty(cut.FindAll("#overview-console-title")));
+        Assert.Empty(cut.FindComponents<TerminalView>());
+        Assert.Empty(cut.FindAll(".overview-terminal-card"));
+        Assert.Empty(cut.FindAll(".resource-overview.terminal-focused"));
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]

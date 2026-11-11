@@ -14,7 +14,7 @@
             Style="@Style"
             PersistOnItemClick="true"
             aria-labelledby="@HeaderId">
-    <FluentMenuList>
+    <FluentMenuList role="menu" aria-labelledby="@HeaderId">
         @foreach (var item in Items)
         {
             <AspireMenuItem @key="item.RenderKey"

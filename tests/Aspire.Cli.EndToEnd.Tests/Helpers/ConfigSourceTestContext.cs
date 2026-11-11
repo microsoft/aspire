@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.IO.Compression;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using Hex1b.Automation;
@@ -15,6 +16,7 @@ internal sealed class ConfigSourceTestContext
     private const string SshRepository = "ssh://git@config-source.example/config";
 
     private readonly string _root;
+    private readonly string _feedRoot;
     private readonly Hex1bTerminalAutomator _auto;
     private readonly SequenceCounter _counter;
     private readonly CancellationToken _cancellationToken;
@@ -25,13 +27,14 @@ internal sealed class ConfigSourceTestContext
         TemporaryWorkspace workspace, Hex1bTerminalAutomator auto, SequenceCounter counter, CancellationToken cancellationToken)
     {
         _root = workspace.WorkspaceRoot.FullName;
+        _feedRoot = CliE2ETestHelpers.ToContainerPath(Path.Combine(_root, "integration-feed"), workspace);
         _auto = auto;
         _counter = counter;
         _cancellationToken = cancellationToken;
         _repository = CliE2ETestHelpers.ToContainerPath(Path.Combine(_root, "configuration source"), workspace);
     }
 
-    public static async Task RunAsync(ITestOutputHelper output, Func<ConfigSourceTestContext, Task> test)
+    public static async Task RunAsync(ITestOutputHelper output, string objectFormat, Func<ConfigSourceTestContext, Task> test)
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
@@ -51,22 +54,78 @@ internal sealed class ConfigSourceTestContext
         await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, cancellationToken);
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);
-        await context.InitializeRepositoryAsync();
+        await context.InitializeRepositoryAsync(objectFormat);
         await test(context);
     }
 
     public async Task CreateProjectAsync()
     {
-        await _auto.RunCommandAsync($"{NewCommand} --use-config-source true --non-interactive", _counter,
+        await _auto.RunCommandAsync($"{NewCommand} --use-config-source --non-interactive", _counter,
             timeout: TimeSpan.FromMinutes(3));
         await ConfigureProjectAsync();
+    }
+
+    public async Task<JsonObject> CreateUnboundProjectAsync()
+    {
+        await _auto.RunCommandAsync($"{NewCommand} --use-config-source false --non-interactive", _counter,
+            timeout: TimeSpan.FromMinutes(3));
+        await ConfigureProjectAsync();
+        // Remove the saved choice to model an existing project created before source adoption.
+        await _auto.RunCommandAsync("aspire config delete configSource", _counter);
+        await _auto.RunCommandAsync("aspire config set docs.llmsTxtUrl https://local.example/llms.txt", _counter);
+        var configuration = await ReadConfigurationAsync();
+        Assert.Null(configuration["configSource"]);
+        Assert.Equal("https://local.example/llms.txt", configuration["docs"]!["llmsTxtUrl"]!.GetValue<string>());
+        await AssertSourceNotAcquiredAsync();
+        return configuration;
+    }
+
+    public async Task AddAndAssertIntegrationSourcesAsync()
+    {
+        foreach (var (feed, id) in new[]
+        {
+            ("team", "Contoso.Hosting.Configured"),
+            ("team", "Excluded.Package"),
+            ("other", "Fabrikam.Hosting.Configured")
+        })
+        {
+            var directory = Directory.CreateDirectory(Path.Combine(_root, "integration-feed", feed));
+            using var archive = ZipFile.Open(Path.Combine(directory.FullName, $"{id}.1.0.0.nupkg"), ZipArchiveMode.Create);
+            await using (var writer = new StreamWriter(archive.CreateEntry($"{id}.nuspec").Open()))
+            {
+                await writer.WriteAsync($"""
+                    <?xml version="1.0"?>
+                    <package><metadata><id>{id}</id><version>1.0.0</version><authors>Aspire Tests</authors><description>Integration source fixture</description></metadata></package>
+                    """);
+            }
+            await using var content = new StreamWriter(archive.CreateEntry("content/readme.txt").Open());
+            await content.WriteAsync("Integration source fixture.");
+        }
+
+        await _auto.RunCommandAsync(
+            "aspire integration list --format json --non-interactive > \"$ASPIRE_E2E_WORKSPACE/integrations.json\"", _counter);
+        var integrations = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(_root, "integrations.json"), _cancellationToken))!.AsArray();
+        Assert.Equal(
+            ["Contoso.Hosting.Configured", "Fabrikam.Hosting.Configured"],
+            integrations.Select(item => item!["package"]!.GetValue<string>()).Order());
+
+        foreach (var id in new[] { "Contoso.Hosting.Configured", "Fabrikam.Hosting.Configured" })
+        {
+            await _auto.RunCommandAsync($"aspire add {id} --version 1.0.0 --non-interactive", _counter,
+                timeout: TimeSpan.FromMinutes(3));
+        }
+
+        await _auto.RunCommandAsync("cat apphost.cs > \"$ASPIRE_E2E_WORKSPACE/actual-apphost.cs\"", _counter);
+        var appHost = await File.ReadAllTextAsync(Path.Combine(_root, "actual-apphost.cs"), _cancellationToken);
+        Assert.Contains("Contoso.Hosting.Configured@1.0.0", appHost);
+        Assert.Contains("Fabrikam.Hosting.Configured@1.0.0", appHost);
     }
 
     public async Task InitializeSolutionAsync()
     {
         await _auto.RunCommandAsync("mkdir SourceApp && cd SourceApp && dotnet new sln --name SourceApp", _counter);
         await _auto.RunCommandAsync(
-            "aspire init --language csharp --suppress-agent-init --use-config-source true --non-interactive",
+            "aspire init --language csharp --suppress-agent-init --use-config-source --non-interactive",
             _counter, timeout: TimeSpan.FromMinutes(3));
         await _auto.RunCommandAsync(
             "test ! -f aspire.config.json && test -f SourceApp.AppHost/aspire.config.json && " +
@@ -85,17 +144,34 @@ internal sealed class ConfigSourceTestContext
         await _auto.RunCommandAsync("aspire config set appHost.path AppHost/apphost.cs", _counter);
     }
 
-    public async Task CreateProjectWithConsentAsync(bool accept)
+    public async Task CreateProjectWithConsentAsync(bool accept, bool useOption)
     {
-        await _auto.TypeAsync(NewCommand);
+        // A template subcommand or --language bypasses configured-template discovery.
+        // Exercise the interactive picker so declining must also suppress runtime inheritance.
+        var consentOption = useOption ? accept ? " --use-config-source" : " --use-config-source false" : "";
+        await _auto.TypeAsync(
+            $"aspire new --name SourceApp --output SourceApp --suppress-agent-init{consentOption}");
         await _auto.EnterAsync();
-        var consentPrompt = new CellPatternSearcher().Find("Use configuration from this source?");
-        await _auto.WaitUntilAsync(snapshot => consentPrompt.Search(snapshot).Count > 0,
-            timeout: TimeSpan.FromMinutes(2), description: "waiting for configuration source consent");
-        if (!accept)
+        if (!useOption)
         {
-            await _auto.DownAsync();
+            var consentPrompt = new CellPatternSearcher().Find("Use configuration from this source? [Y/n]:");
+            await _auto.WaitUntilAsync(snapshot => consentPrompt.Search(snapshot).Count > 0,
+                timeout: TimeSpan.FromMinutes(2), description: "waiting for configuration source consent");
+            // Confirmation consumes a single key; an extra Enter could reach the next prompt.
+            await _auto.TypeAsync(accept ? "y" : "n");
         }
+        var templatePrompt = new CellPatternSearcher().Find("> Starter App");
+        await _auto.WaitUntilAsync(snapshot => templatePrompt.Search(snapshot).Count > 0,
+            timeout: TimeSpan.FromMinutes(2), description: "waiting for template selection after configuration source consent");
+        await _auto.TypeAsync("Empty AppHost");
+        await _auto.EnterAsync();
+        var languagePrompt = new CellPatternSearcher().Find("Which language would you like to use?");
+        await _auto.WaitUntilAsync(snapshot => languagePrompt.Search(snapshot).Count > 0,
+            timeout: TimeSpan.FromSeconds(30), description: "waiting for the empty AppHost language prompt");
+        await _auto.EnterAsync();
+        var urlsPrompt = new CellPatternSearcher().Find("Use *.dev.localhost URLs");
+        await _auto.WaitUntilAsync(snapshot => urlsPrompt.Search(snapshot).Count > 0,
+            timeout: TimeSpan.FromMinutes(2), description: "waiting for the local development URLs prompt");
         await _auto.EnterAsync();
         await _auto.WaitForSuccessPromptAsync(_counter, timeout: TimeSpan.FromMinutes(3));
         await ConfigureProjectAsync();
@@ -110,7 +186,8 @@ internal sealed class ConfigSourceTestContext
         else
         {
             var configuration = await ReadConfigurationAsync();
-            Assert.Null(configuration["configSource"]);
+            Assert.True(configuration["configSource"]!["optOut"]!.GetValue<bool>());
+            Assert.Null(configuration["skillSources"]);
             Assert.Equal("""{"custom":"keep"}""", configuration["docs"]!.ToJsonString());
             await AssertSourceNotAcquiredAsync();
         }
@@ -123,7 +200,7 @@ internal sealed class ConfigSourceTestContext
             $"result=$?; cat \"$ASPIRE_E2E_WORKSPACE/consent.log\"; test \"$result\" -eq {CliExitCodes.InvalidCommand}",
             _counter, timeout: TimeSpan.FromMinutes(3));
         var consentOutput = await File.ReadAllTextAsync(Path.Combine(_root, "consent.log"), _cancellationToken);
-        Assert.Contains("Specify --use-config-source true to accept it or --use-config-source false",
+        Assert.Contains("Specify --use-config-source to accept it or --use-config-source false",
             Regex.Replace(consentOutput, @"\s+", " "));
         Assert.False(Directory.Exists(Path.Combine(_root, "SourceApp")));
         await AssertSourceNotAcquiredAsync();
@@ -132,7 +209,7 @@ internal sealed class ConfigSourceTestContext
     public async Task CreateProjectWithGitAuthenticationAsync()
     {
         await ConfigureGitAuthenticationAsync();
-        await _auto.TypeAsync($"{NewCommand} --use-config-source true");
+        await _auto.TypeAsync($"{NewCommand} --use-config-source --log-file \"$ASPIRE_E2E_WORKSPACE/git-auth-cli.log\"");
         await _auto.EnterAsync();
         var authenticationPrompt = new CellPatternSearcher().Find("Configuration source Git authentication code:");
         await _auto.WaitUntilAsync(snapshot => authenticationPrompt.Search(snapshot).Count > 0,
@@ -147,6 +224,16 @@ internal sealed class ConfigSourceTestContext
         await ConfigureProjectAsync();
     }
 
+    public async Task AssertGitOutputLoggedAsync()
+    {
+        // Export the owner-only CLI log through the container before reading it on the host.
+        await _auto.RunCommandAsync(
+            "cat \"$ASPIRE_E2E_WORKSPACE/git-auth-cli.log\" > \"$ASPIRE_E2E_WORKSPACE/actual-git-auth-cli.log\"", _counter);
+        var log = await File.ReadAllTextAsync(Path.Combine(_root, "actual-git-auth-cli.log"), _cancellationToken);
+        Assert.Contains("[DBUG] [GitCommandRunner] Git stdout: ", log);
+        Assert.Contains("[DBUG] [GitCommandRunner] Git stderr: ", log);
+    }
+
     public async Task<JsonObject> AssertSourceAppliedAsync(string version)
     {
         var configuration = await ReadConfigurationAsync();
@@ -155,6 +242,59 @@ internal sealed class ConfigSourceTestContext
         Assert.Equal("teams/platform.json", configuration["configSource"]!["path"]!.GetValue<string>());
         Assert.Equal("main", configuration["configSource"]!["ref"]!.GetValue<string>());
         return configuration;
+    }
+
+    public async Task RegisterAndAssertSkillSourcesAsync()
+    {
+        const string command = "aspire agent init --workspace-root . --agents copilot,claude,opencode --scope project " +
+            "--skills aspire --mcp=false --non-interactive";
+        const string expectedPluginSettings = """
+            {
+              "extraKnownMarketplaces": {
+                "aspire-skills": { "source": { "source": "github", "repo": "microsoft/aspire-skills" } },
+                "platform": { "source": { "source": "github", "repo": "example/platform-skills", "ref": "original" } },
+                "team": { "source": { "source": "github", "repo": "example/team-skills" } }
+              },
+              "enabledPlugins": {
+                "aspire@aspire-skills": true,
+                "aspire@platform": true,
+                "original@team": true,
+                "deployment@team": true
+              }
+            }
+            """;
+        const string expectedOpenCodeSettings = """
+            {
+              "skills": {
+                "urls": [
+                  "https://raw.githubusercontent.com/microsoft/aspire-skills/main/opencode/v1/",
+                  "https://skills.example/original/"
+                ]
+              }
+            }
+            """;
+        (string Path, string Expected)[] settings =
+        [
+            (".github/copilot/settings.json", expectedPluginSettings),
+            (".claude/settings.json", expectedPluginSettings),
+            ("opencode.jsonc", expectedOpenCodeSettings)
+        ];
+        foreach (var repository in new[] { "microsoft/aspire-skills", "https://github.com/microsoft/aspire-skills.git" })
+        {
+            await _auto.RunCommandAsync(
+                $"aspire config set skillSources.default.repository {repository}", _counter);
+            await _auto.RunCommandAsync(command, _counter);
+            foreach (var (path, expected) in settings)
+            {
+                await _auto.RunCommandAsync(
+                    $"cat \"{path}\" > \"$ASPIRE_E2E_WORKSPACE/actual-agent-settings.json\"", _counter);
+                var actual = await File.ReadAllTextAsync(Path.Combine(_root, "actual-agent-settings.json"), _cancellationToken);
+                Assert.True(JsonNode.DeepEquals(JsonNode.Parse(expected), JsonNode.Parse(actual)),
+                    $"Unexpected skill-source registration in {path}: {actual}");
+            }
+        }
+
+        Assert.False(Directory.Exists(Path.Combine(_root, "SourceApp", ".agents", "skills")));
     }
 
     public async Task UpdateSourceAsync()
@@ -195,14 +335,40 @@ internal sealed class ConfigSourceTestContext
             await File.ReadAllTextAsync(Path.Combine(_root, "run.log"), _cancellationToken));
     }
 
-    public async Task RefreshConfigurationAsync(bool expectChanges)
-    {
-        await _auto.RunCommandAsync(
+    public Task RefreshConfigurationAsync()
+        => _auto.RunCommandAsync(
             "set -o pipefail; aspire update --config-source --yes --non-interactive 2>&1 | tee \"$ASPIRE_E2E_WORKSPACE/update.log\"",
             _counter, timeout: TimeSpan.FromMinutes(2));
-        var message = expectChanges ? "configuration updated" : "configuration already up to date";
-        var updateOutput = await File.ReadAllTextAsync(Path.Combine(_root, "update.log"), _cancellationToken);
-        Assert.Contains(message, Regex.Replace(updateOutput, @"\s+", " "));
+
+    public async Task AssertRefreshWithoutBindingAsync()
+    {
+        await _auto.RunCommandAsync(
+            "aspire update --config-source --yes --non-interactive > \"$ASPIRE_E2E_WORKSPACE/missing-source.log\" 2>&1",
+            _counter, timeout: TimeSpan.FromMinutes(2));
+        var output = await File.ReadAllTextAsync(Path.Combine(_root, "missing-source.log"), _cancellationToken);
+        Assert.Contains("No configuration source to update.", Regex.Replace(output, @"\s+", " "));
+        await AssertSourceNotAcquiredAsync();
+    }
+
+    public async Task UpdateProjectWithSourceConsentAsync()
+    {
+        await _auto.TypeAsync("aspire update --yes");
+        await _auto.EnterAsync();
+        var candidate = new CellPatternSearcher().Find("Git source:");
+        var consentPrompt = new CellPatternSearcher().Find("Use configuration from this source? [Y/n]:");
+        await _auto.WaitUntilAsync(snapshot => candidate.Search(snapshot).Count > 0 && consentPrompt.Search(snapshot).Count > 0,
+            timeout: TimeSpan.FromMinutes(2), description: "waiting for brownfield configuration source consent");
+        await _auto.TypeAsync("y");
+        await _auto.WaitForSuccessPromptAsync(_counter, timeout: TimeSpan.FromMinutes(5));
+    }
+
+    public async Task AssertConfigurationSourceAdoptedAsync(JsonObject original)
+    {
+        var actual = await AssertSourceAppliedAsync("original");
+        original["skillSources"] = actual["skillSources"]!.DeepClone();
+        original["integrationSources"] = actual["integrationSources"]!.DeepClone();
+        original["configSource"] = actual["configSource"]!.DeepClone();
+        Assert.Equal(original.ToJsonString(), actual.ToJsonString());
     }
 
     public async Task AssertConfigurationUpdatedAsync(JsonObject original)
@@ -210,8 +376,7 @@ internal sealed class ConfigSourceTestContext
         var actual = await ReadConfigurationAsync();
         var version = await ReadSourceVersionAsync();
         AssertSourceValues(actual, "updated", version);
-        original["docs"]!["llmsTxtUrl"] = actual["docs"]!["llmsTxtUrl"]!.DeepClone();
-        original["docs"]!["api"]!["sitemapUrl"] = actual["docs"]!["api"]!["sitemapUrl"]!.DeepClone();
+        original["skillSources"] = actual["skillSources"]!.DeepClone();
         original["configSource"]!["appliedVersion"] = version;
         Assert.Equal(original.ToJsonString(), actual.ToJsonString());
     }
@@ -222,12 +387,12 @@ internal sealed class ConfigSourceTestContext
         Assert.Equal(original.ToJsonString(), actual.ToJsonString());
     }
 
-    private async Task InitializeRepositoryAsync()
+    private async Task InitializeRepositoryAsync(string objectFormat)
     {
         await _auto.RunCommandAsync("aspire config set features.updateNotificationsEnabled false -g", _counter);
         // The bind-mounted directory belongs to the host runner, not the container's root user.
         await _auto.RunCommandAsync("git config --global --add safe.directory \"$ASPIRE_E2E_WORKSPACE/configuration source\"", _counter);
-        await _auto.RunCommandAsync("git -C 'configuration source' init --initial-branch=main", _counter);
+        await _auto.RunCommandAsync($"git -C 'configuration source' init --initial-branch=main --object-format={objectFormat}", _counter);
         await _auto.RunCommandAsync("git -C 'configuration source' config user.name 'Aspire E2E'", _counter);
         await _auto.RunCommandAsync("git -C 'configuration source' config user.email aspire-e2e@example.com", _counter);
         await CommitSourceAsync();
@@ -268,11 +433,25 @@ internal sealed class ConfigSourceTestContext
         var directory = Directory.CreateDirectory(Path.Combine(_root, "configuration source", "teams"));
         await File.WriteAllTextAsync(Path.Combine(directory.FullName, "platform.json"), $$"""
             {
-              "docs": {
-                "llmsTxtUrl": "https://docs.example/{{version}}/llms.txt",
-                "api": {
-                  "sitemapUrl": "https://docs.example/{{version}}/sitemap.xml"
+              "skillSources": {
+                "default": {},
+                "platform": {
+                  "repository": "example/platform-skills",
+                  "ref": "{{version}}"
+                },
+                "team": {
+                  "repository": "example/team-skills",
+                  "plugins": ["{{version}}", "deployment"],
+                  "openCodeV2Catalog": "https://skills.example/{{version}}/"
                 }
+              },
+              "integrationSources": {
+                "default": { "enabled": false },
+                "team": { "source": "{{_feedRoot}}/team", "patterns": ["Contoso.Hosting.*"] },
+                "other": { "source": "{{_feedRoot}}/other", "patterns": ["Fabrikam.Hosting.*"] }
+              },
+              "docs": {
+                "llmsTxtUrl": "https://excluded.example/{{version}}/llms.txt"
               }
             }
             """, _cancellationToken);
@@ -294,11 +473,28 @@ internal sealed class ConfigSourceTestContext
         _repository = SshRepository;
     }
 
-    private static void AssertSourceValues(JsonObject config, string version, string appliedVersion)
+    private void AssertSourceValues(JsonObject config, string version, string appliedVersion)
     {
-        Assert.Equal($"https://docs.example/{version}/llms.txt", config["docs"]!["llmsTxtUrl"]!.GetValue<string>());
-        Assert.Equal($"https://docs.example/{version}/sitemap.xml", config["docs"]!["api"]!["sitemapUrl"]!.GetValue<string>());
-        Assert.Equal("keep", config["docs"]!["custom"]!.GetValue<string>());
+        var expectedSources = JsonNode.Parse($$"""
+            {
+              "default": {},
+              "platform": { "repository": "example/platform-skills", "ref": "{{version}}" },
+              "team": {
+                "repository": "example/team-skills",
+                "plugins": ["{{version}}", "deployment"],
+                "openCodeV2Catalog": "https://skills.example/{{version}}/"
+              }
+            }
+            """);
+        Assert.True(JsonNode.DeepEquals(expectedSources, config["skillSources"]));
+        var expectedIntegrationSources = JsonNode.Parse($$"""
+            {
+              "default": { "enabled": false },
+              "team": { "source": "{{_feedRoot}}/team", "patterns": ["Contoso.Hosting.*"] },
+              "other": { "source": "{{_feedRoot}}/other", "patterns": ["Fabrikam.Hosting.*"] }
+            }
+            """);
+        Assert.True(JsonNode.DeepEquals(expectedIntegrationSources, config["integrationSources"]));
         Assert.Equal(appliedVersion, config["configSource"]!["appliedVersion"]!.GetValue<string>());
     }
 

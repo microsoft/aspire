@@ -1,173 +1,91 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Formats.Tar;
-using System.IO.Compression;
-using System.Text;
-using System.Text.Json;
-using Aspire.Cli.Agents.AspireSkills;
 using Aspire.Cli.Agents.Hooks;
 
 namespace Aspire.Cli.Tests.Agents;
 
 public class AgentTelemetryCatalogTests
 {
-    private const string Script = """ASPIRE_MCP_TOOLS="new_tool" """;
-    private const string Manifest = """
-        {
-          "version": "test",
-          "skills": [
-            {
-              "name": "new-skill",
-              "files": [
-                { "relativePath": "SKILL.md" },
-                { "relativePath": "references/new.md" },
-                { "relativePath": "evals/private.json" },
-                { "relativePath": "scripts/helper.sh" }
-              ]
-            },
-            {
-              "name": "another-skill",
-              "files": [
-                { "relativePath": "SKILL.md" },
-                { "relativePath": "references/guide.yml" }
-              ]
-            }
-          ]
-        }
+    private const string Script = """
+        ASPIRE_SKILLS="new-skill another-skill"
+        ASPIRE_MCP_TOOLS="new_tool another-tool"
+        ASPIRE_REFERENCE_FILES="
+        new-skill/references/new.md
+        another-skill/references/guide.yml
+        "
         """;
 
     [Theory]
     [InlineData("\n")]
     [InlineData("\r\n")]
-    public void ReadsSkillsAndReferencesFromManifestWithoutScriptDeclarations(string newline)
+    public void ReadsAllowlistsFromCanonicalScript(string newline)
     {
-        var catalog = AgentTelemetryCatalog.Parse(ParseManifest(Manifest.ReplaceLineEndings(newline)), Script);
+        var catalog = AgentTelemetryCatalog.Parse(Script.ReplaceLineEndings(newline));
         Assert.Equal(["another-skill", "new-skill"], catalog.Skills.Order());
-        Assert.Equal(["new_tool"], catalog.Tools);
+        Assert.Equal(["another-tool", "new_tool"], catalog.Tools.Order());
         Assert.Equal(["another-skill/references/guide.yml", "new-skill/references/new.md"], catalog.References.Order());
         Assert.Contains("NEW-SKILL", catalog.Skills);
         Assert.False(catalog.Skills.Contains("third-party"));
     }
 
-    [Fact]
-    public void ManifestControlsSkillsEvenIfScriptHasStaleSkillDeclarations()
+    [Theory]
+    [InlineData("ASPIRE_SKILLS", "valid $(command)")]
+    [InlineData("ASPIRE_SKILLS", "third/party")]
+    [InlineData("ASPIRE_MCP_TOOLS", "valid name;command")]
+    [InlineData("ASPIRE_MCP_TOOLS", "")]
+    public void SkillAndToolIdentifiersMustBeValid(string variableName, string values)
     {
-        var script = Script + "\n" + """
-            ASPIRE_SKILLS="stale-skill"
-            ASPIRE_REFERENCE_FILES="stale-skill/references/old.md"
-            """;
-        var catalog = AgentTelemetryCatalog.Parse(ParseManifest(Manifest), script);
-        Assert.Equal(["another-skill", "new-skill"], catalog.Skills.Order());
-        Assert.Equal(["another-skill/references/guide.yml", "new-skill/references/new.md"], catalog.References.Order());
+        Assert.Throws<InvalidDataException>(() => AgentTelemetryCatalog.Parse(ReplaceValues(variableName, values)));
     }
 
     [Theory]
-    [InlineData("""{}""")]
-    [InlineData("""{"skills":null}""")]
-    [InlineData("""{"skills":[null]}""")]
-    [InlineData("""{"skills":[{"name":""}]}""")]
-    [InlineData("""{"skills":[{"name":"missing-files"}]}""")]
-    [InlineData("""{"skills":[{"name":"null-files","files":null}]}""")]
-    [InlineData("""{"skills":[{"name":"duplicate","files":[]},{"name":"duplicate","files":[]}]}""")]
-    public void InvalidSkillInventoryFailsExplicitly(string json)
+    [InlineData("unknown-skill/references/new.md")]
+    [InlineData("new-skill/private.md")]
+    [InlineData("new-skill/references/../private.md")]
+    [InlineData("new-skill\\references\\private.md")]
+    public void ReferencesMustBelongToKnownSkillReferenceDirectories(string reference)
     {
-        Assert.Throws<InvalidDataException>(() => AgentTelemetryCatalog.Parse(ParseManifest(json), Script));
+        Assert.Throws<InvalidDataException>(() => AgentTelemetryCatalog.Parse(ReplaceValues("ASPIRE_REFERENCE_FILES", reference)));
     }
 
     [Theory]
-    [InlineData("../private")]
-    [InlineData("third/party")]
-    [InlineData("C:\\private")]
-    public void SkillNamesUseExistingBundleValidation(string name)
+    [InlineData("ASPIRE_SKILLS")]
+    [InlineData("ASPIRE_MCP_TOOLS")]
+    [InlineData("ASPIRE_REFERENCE_FILES")]
+    public void MissingOrDuplicateDeclarationsAreRejected(string variableName)
     {
-        var manifest = new SkillBundleManifest { Skills = [new() { Name = name }] };
-        Assert.Throws<InvalidOperationException>(() => AgentTelemetryCatalog.Parse(manifest, Script));
+        var declaration = GetDeclaration(variableName);
+        Assert.Throws<InvalidDataException>(() => AgentTelemetryCatalog.Parse(Script.Replace(declaration, "", StringComparison.Ordinal)));
+        Assert.Throws<InvalidDataException>(() => AgentTelemetryCatalog.Parse($"{Script}\n{declaration}"));
     }
 
     [Theory]
-    [InlineData("../private.md")]
-    [InlineData("/private.md")]
-    [InlineData("references/../../private.md")]
-    public void ReferencePathsUseExistingBundleValidation(string path)
+    [InlineData("ASPIRE_SKILLS", "new-skill NEW-SKILL")]
+    [InlineData("ASPIRE_MCP_TOOLS", "new_tool NEW_TOOL")]
+    [InlineData("ASPIRE_REFERENCE_FILES", "new-skill/references/new.md NEW-SKILL/references/new.md")]
+    public void DuplicateValuesAreRejectedCaseInsensitively(string variableName, string values)
     {
-        var manifest = new SkillBundleManifest
-        {
-            Skills = [new() { Name = "test-skill", Files = [new() { RelativePath = path }] }]
-        };
-        Assert.Throws<InvalidOperationException>(() => AgentTelemetryCatalog.Parse(manifest, Script));
+        Assert.Throws<InvalidDataException>(() => AgentTelemetryCatalog.Parse(ReplaceValues(variableName, values)));
     }
 
-    [Theory]
-    [InlineData("")]
-    [InlineData("$(command)")]
-    [InlineData("name;command")]
-    public void InvalidToolDeclarationIsRejected(string values)
+    private static string ReplaceValues(string variableName, string values)
     {
-        Assert.Throws<InvalidDataException>(() => AgentTelemetryCatalog.Parse(ParseManifest(Manifest), Script.Replace("new_tool", values)));
+        var prefix = $"{variableName}=\"";
+        var valueStart = Script.IndexOf(prefix, StringComparison.Ordinal) + prefix.Length;
+        Assert.True(valueStart >= prefix.Length);
+        var valueEnd = Script.IndexOf('"', valueStart);
+        Assert.True(valueEnd >= valueStart);
+        return Script[..valueStart] + values + Script[valueEnd..];
     }
 
-    [Fact]
-    public void MissingOrDuplicateToolDeclarationsAreRejected()
+    private static string GetDeclaration(string variableName)
     {
-        Assert.Throws<InvalidDataException>(() => AgentTelemetryCatalog.Parse(ParseManifest(Manifest), ""));
-        Assert.Throws<InvalidDataException>(() => AgentTelemetryCatalog.Parse(ParseManifest(Manifest), Script + "\n" + Script));
-    }
-
-    [Theory]
-    [InlineData("skill-manifest.json")]
-    [InlineData("package/skill-manifest.json")]
-    [InlineData("aspire-skills-v1.2.3/skill-manifest.json")]
-    public void ReadsStructuredManifestInMemoryWithoutVersionSpecificPaths(string path)
-    {
-        using var archive = CreateArchive((path, Manifest), ("skills/third-party/SKILL.md", "Not in the manifest."));
-        var manifest = AgentTelemetryCatalog.ReadManifest(archive);
-        var catalog = AgentTelemetryCatalog.Parse(manifest, Script);
-        Assert.Equal(["another-skill", "new-skill"], catalog.Skills.Order());
-        Assert.True(archive.CanRead);
-    }
-
-    [Fact]
-    public void MissingOrDuplicateManifestsAreRejected()
-    {
-        using var missing = CreateArchive(("skills/not-a-manifest.txt", "{}"));
-        using var duplicate = CreateArchive(("first/skill-manifest.json", Manifest), ("second/skill-manifest.json", Manifest));
-        Assert.Throws<InvalidDataException>(() => AgentTelemetryCatalog.ReadManifest(missing));
-        Assert.Throws<InvalidDataException>(() => AgentTelemetryCatalog.ReadManifest(duplicate));
-    }
-
-    [Theory]
-    [InlineData("null")]
-    [InlineData("{malformed")]
-    public void InvalidManifestJsonIsRejected(string content)
-    {
-        using var archive = CreateArchive(("skill-manifest.json", content));
-        if (content == "null")
-        {
-            Assert.Throws<InvalidDataException>(() => AgentTelemetryCatalog.ReadManifest(archive));
-        }
-        else
-        {
-            Assert.Throws<JsonException>(() => AgentTelemetryCatalog.ReadManifest(archive));
-        }
-    }
-
-    private static SkillBundleManifest ParseManifest(string json)
-        => JsonSerializer.Deserialize(json, AspireSkillsJsonSerializerContext.Default.SkillBundleManifest)!;
-
-    private static MemoryStream CreateArchive(params (string Path, string Content)[] entries)
-    {
-        var archive = new MemoryStream();
-        using (var gzip = new GZipStream(archive, CompressionMode.Compress, leaveOpen: true))
-        using (var writer = new TarWriter(gzip, leaveOpen: true))
-        {
-            foreach (var (path, content) in entries)
-            {
-                using var data = new MemoryStream(Encoding.UTF8.GetBytes(content));
-                writer.WriteEntry(new PaxTarEntry(TarEntryType.RegularFile, path) { DataStream = data });
-            }
-        }
-        archive.Position = 0;
-        return archive;
+        var prefix = $"{variableName}=\"";
+        var start = Script.IndexOf(prefix, StringComparison.Ordinal);
+        Assert.True(start >= 0);
+        var end = Script.IndexOf('"', start + prefix.Length);
+        Assert.True(end >= 0);
+        return Script[start..(end + 1)];
     }
 }

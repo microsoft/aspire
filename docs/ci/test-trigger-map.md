@@ -105,6 +105,15 @@ still select their normal validation.
 | `ALL` | every selector target; PR CI runs the full PR test matrix and all PR-gated jobs, while independently scheduled, dispatched, or outerloop targets remain advisory |
 | `<GROUP_NAME>` | a named group (see `groups:`) expanding **recursively** to its `test:`/`job:` members |
 
+Starter validation runs C#, TypeScript, and Go starters on all six native runner
+platforms. The Go scenario waits for the API on every platform and Redis on Linux.
+Containerless macOS/Windows runners use `--use-redis-cache false`; the default
+Redis-enabled starter remains covered by Linux runners and Docker CLI E2E tests.
+Changes to their hosting/code-generation packages select this lane through runtime consumer rules.
+The stabilization smoke separately scaffolds and restores Go and Java starters
+against the isolated local stable feed; it runs only when the stabilization gate
+is enabled, not through the test selector.
+
 Unconditional baseline builds are not selector targets. Gated reusable
 workflows are routed to the target they implement or serve.
 
@@ -248,6 +257,13 @@ Each entry's YAML comment records which case applies.
 The one general path-glob → targets matcher. `targets` may be `test:` / `job:` /
 a group name / `ALL`. Comment headers in the YAML group the entries by intent;
 the selector treats them all identically.
+
+An optional `exclude_paths` array removes matching files from that rule only.
+It uses the same case-sensitive glob syntax as `paths`; other matching rules
+and Layer 1 remain additive. An excluded file still needs another owner,
+an explicit `ignore` classification, or it triggers the normal run-all fallback.
+Use exclusions for dedicated consumers carved out of a broad shared rule, such
+as analyzer workflow inputs owned by `AnalyzeCiFailure.Tests`.
 
 Highlights:
 

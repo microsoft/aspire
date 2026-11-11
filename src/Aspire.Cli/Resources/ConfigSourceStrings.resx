@@ -61,10 +61,10 @@
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <data name="UseSourceOptionDescription" xml:space="preserve">
-    <value>Accept or decline the proposed Git configuration source for this project.</value>
+    <value>Use the proposed Git configuration source. Specify false to decline it.</value>
   </data>
   <data name="RefreshOptionDescription" xml:space="preserve">
-    <value>Apply allowed settings from the nearest local and global saved Git configuration sources, replacing local edits to supplied settings, without updating packages or the CLI.</value>
+    <value>Apply allowed settings from the nearest local saved Git configuration source, replacing local edits to supplied settings, without updating packages or the CLI.</value>
   </data>
   <data name="InvalidRepository" xml:space="preserve">
     <value>The configuration source must be an absolute local repository path or an HTTPS or SSH Git repository address without passwords, tokens, queries, or fragments.</value>
@@ -76,10 +76,10 @@
     <value>The configuration source ref must be a branch name or full commit SHA, not an empty value, tag, revision expression, or command option.</value>
   </data>
   <data name="MissingFile" xml:space="preserve">
-    <value>The configuration file is missing or is not a regular file at the selected Git branch or commit.</value>
+    <value>The configuration file is missing or is not a Git blob at the selected Git branch or commit.</value>
   </data>
   <data name="InvalidConfiguration" xml:space="preserve">
-    <value>The source configuration must be a valid Aspire JSON object no larger than 4 MiB.</value>
+    <value>The source configuration must be a valid Aspire JSON object.</value>
   </data>
   <data name="NestedSource" xml:space="preserve">
     <value>A source configuration file cannot declare another configSource.</value>
@@ -102,12 +102,25 @@
     <value>No configuration source is available. Set {0} to a Git repository address.</value>
     <comment>{0} is the environment variable name.</comment>
   </data>
-  <data name="Candidate" xml:space="preserve">
-    <value>Configuration source: {0}
-Configuration file: {1}
-Configuration ref: {2}
-Source origin: {3}</value>
-    <comment>{0} is the Git repository address, {1} is the repository-relative configuration file path, {2} is the branch name, commit SHA, or default-branch label, and {3} is the source origin (an environment variable name or Microsoft employee default).</comment>
+  <data name="ConfigurationFile" xml:space="preserve">
+    <value>Configuration file</value>
+  </data>
+  <data name="SourceOrigin" xml:space="preserve">
+    <value>Source origin</value>
+  </data>
+  <data name="Explanation" xml:space="preserve">
+    <value>A configuration source was detected on your machine. It lets an organization share Aspire settings to customize your development experience.</value>
+  </data>
+  <data name="ReadmeLink" xml:space="preserve">
+    <value>Read more about this configuration source</value>
+  </data>
+  <data name="AccessHelp" xml:space="preserve">
+    <value>For help accessing this configuration source, see {0}.</value>
+    <comment>{0} is a hyperlink to the configuration source README.</comment>
+  </data>
+  <data name="InvalidReadmeUrl" xml:space="preserve">
+    <value>{0} must be a nonempty absolute HTTP or HTTPS URL without control characters.</value>
+    <comment>{0} is the environment variable name.</comment>
   </data>
   <data name="DefaultBranch" xml:space="preserve">
     <value>default branch</value>
@@ -118,15 +131,9 @@ Source origin: {3}</value>
   <data name="UseSourcePrompt" xml:space="preserve">
     <value>Use configuration from this source?</value>
   </data>
-  <data name="Accept" xml:space="preserve">
-    <value>Yes</value>
-  </data>
-  <data name="Decline" xml:space="preserve">
-    <value>No, use standard Aspire configuration</value>
-  </data>
   <data name="ConsentRequired" xml:space="preserve">
-    <value>A configuration source is available. Specify --use-config-source true to accept it or --use-config-source false to use standard Aspire configuration in non-interactive mode.</value>
-    <comment>Do not translate "--use-config-source", "true", or "false".</comment>
+    <value>A configuration source is available. Specify --use-config-source to accept it or --use-config-source false to use standard Aspire configuration in non-interactive mode.</value>
+    <comment>Do not translate "--use-config-source" or "false".</comment>
   </data>
   <data name="NoBinding" xml:space="preserve">
     <value>No configuration source to update.</value>
@@ -137,17 +144,6 @@ Source origin: {3}</value>
   </data>
   <data name="InvalidCache" xml:space="preserve">
     <value>The configuration source cache is invalid. Restore or remove its cache entry and retry.</value>
-  </data>
-  <data name="UseNotice" xml:space="preserve">
-    <value>Configuration source {0} ({1}) at commit {2}: {3}.
-Settings file: {4}</value>
-    <comment>{0} is the Git repository address, {1} is the repository-relative configuration file path, {2} is the resolved Git commit SHA, {3} is the localized configuration update result, and {4} is the destination settings file path.</comment>
-  </data>
-  <data name="Refreshed" xml:space="preserve">
-    <value>configuration updated</value>
-  </data>
-  <data name="RefreshedUnchanged" xml:space="preserve">
-    <value>configuration already up to date</value>
   </data>
   <data name="UpdateAvailable" xml:space="preserve">
     <value>A new version of the configuration source is available. Run `aspire update --config-source` to apply it.</value>

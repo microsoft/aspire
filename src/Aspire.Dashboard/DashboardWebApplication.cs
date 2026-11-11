@@ -389,9 +389,11 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         builder.Services.AddGrpc();
         builder.Services.AddSingleton<DashboardRunStore>();
         builder.Services.AddSingleton<IDashboardRunStore>(services => services.GetRequiredService<DashboardRunStore>());
-        builder.Services.AddSingleton<ResourceTagStore>();
-        builder.Services.AddSingleton<ResourceOrderStore>();
-        builder.Services.AddSingleton<MetricPinStore>();
+        // Tags, resource order and pinned metrics are kept in the browser's local storage, so each circuit loads its own.
+        builder.Services.AddSingleton<LocalStorageLocks>();
+        builder.Services.AddScoped<ResourceTagStore>();
+        builder.Services.AddScoped<ResourceOrderStore>();
+        builder.Services.AddScoped<MetricPinStore>();
         // TryAdd for the same reason as IDashboardClient above: the factory decides which resource repository the
         // dashboard reads from, so a substituted client is only actually reachable if its factory survives too.
         builder.Services.TryAddSingleton<IRepositoryFactory, RepositoryFactory>();

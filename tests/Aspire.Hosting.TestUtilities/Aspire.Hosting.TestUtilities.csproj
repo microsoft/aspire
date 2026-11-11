@@ -44,8 +44,10 @@
     -->
     <InternalsVisibleTo Include="Aspire.Hosting.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.Blazor.Tests" />
+    <InternalsVisibleTo Include="Aspire.Hosting.Docker.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.Dotnet.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.Go.Tests" />
+    <InternalsVisibleTo Include="Aspire.Hosting.Java.Tests" />
   </ItemGroup>
 
   <ItemGroup>

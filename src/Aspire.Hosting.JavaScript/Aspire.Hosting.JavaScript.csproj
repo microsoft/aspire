@@ -18,6 +18,7 @@
     <Compile Include="$(SharedDir)BrowserDebuggerResource.cs" Link="BrowserDebuggerResource.cs" />
     <Compile Include="$(SharedDir)BrowserLaunchConfiguration.cs" Link="BrowserLaunchConfiguration.cs" />
     <Compile Include="$(SharedDir)PathNormalizer.cs" Link="Utils\PathNormalizer.cs" />
+    <Compile Include="$(SharedDir)PublishValidationExtensions.cs" Link="PublishValidationExtensions.cs" />
   </ItemGroup>
 
   <ItemGroup>

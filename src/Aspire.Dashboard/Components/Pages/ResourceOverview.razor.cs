@@ -1,8 +1,9 @@
-﻿// Licensed to the .NET Foundation under one or more agreements.
+// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
 using Aspire.Dashboard.Components.Controls;
+using Aspire.Dashboard.Components.CustomIcons;
 using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Otlp;
@@ -12,6 +13,7 @@ using Aspire.Dashboard.Utils;
 using Aspire.Shared.ConsoleLogs;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
+using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
 namespace Aspire.Dashboard.Components.Pages;
 
@@ -42,7 +44,13 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
     private Subscription? _logsSubscription;
     private Subscription? _tracesSubscription;
     private Subscription? _metricsSubscription;
-    private int _telemetryRefreshPending;
+    // Replaced when the selection changes, so a canceled refresh that hasn't observed its cancellation yet can't make
+    // the next resource's first refresh look like it's already pending.
+    private TelemetryRefreshGeneration _telemetryRefresh = new();
+
+    // Tests replace this to hold a refresh at the point where it can be canceled, because how soon a real delay handles
+    // its cancellation depends on thread pool timing.
+    internal Func<TimeSpan, CancellationToken, Task> TelemetryRefreshDelayAsync { get; set; } = Task.Delay;
     private int _consoleRenderPending;
     private bool _hasConsoleLogs;
     private bool _consoleLogsLoaded;
@@ -52,6 +60,7 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
     private IDisposable? _consoleLogsFiltersChangedSubscription;
     private TerminalView? _terminalView;
     private bool? _renderedTerminalFocus;
+    private bool _hideEmptyPanels = true;
 
     [Parameter]
     public string? ResourceName { get; set; }
@@ -121,10 +130,28 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
     private ResourceViewModel? Resource => ResourcesLayout?.SelectedResource;
 
     private bool IsTerminalFocused => ResourcesLayout?.CurrentTab == ResourceTab.Terminal &&
-        Resource is { } resource && ResourceSelectHelpers.HasUsableTerminal(resource);
+        Resource is { } resource && CanShowTerminal(resource);
+
+    // A recording's terminal endpoint would resolve through the live dashboard client, and recorded instance names can
+    // still match a running AppHost after a dashboard-only restart. Showing it would open a writable connection to a
+    // live process from a read-only run, so recordings show the console card instead, like the Terminals page.
+    private bool CanShowTerminal(ResourceViewModel resource) =>
+        !DashboardClient.IsReadOnly && ResourceSelectHelpers.HasUsableTerminal(resource);
 
     private void ToggleTerminalFocus() =>
         NavigationManager.NavigateTo(DashboardUrls.SetResourceTerminalFocus(NavigationManager.Uri, !IsTerminalFocused));
+
+    private IReadOnlyList<IconToggleOption<bool>> PanelOptions =>
+    [
+        new(true, new AspireIcons.Size20.HideEmptyPanels(), Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewHideEmptyPanels)]),
+        new(false, new Icons.Regular.Size20.Grid(), Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewShowAllPanels)])
+    ];
+
+    private Task SetHideEmptyPanelsAsync(bool value)
+    {
+        _hideEmptyPanels = value;
+        return InvokeAsync(StateHasChanged);
+    }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -143,9 +170,12 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
 
     protected override async Task OnInitializedAsync()
     {
-        // The Metrics card lists pinned instruments, which can change on the metrics page in another tab.
+        // The Metrics card lists pinned instruments, which can be changed from the card's charts.
         PinStore.Changed += OnPinsChanged;
         TerminalDockState.Changed += OnTerminalDockStateChanged;
+        // Not awaited, so the console preview and other cards don't start a browser round trip later. The Metrics card
+        // re-renders through OnPinsChanged when the pins are read. The load never faults.
+        _ = PinStore.EnsureLoadedAsync();
 
         // The console preview hides lines removed with the console logs page's "Remove" action, which are stored
         // as filters in session storage.
@@ -155,6 +185,10 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
             if (_subscribedResourceName is { } resourceName)
             {
                 StartConsoleSubscription(resourceName);
+
+                // Replacing the subscription cancels a refresh that's still waiting. Nothing else queues another one
+                // for a quiet resource, which would otherwise keep showing its loading skeleton.
+                QueueTelemetryRefresh();
             }
 
             StateHasChanged();
@@ -240,7 +274,8 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
 
     private void QueueTelemetryRefresh()
     {
-        if (_telemetryKey is null || Interlocked.Exchange(ref _telemetryRefreshPending, 1) == 1)
+        var refresh = _telemetryRefresh;
+        if (_telemetryKey is null || Interlocked.Exchange(ref refresh.Pending, 1) == 1)
         {
             return;
         }
@@ -250,8 +285,8 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
         {
             try
             {
-                await Task.Delay(s_telemetryRefreshDelay, cancellationToken).ConfigureAwait(false);
-                Interlocked.Exchange(ref _telemetryRefreshPending, 0);
+                await TelemetryRefreshDelayAsync(s_telemetryRefreshDelay, cancellationToken).ConfigureAwait(false);
+                Interlocked.Exchange(ref refresh.Pending, 0);
 
                 if (_telemetryKey is not { } key)
                 {
@@ -272,11 +307,11 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
             }
             catch (OperationCanceledException)
             {
-                Interlocked.Exchange(ref _telemetryRefreshPending, 0);
+                Interlocked.Exchange(ref refresh.Pending, 0);
             }
             catch (Exception ex)
             {
-                Interlocked.Exchange(ref _telemetryRefreshPending, 0);
+                Interlocked.Exchange(ref refresh.Pending, 0);
                 Logger.LogWarning(ex, "Error loading telemetry summary for the resource overview.");
             }
         }, CancellationToken.None);
@@ -357,6 +392,7 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
         _resourceCts?.Cancel();
         _resourceCts?.Dispose();
         _resourceCts = null;
+        _telemetryRefresh = new();
 
         lock (_consoleLock)
         {
@@ -388,6 +424,12 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
                 var filterDate = ConsoleLogsManager.GetFilterDate(resourceName);
                 lock (_consoleLock)
                 {
+                    // Cancellation can happen after a batch is delivered but before it
+                    // acquires this lock. Never append it to the next resource's preview.
+                    if (cancellationToken.IsCancellationRequested)
+                    {
+                        return;
+                    }
                     foreach (var line in batch)
                     {
                         var previewLine = CreatePreviewLine(line);
@@ -417,6 +459,10 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
 
         lock (_consoleLock)
         {
+            if (cancellationToken.IsCancellationRequested)
+            {
+                return;
+            }
             _consoleLogsLoaded = true;
         }
         await InvokeAsync(StateHasChanged).ConfigureAwait(false);
@@ -481,7 +527,7 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
 
         lock (_consoleLock)
         {
-            if (_consoleLogsLoaded)
+            if (cancellationToken.IsCancellationRequested || _consoleLogsLoaded)
             {
                 return;
             }
@@ -569,6 +615,11 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
         {
             return _consoleLines.ToList();
         }
+    }
+
+    private sealed class TelemetryRefreshGeneration
+    {
+        public int Pending;
     }
 
     private sealed record EndpointGroup(DisplayedUrl Primary, DisplayedUrl? Secondary);
@@ -772,8 +823,8 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
             return string.Create(CultureInfo.InvariantCulture, $"--overview-span: {_spans.GetValueOrDefault(card, Columns)}; --overview-span-md: {_mediumSpans.GetValueOrDefault(card, Columns)}; --overview-card-height: {GetHeight(card)}px;");
         }
 
-        // Each card has a fixed height, so a card is the same size for every resource and the cards below it don't
-        // move. Content that doesn't fit scrolls inside the card. Cards on the same row share a height.
+        // Bound scrollable content while allowing each grid row to fit its tallest card.
+        // Terminals use the console limit as their minimum interactive viewport instead.
         private static int GetHeight(OverviewCard card) => card switch
         {
             OverviewCard.Status or OverviewCard.Endpoints or OverviewCard.Metrics => 260,

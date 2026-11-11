@@ -66,6 +66,23 @@ public class AppHostPresentationTests
     }
 
     [Theory]
+    [InlineData("\U0001F469\u200D\U0001F4BB")]
+    [InlineData("e\u0301")]
+    [InlineData("\U0001F600")]
+    public void CompactLocationsKeepBothEndsWithoutSplittingGraphemes(string grapheme)
+    {
+        var parent = string.Concat(Enumerable.Repeat(grapheme, 22));
+        var directory = string.Concat(Enumerable.Repeat(grapheme, 24));
+        var path = Path.GetFullPath(Path.Combine(parent, directory, "apphost.cs"));
+        var expected = string.Concat(Enumerable.Repeat(grapheme, 21)) + "\u2026" + string.Concat(Enumerable.Repeat(grapheme, 22));
+
+        var location = AppHostPresentation.GetCompactLocation(path);
+
+        Assert.Equal(expected, location);
+        Assert.Equal(44, StringInfo.ParseCombiningCharacters(location).Length);
+    }
+
+    [Theory]
     [InlineData("my\nproject\tname", "my project name")]
     [InlineData("my\r\nproject\tname", "my project name")]
     [InlineData("my\u0085project\u2028name\u2029end", "my project name end")]

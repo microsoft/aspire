@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json.Nodes;
+using Aspire.Cli.Agents.AspireSkills;
 using Aspire.Cli.Agents.Hooks;
 
 namespace Aspire.Cli.Agents;
@@ -21,13 +22,13 @@ internal interface IAgentClient
     IEnumerable<string> GetLocalSkillDirectories(AgentConfigurationScope scope, DirectoryInfo workspaceRoot);
 
     bool HasIntegrationRegistration(
-        DirectoryInfo workspaceRoot, AgentConfigurationScope scope, CancellationToken cancellationToken);
+        DirectoryInfo workspaceRoot, AgentConfigurationScope scope, IReadOnlyList<SkillSource> sources);
 
     string GetIntegrationConfigPath(AgentConfigurationScope scope, DirectoryInfo workspaceRoot);
 
     Task UpdateIntegrationConfigAsync(
         JsonObject config, DirectoryInfo workspaceRoot, AgentConfigurationScope scope,
-        AgentConfiguration edit, CancellationToken cancellationToken);
+        AgentConfiguration edit, IReadOnlyList<SkillSource> sources, CancellationToken cancellationToken);
 
     string GetMcpConfigPath(AgentConfigurationScope scope, DirectoryInfo workspaceRoot);
 

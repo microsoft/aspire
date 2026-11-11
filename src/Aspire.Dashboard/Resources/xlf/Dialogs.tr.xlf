@@ -224,8 +224,8 @@ Yeteneklerin kurulumu da dahil olmak Ã¼zere, kontrol paneli ile yapay zeka aracÄ
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackPromptMessage">
-        <source>Share what works, what is missing, or what feels harder. Your feedback helps improve the dashboard while both experiences are available.</source>
-        <target state="new">Share what works, what is missing, or what feels harder. Your feedback helps improve the dashboard while both experiences are available.</target>
+        <source>We'd love your feedback on the new experience.</source>
+        <target state="new">We'd love your feedback on the new experience.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackPromptShare">
@@ -234,8 +234,8 @@ Yeteneklerin kurulumu da dahil olmak Ã¼zere, kontrol paneli ile yapay zeka aracÄ
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackPromptTitle">
-        <source>Help shape the new dashboard</source>
-        <target state="new">Help shape the new dashboard</target>
+        <source>Welcome to the new Aspire dashboard!</source>
+        <target state="new">Welcome to the new Aspire dashboard!</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackReasonFindingApplicationUrls">
@@ -653,6 +653,11 @@ Yeteneklerin kurulumu da dahil olmak Ã¼zere, kontrol paneli ile yapay zeka aracÄ
         <target state="translated">Paneller</target>
         <note />
       </trans-unit>
+      <trans-unit id="HelpDialogCategoryResourceGraph">
+        <source>Resource graph</source>
+        <target state="new">Resource graph</target>
+        <note />
+      </trans-unit>
       <trans-unit id="HelpDialogCategoryTelemetry">
         <source>Logs &amp; telemetry</source>
         <target state="new">Logs &amp; telemetry</target>
@@ -701,6 +706,16 @@ Yeteneklerin kurulumu da dahil olmak Ã¼zere, kontrol paneli ile yapay zeka aracÄ
       <trans-unit id="HelpDialogDocumentationTab">
         <source>Documentation</source>
         <target state="new">Documentation</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HelpDialogGameDescription">
+        <source>In the resource graph, select Play Aspire Outage, or focus the graph and press O, to play a game starring your resources. Press Esc to return to the graph.</source>
+        <target state="new">In the resource graph, select Play Aspire Outage, or focus the graph and press O, to play a game starring your resources. Press Esc to return to the graph.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HelpDialogGameTitle">
+        <source>Aspire Outage</source>
+        <target state="new">Aspire Outage</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGetHelpLinkText">
@@ -787,6 +802,11 @@ Yeteneklerin kurulumu da dahil olmak Ã¼zere, kontrol paneli ile yapay zeka aracÄ
         <source>Opens in a new tab</source>
         <target state="new">Opens in a new tab</target>
         <note />
+      </trans-unit>
+      <trans-unit id="HelpDialogPlayGame">
+        <source>Play Aspire Outage, when the graph has focus</source>
+        <target state="new">Play Aspire Outage, when the graph has focus</target>
+        <note>Aspire Outage is the name of a game.</note>
       </trans-unit>
       <trans-unit id="HelpDialogRepoDescription">
         <source>Source code, releases and issues on GitHub.</source>
@@ -1023,14 +1043,9 @@ Yeteneklerin kurulumu da dahil olmak Ã¼zere, kontrol paneli ile yapay zeka aracÄ
         <target state="new">Overview layout</target>
         <note />
       </trans-unit>
-      <trans-unit id="SettingsDialogGroupOverviewCards">
-        <source>Cards</source>
-        <target state="new">Cards</target>
-        <note />
-      </trans-unit>
       <trans-unit id="SettingsDialogGroupOverviewSummary">
-        <source>Home</source>
-        <target state="new">Home</target>
+        <source>Summary</source>
+        <target state="new">Summary</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogLanguage">
@@ -1066,11 +1081,6 @@ Yeteneklerin kurulumu da dahil olmak Ã¼zere, kontrol paneli ile yapay zeka aracÄ
       <trans-unit id="SettingsDialogResourceListDensityCompact">
         <source>Compact</source>
         <target state="new">Compact</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="SettingsDialogResourceListDensitySpacious">
-        <source>Spacious</source>
-        <target state="new">Spacious</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogSystemTheme">

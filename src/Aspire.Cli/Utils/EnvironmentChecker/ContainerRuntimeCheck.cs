@@ -26,7 +26,7 @@ internal sealed class ContainerRuntimeCheck(ILogger<ContainerRuntimeCheck> logge
     public const string MinimumPodmanVersion = "5.0.0";
 
     // Matches DCP's minimum supported WSLc client and session manager version.
-    public const string MinimumWslcVersion = "3.0.2.0";
+    public const string MinimumWslcVersion = "3.0.4.0";
 
     public int Order => 40; // Process check - more expensive
 
@@ -290,7 +290,7 @@ internal sealed class ContainerRuntimeCheck(ILogger<ContainerRuntimeCheck> logge
         {
             if (string.Equals(runtime, KnownContainerRuntimes.Wslc, StringComparisons.ContainerRuntime) && version.Revision == 0)
             {
-                // WSLc reports clients as 3.0.2.0 and session managers as 3.0.2.
+                // WSLc reports clients as 3.0.4.0 and session managers as 3.0.4.
                 // Omit a zero revision from the minimum so either form compares correctly.
                 version = new Version(version.Major, version.Minor, version.Build);
             }

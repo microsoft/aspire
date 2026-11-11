@@ -3,6 +3,7 @@
 
 using Aspire.Cli.Commands;
 using Aspire.Cli.Git;
+using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Templating;
 using Aspire.Cli.Tests.TestServices;
@@ -15,6 +16,45 @@ namespace Aspire.Cli.Tests.Templating;
 public class TemplateEngineFactoryGitTests(ITestOutputHelper outputHelper)
 {
     private const string CommitSha = TestGitCommandRunner.DefaultCommitSha;
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RepositoryTemplate_WarnsBeforeAcquisitionIncludingCachedCheckouts(bool cached)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var interaction = new TestInteractionService();
+        var commands = TestGitCommandRunner.CreateForTemplateCheckout(CreateTemplateCheckoutAsync);
+        var run = Assert.IsType<Func<GitCommandInvocation, CancellationToken, Task<string>>>(commands.RunCallback);
+        commands.RunCallback = (command, token) =>
+        {
+            Assert.Empty(interaction.ShownStatuses);
+            var warning = Assert.Single(interaction.DisplayedMessages, message => message.Emoji.Equals(KnownEmojis.PoliceCarLight));
+            Assert.Equal(KnownEmojis.PoliceCarLight, warning.Emoji);
+            Assert.Equal($"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]", warning.Message);
+            Assert.Equal(ConsoleOutput.Error, warning.ConsoleOverride);
+            return run(command, token);
+        };
+        var services = CreateServices(workspace, commands);
+        services.AddSingleton<IInteractionService>(interaction);
+        var source = new TemplateSource(".", "repository", CommitSha);
+        if (cached)
+        {
+            using var warmup = services.BuildServiceProvider();
+            await GetFactory(warmup).GetTemplatesAsync(source, TestContext.Current.CancellationToken);
+            interaction.DisplayedMessages.Clear();
+        }
+        using var provider = services.BuildServiceProvider();
+        var factory = GetFactory(provider);
+
+        var templates = await factory.GetTemplatesAsync(source, TestContext.Current.CancellationToken);
+
+        Assert.Equal("git-template", Assert.Single(templates).Name);
+        Assert.Empty(interaction.ShownStatuses);
+        var warning = Assert.Single(interaction.DisplayedMessages, message => message.Emoji.Equals(KnownEmojis.PoliceCarLight));
+        Assert.Equal($"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]", warning.Message);
+        Assert.Equal(ConsoleOutput.Error, warning.ConsoleOverride);
+    }
 
     [Theory]
     [InlineData(40)]
@@ -40,10 +80,10 @@ public class TemplateEngineFactoryGitTests(ITestOutputHelper outputHelper)
             },
             command =>
             {
-                Assert.Equal(["fetch", "--depth", "1", "--no-tags", "--", "-repository with spaces", commit], command.Arguments);
+                Assert.Equal(["fetch", "--quiet", "--depth", "1", "--no-tags", "--", "-repository with spaces", commit], command.Arguments);
                 Assert.Equal(destination, command.WorkingDirectory.FullName);
             },
-            command => Assert.Equal(["checkout", "--detach", "--force", "FETCH_HEAD"], command.Arguments),
+            command => Assert.Equal(["checkout", "--quiet", "--detach", "--force", "FETCH_HEAD"], command.Arguments),
             command => Assert.Equal(["rev-parse", "--verify", "HEAD"], command.Arguments));
         Assert.All(commands.Commands, command => Assert.Equal(GitCommandMode.Captured, command.Mode));
     }
@@ -125,11 +165,13 @@ public class TemplateEngineFactoryGitTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var time = new FakeTimeProvider();
+        var startedAt = time.GetUtcNow();
+        var commandDurationsInSeconds = new Queue<int>([30, 269, 1]);
         var commands = new TestGitCommandRunner
         {
             RunCallback = (_, token) =>
             {
-                time.Advance(TimeSpan.FromSeconds(40));
+                time.Advance(TimeSpan.FromSeconds(commandDurationsInSeconds.Dequeue()));
                 token.ThrowIfCancellationRequested();
                 return Task.FromResult(CommitSha);
             }
@@ -143,6 +185,7 @@ public class TemplateEngineFactoryGitTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(ErrorStrings.GitTimedOut, exception.Message);
         Assert.Equal(3, commands.Commands.Count);
+        Assert.Equal(TimeSpan.FromMinutes(5), time.GetUtcNow() - startedAt);
     }
 
     [Fact]
@@ -154,7 +197,10 @@ public class TemplateEngineFactoryGitTests(ITestOutputHelper outputHelper)
         {
             RunCallback = async (_, token) =>
             {
-                time.Advance(TimeSpan.FromMinutes(2));
+                time.Advance(TimeSpan.FromSeconds(299));
+                Assert.False(token.IsCancellationRequested);
+                time.Advance(TimeSpan.FromSeconds(1));
+                Assert.True(token.IsCancellationRequested);
                 await Task.Delay(Timeout.InfiniteTimeSpan, token);
                 return string.Empty;
             }
@@ -175,16 +221,18 @@ public class TemplateEngineFactoryGitTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var time = new FakeTimeProvider();
+        var startedAt = time.GetUtcNow();
         var commands = TestGitCommandRunner.CreateForTemplateCheckout(CreateTemplateCheckoutAsync);
         var run = Assert.IsType<Func<GitCommandInvocation, CancellationToken, Task<string>>>(commands.RunCallback);
         commands.RunCallback = (command, token) =>
         {
             time.Advance(command.Arguments[0] switch
             {
-                "ls-remote" => TimeSpan.FromSeconds(119),
-                "rev-parse" => TimeSpan.FromSeconds(29),
-                _ => TimeSpan.FromSeconds(30)
+                "ls-remote" => TimeSpan.FromSeconds(299),
+                "rev-parse" => TimeSpan.FromSeconds(74),
+                _ => TimeSpan.FromSeconds(75)
             });
+            token.ThrowIfCancellationRequested();
             return run(command, token);
         };
         var services = CreateServices(workspace, commands);
@@ -195,6 +243,7 @@ public class TemplateEngineFactoryGitTests(ITestOutputHelper outputHelper)
 
         Assert.Equal("git-template", Assert.Single(templates).Name);
         Assert.Equal(5, commands.Commands.Count);
+        Assert.Equal(TimeSpan.FromSeconds(598), time.GetUtcNow() - startedAt);
     }
 
     private IServiceCollection CreateServices(TemporaryWorkspace workspace, TestGitCommandRunner commands)

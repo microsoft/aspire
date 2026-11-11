@@ -1,0 +1,21 @@
+﻿{
+  "resources": {
+    "backend": {
+      "type": "container.v0",
+      "image": "image:latest",
+      "env": {
+        "CUSTOM": "{frontend.customProperty}",
+        "URL": "https://{public-host.value}/{frontend.customProperty}"
+      }
+    },
+    "public-host": {
+      "type": "parameter.v0",
+      "value": "{public-host.inputs.value}",
+      "inputs": {
+        "value": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

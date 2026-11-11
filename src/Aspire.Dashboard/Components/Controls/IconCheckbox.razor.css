@@ -1,6 +1,6 @@
 .icon-checkbox {
     align-items: center;
-    border-radius: var(--borderRadiusLarge);
+    border-radius: var(--aspire-radius-small);
     cursor: pointer;
     display: inline-flex;
     height: 32px;

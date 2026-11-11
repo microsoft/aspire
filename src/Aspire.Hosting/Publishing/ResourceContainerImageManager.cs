@@ -442,6 +442,29 @@ internal sealed class ResourceContainerImageManager(
 
         var hasContainerFiles = resource.TryGetAnnotationsOfType<ContainerFilesDestinationAnnotation>(out _);
         var containerRuntime = await GetContainerRuntimeAsync(cancellationToken).ConfigureAwait(false);
+        if (containerRuntime is WslcContainerRuntime)
+        {
+            if (hasContainerFiles)
+            {
+                // Layering selects a platform for its Dockerfile build even when the SDK image
+                // uses the host default. WSLc cannot honor that Dockerfile platform selection.
+                throw new DistributedApplicationException(
+                    $"WSLc does not support the platform-selected Dockerfile build required by PublishWithContainerFiles for resource '{resource.Name}'. " +
+                    "Use Docker or Podman for container-file layering.");
+            }
+
+            if (string.IsNullOrEmpty(options.OutputPath) &&
+                options.TargetPlatform is { } targetPlatform &&
+                targetPlatform.ToMSBuildRuntimeIdentifierString().Contains(';'))
+            {
+                // WSLc cannot load the OCI image layout used by multi-platform SDK images.
+                // Track support at https://github.com/microsoft/WSL/issues/41123.
+                throw new DistributedApplicationException(
+                    $"WSLc does not support loading multi-platform .NET SDK images into its local image store for resource '{resource.Name}'. " +
+                    "Select a single TargetPlatform, use Docker or Podman, or publish an archive with Destination = Archive and OutputPath.");
+            }
+        }
+
         if (hasContainerFiles || ResourceRequiresContainerRuntime(resource, options))
         {
             await ensureContainerRuntimeRunning(containerRuntime, cancellationToken).ConfigureAwait(false);
@@ -568,7 +591,12 @@ internal sealed class ResourceContainerImageManager(
             MsBuildResponseFileFactory.CreatePropertyArgument("ContainerImageTag", options.LocalImageTag)
         };
 
-        if (GetLocalRegistryName(containerRuntime) is string localRegistry)
+        // Archives do not use a local registry. Omitting Wslc here also preserves archive-only
+        // publishing with older SDKs that do not recognize that registry name.
+        var localRegistryName = containerRuntime is WslcContainerRuntime && !string.IsNullOrEmpty(options.OutputPath)
+            ? null
+            : GetLocalRegistryName(containerRuntime);
+        if (localRegistryName is string localRegistry)
         {
             arguments.Add(MsBuildResponseFileFactory.CreatePropertyArgument("LocalRegistry", localRegistry));
         }
@@ -589,7 +617,7 @@ internal sealed class ResourceContainerImageManager(
             arguments.Add(MsBuildResponseFileFactory.CreatePropertyArgument("ContainerImageFormat", format));
         }
 
-        AddTargetPlatformArguments(arguments, options.TargetPlatform);
+        AddTargetPlatformArguments(arguments, options.TargetPlatform, projectMetadata.IsFileBasedApp);
 
         if (resource.TryGetLastAnnotation<DockerfileBaseImageAnnotation>(out var baseImageAnnotation) &&
             baseImageAnnotation.RuntimeImage is string baseImage)
@@ -755,6 +783,7 @@ internal sealed class ResourceContainerImageManager(
 
         var responseFile = await MsBuildResponseFileFactory.CreateAsync(
             environment,
+            projectMetadata.IsFileBasedApp,
             logger,
             cancellationToken).ConfigureAwait(false);
         var workingDirectory = projectMetadata.BuildWorkingDirectory ??
@@ -797,7 +826,7 @@ internal sealed class ResourceContainerImageManager(
                     "-getProperty:ContainerWorkingDirectory",
                     "-v:q"
                 };
-            AddTargetPlatformArguments(arguments, options.TargetPlatform);
+            AddTargetPlatformArguments(arguments, options.TargetPlatform, projectMetadata.IsFileBasedApp);
             if (buildContext.ResponseFile is not null)
             {
                 arguments.Add(buildContext.ResponseFile.Argument);
@@ -862,7 +891,8 @@ internal sealed class ResourceContainerImageManager(
 
     private static void AddTargetPlatformArguments(
             List<string> arguments,
-            ContainerTargetPlatform? targetPlatform)
+            ContainerTargetPlatform? targetPlatform,
+            bool isFileBasedApp)
     {
         if (targetPlatform is null)
         {
@@ -872,11 +902,26 @@ internal sealed class ResourceContainerImageManager(
         var runtimeIdentifiers = targetPlatform.Value.ToMSBuildRuntimeIdentifierString();
         if (runtimeIdentifiers.Contains(';'))
         {
-            // ArgumentList preserves "linux-x64;linux-arm64" as one argument, but MSBuild still
-            // splits property switches on ';'. Escape the value for that second parsing layer.
-            // https://github.com/dotnet/msbuild/issues/471
-            arguments.Add(MsBuildResponseFileFactory.CreatePropertyArgument("RuntimeIdentifiers", runtimeIdentifiers));
-            arguments.Add(MsBuildResponseFileFactory.CreatePropertyArgument("ContainerRuntimeIdentifiers", runtimeIdentifiers));
+            // The SDK prefers singular RIDs and can derive the container RID from RuntimeIdentifier.
+            // Clear both so inherited or project defaults cannot turn an explicit multi-platform build into a single image.
+            arguments.Add(MsBuildResponseFileFactory.CreatePropertyArgument("RuntimeIdentifier", string.Empty));
+            arguments.Add(MsBuildResponseFileFactory.CreatePropertyArgument("ContainerRuntimeIdentifier", string.Empty));
+            var runtimeIdentifierList = runtimeIdentifiers.Split(';');
+            if (isFileBasedApp)
+            {
+                // "dotnet publish app.cs" passes property switches to the virtual project as global properties
+                // without MSBuild's switch parser, so quoting the list fails with NETSDK1083 for '"linux-x64'.
+                arguments.Add(MsBuildResponseFileFactory.CreateFileBasedAppListPropertyArgument("RuntimeIdentifiers", runtimeIdentifierList));
+                arguments.Add(MsBuildResponseFileFactory.CreateFileBasedAppListPropertyArgument("ContainerRuntimeIdentifiers", runtimeIdentifierList));
+            }
+            else
+            {
+                // ArgumentList preserves "linux-x64;linux-arm64" as one argument, but MSBuild still
+                // splits property switches on ';' (https://github.com/dotnet/msbuild/issues/471).
+                // Percent-escaping the separator would make the SDK see one RID, so quote the list instead.
+                arguments.Add(MsBuildResponseFileFactory.CreateListPropertyArgument("RuntimeIdentifiers", runtimeIdentifierList));
+                arguments.Add(MsBuildResponseFileFactory.CreateListPropertyArgument("ContainerRuntimeIdentifiers", runtimeIdentifierList));
+            }
         }
         else
         {
@@ -932,6 +977,11 @@ internal sealed class ResourceContainerImageManager(
             return "Podman";
         }
 
+        if (containerRuntime is WslcContainerRuntime)
+        {
+            return "Wslc";
+        }
+
         return null;
     }
 
@@ -978,6 +1028,7 @@ internal sealed class ResourceContainerImageManager(
         {
             ImageName = imageNameOnly,
             Tag = imageTag,
+            Destination = options.Destination,
             OutputPath = options.OutputPath,
             ImageFormat = options.ImageFormat,
             TargetPlatform = options.TargetPlatform

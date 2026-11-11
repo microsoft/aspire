@@ -692,6 +692,7 @@ async function main() {
     patchExtesterLaunchLocale();
     writeVsCodeLocaleFile();
 
+    const devCertificatePath = exportDevelopmentCertificate();
     const extestEnv = getAspireCliEnvironment({
       ASPIRE_EXTENSION_E2E_CLI_PATH: cliPath,
       ASPIRE_EXTENSION_E2E_EXTENSION_ROOT: extensionRoot,
@@ -705,6 +706,7 @@ async function main() {
       // ignore an extension host left behind by an earlier run that is still polling them.
       ASPIRE_EXTENSION_E2E_RUN_ID: runId,
       ASPIRE_EXTENSION_E2E_ENABLE_BRIDGE: 'true',
+      ...(devCertificatePath ? { ASPIRE_EXTENSION_E2E_DEV_CERT_PATH: devCertificatePath } : {}),
       NUGET_PACKAGES: e2eNuGetPackages,
       ASPIRE_EXTENSION_E2E_NUGET_PACKAGES: e2eNuGetPackages,
       ASPIRE_EXTENSION_E2E_SKIP_CURRENT_CLI_REGRESSIONS: process.env.ASPIRE_EXTENSION_E2E_SKIP_CURRENT_CLI_REGRESSIONS === 'true' ? 'true' : 'false',
@@ -2019,7 +2021,11 @@ public partial class App : Application
     {
         var readyFile = Environment.GetEnvironmentVariable("ASPIRE_WINUI_E2E_READY_FILE")
             ?? throw new InvalidOperationException("ASPIRE_WINUI_E2E_READY_FILE is required.");
-        File.WriteAllText(readyFile, $"ready:{Environment.ProcessId}");
+        // Publish the marker atomically: the E2E test polls for this file and asserts on its
+        // first successful read, so it must never observe a created-but-empty file.
+        var pendingReadyFile = readyFile + ".tmp";
+        File.WriteAllText(pendingReadyFile, $"ready:{Environment.ProcessId}");
+        File.Move(pendingReadyFile, readyFile, overwrite: true);
 
         _window = new Window
         {
@@ -2288,6 +2294,34 @@ function compareConcreteVersions(left, right) {
   }
 
   return 0;
+}
+
+/**
+ * Exports the public half of the ASP.NET Core development certificate. The AppHost serves the
+ * Dashboard and HTTPS resource endpoints with it, and the tests pin it (see readTrustedDevCertificate
+ * in src/test-e2e/helpers/assertions.ts) instead of disabling certificate validation. `dotnet dev-certs`
+ * writes a private key only when --password or --no-password is passed, so none is exported here.
+ * Like the CLI on first run, the export creates the certificate when the machine has none, but it
+ * never trusts it.
+ *
+ * A failure is not fatal: shards that never probe an HTTPS endpoint do not need the certificate, and
+ * the probes in the shards that do fail with a certificate error under the default trust store.
+ */
+function exportDevelopmentCertificate() {
+  logStep('Exporting the ASP.NET Core development certificate');
+  const certificatePath = path.join(shortRunRoot, 'aspnetcore-dev-cert.pem');
+  try {
+    run('dotnet', ['dev-certs', 'https', '--export-path', certificatePath, '--format', 'Pem'], {}, { timeout: 120000 });
+    if (!fs.existsSync(certificatePath)) {
+      throw new Error(`dotnet dev-certs did not write ${certificatePath}.`);
+    }
+  }
+  catch (error) {
+    console.warn(`Warning: unable to export the ASP.NET Core development certificate, so HTTPS probes will use the default trust store: ${error instanceof Error ? error.message : String(error)}`);
+    return undefined;
+  }
+
+  return certificatePath;
 }
 
 function getAspireCliEnvironment(extraEnv = {}) {
@@ -2864,6 +2898,10 @@ function printFailureDiagnosticsSummary() {
   console.error(`Workspace diagnostics directory: ${path.relative(extensionRoot, workspaceDiagnosticsDir)}`);
 
   const results = readMochaResults();
+  if (results?.complete === false) {
+    console.error('Mocha did not finish the run; mocha.json contains only the tests that completed before it stopped.');
+  }
+
   if (results?.failures?.length > 0) {
     console.error('Failed E2E tests:');
     for (const failure of results.failures) {

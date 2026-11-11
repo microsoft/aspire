@@ -3,8 +3,12 @@
 
 using Microsoft.AspNetCore.InternalTesting;
 using Aspire.Cli.Backchannel;
+using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Packaging;
 using Aspire.Cli.Resources;
+using Aspire.Cli.Templating;
+using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
@@ -12,13 +16,18 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging.Testing;
 using Spectre.Console;
 using Spectre.Console.Rendering;
+using NewCommand = Aspire.Cli.Commands.NewCommand;
+using NewCommandPrompter = Aspire.Cli.Commands.NewCommandPrompter;
+using AddCommandPrompter = Aspire.Cli.Commands.AddCommandPrompter;
 
 using System.CommandLine;
+using System.Globalization;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace Aspire.Cli.Tests.Interaction;
 
-public class ConsoleInteractionServiceTests
+public class ConsoleInteractionServiceTests(ITestOutputHelper outputHelper)
 {
     private static readonly DirectoryInfo s_tempRoot = Directory.CreateTempSubdirectory();
     private static readonly DirectoryInfo s_runtimeDirectory = s_tempRoot.CreateSubdirectory("runtimes");
@@ -32,6 +41,571 @@ public class ConsoleInteractionServiceTests
         executionContext ??= CreateExecutionContext();
         var consoleEnvironment = new ConsoleEnvironment(console, console, TextReader.Null);
         return new ConsoleInteractionService(consoleEnvironment, executionContext, hostEnvironment ?? TestHelpers.CreateInteractiveHostEnvironment(), new EnvironmentProcessPathProvider(), loggerFactory ?? NullLoggerFactory.Instance, new ConsoleLogBufferContext());
+    }
+
+    [Theory]
+    [InlineData(false, 40)]
+    [InlineData(false, 120)]
+    [InlineData(true, 120)]
+    public async Task SourceDetails_RendersConsistently(bool ansi, int width)
+    {
+        var output = new StringBuilder();
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = ansi ? AnsiSupport.Yes : AnsiSupport.No,
+            ColorSystem = ansi ? ColorSystemSupport.Standard : ColorSystemSupport.NoColors,
+            Out = new AnsiConsoleOutput(new StringWriter(output)),
+            Enrichment = new ProfileEnrichment { UseDefaultEnrichers = false }
+        });
+        console.Profile.Width = width;
+        var interaction = CreateInteractionService(console);
+        interaction.DisplaySourceDetails(
+        [
+            [(SharedCommandStrings.SourceGitRepository, "https://example.test/config"), (SharedCommandStrings.SourceRef, "release/[team]")],
+            [(SharedCommandStrings.SourceName, "Company [templates]"), (SharedCommandStrings.SourceGitRepository, "https://example.test/templates"), (SharedCommandStrings.SourceGitPath, "templates"), (SharedCommandStrings.SourceRef, "release/[team]")],
+            [(SharedCommandStrings.SourceName, "company"), (SharedCommandStrings.SourceFeed, "https://example.test/nuget"), (SharedCommandStrings.SourcePatterns, "Acme.Hosting.*")],
+            [(SharedCommandStrings.SourceName, "company"), (SharedCommandStrings.SourceGitRepository, "https://example.test/skills"), (SharedCommandStrings.SourceMarketplace, "company-skills"), (SharedCommandStrings.SourcePlugins, "aspire@company-skills")]
+        ]);
+
+        await Verify(output.ToString(), "txt").UseParameters(ansi, width).ScrubLinesWithReplace(line => line.TrimEnd());
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task SourceSelection_IntegrationGroupsAndTrustNotice(bool customSource, bool multipleSources)
+    {
+        var output = new StringBuilder();
+        var console = CreateSelectionConsole(output, [new ConsoleKeyInfo('\r', ConsoleKey.Enter, false, false, false)]);
+        var interaction = CreateInteractionService(console);
+        var cache = new FakeNuGetPackageCache();
+        var implicitChannel = PackageChannel.CreateImplicitChannel(cache, new TestFeatures(), NullLogger.Instance);
+        var source = customSource ? "https://example.test/team" : PackageSources.NuGetOrg;
+        var channel = customSource ? new PackageChannel("integration:team", PackageChannelQuality.Both,
+            [new PackageMapping("Aspire.Hosting.*", source)], cache, new TestFeatures(), NullLogger.Instance)
+        {
+            IntegrationSource = new IntegrationSourceConfiguration
+            {
+                Name = "team",
+                Source = source,
+                Patterns = ["Aspire.Hosting.*"]
+            }
+        } : implicitChannel;
+        List<(string FriendlyName, Aspire.Shared.NuGetPackageCli Package, PackageChannel Channel)> packages =
+        [
+            ("redis", new() { Id = "Aspire.Hosting.Redis", Version = "1.0.0", Source = source }, channel)
+        ];
+        if (multipleSources)
+        {
+            packages.Add(("postgres", new() { Id = "Aspire.Hosting.Postgres", Version = "2.0.0", Source = "https://example.test/other" }, implicitChannel));
+        }
+
+        var selected = await new AddCommandPrompter(interaction, CreateExecutionContext()).PromptForIntegrationAsync(packages, CancellationToken.None);
+
+        Assert.Equal("Aspire.Hosting.Redis", selected.Package.Id);
+        await Verify(output.ToString(), "txt").UseParameters(customSource, multipleSources).ScrubLinesWithReplace(line => line.TrimEnd());
+    }
+
+    [Theory]
+    [InlineData(false, 40)]
+    [InlineData(false, 120)]
+    [InlineData(true, 40)]
+    [InlineData(true, 120)]
+    public async Task SourceSelection_TemplateSourcesExplainBeforeFetching(bool nonDefaultGitValues, int width)
+    {
+        var output = new StringBuilder();
+        var console = CreateSelectionConsole(output, []);
+        console.Profile.Width = width;
+        var executionContext = CreateExecutionContext();
+        var interaction = CreateInteractionService(console, executionContext);
+        interaction.DisplayTemplateSources(
+        [
+            ("aspire[1p]", new TemplateSource(nonDefaultGitValues ? "templates/[team]" : ".",
+                "https://example.test/templates.git", nonDefaultGitValues ? "release/[team]" : null)),
+            ("another", new TemplateSource("./", "ssh://git@example.test/another.git", "HEAD")),
+            ("third", new TemplateSource(".\\", "https://example.test/third.git", null)),
+            ("local", new TemplateSource("C:\\Templates\\Company [local]", null, null))
+        ], executionContext);
+        interaction.DisplayTemplateGitFetchNotice("https://example.test/templates.git",
+            nonDefaultGitValues ? "templates/[team]" : ".",
+            nonDefaultGitValues ? "release/[team]" : null, mayPromptForAuthentication: false);
+
+        Assert.False(executionContext.TryMarkSourceTrustWarningDisplayed());
+        await Verify(output.ToString(), "txt").UseParameters(nonDefaultGitValues, width).ScrubLinesWithReplace(line => line.TrimEnd());
+    }
+
+    [Theory]
+    [InlineData(".", null, "https://example.test/templates.git")]
+    [InlineData("./", "HEAD", "https://example.test/templates.git")]
+    [InlineData(".\\", null, "https://example.test/templates.git")]
+    [InlineData("templates/[team]", "release/[team]", "https://example.test/templates.git")]
+    [InlineData(".", null, "https://user:password@example.test/templates.git?token=secret#fragment")]
+    public void TemplateGitFetchNotice_IdentifiesSourceWithoutExposingUrlCredentials(string path, string? reference, string repository)
+    {
+        var interaction = new TestInteractionService();
+        const string displayedRepository = "https://example.test/templates.git";
+        var source = repository == displayedRepository ? displayedRepository : "https://***@example.test/templates.git";
+        if (path == "templates/[team]")
+        {
+            source += $" ({SharedCommandStrings.SourceGitPath}: {path}, {SharedCommandStrings.SourceRef}: {reference})";
+        }
+
+        interaction.DisplayTemplateGitFetchNotice(repository, path, reference, mayPromptForAuthentication: true);
+
+        var message = Assert.Single(interaction.DisplayedMessages);
+        var expected = string.Format(System.Globalization.CultureInfo.CurrentCulture, SharedCommandStrings.FetchingSourceWithAuthentication,
+            SharedCommandStrings.GitFetchTemplates, source);
+        Assert.Equal($"[blue]{expected.EscapeMarkup()}[/]", message.Message);
+        Assert.Equal(KnownEmojis.InboxTray, message.Emoji);
+        Assert.Equal(ConsoleOutput.Error, message.ConsoleOverride);
+    }
+
+    [Fact]
+    public void SourceSelection_NoTemplateSourcesDoesNotDisplayOnboarding()
+    {
+        var interaction = new TestInteractionService();
+
+        interaction.DisplayTemplateSources([], CreateExecutionContext());
+
+        Assert.Empty(interaction.DisplayedMessages);
+        Assert.Empty(interaction.DisplayedRenderables);
+        Assert.Equal(0, interaction.DisplayEmptyLineCount);
+    }
+
+    [Fact]
+    public async Task SourceDetails_WideLabelsUseTerminalCellWidths()
+    {
+        var output = new StringBuilder();
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.No,
+            ColorSystem = ColorSystemSupport.NoColors,
+            Out = new AnsiConsoleOutput(new StringWriter(output)),
+            Enrichment = new ProfileEnrichment { UseDefaultEnrichers = false }
+        });
+        console.Profile.Width = 40;
+        CreateInteractionService(console).DisplaySourceDetails(
+        [
+            [("配置来源", "company"), ("仓库", "https://example.test/repo")],
+            [("Source", "another")]
+        ]);
+
+        await Verify(output.ToString(), "txt").ScrubLinesWithReplace(line => line.TrimEnd());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task SourceSelection_IntegrationVersionsUseSourceGroups(bool multipleSources)
+    {
+        var output = new StringBuilder();
+        var console = CreateSelectionConsole(output, [new ConsoleKeyInfo('\r', ConsoleKey.Enter, false, false, false)]);
+        var interaction = CreateInteractionService(console);
+        var cache = new FakeNuGetPackageCache();
+        var defaultChannel = PackageChannel.CreateImplicitChannel(cache, new TestFeatures(), NullLogger.Instance);
+        var source = multipleSources ? "https://example.test/daily" : PackageSources.NuGetOrg;
+        var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both,
+            [new PackageMapping("Aspire*", source)], cache, new TestFeatures(), NullLogger.Instance);
+        (string FriendlyName, Aspire.Shared.NuGetPackageCli Package, PackageChannel Channel)[] packages =
+        [
+            ("redis", new() { Id = "Aspire.Hosting.Redis", Version = "1.0.0", Source = PackageSources.NuGetOrg }, defaultChannel),
+            ("redis", new() { Id = "Aspire.Hosting.Redis", Version = "2.0.0", Source = source }, dailyChannel)
+        ];
+
+        var selected = await new AddCommandPrompter(interaction, CreateExecutionContext()).PromptForIntegrationVersionAsync(packages, "daily", CancellationToken.None);
+
+        Assert.Same(dailyChannel, selected.Channel);
+        Assert.Equal("2.0.0", selected.Package.Version);
+        await Verify(output.ToString(), "txt").UseParameters(multipleSources).ScrubLinesWithReplace(line => line.TrimEnd());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ConfigSource_RendersAlignedDetailsAndReadmeLink(bool ansi)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var output = new StringBuilder();
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = ansi ? AnsiSupport.Yes : AnsiSupport.No,
+            ColorSystem = ansi ? ColorSystemSupport.Standard : ColorSystemSupport.NoColors,
+            Out = new AnsiConsoleOutput(new StringWriter(output)),
+            Enrichment = new ProfileEnrichment { UseDefaultEnrichers = false }
+        });
+        console.Profile.Width = 160;
+        console.Profile.Capabilities.Links = ansi;
+        var context = workspace.CreateExecutionContext();
+        var interaction = CreateInteractionService(console, context);
+        const string readmeUrl = "https://docs.example/config-source?team=[platform]";
+        using var service = TestConfigSourceServices.Create(context, interaction: interaction,
+            environment: new TestEnvironment(new Dictionary<string, string?>
+            {
+                [CliConfigNames.InitSourceUrl] = "https://git.example/configuration",
+                [CliConfigNames.InitSourcePath] = "teams/[platform].json",
+                [CliConfigNames.InitSourceRef] = "config-preview",
+                [CliConfigNames.InitSourceReadmeUrl] = readmeUrl
+            }));
+        var command = new RootCommand();
+        command.Options.Add(ConfigSourceService.s_useSourceOption);
+
+        var source = await service.ResolveAndAcquireConfigSourceAsync(command.Parse("--use-config-source false"), CancellationToken.None);
+
+        Assert.True(Assert.IsType<ConfigSource>(source).OptOut);
+        var rendered = output.ToString();
+        if (ansi)
+        {
+            TerminalLinkAssert.ContainsLink(rendered, readmeUrl, ConfigSourceStrings.ReadmeLink);
+        }
+        // OSC 8 links include process-specific IDs, e.g. ESC]8;id=123;urlESC\.
+        rendered = Regex.Replace(rendered, @"(?<=\x1b]8;id=)\d+", "link-id");
+        await Verify(rendered, "txt").UseParameters(ansi).ScrubLinesWithReplace(line => line.TrimEnd());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ConfigSource_RendersFetchNotice(bool interactive)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var output = new StringBuilder();
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.No,
+            ColorSystem = ColorSystemSupport.NoColors,
+            Out = new AnsiConsoleOutput(new StringWriter(output)),
+            Enrichment = new ProfileEnrichment { UseDefaultEnrichers = false }
+        });
+        console.Profile.Width = 160;
+        var context = workspace.CreateExecutionContext();
+        var interaction = CreateInteractionService(console, context);
+        using var service = TestConfigSourceServices.Create(context, interaction: interaction, interactive: interactive,
+            environment: new TestEnvironment(new Dictionary<string, string?>
+            {
+                [CliConfigNames.InitSourceUrl] = "https://git.example/configuration"
+            }));
+        var command = new RootCommand();
+        command.Options.Add(ConfigSourceService.s_useSourceOption);
+
+        var source = await service.ResolveAndAcquireConfigSourceAsync(command.Parse("--use-config-source"), CancellationToken.None);
+
+        Assert.False(Assert.IsType<ConfigSource>(source).OptOut);
+        await Verify(output.ToString(), "txt").UseParameters(interactive).ScrubLinesWithReplace(line => line.TrimEnd());
+    }
+
+    [Theory]
+    [InlineData(null, null)]
+    [InlineData("aspire.config.json", null)]
+    [InlineData("teams/platform.json", null)]
+    [InlineData(null, "config-preview")]
+    [InlineData("aspire.config.json", "config-preview")]
+    [InlineData("teams/platform.json", "config-preview")]
+    public async Task ConfigSource_OmitsDefaultDetails(string? path, string? reference)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var output = new StringBuilder();
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.No,
+            ColorSystem = ColorSystemSupport.NoColors,
+            Out = new AnsiConsoleOutput(new StringWriter(output)),
+            Enrichment = new ProfileEnrichment { UseDefaultEnrichers = false }
+        });
+        console.Profile.Width = 160;
+        var context = workspace.CreateExecutionContext();
+        var interaction = CreateInteractionService(console, context);
+        using var service = TestConfigSourceServices.Create(context, interaction: interaction,
+            environment: new TestEnvironment(new Dictionary<string, string?>
+            {
+                [CliConfigNames.InitSourceUrl] = "https://git.example/configuration",
+                [CliConfigNames.InitSourcePath] = path,
+                [CliConfigNames.InitSourceRef] = reference
+            }));
+        var command = new RootCommand();
+        command.Options.Add(ConfigSourceService.s_useSourceOption);
+
+        var source = await service.ResolveAndAcquireConfigSourceAsync(command.Parse("--use-config-source false"), CancellationToken.None);
+
+        Assert.True(Assert.IsType<ConfigSource>(source).OptOut);
+        await Verify(output.ToString(), "txt").UseParameters(path, reference).ScrubLinesWithReplace(line => line.TrimEnd());
+    }
+
+    [Fact]
+    public async Task PromptForSelectionAsync_GroupsRenderAsHeadingsAndKeepFirstLeafDefault()
+    {
+        var output = new StringBuilder();
+        var console = CreateSelectionConsole(output, [new('\r', ConsoleKey.Enter, false, false, false)]);
+        var interaction = CreateInteractionService(console);
+        TestItem[] choices = [
+            new("built-in", "Starter"),
+            new("first", "Same (same) - first"),
+            new("second", "Same (same) - second")];
+
+        var selected = await interaction.PromptForSelectionAsync("Select a template:", choices, choice => choice.Display,
+            choice => choice.Id switch
+            {
+                "built-in" => new("builtin", "Built-in templates"),
+                "first" => new("source:first", "Company [first]"),
+                "second" => new("source:second", "Company [second]"),
+                _ => null
+            }, choice => choice.Id switch
+            {
+                "built-in" => "Starter",
+                "first" => "Same",
+                _ => "Same (Observable services)"
+            });
+
+        Assert.Same(choices[0], selected);
+        await Verify(output.ToString()).ScrubLinesWithReplace(line => line.TrimEnd());
+    }
+
+    [Theory]
+    [InlineData(0, 0)]
+    [InlineData(1, 1)]
+    [InlineData(2, 2)]
+    [InlineData(3, 3)]
+    public async Task PromptForSelectionAsync_GroupHeadersCannotBeSelected(int moves, int expectedIndex)
+    {
+        var keys = Enumerable.Repeat(new ConsoleKeyInfo('\0', ConsoleKey.DownArrow, false, false, false), moves)
+            .Append(new ConsoleKeyInfo('\r', ConsoleKey.Enter, false, false, false));
+        var interaction = CreateInteractionService(CreateSelectionConsole(new StringBuilder(), keys));
+        TestItem[] choices = [
+            new("built-in", "Same"),
+            new("first", "Same (same) - first"),
+            new("second", "Same (same) - second"),
+            new("search", "Search")];
+
+        var selected = await interaction.PromptForSelectionAsync("Select:", choices, choice => choice.Display,
+            choice => choice.Id == "search" ? null : new SelectionChoiceGroup(choice.Id, "Same heading"),
+            choice => choice.Id == "search" ? "Other action" : "Same");
+
+        Assert.Same(choices[expectedIndex], selected);
+    }
+
+    [Fact]
+    public async Task PromptForSelectionAsync_GroupsWithSameIdShareOneHeadingAndRetainChildOrder()
+    {
+        var output = new StringBuilder();
+        var console = CreateSelectionConsole(output, [new('\r', ConsoleKey.Enter, false, false, false)]);
+        var interaction = CreateInteractionService(console);
+        TestItem[] choices = [
+            new("first:one", "First template - first"),
+            new("second:one", "Other template - second"),
+            new("first:two", "Second template - first")];
+
+        var selected = await interaction.PromptForSelectionAsync("Select:", choices, choice => choice.Display,
+            choice => choice.Id.StartsWith("first:", StringComparison.Ordinal)
+                ? new("source:first", "First source")
+                : new SelectionChoiceGroup("source:second", "Second source"), choice => choice.Display);
+
+        Assert.Same(choices[0], selected);
+        await Verify(output.ToString()).ScrubLinesWithReplace(line => line.TrimEnd());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PromptForSelectionAsync_PresentationGroupsPreserveValueTypeDefault(bool grouped)
+    {
+        var console = CreateSelectionConsole(new StringBuilder(), [new('\r', ConsoleKey.Enter, false, false, false)]);
+        var interaction = CreateInteractionService(console);
+        bool[] choices = [true, false];
+
+        var selected = grouped
+            ? await interaction.PromptForSelectionAsync("Select:", choices, choice => choice.ToString(),
+                _ => new SelectionChoiceGroup("choices", "Choices"), choice => choice.ToString())
+            : await interaction.PromptForSelectionAsync("Select:", choices, choice => choice.ToString());
+
+        Assert.False(selected);
+    }
+
+    [Fact]
+    public async Task PromptForSelectionAsync_GroupedChoicesRemainSearchable()
+    {
+        var keys = "second".Select(ch => new ConsoleKeyInfo(ch, Enum.Parse<ConsoleKey>(char.ToUpperInvariant(ch).ToString()), false, false, false))
+            .Append(new ConsoleKeyInfo('\r', ConsoleKey.Enter, false, false, false));
+        var interaction = CreateInteractionService(CreateSelectionConsole(new StringBuilder(), keys));
+        TestItem[] choices = [new("first", "Same (same) - first"), new("second", "Same (same) - second")];
+
+        var selected = await interaction.PromptForSelectionAsync("Select:", choices, choice => choice.Display,
+            choice => new SelectionChoiceGroup(choice.Id, "Source"), choice => choice.Display);
+
+        Assert.Same(choices[1], selected);
+    }
+
+    [Fact]
+    public async Task PromptForSelectionAsync_DescriptionOnlySearchSelectsExactTemplate()
+    {
+        var keys = "OBSERVABLE".Select(ch => new ConsoleKeyInfo(ch, Enum.Parse<ConsoleKey>(ch.ToString()), true, false, false))
+            .Append(new ConsoleKeyInfo('\r', ConsoleKey.Enter, false, false, false));
+        var interaction = CreateInteractionService(CreateSelectionConsole(new StringBuilder(), keys));
+        ITemplate[] templates = [CreateSearchableTemplate("first", null), CreateSearchableTemplate("second", "Observable [services]")];
+
+        var selected = await interaction.PromptForSelectionAsync("Select:", templates, template => $"Same - {template.Name}",
+            template => new SelectionChoiceGroup(template.Name, template.Name),
+            template => NewCommand.FormatTemplateDisplayLabel(template).EscapeMarkup());
+
+        Assert.Same(templates[1], selected);
+    }
+
+    [Theory]
+    [InlineData("Name (Description)", 18, "Name (Description)")]
+    [InlineData("Name (Description)", 12, "Name (Descr…")]
+    [InlineData(" \tName\r\n (Description)\n", 30, "Name (Description)")]
+    [InlineData("Name [[services]]", 10, "Name [[ser…")]
+    [InlineData("Name [[services]]", 15, "Name [[services]]")]
+    [InlineData("界界界", 5, "界界…")]
+    [InlineData("界界界", 4, "界…")]
+    [InlineData("e\u0301e\u0301e\u0301e\u0301", 3, "e\u0301e\u0301…")]
+    [InlineData("😀😀😀", 4, "😀…")]
+    [InlineData(":rocket: launch", 3, "🚀…")]
+    [InlineData("Name\u001b[[31m", 20, "Name[[31m")]
+    [InlineData("Name", 1, "…")]
+    [InlineData("界", 1, "…")]
+    [InlineData("Name", 0, "")]
+    [InlineData("Name", -1, "")]
+    [InlineData("", 1, "")]
+    public void SelectionLabel_FitsTerminalCellsWithoutSplittingTextElements(string markup, int width, string expected)
+    {
+        var label = ConsoleInteractionService.FormatSelectionLabel(markup, width);
+
+        Assert.Equal(expected, label);
+        Assert.InRange(new Segment(label.RemoveMarkup()).CellCount(), 0, Math.Max(0, width));
+    }
+
+    [Fact]
+    public async Task PromptForSelectionAsync_GroupedLabelsFitWidthAndNormalizeMetadata()
+    {
+        var output = new StringBuilder();
+        var console = CreateSelectionConsole(output, [new('\r', ConsoleKey.Enter, false, false, false)]);
+        console.Profile.Width = 40;
+        var interaction = CreateInteractionService(console);
+        ITemplate[] templates = [CreateSearchableTemplate("first", "Observable [services]\r\nwith 界界 and a long description")];
+
+        var selected = await interaction.PromptForSelectionAsync("Select:", templates, template => $"Same - {template.Name}",
+            _ => new SelectionChoiceGroup("source", "Company [source]\r\nwith a long heading that must fit"),
+            template => NewCommand.FormatTemplateDisplayLabel(template).EscapeMarkup());
+
+        Assert.Same(templates[0], selected);
+        await Verify(output.ToString()).ScrubLinesWithReplace(line => line.TrimEnd());
+    }
+
+    [Theory]
+    [InlineData(false, 120)]
+    [InlineData(true, 120)]
+    [InlineData(false, 40)]
+    [InlineData(true, 40)]
+    public async Task PromptForSelectionAsync_TemplateSourceHeadingsAreLiteralAndFitWidth(bool gitSource, int width)
+    {
+        var output = new StringBuilder();
+        var console = CreateSelectionConsole(output, [new('\r', ConsoleKey.Enter, false, false, false)]);
+        console.Profile.Width = width;
+        console.Profile.Capabilities.ColorSystem = ColorSystem.Standard;
+        var interaction = CreateInteractionService(console);
+        var template = CreateSearchableTemplate("first", null);
+        var source = gitSource
+            ? new TemplateSource(".", "https://example.test/organization/[templates]/long-location", "release/[blue]")
+            : new TemplateSource("/work/[templates]/long-directory-location", null, null);
+        var configured = new ConfiguredTemplate("source", template, "Team [templates]", source);
+
+        var selected = await interaction.PromptForSelectionAsync("Select:", new[] { template }, item => item.Name,
+            _ => NewCommand.CreateTemplateSourceGroup(configured),
+            item => NewCommand.FormatTemplateDisplayLabel(item).EscapeMarkup());
+
+        Assert.Same(template, selected);
+        await Verify(output.ToString()).UseParameters(gitSource, width).ScrubLinesWithReplace(line => line.TrimEnd());
+    }
+
+    [Theory]
+    [InlineData(6)]
+    [InlineData(10)]
+    public async Task PromptForSelectionAsync_GroupedLabelsFitNarrowTerminals(int width)
+    {
+        var output = new StringBuilder();
+        var console = CreateSelectionConsole(output, [new('\r', ConsoleKey.Enter, false, false, false)]);
+        console.Profile.Width = width;
+        var interaction = CreateInteractionService(console);
+        ITemplate[] templates = [CreateSearchableTemplate("first", "Wide 界 description")];
+
+        var selected = await interaction.PromptForSelectionAsync("Pick:", templates, template => template.Name,
+            _ => new SelectionChoiceGroup("source", "Company"), template => NewCommand.FormatTemplateDisplayLabel(template).EscapeMarkup());
+
+        Assert.Same(templates[0], selected);
+        await Verify(output.ToString()).UseParameters(width).ScrubLinesWithReplace(line => line.TrimEnd());
+    }
+
+    [Fact]
+    public async Task PromptForSelectionAsync_TruncatedDescriptionTailIsNotSearchable()
+    {
+        var keys = "ZXQ".Select(ch => new ConsoleKeyInfo(ch, Enum.Parse<ConsoleKey>(ch.ToString()), true, false, false))
+            .Append(new ConsoleKeyInfo('\r', ConsoleKey.Enter, false, false, false));
+        var console = CreateSelectionConsole(new StringBuilder(), keys);
+        console.Profile.Width = 40;
+        var interaction = CreateInteractionService(console);
+        const string Description = "A description longer than the terminal with ZXQ at the end";
+        ITemplate[] templates = [CreateSearchableTemplate("first", null), CreateSearchableTemplate("second", Description)];
+
+        var selected = await interaction.PromptForSelectionAsync("Select:", templates, template => $"Same - {template.Name}",
+            template => new SelectionChoiceGroup(template.Name, template.Name),
+            template => NewCommand.FormatTemplateDisplayLabel(template).EscapeMarkup());
+
+        Assert.Same(templates[0], selected);
+        Assert.Equal(Description, templates[1].SearchDescription);
+    }
+
+    [Theory]
+    [InlineData(null, "Same")]
+    [InlineData("", "Same")]
+    [InlineData(" ", "Same")]
+    [InlineData("Observable [services]", "Same (Observable [services])")]
+    public void TemplateDisplayLabel_IncludesOnlyNonemptyDescriptions(string? description, string expectedLabel)
+    {
+        var template = CreateSearchableTemplate("sample", description);
+
+        Assert.Equal(expectedLabel, NewCommand.FormatTemplateDisplayLabel(template));
+    }
+
+    [Fact]
+    public async Task BuiltInTemplatePicker_DescriptionOnlySearchWorksWithoutConfiguredSources()
+    {
+        var keys = "OBSERVABLE".Select(ch => new ConsoleKeyInfo(ch, Enum.Parse<ConsoleKey>(ch.ToString()), true, false, false))
+            .Append(new ConsoleKeyInfo('\r', ConsoleKey.Enter, false, false, false));
+        var interaction = CreateInteractionService(CreateSelectionConsole(new StringBuilder(), keys));
+        var prompter = new NewCommandPrompter(interaction);
+        ITemplate[] templates = [CreateSearchableTemplate("first", ""), CreateSearchableTemplate("second", "Observable services")];
+
+        var selected = await prompter.PromptForTemplateAsync(templates, TestContext.Current.CancellationToken);
+
+        Assert.Same(templates[1], selected);
+    }
+
+    [Fact]
+    public async Task PromptForSelectionAsync_GroupedBindingUsesFlatLabelWithoutRendering()
+    {
+        var output = new StringBuilder();
+        var interaction = CreateInteractionService(CreateInteractiveConsoleWithInput(output, ""),
+            hostEnvironment: TestHelpers.CreateNonInteractiveHostEnvironment());
+        var option = new Option<string?>("--template");
+        var binding = PromptBinding.Create(new RootCommand { option }.Parse("--template second"), option);
+        TestItem[] choices = [new("first", "first"), new("second", "second")];
+
+        var selected = await interaction.PromptForSelectionAsync("Select:", choices, choice => choice.Display,
+            _ => throw new InvalidOperationException("Noninteractive binding must not evaluate grouping."),
+            _ => throw new InvalidOperationException("Noninteractive binding must use flat labels."), binding);
+
+        Assert.Same(choices[1], selected);
+        Assert.Empty(output.ToString());
+    }
+
+    [Fact]
+    public async Task PromptForSelectionAsync_EmptyGroupedChoicesHaveNoSelectableHeaders()
+    {
+        var interaction = CreateInteractionService(CreateInteractiveConsoleWithInput(new StringBuilder(), ""));
+
+        await Assert.ThrowsAsync<EmptyChoicesException>(() => interaction.PromptForSelectionAsync("Select:", Array.Empty<string>(), choice => choice,
+            _ => throw new InvalidOperationException("Empty choices must not create groups."), choice => choice));
     }
 
     [Fact]
@@ -871,6 +1445,46 @@ public class ConsoleInteractionServiceTests
         Assert.DoesNotContain("[[Prod]]", outputString);
     }
 
+    [Theory]
+    [InlineData(null, false)]
+    [InlineData(null, true)]
+    [InlineData("Stopping Aspire.", false)]
+    [InlineData("Stopping Aspire.", true)]
+    [InlineData("Stopping dashboard.", false)]
+    [InlineData("Stopping dashboard.", true)]
+    public void DisplayCancellationMessage_UsesDefaultOrCustomMessageAndConsoleOverride(string? message, bool useStderr)
+    {
+        var stdoutOutput = new StringBuilder();
+        var stderrOutput = new StringBuilder();
+        var stdoutConsole = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.No,
+            ColorSystem = ColorSystemSupport.NoColors,
+            Out = new AnsiConsoleOutput(new StringWriter(stdoutOutput)),
+            Enrichment = new ProfileEnrichment { UseDefaultEnrichers = false }
+        });
+        var stderrConsole = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.No,
+            ColorSystem = ColorSystemSupport.NoColors,
+            Out = new AnsiConsoleOutput(new StringWriter(stderrOutput)),
+            Enrichment = new ProfileEnrichment { UseDefaultEnrichers = false }
+        });
+        var consoleEnvironment = new ConsoleEnvironment(stdoutConsole, stderrConsole, TextReader.Null);
+        var interactionService = new ConsoleInteractionService(consoleEnvironment, CreateExecutionContext(), TestHelpers.CreateInteractiveHostEnvironment(), new EnvironmentProcessPathProvider(), NullLoggerFactory.Instance, new ConsoleLogBufferContext());
+        ConsoleOutput? consoleOverride = useStderr ? ConsoleOutput.Error : null;
+
+        interactionService.DisplayCancellationMessage(message, consoleOverride);
+
+        var targetConsole = useStderr ? stderrConsole : stdoutConsole;
+        var expectedOutput = Environment.NewLine
+            + ConsoleHelpers.FormatEmojiPrefix(KnownEmojis.StopSign, targetConsole, replaceEmoji: true)
+            + (message ?? InteractionServiceStrings.OperationCancelled)
+            + Environment.NewLine;
+        Assert.Equal(useStderr ? string.Empty : expectedOutput, stdoutOutput.ToString());
+        Assert.Equal(useStderr ? expectedOutput : string.Empty, stderrOutput.ToString());
+    }
+
     [Fact]
     public void DisplayError_WritesToStderr_RegardlessOfConsoleSetting()
     {
@@ -926,6 +1540,91 @@ public class ConsoleInteractionServiceTests
 
         Assert.Contains("Status update", stdoutOutput.ToString());
         Assert.Empty(stderrOutput.ToString());
+    }
+
+    [Fact]
+    public async Task DisplayMessage_SkillSourcesAlignEachUrlWithHeading()
+    {
+        var output = new StringBuilder();
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.No,
+            ColorSystem = ColorSystemSupport.NoColors,
+            Out = new AnsiConsoleOutput(new StringWriter(output)),
+            Enrichment = new ProfileEnrichment { UseDefaultEnrichers = false }
+        });
+        console.Profile.Width = 100;
+        var interactionService = CreateInteractionService(console);
+        var message = string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_SkillSources,
+            string.Join(Environment.NewLine, "https://example.com/skills-a", "https://example.com/skills-b"));
+
+        interactionService.DisplayMessage(KnownEmojis.Information, message);
+
+        var lines = output.ToString().Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
+        await Verify(string.Join('\n', lines.Select(line => line.TrimEnd())));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void DisplayMessage_SourceTrustNoticeUsesWarningFormatting(bool enableColor)
+    {
+        var output = new StringBuilder();
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = enableColor ? AnsiSupport.Yes : AnsiSupport.No,
+            ColorSystem = enableColor ? ColorSystemSupport.Standard : ColorSystemSupport.NoColors,
+            Out = new AnsiConsoleOutput(new StringWriter(output)),
+            Enrichment = new ProfileEnrichment { UseDefaultEnrichers = false }
+        });
+        console.Profile.Width = 200;
+        var interactionService = CreateInteractionService(console);
+
+        var executionContext = CreateExecutionContext();
+        Assert.True(interactionService.DisplaySourceTrustWarning(executionContext));
+        Assert.False(interactionService.DisplaySourceTrustWarning(executionContext));
+
+        var expected = enableColor
+            ? $"\u001b[91m\U0001F6A8\u001b[0m \u001b[93m{SharedCommandStrings.SourceTrustWarning}\u001b[0m"
+            : $"\U0001F6A8 {SharedCommandStrings.SourceTrustWarning}";
+        Assert.Equal(expected, output.ToString().TrimEnd());
+    }
+
+    [Fact]
+    public void DisplayTemplateSources_DoesNotRepeatSourceTrustWarning()
+    {
+        var interaction = new TestInteractionService();
+        var executionContext = CreateExecutionContext();
+
+        interaction.DisplaySourceTrustWarning(executionContext);
+        interaction.DisplayTemplateSources(
+            [("first", new TemplateSource(".", "https://example.test/first.git", null))], executionContext);
+        interaction.DisplayTemplateSources(
+            [("second", new TemplateSource(".", "https://example.test/second.git", null))], executionContext);
+        interaction.DisplaySourceTrustWarning(executionContext);
+
+        Assert.Equal(
+            [$"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]",
+                NewCommandStrings.TemplateSourceExplanation, NewCommandStrings.TemplateSourceExplanation],
+            interaction.DisplayedMessages.Select(message => message.Message));
+        Assert.Equal(2, interaction.DisplayedRenderables.Count);
+    }
+
+    [Fact]
+    public void DisplaySourceTrustWarning_IsScopedToExecutionContext()
+    {
+        var interaction = new TestInteractionService();
+        var executionContext = CreateExecutionContext();
+
+        Parallel.For(0, 10, _ => interaction.DisplaySourceTrustWarning(executionContext));
+
+        var warning = Assert.Single(interaction.DisplayedMessages);
+        Assert.Equal($"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]", warning.Message);
+        Assert.Equal(ConsoleOutput.Error, warning.ConsoleOverride);
+
+        interaction.DisplaySourceTrustWarning(CreateExecutionContext());
+
+        Assert.Equal([warning, warning], interaction.DisplayedMessages);
     }
 
     [Fact]
@@ -2007,6 +2706,27 @@ public class ConsoleInteractionServiceTests
         public override string ToString() => Id;
     }
 
+    private static IAnsiConsole CreateSelectionConsole(StringBuilder output, IEnumerable<ConsoleKeyInfo> keys)
+    {
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.Yes,
+            ColorSystem = ColorSystemSupport.NoColors,
+            Interactive = InteractionSupport.Yes,
+            Out = new AnsiConsoleOutput(new StringWriter(output)),
+            Enrichment = new ProfileEnrichment { UseDefaultEnrichers = false }
+        });
+        console.Profile.Width = 100;
+        console.Profile.Height = 40;
+        return new TestAnsiConsoleWithInput(console, keys);
+    }
+
+    private static CallbackTemplate CreateSearchableTemplate(string id, string? description) =>
+        new(id, "Same", (_, name) => name, _ => { }, (_, _, _, _) => throw new InvalidOperationException("The picker must not execute a template."))
+        {
+            SearchDescription = description
+        };
+
     private static IAnsiConsole CreateInteractiveConsoleWithInput(StringBuilder output, string input)
     {
         var settings = new AnsiConsoleSettings
@@ -2019,63 +2739,5 @@ public class ConsoleInteractionServiceTests
         var console = AnsiConsole.Create(settings);
         console.Profile.Width = int.MaxValue;
         return new TestAnsiConsoleWithInput(console, new StringReader(input));
-    }
-}
-
-/// <summary>
-/// A test <see cref="IAnsiConsole"/> wrapper that redirects input reads to a <see cref="TextReader"/>,
-/// allowing prompts to be answered in unit tests without blocking on real console input.
-/// </summary>
-file sealed class TestAnsiConsoleWithInput : IAnsiConsole
-{
-    private readonly IAnsiConsole _inner;
-    private readonly IAnsiConsoleInput _testInput;
-
-    public TestAnsiConsoleWithInput(IAnsiConsole inner, TextReader inputReader)
-    {
-        _inner = inner;
-        _testInput = new TextReaderInput(inputReader);
-    }
-
-    public Profile Profile => _inner.Profile;
-    public IAnsiConsoleCursor Cursor => _inner.Cursor;
-    public IAnsiConsoleInput Input => _testInput;
-    public IExclusivityMode ExclusivityMode => _inner.ExclusivityMode;
-    public RenderPipeline Pipeline => _inner.Pipeline;
-
-    public void Clear(bool home) => _inner.Clear(home);
-    public void Write(IRenderable renderable) => _inner.Write(renderable);
-    public void WriteAnsi(Action<AnsiWriter> action) => _inner.WriteAnsi(action);
-
-    private sealed class TextReaderInput : IAnsiConsoleInput
-    {
-        private readonly TextReader _reader;
-
-        public TextReaderInput(TextReader reader) => _reader = reader;
-
-        public bool IsKeyAvailable() => true;
-
-        public ConsoleKeyInfo? ReadKey(bool intercept)
-        {
-            var read = _reader.Read();
-            if (read == -1)
-            {
-                // End of stream - return Enter as a safe fallback
-                return new ConsoleKeyInfo('\r', ConsoleKey.Enter, shift: false, alt: false, control: false);
-            }
-
-            var ch = (char)read;
-            var key = ch switch
-            {
-                '\n' or '\r' => ConsoleKey.Enter,
-                'y' or 'Y'   => ConsoleKey.Y,
-                'n' or 'N'   => ConsoleKey.N,
-                _            => ConsoleKey.Enter,
-            };
-            return new ConsoleKeyInfo(ch, key, shift: char.IsUpper(ch), alt: false, control: false);
-        }
-
-        public Task<ConsoleKeyInfo?> ReadKeyAsync(bool intercept, CancellationToken cancellationToken)
-            => Task.FromResult(ReadKey(intercept));
     }
 }

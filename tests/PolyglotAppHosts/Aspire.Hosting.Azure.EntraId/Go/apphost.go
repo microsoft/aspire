@@ -23,10 +23,11 @@ func main() {
 	exampleClient := "00001111-aaaa-2222-bbbb-3333cccc4444"
 
 	container := builder.AddContainer("api", "mcr.microsoft.com/dotnet/samples:aspnetapp").
-		WithHttpEndpoint(&aspire.WithHttpEndpointOptions{Name: aspire.StringPtr("http"), TargetPort: aspire.Float64Ptr(8080)})
+		WithHttpEndpoint(&aspire.WithHttpEndpointOptions{Name: aspire.StringPtr("http"), TargetPort: aspire.IntPtr(8080)})
 	executable := builder.AddExecutable("worker", "dotnet", ".", []string{"--info"})
 	endpoint := container.GetEndpoint("http")
 	identity := builder.AddAzureUserAssignedIdentity("identity")
+	vault := builder.AddAzureKeyVault("vault")
 
 	// Existing registrations: configuration only, with literal or parameter IDs in any combination.
 	existingEntra := builder.AddExistingEntraApplication("existing-entra", tenantId, exampleClient)
@@ -36,11 +37,14 @@ func main() {
 	existingEntra.WithSignInAudience(aspire.EntraIdSignInAudienceAzureADMultipleOrgs)
 	existingEntra.WithAudience("api://example")
 	existingEntra.WithClientSecret(clientSecret)
-	existingEntra.WithFederatedManagedIdentityCredential(exampleClient, &aspire.EntraIdTokenExchangeOptions{
-		TokenExchangeUrl:       aspire.StringPtr("api://AzureADTokenExchange"),
-		TokenExchangeAuthority: aspire.StringPtr("https://login.microsoftonline.com/"),
+	existingEntra.WithFederatedManagedIdentityCredential(exampleClient, &aspire.WithFederatedManagedIdentityCredentialOptions{
+		Options: &aspire.EntraIdTokenExchangeOptions{
+			TokenExchangeUrl:       aspire.StringPtr("api://AzureADTokenExchange"),
+			TokenExchangeAuthority: aspire.StringPtr("https://login.microsoftonline.com/"),
+		},
 	})
 	existingEntra.WithCertificateFromKeyVault("https://vault.vault.azure.net", "certificate")
+	existingEntra.WithCertificateFromKeyVault(vault, "vault-certificate")
 	existingEntra.WithCertificateThumbprint("CurrentUser/My", "thumbprint")
 	existingEntra.WithCertificateDistinguishedName("CurrentUser/My", "CN=certificate")
 	existingEntra.WithCertificateFromFile("/certs/client.pfx", &aspire.WithCertificateFromFileOptions{Password: &certificatePassword})
@@ -59,7 +63,9 @@ func main() {
 	// An existing API registration is configuration only: its URI and scope IDs describe what the registration already defines.
 	existingApi := builder.AddExistingEntraApplication("existing-api", exampleTenant, exampleClient)
 	existingApi.WithApplicationIdUri(&aspire.WithApplicationIdUriOptions{ApplicationIdUri: aspire.StringPtr("api://contoso-orders")})
-	existingApi.WithScope("orders.read", "Read orders.", &aspire.EntraIdScopeOptions{Id: aspire.StringPtr("33334444-aaaa-5555-bbbb-6666cccc7777")})
+	existingApi.WithScope("orders.read", "Read orders.", &aspire.WithScopeOptions{
+		Options: &aspire.EntraIdScopeOptions{Id: aspire.StringPtr("33334444-aaaa-5555-bbbb-6666cccc7777")},
+	})
 
 	// Registrations created by Aspire.
 	createdEntra := builder.AddEntraIdApplication("created-entra")
@@ -89,13 +95,15 @@ func main() {
 	apiEntra.WithApplicationIdUri()
 	apiEntra.WithApplicationIdUri(&aspire.WithApplicationIdUriOptions{ApplicationIdUri: aspire.StringPtr("api://contoso-api")})
 	apiEntra.WithScope("access_as_user", "Allows the app to call the API.")
-	apiEntra.WithScope("admin", "Allows the app to administer the API.", &aspire.EntraIdScopeOptions{
-		DisplayName:            aspire.StringPtr("Administer"),
-		UserConsentDisplayName: aspire.StringPtr("Administer on your behalf"),
-		UserConsentDescription: aspire.StringPtr("Allows the app to administer the API for you."),
-		RequiresAdminConsent:   aspire.BoolPtr(true),
-		IsEnabled:              aspire.BoolPtr(false),
-		Id:                     aspire.StringPtr("11112222-aaaa-3333-bbbb-4444cccc5555"),
+	apiEntra.WithScope("admin", "Allows the app to administer the API.", &aspire.WithScopeOptions{
+		Options: &aspire.EntraIdScopeOptions{
+			DisplayName:            aspire.StringPtr("Administer"),
+			UserConsentDisplayName: aspire.StringPtr("Administer on your behalf"),
+			UserConsentDescription: aspire.StringPtr("Allows the app to administer the API for you."),
+			RequiresAdminConsent:   aspire.BoolPtr(true),
+			IsEnabled:              aspire.BoolPtr(false),
+			Id:                     aspire.StringPtr("11112222-aaaa-3333-bbbb-4444cccc5555"),
+		},
 	})
 	scopeUri := apiEntra.GetScopeUri("access_as_user")
 	container.WithEnvironment("API_SCOPE", scopeUri)

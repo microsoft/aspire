@@ -663,15 +663,24 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
                     continue;
                 }
 
+                // TLS state comes from the endpoint annotation; the Kubernetes endpoint mapping does not track it.
+                if (epExpr.Property == EndpointProperty.TlsEnabled)
+                {
+                    return epExpr.Endpoint.TlsEnabled ? bool.TrueString : bool.FalseString;
+                }
+
                 var referencedResource = epExpr.Endpoint.Resource == this
                     ? this
                     : await context.CreateKubernetesResourceAsync(epExpr.Endpoint.Resource, executionContext, default).ConfigureAwait(false);
 
                 var mapping = referencedResource.EndpointMappings[epExpr.Endpoint.EndpointName];
 
-                var val = GetEndpointValue(mapping, epExpr.Property, embedded && epExpr.Property is EndpointProperty.Port or EndpointProperty.TargetPort);
-
-                return val;
+                return epExpr.Property switch
+                {
+                    EndpointProperty.BrowserOrigins or EndpointProperty.PrimaryBrowserOrigin =>
+                        await ProcessValueAsync(context, executionContext, context.GetEndpointInput(epExpr, executionContext), embedded).ConfigureAwait(false),
+                    _ => GetEndpointValue(mapping, epExpr.Property, embedded && epExpr.Property is EndpointProperty.Port or EndpointProperty.TargetPort)
+                };
             }
 
             if (value is ReferenceExpression expr)

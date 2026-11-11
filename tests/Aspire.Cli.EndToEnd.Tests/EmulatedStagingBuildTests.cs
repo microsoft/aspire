@@ -107,7 +107,13 @@ public sealed class EmulatedStagingBuildTests(ITestOutputHelper output)
 
         // `aspire add` must complete using the registered darc feed in both mapping modes.
         await auto.RunCommandAsync($"cd {projectName}/{projectName}.AppHost", counter);
-        await AddIntegrationInteractivelyAsync(auto, counter, "redis");
+        // C# projects use NuGet.config rather than a pinned CLI channel. Specify the staging
+        // version directly so the test doesn't depend on a version picker appearing.
+        await auto.RunCommandAsync($"aspire add Aspire.Hosting.Redis --version {staging.Version}", counter,
+            timeout: TimeSpan.FromMinutes(2));
+        var redisReference = Assert.Single(XDocument.Load(appHostCsproj).Descendants("PackageReference"),
+            reference => (string?)reference.Attribute("Include") == "Aspire.Hosting.Redis");
+        Assert.Equal(staging.Version, (string?)redisReference.Attribute("Version"));
     }
 
     /// <summary>
@@ -169,12 +175,8 @@ public sealed class EmulatedStagingBuildTests(ITestOutputHelper output)
 
         // `aspire add` must resolve the integration from the staging darc feed and complete, proving
         // the CLI's internal channel-feed resolution works for TS without a project-local NuGet.config.
-        // Use `valkey` rather than `redis`: the interactive picker filters by substring and selects the
-        // first match, and "redis" matches `azure-redis` (Aspire.Hosting.Azure.Redis) ahead of
-        // `redis` — whereas "valkey" uniquely matches Aspire.Hosting.Valkey, so the assertion below
-        // targets a deterministic package id.
         await auto.RunCommandAsync($"cd {projectName}", counter);
-        await AddIntegrationInteractivelyAsync(auto, counter, "valkey");
+        await AddIntegrationInteractivelyAsync(auto, counter, "Aspire.Hosting.Valkey");
 
         // REGRESSION GUARD: "added successfully" alone is insufficient here — the stable Valkey package
         // (13.4.3) also resolves fine from nuget.org, so a regression that ignored the pinned staging
@@ -221,16 +223,18 @@ public sealed class EmulatedStagingBuildTests(ITestOutputHelper output)
     }
 
     /// <summary>
-    /// Runs <c>aspire add</c> interactively, filters the integration list by <paramref name="filter"/>,
+    /// Runs <c>aspire add</c> interactively, searches for <paramref name="packageId"/>,
     /// accepts the default version if a version picker appears, and waits for the success message.
     /// Mirrors the proven interactive add flow used elsewhere in the E2E suite.
     /// </summary>
-    private static async Task AddIntegrationInteractivelyAsync(Hex1bTerminalAutomator auto, SequenceCounter counter, string filter)
+    private static async Task AddIntegrationInteractivelyAsync(Hex1bTerminalAutomator auto, SequenceCounter counter, string packageId)
     {
         await auto.TypeAsync("aspire add");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync(AddCommandStrings.SelectAnIntegrationToAdd, timeout: TimeSpan.FromMinutes(1));
-        await auto.TypeAsync(filter);
+        // Match the complete "(Aspire.Hosting.Redis)" label, not a friendly-name substring
+        // that can select a different package when choices are grouped by feed.
+        await auto.TypeAsync($"({packageId})");
         await auto.EnterAsync();
 
         var waitingForVersionSelection = false;

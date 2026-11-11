@@ -17,7 +17,7 @@ internal interface IExtensionInteractionService : IInteractionService
 {
     IExtensionBackchannel Backchannel { get; }
     Task FlushAsync(CancellationToken cancellationToken = default);
-    Task<bool> TryDisplayCommandFailureAsync(string? errorMessage, string cliLogFilePath, string? appHostCliLogFilePath, CancellationToken cancellationToken);
+    Task<bool> TryDisplayCommandFailureAsync(string? errorMessage, string cliLogFilePath, string? appHostCliLogFilePath, bool allowMarkup, CancellationToken cancellationToken);
     void DisplayError(string errorMessage, IReadOnlyList<InteractionMessageAction> actions, bool allowMarkup = false);
     void DisplayMessage(KnownEmoji emoji, string message, IReadOnlyList<InteractionMessageAction> actions, bool allowMarkup = false, ConsoleOutput? consoleOverride = null);
     void OpenEditor(string projectPath);
@@ -174,8 +174,8 @@ internal class ExtensionInteractionService : IExtensionInteractionService, IDisp
                         }
                         else
                         {
-                            // Fallback to regular prompt for older extension versions
-                            result = await Backchannel.PromptForStringAsync(StringUtils.RemoveMarkup(promptText), binding?.DefaultValue, validator, required, _cancellationToken).ConfigureAwait(false);
+                            // Older extensions cannot mask regular input boxes, so keep secret entry in the terminal.
+                            result = await _consoleInteractionService.PromptForStringAsync(promptText, validator, isSecret, required, binding, logResponse, cancellationToken).ConfigureAwait(false);
                         }
                     }
                     else
@@ -305,6 +305,16 @@ internal class ExtensionInteractionService : IExtensionInteractionService, IDisp
         }
     }
 
+    public Task<T> PromptForSelectionAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter,
+        Func<T, SelectionChoiceGroup?> choiceGroup, Func<T, string> groupedChoiceFormatter, PromptBinding<string?>? binding = null, bool echoSelected = true, CancellationToken cancellationToken = default) where T : notnull
+    {
+        // Keep the extension's legacy string[] RPC unchanged. Source-qualified labels
+        // remain sufficient when the client cannot render the optional group headings.
+        return _extensionPromptEnabled
+            ? PromptForSelectionAsync(promptText, choices, choiceFormatter, binding, echoSelected, cancellationToken)
+            : _consoleInteractionService.PromptForSelectionAsync(promptText, choices, choiceFormatter, choiceGroup, groupedChoiceFormatter, binding, echoSelected, cancellationToken);
+    }
+
     public async Task<T> PromptForSelectionAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter,
         PromptBinding<string?>? binding = null, bool echoSelected = true, CancellationToken cancellationToken = default) where T : notnull
     {
@@ -399,7 +409,7 @@ internal class ExtensionInteractionService : IExtensionInteractionService, IDisp
         // out-of-order output like an error message preceding the lines that explain it.
         var result = _extensionTaskChannel.Writer.TryWrite(async () =>
         {
-            await Backchannel.DisplayErrorAsync(StringUtils.RemoveMarkup(errorMessage), _cancellationToken);
+            await Backchannel.DisplayErrorAsync(allowMarkup ? StringUtils.RemoveMarkup(errorMessage) : errorMessage, _cancellationToken);
             _consoleInteractionService.DisplayError(errorMessage, allowMarkup);
         });
         Debug.Assert(result);
@@ -410,7 +420,7 @@ internal class ExtensionInteractionService : IExtensionInteractionService, IDisp
         var materializedActions = actions.ToArray();
         var result = _extensionTaskChannel.Writer.TryWrite(async () =>
         {
-            await Backchannel.DisplayErrorAsync(StringUtils.RemoveMarkup(errorMessage), materializedActions, _cancellationToken);
+            await Backchannel.DisplayErrorAsync(allowMarkup ? StringUtils.RemoveMarkup(errorMessage) : errorMessage, materializedActions, _cancellationToken);
             _consoleInteractionService.DisplayError(errorMessage, allowMarkup);
         });
         Debug.Assert(result);
@@ -473,6 +483,7 @@ internal class ExtensionInteractionService : IExtensionInteractionService, IDisp
         string? errorMessage,
         string cliLogFilePath,
         string? appHostCliLogFilePath,
+        bool allowMarkup,
         CancellationToken cancellationToken)
     {
         if (!await SupportsMessageActionsAsync(cancellationToken).ConfigureAwait(false))
@@ -511,7 +522,7 @@ internal class ExtensionInteractionService : IExtensionInteractionService, IDisp
         }
         else
         {
-            DisplayError(errorMessage, diagnosticLogs.Select(log => log.Action).ToArray());
+            DisplayError(errorMessage, diagnosticLogs.Select(log => log.Action).ToArray(), allowMarkup);
             foreach (var log in diagnosticLogs)
             {
                 ConsoleDisplayMessage(log.Emoji, log.Message, allowMarkup: true, consoleOverride: ConsoleOutput.Error);

@@ -9,6 +9,7 @@ using Aspire.TypeSystem;
 
 namespace Aspire.Hosting.CodeGeneration.Go.Tests;
 
+[RequiresTools(["gofmt"])]
 public class GoScaffoldTests(ITestOutputHelper outputHelper)
 {
     private readonly GoLanguageSupport _languageSupport = new();
@@ -23,6 +24,16 @@ public class GoScaffoldTests(ITestOutputHelper outputHelper)
         Assert.Equal(
             [".gitignore", "apphost.go", "apphost.run.json", "go.mod"],
             files.Keys.Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public void Scaffold_ReliesOnBuildForResourceErrors()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var appHost = Scaffold(workspace)["apphost.go"];
+
+        Assert.DoesNotContain(".Err()", appHost, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -45,7 +56,10 @@ public class GoScaffoldTests(ITestOutputHelper outputHelper)
         // An existing working tree keeps CRLF until its files are re-created: delete the go-starter directory, then
         // run `git checkout -- <directory>`.
         var starterRoot = Path.Combine(AppContext.BaseDirectory, "go-starter");
-        var starterFiles = Directory.EnumerateFiles(starterRoot, "*", SearchOption.AllDirectories).ToList();
+        // The frontend includes a PNG logo; line endings only apply to text template files.
+        var starterFiles = Directory.EnumerateFiles(starterRoot, "*", SearchOption.AllDirectories)
+            .Where(file => !string.Equals(Path.GetExtension(file), ".png", StringComparison.OrdinalIgnoreCase))
+            .ToList();
         Assert.NotEmpty(starterFiles);
 
         Assert.Empty(starterFiles
@@ -236,7 +250,7 @@ public class GoScaffoldTests(ITestOutputHelper outputHelper)
         File.WriteAllText(path, content);
     }
 
-    // `gofmt -l -d` prints the name and the diff of every file whose formatting differs and nothing otherwise.
+    // `gofmt -s -l -d` prints the name and the simplified diff of every file whose formatting differs.
     private static async Task<string> RunGofmtAsync(string directory)
     {
         using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(1));
@@ -247,7 +261,7 @@ public class GoScaffoldTests(ITestOutputHelper outputHelper)
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
-            ArgumentList = { "-l", "-d", "." }
+            ArgumentList = { "-s", "-l", "-d", "." }
         };
         process.Start();
 

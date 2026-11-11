@@ -31,9 +31,8 @@ internal sealed class CodespacesResourceUrlRewriterService(ILogger<CodespacesRes
 
                     foreach (var originalUrlSnapshot in resourceEvent.Snapshot.Urls)
                     {
-                        var uri = new Uri(originalUrlSnapshot.Url);
-
-                        if (!originalUrlSnapshot.IsInternal && (uri.Scheme == "http" || uri.Scheme == "https") && uri.Host == "localhost")
+                        if (!originalUrlSnapshot.IsInternal &&
+                            codespaceUrlRewriter.TryRewriteResourceUrl(originalUrlSnapshot.Url, out var rewrittenUrl))
                         {
                             remappedUrls ??= new();
 
@@ -45,7 +44,7 @@ internal sealed class CodespacesResourceUrlRewriterService(ILogger<CodespacesRes
                                 // which is typically ".app.github.dev". The VSCode instance is typically
                                 // hosted at codespacename.github.dev whereas the forwarded ports
                                 // would be at codespacename-port.app.github.dev.
-                                Url = codespaceUrlRewriter.RewriteUrl(uri)
+                                Url = rewrittenUrl
                             };
 
                             remappedUrls.Add(originalUrlSnapshot, newUrlSnapshot);

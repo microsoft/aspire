@@ -7,6 +7,7 @@ using System.Collections.Concurrent;
 using System.Text;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Git;
+using Aspire.Cli.Interaction;
 using Aspire.Cli.Utils;
 using Aspire.Shared.Telemetry;
 using Aspire.Cli.Tests.Utils;
@@ -28,13 +29,9 @@ internal static class TestConfigSourceServices
 
     public static ConfigSourceService Create(CliExecutionContext context, IGitClient? git = null,
         TimeProvider? clock = null, IEnvironment? environment = null, TestConfigSourceDetector? detector = null,
-        TestInteractionService? interaction = null, bool interactive = false, FileInfo? globalSettingsFile = null)
+        IInteractionService? interaction = null, bool interactive = false)
     {
-        var configurationService = new TestConfigurationService
-        {
-            SettingsFilePath = globalSettingsFile?.FullName ?? Path.Combine(context.WorkingDirectory.FullName, ".aspire", "settings.global.json")
-        };
-        return new ConfigSourceService(context, configurationService, environment ?? new TestEnvironment(), detector ?? new TestConfigSourceDetector(),
+        return new ConfigSourceService(context, environment ?? new TestEnvironment(), detector ?? new TestConfigSourceDetector(),
             git ?? new TestConfigSourceRepository(), clock ?? TimeProvider.System, interaction ?? new TestInteractionService(),
             interactive ? TestHelpers.CreateInteractiveHostEnvironment() : TestHelpers.CreateNonInteractiveHostEnvironment(),
             NullLogger<ConfigSourceService>.Instance);
@@ -87,12 +84,17 @@ internal sealed class TestConfigSourceDetector : IInternalMicrosoftDetector
 
 internal sealed class TestConfigSourceRepository : IGitClient
 {
+    public IGitClient WithStandardErrorHandler(Action<string> standardErrorHandler) => this;
+
     private readonly ConcurrentDictionary<string, RepositoryState> _repositories = new();
     private int _calls;
     private int _checkCalls;
     public string Commit { get; set; } = "commit-1";
     public int Calls => _calls;
     public int CheckCalls => _checkCalls;
+    public bool ReadConfigurationWhenUnattended { get; set; }
+    public ConcurrentQueue<GitCommandMode> FetchModes { get; } = new();
+    public ConcurrentQueue<GitCommandMode> ResolutionModes { get; } = new();
     public Func<ConfigSource, CancellationToken, Task<(string Version, JsonObject Configuration)>> ReadConfiguration { get; set; }
         = (_, _) => Task.FromResult(("version-1", new JsonObject()));
     public Func<ConfigSource, CancellationToken, Task<string>> InspectConfiguration { get; set; }
@@ -103,6 +105,7 @@ internal sealed class TestConfigSourceRepository : IGitClient
 
     public Task FetchAsync(GitRepositoryLocation destination, string repository, string reference, GitCommandMode mode, CancellationToken cancellationToken)
     {
+        FetchModes.Enqueue(mode);
         _repositories[destination.Directory.FullName] = new RepositoryState(repository, reference, mode);
         return Task.CompletedTask;
     }
@@ -121,7 +124,7 @@ internal sealed class TestConfigSourceRepository : IGitClient
                 ? state.Reference["refs/heads/".Length..] : state.Reference
         };
         string version;
-        if (state.Mode == GitCommandMode.Unattended)
+        if (state.Mode == GitCommandMode.Unattended && !ReadConfigurationWhenUnattended)
         {
             Interlocked.Increment(ref _checkCalls);
             version = await InspectConfiguration(source, cancellationToken);
@@ -142,8 +145,11 @@ internal sealed class TestConfigSourceRepository : IGitClient
     public Task<string> ReadBlobAsync(GitRepositoryLocation repository, string objectId, GitCommandMode mode, CancellationToken cancellationToken) =>
         Task.FromResult(_repositories[repository.Directory.FullName].Content);
 
-    public Task<string> ResolveReferenceAsync(string repository, string? reference, DirectoryInfo workingDirectory, GitCommandMode mode, CancellationToken cancellationToken) =>
-        Task.FromResult(Commit);
+    public Task<string> ResolveReferenceAsync(string repository, string? reference, DirectoryInfo workingDirectory, GitCommandMode mode, CancellationToken cancellationToken)
+    {
+        ResolutionModes.Enqueue(mode);
+        return Task.FromResult(Commit);
+    }
 
     public Task CheckoutAsync(GitRepositoryLocation repository, GitCommandMode mode, CancellationToken cancellationToken) =>
         throw new InvalidOperationException("Configuration sources must not check out a worktree.");
