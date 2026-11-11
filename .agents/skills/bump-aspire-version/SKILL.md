@@ -55,7 +55,7 @@ When the bump follows a newly created release branch, add
 `--api-diff-release-branch release/<X.Y>` to the same command:
 
 ```bash
-dotnet run --file .agents/skills/bump-aspire-version/BumpVersion.cs -- 17.1 --branch main --milestone 17.1 --api-diff-release-branch release/17.0
+dotnet run --file .agents/skills/bump-aspire-version/BumpVersion.cs -- 17.0 --branch main --milestone 17.0 --api-diff-release-branch release/13.6
 ```
 
 `--branch` is the PR's target branch, not the feature branch. `--milestone` is
