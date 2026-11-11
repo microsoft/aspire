@@ -195,18 +195,20 @@ public class AgentTelemetryHookTests
     }
 
     [Theory]
-    [InlineData("Skill", true, false)]
-    [InlineData("Read", false, true)]
-    [InlineData("mcp__aspire__list_resources", true, false)]
-    [InlineData("skill", false, false)]
-    [InlineData("view", false, false)]
-    [InlineData("Bash", false, false)]
-    [InlineData("NotebookRead", false, false)]
-    [InlineData("ReadMe", false, false)]
-    [InlineData("mcp__other__list_resources", false, false)]
-    public void ClaudeMatchersSelectOnlyTrackedTools(string toolName, bool expectedTool, bool expectedRead)
+    [InlineData("Skill", true, false, false)]
+    [InlineData("mcp__aspire__list_resources", false, true, false)]
+    [InlineData("Read", false, false, true)]
+    [InlineData("skill", false, false, false)]
+    [InlineData("SkillSearch", false, false, false)]
+    [InlineData("view", false, false, false)]
+    [InlineData("Bash", false, false, false)]
+    [InlineData("NotebookRead", false, false, false)]
+    [InlineData("ReadMe", false, false, false)]
+    [InlineData("mcp__other__list_resources", false, false, false)]
+    public void ClaudeMatchersSelectOnlyTrackedTools(string toolName, bool expectedSkill, bool expectedMcp, bool expectedRead)
     {
-        Assert.Equal(expectedTool, MatchesAsClaude(toolName, ClaudeCodeAgentClient.TelemetryHookToolMatcher));
+        Assert.Equal(expectedSkill, MatchesAsClaude(toolName, ClaudeCodeAgentClient.TelemetryHookSkillMatcher));
+        Assert.Equal(expectedMcp, MatchesAsClaude(toolName, ClaudeCodeAgentClient.TelemetryHookMcpMatcher));
         Assert.Equal(expectedRead, MatchesAsClaude(toolName, ClaudeCodeAgentClient.TelemetryHookReadMatcher));
     }
 
@@ -219,13 +221,30 @@ public class AgentTelemetryHookTests
             {
                 var toolName = prefix + tool;
                 Assert.True(MatchesAsCopilot(toolName), toolName);
-                Assert.True(MatchesAsClaude(toolName, ClaudeCodeAgentClient.TelemetryHookToolMatcher), toolName);
+                Assert.True(MatchesAsClaude(toolName, ClaudeCodeAgentClient.TelemetryHookMcpMatcher), toolName);
                 Assert.NotNull(AgentTelemetryHook.Classify(
                     $$$"""{"toolName":"{{{toolName}}}","toolArgs":{}}""",
                     new TestEnvironment(),
                     AgentTelemetryHook.DefaultMaxPayloadCharacters));
             }
         }
+    }
+
+    [Fact]
+    public void ClaudeSkillIfSelectsEveryCanonicalSkill()
+    {
+        var names = AgentTelemetryCatalog.Canonical.Skills.SelectMany(skill => new[] { skill, $"aspire:{skill}" });
+        foreach (var name in names)
+        {
+            Assert.True(MatchesClaudeSkillIf(name), name);
+            Assert.NotNull(AgentTelemetryHook.Classify(
+                $$$"""{"tool_name":"Skill","tool_input":{"skill":"{{{name}}}"}}""",
+                new TestEnvironment(),
+                AgentTelemetryHook.DefaultMaxPayloadCharacters));
+        }
+
+        Assert.False(MatchesClaudeSkillIf("notes-helper"));
+        Assert.False(MatchesClaudeSkillIf("anthropic-skills:pdf"));
     }
 
     [Fact]
@@ -353,6 +372,19 @@ public class AgentTelemetryHookTests
 
     private static bool MatchesAsClaude(string toolName, string matcher) =>
         Regex.IsMatch(toolName, matcher, RegexOptions.ECMAScript);
+
+    // Emulates the Claude permission-rule prefix glob that TelemetryHookSkillIf uses. A trailing "*" with no space
+    // before it matches any remaining text:
+    //   Skill(aspire*) matches aspire-init and aspire:aspire-init
+    // https://code.claude.com/docs/en/permissions#wildcard-patterns
+    private static bool MatchesClaudeSkillIf(string skillName)
+    {
+        const string RulePrefix = "Skill(";
+        Assert.StartsWith(RulePrefix, ClaudeCodeAgentClient.TelemetryHookSkillIf);
+        Assert.EndsWith("*)", ClaudeCodeAgentClient.TelemetryHookSkillIf);
+        var prefix = ClaudeCodeAgentClient.TelemetryHookSkillIf[RulePrefix.Length..^2];
+        return skillName.StartsWith(prefix, StringComparison.Ordinal);
+    }
 
     // Emulates the subset of Claude permission-rule globs that TelemetryHookReadIf uses. "//" anchors the pattern at
     // the filesystem root, "**/" spans any number of directories, and "*" stays within one path segment:
