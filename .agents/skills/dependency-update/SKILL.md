@@ -316,42 +316,16 @@ Some external dependencies have known constraints:
 
 ### Npgsql EF major-version transitions
 
-1. **Check package metadata first.** Query available stable/prerelease provider versions, then inspect the selected provider's nuspec at `https://api.nuget.org/v3-flatcontainer/npgsql.entityframeworkcore.postgresql/{version}/npgsql.entityframeworkcore.postgresql.nuspec`. Check each TFM's dependency ranges, including `Microsoft.EntityFrameworkCore` and `.Relational`, and the corresponding HealthChecks EF nuspec. Matching major numbers do not establish compatibility; `[version]` means an exact dependency, not a minimum.
-2. **Keep the stable line global.** When a compatible stable provider is unavailable, select the latest compatible provider prerelease in the affected TFM's `PackageVersion Update="Npgsql.EntityFrameworkCore.PostgreSQL"` block in `Directory.Packages.props`. Keep repo-wide EF Core and `Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore` properties in `eng/Versions.props` on GA, with matching stable version/repository/SHA metadata in `eng/Version.Details.xml` through the managed dependency-flow process. Do not downgrade other EF providers or flow records to accommodate Npgsql.
-3. **Isolate compatibility pins to Npgsql's affected TFM.** In both component projects under `src/Components/`, override `Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore` to the compatible prerelease. Use `PackageReference Update` in `Aspire.Npgsql.EntityFrameworkCore.PostgreSQL` because it already has a direct reference. Use `PackageReference Include` in `Aspire.Azure.Npgsql.EntityFrameworkCore.PostgreSQL` because its reference otherwise arrives transitively through the non-Azure project; `Update` cannot add a missing item. In both matching projects under `tests/`, use a conditional `PackageVersion Update` for HealthChecks EF so central transitive pinning does not lift it back to GA. Preserve older supported TFMs' provider and EF dependency lines.
-4. **Keep both integration packages prerelease.** Set `<SuppressFinalPackageVersion>true</SuppressFinalPackageVersion>` in both component projects while their provider requires prerelease dependencies. This applies to each multi-targeted package as a whole, not just its newest TFM. Leave main's global `StabilizePackageVersion` setting unchanged; the local suppression also protects these packages when a release build stabilizes the rest of the repository.
+When EF reaches GA before the matching Npgsql provider, use this pattern:
 
-For example, [#22070](https://github.com/microsoft/aspire/pull/22070/commits/b7bc012095fdef8b7e03176aadd8dd500b5b4793) carried the pattern from [#22146](https://github.com/microsoft/aspire/pull/22146). These are historical examples, not permanent update targets or an assumption that either PR has merged:
+- **Check compatibility:** inspect the provider and HealthChecks EF nuspec dependency ranges for each TFM; matching major numbers do not guarantee compatibility. Pin the latest compatible Npgsql prerelease only in that TFM's `PackageVersion Update` in `Directory.Packages.props`.
+- **Keep the shared line stable:** leave repo-wide EF Core and HealthChecks EF versions on GA, with matching stable version/repository/SHA dependency-flow records. Do not hold other EF integrations on prerelease for Npgsql.
+- **Scope the HealthChecks override:** in both `Aspire.Npgsql.EntityFrameworkCore.PostgreSQL` and `Aspire.Azure.Npgsql.EntityFrameworkCore.PostgreSQL`, use an affected-TFM `VersionOverride` for HealthChecks EF. Use `PackageReference Update` for the non-Azure project's existing reference and `Include` for the Azure project's otherwise-transitive reference. Add a matching conditional `PackageVersion Update` in both test projects. Preserve older TFMs' existing dependency lines.
+- **Keep both packages prerelease:** set `SuppressFinalPackageVersion=true` in both component projects while needed; do not change the global `StabilizePackageVersion` setting.
+- **Remove the workaround together:** when a compatible stable provider ships, recheck its nuspec, remove the provider and HealthChecks pins (and Azure's direct reference if no longer needed), both test overrides, and both suppression properties.
+- **Verify:** inspect restored per-TFM graphs for the provider, EF Core/Relational, and HealthChecks EF; run both integration test projects; and pack both components normally and with `/p:StabilizePackageVersion=true`, checking package suffixes and TFM dependency groups.
 
-- The [Npgsql EF `11.0.0-rc.3` nuspec](https://api.nuget.org/v3-flatcontainer/npgsql.entityframeworkcore.postgresql/11.0.0-rc.3/npgsql.entityframeworkcore.postgresql.nuspec) requires exactly EF Core and EF Core Relational `[11.0.0-rc.3.26522.148]`.
-- [HealthChecks EF `11.0.0`](https://api.nuget.org/v3-flatcontainer/microsoft.extensions.diagnostics.healthchecks.entityframeworkcore/11.0.0/microsoft.extensions.diagnostics.healthchecks.entityframeworkcore.nuspec) requires EF Core Relational `>= 11.0.0`, which conflicts with that provider. [HealthChecks EF `11.0.0-rc.3.26522.148`](https://api.nuget.org/v3-flatcontainer/microsoft.extensions.diagnostics.healthchecks.entityframeworkcore/11.0.0-rc.3.26522.148/microsoft.extensions.diagnostics.healthchecks.entityframeworkcore.nuspec) permits the matching EF prerelease. This does not require globally downgrading the other HealthChecks packages.
-
-The project-local overrides for that example were:
-
-```xml
-<!-- Non-Azure component: override its existing direct reference. -->
-<ItemGroup Condition="'$(TargetFramework)' == 'net11.0'">
-  <PackageReference Update="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" VersionOverride="11.0.0-rc.3.26522.148" />
-</ItemGroup>
-
-<!-- Azure component: add a direct reference to constrain the transitive dependency. -->
-<ItemGroup Condition="'$(TargetFramework)' == 'net11.0'">
-  <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" VersionOverride="11.0.0-rc.3.26522.148" />
-</ItemGroup>
-
-<!-- Both test projects: override the centrally pinned transitive version. -->
-<ItemGroup Condition="'$(TargetFramework)' == 'net11.0'">
-  <PackageVersion Update="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="11.0.0-rc.3.26522.148" />
-</ItemGroup>
-```
-
-**Verify a dependency update:**
-
-- Run the repository restore bootstrap (`.\restore.cmd` on Windows or `./restore.sh` on Linux/macOS), then restore both component projects and both matching test projects using approved feeds. Inspect each TFM's resolved `project.assets.json` graph (use `dotnet list <project> package --include-transitive --framework <tfm>` for a readable view). Verify the provider, EF Core, EF Core Relational, and HealthChecks EF versions, not just evaluated MSBuild properties. In the example, `net11.0` must resolve the RC3 graph while `net10.0` retains Npgsql EF/EF Core 10.x. Resolve downgrade/range warnings rather than suppressing them, and confirm unaffected EF integrations still resolve GA.
-- Run both Azure and non-Azure test projects across their supported TFMs. Use the repository's MTP filters; for example, `dotnet test --project tests\Aspire.Npgsql.EntityFrameworkCore.PostgreSQL.Tests\Aspire.Npgsql.EntityFrameworkCore.PostgreSQL.Tests.csproj --no-launch-profile -- --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"`, then repeat for `tests\Aspire.Azure.Npgsql.EntityFrameworkCore.PostgreSQL.Tests\Aspire.Azure.Npgsql.EntityFrameworkCore.PostgreSQL.Tests.csproj`. Container-backed tests require Docker; report skipped or blocked coverage explicitly.
-- Pack both components with normal settings and with `/p:StabilizePackageVersion=true` as a command-line release-build simulation, without editing the global setting. Inspect the resulting package versions and nuspec dependency groups: both integration packages must retain prerelease suffixes even under stabilization, and older TFM groups must remain on their supported dependency line.
-
-**Retire the workaround together.** When a compatible stable provider is published, recheck its nuspec ranges, update the affected TFM's provider pin to stable, remove both components' temporary HealthChecks EF `VersionOverride` entries (remove the Azure-only direct reference if no longer needed), remove both tests' temporary `PackageVersion Update` entries, and remove `SuppressFinalPackageVersion` from both components. Remove obsolete workaround comments and repeat graph, test, and pack verification. Under stabilization, both packages should then be eligible for final versions. Do not carry RC pins or suppression forward merely because they worked for the previous release.
+In the #22070/#22146 example, Npgsql EF `11.0.0-rc.3` required exact EF Core `11.0.0-rc.3.26522.148`; stable HealthChecks EF `11.0.0` was incompatible, so the affected integrations and tests used HealthChecks EF `11.0.0-rc.3.26522.148`. Treat these versions as historical examples, not update targets.
 
 ## Important Constraints
 
