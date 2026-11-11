@@ -156,10 +156,8 @@ public class ComputeEnvironmentEndpointResolverTests
 
     private sealed class TestComputeEnvironmentResource(string name) : Resource(name), IComputeEnvironmentResource
     {
-#pragma warning disable ASPIRECOMPUTE002
         public ReferenceExpression GetHostAddressExpression(EndpointReference endpointReference) =>
             ReferenceExpression.Create($"{endpointReference.Resource.Name}.example.com");
-#pragma warning restore ASPIRECOMPUTE002
     }
 
     private sealed class TestComputeResource(string name) : Resource(name), IComputeResource, IResourceWithEndpoints

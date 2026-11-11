@@ -1554,7 +1554,6 @@ public class EntraIdProvisioningTests(ITestOutputHelper outputHelper)
         Assert.Throws<ArgumentException>("callbackPaths", () => entra.WithRedirectUris(web.GetEndpoint("https"), "signin-oidc"));
     }
 
-#pragma warning disable ASPIRECOMPUTE002 // Test compute environment implements the experimental host address member.
     private sealed class TestComputeEnvironment(string name) : Resource(name), IComputeEnvironmentResource
     {
         public ReferenceExpression GetHostAddressExpression(EndpointReference endpointReference) =>
@@ -1571,7 +1570,6 @@ public class EntraIdProvisioningTests(ITestOutputHelper outputHelper)
             return ReferenceExpression.Create($"https://{GetHostAddressExpression(endpointReferenceExpression.Endpoint)}");
         }
     }
-#pragma warning restore ASPIRECOMPUTE002
 
     [Fact]
     public async Task ConfigureInfrastructure_WritesDirectResourcePropertyValues()

@@ -1550,10 +1550,8 @@ public static class EntraIdResourceExtensions
                     "or register the redirect URI with an explicit URL.");
             }
 
-#pragma warning disable ASPIRECOMPUTE002 // Resolve deployment properties without allocating the endpoint.
             var origin = computeEnvironment.GetEndpointPropertyExpression(endpoint.PrimaryBrowserOrigin);
             var tlsEnabled = computeEnvironment.GetEndpointPropertyExpression(endpoint.Property(EndpointProperty.TlsEnabled));
-#pragma warning restore ASPIRECOMPUTE002
             if (string.Equals(tlsEnabled.ValueExpression, bool.FalseString, StringComparison.OrdinalIgnoreCase))
             {
                 throw new InvalidOperationException(
