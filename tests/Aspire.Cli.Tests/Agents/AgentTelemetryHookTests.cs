@@ -40,6 +40,7 @@ public class AgentTelemetryHookTests
     [InlineData("aspire-terminals/references/automation-and-cli.md")]
     [InlineData("aspire-terminals/references/resource-terminals.md")]
     [InlineData("aspire-terminals/references/tapes.md")]
+    [InlineData("aspireify/references/go-authoring.md")]
     public void ReferenceFileEventsForwardRelativePath(string referencePath)
     {
         var args = AgentTelemetryHook.Classify(
