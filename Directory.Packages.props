@@ -297,6 +297,9 @@
     <PackageVersion Update="System.Security.Cryptography.Pkcs" Version="$(SystemSecurityCryptographyPkcsVersion)" />
     <PackageVersion Update="Microsoft.Bcl.Cryptography" Version="$(SystemSecurityCryptographyPkcsVersion)" />
     <PackageVersion Update="System.Text.Json" Version="$(SystemTextJsonVersion)" />
+    <!-- EF Core 11 requires SqlClient 7.1.1; keep its Azure extension aligned. -->
+    <PackageVersion Update="Microsoft.Data.SqlClient" Version="7.1.1" />
+    <PackageVersion Update="Microsoft.Data.SqlClient.Extensions.Azure" Version="7.1.1" />
     <PackageVersion Update="Microsoft.EntityFrameworkCore.Cosmos" Version="$(MicrosoftEntityFrameworkCoreCosmosVersion)" />
     <PackageVersion Update="Microsoft.EntityFrameworkCore.Design" Version="$(MicrosoftEntityFrameworkCoreDesignVersion)" />
     <PackageVersion Update="Microsoft.EntityFrameworkCore.SqlServer" Version="$(MicrosoftEntityFrameworkCoreSqlServerVersion)" />
@@ -316,7 +319,7 @@
     <PackageVersion Update="System.IO.Hashing" Version="11.0.0" />
     <PackageVersion Update="Microsoft.Data.Sqlite.Core" Version="11.0.0" />
     <!-- Npgsql 11 RC1 requires the exact EF Core RC1 versions. Keep this pin and the
-         EF Core 11 pins in Versions.props aligned until the GA provider is published. -->
+         Npgsql EF Core compatibility version in Versions.props aligned until the GA provider is published. -->
     <PackageVersion Update="Npgsql.EntityFrameworkCore.PostgreSQL" Version="11.0.0-rc.1.1" />
   </ItemGroup>
 

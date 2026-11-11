@@ -4,7 +4,14 @@
     <TargetFrameworks>$(AllTargetFrameworks)</TargetFrameworks>
   </PropertyGroup>
 
+  <ItemGroup Condition="'$(TargetFramework)' == 'net11.0'">
+    <!-- Npgsql 11 RC1 requires EF Core RC1; remove this override when upgrading Npgsql. -->
+    <PackageVersion Update="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="$(MicrosoftEntityFrameworkCoreNpgsqlVersion)" />
+  </ItemGroup>
+
   <ItemGroup>
+    <!-- Helix props can be generated before a target framework is selected. -->
+    <PropertyForHelixRun Include="MicrosoftEntityFrameworkCoreNpgsqlVersion" />
     <Compile Include="$(RepoRoot)src\Aspire.Hosting.PostgreSQL\PostgresContainerImageTags.cs" />
     <Compile Include="..\Aspire.Npgsql.Tests\PostgreSQLContainerFixture.cs" />
 
