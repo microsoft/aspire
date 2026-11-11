@@ -1642,18 +1642,8 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private IEnumerable<ResourceViewModel> GetFilterCountResources() =>
         _resourceByName.Values.Where(r => !r.IsResourceHidden(_filter.ShowHiddenResources));
 
-    private void InitializeLaunchGroupFilters()
-    {
-        if (DashboardClient.LaunchGroups is not { } launchGroups)
-        {
-            return;
-        }
-
-        foreach (var (group, visible) in launchGroups.CreateVisibility())
-        {
-            _filter.ResourceLaunchGroupsToVisibility.TryAdd(group, visible);
-        }
-    }
+    private void InitializeLaunchGroupFilters() =>
+        LaunchGroupInformationViewModel.AddVisibility(DashboardClient.LaunchGroups, _filter.ResourceLaunchGroupsToVisibility);
 
     private async Task RestoreLaunchGroupFiltersAsync(string location)
     {
@@ -1677,23 +1667,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             hiddenGroups = storedGroups is { Success: true, Value: { } groups } ? groups : [];
         }
 
-        SetHiddenLaunchGroups(hiddenGroups);
-    }
-
-    private void SetHiddenLaunchGroups(IEnumerable<string> hiddenGroups)
-    {
-        foreach (var group in _filter.ResourceLaunchGroupsToVisibility.Keys)
-        {
-            _filter.ResourceLaunchGroupsToVisibility[group] = true;
-        }
-
-        foreach (var group in hiddenGroups)
-        {
-            if (_filter.ResourceLaunchGroupsToVisibility.ContainsKey(group))
-            {
-                _filter.ResourceLaunchGroupsToVisibility[group] = false;
-            }
-        }
+        LaunchGroupInformationViewModel.SetHiddenGroups(_filter.ResourceLaunchGroupsToVisibility, hiddenGroups);
     }
 
     private async Task OnPaneFiltersChangedAsync()

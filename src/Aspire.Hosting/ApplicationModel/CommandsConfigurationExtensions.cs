@@ -15,7 +15,7 @@ namespace Aspire.Hosting.ApplicationModel;
 
 internal static class CommandsConfigurationExtensions
 {
-    internal const string BuildLogPrefix = "[build] ";
+    private const string BuildLogPrefix = "[build] ";
     internal static void AddLifeCycleCommands(this IResource resource)
     {
         if (resource.TryGetLastAnnotation<ExcludeLifecycleCommandsAnnotation>(out _))
@@ -506,6 +506,20 @@ internal static class CommandsConfigurationExtensions
         logger.LogError(BuildLogPrefix + "{Message}", message);
     }
 
+    // Build stderr is surfaced as a warning on the target resource so a noisy compiler doesn't make the
+    // resource look failed; the build's exit code decides failure.
+    internal static void LogBuildOutput(ILogger logger, string? content, bool isError)
+    {
+        if (isError)
+        {
+            logger.LogWarning(BuildLogPrefix + "{Content}", content);
+        }
+        else
+        {
+            logger.LogInformation(BuildLogPrefix + "{Content}", content);
+        }
+    }
+
     private static async Task ForwardLogsAsync(ResourceLoggerService loggerService, string sourceResourceName, ILogger targetLogger, BuildOutputCollector buildOutput, CancellationToken cancellationToken)
     {
         try
@@ -515,15 +529,7 @@ internal static class CommandsConfigurationExtensions
                 foreach (var line in batch)
                 {
                     buildOutput.Append(line.Content);
-
-                    if (line.IsErrorMessage)
-                    {
-                        targetLogger.LogWarning(BuildLogPrefix + "{Content}", line.Content);
-                    }
-                    else
-                    {
-                        targetLogger.LogInformation(BuildLogPrefix + "{Content}", line.Content);
-                    }
+                    LogBuildOutput(targetLogger, line.Content, line.IsErrorMessage);
                 }
             }
         }

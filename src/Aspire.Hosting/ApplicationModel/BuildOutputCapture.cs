@@ -340,15 +340,7 @@ internal sealed class BuildOutputCapture(ResourceLoggerService loggerService)
 
     private static void Forward(Target target, LogEntry entry, long sequence)
     {
-        if (entry.Type == LogEntryType.Error)
-        {
-            target.Logger.LogWarning(CommandsConfigurationExtensions.BuildLogPrefix + "{Content}", entry.Content);
-        }
-        else
-        {
-            target.Logger.LogInformation(CommandsConfigurationExtensions.BuildLogPrefix + "{Content}", entry.Content);
-        }
-
+        CommandsConfigurationExtensions.LogBuildOutput(target.Logger, entry.Content, entry.Type == LogEntryType.Error);
         target.LastSequence = sequence;
     }
 

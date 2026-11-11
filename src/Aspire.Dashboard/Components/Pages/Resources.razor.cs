@@ -372,39 +372,13 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         return added;
     }
 
-    private void InitializeLaunchGroupFilters()
-    {
-        if (DashboardClient.LaunchGroups is not { } launchGroups)
-        {
-            return;
-        }
+    private void InitializeLaunchGroupFilters() =>
+        LaunchGroupInformationViewModel.AddVisibility(DashboardClient.LaunchGroups, PageViewModel.ResourceLaunchGroupsToVisibility);
 
-        foreach (var (group, visible) in launchGroups.CreateVisibility())
-        {
-            PageViewModel.ResourceLaunchGroupsToVisibility.TryAdd(group, visible);
-        }
-    }
-
-    private void ApplyLaunchGroupFiltersFromQuery()
-    {
-        foreach (var group in PageViewModel.ResourceLaunchGroupsToVisibility.Keys)
-        {
-            PageViewModel.ResourceLaunchGroupsToVisibility[group] = true;
-        }
-
-        if (HiddenLaunchGroups is null)
-        {
-            return;
-        }
-
-        foreach (var group in HiddenLaunchGroups.Split(' ').Select(StringUtils.Unescape))
-        {
-            if (PageViewModel.ResourceLaunchGroupsToVisibility.ContainsKey(group))
-            {
-                PageViewModel.ResourceLaunchGroupsToVisibility[group] = false;
-            }
-        }
-    }
+    private void ApplyLaunchGroupFiltersFromQuery() =>
+        LaunchGroupInformationViewModel.SetHiddenGroups(
+            PageViewModel.ResourceLaunchGroupsToVisibility,
+            HiddenLaunchGroups?.Split(' ').Select(StringUtils.Unescape) ?? []);
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {

@@ -103,6 +103,36 @@ public sealed class LaunchGroupInformationViewModel
         return visibility;
     }
 
+    internal static void AddVisibility(LaunchGroupInformationViewModel? information, ConcurrentDictionary<string, bool> visibility)
+    {
+        if (information is null)
+        {
+            return;
+        }
+
+        foreach (var (group, visible) in information.CreateVisibility())
+        {
+            visibility.TryAdd(group, visible);
+        }
+    }
+
+    internal static void SetHiddenGroups(ConcurrentDictionary<string, bool> visibility, IEnumerable<string> hiddenGroups)
+    {
+        foreach (var group in visibility.Keys)
+        {
+            visibility[group] = true;
+        }
+
+        // Ignore hidden groups from a stale URL or session that the current AppHost no longer advertises.
+        foreach (var group in hiddenGroups)
+        {
+            if (visibility.ContainsKey(group))
+            {
+                visibility[group] = false;
+            }
+        }
+    }
+
     internal static bool IsVisible(ResourceViewModel resource, IReadOnlyDictionary<string, bool> visibility)
     {
         if (resource.LaunchGroup is not { } launchGroup || visibility.Count == 0)
