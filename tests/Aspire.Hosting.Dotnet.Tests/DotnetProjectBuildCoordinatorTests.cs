@@ -260,10 +260,87 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             processSpec => Assert.Equal(secondDotnetPath, processSpec.EnvironmentVariables["PATH"]));
     }
 
+    [Fact]
+    public void LegacyVisualStudioProjectDebugSessionCreatesBuildWithoutSuppressingIdeBuild()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path,
+            outputHelper);
+        builder.Configuration["DEBUG_SESSION_PORT"] = "localhost:12345";
+
+        var projectPath = CreateProject(workspace.Path, "Api", "Api.csproj");
+        var project = builder.AddDotnetProject("api", projectPath, options => options.ExcludeLaunchProfile = true);
+
+        var buildResource = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
+        AssertBuildDependency(project.Resource, buildResource);
+        Assert.Single(project.Resource.Annotations.OfType<DotnetProgramBuildCompletionAnnotation>());
+        Assert.False(Assert.Single(project.Resource.Annotations.OfType<DotnetProjectMetadata>()).SuppressBuild);
+        Assert.Equal(
+            KnownLaunchConfigurationTypes.Project,
+            Assert.Single(project.Resource.Annotations.OfType<SupportsDebuggingAnnotation>()).LaunchConfigurationType);
+        Assert.True(project.Resource.SupportsDebugging(builder.Configuration, out _));
+    }
+
+    [Fact]
+    [RequiresTools(["dotnet"])]
+    public async Task LegacyVisualStudioBuildProducesProjectOutputBeforeIdeLaunch()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var sharedProject = CreateSharedProject(workspace.Path);
+        var projectPath = CreateConsoleProject(workspace.Path, "Api", sharedProject);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path,
+            outputHelper);
+        builder.Configuration["DEBUG_SESSION_PORT"] = "localhost:12345";
+        var project = builder.AddDotnetProject("api", projectPath, options => options.ExcludeLaunchProfile = true);
+        await using var app = builder.Build();
+
+        await EventingTestHelpers.SubscribeEventingSubscribersAsync(
+            app,
+            TestContext.Current.CancellationToken);
+        await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
+
+        var buildResource = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
+        await builder.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(buildResource, app.Services),
+            TestContext.Current.CancellationToken);
+        var buildArguments = await ArgumentEvaluator.GetArgumentListAsync(buildResource, app.Services);
+        var buildEnvironment = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            buildResource,
+            serviceProvider: app.Services);
+        var buildResult = await new DefaultProcessRunner().RunAndCaptureTextAsync(
+            buildResource.Command,
+            buildArguments,
+            buildResource.WorkingDirectory,
+            buildEnvironment,
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.True(
+            buildResult.ExitCode == 0,
+            $"{buildResult.StandardOutput}{Environment.NewLine}{buildResult.StandardError}");
+        Assert.True(File.Exists(Path.Combine(
+            Path.GetDirectoryName(projectPath)!,
+            "bin",
+            string.IsNullOrEmpty(buildResource.BuildConfiguration) ? "Debug" : buildResource.BuildConfiguration,
+            "net10.0",
+            "Api.dll")));
+
+        var launchConfiguration = Assert.IsType<ProjectLaunchConfiguration>(
+            await project.Resource.CreateLaunchConfigurationAsync(
+                LaunchConfigurationTestHelpers.CreateCallbackContext(
+                    project.Resource,
+                    ExecutableLaunchMode.Debug)));
+        Assert.Equal(KnownLaunchConfigurationTypes.Project, launchConfiguration.Type);
+        Assert.False(launchConfiguration.SuppressBuild);
+        Assert.Null(launchConfiguration.BuildEnvironment);
+        Assert.Null(launchConfiguration.BuildWorkingDirectory);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public void LegacyProjectDebugSessionDoesNotCreateCoordinatedBuild(bool advertisesProjectCapability)
+    public async Task LegacyIdeProjectWithBuildEnvironmentFailsBeforeBuild(bool advertisesProjectCapability)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(
@@ -280,15 +357,109 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         }
 
         var projectPath = CreateProject(workspace.Path, "Api", "Api.csproj");
+        builder.AddDotnetProject("api", projectPath, options => options.ExcludeLaunchProfile = true)
+            .WithBuildEnvironment("OutputPath", "bin/custom/");
+        await using var app = builder.Build();
+
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(
+            () => app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken));
+
+        Assert.Equal(
+            $"The .NET project resource 'api' uses WithBuildEnvironment, but Aspire can use only the legacy " +
+            $"'{KnownLaunchConfigurationTypes.Project}' launch contract for the active IDE session and cannot reliably " +
+            $"launch output produced with project-specific build settings. Use an IDE that advertises " +
+            $"'{KnownLaunchConfigurationTypes.ProjectWithExternalBuild}', run the application outside this IDE, or " +
+            "remove the build customization.",
+            exception.Message);
+    }
+
+    [Fact]
+    public void ProjectCapabilityWithoutExternalBuildCreatesBuildWithoutSuppressingIdeBuild()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path,
+            outputHelper);
+        builder.Configuration["DEBUG_SESSION_PORT"] = "localhost:12345";
+        builder.Configuration[KnownConfigNames.DebugSessionInfo] = JsonSerializer.Serialize(new RunSessionInfo
+        {
+            ProtocolsSupported = ["test"],
+            SupportedLaunchConfigurations = [KnownLaunchConfigurationTypes.Project]
+        });
+
+        var projectPath = CreateProject(workspace.Path, "Api", "Api.csproj");
         var project = builder.AddDotnetProject("api", projectPath, options => options.ExcludeLaunchProfile = true);
 
-        Assert.Empty(builder.Resources.OfType<DotnetProjectBuildResource>());
-        Assert.Empty(project.Resource.Annotations.OfType<DotnetProgramBuildCompletionAnnotation>());
+        var buildResource = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
+        AssertBuildDependency(project.Resource, buildResource);
+        Assert.Single(project.Resource.Annotations.OfType<DotnetProgramBuildCompletionAnnotation>());
         Assert.False(Assert.Single(project.Resource.Annotations.OfType<DotnetProjectMetadata>()).SuppressBuild);
         Assert.Equal(
             KnownLaunchConfigurationTypes.Project,
             Assert.Single(project.Resource.Annotations.OfType<SupportsDebuggingAnnotation>()).LaunchConfigurationType);
         Assert.True(project.Resource.SupportsDebugging(builder.Configuration, out _));
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task LegacyIdeFileAppWaitsForFinalProjectBuild(
+        bool advertisesProjectCapability,
+        bool fileFirst)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path,
+            outputHelper);
+        builder.Configuration["DEBUG_SESSION_PORT"] = "localhost:12345";
+        if (advertisesProjectCapability)
+        {
+            builder.Configuration[KnownConfigNames.DebugSessionInfo] = JsonSerializer.Serialize(new RunSessionInfo
+            {
+                ProtocolsSupported = ["test"],
+                SupportedLaunchConfigurations = [KnownLaunchConfigurationTypes.Project]
+            });
+        }
+
+        var sharedProject = CreateSharedProject(workspace.Path);
+        var projectPath = CreateConsoleProject(workspace.Path, "Api", sharedProject);
+        var filePath = CreateFileApp(workspace.Path, "Worker", sharedProject);
+        IResourceBuilder<DotnetProjectResource> project;
+        IResourceBuilder<DotnetProjectResource> fileApp;
+        if (fileFirst)
+        {
+            fileApp = builder.AddDotnetProject("worker", filePath, options => options.ExcludeLaunchProfile = true);
+            project = builder.AddDotnetProject("api", projectPath, options => options.ExcludeLaunchProfile = true);
+        }
+        else
+        {
+            project = builder.AddDotnetProject("api", projectPath, options => options.ExcludeLaunchProfile = true);
+            fileApp = builder.AddDotnetProject("worker", filePath, options => options.ExcludeLaunchProfile = true);
+        }
+
+        await using var app = builder.Build();
+        await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
+
+        var buildResource = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
+        Assert.Equal([NormalizeProjectPath(projectPath)], buildResource.ProjectPaths);
+        AssertBuildDependency(project.Resource, buildResource);
+        AssertBuildDependency(fileApp.Resource, buildResource);
+        Assert.False(Assert.Single(fileApp.Resource.Annotations.OfType<DotnetProjectMetadata>()).SuppressBuild);
+
+        var fileArgs = await ArgumentEvaluator.GetArgumentListAsync(fileApp.Resource, app.Services);
+        if (advertisesProjectCapability)
+        {
+            Assert.Empty(fileArgs);
+        }
+        else
+        {
+            var expectedFileArgs = new List<string> { "run", "--file", filePath, "--no-cache" };
+            AddExpectedConfiguration(builder, expectedFileArgs);
+            expectedFileArgs.Add("--no-launch-profile");
+            Assert.Equal(expectedFileArgs, fileArgs);
+        }
     }
 
     [Fact]
@@ -366,7 +537,10 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         var projectPath = CreateProject(workspace.Path, "Api", "Api.csproj");
         var project = builder.AddDotnetProject("api", projectPath, options => options.ExcludeLaunchProfile = true);
 
-        Assert.Empty(builder.Resources.OfType<DotnetProjectBuildResource>());
+        var buildResource = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
+        AssertBuildDependency(project.Resource, buildResource);
+        Assert.Single(project.Resource.Annotations.OfType<DotnetProgramBuildCompletionAnnotation>());
+        Assert.False(Assert.Single(project.Resource.Annotations.OfType<DotnetProjectMetadata>()).SuppressBuild);
         Assert.Equal(
             KnownLaunchConfigurationTypes.Project,
             Assert.Single(project.Resource.Annotations.OfType<SupportsDebuggingAnnotation>()).LaunchConfigurationType);
@@ -389,7 +563,9 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         var projectPath = CreateProject(workspace.Path, "Api", "Api.csproj");
         var project = builder.AddDotnetProject("api", projectPath, options => options.ExcludeLaunchProfile = true);
 
-        Assert.Empty(builder.Resources.OfType<DotnetProjectBuildResource>());
+        var buildResource = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
+        AssertBuildDependency(project.Resource, buildResource);
+        Assert.Single(project.Resource.Annotations.OfType<DotnetProgramBuildCompletionAnnotation>());
         Assert.False(Assert.Single(project.Resource.Annotations.OfType<DotnetProjectMetadata>()).SuppressBuild);
         Assert.Equal(
             KnownLaunchConfigurationTypes.Project,
