@@ -6,6 +6,8 @@
     <PackageTags>$(ComponentEfCorePackageTags) postgressql postgres npgsql sql</PackageTags>
     <Description>A PostgreSQL® provider for Entity Framework Core that integrates with Aspire, including connection pooling, health checks, logging, and telemetry.</Description>
     <PackageIconFullPath>$(SharedDir)PostgreSQL_logo.3colors.540x557.png</PackageIconFullPath>
+    <!-- Temporarily we need to ship this as prerelease until Npgsql.EntityFrameworkCore.PostgreSQL ships a stable version that depends on .NET 11 stable -->
+    <SuppressFinalPackageVersion>true</SuppressFinalPackageVersion>
   </PropertyGroup>
 
   <ItemGroup>
@@ -26,6 +28,11 @@
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
     <PackageReference Include="Npgsql.OpenTelemetry" />
     <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'net11.0'">
+    <!-- Temporary until Npgsql.EntityFrameworkCore.PostgreSQL ships a stable version that depends on 11.0 -->
+    <PackageReference Update="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" VersionOverride="11.0.0-rc.3.26522.148" />
   </ItemGroup>
 
 </Project>

@@ -6,7 +6,14 @@
     <PackageTags>$(ComponentEfCorePackageTags) postgresql postgres npgsql sql cloud</PackageTags>
     <Description>An Azure Database for PostgreSQL® provider for Entity Framework Core that integrates with Aspire, including connection pooling, health checks, logging, and telemetry.</Description>
     <PackageIconFullPath>$(SharedDir)AzurePostgreSQL_256x.png</PackageIconFullPath>
+    <!-- Temporarily we need to ship this as prerelease until Npgsql.EntityFrameworkCore.PostgreSQL ships a stable version that depends on .NET 11 stable -->
+    <SuppressFinalPackageVersion>true</SuppressFinalPackageVersion>
   </PropertyGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'net11.0'">
+    <!-- Temporary until Npgsql.EntityFrameworkCore.PostgreSQL ships a stable version that depends on 11.0 -->
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" VersionOverride="11.0.0-rc.3.26522.148" />
+  </ItemGroup>
 
   <ItemGroup>
     <Compile Include="..\Common\ManagedIdentityTokenCredentialHelpers.cs" Link="ManagedIdentityTokenCredentialHelpers.cs" />
