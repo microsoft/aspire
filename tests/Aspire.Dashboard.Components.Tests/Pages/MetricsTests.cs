@@ -1572,6 +1572,59 @@ public partial class MetricsTests : DashboardTestContext
             [.. cut.FindAll(".meter-card").Select(card => $"{card.QuerySelector(".meter-card-name")!.TextContent}: {card.QuerySelector(".meter-card-value-number")?.TextContent}")];
     }
 
+    [Fact]
+    public async Task MeterOverview_RemovedWhileItsModuleLoads_ReleasesTheModuleWithoutObservingCards()
+    {
+        MetricsSetupHelpers.SetupMetricsPage(this);
+        // Holds the overview's module, so the overview can be removed while it loads, as switching from Metrics to Traces
+        // right after opening an instrument does (https://github.com/microsoft/aspire/issues/21714). This handler is
+        // registered last, so it answers the import instead of the one SetupMetricsPage registers.
+        var import = TestJSObjectReference.SetupImport(this, "/Components/Controls/Chart/MeterOverview.razor.js");
+        var module = new TestJSObjectReference();
+        var timeProvider = (TestTimeProvider)Services.GetRequiredService<BrowserTimeProvider>();
+        timeProvider.UtcNow = s_testTime.AddMinutes(2);
+
+        var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        await telemetryRepository.AddMetricsAsync(new AddContext(), new RepeatedField<ResourceMetrics>
+        {
+            new ResourceMetrics
+            {
+                Resource = CreateResource(name: "TestApp"),
+                ScopeMetrics =
+                {
+                    new ScopeMetrics
+                    {
+                        Scope = CreateScope(name: "test-meter"),
+                        Metrics = { CreateSumMetric(metricName: "test.count", startTime: s_testTime.AddMinutes(1), value: 1) }
+                    }
+                }
+            }
+        });
+
+        var resource = Assert.Single(telemetryRepository.GetResources());
+        var cut = Render<MeterOverview>(builder =>
+        {
+            builder.Add(c => c.ResourceKey, resource.ResourceKey);
+            builder.Add(c => c.Instruments, telemetryRepository.GetInstrumentSummaries(resource.ResourceKey));
+            builder.Add(c => c.Duration, TimeSpan.FromMinutes(5));
+            builder.Add(c => c.ShowMeterName, false);
+            builder.Add(c => c.GetInstrumentUrl, instrument => $"/metrics/{instrument.Name}");
+        });
+        cut.WaitForAssertion(() => Assert.Single(import.Invocations));
+
+        // The removal runs on the dispatcher: from another thread, DisposeComponentsAsync can find nothing to remove
+        // while the dispatcher is busy (see DisposalSafeFluentDataGridTests).
+        await Renderer.Dispatcher.InvokeAsync(DisposeComponentsAsync);
+        import.SetResult(module);
+        await Renderer.Dispatcher.InvokeAsync(() => { });
+
+        // The module that arrived after disposal is released, and the removed cards aren't observed. In the browser, the
+        // removed container reached observeCards as null, and the error it raised ended the circuit.
+        Assert.Empty(module.Invocations);
+        Assert.Equal(1, module.DisposeCount);
+        Assert.False(Renderer.UnhandledException.IsCompleted);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
