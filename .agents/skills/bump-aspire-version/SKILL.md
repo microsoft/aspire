@@ -1,6 +1,6 @@
 ---
 name: bump-aspire-version
-description: Bumps the Aspire repository product version in eng/Versions.props using previous version-bump commits as guidance. Use when asked to bump Aspire branding, advance the repository to a new major or minor version, or create a version-bump PR. Not for external dependency, SDK, or container-image updates.
+description: Bumps the Aspire repository product version in eng/Versions.props using previous version-bump commits as guidance. Use when asked to bump Aspire branding, advance the repository to a new major or minor version (including after a new release branch is created), or create a version-bump PR. Not for external dependency, SDK, or container-image updates.
 ---
 
 # Bump the Aspire repository version
@@ -62,10 +62,39 @@ rules, dependencies, SDKs, generated APIs, or sample versions without explicit s
 The old `.github/workflows/milestone-assignment.yml` was removed in #20390 in favor
 of the policy bot; do not recreate it.
 
+## Retarget scheduled API diffs after a new release branch
+
+When the bump advances `main` because a new release branch was just created (for
+example, main moves to 17.1 after `release/17.0` is branched, as in #21850), the
+scheduled API and ATS diff workflows must also follow that release branch.
+Otherwise they keep generating baseline PRs for the previous release, and the new
+release's shipped API surface is never captured. Skip this section for servicing
+bumps or any bump that does not follow a newly created release branch.
+
+1. Confirm the new release branch exists:
+   `git ls-remote --heads origin release/<X.Y>`.
+2. In `.github/workflows/generate-api-diffs.yml` and
+   `.github/workflows/generate-ats-diffs.yml`, replace the previous release branch
+   in the scheduled `target_branch` matrix, `'["main","release/<old>"]'`, with the
+   new branch. Keep `main` and change nothing else in either workflow.
+3. Update the "currently `release/<old>`" note in
+   `docs/ci/typescript-api-compat.md` to name the new branch.
+4. Check whether the previous release's shipped baselines reached `main`. Those are
+   the `src/**/api/*.cs` and `src/**/api/*.ats.txt` files from the automated
+   API/ATS diff PRs against `release/<old>`; #22152 merged the 13.6 baselines.
+   Report any baselines still missing to the user. Do not import them in the bump
+   PR unless asked.
+
+Precedent: #22172 retargeted both workflows from `release/13.6` to `release/17.0`.
+These edits are manual because the bundled script handles only version and
+milestone metadata. Include them in the bump PR, or in a separate PR when the bump
+has already merged.
+
 ## Validate
 
 Review `git diff --check` and the complete diff. Confirm only the intended version
-properties, milestone assignment, and any directly related comments changed.
+properties, milestone assignment, any directly related comments, and (when
+applicable) the scheduled API/ATS diff release branch changed.
 
 Confirm the resulting version components and milestone title match the request.
 Run the edit command again and confirm it reports both files unchanged.
@@ -79,7 +108,8 @@ for that behavior and follow the repository's SDK setup instructions when needed
 Use the `create-pr` skill and the repository PR template. Commit only the intended
 files, include required commit trailers, push without force, and use the available
 PR creation tool when the environment requires it. Describe the old and new
-versions, milestone routing, unchanged prerelease status, any retained
-dashboard-image override, and the validation actually performed.
+versions, milestone routing, any API/ATS diff workflow retargeting, unchanged
+prerelease status, any retained dashboard-image override, and the validation
+actually performed.
 Do not claim a full build or test run unless
 one was performed. Do not merge automatically.
