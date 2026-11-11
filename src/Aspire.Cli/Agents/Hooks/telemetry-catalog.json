@@ -47,22 +47,5 @@
     "aspireify/references/service-defaults.md",
     "aspireify/references/typescript-authoring.md",
     "aspireify/references/validation.md"
-  ],
-  "mcpTools": [
-    "doctor",
-    "execute_resource_command",
-    "get_doc",
-    "list_apphosts",
-    "list_console_logs",
-    "list_docs",
-    "list_integrations",
-    "list_resources",
-    "list_structured_logs",
-    "list_trace_structured_logs",
-    "list_traces",
-    "refresh_tools",
-    "search_docs",
-    "select_apphost",
-    "wait_for_resources"
   ]
 }

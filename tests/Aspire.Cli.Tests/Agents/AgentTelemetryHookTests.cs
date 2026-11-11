@@ -15,6 +15,8 @@ public class AgentTelemetryHookTests
     [InlineData("{ malformed")]
     [InlineData("""{"toolName":"bash","toolArgs":{"command":"aspire run"}}""")]
     [InlineData("""{"toolName":"Read","tool_input":{"file_path":"/skills/third-party/SKILL.md"}}""")]
+    [InlineData("""{"toolName":"aspire-third_party_tool"}""")]
+    [InlineData("""{"toolName":"ASPIRE-wait_for_resources"}""")]
     public void UnrelatedOrMalformedEventsDoNotInitializeCli(string payload)
     {
         Assert.Null(AgentTelemetryHook.Classify(payload, new TestEnvironment(), AgentTelemetryHook.DefaultMaxPayloadCharacters));
@@ -174,6 +176,26 @@ public class AgentTelemetryHookTests
     public void CanonicalCatalogCoversKnownMcpTools()
     {
         Assert.Equal(KnownMcpTools.All.Order(), AgentTelemetryCatalog.Canonical.Tools.Order());
+    }
+
+    [Theory]
+    [InlineData("aspire-", false)]
+    [InlineData("mcp__aspire__", false)]
+    [InlineData("mcp_aspire_", false)]
+    [InlineData("aspire-", true)]
+    public void KnownMcpToolsAreReportedForEachClientPrefix(string prefix, bool uppercase)
+    {
+        Assert.Contains(KnownMcpTools.WaitForResources, KnownMcpTools.All);
+        foreach (var knownTool in KnownMcpTools.All)
+        {
+            var tool = prefix + (uppercase ? knownTool.ToUpperInvariant() : knownTool);
+            var args = AgentTelemetryHook.Classify(
+                $$"""{"toolName":"{{tool}}"}""", new TestEnvironment(), AgentTelemetryHook.DefaultMaxPayloadCharacters);
+
+            Assert.NotNull(args);
+            Assert.Equal("tool_invocation", args[Array.IndexOf(args, "--event-type") + 1]);
+            Assert.Equal(tool, args[Array.IndexOf(args, "--tool-name") + 1]);
+        }
     }
 
     [Theory]

@@ -3,6 +3,7 @@
 
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Aspire.Cli.Mcp;
 
 namespace Aspire.Cli.Agents.Hooks;
 
@@ -15,7 +16,6 @@ internal sealed partial class AgentTelemetryCatalog
 
     private const string SkillsPropertyName = "skills";
     private const string ReferencesPropertyName = "references";
-    private const string McpToolsPropertyName = "mcpTools";
 
     private static readonly Lazy<AgentTelemetryCatalog> s_canonical = new(LoadCanonical);
 
@@ -25,10 +25,10 @@ internal sealed partial class AgentTelemetryCatalog
     internal IReadOnlySet<string> Tools { get; }
     internal IReadOnlySet<string> References { get; }
 
-    private AgentTelemetryCatalog(HashSet<string> skills, HashSet<string> tools, HashSet<string> references)
+    private AgentTelemetryCatalog(HashSet<string> skills, HashSet<string> references)
     {
         Skills = skills;
-        Tools = tools;
+        Tools = new HashSet<string>(KnownMcpTools.All, StringComparer.OrdinalIgnoreCase);
         References = references;
     }
 
@@ -36,29 +36,27 @@ internal sealed partial class AgentTelemetryCatalog
     /// Parses a catalog document.
     /// </summary>
     /// <remarks>
-    /// The document has exactly three properties, each a non-empty, ordinally sorted array of unique strings:
+    /// The document has exactly two properties, each a non-empty, ordinally sorted array of unique strings:
     /// <code>
     /// {
     ///   "skills": [ "aspire", "aspire-init" ],
-    ///   "references": [ "aspire-init/references/templates.md" ],
-    ///   "mcpTools": [ "doctor", "list_resources" ]
+    ///   "references": [ "aspire-init/references/templates.md" ]
     /// }
     /// </code>
-    /// The file is edited by automation in the Aspire skills release workflow, so the strict shape catches
-    /// malformed edits at test time instead of silently dropping telemetry.
+    /// The file is regenerated deterministically from Aspire skills and references, so the strict shape
+    /// catches malformed edits at test time instead of silently dropping telemetry.
     /// </remarks>
     internal static AgentTelemetryCatalog Parse(string json)
     {
         using var document = ParseDocument(json);
         var root = document.RootElement;
         if (root.ValueKind is not JsonValueKind.Object ||
-            root.EnumerateObject().Any(property => property.Name is not (SkillsPropertyName or ReferencesPropertyName or McpToolsPropertyName)))
+            root.EnumerateObject().Any(property => property.Name is not (SkillsPropertyName or ReferencesPropertyName)))
         {
-            throw new InvalidDataException("The telemetry catalog must be an object with only skills, references, and mcpTools properties.");
+            throw new InvalidDataException("The telemetry catalog must be an object with only skills and references properties.");
         }
 
         var skills = ReadIdentifiers(root, SkillsPropertyName);
-        var tools = ReadIdentifiers(root, McpToolsPropertyName);
         var references = ReadValues(root, ReferencesPropertyName);
         foreach (var reference in references)
         {
@@ -74,7 +72,7 @@ internal sealed partial class AgentTelemetryCatalog
             }
         }
 
-        return new(skills, tools, references);
+        return new(skills, references);
     }
 
     private static JsonDocument ParseDocument(string json)

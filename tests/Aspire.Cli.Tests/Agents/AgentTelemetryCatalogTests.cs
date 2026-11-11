@@ -11,8 +11,7 @@ public class AgentTelemetryCatalogTests
     private const string CatalogJson = """
         {
           "skills": [ "another-skill", "new-skill" ],
-          "references": [ "another-skill/references/guide.yml", "new-skill/references/new.md" ],
-          "mcpTools": [ "another-tool", "new_tool" ]
+          "references": [ "another-skill/references/guide.yml", "new-skill/references/new.md" ]
         }
         """;
 
@@ -21,20 +20,18 @@ public class AgentTelemetryCatalogTests
     {
         var catalog = AgentTelemetryCatalog.Parse(CatalogJson);
         Assert.Equal(["another-skill", "new-skill"], catalog.Skills.Order());
-        Assert.Equal(["another-tool", "new_tool"], catalog.Tools.Order());
         Assert.Equal(["another-skill/references/guide.yml", "new-skill/references/new.md"], catalog.References.Order());
         Assert.Contains("NEW-SKILL", catalog.Skills);
         Assert.False(catalog.Skills.Contains("third-party"));
     }
 
     [Theory]
-    [InlineData("skills", "valid $(command)")]
-    [InlineData("skills", "third/party")]
-    [InlineData("mcpTools", "valid name;command")]
-    [InlineData("mcpTools", "")]
-    public void SkillAndToolIdentifiersMustBeValid(string propertyName, string value)
+    [InlineData("valid $(command)")]
+    [InlineData("third/party")]
+    [InlineData("")]
+    public void SkillIdentifiersMustBeValid(string value)
     {
-        Assert.Throws<InvalidDataException>(() => AgentTelemetryCatalog.Parse(ReplaceValues(propertyName, value)));
+        Assert.Throws<InvalidDataException>(() => AgentTelemetryCatalog.Parse(ReplaceValues("skills", value)));
     }
 
     [Theory]
@@ -50,7 +47,6 @@ public class AgentTelemetryCatalogTests
     [Theory]
     [InlineData("skills")]
     [InlineData("references")]
-    [InlineData("mcpTools")]
     public void MissingEmptyOrNonArrayPropertiesAreRejected(string propertyName)
     {
         Assert.Throws<InvalidDataException>(() => AgentTelemetryCatalog.Parse(Mutate(root => root.Remove(propertyName))));
@@ -61,7 +57,6 @@ public class AgentTelemetryCatalogTests
 
     [Theory]
     [InlineData("skills", "NEW-SKILL", "new-skill")]
-    [InlineData("mcpTools", "NEW_TOOL", "new_tool")]
     [InlineData("references", "NEW-SKILL/references/new.md", "new-skill/references/new.md")]
     public void DuplicateValuesAreRejectedCaseInsensitively(string propertyName, string first, string second)
     {
@@ -70,7 +65,6 @@ public class AgentTelemetryCatalogTests
 
     [Theory]
     [InlineData("skills", "new-skill", "another-skill")]
-    [InlineData("mcpTools", "new_tool", "another-tool")]
     [InlineData("references", "new-skill/references/new.md", "another-skill/references/guide.yml")]
     public void UnsortedValuesAreRejected(string propertyName, string first, string second)
     {
@@ -78,7 +72,8 @@ public class AgentTelemetryCatalogTests
     }
 
     [Theory]
-    [InlineData("""{ "skills": [ "new-skill" ], "references": [ "new-skill/references/new.md" ], "mcpTools": [ "new_tool" ], "extra": [] }""")]
+    [InlineData("""{ "skills": [ "new-skill" ], "references": [ "new-skill/references/new.md" ], "mcpTools": [ "doctor" ] }""")]
+    [InlineData("""{ "skills": [ "new-skill" ], "references": [ "new-skill/references/new.md" ], "extra": [] }""")]
     [InlineData("""[]""")]
     [InlineData("""{ "skills": [ "new-skill" ],""")]
     public void UnexpectedDocumentsAreRejected(string json)
