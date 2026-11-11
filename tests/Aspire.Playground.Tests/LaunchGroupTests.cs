@@ -15,6 +15,37 @@ namespace Aspire.Playground.Tests;
 
 public class LaunchGroupTests(ITestOutputHelper output)
 {
+    [Theory]
+    [InlineData(null)]
+    [InlineData("storefront.pfx")]
+    public async Task TestShopCertificateIsOptionalWhenRunning(string? value)
+    {
+        var builder = await DistributedApplicationTestingBuilder.CreateAsync<Projects.TestShop_AppHost>();
+        builder.Configuration["Parameters:storefront-certificate"] = value;
+        var certificate = Assert.IsType<ParameterResource>(GetResource(builder, "storefront-certificate"));
+
+        Assert.False(certificate.Required);
+        Assert.Equal(value, await certificate.GetValueAsync(TestContext.Current.CancellationToken));
+
+        var input = Assert.Single(certificate.Annotations.OfType<InputGeneratorAnnotation>()).InputGenerator(certificate);
+        Assert.Equal(InputType.File, input.InputType);
+        Assert.Equal(".pem,.pfx,.crt", input.FileFilter);
+
+        await using var app = await builder.BuildAsync();
+    }
+
+    [Fact]
+    public async Task TestShopCertificateRemainsCompatibleWithManifestPublishing()
+    {
+        var builder = await DistributedApplicationTestingBuilder.CreateAsync<Projects.TestShop_AppHost>(
+            ["--publisher", "manifest"]);
+        var certificate = Assert.IsType<ParameterResource>(GetResource(builder, "storefront-certificate"));
+
+        Assert.True(certificate.Required);
+
+        await using var app = await builder.BuildAsync();
+    }
+
     [Fact]
     public async Task TestShopStructuralAndRelationshipResourcesUseExpectedLaunchGroups()
     {

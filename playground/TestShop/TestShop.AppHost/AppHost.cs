@@ -77,18 +77,24 @@ builder.AddParameter("maintenance-mode", "false")
            Label = parameter.Name,
            Description = parameter.Description
        });
-builder.AddParameter("storefront-certificate")
-       .WithDescription("Upload the certificate used by the storefront.")
-       .WithTags("Frontend", "Storefront")
-       .WithCustomInput(parameter => new()
-       {
-           Name = parameter.Name,
-           InputType = InputType.File,
-           Label = parameter.Name,
-           Description = parameter.Description,
-           Placeholder = "Choose certificate",
-           FileFilter = ".pem,.pfx,.crt"
-       });
+var storefrontCertificate = builder.AddParameter("storefront-certificate")
+                                   .WithDescription("Upload a certificate to demonstrate the file input.")
+                                   .WithTags("Frontend", "Storefront")
+                                   .WithCustomInput(parameter => new()
+                                   {
+                                       Name = parameter.Name,
+                                       InputType = InputType.File,
+                                       Label = parameter.Name,
+                                       Description = parameter.Description,
+                                       Placeholder = "Choose certificate",
+                                       FileFilter = ".pem,.pfx,.crt"
+                                   });
+
+// Optional parameters are not supported when publishing a manifest.
+if (builder.ExecutionContext.IsRunMode)
+{
+    storefrontCertificate.WithOptional();
+}
 
 var postgres = builder.AddPostgres("postgres")
                       .WithLaunchGroups("catalog", "frontend")
