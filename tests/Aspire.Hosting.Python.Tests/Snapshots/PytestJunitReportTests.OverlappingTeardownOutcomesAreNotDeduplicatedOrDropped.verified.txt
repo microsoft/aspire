@@ -1,0 +1,23 @@
+﻿[
+  {
+    Name: fixture.same,
+    Duration: 00:00:00.1000000,
+    Message: failure:  call failed
+  },
+  {
+    Name: fixture.same,
+    Outcome: Error,
+    Duration: 00:00:00.2000000,
+    Message: error:  teardown failed
+  },
+  {
+    Name: fixture.skipped,
+    Outcome: Skipped,
+    Message: skipped:  skip
+  },
+  {
+    Name: fixture.skipped,
+    Outcome: Error,
+    Message: error:  teardown
+  }
+]
