@@ -20,6 +20,97 @@ public class DashboardInteractionsTests : PlaywrightTestsBase<DashboardInteracti
     {
     }
 
+    [Theory]
+    [InlineData("a")]
+    [InlineData("g")]
+    [InlineData("path")]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task Tooltips_SvgAnchorsPositionAndCleanUp(string tagName)
+    {
+        await RunTestAsync(async page =>
+        {
+            await page.SetViewportSizeAsync(1280, 900);
+            await GoToResourcesAndWaitAsync(page);
+            await page.EvaluateAsync("""
+                tagName => {
+                    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+                    svg.style.cssText = 'position:fixed;left:600px;top:250px;width:200px;height:80px;z-index:1000;';
+                    svg.setAttribute('viewBox', '0 0 200 80');
+                    const anchor = document.createElementNS(svg.namespaceURI, tagName);
+                    anchor.id = 'svg-tooltip-probe';
+                    anchor.setAttribute('tabindex', '0');
+                    anchor.setAttribute('data-tooltip', 'Graph resource');
+                    if (tagName === 'path') {
+                        anchor.setAttribute('d', 'M0 0 H120 V40 H0 Z');
+                    } else {
+                        const rect = document.createElementNS(svg.namespaceURI, 'rect');
+                        rect.setAttribute('width', '120');
+                        rect.setAttribute('height', '40');
+                        anchor.appendChild(rect);
+                    }
+                    svg.appendChild(anchor);
+                    document.body.appendChild(svg);
+                    const button = document.createElement('button');
+                    button.id = 'html-tooltip-probe';
+                    button.textContent = 'HTML control';
+                    button.setAttribute('data-tooltip', 'HTML control');
+                    button.style.cssText = 'position:fixed;left:900px;top:250px;z-index:1000;';
+                    document.body.appendChild(button);
+                }
+                """, tagName);
+
+            var anchor = page.Locator("#svg-tooltip-probe");
+            var tooltip = page.Locator(".dashboard-tooltip");
+            var positioningAnchor = page.Locator(".dashboard-tooltip-anchor");
+            await anchor.HoverAsync();
+            await Assertions.Expect(tooltip).ToHaveTextAsync("Graph resource");
+            await AssertPositionedAboveAsync(anchor);
+            await Assertions.Expect(tooltip).ToHaveAttributeAsync("anchor", "svg-tooltip-probe");
+            await Assertions.Expect(anchor).ToHaveAttributeAsync("aria-describedby", (await tooltip.GetAttributeAsync("id"))!);
+
+            await page.Keyboard.PressAsync("Escape");
+            await Assertions.Expect(tooltip).ToHaveCountAsync(0);
+            await Assertions.Expect(positioningAnchor).ToHaveCountAsync(0);
+
+            await anchor.FocusAsync();
+            await Assertions.Expect(tooltip).ToHaveTextAsync("Graph resource");
+            await AssertPositionedAboveAsync(anchor);
+            await page.SetViewportSizeAsync(1100, 800);
+            await Assertions.Expect(tooltip).ToHaveCountAsync(0);
+            await Assertions.Expect(positioningAnchor).ToHaveCountAsync(0);
+
+            await page.Mouse.MoveAsync(0, 0);
+            await anchor.HoverAsync();
+            await AssertPositionedAboveAsync(anchor);
+            await anchor.EvaluateAsync("anchor => anchor.remove()");
+            await Assertions.Expect(tooltip).ToHaveCountAsync(0);
+            await Assertions.Expect(positioningAnchor).ToHaveCountAsync(0);
+
+            var button = page.Locator("#html-tooltip-probe");
+            await button.HoverAsync();
+            await Assertions.Expect(tooltip).ToHaveTextAsync("HTML control");
+            await AssertPositionedAboveAsync(button);
+            await Assertions.Expect(positioningAnchor).ToHaveCountAsync(0);
+
+            async Task AssertPositionedAboveAsync(ILocator target)
+            {
+                await Assertions.Expect(tooltip).ToBeVisibleAsync();
+                await page.WaitForFunctionAsync("""
+                    anchor => {
+                        const tooltip = document.querySelector('.dashboard-tooltip:popover-open');
+                        if (!tooltip) {
+                            return false;
+                        }
+                        const a = anchor.getBoundingClientRect();
+                        const t = tooltip.getBoundingClientRect();
+                        return Math.abs((a.left + a.width / 2) - (t.left + t.width / 2)) <= 2 &&
+                            Math.abs(a.top - t.bottom) <= 8;
+                    }
+                    """, await target.ElementHandleAsync()).DefaultTimeout();
+            }
+        });
+    }
+
     [Fact]
     [OuterloopTest("Resource-intensive Playwright browser test")]
     public async Task ReconnectModal_RemainsAboveInteractionDialog()
