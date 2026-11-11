@@ -1,14 +1,16 @@
 {
   "area": "CLI",
-  "areaEmoji": "💻",
+  "areaEmoji": "\ud83d\udcbb",
   "backport": false,
   "breaking": false,
   "changeType": "New features",
   "communityContributors": [],
   "description": "Teams can configure multiple named `skillSources` (repositories, marketplace/plugin names, refs, and OpenCode catalogs) instead of only the built-in `microsoft/aspire-skills` source. Sources merge across global and local configuration and are registered with Copilot, Claude Code, and OpenCode.",
-  "docsPrs": [],
+  "docsPrs": [
+    2032
+  ],
   "docsRequired": true,
-  "emoji": "🧠",
+  "emoji": "\ud83e\udde0",
   "firstMergedAt": "2026-11-02T16:28:36Z",
   "lastMergedAt": "2026-11-02T16:28:36Z",
   "name": "Configurable named skill sources",

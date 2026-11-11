@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Docs repo release-sync workflow; no matching changelog entry",
+  "mergedAt": "2026-11-11T17:18:51Z",
+  "number": 2118,
+  "runDate": "2026-11-11T18:10:00Z",
+  "status": "excluded",
+  "title": "Fail release sync when the release branch is not updated"
+}
