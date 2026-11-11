@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Text.RegularExpressions;
 using Aspire.Cli.Agents.Hooks;
 using Aspire.Cli.Mcp;
 using Aspire.Cli.Tests.Utils;
@@ -175,23 +174,6 @@ public class AgentTelemetryHookTests
     public void CanonicalCatalogCoversKnownMcpTools()
     {
         Assert.Equal(KnownMcpTools.All.Order(), AgentTelemetryCatalog.Canonical.Tools.Order());
-    }
-
-    [Fact]
-    public void AllowlistsMatchCanonicalPowerShellHook()
-    {
-        using var stream = typeof(AgentTelemetryHook).Assembly.GetManifestResourceStream("track-telemetry.ps1")!;
-        using var reader = new StreamReader(stream);
-        var script = reader.ReadToEnd();
-        // Canonical declarations have the form $AspireSkills = @('aspire', 'aspire-init', ...).
-        static string[] Values(string script, string name)
-        {
-            var body = Regex.Match(script, $@"\${name} = @\((.*?)\)", RegexOptions.Singleline).Groups[1].Value;
-            return Regex.Matches(body, "'([^']+)'").Select(match => match.Groups[1].Value).Order().ToArray();
-        }
-        Assert.Equal(Values(script, "AspireSkills"), AgentTelemetryCatalog.Canonical.Skills.Order());
-        Assert.Equal(Values(script, "AspireMcpTools"), AgentTelemetryCatalog.Canonical.Tools.Order());
-        Assert.Equal(Values(script, "AspireReferenceFiles"), AgentTelemetryCatalog.Canonical.References.Order());
     }
 
     [Theory]

@@ -3,9 +3,7 @@
 
 namespace Aspire.Cli.Agents.Hooks;
 
-internal sealed class TelemetryHookConfigurator(
-    ITelemetryHookInstaller installer,
-    IEnumerable<IAgentClient> clients) : ITelemetryHookConfigurator
+internal sealed class TelemetryHookConfigurator(IEnumerable<IAgentClient> clients) : ITelemetryHookConfigurator
 {
     public async Task<TelemetryHookConfigurationResult> ConfigureAsync(
         AgentEnvironment detectedEnvironments, CancellationToken cancellationToken)
@@ -17,9 +15,6 @@ internal sealed class TelemetryHookConfigurator(
         {
             return new TelemetryHookConfigurationResult(AgentEnvironment.None, []);
         }
-
-        // Keep compatibility scripts current for existing registrations and older clients.
-        await installer.EnsureInstalledAsync(cancellationToken);
 
         var configured = AgentEnvironment.None;
         var skipped = new List<TelemetryHookSkip>();

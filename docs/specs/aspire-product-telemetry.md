@@ -188,7 +188,9 @@ Dashboard shutdown retains its service-style policy, even when the host's cancel
 | `tool_invocation` | An allowlisted Aspire MCP tool invocation. |
 | `reference_file_read` | A read of an allowlisted reference under an Aspire skill's `references/` directory. |
 
-[AgentTelemetryCatalog](../../src/Aspire.Cli/Agents/Hooks/AgentTelemetryCatalog.cs) obtains the skill, reference, and MCP tool inventories from the canonical telemetry hook embedded in the CLI. User-installed scripts, plugin contents, arbitrary local skills, and non-reference assets do not extend the reporting catalog.
+[AgentTelemetryCatalog](../../src/Aspire.Cli/Agents/Hooks/AgentTelemetryCatalog.cs) obtains the skill, reference, and MCP tool inventories from [telemetry-allowlist.json](../../src/Aspire.Cli/Agents/Hooks/telemetry-allowlist.json), which is embedded in the CLI. The file has exactly three properties, `skills`, `references`, and `mcpTools`, each a non-empty, ordinally sorted array of unique strings. User-installed files, plugin contents, arbitrary local skills, and non-reference assets do not extend the reporting catalog.
+
+Older CLIs installed `track-telemetry.sh` and `track-telemetry.ps1` under `~/.aspire/hooks/` and registered hooks that ran them. Current CLIs no longer ship or refresh those scripts. Re-running `aspire agent init` replaces legacy registrations: Copilot hooks are stored in the same Aspire-owned file that initialization rewrites, and Claude Code registrations that reference the legacy scripts are replaced with a direct `aspire agent telemetry --hook` command. Until initialization is re-run, the previously installed scripts continue to work because they invoke supported `aspire agent telemetry` options; only their embedded allowlists stop receiving updates.
 
 The classifier produces event type, client name, timestamp, and the applicable skill, tool, or skills-relative reference identifier. It includes a session ID only when the incoming value is a GUID. It does not export the raw hook payload, prompts, tool arguments, file contents, or absolute paths.
 

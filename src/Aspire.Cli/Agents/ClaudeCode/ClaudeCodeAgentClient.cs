@@ -228,6 +228,11 @@ internal sealed class ClaudeCodeAgentClient(
         }
     }
 
+    // Aspire 13.5 registered hooks that ran these scripts from ~/.aspire/hooks/. Matching the names
+    // lets init replace those registrations with the direct CLI invocation.
+    private const string LegacyShellScriptName = "track-telemetry.sh";
+    private const string LegacyPowerShellScriptName = "track-telemetry.ps1";
+
     private static bool IsAspireHook(JsonNode? node)
     {
         // Match legacy scripts or our exact CLI invocation, not arbitrary Aspire commands.
@@ -264,8 +269,8 @@ internal sealed class ClaudeCodeAgentClient(
 
     private static bool ReferencesTelemetryScript(string? value)
         => value is not null
-            && (value.Contains(TelemetryHookInstaller.ShellResourceName, StringComparison.OrdinalIgnoreCase)
-                || value.Contains(TelemetryHookInstaller.PowerShellResourceName, StringComparison.OrdinalIgnoreCase));
+            && (value.Contains(LegacyShellScriptName, StringComparison.OrdinalIgnoreCase)
+                || value.Contains(LegacyPowerShellScriptName, StringComparison.OrdinalIgnoreCase));
 
     private string ManagedSettingsDirectory
         => AgentPath.GetManagedSettingsDirectory(context, environment, "ClaudeCode", "claude-code");
