@@ -4,6 +4,7 @@ class AspireTooltipProvider extends HTMLElement {
     #controller = null;
     #tooltip = null;
     #anchor = null;
+    #positioningAnchor = null;
     #timer = null;
     #version = 0;
     #observer = null;
@@ -50,6 +51,12 @@ class AspireTooltipProvider extends HTMLElement {
                 this.#show(focused, 0);
             }
         }, { ...options, capture: true });
+        window.addEventListener("resize", () => {
+            // SVG positioning anchors snapshot viewport geometry, which is stale after a resize.
+            if (this.#positioningAnchor) {
+                this.#clear();
+            }
+        }, options);
     }
 
     disconnectedCallback() {
@@ -140,6 +147,19 @@ class AspireTooltipProvider extends HTMLElement {
             tooltip.appendChild(content);
             this.#tooltip = tooltip;
             this.appendChild(tooltip);
+            if (target.anchor instanceof SVGElement) {
+                // SVG graphics don't generate the principal CSS boxes required by anchor positioning.
+                // Keep Fluent attached to the real element for accessibility, but position against an HTML box.
+                // https://drafts.csswg.org/css-anchor-position-1/#name
+                const anchor = document.createElement("span");
+                anchor.className = "dashboard-tooltip-anchor";
+                anchor.setAttribute("aria-hidden", "true");
+                anchor.style.cssText = `position: fixed; pointer-events: none; left: ${bounds.left}px; top: ${bounds.top}px; width: ${bounds.width}px; height: ${bounds.height}px;`;
+                anchor.style.anchorName = `--tooltip-position-${crypto.randomUUID()}`;
+                this.#positioningAnchor = anchor;
+                this.appendChild(anchor);
+                tooltip.style.positionAnchor = anchor.style.anchorName;
+            }
             // The Fluent template sets popover=auto when connected. Switch afterwards so a
             // tooltip never light-dismisses an open menu or select popover.
             tooltip.setAttribute("popover", "manual");
@@ -188,6 +208,8 @@ class AspireTooltipProvider extends HTMLElement {
         this.#tooltip?.remove();
         this.#tooltip?.anchorPositioningStyleElement?.remove();
         this.#tooltip = null;
+        this.#positioningAnchor?.remove();
+        this.#positioningAnchor = null;
         this.#anchor = null;
     }
 }

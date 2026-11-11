@@ -1323,6 +1323,7 @@ fluent-badge.property-details-accordion-badge {
    descriptions and wrap long URLs rather than overflowing the tooltip's default max width. */
 .dashboard-tooltip {
     width: max-content;
+    max-width: 300px;
     overflow-wrap: anywhere;
     pointer-events: none;
 }
