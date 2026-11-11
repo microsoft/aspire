@@ -374,6 +374,9 @@ internal sealed class GitCommandRunner(ICliHostEnvironment hostEnvironment, IInt
                     // or wait for input until the acquisition deadline expires.
                     process.StandardInput.Close();
                 }
+                // Log both streams independently of normal console routing for troubleshooting.
+                // With --debug or --log-level Debug, these records intentionally also appear on
+                // the console, including captured stdout and otherwise deferred background diagnostics.
                 var stdout = ReadOutputAsync(process.StandardOutput, output =>
                 {
                     logger.LogDebug("Git stdout: {Output}", output);
