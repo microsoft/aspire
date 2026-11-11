@@ -23,6 +23,11 @@ When automatic CLI bundle setup fails, `ASPIRE009` includes the setup command's 
 
 ## Experimental API Warnings
 
+`ASPIRECONTAINERSHELLEXECUTION001` is no longer emitted: `ContainerResource.ShellExecution` is stable.
+Existing suppressions can be removed. Its behavior is unchanged: `null` and `false` pass arguments individually;
+`true` passes `-c` followed by space-joined arguments without quoting or escaping. The container entrypoint
+must already be a compatible shell (for example, `/bin/sh`); this property does not select one.
+
 | Diagnostic ID | Severity | Description | Location |
 | ------------- | -------- | ----------- | -------- |
 | `ASPIREAZUREPROVISIONING001` | Warning | The polyglot Azure Provisioning proxy packages are experimental and may change or be removed in future releases. | [src/Aspire.Hosting.Azure.Provisioning/ExperimentalAssemblyInfo.cs](../src/Aspire.Hosting.Azure.Provisioning/ExperimentalAssemblyInfo.cs) |

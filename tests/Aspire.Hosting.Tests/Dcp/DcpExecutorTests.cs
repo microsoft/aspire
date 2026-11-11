@@ -802,6 +802,35 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
+    [InlineData(null, null)]
+    [InlineData(false, null)]
+    [InlineData(true, null)]
+    [InlineData(null, "/bin/sh")]
+    [InlineData(false, "/bin/sh")]
+    [InlineData(true, "/bin/sh")]
+    public async Task CreateContainer_ShellExecutionPreservesEntrypointAndControlsArgumentWrapping(bool? shellExecution, string? entrypoint)
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var resource = builder.AddContainer("shell", "image")
+            .WithArgs("echo", "'two words'", "$VALUE");
+        resource.Resource.Entrypoint = entrypoint;
+        resource.Resource.ShellExecution = shellExecution;
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        await using var executor = CreateAppExecutor(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            kubernetesService: kubernetesService);
+        await executor.RunApplicationAsync().DefaultTimeout();
+
+        var container = Assert.Single(kubernetesService.CreatedResources.OfType<Container>(), c => c.AppModelResourceName == "shell");
+        Assert.Equal(entrypoint, container.Spec.Command);
+        Assert.Equal(
+            shellExecution is true ? ["-c", "echo 'two words' $VALUE"] : new[] { "echo", "'two words'", "$VALUE" },
+            container.Spec.Args);
+    }
+
+    [Theory]
     [InlineData("aspire")]
     [InlineData("ASPIRE")]
     public async Task RunApplicationAsync_ThrowsWhenContainerResourceNameConflictsWithContainerTunnelName(string containerName)
