@@ -93,41 +93,6 @@ internal sealed class AgentTelemetryHook(IEnvironment environment, CliExecutionC
     }
 
     /// <summary>
-    /// Determines whether a hook handler's executable and arguments run Aspire's telemetry hook.
-    /// </summary>
-    /// <remarks>
-    /// Each agent client owns its hook file layout and passes the handler's executable and arguments here, so this
-    /// matches only the CLI invocation that <see cref="GetCommand"/> writes, plus legacy hook scripts.
-    /// </remarks>
-    internal static bool IsHookInvocation(JsonNode? executableNode, JsonNode? argsNode)
-    {
-        // Match legacy scripts or our exact CLI invocation, not arbitrary Aspire commands. Trailing
-        // arguments are allowed because current hooks append --source and --scope.
-        var executable = GetString(executableNode);
-        if (ReferencesTelemetryScript(executable))
-        {
-            return true;
-        }
-        if (argsNode is JsonArray args)
-        {
-            var values = args.Select(GetString).ToArray();
-            var (currentCommand, _) = GetCommand(AgentTelemetryProtocol.HookOptionName);
-            var executableName = Path.GetFileNameWithoutExtension(executable);
-            var isDotnet = string.Equals(executableName, "dotnet", StringComparison.OrdinalIgnoreCase);
-            var isDirectAspireInvocation = !isDotnet
-                && values is [AgentTelemetryProtocol.AgentCommandName, AgentTelemetryProtocol.TelemetryCommandName, AgentTelemetryProtocol.HookOptionName, ..]
-                && (executable == currentCommand || string.Equals(executableName, "aspire", StringComparison.OrdinalIgnoreCase));
-            var isManagedAspireInvocation = isDotnet
-                && values is [var assemblyPath, AgentTelemetryProtocol.AgentCommandName, AgentTelemetryProtocol.TelemetryCommandName, AgentTelemetryProtocol.HookOptionName, ..]
-                && string.Equals(Path.GetFileName(assemblyPath), "aspire.dll", StringComparison.OrdinalIgnoreCase);
-
-            return isDirectAspireInvocation || isManagedAspireInvocation || values.Any(ReferencesTelemetryScript);
-        }
-
-        return false;
-    }
-
-    /// <summary>
     /// Determines whether the hook identified by <paramref name="source"/> and <paramref name="scope"/> records
     /// the tool call, or leaves it to another installed Aspire hook that runs for the same call.
     /// </summary>
@@ -196,7 +161,7 @@ internal sealed class AgentTelemetryHook(IEnvironment environment, CliExecutionC
                     && postToolUse.OfType<JsonObject>()
                         .SelectMany(group => group["hooks"] as JsonArray ?? [])
                         .OfType<JsonObject>()
-                        .Any(hook => IsHookInvocation(hook["command"], hook["args"]) && !IsProjectScoped(hook["args"]));
+                        .Any(hook => ClaudeCodeAgentClient.IsAspireHook(hook) && !IsProjectScoped(hook["args"]));
 
             default:
                 return false;
@@ -215,11 +180,6 @@ internal sealed class AgentTelemetryHook(IEnvironment environment, CliExecutionC
 
     private static string? GetString(JsonNode? node)
         => node is JsonValue value && value.TryGetValue<string>(out var text) ? text : null;
-
-    private static bool ReferencesTelemetryScript(string? value)
-        => value is not null
-            && (value.Contains(TelemetryHookInstaller.ShellResourceName, StringComparison.OrdinalIgnoreCase)
-                || value.Contains(TelemetryHookInstaller.PowerShellResourceName, StringComparison.OrdinalIgnoreCase));
 
     internal static int GetMaxPayloadCharacters(string? configuredValue)
     {

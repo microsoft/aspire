@@ -421,7 +421,7 @@ public class AgentTelemetryHookTests(ITestOutputHelper outputHelper)
     {
         // When the workspace is the home directory, the project hook is written to the user settings file.
         using var context = new AgentConfigurationTestContext(outputHelper);
-        var (command, args) = AgentTelemetryHook.GetCommand("--hook", "--source", "claude", "--scope", "project");
+        var (command, args) = AgentTelemetryHook.GetCommand("--hook", "--source", "claude", "--scope", nameof(AgentConfigurationScope.Project));
         var settings = new JsonObject
         {
             ["hooks"] = new JsonObject

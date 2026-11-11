@@ -219,7 +219,7 @@ internal sealed class ClaudeCodeAgentClient(
         var (command, args) = AgentTelemetryHook.GetCommand(
             AgentTelemetryProtocol.HookOptionName,
             AgentTelemetryProtocol.SourceOptionName, ClientId,
-            AgentTelemetryProtocol.ScopeOptionName, scope.ToString().ToLowerInvariant());
+            AgentTelemetryProtocol.ScopeOptionName, scope.ToString());
         var hook = new JsonObject
         {
             ["type"] = "command",
@@ -251,7 +251,7 @@ internal sealed class ClaudeCodeAgentClient(
             }
             for (var hookIndex = hooks.Count - 1; hookIndex >= 0; hookIndex--)
             {
-                if (hooks[hookIndex] is JsonObject hook && AgentTelemetryHook.IsHookInvocation(hook["command"], hook["args"]))
+                if (IsAspireHook(hooks[hookIndex]))
                 {
                     hooks.RemoveAt(hookIndex);
                 }
@@ -262,6 +262,46 @@ internal sealed class ClaudeCodeAgentClient(
             }
         }
     }
+
+    internal static bool IsAspireHook(JsonNode? node)
+    {
+        // Match legacy scripts or our exact CLI invocation, not arbitrary Aspire commands. Trailing
+        // arguments are allowed because current hooks append --source and --scope.
+        if (node is not JsonObject hook)
+        {
+            return false;
+        }
+        if (hook["command"] is JsonValue commandValue
+            && commandValue.TryGetValue<string>(out var command)
+            && ReferencesTelemetryScript(command))
+        {
+            return true;
+        }
+        if (hook["args"] is JsonArray args)
+        {
+            var values = args.Select(arg => arg is JsonValue value && value.TryGetValue<string>(out var text) ? text : null).ToArray();
+            var executable = hook["command"] is JsonValue executableValue && executableValue.TryGetValue<string>(out var executableText)
+                ? executableText : null;
+            var (currentCommand, _) = AgentTelemetryHook.GetCommand(AgentTelemetryProtocol.HookOptionName);
+            var executableName = Path.GetFileNameWithoutExtension(executable);
+            var isDotnet = string.Equals(executableName, "dotnet", StringComparison.OrdinalIgnoreCase);
+            var isDirectAspireInvocation = !isDotnet
+                && values is [AgentTelemetryProtocol.AgentCommandName, AgentTelemetryProtocol.TelemetryCommandName, AgentTelemetryProtocol.HookOptionName, ..]
+                && (executable == currentCommand || string.Equals(executableName, "aspire", StringComparison.OrdinalIgnoreCase));
+            var isManagedAspireInvocation = isDotnet
+                && values is [var assemblyPath, AgentTelemetryProtocol.AgentCommandName, AgentTelemetryProtocol.TelemetryCommandName, AgentTelemetryProtocol.HookOptionName, ..]
+                && string.Equals(Path.GetFileName(assemblyPath), "aspire.dll", StringComparison.OrdinalIgnoreCase);
+
+            return isDirectAspireInvocation || isManagedAspireInvocation || values.Any(ReferencesTelemetryScript);
+        }
+
+        return false;
+    }
+
+    private static bool ReferencesTelemetryScript(string? value)
+        => value is not null
+            && (value.Contains(TelemetryHookInstaller.ShellResourceName, StringComparison.OrdinalIgnoreCase)
+                || value.Contains(TelemetryHookInstaller.PowerShellResourceName, StringComparison.OrdinalIgnoreCase));
 
     private string ManagedSettingsDirectory
         => AgentPath.GetManagedSettingsDirectory(context, environment, "ClaudeCode", "claude-code");

@@ -717,7 +717,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         Assert.False(Directory.Exists(Path.Combine(homeDirectory.FullName, ".copilot", "hooks")));
         var handler = Assert.Single(JsonNode.Parse(await File.ReadAllTextAsync(hookFile))!["hooks"]!["postToolUse"]!.AsArray())!;
         Assert.Equal(
-            AgentTelemetryHook.GetCommand("--hook", "--source", "copilot", "--scope", "project").Args,
+            AgentTelemetryHook.GetCommand("--hook", "--source", "copilot", "--scope", nameof(AgentConfigurationScope.Project)).Args,
             handler["args"]!.AsArray().Select(value => (string?)value));
     }
 

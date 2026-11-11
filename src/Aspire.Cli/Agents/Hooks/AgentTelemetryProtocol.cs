@@ -28,5 +28,5 @@ internal static class AgentTelemetryProtocol
     internal const string ReferenceFileReadEventType = "reference_file_read";
 
     // --source is the IAgentClient.Id whose hook configuration invoked the hook.
-    // --scope is the lowercase AgentConfigurationScope the hook configuration was installed at.
+    // --scope is the AgentConfigurationScope the hook configuration was installed at.
 }
