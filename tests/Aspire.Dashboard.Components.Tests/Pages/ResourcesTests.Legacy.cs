@@ -8,6 +8,7 @@ using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Resources;
+using Aspire.Dashboard.Tests.Shared;
 using Aspire.Tests.Shared;
 using Aspire.Tests.Shared.DashboardModel;
 using Bunit;
