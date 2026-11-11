@@ -27,9 +27,10 @@ public sealed partial class ResourceRelationshipGraph : ComponentBase
     private const int TwoColumnGap = 44;
     private const int Padding = 2;
 
-    // At 12px, text fits in a node with about one character per this many pixels, after the color dot.
-    private const int PixelsPerCharacter = 7;
+    // At 11px, allow six pixels per character so the semibold center label also fits.
+    private const int PixelsPerCharacter = 6;
     private const int LabelStart = 22;
+    private const int LabelEndPadding = 4;
 
     private GraphLayout _layout = null!;
     private int _nodeWidth;
@@ -65,7 +66,7 @@ public sealed partial class ResourceRelationshipGraph : ComponentBase
         var columnCount = 1 + (incoming.Count > 0 ? 1 : 0) + (outgoing.Count > 0 ? 1 : 0);
         _nodeWidth = columnCount == 3 ? ThreeColumnNodeWidth : TwoColumnNodeWidth;
         var columnGap = columnCount == 3 ? ThreeColumnGap : TwoColumnGap;
-        _maximumLabelLength = (_nodeWidth - LabelStart - 8) / PixelsPerCharacter;
+        _maximumLabelLength = (_nodeWidth - LabelStart - LabelEndPadding) / PixelsPerCharacter;
         var centerX = incoming.Count > 0 ? Padding + _nodeWidth + columnGap : Padding;
         var width = (columnCount * _nodeWidth) + ((columnCount - 1) * columnGap) + (Padding * 2);
 
