@@ -4,6 +4,7 @@
 using System.Collections.Concurrent;
 using System.Collections.Immutable;
 using System.Globalization;
+using System.Threading.Channels;
 using Aspire.Dashboard.Components.Controls;
 using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model;
@@ -467,9 +468,16 @@ public class ResourceDetailsTests : DashboardTestContext
                     inheritedFrom: "parent",
                     explicitStart: true,
                     excludedByGroup: true,
-                    buildDisposition: LaunchGroupBuildDisposition.InitialShared)
+                    buildDisposition: LaunchGroupBuildDisposition.InitialShared),
+                LaunchGroupTestHelpers.CreateResource("worker", groups: ["Web"], inheritedFrom: "app1"),
+                LaunchGroupTestHelpers.CreateResource("app1-rebuilder", groups: ["Web"], inheritedFrom: "app1"),
+                LaunchGroupTestHelpers.CreateResource("cache", groups: ["Shared"])
             ]);
-        LaunchGroupInformationViewModel.Create(information).ApplyToResource(resource);
+        var client = new LaunchGroupTestDashboardClient(
+            information,
+            [resource, ModelTestHelpers.CreateResource("app1-rebuilder", hidden: true)],
+            Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>);
+        Services.AddSingleton<IDashboardClient>(client);
 
         var cut = Render<ResourceDetails>(builder =>
         {
@@ -485,9 +493,34 @@ public class ResourceDetailsTests : DashboardTestContext
         Assert.Equal("Web, Shared", properties["Effective membership"]);
         Assert.Equal("parent", properties["Inherited from"]);
         Assert.Equal("Yes", properties["Explicit start"]);
-        Assert.Equal("Yes", properties["Excluded by selected group"]);
-        Assert.Equal("No", properties["Excluded from selection"]);
-        Assert.Equal("Initial (shared)", properties["Build disposition"]);
+        Assert.Equal("Not in selected group", properties["Exclusion reason"]);
+        Assert.False(properties.ContainsKey("Build disposition"));
+        Assert.False(properties.ContainsKey("Excluded from selection"));
+
+        cut.WaitForAssertion(() =>
+        {
+            var groupValues = cut.FindAll(".launch-group-value").Select(element =>
+            {
+                var members = element.GetAttribute("data-tooltip");
+                Assert.Equal("0", element.GetAttribute("tabindex"));
+                Assert.Equal(members, element.GetAttribute("aria-description"));
+                return (element.TextContent.Trim(), members);
+            });
+            Assert.Equal(
+                [("Web", "app1, worker"), ("Web", "app1, worker"), ("Shared", "app1, cache")],
+                groupValues);
+        });
+
+        cut.Render(builder => builder.Add(component => component.ShowHiddenResources, true));
+
+        cut.WaitForAssertion(() =>
+        {
+            var groupValues = cut.FindAll(".launch-group-value")
+                .Select(element => (element.TextContent.Trim(), element.GetAttribute("data-tooltip")));
+            Assert.Equal(
+                [("Web", "app1, app1-rebuilder, worker"), ("Web", "app1, app1-rebuilder, worker"), ("Shared", "app1, cache")],
+                groupValues);
+        });
     }
 
     [Fact]

@@ -2770,8 +2770,9 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         var dcpOptions = new DcpOptions { DashboardPath = "./dashboard" };
         var resourceLoggerService = new ResourceLoggerService();
         var logLines = new List<LogLine>();
+        var buildOutputLines = new List<LogLine>();
         var logLinesLock = new object();
-        var terminalLogCountAtNotification = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var terminalLogCountAtNotification = new TaskCompletionSource<(int Source, int BuildOutput)>(TaskCreationOptions.RunContinuationsAsynchronously);
         string? dcpResourceName = null;
 
         var events = new DcpExecutorEvents();
@@ -2779,10 +2780,12 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         {
             if (context.DcpResourceName == dcpResourceName && context.Status.State == ContainerState.Exited)
             {
-                int logCount;
+                (int Source, int BuildOutput) logCount;
                 lock (logLinesLock)
                 {
-                    logCount = logLines.Count(l => l.Content.Contains(terminalLogMessage));
+                    logCount = (
+                        logLines.Count(l => l.Content.Contains(terminalLogMessage)),
+                        buildOutputLines.Count(l => l.Content.Contains(terminalLogMessage)));
                 }
 
                 terminalLogCountAtNotification.TrySetResult(logCount);
@@ -2797,6 +2800,16 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         var container = Assert.Single(kubernetesService.CreatedResources.OfType<Container>());
         dcpResourceName = container.Metadata.Name;
 
+        using var captureRegistration = resourceLoggerService.BuildOutputCapture.Register(dcpResourceName);
+        using var capturedLogs = resourceLoggerService.Subscribe("project", batch =>
+        {
+            lock (logLinesLock)
+            {
+                buildOutputLines.AddRange(batch);
+            }
+        });
+        using var buildOutput = resourceLoggerService.BuildOutputCapture.Subscribe(dcpResourceName, ["project"], includeCompleted: false);
+        resourceLoggerService.BuildOutputCapture.BeginAttempt(dcpResourceName);
         using var subscription = resourceLoggerService.Subscribe(dcpResourceName, batch =>
         {
             lock (logLinesLock)
@@ -2808,12 +2821,13 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         container.Status = new ContainerStatus { State = ContainerState.Exited };
         kubernetesService.PushResourceModified(container);
 
-        Assert.Equal(1, await terminalLogCountAtNotification.Task.DefaultTimeout());
+        Assert.Equal((1, 1), await terminalLogCountAtNotification.Task.DefaultTimeout());
         Assert.True(terminalStdErrFollow == true);
 
         lock (logLinesLock)
         {
             Assert.Single(logLines, l => l.Content.Contains(terminalLogMessage));
+            Assert.Single(buildOutputLines, l => l.Content.Contains("[build] " + terminalLogMessage));
         }
     }
 
@@ -3814,6 +3828,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
         var resourceLoggerService = new ResourceLoggerService();
         var logLines = new ConcurrentQueue<LogLine>();
+        var buildOutputLines = new ConcurrentQueue<LogLine>();
         var terminalNotifications = 0;
         string? dcpResourceName = null;
 
@@ -3849,6 +3864,16 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         previousResourceUid = container.Metadata.Uid;
         Assert.False(string.IsNullOrEmpty(previousResourceUid));
 
+        using var captureRegistration = resourceLoggerService.BuildOutputCapture.Register(dcpResourceName);
+        using var capturedLogs = resourceLoggerService.Subscribe("project", batch =>
+        {
+            foreach (var line in batch)
+            {
+                buildOutputLines.Enqueue(line);
+            }
+        });
+        using var buildOutput = resourceLoggerService.BuildOutputCapture.Subscribe(dcpResourceName, ["project"], includeCompleted: false);
+        resourceLoggerService.BuildOutputCapture.BeginAttempt(dcpResourceName);
         using var subscription = resourceLoggerService.Subscribe(dcpResourceName, batch =>
         {
             foreach (var logLine in batch)
@@ -3883,6 +3908,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
             // Simulate a delete and recreation that happened while the watch was disconnected. The fresh
             // list-and-watch reports only Added for the new UID, and resourceVersion is opaque enough that
             // it can equal the value last observed for the previous object.
+            resourceLoggerService.BuildOutputCapture.BeginAttempt(dcpResourceName);
             replacementResourceUid = "database-instance-2";
             container.Metadata.Uid = replacementResourceUid;
             container.Status = new ContainerStatus { State = ContainerState.Exited, ExitCode = 1 };
@@ -3913,6 +3939,11 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
                     line.Content.Contains(previousLateLogMessage, StringComparison.Ordinal) ||
                     line.Content.Contains(replacementLogMessage, StringComparison.Ordinal)),
                 line => Assert.Contains(replacementLogMessage, line.Content, StringComparison.Ordinal));
+            Assert.Collection(
+                buildOutputLines.Where(line =>
+                    line.Content.Contains(previousLateLogMessage, StringComparison.Ordinal) ||
+                    line.Content.Contains(replacementLogMessage, StringComparison.Ordinal)),
+                line => Assert.Contains("[build] " + replacementLogMessage, line.Content, StringComparison.Ordinal));
         }
         finally
         {

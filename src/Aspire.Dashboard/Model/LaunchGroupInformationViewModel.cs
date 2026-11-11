@@ -56,6 +56,21 @@ public sealed class LaunchGroupInformationViewModel
         return Resources.GetValueOrDefault(displayName);
     }
 
+    internal IEnumerable<string> GetMembers(string group, IEnumerable<ResourceViewModel> resources, bool showHiddenResources)
+    {
+        var hiddenNames = resources
+            .GroupBy(resource => resource.DisplayName, StringComparers.ResourceName)
+            .Where(replicas => replicas.All(resource => resource.IsResourceHidden(showHiddenResources)))
+            .Select(replicas => replicas.Key)
+            .ToHashSet(StringComparers.ResourceName);
+
+        return Resources
+            .Where(resource => resource.Value.Groups.Contains(group, StringComparer.OrdinalIgnoreCase) && !hiddenNames.Contains(resource.Key))
+            .Select(resource => resource.Key)
+            .Order(StringComparer.OrdinalIgnoreCase)
+            .ThenBy(name => name, StringComparer.Ordinal);
+    }
+
     internal void ApplyToResource(ResourceViewModel resource)
     {
         resource.LaunchGroup = FindResource(resource.DisplayName);
@@ -132,6 +147,9 @@ internal sealed record ResourceLaunchGroupViewModel(
 
 internal static class LaunchGroupDisplayHelpers
 {
+    internal const string SelectedGroupPropertyKey = "resource-launch-group-selected-group";
+    internal const string EffectiveMembershipPropertyKey = "resource-launch-group-effective-membership";
+
     internal static IEnumerable<ResourcePropertyViewModel> GetProperties(ResourceLaunchGroupViewModel? launchGroup, IStringLocalizer<Resources.Resources> loc)
     {
         if (launchGroup is null)
@@ -140,21 +158,38 @@ internal static class LaunchGroupDisplayHelpers
         }
 
         var sortOrder = int.MaxValue - 7;
-        return
-        [
-            CreateProperty("selected-group", nameof(Resources.Resources.ResourceLaunchGroupsSelectedGroup), GetSelectedGroupText(launchGroup, loc), sortOrder++),
-            CreateProperty("effective-membership", nameof(Resources.Resources.ResourceLaunchGroupsEffectiveMembership), GetGroupsText(launchGroup, loc), sortOrder++),
-            CreateProperty("inherited-from", nameof(Resources.Resources.ResourceLaunchGroupsInheritedFrom), GetInheritedFromText(launchGroup, loc), sortOrder++),
-            CreateProperty("explicit-start", nameof(Resources.Resources.ResourceLaunchGroupsExplicitStart), GetBooleanText(launchGroup.ExplicitStart, loc), sortOrder++),
-            CreateProperty("excluded-by-group", nameof(Resources.Resources.ResourceLaunchGroupsExcludedByGroup), GetBooleanText(launchGroup.ExcludedByGroup, loc), sortOrder++),
-            CreateProperty("excluded-from-selection", nameof(Resources.Resources.ResourceLaunchGroupsExcludedFromSelection), GetBooleanText(launchGroup.ExcludedFromSelection, loc), sortOrder++),
-            CreateProperty("build-disposition", nameof(Resources.Resources.ResourceLaunchGroupsBuildDisposition), GetBuildDispositionText(launchGroup.BuildDisposition, loc), sortOrder)
-        ];
+        var properties = new List<ResourcePropertyViewModel>
+        {
+            CreateProperty(SelectedGroupPropertyKey, nameof(Resources.Resources.ResourceLaunchGroupsSelectedGroup), GetSelectedGroupText(launchGroup, loc), sortOrder++),
+            CreateProperty(EffectiveMembershipPropertyKey, nameof(Resources.Resources.ResourceLaunchGroupsEffectiveMembership), GetGroupsText(launchGroup, loc), sortOrder++)
+        };
+        if (launchGroup.InheritedFrom is { Length: > 0 } inheritedFrom)
+        {
+            properties.Add(CreateProperty("resource-launch-group-inherited-from", nameof(Resources.Resources.ResourceLaunchGroupsInheritedFrom), inheritedFrom, sortOrder++));
+        }
+        if (launchGroup.ExplicitStart)
+        {
+            properties.Add(CreateProperty("resource-launch-group-explicit-start", nameof(Resources.Resources.ResourceLaunchGroupsExplicitStart), loc[nameof(Resources.Resources.ResourceLaunchGroupsYes)], sortOrder++));
+        }
+        if (launchGroup.ExcludedByGroup)
+        {
+            properties.Add(CreateProperty("resource-launch-group-exclusion-reason", nameof(Resources.Resources.ResourceLaunchGroupsExclusionReason), loc[nameof(Resources.Resources.ResourceLaunchGroupsExcludedByGroup)], sortOrder++));
+        }
+        if (launchGroup.BuildDisposition is not (LaunchGroupBuildDisposition.Initial or LaunchGroupBuildDisposition.InitialPersistent or LaunchGroupBuildDisposition.InitialShared))
+        {
+            properties.Add(CreateProperty("resource-launch-group-build-disposition", nameof(Resources.Resources.ResourceLaunchGroupsBuildDisposition), GetBuildDispositionText(launchGroup.BuildDisposition, loc), sortOrder));
+        }
+
+        return properties;
     }
 
-    private static ResourcePropertyViewModel CreateProperty(string name, string displayNameResourceName, string value, int sortOrder)
+    internal static IReadOnlyList<string> GetSelectedGroups(ResourceLaunchGroupViewModel launchGroup)
     {
-        var key = "resource-launch-group-" + name;
+        return launchGroup.SelectedGroup is { } selectedGroup ? [selectedGroup] : [];
+    }
+
+    private static ResourcePropertyViewModel CreateProperty(string key, string displayNameResourceName, string value, int sortOrder)
+    {
         return new ResourcePropertyViewModel(
             name: key,
             value: Value.ForString(value),
@@ -175,18 +210,6 @@ internal static class LaunchGroupDisplayHelpers
         return launchGroup.Groups.IsEmpty
             ? loc[nameof(Resources.Resources.ResourceLaunchGroupsUngrouped)]
             : string.Join(", ", launchGroup.Groups);
-    }
-
-    internal static string GetInheritedFromText(ResourceLaunchGroupViewModel launchGroup, IStringLocalizer<Resources.Resources> loc)
-    {
-        return launchGroup.InheritedFrom ?? loc[nameof(Resources.Resources.ResourceLaunchGroupsNone)];
-    }
-
-    internal static string GetBooleanText(bool value, IStringLocalizer<Resources.Resources> loc)
-    {
-        return loc[value
-            ? nameof(Resources.Resources.ResourceLaunchGroupsYes)
-            : nameof(Resources.Resources.ResourceLaunchGroupsNo)];
     }
 
     internal static string GetBuildDispositionText(LaunchGroupBuildDisposition disposition, IStringLocalizer<Resources.Resources> loc)

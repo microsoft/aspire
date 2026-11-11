@@ -575,6 +575,41 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task DeferredBuildStatusSurvivesStaleDcpSnapshots()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var resource = builder.AddExecutable("resource", "unused", ".");
+        using var app = builder.Build();
+        var events = new DcpExecutorEvents();
+        var notifications = ResourceNotificationServiceTestHelpers.Create();
+        var reporting = new DeferredBuildReportingService(notifications);
+        var orchestrator = CreateOrchestrator(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            notifications,
+            dcpEvents: events,
+            buildReporting: reporting);
+        await orchestrator.RunApplicationAsync();
+        await notifications.PublishUpdateAsync(resource.Resource, resource.Resource.Name,
+            snapshot => snapshot with { State = KnownResourceStates.Starting });
+
+        await using (await reporting.BeginAsync(new BeforeResourceStartedEvent(resource.Resource, app.Services)))
+        {
+            await PublishStateAsync(KnownResourceStates.NotStarted);
+            Assert.True(notifications.TryGetCurrentState(resource.Resource.Name, out var building));
+            Assert.Equal(KnownResourceStates.Building, building.Snapshot.State?.Text);
+
+            await PublishStateAsync(KnownResourceStates.Running);
+            Assert.True(notifications.TryGetCurrentState(resource.Resource.Name, out var running));
+            Assert.Equal(KnownResourceStates.Running, running.Snapshot.State?.Text);
+        }
+
+        Task PublishStateAsync(string state) => events.PublishAsync(new OnResourceChangedContext(
+            CancellationToken.None, KnownResourceTypes.Executable, resource.Resource, resource.Resource.Name,
+            new ResourceStatus(state, null, null), null,
+            snapshot => snapshot with { State = state }));
+    }
+
+    [Fact]
     public async Task ParentPropertySetOnChildResource()
     {
         var builder = DistributedApplication.CreateBuilder();
@@ -1797,7 +1832,8 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
         IDistributedApplicationEventing? applicationEventing = null,
         ResourceLoggerService? resourceLoggerService = null,
         DashboardOptions? dashboardOptions = null,
-        TestDcpExecutor? dcpExecutor = null)
+        TestDcpExecutor? dcpExecutor = null,
+        DeferredBuildReportingService? buildReporting = null)
     {
         var services = new ServiceCollection();
         var configuration = new ConfigurationManager();
@@ -1815,6 +1851,7 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
             [],
             notificationService,
             resourceLoggerService,
+            buildReporting ?? new DeferredBuildReportingService(notificationService),
             applicationEventing ?? new DistributedApplicationEventing(),
             serviceProvider,
             executionContext,

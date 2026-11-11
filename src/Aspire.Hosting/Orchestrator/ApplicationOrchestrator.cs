@@ -29,6 +29,7 @@ internal sealed class ApplicationOrchestrator
 #pragma warning restore CS0618 // Lifecycle hooks are obsolete, but still need to be supported until fully removed.
     private readonly ResourceNotificationService _notificationService;
     private readonly ResourceLoggerService _loggerService;
+    private readonly DeferredBuildReportingService _buildReporting;
     private readonly ILogger _logger;
     private readonly IDistributedApplicationEventing _eventing;
     private readonly IServiceProvider _serviceProvider;
@@ -47,6 +48,7 @@ internal sealed class ApplicationOrchestrator
 #pragma warning restore CS0618 // Lifecycle hooks are obsolete, but still need to be supported until fully removed.
                                    ResourceNotificationService notificationService,
                                    ResourceLoggerService loggerService,
+                                   DeferredBuildReportingService buildReporting,
                                    IDistributedApplicationEventing eventing,
                                    IServiceProvider serviceProvider,
                                    DistributedApplicationExecutionContext executionContext,
@@ -60,6 +62,7 @@ internal sealed class ApplicationOrchestrator
         _lifecycleHooks = lifecycleHooks.ToArray();
         _notificationService = notificationService;
         _loggerService = loggerService;
+        _buildReporting = buildReporting;
         _logger = logger;
         _eventing = eventing;
         _serviceProvider = serviceProvider;
@@ -249,6 +252,8 @@ internal sealed class ApplicationOrchestrator
 
     private async Task OnResourceStarting(OnResourceStartingContext context)
     {
+        _loggerService.BuildOutputCapture.BeginAttempt(context.Resource, context.DcpResourceName);
+
         switch (context.ResourceType)
         {
             case KnownResourceTypes.Project:
@@ -654,7 +659,8 @@ internal sealed class ApplicationOrchestrator
 
     private async Task OnResourceChanged(OnResourceChangedContext context)
     {
-        await _notificationService.PublishUpdateAsync(context.Resource, context.DcpResourceName, context.UpdateSnapshot).ConfigureAwait(false);
+        await _notificationService.PublishUpdateAsync(context.Resource, context.DcpResourceName, snapshot =>
+            _buildReporting.ApplyDcpSnapshot(context.DcpResourceName, snapshot, context.UpdateSnapshot(snapshot))).ConfigureAwait(false);
 
         if (context.ResourceType == KnownResourceTypes.Container)
         {
@@ -679,6 +685,7 @@ internal sealed class ApplicationOrchestrator
 
     private async Task OnResourceFailedToStart(OnResourceFailedToStartContext context)
     {
+        _loggerService.BuildOutputCapture.CompleteCurrent(context.DcpResourceName ?? context.Resource.Name);
         var stateSnapshot = context.ErrorMessage is not null
             ? new ResourceStateSnapshot(KnownResourceStates.FailedToStart, KnownResourceStateStyles.Error)
             : new ResourceStateSnapshot(KnownResourceStates.FailedToStart, null);

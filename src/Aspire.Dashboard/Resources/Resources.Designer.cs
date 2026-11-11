@@ -1015,7 +1015,7 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Excluded by selected group.
+        ///   Looks up a localized string similar to Not in selected group.
         /// </summary>
         public static string ResourceLaunchGroupsExcludedByGroup {
             get {
@@ -1029,6 +1029,15 @@ namespace Aspire.Dashboard.Resources {
         public static string ResourceLaunchGroupsExcludedFromSelection {
             get {
                 return ResourceManager.GetString("ResourceLaunchGroupsExcludedFromSelection", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Exclusion reason.
+        /// </summary>
+        public static string ResourceLaunchGroupsExclusionReason {
+            get {
+                return ResourceManager.GetString("ResourceLaunchGroupsExclusionReason", resourceCulture);
             }
         }
 

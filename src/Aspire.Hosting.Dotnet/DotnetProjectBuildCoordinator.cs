@@ -41,6 +41,9 @@ internal static partial class DotnetProjectBuildCoordinator
     // Matches the Hosting-internal keyed delegate used to report finalized build decisions.
     private const string BuildPlanReporterKey = "Aspire.Hosting.LaunchGroups.BuildPlanReporter";
     private const string BuildPlanFinalizerKey = "Aspire.Hosting.LaunchGroups.BuildPlanFinalizer";
+    private const string BeginBuildReportingKey = "Aspire.Hosting.DeferredBuildReporting.Begin";
+    private const string RegisterBuildWriterKey = "Aspire.Hosting.BuildOutputCapture.Register";
+    private const string SubscribeBuildOutputKey = "Aspire.Hosting.BuildOutputCapture.Subscribe";
 
     internal sealed record CoordinatedBuildDependencyAnnotation(IResource Resource) : IResourceAnnotation;
 
@@ -86,7 +89,7 @@ internal static partial class DotnetProjectBuildCoordinator
         state.AddResource(resourceBuilder.Resource);
         resourceBuilder.WithAnnotation(new DotnetProgramBuildCompletionAnnotation(
             (services, cancellationToken) =>
-                state.WaitForBuildCompletionAsync(resourceBuilder.Resource, services, cancellationToken)));
+                state.WaitForBuildCompletionAsync(resourceBuilder.Resource, services, startEvent: null, cancellationToken)));
 
         // Preserve the eagerly visible dependency used by model tests and tooling. BeforeStart replaces
         // the build plan after all resource environment callbacks and SDK roots are known, then adds the
@@ -165,7 +168,7 @@ internal static partial class DotnetProjectBuildCoordinator
         var subscription = builder.Eventing.Subscribe<BeforeResourceStartedEvent>(
             resource,
             (@event, cancellationToken) =>
-                state.WaitForBuildCompletionAsync(resource, @event.Services, cancellationToken));
+                state.WaitForBuildCompletionAsync(resource, @event.Services, startEvent: null, cancellationToken));
 
         return () =>
         {
@@ -214,7 +217,7 @@ internal static partial class DotnetProjectBuildCoordinator
         var subscription = builder.Eventing.Subscribe<BeforeResourceStartedEvent>(
             resource,
             (@event, cancellationToken) =>
-                state.WaitForBuildCompletionAsync(resource, @event.Services, cancellationToken));
+                state.WaitForBuildCompletionAsync(resource, @event.Services, @event, cancellationToken));
 
         return () =>
         {
@@ -462,6 +465,7 @@ internal static partial class DotnetProjectBuildCoordinator
         private readonly List<ResourceRegistration> _registrations = [];
         private readonly List<DotnetProjectBuildResource> _ownedBuildResources = [];
         private readonly List<SharedBuildEnvironment> _sharedBuildEnvironments = [];
+        private readonly List<IDisposable> _buildOutputRegistrations = [];
         private readonly Dictionary<DotnetProjectBuildResource, Task> _buildStarts =
             new(ReferenceEqualityComparer.Instance);
         private readonly object _outputWriterLock = new();
@@ -530,6 +534,7 @@ internal static partial class DotnetProjectBuildCoordinator
         public async Task WaitForBuildCompletionAsync(
             DotnetProjectResource resource,
             IServiceProvider services,
+            BeforeResourceStartedEvent? startEvent,
             CancellationToken cancellationToken)
         {
             Task materializationTask;
@@ -565,75 +570,122 @@ internal static partial class DotnetProjectBuildCoordinator
                      state == KnownResourceStates.Building ||
                      state == KnownResourceStates.Stopping));
 
-                var waitForFinalBuild = true;
-                if (registration.BuildIsDeferred)
+                IAsyncDisposable? reportingScope = null;
+                IDisposable? outputSubscription = null;
+                IResource? reportedWriter = null;
+
+                async Task ReportBuildAsync(IResource writer, bool includeCompleted)
                 {
-                    // A compatible Rebuild may already be producing these outputs. Join it instead of
-                    // starting a second build, but let a later demand retry after a failed attempt.
-                    if (FindActiveRebuilder() is { } activeRebuilder)
+                    if (startEvent is null)
                     {
-                        await WaitForSuccessfulBuildAsync(services, activeRebuilder, cancellationToken).ConfigureAwait(false);
-                        waitForFinalBuild = false;
+                        return;
                     }
-                    else if (registration.BuildIdentity is { } deferredIdentity)
+
+                    reportingScope ??= await services.GetRequiredKeyedService<Func<BeforeResourceStartedEvent, Task<IAsyncDisposable>>>(
+                        BeginBuildReportingKey)(startEvent).ConfigureAwait(false);
+                    if (!ReferenceEquals(reportedWriter, writer))
                     {
-                        OutputWriter? latest;
-                        lock (_outputWriterLock)
+                        var subscription = services.GetRequiredKeyedService<Func<IResource, BeforeResourceStartedEvent, bool, IDisposable>>(
+                            SubscribeBuildOutputKey)(writer, startEvent, includeCompleted);
+                        outputSubscription?.Dispose();
+                        outputSubscription = subscription;
+                        reportedWriter = writer;
+                    }
+                }
+
+                try
+                {
+                    var waitForFinalBuild = true;
+                    if (registration.BuildIsDeferred)
+                    {
+                        // A compatible Rebuild may already be producing these outputs. Join it instead of
+                        // starting a second build, but let a later demand retry after a failed attempt.
+                        if (FindActiveRebuilder() is { } activeRebuilder)
                         {
-                            latest = _latestOutputWriters.GetValueOrDefault(deferredIdentity);
+                            await ReportBuildAsync(activeRebuilder, includeCompleted: true).ConfigureAwait(false);
+                            await WaitForSuccessfulBuildAsync(services, activeRebuilder, cancellationToken).ConfigureAwait(false);
+                            waitForFinalBuild = false;
+                        }
+                        else if (registration.BuildIdentity is { } deferredIdentity)
+                        {
+                            OutputWriter? latest;
+                            lock (_outputWriterLock)
+                            {
+                                latest = _latestOutputWriters.GetValueOrDefault(deferredIdentity);
+                            }
+
+                            if (latest is not null &&
+                                rebuilders.Any(rebuilder => ReferenceEquals(rebuilder, latest.Resource)) &&
+                                notifications.TryGetCurrentState(latest.Resource.Name, out var latestEvent) &&
+                                IsSuccessfulBuildSnapshot(latestEvent.Snapshot))
+                            {
+                                waitForFinalBuild = false;
+                            }
                         }
 
-                        if (latest is not null &&
-                            rebuilders.Any(rebuilder => ReferenceEquals(rebuilder, latest.Resource)) &&
-                            notifications.TryGetCurrentState(latest.Resource.Name, out var latestEvent) &&
-                            IsSuccessfulBuildSnapshot(latestEvent.Snapshot))
+                        if (waitForFinalBuild)
                         {
-                            waitForFinalBuild = false;
+                            if (!notifications.TryGetCurrentState(finalBuildResource.Name, out var current) ||
+                                !IsSuccessfulBuildSnapshot(current.Snapshot))
+                            {
+                                await ReportBuildAsync(finalBuildResource, includeCompleted: false).ConfigureAwait(false);
+                            }
+
+                            await EnsureBuildStartedAsync(finalBuildResource, services, cancellationToken).ConfigureAwait(false);
                         }
                     }
 
                     if (waitForFinalBuild)
                     {
-                        await EnsureBuildStartedAsync(finalBuildResource, services, cancellationToken).ConfigureAwait(false);
+                        // Do not cache this wait: another command can arrive during a later build attempt.
+                        await WaitForSuccessfulBuildAsync(services, finalBuildResource, cancellationToken).ConfigureAwait(false);
                     }
-                }
 
-                if (waitForFinalBuild)
-                {
-                    // Do not cache this wait: another command can arrive during a later build attempt.
-                    await WaitForSuccessfulBuildAsync(services, finalBuildResource, cancellationToken).ConfigureAwait(false);
-                }
-
-                if (registration.BuildIdentity is { } identity)
-                {
-                    while (true)
+                    if (registration.BuildIdentity is { } identity)
                     {
-                        // DCP publishes Starting before the rebuilder's event callback records the writer.
-                        // Check every compatible registration so a sibling cannot launch an old shared output.
-                        if (FindActiveRebuilder() is { } activeRebuilder)
+                        while (true)
                         {
-                            await WaitForSuccessfulBuildAsync(services, activeRebuilder, cancellationToken).ConfigureAwait(false);
-                            continue;
-                        }
-
-                        OutputWriter? latest;
-                        lock (_outputWriterLock)
-                        {
-                            latest = _latestOutputWriters.GetValueOrDefault(identity);
-                        }
-
-                        if (latest is not null)
-                        {
-                            await WaitForSuccessfulBuildAsync(services, latest.Resource, cancellationToken).ConfigureAwait(false);
-                        }
-
-                        lock (_outputWriterLock)
-                        {
-                            if (_latestOutputWriters.GetValueOrDefault(identity) == latest)
+                            // DCP publishes Starting before the rebuilder's event callback records the writer.
+                            // Check every compatible registration so a sibling cannot launch an old shared output.
+                            if (FindActiveRebuilder() is { } activeRebuilder)
                             {
-                                return;
+                                await ReportBuildAsync(activeRebuilder, includeCompleted: true).ConfigureAwait(false);
+                                await WaitForSuccessfulBuildAsync(services, activeRebuilder, cancellationToken).ConfigureAwait(false);
+                                continue;
+                            }
+
+                            OutputWriter? latest;
+                            lock (_outputWriterLock)
+                            {
+                                latest = _latestOutputWriters.GetValueOrDefault(identity);
+                            }
+
+                            if (latest is not null)
+                            {
+                                if (notifications.TryGetCurrentState(latest.Resource.Name, out var latestEvent) &&
+                                    !IsSettledBuildSnapshot(latestEvent.Snapshot))
+                                {
+                                    await ReportBuildAsync(latest.Resource, includeCompleted: true).ConfigureAwait(false);
+                                }
+                                await WaitForSuccessfulBuildAsync(services, latest.Resource, cancellationToken).ConfigureAwait(false);
+                            }
+
+                            lock (_outputWriterLock)
+                            {
+                                if (_latestOutputWriters.GetValueOrDefault(identity) == latest)
+                                {
+                                    return;
+                                }
                             }
                         }
+                    }
+                }
+                finally
+                {
+                    outputSubscription?.Dispose();
+                    if (reportingScope is not null)
+                    {
+                        await reportingScope.DisposeAsync().ConfigureAwait(false);
                     }
                 }
             }
@@ -813,6 +865,10 @@ internal static partial class DotnetProjectBuildCoordinator
             {
                 sharedBuildEnvironment.Dispose();
             }
+            foreach (var registration in _buildOutputRegistrations)
+            {
+                registration.Dispose();
+            }
         }
 
         internal Task MaterializeBuildPlan(
@@ -955,6 +1011,8 @@ internal static partial class DotnetProjectBuildCoordinator
                 var deferredBuildEntries = buildEntries
                     .Where(entry => !initialBuildRegistrations.Contains(entry.Registration))
                     .ToArray();
+                var deferredBuildIdentities = deferredBuildEntries.Select(GetBuildIdentity).ToHashSet();
+                var registeredWriters = new HashSet<IResource>(ReferenceEqualityComparer.Instance);
                 var initialBuildSteps = CreateBuildSteps(initialBuildEntries);
                 var deferredBuildSteps = CreateDeferredBuildSteps(deferredBuildEntries);
                 var buildSteps = initialBuildSteps.Concat(deferredBuildSteps).ToArray();
@@ -981,6 +1039,11 @@ internal static partial class DotnetProjectBuildCoordinator
                             _ownedBuildResources.Remove(buildResource);
                             buildResource.Dispose();
                         });
+                    }
+
+                    if (step.Projects.Any(entry => deferredBuildIdentities.Contains(GetBuildIdentity(entry))))
+                    {
+                        RegisterBuildOutput(buildResource);
                     }
 
                     if (step.IsTraversal)
@@ -1053,6 +1116,10 @@ internal static partial class DotnetProjectBuildCoordinator
                     {
                         if (FindRebuilder(model, entry.Registration.Resource) is { } rebuilder)
                         {
+                            if (deferredBuildIdentities.Contains(GetBuildIdentity(entry)))
+                            {
+                                RegisterBuildOutput(rebuilder);
+                            }
                             rollbackActions.Push(BeginBuildAttemptOnResourceStart(_builder, rebuilder));
                             rollbackActions.Push(SerializeOutputWriter(rebuilder, [GetBuildIdentity(entry)]));
                         }
@@ -1146,6 +1213,20 @@ internal static partial class DotnetProjectBuildCoordinator
                     reportBuild(buildResources[index], index < initialBuildSteps.Count, false, true);
                 }
                 _materialized = true;
+
+                void RegisterBuildOutput(IResource writer)
+                {
+                    if (registeredWriters.Add(writer))
+                    {
+                        var registration = services.GetRequiredKeyedService<Func<IResource, IDisposable>>(RegisterBuildWriterKey)(writer);
+                        _buildOutputRegistrations.Add(registration);
+                        rollbackActions.Push(() =>
+                        {
+                            _buildOutputRegistrations.Remove(registration);
+                            registration.Dispose();
+                        });
+                    }
+                }
             }
             catch (Exception materializationException)
             {

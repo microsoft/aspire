@@ -266,6 +266,8 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     internal ConcurrentDictionary<string, ResourceViewModel> ResourceByName => _resourceByName;
 
+    internal bool ShowHiddenResources => _filter.ShowHiddenResources;
+
     /// <summary>
     /// Raised on the renderer's synchronization context after resources change, so pages that display data owned by
     /// the layout (such as the resource overview) can refresh.
@@ -1965,6 +1967,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
                 _filter.ShowHiddenResources = value;
                 EnsureGroupOrder();
                 UpdatePaneMenuItems();
+                ResourcesChanged?.Invoke();
             }));
     }
 

@@ -162,33 +162,60 @@ public sealed class LaunchGroupRealAppHostTests(PlaywrightFixture playwrightFixt
             await Assertions.Expect(page.Locator("h1.resource-title")).ToHaveTextAsync(firstReplicaName);
             await AssertOverviewPropertyAsync(page, Resources.Resources.ResourceLaunchGroupsSelectedGroup, FrontendGroup);
             await AssertOverviewPropertyAsync(page, Resources.Resources.ResourceLaunchGroupsEffectiveMembership, FrontendGroup);
-            await AssertOverviewPropertyAsync(page, Resources.Resources.ResourceLaunchGroupsInheritedFrom, Resources.Resources.ResourceLaunchGroupsNone);
-            await AssertOverviewPropertyAsync(page, Resources.Resources.ResourceLaunchGroupsExplicitStart, Resources.Resources.ResourceLaunchGroupsNo);
-            await AssertOverviewPropertyAsync(page, Resources.Resources.ResourceLaunchGroupsExcludedByGroup, Resources.Resources.ResourceLaunchGroupsNo);
-            await AssertOverviewPropertyAsync(page, Resources.Resources.ResourceLaunchGroupsBuildDisposition, Resources.Resources.ResourceLaunchGroupsBuildInitial);
+            await AssertOverviewPropertyAbsentAsync(page, Resources.Resources.ResourceLaunchGroupsInheritedFrom);
+            await AssertOverviewPropertyAbsentAsync(page, Resources.Resources.ResourceLaunchGroupsExplicitStart);
+            await AssertOverviewPropertyAbsentAsync(page, Resources.Resources.ResourceLaunchGroupsExclusionReason);
+            await AssertOverviewPropertyAbsentAsync(page, Resources.Resources.ResourceLaunchGroupsBuildDisposition);
+
+            var statusGroup = page.Locator("[aria-labelledby='overview-status-title'] .launch-group-value").First;
+            var propertiesGroup = page.Locator("[aria-labelledby='overview-properties-title'] .launch-group-value").First;
+            const string visibleMembers = "frontend-child, frontend-replica";
+            await Assertions.Expect(statusGroup).ToHaveAttributeAsync("data-tooltip", visibleMembers);
+            await Assertions.Expect(propertiesGroup).ToHaveAttributeAsync("data-tooltip", visibleMembers);
+            await Assertions.Expect(page.Locator(".resource-content")).Not.ToHaveAttributeAsync("inert", "");
+            await page.Mouse.MoveAsync(1, 1);
+            await page.Keyboard.PressAsync("Tab");
+            await statusGroup.FocusAsync();
+            await Assertions.Expect(statusGroup).ToBeFocusedAsync();
+            var tooltip = page.Locator("aspire-tooltip-provider fluent-tooltip[aria-hidden='false']");
+            await Assertions.Expect(tooltip).ToHaveTextAsync(visibleMembers);
+            await page.Mouse.MoveAsync(1, 1);
+            await statusGroup.HoverAsync();
+            await Assertions.Expect(tooltip).ToHaveTextAsync(visibleMembers);
+            await page.ScreenshotAsync(new() { Path = Path.Combine(AppContext.BaseDirectory, "launch-groups-overview.png"), FullPage = true });
+
+            var viewOptions = page.GetByRole(AriaRole.Button, new() { Name = Resources.Resources.ResourcesChangeViewOptions, Exact = true });
+            await viewOptions.ClickAsync();
+            await page.GetByRole(AriaRole.Menuitem, new() { Name = Resources.ControlsStrings.ShowHiddenResources, Exact = true }).ClickAsync();
+            const string allMembers = "frontend-child, frontend-replica, frontend-replica-rebuilder";
+            await Assertions.Expect(statusGroup).ToHaveAttributeAsync("data-tooltip", allMembers);
+            await Assertions.Expect(propertiesGroup).ToHaveAttributeAsync("data-tooltip", allMembers);
+            await viewOptions.ClickAsync();
+            await page.GetByRole(AriaRole.Menuitem, new() { Name = Resources.ControlsStrings.ShowHiddenResources, Exact = true }).ClickAsync();
+            await Assertions.Expect(statusGroup).ToHaveAttributeAsync("data-tooltip", visibleMembers);
 
             await OpenResourceAsync(page, ChildResourceName);
             await AssertOverviewPropertyAsync(page, Resources.Resources.ResourceLaunchGroupsSelectedGroup, FrontendGroup);
             await AssertOverviewPropertyAsync(page, Resources.Resources.ResourceLaunchGroupsEffectiveMembership, FrontendGroup);
             await AssertOverviewPropertyAsync(page, Resources.Resources.ResourceLaunchGroupsInheritedFrom, ReplicaResourceName);
             await AssertOverviewPropertyAsync(page, Resources.Resources.ResourceLaunchGroupsExplicitStart, Resources.Resources.ResourceLaunchGroupsYes);
-            await AssertOverviewPropertyAsync(page, Resources.Resources.ResourceLaunchGroupsExcludedByGroup, Resources.Resources.ResourceLaunchGroupsNo);
+            await AssertOverviewPropertyAbsentAsync(page, Resources.Resources.ResourceLaunchGroupsExclusionReason);
 
             await OpenResourceAsync(page, ReferencedResourceName);
             await AssertOverviewPropertyAsync(page, Resources.Resources.ResourceLaunchGroupsEffectiveMembership, Resources.Resources.ResourceLaunchGroupsUngrouped);
-            await AssertOverviewPropertyAsync(page, Resources.Resources.ResourceLaunchGroupsInheritedFrom, Resources.Resources.ResourceLaunchGroupsNone);
+            await AssertOverviewPropertyAbsentAsync(page, Resources.Resources.ResourceLaunchGroupsInheritedFrom);
             await AssertOverviewPropertyAsync(page, Resources.Resources.ResourceLaunchGroupsExplicitStart, Resources.Resources.ResourceLaunchGroupsYes);
-            await AssertOverviewPropertyAsync(page, Resources.Resources.ResourceLaunchGroupsExcludedByGroup, Resources.Resources.ResourceLaunchGroupsYes);
+            await AssertOverviewPropertyAsync(page, Resources.Resources.ResourceLaunchGroupsExclusionReason, Resources.Resources.ResourceLaunchGroupsExcludedByGroup);
 
             await OpenResourceAsync(page, BackendResourceName);
             await AssertOverviewPropertyAsync(page, Resources.Resources.ResourceLaunchGroupsEffectiveMembership, BackendGroup);
-            await AssertOverviewPropertyAsync(page, Resources.Resources.ResourceLaunchGroupsExplicitStart, Resources.Resources.ResourceLaunchGroupsNo);
-            await AssertOverviewPropertyAsync(page, Resources.Resources.ResourceLaunchGroupsExcludedByGroup, Resources.Resources.ResourceLaunchGroupsYes);
+            await AssertOverviewPropertyAbsentAsync(page, Resources.Resources.ResourceLaunchGroupsExplicitStart);
+            await AssertOverviewPropertyAsync(page, Resources.Resources.ResourceLaunchGroupsExclusionReason, Resources.Resources.ResourceLaunchGroupsExcludedByGroup);
 
             await OpenResourceAsync(page, DeferredResourceName);
             await AssertOverviewPropertyAsync(page, Resources.Resources.ResourceLaunchGroupsEffectiveMembership, Resources.Resources.ResourceLaunchGroupsUngrouped);
             await AssertOverviewPropertyAsync(page, Resources.Resources.ResourceLaunchGroupsExplicitStart, Resources.Resources.ResourceLaunchGroupsYes);
-            await AssertOverviewPropertyAsync(page, Resources.Resources.ResourceLaunchGroupsExcludedByGroup, Resources.Resources.ResourceLaunchGroupsYes);
+            await AssertOverviewPropertyAsync(page, Resources.Resources.ResourceLaunchGroupsExclusionReason, Resources.Resources.ResourceLaunchGroupsExcludedByGroup);
             await AssertOverviewPropertyAsync(page, Resources.Resources.ResourceLaunchGroupsBuildDisposition, Resources.Resources.ResourceLaunchGroupsBuildDeferred);
 
             await OpenResourceAsync(page, ChildResourceName);
@@ -291,6 +318,13 @@ public sealed class LaunchGroupRealAppHostTests(PlaywrightFixture playwrightFixt
             .Filter(new() { HasTextRegex = new Regex($"^{Regex.Escape(label)}$") });
         await Assertions.Expect(propertyLabel).ToHaveCountAsync(1);
         await Assertions.Expect(propertyLabel.Locator("xpath=following-sibling::dd[1]")).ToHaveTextAsync(expectedValue);
+    }
+
+    private static async Task AssertOverviewPropertyAbsentAsync(IPage page, string label)
+    {
+        var propertyLabel = page.Locator(".overview-properties dt")
+            .Filter(new() { HasTextRegex = new Regex($"^{Regex.Escape(label)}$") });
+        await Assertions.Expect(propertyLabel).ToHaveCountAsync(0);
     }
 
     private static void CopyFixtureToWorkspace(string workspacePath)

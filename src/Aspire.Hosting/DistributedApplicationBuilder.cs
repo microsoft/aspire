@@ -425,7 +425,17 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         _innerBuilder.Services.AddSingleton<IPackageVersionProvider, PackageVersionProvider>();
         _innerBuilder.Services.AddSingleton(options);
         _innerBuilder.Services.AddSingleton<ResourceNotificationService>();
+        _innerBuilder.Services.AddSingleton<DeferredBuildReportingService>();
+        _innerBuilder.Services.AddKeyedSingleton<Func<BeforeResourceStartedEvent, Task<IAsyncDisposable>>>(
+            DeferredBuildReportingService.BeginReportingKey,
+            (sp, _) => sp.GetRequiredService<DeferredBuildReportingService>().BeginAsync);
         _innerBuilder.Services.AddSingleton<ResourceLoggerService>();
+        _innerBuilder.Services.AddKeyedSingleton<Func<IResource, IDisposable>>(
+            BuildOutputCapture.RegisterWriterKey,
+            (sp, _) => sp.GetRequiredService<ResourceLoggerService>().BuildOutputCapture.Register);
+        _innerBuilder.Services.AddKeyedSingleton<Func<IResource, BeforeResourceStartedEvent, bool, IDisposable>>(
+            BuildOutputCapture.SubscribeKey,
+            (sp, _) => sp.GetRequiredService<ResourceLoggerService>().BuildOutputCapture.Subscribe);
         _innerBuilder.Services.AddSingleton<ResourceCommandService>(s => new ResourceCommandService(s.GetRequiredService<ResourceNotificationService>(), s.GetRequiredService<ResourceLoggerService>(), s));
         _innerBuilder.Services.TryAddSingleton<IProcessRunner, DefaultProcessRunner>();
         _innerBuilder.Services.TryAddSingleton<IDotnetSdkVersionProvider, DotnetSdkVersionProvider>();

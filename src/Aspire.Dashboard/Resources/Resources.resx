@@ -155,10 +155,13 @@
     <value>Explicit start</value>
   </data>
   <data name="ResourceLaunchGroupsExcludedByGroup" xml:space="preserve">
-    <value>Excluded by selected group</value>
+    <value>Not in selected group</value>
   </data>
   <data name="ResourceLaunchGroupsExcludedFromSelection" xml:space="preserve">
     <value>Excluded from selection</value>
+  </data>
+  <data name="ResourceLaunchGroupsExclusionReason" xml:space="preserve">
+    <value>Exclusion reason</value>
   </data>
   <data name="ResourceLaunchGroupsBuildDisposition" xml:space="preserve">
     <value>Build disposition</value>

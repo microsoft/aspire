@@ -21,6 +21,80 @@ namespace Aspire.Hosting.Tests;
 public class ResourceNotificationTests
 {
     [Fact]
+    public async Task DeferredBuildReportsOnlyTheStartingReplica()
+    {
+        var resource = new CustomResource("resource");
+        resource.Annotations.Add(new DcpInstancesAnnotation([
+            new DcpInstance("resource-first", "first", 0),
+            new DcpInstance("resource-second", "second", 1)
+        ]));
+        var notifications = ResourceNotificationServiceTestHelpers.Create();
+        await notifications.PublishUpdateAsync(resource, "resource-first", snapshot => snapshot with { State = KnownResourceStates.Starting });
+        await notifications.PublishUpdateAsync(resource, "resource-second", snapshot => snapshot with { State = KnownResourceStates.NotStarted });
+        var reporting = new DeferredBuildReportingService(notifications);
+        var start = new BeforeResourceStartedEvent(resource, new TestServiceProvider()) { ResourceInstanceId = "resource-first" };
+
+        await using (await reporting.BeginAsync(start))
+        {
+            Assert.True(notifications.TryGetCurrentState("resource-first", out var first));
+            Assert.Equal(KnownResourceStates.Building, first.Snapshot.State?.Text);
+            Assert.True(notifications.TryGetCurrentState("resource-second", out var second));
+            Assert.Equal(KnownResourceStates.NotStarted, second.Snapshot.State?.Text);
+        }
+
+        Assert.True(notifications.TryGetCurrentState("resource-first", out var restored));
+        Assert.Equal(KnownResourceStates.Starting, restored.Snapshot.State?.Text);
+    }
+
+    [Fact]
+    public async Task DeferredBuildReportingPreservesWaitingAndNewerState()
+    {
+        var resource = new CustomResource("resource");
+        resource.Annotations.Add(new DcpInstancesAnnotation([
+            new DcpInstance("resource-first", "first", 0),
+            new DcpInstance("resource-second", "second", 1)
+        ]));
+        var notifications = ResourceNotificationServiceTestHelpers.Create();
+        await notifications.PublishUpdateAsync(resource, "resource-first", snapshot => snapshot with { State = KnownResourceStates.Starting });
+        await notifications.PublishUpdateAsync(resource, "resource-second", snapshot => snapshot with { State = KnownResourceStates.Waiting });
+        var reporting = new DeferredBuildReportingService(notifications);
+        var start = new BeforeResourceStartedEvent(resource, new TestServiceProvider());
+
+        await using (await reporting.BeginAsync(start))
+        {
+            Assert.True(notifications.TryGetCurrentState("resource-first", out var first));
+            Assert.Equal(KnownResourceStates.Building, first.Snapshot.State?.Text);
+            Assert.True(notifications.TryGetCurrentState("resource-second", out var second));
+            Assert.Equal(KnownResourceStates.Waiting, second.Snapshot.State?.Text);
+            await notifications.PublishUpdateAsync(resource, "resource-first", snapshot => snapshot with { State = KnownResourceStates.Running });
+        }
+
+        Assert.True(notifications.TryGetCurrentState("resource-first", out var updated));
+        Assert.Equal(KnownResourceStates.Running, updated.Snapshot.State?.Text);
+        Assert.True(notifications.TryGetCurrentState("resource-second", out var waiting));
+        Assert.Equal(KnownResourceStates.Waiting, waiting.Snapshot.State?.Text);
+    }
+
+    [Fact]
+    public async Task ConcurrentDeferredBuildReportersKeepStateUntilTheLastWaiterLeaves()
+    {
+        var resource = new CustomResource("resource");
+        var notifications = ResourceNotificationServiceTestHelpers.Create();
+        await notifications.PublishUpdateAsync(resource, snapshot => snapshot with { State = KnownResourceStates.Starting });
+        var reporting = new DeferredBuildReportingService(notifications);
+        var start = new BeforeResourceStartedEvent(resource, new TestServiceProvider());
+
+        var first = await reporting.BeginAsync(start);
+        var second = await reporting.BeginAsync(start);
+        await first.DisposeAsync();
+        Assert.True(notifications.TryGetCurrentState(resource.Name, out var building));
+        Assert.Equal(KnownResourceStates.Building, building.Snapshot.State?.Text);
+        await second.DisposeAsync();
+        Assert.True(notifications.TryGetCurrentState(resource.Name, out var restored));
+        Assert.Equal(KnownResourceStates.Starting, restored.Snapshot.State?.Text);
+    }
+
+    [Fact]
     public void InitialStateCanBeSpecified()
     {
         var builder = DistributedApplication.CreateBuilder();

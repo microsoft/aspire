@@ -27,8 +27,7 @@ public class ResourceOverviewLaunchGroupTests : DashboardTestContext
         ("Effective membership", "Web, Shared"),
         ("Inherited from", "parent"),
         ("Explicit start", "Yes"),
-        ("Excluded by selected group", "Yes"),
-        ("Excluded from selection", "No"),
+        ("Exclusion reason", "Not in selected group"),
         ("Build disposition", "Deferred")
     ];
 
@@ -44,8 +43,7 @@ public class ResourceOverviewLaunchGroupTests : DashboardTestContext
         Assert.Equal("Web, Shared", values["Effective membership"]);
         Assert.Equal("parent", values["Inherited from"]);
         Assert.Equal("Yes", values["Explicit start"]);
-        Assert.Equal("Yes", values["Excluded by selected group"]);
-        Assert.Equal("No", values["Excluded from selection"]);
+        Assert.Equal("Not in selected group", values["Exclusion reason"]);
         Assert.Equal("Deferred", values["Build disposition"]);
         Assert.Equal("Running", values["State"]);
     }
@@ -70,12 +68,82 @@ public class ResourceOverviewLaunchGroupTests : DashboardTestContext
         cut.WaitForAssertion(() =>
         {
             var properties = GetPropertyValues(cut);
-            Assert.Equal(18, properties.Length);
+            Assert.Equal(17, properties.Length);
             Assert.Equal(s_expectedProperties, properties.Skip(11));
         });
 
         cut.Find($"{propertiesSelector} [aria-label='Show core properties']").Click();
         cut.WaitForAssertion(() => Assert.Equal(s_expectedProperties, GetPropertyValues(cut)));
+    }
+
+    [Theory]
+    [InlineData(LaunchGroupBuildDisposition.Initial)]
+    [InlineData(LaunchGroupBuildDisposition.InitialPersistent)]
+    [InlineData(LaunchGroupBuildDisposition.InitialShared)]
+    public void Overview_DefaultMetadataDoesNotShowExtraRows(LaunchGroupBuildDisposition buildDisposition)
+    {
+        var cut = RenderOverview(
+            withLaunchGroups: true,
+            customPropertyCount: 0,
+            launchGroup: LaunchGroupTestHelpers.CreateResource(
+                "api",
+                groups: ["Web"],
+                excludedFromSelection: true,
+                buildDisposition: buildDisposition));
+
+        cut.WaitForAssertion(() =>
+        {
+            var status = GetStatusValues(cut);
+            Assert.Equal(["Selected group", "Effective membership"], status.Keys.TakeLast(2));
+            Assert.Equal([("Selected group", "Web"), ("Effective membership", "Web")], GetPropertyValues(cut));
+        });
+    }
+
+    [Fact]
+    public void Overview_GroupValuesExposeEffectiveMembersOnHoverAndFocus()
+    {
+        var cut = RenderOverview(withLaunchGroups: true, customPropertyCount: 0);
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal(
+                [("Web", "api, worker"), ("Web", "api, worker"), ("Shared", "api, cache")],
+                GetGroupValues(cut.Find("[aria-labelledby='overview-status-title']")));
+            Assert.Equal(
+                [("Web", "api, worker"), ("Web", "api, worker"), ("Shared", "api, cache")],
+                GetGroupValues(cut.Find("[aria-labelledby='overview-properties-title']")));
+        });
+    }
+
+    [Fact]
+    public async Task Overview_GroupMembersFollowHiddenResourceVisibility()
+    {
+        var cut = RenderOverview(withLaunchGroups: true, customPropertyCount: 0);
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal(
+                [("Web", "api, worker"), ("Web", "api, worker"), ("Shared", "api, cache")],
+                GetGroupValues(cut.Find("[aria-labelledby='overview-status-title']")));
+            Assert.Equal(
+                [("Web", "api, worker"), ("Web", "api, worker"), ("Shared", "api, cache")],
+                GetGroupValues(cut.Find("[aria-labelledby='overview-properties-title']")));
+        });
+
+        cut.Find($"fluent-button[aria-label='{Resources.Resources.ResourcesChangeViewOptions}']").Click();
+        var menu = cut.FindComponents<AspireMenu>().Single(m =>
+            m.Instance.Items.Any(item => item.Text == Resources.ControlsStrings.ShowHiddenResources));
+        await cut.InvokeAsync(menu.Instance.Items.Single(item => item.Text == Resources.ControlsStrings.ShowHiddenResources).OnClick!);
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal(
+                [("Web", "api, api-rebuilder, worker"), ("Web", "api, api-rebuilder, worker"), ("Shared", "api, cache")],
+                GetGroupValues(cut.Find("[aria-labelledby='overview-status-title']")));
+            Assert.Equal(
+                [("Web", "api, api-rebuilder, worker"), ("Web", "api, api-rebuilder, worker"), ("Shared", "api, cache")],
+                GetGroupValues(cut.Find("[aria-labelledby='overview-properties-title']")));
+        });
     }
 
     [Fact]
@@ -89,14 +157,23 @@ public class ResourceOverviewLaunchGroupTests : DashboardTestContext
         Assert.Empty(GetPropertyValues(cut));
     }
 
-    private IRenderedComponent<ResourcesLayout> RenderOverview(bool withLaunchGroups, int customPropertyCount)
+    private IRenderedComponent<ResourcesLayout> RenderOverview(
+        bool withLaunchGroups,
+        int customPropertyCount,
+        LaunchGroupResourceInfo? launchGroup = null)
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         var properties = Enumerable.Range(1, customPropertyCount).ToDictionary(
             number => $"custom-{number:D2}",
             number => new ResourcePropertyViewModel($"custom-{number:D2}", Value.ForString($"value-{number}"), false, null, 0, null, false));
         var resource = ModelTestHelpers.CreateResource("api", state: KnownResourceState.Running, properties: properties);
-        var resources = new List<ResourceViewModel> { resource };
+        var resources = new List<ResourceViewModel>
+        {
+            resource,
+            ModelTestHelpers.CreateResource("api-rebuilder", hidden: true),
+            ModelTestHelpers.CreateResource("worker-1", displayName: "worker", hidden: true),
+            ModelTestHelpers.CreateResource("worker-2", displayName: "worker")
+        };
         var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
         IDashboardClient client = withLaunchGroups
             ? new LaunchGroupTestDashboardClient(
@@ -105,13 +182,16 @@ public class ResourceOverviewLaunchGroupTests : DashboardTestContext
                     groups: ["Web", "Shared"],
                     resources:
                     [
-                        LaunchGroupTestHelpers.CreateResource(
+                        launchGroup ?? LaunchGroupTestHelpers.CreateResource(
                             "api",
                             groups: ["Web", "Shared"],
                             inheritedFrom: "parent",
                             explicitStart: true,
                             excludedByGroup: true,
-                            buildDisposition: LaunchGroupBuildDisposition.Deferred)
+                            buildDisposition: LaunchGroupBuildDisposition.Deferred),
+                        LaunchGroupTestHelpers.CreateResource("worker", groups: ["Web"], inheritedFrom: "api"),
+                        LaunchGroupTestHelpers.CreateResource("api-rebuilder", groups: ["Web"], inheritedFrom: "api"),
+                        LaunchGroupTestHelpers.CreateResource("cache", groups: ["Shared"])
                     ]),
                 resources,
                 () => channel)
@@ -144,6 +224,19 @@ public class ResourceOverviewLaunchGroupTests : DashboardTestContext
             .Select(row => (
                 row.QuerySelector(".nameColumn")!.TextContent.Trim(),
                 row.QuerySelector(".valueColumn")!.TextContent.Trim()))
+            .ToArray();
+    }
+
+    private static (string Group, string Members)[] GetGroupValues(AngleSharp.Dom.IElement container)
+    {
+        return container.QuerySelectorAll(".launch-group-value")
+            .Select(element =>
+            {
+                var members = element.GetAttribute("data-tooltip");
+                Assert.Equal("0", element.GetAttribute("tabindex"));
+                Assert.Equal(members, element.GetAttribute("aria-description"));
+                return (element.TextContent.Trim(), members!);
+            })
             .ToArray();
     }
 }

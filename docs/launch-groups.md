@@ -231,6 +231,12 @@ direct memberships, and a resource with multiple memberships can match each grou
 Filtering only changes the visible rows. It does not change automatic startup,
 lifecycle controls, or the AppHost's selected group.
 
+Resource details show the selection and effective memberships in both Status and
+Properties. Hover over or focus a group to see its effective members, including
+resources that inherit membership. Hidden members appear when **Show hidden resources**
+is enabled. Details also show the inheritance source,
+explicit-start setting, exclusion reason, and build disposition when relevant.
+
 ## Project builds
 
 When a group is selected, the AppHost's .NET build coordinator initially builds
@@ -246,7 +252,9 @@ runtime startup; building it does not start that resource.
 An ordinary Start of an excluded, never-built non-persistent .NET project builds
 it before launch. A separate Rebuild is not required. Build-completion consumers,
 such as EF migration commands, trigger or join the needed build without waiting
-for the application to be ready.
+for the application to be ready. While a deferred build runs, the starting resource
+shows Building and its console receives the build output. A resource waiting on a
+dependency remains Waiting until that dependency is ready.
 
 Coordinator-owned output-writing builds are conservatively serialized. This includes
 initial builds, deferred cold-Start builds, and Rebuild commands, so separate build

@@ -16,6 +16,16 @@ namespace Aspire.Hosting.ApplicationModel;
 /// </summary>
 public class ResourceLoggerService : IDisposable
 {
+    /// <summary>
+    /// Creates a resource logger service.
+    /// </summary>
+    public ResourceLoggerService()
+    {
+        BuildOutputCapture = new(this);
+    }
+
+    internal BuildOutputCapture BuildOutputCapture { get; }
+
     // Internal for testing.
     internal TimeProvider TimeProvider { get; set; } = TimeProvider.System;
 
@@ -347,7 +357,7 @@ public class ResourceLoggerService : IDisposable
     internal ResourceLoggerState GetResourceLoggerState(string resourceName) =>
         _loggers.GetOrAdd(resourceName, (name, context) =>
         {
-            var state = new ResourceLoggerState(name, TimeProvider);
+            var state = new ResourceLoggerState(name, TimeProvider, context.BuildOutputCapture);
             context._loggerAdded?.Invoke((name, state));
             return state;
         },
@@ -384,15 +394,17 @@ public class ResourceLoggerService : IDisposable
         private readonly LogEntries _backlog = new(MaxLogCount) { BaseLineNumber = 0 };
         private readonly string _name;
         private readonly TimeProvider _timeProvider;
+        private readonly BuildOutputCapture _buildOutputCapture;
 
         /// <summary>
         /// Creates a new <see cref="ResourceLoggerState"/>.
         /// </summary>
-        public ResourceLoggerState(string name, TimeProvider timeProvider)
+        public ResourceLoggerState(string name, TimeProvider timeProvider, BuildOutputCapture buildOutputCapture)
         {
             _logger = new ResourceLogger(this);
             _name = name;
             _timeProvider = timeProvider;
+            _buildOutputCapture = buildOutputCapture;
         }
 
         private Action<bool>? _onSubscribersChanged;
@@ -730,6 +742,10 @@ public class ResourceLoggerService : IDisposable
                 }
             }
 
+            if (inMemorySource)
+            {
+                _buildOutputCapture.AddInMemory(_name, logEntry);
+            }
             _onNewLog?.Invoke(logEntry);
         }
 

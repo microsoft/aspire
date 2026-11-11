@@ -538,13 +538,18 @@
         <note />
       </trans-unit>
       <trans-unit id="ResourceLaunchGroupsExcludedByGroup">
-        <source>Excluded by selected group</source>
-        <target state="new">Excluded by selected group</target>
+        <source>Not in selected group</source>
+        <target state="new">Not in selected group</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceLaunchGroupsExcludedFromSelection">
         <source>Excluded from selection</source>
         <target state="new">Excluded from selection</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceLaunchGroupsExclusionReason">
+        <source>Exclusion reason</source>
+        <target state="new">Exclusion reason</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceLaunchGroupsExplicitStart">

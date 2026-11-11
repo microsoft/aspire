@@ -15,7 +15,7 @@ namespace Aspire.Hosting.ApplicationModel;
 
 internal static class CommandsConfigurationExtensions
 {
-    private const string BuildLogPrefix = "[build] ";
+    internal const string BuildLogPrefix = "[build] ";
     internal static void AddLifeCycleCommands(this IResource resource)
     {
         if (resource.TryGetLastAnnotation<ExcludeLifecycleCommandsAnnotation>(out _))

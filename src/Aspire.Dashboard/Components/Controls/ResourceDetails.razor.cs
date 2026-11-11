@@ -235,6 +235,11 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
             UpdateResourceActionsMenu();
         }
 
+        if (_valueComponents is not null && Resource.LaunchGroup is { } launchGroup)
+        {
+            LaunchGroupValue.AddValueComponents(_valueComponents, launchGroup, ShowHiddenResources);
+        }
+
         UpdateTelemetryProperties();
     }
 

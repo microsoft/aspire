@@ -1,0 +1,24 @@
+@if (Groups.Count == 0)
+{
+    <FluentHighlighter HighlightedText="@HighlightText" Text="@Value" />
+}
+else
+{
+    @for (var index = 0; index < Groups.Count; index++)
+    {
+        var group = Groups[index];
+        @if (index > 0)
+        {
+            <text>, </text>
+        }
+        @if (DashboardClient.LaunchGroups is { } information)
+        {
+            var members = GetMembersText(information, group);
+            <span class="launch-group-value" tabindex="0" data-tooltip="@members" aria-description="@members"><FluentHighlighter HighlightedText="@HighlightText" Text="@group" /></span>
+        }
+        else
+        {
+            <FluentHighlighter HighlightedText="@HighlightText" Text="@group" />
+        }
+    }
+}
