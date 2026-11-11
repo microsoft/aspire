@@ -111,7 +111,7 @@ var subnet = vnet.AddSubnet("web", "10.0.1.0/24")
     .DenyInbound(from: AzureServiceTags.Internet);
 ```
 
-An NSG is automatically created when shorthand methods are used. Priority auto-increments (100, 200, 300...) and rule names are auto-generated. Generated names replace invalid characters, fit Azure's 80-character limit, and get a suffix when needed to avoid collisions. Address prefixes and explicit `name` values are kept unchanged.
+An NSG is automatically created when shorthand methods are used. Priority auto-increments (100, 200, 300...) and rule names are auto-generated.
 
 For full control, create an explicit NSG with `AzureSecurityRule` objects:
 
