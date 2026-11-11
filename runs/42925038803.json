@@ -1,0 +1,55 @@
+{
+  "run_id": 42925038803,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/42925038803",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-11T00:28:34Z",
+  "verdict": "main-repository-breakage",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 21433,
+    "title": "Keep terminal host shutdown connection open until the notification is delivered",
+    "author": "davidfowl",
+    "state": "closed",
+    "head_branch": "agent/fix-terminalhost-shutdown-notification",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/21433",
+    "merged_at": "2026-11-10T23:38:32Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "f6d716eb65f4cc46856d78acacd8ad3935541171",
+    "failed_sha": "9d73c4ae62257714459fa3d86533c59659acfdf6",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "9d73c4ae62257714459fa3d86533c59659acfdf6",
+        "message": "Keep terminal host shutdown connection open until the notification is delivered (#21433) ## Description Fixes the flaky `Aspire.Managed.Tests.TerminalHostSignalTests.TerminalHostSubcommandStopsWhenOwningAppHostIsGone` failure on Windows: `aspire-managed exited with code 124`, with empty stdout and stderr. **Root cause.** On Windows, when the owning AppHost goes away, `TerminalHostForwarder` asks the native terminal host to stop by calling `RequestShutdownAsync`. That method sent the `shutdown` J",
+        "html_url": "https://github.com/microsoft/aspire/commit/9d73c4ae62257714459fa3d86533c59659acfdf6",
+        "pull_request": {
+          "number": 21433,
+          "title": "Keep terminal host shutdown connection open until the notification is delivered",
+          "url": "https://github.com/microsoft/aspire/pull/21433",
+          "merged_at": "2026-11-10T23:38:32Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Run VS Code extension unit tests (Windows) / Run VS Code extension unit tests (Windows)",
+      "id": 130211868868,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/42925038803/job/130211868868",
+      "classification": "main-repository-breakage",
+      "reason": "VS Code extension unit tests on Windows failed deterministically with strict-equality assertions in spawnCliProcess/CLI process termination tests.",
+      "failed_steps": [
+        "Run tests"
+      ]
+    }
+  ],
+  "failed_tests": [],
+  "causes": [
+    "vscode-unit-windows-spawncliprocess-posix-cleanup-retry-ownership",
+    "vscode-unit-windows-cli-termination-pidless-child-signal"
+  ]
+}

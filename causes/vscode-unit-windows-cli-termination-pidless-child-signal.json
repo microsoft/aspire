@@ -1,0 +1,15 @@
+{
+  "id": "vscode-unit-windows-cli-termination-pidless-child-signal",
+  "type": "main-repository-breakage",
+  "title": "VS Code extension Windows unit test 'CLI process termination rejects when signaling a PID-less child throws' fails strict equality 2 !== 0",
+  "error_pattern": "CLI process termination\nrejects when signaling a PID-less child throws:\nAssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n2 !== 0",
+  "occurrences": [
+    {
+      "run_id": 42925038803,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/42925038803",
+      "job": "Tests / Run VS Code extension unit tests (Windows) / Run VS Code extension unit tests (Windows)",
+      "observed_at": "2026-11-11T00:28:34Z",
+      "pr_number": 0
+    }
+  ]
+}
