@@ -1416,9 +1416,11 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData("claude")]
-    [InlineData("copilot")]
-    public async Task AgentInit_NullAspireMcpEntry_IsReplacedAndInstallsHook(string clientId)
+    [InlineData("claude", "null")]
+    [InlineData("copilot", "null")]
+    [InlineData("claude", """{"command":"aspire","args":["agent","mcp"]}""")]
+    [InlineData("copilot", """{"command":"aspire","args":["agent","mcp"]}""")]
+    public async Task AgentInit_ExistingAspireMcpEntry_InstallsHook(string clientId, string aspireEntry)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var homeDirectory = workspace.CreateDirectory("fake-home");
@@ -1435,7 +1437,7 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
         var client = provider.GetServices<IAgentClient>().Single(client => string.Equals(client.Id, clientId, StringComparisons.AgentClientId));
         var path = client.GetMcpConfigPath(AgentConfigurationScope.Global, workspace.WorkspaceRoot);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        await File.WriteAllTextAsync(path, """{"mcpServers":{"aspire":null}}""");
+        await File.WriteAllTextAsync(path, $$$"""{"mcpServers":{"aspire":{{{aspireEntry}}}}}""");
 
         var result = provider.GetRequiredService<RootCommand>().Parse(
             $"agent init --agents {clientId} --scope global --skills none --mcp");
@@ -1443,6 +1445,58 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
         using var config = JsonDocument.Parse(await File.ReadAllTextAsync(path));
         Assert.Equal(JsonValueKind.Object, config.RootElement.GetProperty("mcpServers").GetProperty("aspire").ValueKind);
         Assert.Equal([clientId], hooks.SelectedClientIds);
+    }
+
+    [Theory]
+    [InlineData("claude", "mcp", true)]
+    [InlineData("copilot", "mcp", true)]
+    [InlineData("claude", "plugin", true)]
+    [InlineData("copilot", "plugin", true)]
+    [InlineData("claude", "disabled-plugin", false)]
+    [InlineData("claude", "malformed-mcp", false)]
+    [InlineData("claude", "none", false)]
+    public async Task AgentInit_ExistingAspireSetupWithoutSelection_RefreshesHook(string clientId, string existing, bool expectHook)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var homeDirectory = workspace.CreateDirectory("fake-home");
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(workspace.WorkspaceRoot, homeDirectory: homeDirectory);
+        var hooks = new TestTelemetryHookConfigurator();
+        var playwrightVersion = SemVersion.Parse("0.1.3", SemVersionStyles.Strict);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => executionContext;
+            options.TelemetryHookConfiguratorFactory = _ => hooks;
+            options.NpmRunnerFactory = _ => new FakeNpmRunner
+            {
+                ResolvePackageAsyncCallback = (_, _, _) => Task.FromResult<NpmPackageInfo?>(new NpmPackageInfo { Version = playwrightVersion })
+            };
+            options.PlaywrightCliRunnerFactory = _ => new FakePlaywrightCliRunner { InstalledVersion = playwrightVersion };
+        });
+        services.AddSingleton<IEnvironment>(new TestEnvironment());
+        using var provider = services.BuildServiceProvider();
+        var client = provider.GetServices<IAgentClient>().Single(client => string.Equals(client.Id, clientId, StringComparisons.AgentClientId));
+        var (path, content) = existing switch
+        {
+            "mcp" => (client.GetMcpConfigPath(AgentConfigurationScope.Global, workspace.WorkspaceRoot), """{"mcpServers":{"aspire":{"command":"aspire","args":["agent","mcp"]}}}"""),
+            "malformed-mcp" => (client.GetMcpConfigPath(AgentConfigurationScope.Global, workspace.WorkspaceRoot), "{broken"),
+            "plugin" => (client.GetIntegrationConfigPath(AgentConfigurationScope.Global, workspace.WorkspaceRoot), """{"enabledPlugins":{"aspire@aspire-skills":true}}"""),
+            "disabled-plugin" => (client.GetIntegrationConfigPath(AgentConfigurationScope.Global, workspace.WorkspaceRoot), """{"enabledPlugins":{"aspire@aspire-skills":false}}"""),
+            _ => ((string?)null, (string?)null)
+        };
+        if (path is not null)
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            await File.WriteAllTextAsync(path, content);
+        }
+
+        var result = provider.GetRequiredService<RootCommand>().Parse(
+            $"agent init --agents {clientId} --scope global --skills playwright-cli --mcp=false");
+        Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
+        Assert.Equal(expectHook ? [clientId] : [], hooks.SelectedClientIds);
+        if (path is not null)
+        {
+            Assert.Equal(content, await File.ReadAllTextAsync(path));
+        }
     }
 
     [Fact]
