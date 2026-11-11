@@ -104,11 +104,11 @@
   </PropertyGroup>
   <!-- .NET 11 package versions use Darc's package-name-without-punctuation + Version convention. -->
   <PropertyGroup Label="Net11">
-    <!-- EF Core 11 stays on RC1 to match Npgsql's exact dependency constraints until its GA release. -->
-    <MicrosoftEntityFrameworkCoreCosmosVersion>11.0.0-rc.1.26425.128</MicrosoftEntityFrameworkCoreCosmosVersion>
-    <MicrosoftEntityFrameworkCoreDesignVersion>11.0.0-rc.1.26425.128</MicrosoftEntityFrameworkCoreDesignVersion>
-    <MicrosoftEntityFrameworkCoreSqlServerVersion>11.0.0-rc.1.26425.128</MicrosoftEntityFrameworkCoreSqlServerVersion>
-    <MicrosoftEntityFrameworkCoreToolsVersion>11.0.0-rc.1.26425.128</MicrosoftEntityFrameworkCoreToolsVersion>
+    <!-- EF -->
+    <MicrosoftEntityFrameworkCoreCosmosVersion>11.0.0</MicrosoftEntityFrameworkCoreCosmosVersion>
+    <MicrosoftEntityFrameworkCoreDesignVersion>11.0.0</MicrosoftEntityFrameworkCoreDesignVersion>
+    <MicrosoftEntityFrameworkCoreSqlServerVersion>11.0.0</MicrosoftEntityFrameworkCoreSqlServerVersion>
+    <MicrosoftEntityFrameworkCoreToolsVersion>11.0.0</MicrosoftEntityFrameworkCoreToolsVersion>
     <!-- ASP.NET Core -->
     <MicrosoftAspNetCoreComponentsGatewayCliVersion>11.0.0</MicrosoftAspNetCoreComponentsGatewayCliVersion>
     <MicrosoftAspNetCoreComponentsWebAssemblyVersion>11.0.0</MicrosoftAspNetCoreComponentsWebAssemblyVersion>
@@ -119,7 +119,7 @@
     <MicrosoftAspNetCoreOutputCachingStackExchangeRedisVersion>11.0.0</MicrosoftAspNetCoreOutputCachingStackExchangeRedisVersion>
     <MicrosoftAspNetCoreTestHostVersion>11.0.0</MicrosoftAspNetCoreTestHostVersion>
     <MicrosoftExtensionsCachingStackExchangeRedisVersion>11.0.0</MicrosoftExtensionsCachingStackExchangeRedisVersion>
-    <MicrosoftExtensionsDiagnosticsHealthChecksEntityFrameworkCoreVersion>11.0.0-rc.1.26425.128</MicrosoftExtensionsDiagnosticsHealthChecksEntityFrameworkCoreVersion>
+    <MicrosoftExtensionsDiagnosticsHealthChecksEntityFrameworkCoreVersion>11.0.0</MicrosoftExtensionsDiagnosticsHealthChecksEntityFrameworkCoreVersion>
     <MicrosoftExtensionsDiagnosticsHealthChecksVersion>11.0.0</MicrosoftExtensionsDiagnosticsHealthChecksVersion>
     <MicrosoftExtensionsFeaturesVersion>11.0.0</MicrosoftExtensionsFeaturesVersion>
     <MicrosoftAspNetCoreSignalRClientVersion>11.0.0</MicrosoftAspNetCoreSignalRClientVersion>

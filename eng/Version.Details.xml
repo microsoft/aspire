@@ -83,9 +83,9 @@
       <Uri>https://github.com/dotnet/dotnet</Uri>
       <Sha>297acf930fb0f5c07fd4e51d78e521b4ad2e5d1f</Sha>
     </Dependency>
-    <Dependency Name="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="11.0.0-rc.1.26425.128">
+    <Dependency Name="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="11.0.0">
       <Uri>https://github.com/dotnet/dotnet</Uri>
-      <Sha>3551975be08744f0418857c5bed8ab1545c5dd47</Sha>
+      <Sha>297acf930fb0f5c07fd4e51d78e521b4ad2e5d1f</Sha>
     </Dependency>
     <Dependency Name="Microsoft.Extensions.Diagnostics.HealthChecks" Version="11.0.0">
       <Uri>https://github.com/dotnet/dotnet</Uri>
@@ -111,21 +111,21 @@
       <Uri>https://github.com/dotnet/dotnet</Uri>
       <Sha>297acf930fb0f5c07fd4e51d78e521b4ad2e5d1f</Sha>
     </Dependency>
-    <Dependency Name="Microsoft.EntityFrameworkCore.Cosmos" Version="11.0.0-rc.1.26425.128">
+    <Dependency Name="Microsoft.EntityFrameworkCore.Cosmos" Version="11.0.0">
       <Uri>https://github.com/dotnet/dotnet</Uri>
-      <Sha>3551975be08744f0418857c5bed8ab1545c5dd47</Sha>
+      <Sha>297acf930fb0f5c07fd4e51d78e521b4ad2e5d1f</Sha>
     </Dependency>
-    <Dependency Name="Microsoft.EntityFrameworkCore.SqlServer" Version="11.0.0-rc.1.26425.128">
+    <Dependency Name="Microsoft.EntityFrameworkCore.SqlServer" Version="11.0.0">
       <Uri>https://github.com/dotnet/dotnet</Uri>
-      <Sha>3551975be08744f0418857c5bed8ab1545c5dd47</Sha>
+      <Sha>297acf930fb0f5c07fd4e51d78e521b4ad2e5d1f</Sha>
     </Dependency>
-    <Dependency Name="Microsoft.EntityFrameworkCore.Tools" Version="11.0.0-rc.1.26425.128">
+    <Dependency Name="Microsoft.EntityFrameworkCore.Tools" Version="11.0.0">
       <Uri>https://github.com/dotnet/dotnet</Uri>
-      <Sha>3551975be08744f0418857c5bed8ab1545c5dd47</Sha>
+      <Sha>297acf930fb0f5c07fd4e51d78e521b4ad2e5d1f</Sha>
     </Dependency>
-    <Dependency Name="Microsoft.EntityFrameworkCore.Design" Version="11.0.0-rc.1.26425.128">
+    <Dependency Name="Microsoft.EntityFrameworkCore.Design" Version="11.0.0">
       <Uri>https://github.com/dotnet/dotnet</Uri>
-      <Sha>3551975be08744f0418857c5bed8ab1545c5dd47</Sha>
+      <Sha>297acf930fb0f5c07fd4e51d78e521b4ad2e5d1f</Sha>
     </Dependency>
     <Dependency Name="Microsoft.AspNetCore.SignalR.Client" Version="11.0.0">
       <Uri>https://github.com/dotnet/dotnet</Uri>
