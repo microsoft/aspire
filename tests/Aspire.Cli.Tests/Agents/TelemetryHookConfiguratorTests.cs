@@ -34,7 +34,7 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
 
         var entry = root["hooks"]!["postToolUse"]!.AsArray()[0]!.AsObject();
         Assert.Equal("command", (string)entry["type"]!);
-        Assert.Equal(AgentTelemetryHook.CopilotToolMatcher, (string)entry["matcher"]!);
+        Assert.Equal(CopilotAgentClient.TelemetryHookMatcher, (string)entry["matcher"]!);
         Assert.Equal(30, (int)entry["timeoutSec"]!);
         var (command, args) = AgentTelemetryHook.GetCommand("--hook");
         Assert.Equal(command, (string)entry["exec"]!);
@@ -113,8 +113,8 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
 
         var postToolUse = await ReadClaudePostToolUseAsync(home).DefaultTimeout();
         Assert.Collection(postToolUse,
-            group => AssertClaudeGroup(group, AgentTelemetryHook.ClaudeToolMatcher, condition: null),
-            group => AssertClaudeGroup(group, AgentTelemetryHook.ClaudeReadMatcher, AgentTelemetryHook.ClaudeReadIf));
+            group => AssertClaudeGroup(group, ClaudeCodeAgentClient.TelemetryHookToolMatcher, condition: null),
+            group => AssertClaudeGroup(group, ClaudeCodeAgentClient.TelemetryHookReadMatcher, ClaudeCodeAgentClient.TelemetryHookReadIf));
     }
 
     [Fact]
@@ -186,8 +186,8 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
         var groups = await ReadClaudePostToolUseAsync(home);
         Assert.Collection(groups,
             group => Assert.True(GroupContainsCommand(group, "echo keep") && (string?)group!["matcher"] == "*"),
-            group => AssertClaudeGroup(group, AgentTelemetryHook.ClaudeToolMatcher, condition: null),
-            group => AssertClaudeGroup(group, AgentTelemetryHook.ClaudeReadMatcher, AgentTelemetryHook.ClaudeReadIf));
+            group => AssertClaudeGroup(group, ClaudeCodeAgentClient.TelemetryHookToolMatcher, condition: null),
+            group => AssertClaudeGroup(group, ClaudeCodeAgentClient.TelemetryHookReadMatcher, ClaudeCodeAgentClient.TelemetryHookReadIf));
     }
 
     [Fact]
@@ -217,8 +217,8 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
 
         var groups = await ReadClaudePostToolUseAsync(home).DefaultTimeout();
         Assert.Collection(groups,
-            group => AssertClaudeGroup(group, AgentTelemetryHook.ClaudeToolMatcher, condition: null),
-            group => AssertClaudeGroup(group, AgentTelemetryHook.ClaudeReadMatcher, AgentTelemetryHook.ClaudeReadIf));
+            group => AssertClaudeGroup(group, ClaudeCodeAgentClient.TelemetryHookToolMatcher, condition: null),
+            group => AssertClaudeGroup(group, ClaudeCodeAgentClient.TelemetryHookReadMatcher, ClaudeCodeAgentClient.TelemetryHookReadIf));
     }
 
     [Theory]
