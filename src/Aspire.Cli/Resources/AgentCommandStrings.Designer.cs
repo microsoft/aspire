@@ -403,16 +403,17 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Keep copied Aspire skills instead of removing them after configuring skill sources.
+        ///   Looks up a localized string similar to Ignore Aspire skills copied by older CLI versions instead of reporting and removing them.
         /// </summary>
-        internal static string InitCommand_KeepSkillCopiesOptionDescription {
+        internal static string InitCommand_IgnoreSkillCopiesOptionDescription {
             get {
-                return ResourceManager.GetString("InitCommand_KeepSkillCopiesOptionDescription", resourceCulture);
+                return ResourceManager.GetString("InitCommand_IgnoreSkillCopiesOptionDescription", resourceCulture);
             }
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Copied Aspire skills are not recommended; configured skill sources supersede them {0}.
+        ///   Looks up a localized string similar to Copied Aspire skills were found. Configured skill sources replace them, so the copies are no longer recommended.
+        ///{0}.
         /// </summary>
         internal static string InitCommand_LocalSkillsConflict {
             get {
@@ -484,7 +485,7 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Removed copied Aspire skill &apos;{0}&apos;.
+        ///   Looks up a localized string similar to Removed copied Aspire skill &apos;{0}&apos;..
         /// </summary>
         internal static string InitCommand_RemovedSkillCopy {
             get {
@@ -651,15 +652,6 @@ namespace Aspire.Cli.Resources {
         internal static string InitCommand_WorkspaceRootOptionDescription {
             get {
                 return ResourceManager.GetString("InitCommand_WorkspaceRootOptionDescription", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Could not check local Aspire skills at &apos;{0}&apos;: {1}.
-        /// </summary>
-        internal static string LocalSkills_ReadFailed {
-            get {
-                return ResourceManager.GetString("LocalSkills_ReadFailed", resourceCulture);
             }
         }
         

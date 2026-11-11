@@ -106,11 +106,11 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Could not inspect local Aspire skills.
+        ///   Looks up a localized string similar to Run &apos;aspire agent init&apos; to configure skill sources and remove these copies..
         /// </summary>
-        internal static string AspireSkillsInspectionFailedMessage {
+        internal static string AspireSkillsFix {
             get {
-                return ResourceManager.GetString("AspireSkillsInspectionFailedMessage", resourceCulture);
+                return ResourceManager.GetString("AspireSkillsFix", resourceCulture);
             }
         }
         

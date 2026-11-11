@@ -149,6 +149,11 @@
         <target state="needs-review-translation">全域 (安裝在您的主目錄中；適用於所有專案)</target>
         <note />
       </trans-unit>
+      <trans-unit id="InitCommand_IgnoreSkillCopiesOptionDescription">
+        <source>Ignore Aspire skills copied by older CLI versions instead of reporting and removing them</source>
+        <target state="new">Ignore Aspire skills copied by older CLI versions instead of reporting and removing them</target>
+        <note />
+      </trans-unit>
       <trans-unit id="InitCommand_InstallationLocations">
         <source>Installation locations:</source>
         <target state="translated">安裝位置:</target>
@@ -189,17 +194,12 @@
         <target state="new">Invalid skill/tool selection '{0}'. Use {1}, '{2}', or '{3}'.</target>
         <note />
       </trans-unit>
-      <trans-unit id="InitCommand_KeepSkillCopiesOptionDescription">
-        <source>Keep copied Aspire skills instead of removing them after configuring skill sources</source>
-        <target state="new">Keep copied Aspire skills instead of removing them after configuring skill sources</target>
-        <note />
-      </trans-unit>
       <trans-unit id="InitCommand_LocalSkillsConflict">
-        <source>Copied Aspire skills are not recommended; configured skill sources supersede them
+        <source>Copied Aspire skills were found. Configured skill sources replace them, so the copies are no longer recommended.
 {0}</source>
-        <target state="new">Copied Aspire skills are not recommended; configured skill sources supersede them
+        <target state="new">Copied Aspire skills were found. Configured skill sources replace them, so the copies are no longer recommended.
 {0}</target>
-        <note>{0} lists the local skill entry-point paths, one per line.</note>
+        <note>{0} lists the copied skill directories, one per line.</note>
       </trans-unit>
       <trans-unit id="InitCommand_LocationWithAgents">
         <source>{0} ({1})</source>
@@ -247,8 +247,8 @@
         <note>{0} is the skill directory path, and {1} is the failure reason.</note>
       </trans-unit>
       <trans-unit id="InitCommand_RemovedSkillCopy">
-        <source>Removed copied Aspire skill '{0}'</source>
-        <target state="new">Removed copied Aspire skill '{0}'</target>
+        <source>Removed copied Aspire skill '{0}'.</source>
+        <target state="new">Removed copied Aspire skill '{0}'.</target>
         <note>{0} is the removed skill directory path.</note>
       </trans-unit>
       <trans-unit id="InitCommand_ScopeOptionDescription">
@@ -326,11 +326,6 @@
       <trans-unit id="InitCommand_WorkspaceRootOptionDescription">
         <source>Path to the workspace root directory</source>
         <target state="translated">工作區根目錄的路徑</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="LocalSkills_ReadFailed">
-        <source>Could not check local Aspire skills at '{0}': {1}</source>
-        <target state="new">Could not check local Aspire skills at '{0}': {1}</target>
         <note />
       </trans-unit>
       <trans-unit id="McpServerContainerMustBeJsonObject">

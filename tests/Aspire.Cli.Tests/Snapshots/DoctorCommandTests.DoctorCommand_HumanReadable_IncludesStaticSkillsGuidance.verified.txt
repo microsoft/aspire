@@ -3,11 +3,11 @@ Aspire Environment Check
 ========================
 
 AppHost
-  🚨 Copied Aspire skills are not recommended; configured skill sources supersede them
-       Run 'aspire agent init' to update configuration
+  🚨 Copied Aspire skills were found. Configured skill sources replace them, so the copies are no longer recommended.
+       Run 'aspire agent init' to configure skill sources and remove these copies.
        Files:
-         .agents/skills/aspire/SKILL.md
-         ~/.agents/skills/aspire/SKILL.md
+         .agents/skills/aspire
+         ~/.agents/skills/aspire
 
 Summary: 0 passed, 1 warnings, 0 failed
 For detailed prerequisites: https://aka.ms/aspire-prerequisites

@@ -2,11 +2,11 @@
       "category": "apphost",
       "name": "aspire-skill-sources",
       "status": "warning",
-      "message": "Copied Aspire skills are not recommended; configured skill sources supersede them",
-      "fix": "Run 'aspire agent init' to update configuration",
+      "message": "Copied Aspire skills were found. Configured skill sources replace them, so the copies are no longer recommended.",
+      "fix": "Run 'aspire agent init' to configure skill sources and remove these copies.",
       "files": [
-        ".agents/skills/aspire/SKILL.md",
-        "~/.agents/skills/aspire/SKILL.md"
+        ".agents/skills/aspire",
+        "~/.agents/skills/aspire"
       ],
       "metadata": {
         "workspaceRoot": "<workspace>"

@@ -56,10 +56,10 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
             configureServices: services =>
             {
                 services.AddSingleton<IEnvironment>(context.Environment);
-                services.AddSingleton<IEnvironmentCheck, AspireSkillsCheck>();
+                services.AddSingleton<IEnvironmentCheck, DeprecatedAgentConfigCheck>();
             });
 
-        var check = GetCheckByName(doc, AspireSkillsCheck.CheckName);
+        var check = GetCheckByName(doc, DeprecatedAgentConfigCheck.AspireSkillsCheckName);
         var workspacePath = JsonEncodedText.Encode(
             context.Project.FullName, JsonSourceGenerationContext.RelaxedEscaping.Options.Encoder).ToString();
         await Verify(check.GetRawText().Replace(workspacePath, "<workspace>", StringComparison.Ordinal), "json");
@@ -99,7 +99,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
         services.RemoveAll<IAnsiConsole>();
         services.AddSingleton<IAnsiConsole>(console);
         services.AddSingleton<IEnvironment>(context.Environment);
-        services.AddSingleton<IEnvironmentCheck, AspireSkillsCheck>();
+        services.AddSingleton<IEnvironmentCheck, DeprecatedAgentConfigCheck>();
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();

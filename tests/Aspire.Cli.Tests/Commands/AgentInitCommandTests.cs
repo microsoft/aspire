@@ -955,16 +955,19 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task Remote_WarnsForConfiguredOpenCodeSkillRootsAndRemovesTheCopy(bool array)
+    public async Task Remote_RemovesLegacyOpenCodeCopyAndLeavesConfiguredSkillRootsAlone(bool array)
     {
         using var context = new AgentConfigurationTestContext(outputHelper);
         var configPath = Path.Combine(context.Project.FullName, ".opencode", "opencode.jsonc");
-        var skillDirectory = Path.Combine(context.Project.FullName, "team-skills", "aspire");
+        var skillDirectory = Path.Combine(context.Project.FullName, ".opencode", "skill", "aspire");
+        var configuredSkillPath = Path.Combine(context.Project.FullName, "team-skills", "aspire", "SKILL.md");
+        const string configuredSkill = "Team Aspire instructions.";
         await AgentConfigurationTestContext.WriteAsync(configPath, array
             ? """{"skills":["./team-skills"]}"""
             : """{"skills":{"paths":["./team-skills"]}}""");
         await AgentConfigurationTestContext.WriteAsync(Path.Combine(skillDirectory, "SKILL.md"), "My customized Aspire instructions.");
         await AgentConfigurationTestContext.WriteAsync(Path.Combine(skillDirectory, "references", "deploy.md"), "Supporting file.");
+        await AgentConfigurationTestContext.WriteAsync(configuredSkillPath, configuredSkill);
         var interaction = new TestInteractionService();
         using var provider = context.CreateServiceCollection(outputHelper, options =>
         {
@@ -978,14 +981,16 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         Assert.Empty(interaction.DisplayedErrors);
         Assert.Contains(interaction.DisplayedMessages, message => message.Emoji.Equals(KnownEmojis.PoliceCarLight) &&
             message.Message == string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_LocalSkillsConflict,
-                "  team-skills/aspire/SKILL.md"));
+                "  .opencode/skill/aspire"));
         Assert.Equal(
             [new BooleanPromptCall(AgentCommandStrings.InitCommand_RemoveSkillCopiesPrompt, true)],
             interaction.BooleanPromptCalls);
         Assert.Contains(interaction.DisplayedMessages, message => message.Emoji.Equals(KnownEmojis.CheckMarkButton) &&
-            message.Message == string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_RemovedSkillCopy, "team-skills/aspire"));
+            message.Message == string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_RemovedSkillCopy, ".opencode/skill/aspire"));
         Assert.False(Directory.Exists(skillDirectory));
-        Assert.True(Directory.Exists(Path.Combine(context.Project.FullName, "team-skills")));
+        Assert.True(Directory.Exists(Path.Combine(context.Project.FullName, ".opencode", "skill")));
+        // Configured skill roots belong to the user; the CLI never copied skills there.
+        Assert.Equal(configuredSkill, await File.ReadAllTextAsync(configuredSkillPath));
         var config = JsonNode.Parse(await File.ReadAllTextAsync(configPath))!;
         var sources = array ? config["skills"]!.AsArray() : config["skills"]!["urls"]!.AsArray();
         Assert.Equal(array
@@ -997,7 +1002,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData("declined")]
+    [InlineData("ignored")]
     [InlineData("plugin-not-selected")]
     [InlineData("registration-failed")]
     public async Task Remote_KeepsSkillCopiesUnlessThePluginIsRegisteredAndRemovalIsAccepted(string reason)
@@ -1019,7 +1024,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         }).BuildServiceProvider();
         var arguments = reason switch
         {
-            "declined" => "--skills aspire --mcp=false --keep-skill-copies",
+            "ignored" => "--skills aspire --mcp=false --ignore-skill-copies",
             "plugin-not-selected" => "--skills none --mcp",
             _ => "--skills aspire --mcp=false"
         };
@@ -1029,6 +1034,12 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(reason == "registration-failed" ? CliExitCodes.InvalidCommand : CliExitCodes.Success,
             await result.InvokeAsync().DefaultTimeout());
         Assert.Equal(skill, await File.ReadAllTextAsync(skillPath));
+        // Copies are only reported when they would be removed: --ignore-skill-copies skips them entirely,
+        // and they are irrelevant when the plugin is not selected.
+        var conflictWarning = string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_LocalSkillsConflict,
+            "  .agents/skills/aspire");
+        Assert.Equal(reason == "registration-failed" ? 1 : 0,
+            interaction.DisplayedMessages.Count(message => message.Message == conflictWarning));
         // The prompt is only recorded when no option value answers it, so a registration failure
         // shows the copies were selected for removal and kept only because registration failed.
         Assert.Equal(

@@ -1,10 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Globalization;
-using System.Text.Json;
-using Aspire.Cli.Resources;
-
 namespace Aspire.Cli.Agents.AspireSkills;
 
 internal static class LocalAspireSkills
@@ -22,87 +18,61 @@ internal static class LocalAspireSkills
         "aspireify"
     ];
 
-    internal static (IReadOnlyList<string> Files, IReadOnlyList<string> Errors, bool HasFileErrors) Find(
+    // The fixed locations older CLIs copied skills into (their --skill-location choices).
+    // Only these are probed: copies never went to agent-specific roots such as CLAUDE_CONFIG_DIR
+    // or OpenCode skills.paths, so reading those would inspect files the CLI never wrote.
+    private static readonly string[] s_projectSkillDirectories =
+    [
+        AgentPath.UniversalSkillsDirectory,
+        Path.Combine(".claude", "skills"),
+        Path.Combine(".github", "skills"),
+        Path.Combine(".opencode", "skill")
+    ];
+
+    /// <summary>
+    /// Finds skill directories copied by older CLIs in the workspace (tagged <see cref="AgentConfigurationScope.Project"/>)
+    /// and in the user-level standard location (tagged <see cref="AgentConfigurationScope.Global"/>).
+    /// </summary>
+    internal static IReadOnlyList<(string Directory, AgentConfigurationScope Scope)> Find(
         DirectoryInfo workingDirectory,
         DirectoryInfo workspaceRoot,
-        IEnumerable<IAgentClient> agents,
+        DirectoryInfo homeDirectory,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
         // Clients load project skills along the active ancestor chain, not just at its root.
         // Clamping to the workspace excludes sibling projects and unrelated current directories.
-        var projectDirectories = AgentPath.ProjectDirectories(workingDirectory, workspaceRoot).ToArray();
-        var files = new Dictionary<string, string>(StringComparers.FileSystemPath);
-        var errors = new HashSet<string>(StringComparer.Ordinal);
-        var inspected = new HashSet<string>(StringComparers.FileSystemPath);
-        var hasFileErrors = false;
-        foreach (var agent in agents)
+        // Older CLIs only installed user-level copies to the standard location.
+        var candidates = AgentPath.ProjectDirectories(workingDirectory, workspaceRoot)
+            .SelectMany(root => s_projectSkillDirectories.Select(directory =>
+                (Path: Path.Combine(root.FullName, directory), Scope: AgentConfigurationScope.Project)))
+            .Append((Path: Path.Combine(homeDirectory.FullName, AgentPath.UniversalSkillsDirectory), Scope: AgentConfigurationScope.Global));
+
+        // A workspace rooted at the home directory shares the user-level location; the first
+        // (project) match wins so project-scoped removal still covers it.
+        var found = new Dictionary<string, AgentConfigurationScope>(StringComparers.FileSystemPath);
+        foreach (var (skillsDirectory, scope) in candidates)
         {
-            foreach (var scope in new[] { AgentConfigurationScope.Project, AgentConfigurationScope.Global })
+            foreach (var name in s_legacySkillNames)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                List<string> directories = [];
-                DirectoryInfo[] roots = scope is AgentConfigurationScope.Project ? projectDirectories : [workspaceRoot];
-                foreach (var root in roots)
-                {
-                    // Clients yield their standard skill roots before parsing settings that add more.
-                    // Collect as they are yielded so a settings failure still probes the standard roots,
-                    // and isolate each project directory so invalid settings in a nested directory
-                    // do not hide skills in its ancestors.
-                    try
-                    {
-                        foreach (var directory in agent.GetLocalSkillDirectories(scope, root))
-                        {
-                            directories.Add(directory);
-                        }
-                    }
-                    catch (Exception ex) when (ex is JsonException or InvalidOperationException or ArgumentNullException)
-                    {
-                        // Invalid skill settings block plugin setup, not independently selected MCP.
-                        errors.Add(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.LocalSkills_ReadFailed, agent.DisplayName, ex.Message));
-                    }
-                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
-                    {
-                        hasFileErrors = true;
-                        errors.Add(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.LocalSkills_ReadFailed, agent.DisplayName, ex.Message));
-                    }
-                }
 
-                foreach (var directory in directories)
+                // Older CLIs copied each skill as a directory with supporting files (for example
+                // references/) and no ownership stamp, so the directory name is the only signal.
+                // Directory.Exists treats inaccessible paths as missing, which is correct here:
+                // an agent running as the same user cannot load them either.
+                var path = Path.GetFullPath(Path.Combine(skillsDirectory, name));
+                if (Directory.Exists(path))
                 {
-                    foreach (var name in s_legacySkillNames)
-                    {
-                        cancellationToken.ThrowIfCancellationRequested();
-                        var path = Path.Combine(directory, name, "SKILL.md");
-                        if (!inspected.Add(path))
-                        {
-                            continue;
-                        }
-
-                        try
-                        {
-                            var fullPath = Path.GetFullPath(path);
-                            // Older CLI versions copied Markdown verbatim, without an ownership
-                            // stamp or installed version. Names identify possible collisions only;
-                            // even byte-identical direct installs cannot be classified as obsolete.
-                            using var stream = File.OpenRead(fullPath);
-                            files.TryAdd(fullPath, path);
-                        }
-                        catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
-                        {
-                            // Missing entry points are expected; unreadable ones remain errors.
-                        }
-                        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
-                        {
-                            hasFileErrors = true;
-                            errors.Add(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.LocalSkills_ReadFailed, path, ex.Message));
-                        }
-                    }
+                    found.TryAdd(path, scope);
                 }
             }
         }
 
-        return (files.Values.Order(StringComparers.FileSystemPath).ToArray(), errors.Order(StringComparer.Ordinal).ToArray(), hasFileErrors);
+        return found
+            .Select(entry => (Directory: entry.Key, Scope: entry.Value))
+            .OrderBy(entry => entry.Directory, StringComparers.FileSystemPath)
+            .ToArray();
     }
 }

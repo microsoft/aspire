@@ -288,18 +288,18 @@
     <comment>{0} lists each agent's configuration path and failure details, one target per line.</comment>
   </data>
   <data name="InitCommand_LocalSkillsConflict" xml:space="preserve">
-    <value>Copied Aspire skills are not recommended; configured skill sources supersede them
+    <value>Copied Aspire skills were found. Configured skill sources replace them, so the copies are no longer recommended.
 {0}</value>
-    <comment>{0} lists the local skill entry-point paths, one per line.</comment>
+    <comment>{0} lists the copied skill directories, one per line.</comment>
   </data>
-  <data name="InitCommand_KeepSkillCopiesOptionDescription" xml:space="preserve">
-    <value>Keep copied Aspire skills instead of removing them after configuring skill sources</value>
+  <data name="InitCommand_IgnoreSkillCopiesOptionDescription" xml:space="preserve">
+    <value>Ignore Aspire skills copied by older CLI versions instead of reporting and removing them</value>
   </data>
   <data name="InitCommand_RemoveSkillCopiesPrompt" xml:space="preserve">
     <value>Remove the copied Aspire skills listed above after configuring skill sources?</value>
   </data>
   <data name="InitCommand_RemovedSkillCopy" xml:space="preserve">
-    <value>Removed copied Aspire skill '{0}'</value>
+    <value>Removed copied Aspire skill '{0}'.</value>
     <comment>{0} is the removed skill directory path.</comment>
   </data>
   <data name="InitCommand_RemoveSkillCopyFailed" xml:space="preserve">
@@ -325,8 +325,5 @@
   <data name="InitCommand_ConfigurationTarget" xml:space="preserve">
     <value>{0}: {1}</value>
     <comment>{0} is the agent name, and {1} lists its configuration paths separated by commas.</comment>
-  </data>
-  <data name="LocalSkills_ReadFailed" xml:space="preserve">
-    <value>Could not check local Aspire skills at '{0}': {1}</value>
   </data>
 </root>

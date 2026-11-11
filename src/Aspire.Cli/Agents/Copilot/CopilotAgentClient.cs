@@ -38,17 +38,6 @@ internal sealed class CopilotAgentClient(
         => Path.Combine(scope is AgentConfigurationScope.Project ? workspaceRoot.FullName : context.HomeDirectory.FullName,
             AgentPath.UniversalSkillsDirectory);
 
-    public IEnumerable<string> GetLocalSkillDirectories(AgentConfigurationScope scope, DirectoryInfo workspaceRoot)
-    {
-        // https://docs.github.com/en/copilot/concepts/agents/about-agent-skills
-        var root = scope is AgentConfigurationScope.Project ? workspaceRoot.FullName : context.HomeDirectory.FullName;
-        yield return GetSkillBaseDirectory(scope, workspaceRoot);
-        yield return Path.Combine(root, ".claude", "skills");
-        yield return scope is AgentConfigurationScope.Project
-            ? Path.Combine(root, ".github", "skills")
-            : Path.Combine(GetSettingsDirectory(), "skills");
-    }
-
     public bool HasIntegrationRegistration(
         DirectoryInfo workspaceRoot, AgentConfigurationScope scope, IReadOnlyList<SkillSource> sources)
         => AspireSkillsRemoteConfiguration.HasPluginRegistration(GetSettingsFiles(workspaceRoot, scope), sources);

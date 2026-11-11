@@ -27,11 +27,6 @@ internal sealed class ClaudeCodeAgentClient(
             ? Path.Combine(workspaceRoot.FullName, ClaudeCodePaths.ConfigDirectoryName)
             : ClaudeCodePaths.GetConfigDirectory(context, environment), "skills");
 
-    public IEnumerable<string> GetLocalSkillDirectories(AgentConfigurationScope scope, DirectoryInfo workspaceRoot)
-    {
-        yield return GetSkillBaseDirectory(scope, workspaceRoot);
-    }
-
     public bool HasIntegrationRegistration(
         DirectoryInfo workspaceRoot, AgentConfigurationScope scope, IReadOnlyList<SkillSource> sources)
         => AspireSkillsRemoteConfiguration.HasPluginRegistration(

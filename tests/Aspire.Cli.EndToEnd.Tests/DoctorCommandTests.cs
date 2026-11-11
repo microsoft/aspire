@@ -64,8 +64,8 @@ public sealed class DoctorCommandTests(ITestOutputHelper output)
 
         var text = await File.ReadAllTextAsync(
             Path.Combine(workspace.Path, "doctor-skills.txt"), TestContext.Current.CancellationToken);
-        string[] expectedFiles = [".agents/skills/aspire/SKILL.md", "~/.agents/skills/aspire/SKILL.md"];
-        Assert.Contains("Copied Aspire skills are not recommended; configured skill sources supersede them", text, StringComparison.Ordinal);
+        string[] expectedFiles = [".agents/skills/aspire", "~/.agents/skills/aspire"];
+        Assert.Contains("Copied Aspire skills were found. Configured skill sources replace them, so the copies are no longer recommended.", text, StringComparison.Ordinal);
         var lines = text.Split('\n', StringSplitOptions.TrimEntries);
         Assert.All(expectedFiles, file => Assert.Contains(file, lines));
 

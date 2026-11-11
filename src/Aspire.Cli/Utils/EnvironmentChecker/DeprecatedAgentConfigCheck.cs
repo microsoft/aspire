@@ -4,15 +4,22 @@
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Aspire.Cli.Agents;
+using Aspire.Cli.Agents.AspireSkills;
+using Aspire.Cli.Git;
 using Aspire.Cli.Resources;
 
 namespace Aspire.Cli.Utils.EnvironmentChecker;
 
 /// <summary>
-/// Checks for deprecated 'mcp start' command usage in agent environment configurations.
+/// Checks for outdated agent configuration that 'aspire agent init' updates, such as deprecated
+/// 'mcp start' commands and copied Aspire skills that can shadow configured skill sources.
 /// </summary>
 internal sealed class DeprecatedAgentConfigCheck : IEnvironmentCheck
 {
+    internal const string AspireSkillsCheckName = "aspire-skill-sources";
+
+    private readonly IGitRepository _gitRepository;
     private readonly CliExecutionContext _executionContext;
 
     internal static string GetCheckName(string agentName) => $"agent-config-{agentName.ToLowerInvariant().Replace(" ", "-")}";
@@ -26,9 +33,13 @@ internal sealed class DeprecatedAgentConfigCheck : IEnvironmentCheck
         new AgentConfigLocation("OpenCode", "opencode.jsonc", ConfigFormat.McpWithCommandArray, "mcp"),
     ];
 
-    public DeprecatedAgentConfigCheck(CliExecutionContext executionContext)
+    public DeprecatedAgentConfigCheck(
+        IGitRepository gitRepository,
+        CliExecutionContext executionContext)
     {
+        ArgumentNullException.ThrowIfNull(gitRepository);
         ArgumentNullException.ThrowIfNull(executionContext);
+        _gitRepository = gitRepository;
         _executionContext = executionContext;
     }
 
@@ -36,8 +47,9 @@ internal sealed class DeprecatedAgentConfigCheck : IEnvironmentCheck
     public int Order => 100; // Run after core checks
 
     /// <inheritdoc />
-    public Task<IReadOnlyList<EnvironmentCheckResult>> CheckAsync(CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<EnvironmentCheckResult>> CheckAsync(CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var results = new List<EnvironmentCheckResult>();
         var workingDirectory = _executionContext.WorkingDirectory;
 
@@ -82,7 +94,38 @@ internal sealed class DeprecatedAgentConfigCheck : IEnvironmentCheck
             }
         }
 
-        return Task.FromResult<IReadOnlyList<EnvironmentCheckResult>>(results);
+        await AddAspireSkillsResultsAsync(results, cancellationToken);
+        return results;
+    }
+
+    /// <summary>
+    /// Adds warnings for copied Aspire skills that can shadow configured skill sources.
+    /// </summary>
+    private async Task AddAspireSkillsResultsAsync(List<EnvironmentCheckResult> results, CancellationToken cancellationToken)
+    {
+        var workingDirectory = _executionContext.WorkingDirectory;
+        var workspaceRoot = await _gitRepository.GetRootAsync(cancellationToken) ?? workingDirectory;
+        var skillCopies = LocalAspireSkills.Find(workingDirectory, workspaceRoot, _executionContext.HomeDirectory, cancellationToken);
+        if (skillCopies.Count > 0)
+        {
+            var displayPaths = skillCopies
+                .Select(copy => AgentPath.GetDisplayPath(copy.Directory, workspaceRoot, _executionContext))
+                .Order(StringComparer.Ordinal)
+                .ToArray();
+            results.Add(new EnvironmentCheckResult
+            {
+                Category = EnvironmentCheckCategories.AppHost,
+                Name = AspireSkillsCheckName,
+                Status = EnvironmentCheckStatus.Warning,
+                Message = string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_LocalSkillsConflict, string.Empty).TrimEnd(),
+                Fix = DoctorCommandStrings.AspireSkillsFix,
+                Files = displayPaths,
+                Metadata = new JsonObject
+                {
+                    ["workspaceRoot"] = workspaceRoot.FullName
+                }
+            });
+        }
     }
 
     /// <summary>

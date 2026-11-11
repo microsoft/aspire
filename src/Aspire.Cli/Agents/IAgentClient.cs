@@ -18,9 +18,6 @@ internal interface IAgentClient
 
     string GetSkillBaseDirectory(AgentConfigurationScope scope, DirectoryInfo workspaceRoot);
 
-    // Include compatibility locations the client loads, not just the CLI's install destination.
-    IEnumerable<string> GetLocalSkillDirectories(AgentConfigurationScope scope, DirectoryInfo workspaceRoot);
-
     bool HasIntegrationRegistration(
         DirectoryInfo workspaceRoot, AgentConfigurationScope scope, IReadOnlyList<SkillSource> sources);
 

@@ -67,7 +67,7 @@ internal sealed class AgentInitCommand : BaseCommand
         Options.Add(AgentsOption);
         Options.Add(s_scopeOption);
         Options.Add(s_skillsOption);
-        Options.Add(s_keepSkillCopiesOption);
+        Options.Add(s_ignoreSkillCopiesOption);
     }
 
     internal Option<string?> AgentsOption { get; }
@@ -94,15 +94,15 @@ internal sealed class AgentInitCommand : BaseCommand
     };
 
     /// <summary>
-    /// Opts out of removing Aspire skills copied by older CLI versions after skill sources are configured.
-    /// Configured skill sources supersede those copies, so omitting the option prompts with "remove" as the
-    /// default (and removes them non-interactively); <c>--keep-skill-copies</c> keeps them. Registered on every
-    /// command that can configure skill sources (<c>aspire agent init</c>, <c>aspire init</c>, <c>aspire new</c>,
-    /// and <c>aspire mcp init</c>).
+    /// Opts out of finding, reporting, and removing Aspire skills copied by older CLI versions.
+    /// Configured skill sources supersede those copies, so omitting the option reports them and prompts with
+    /// "remove" as the default (and removes them non-interactively); <c>--ignore-skill-copies</c> leaves them
+    /// untouched. Registered on every command that can configure skill sources (<c>aspire agent init</c>,
+    /// <c>aspire init</c>, <c>aspire new</c>, and <c>aspire mcp init</c>).
     /// </summary>
-    internal static readonly Option<bool?> s_keepSkillCopiesOption = new("--keep-skill-copies")
+    internal static readonly Option<bool?> s_ignoreSkillCopiesOption = new("--ignore-skill-copies")
     {
-        Description = AgentCommandStrings.InitCommand_KeepSkillCopiesOptionDescription,
+        Description = AgentCommandStrings.InitCommand_IgnoreSkillCopiesOptionDescription,
         Recursive = true
     };
 
@@ -265,7 +265,7 @@ internal sealed class AgentInitCommand : BaseCommand
             PromptBinding.Create(parseResult, s_skillsOption, CommonAgentApplicators.AspireSkillName),
             PromptBinding.Create(parseResult, s_scopeOption, AgentConfigurationScope.Project),
             PromptBinding.CreateBoolConfirm(parseResult, s_mcpOption, defaultValue: false),
-            PromptBinding.CreateInvertedBoolConfirm(parseResult, s_keepSkillCopiesOption, defaultValue: true),
+            PromptBinding.CreateInvertedBoolConfirm(parseResult, s_ignoreSkillCopiesOption, defaultValue: true),
             cancellationToken);
         return CommandResult.FromExitCode(result.ExitCode);
     }
@@ -402,7 +402,7 @@ internal sealed class AgentInitCommand : BaseCommand
             ConsoleInteractionService.MatchChoices(requestedSkills ?? CommonAgentApplicators.AspireSkillName,
                 availableSkillChoices, static name => name)?.Contains(CommonAgentApplicators.AspireSkillName) is true;
         IReadOnlyList<SkillSource> skillSources = [];
-        IReadOnlyList<string> skillCopies = [];
+        IReadOnlyList<(string Directory, AgentConfigurationScope Scope)> skillCopies = [];
         string? skillConfigurationError = null;
         if (showSkillWarnings)
         {
@@ -461,28 +461,13 @@ internal sealed class AgentInitCommand : BaseCommand
                     }
                 }
 
-                var local = LocalAspireSkills.Find(ExecutionContext.WorkingDirectory, workspaceRoot,
-                    selectedClients, cancellationToken);
-                if (local.Files.Count > 0)
+                // The binding inverts --ignore-skill-copies, so an explicit "do not remove" means the
+                // user asked to leave the copies untouched: skip finding, reporting, and removing them.
+                var (ignoreSkillCopiesProvided, removeSkillCopiesRequested) = removeSkillCopiesBinding.Resolve();
+                if (!ignoreSkillCopiesProvided || removeSkillCopiesRequested)
                 {
-                    InteractionService.DisplayMessage(KnownEmojis.PoliceCarLight,
-                        string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_LocalSkillsConflict,
-                            string.Join(System.Environment.NewLine, local.Files
-                                .Select(path => $"  {AgentPath.GetDisplayPath(path, workspaceRoot, ExecutionContext)}")
-                                .Order(StringComparer.Ordinal))));
-                    InteractionService.DisplayEmptyLine();
-
-                    // Older CLI versions copied each skill as a directory with supporting files
-                    // (for example references/), so the whole directory is the unit to remove.
-                    skillCopies = local.Files
-                        .Select(path => Path.GetFullPath(Path.GetDirectoryName(path)!))
-                        .Distinct(StringComparers.FileSystemPath)
-                        .Order(StringComparers.FileSystemPath)
-                        .ToArray();
-                }
-                if (local.HasFileErrors)
-                {
-                    skillConfigurationError = string.Join(System.Environment.NewLine, local.Errors);
+                    skillCopies = LocalAspireSkills.Find(ExecutionContext.WorkingDirectory, workspaceRoot,
+                        ExecutionContext.HomeDirectory, cancellationToken);
                 }
             }
             catch (Exception ex) when (ex is JsonException or InvalidOperationException or IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
@@ -512,14 +497,6 @@ internal sealed class AgentInitCommand : BaseCommand
             InteractionService.DisplayError(skillConfigurationError);
             return new(CliExitCodes.InvalidCommand, selectedClients, []);
         }
-
-        // Configured skill sources supersede copies left by older CLI versions, so the copies are
-        // only worth removing once the user has chosen to configure Aspire skills.
-        var removeSkillCopies = configureAspire && skillCopies.Count > 0 &&
-            await InteractionService.PromptConfirmAsync(
-                AgentCommandStrings.InitCommand_RemoveSkillCopiesPrompt,
-                binding: removeSkillCopiesBinding,
-                cancellationToken: cancellationToken);
 
         // `mcpBinding` is only supplied by standalone `aspire agent init` (see s_mcpOption).
         // Chained flows (`aspire new`, `aspire init`) never construct a binding for it, so MCP
@@ -553,6 +530,30 @@ internal sealed class AgentInitCommand : BaseCommand
                 value => value is AgentConfigurationScope.Project
                     ? AgentCommandStrings.InitCommand_ProjectScope
                     : AgentCommandStrings.InitCommand_GlobalScope,
+                cancellationToken: cancellationToken);
+        }
+
+        // Configured skill sources supersede copies left by older CLI versions, so the copies are
+        // only worth removing once the user has chosen to configure Aspire skills. Project scope
+        // leaves user-level copies alone because other workspaces may still rely on them.
+        IReadOnlyList<string> skillCopiesToRemove = configureAspire
+            ? skillCopies
+                .Where(copy => scope is AgentConfigurationScope.Global || copy.Scope is AgentConfigurationScope.Project)
+                .Select(copy => copy.Directory)
+                .ToArray()
+            : [];
+        var removeSkillCopies = false;
+        if (skillCopiesToRemove.Count > 0)
+        {
+            InteractionService.DisplayMessage(KnownEmojis.PoliceCarLight,
+                string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_LocalSkillsConflict,
+                    string.Join(System.Environment.NewLine, skillCopiesToRemove
+                        .Select(path => $"  {AgentPath.GetDisplayPath(path, workspaceRoot, ExecutionContext)}")
+                        .Order(StringComparer.Ordinal))));
+            InteractionService.DisplayEmptyLine();
+            removeSkillCopies = await InteractionService.PromptConfirmAsync(
+                AgentCommandStrings.InitCommand_RemoveSkillCopiesPrompt,
+                binding: removeSkillCopiesBinding,
                 cancellationToken: cancellationToken);
         }
 
@@ -595,7 +596,7 @@ internal sealed class AgentInitCommand : BaseCommand
             // Keep the copies when registration failed so the agent is not left without Aspire skills.
             if (removeSkillCopies && !registrationFailed)
             {
-                hasErrors |= RemoveSkillCopies(skillCopies, workspaceRoot);
+                hasErrors |= RemoveSkillCopies(skillCopiesToRemove, workspaceRoot);
             }
         }
 
@@ -1005,7 +1006,7 @@ internal sealed class AgentInitCommand : BaseCommand
                     continue;
                 }
 
-                // A directory can already be gone when two configured skill roots resolve to one location.
+                // Prompts and registration run between discovery and removal, so the copy may already be gone.
                 if (Directory.Exists(skillDirectory))
                 {
                     Directory.Delete(skillDirectory, recursive: true);

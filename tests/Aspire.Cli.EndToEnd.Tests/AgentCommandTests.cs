@@ -206,8 +206,8 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         await File.WriteAllTextAsync(localSkillPath, localSkillContent);
         string[] expectedWarnings =
         [
-            "Copied Aspire skills are not recommended; configured skill sources supersede them",
-            ".agents/skills/aspire/SKILL.md"
+            "Copied Aspire skills were found. Configured skill sources replace them, so the copies are no longer recommended.",
+            ".agents/skills/aspire"
         ];
 
         // Accept agents before choosing independent assets and project scope.
@@ -223,32 +223,27 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("Which skills and tools do you want to configure?", timeout: TimeSpan.FromSeconds(30));
         await auto.WaitUntilTextAsync("aspire — Agent assets from configured skill sources", timeout: TimeSpan.FromSeconds(30));
-        var skillsScreen = auto.CreateSnapshot().GetScreenText();
-        foreach (var warning in expectedWarnings)
-        {
-            Assert.Contains(warning, skillsScreen);
-            Assert.True(skillsScreen.IndexOf(warning, StringComparison.Ordinal) <
-                skillsScreen.IndexOf("Which skills and tools do you want to configure?", StringComparison.Ordinal));
-        }
-        await auto.EnterAsync();
-        // Removing the copies defaults to Yes once Aspire skills are selected.
-        await auto.WaitUntilTextAsync("Remove the copied Aspire skills listed above after configuring skill sources?",
-            timeout: TimeSpan.FromSeconds(30));
         await auto.EnterAsync();
         await auto.WaitUntilAsync(
             s => s.ContainsText("Configure the Aspire MCP server for selected agent environments?"),
             timeout: TimeSpan.FromSeconds(30), description: "MCP server confirmation prompt");
-        var mcpScreen = auto.CreateSnapshot().GetScreenText();
-        foreach (var warning in expectedWarnings)
-        {
-            Assert.Contains(warning, mcpScreen);
-        }
         // MCP configuration is strictly opt-in and defaults to No, so accepting the default
         // here leaves MCP unconfigured.
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("Where should skills and tools be installed?", timeout: TimeSpan.FromSeconds(30));
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("Removed copied Aspire skill '.agents/skills/aspire'", timeout: TimeSpan.FromSeconds(30));
+        // Copies are reported once the scope is known, and removing them defaults to Yes.
+        const string removePrompt = "Remove the copied Aspire skills listed above after configuring skill sources?";
+        await auto.WaitUntilTextAsync(removePrompt, timeout: TimeSpan.FromSeconds(30));
+        var removeScreen = auto.CreateSnapshot().GetScreenText();
+        foreach (var warning in expectedWarnings)
+        {
+            Assert.Contains(warning, removeScreen);
+            Assert.True(removeScreen.IndexOf(warning, StringComparison.Ordinal) <
+                removeScreen.IndexOf(removePrompt, StringComparison.Ordinal));
+        }
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("Removed copied Aspire skill '.agents/skills/aspire'.", timeout: TimeSpan.FromSeconds(30));
         await auto.WaitUntilTextAsync("configuration complete", timeout: TimeSpan.FromSeconds(30));
         await auto.WaitForSuccessPromptAsync(counter);
 
