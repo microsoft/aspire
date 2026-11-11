@@ -250,6 +250,23 @@ internal sealed record PublicationEvidence(
     CandidateHistoryState CandidateState,
     ImmutableArray<CandidateMerge>? Candidates)
 {
+    internal ImmutableDictionary<long, ImmutableArray<string>> JobDiagnostics { get; init; }
+        = ImmutableDictionary<long, ImmutableArray<string>>.Empty;
+
+    internal PublicationEvidence WithJobLogs(EvidencePaths paths)
+    {
+        var diagnostics = JobDiagnostics.ToBuilder();
+        foreach (var (jobId, sources) in JobDiagnostics)
+        {
+            var id = jobId.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            var logs = new[] { paths.JobLog(id), Path.Combine(paths.RootDirectory, "diagnostics", $"job-{id}-mocha.log") };
+            diagnostics[jobId] = sources.AddRange(logs.Where(File.Exists)
+                .Select(path => DiagnosticTextSanitizer.Sanitize(File.ReadAllText(path), multiline: true)));
+        }
+
+        return this with { JobDiagnostics = diagnostics.ToImmutable() };
+    }
+
     internal static PublicationEvidence FromBundle(EvidenceBundle bundle)
     {
         static JsonElement Text(string text) => JsonSerializer.SerializeToElement(text);
@@ -298,7 +315,19 @@ internal sealed record PublicationEvidence(
                         Url = candidate.PullRequest.Url,
                         MergedAt = candidate.PullRequest.MergedAt is null ? null : Text(candidate.PullRequest.MergedAt),
                     },
-                }).ToImmutableArray());
+                }).ToImmutableArray())
+        {
+            JobDiagnostics = bundle.Jobs.ToImmutableDictionary(
+                job => job.Id,
+                job => bundle.TestEvidence.Failures.Where(test => test.JobId == job.Id)
+                    .SelectMany(test => new[]
+                    {
+                        test.Diagnostics.Error, test.Diagnostics.StackTrace,
+                        test.Diagnostics.StandardOutput, test.Diagnostics.StandardError,
+                    })
+                    .Select(text => DiagnosticTextSanitizer.Sanitize(text, multiline: true))
+                    .ToImmutableArray()),
+        };
     }
 
 }

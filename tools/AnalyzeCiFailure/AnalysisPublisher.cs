@@ -370,7 +370,12 @@ internal sealed partial class AnalysisPublisher
         var canonical = CauseIssueRenderer.RenderCanonicalIssue(
             history,
             analysis.Evidence.Context,
-            evidence,
+            evidence with
+            {
+                JobDiagnostics = evidence.JobDiagnostics
+                    .Where(pair => cause.JobIds.Any(id => id == NormalizedJsonNumber.Parse(pair.Key.ToString(System.Globalization.CultureInfo.InvariantCulture))))
+                    .ToImmutableDictionary(),
+            },
             analysis.Run.Url,
             EnumText(analysis.Run.Scope),
             pr,

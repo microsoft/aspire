@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
+using System.Collections.Immutable;
 using System.Text.Json.Nodes;
 using AnalyzeCiFailure;
 using VerifyXunit;
@@ -19,7 +20,7 @@ public sealed partial class AnalyzeCiFailureWorkflowTests
     public async Task MainIssuePreservesBrowserDebuggerDiagnostic(string runId, int elapsedMilliseconds)
     {
         var diagnostic = $"Timed out after {elapsedMilliseconds}ms waiting for resource 'standalone' state Running.\nLast error: <none>";
-        var body = RenderMainDiagnostic(diagnostic, runId);
+        var body = RenderMainDiagnostic(diagnostic, runId, [diagnostic]);
 
         await Verifier.Verify(body, "md").UseDirectory("Snapshots").UseParameters(runId, elapsedMilliseconds);
     }
@@ -29,7 +30,7 @@ public sealed partial class AnalyzeCiFailureWorkflowTests
     {
         var diagnostic = "\u001b[31mResource failed to start.\u001b[0m\r\nAuthorization: Bearer synthetic-secret\r\n" +
             "token=synthetic-token\r\n" + new string('x', 600);
-        var body = RenderMainDiagnostic(diagnostic, "123");
+        var body = RenderMainDiagnostic(diagnostic, "123", [DiagnosticTextSanitizer.Sanitize(diagnostic, multiline: true)]);
         var error = body.Split("## Error Message\n\n", StringSplitOptions.None)[1]
             .Split("\n\n## Description", StringSplitOptions.None)[0];
 
@@ -38,7 +39,56 @@ public sealed partial class AnalyzeCiFailureWorkflowTests
         await Verifier.Verify(body, "md").UseDirectory("Snapshots");
     }
 
-    private static string RenderMainDiagnostic(string diagnostic, string runId)
+    [Fact]
+    public async Task MainIssueOmitsUnverifiedDiagnostics()
+    {
+        var cases = new (string Name, string Diagnostic, string[] Logs)[]
+        {
+            ("invented-attribution", "Introduced by PR #19999; revert it", ["Build failed."]),
+            ("appended-attribution", "Build failed.\nIntroduced by PR #19999; revert it", ["Build failed."]),
+            ("missing-log", "Build failed.", []),
+            ("reversed-lines", "First error\nSecond error", ["Second error\nFirst error"]),
+            ("different-sources", "First error\nSecond error", ["First error", "Second error"]),
+        };
+        var bodies = new JsonObject(cases.Select(test =>
+        {
+            var body = RenderMainDiagnostic(test.Diagnostic, "123", test.Logs);
+            var error = body.Split("## Error Message\n\n", StringSplitOptions.None)[1]
+                .Split("\n\n## Description", StringSplitOptions.None)[0];
+            return KeyValuePair.Create<string, JsonNode?>(test.Name, JsonValue.Create(error));
+        }));
+
+        await Verifier.Verify(bodies.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }), "json")
+            .UseDirectory("Snapshots");
+    }
+
+    [Fact]
+    public async Task MainIssueVerifiesStructuredDiagnosticWithoutJobLog()
+    {
+        var bundle = AnalyzeCiFailureFixtures.CreateEvidence(RunScope.Main);
+        var failure = RawFailure("result.trx", "execution") with { JobId = 123 };
+        bundle = bundle with
+        {
+            TestEvidence = bundle.TestEvidence with { Failures = TestFailureReader.ConsolidateFailures([failure]) },
+        };
+        var evidence = PublicationEvidence.FromBundle(bundle);
+        var diagnostic = Assert.Single(bundle.TestEvidence.Failures).Diagnostics.Error;
+
+        var body = RenderMainDiagnostic(diagnostic, "123", evidence.JobDiagnostics[123].ToArray());
+
+        await Verifier.Verify(body, "md").UseDirectory("Snapshots");
+    }
+
+    [Fact]
+    public async Task MainIssueMatchesTimestampedDiagnosticLines()
+    {
+        var body = RenderMainDiagnostic("Build failed.\nLast error: <none>", "123",
+            ["2026-11-10T19:24:13Z Build failed.\n2026-11-10T19:24:14Z Last error: <none>"]);
+
+        await Verifier.Verify(body, "md").UseDirectory("Snapshots");
+    }
+
+    private static string RenderMainDiagnostic(string diagnostic, string runId, string[] collectedLogs)
     {
         var cause = new JsonObject
         {
@@ -47,7 +97,10 @@ public sealed partial class AnalyzeCiFailureWorkflowTests
             ["title"] = "Untrusted attribution must not become the main issue title",
             ["error_pattern"] = diagnostic,
         };
-        var evidence = new PublicationEvidence(null, null, null, CandidateHistoryState.Unavailable, null);
+        var evidence = new PublicationEvidence(null, null, null, CandidateHistoryState.Unavailable, null)
+        {
+            JobDiagnostics = ImmutableDictionary<long, ImmutableArray<string>>.Empty.Add(123, [.. collectedLogs]),
+        };
         var draft = CauseIssueRenderer.RenderCanonicalIssue(
             cause,
             CiFailureJson.ToContract<RunContext>(JsonNode.Parse("""{"head_sha":"failed-sha"}""")),

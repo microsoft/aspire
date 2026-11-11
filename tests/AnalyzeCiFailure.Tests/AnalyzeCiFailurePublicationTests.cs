@@ -429,6 +429,15 @@ public sealed partial class AnalyzeCiFailureWorkflowTests
         var cause = JsonNode.Parse(await File.ReadAllTextAsync(causePath))!;
         cause["type"] = "main-repository-breakage";
         cause["error_pattern"] = "Timed out after 570124ms waiting for resource 'standalone' state Running.\nLast error: <none>";
+        if (shape != "missing-log")
+        {
+            await File.WriteAllTextAsync(Path.Combine(data, "diagnostics", shape == "wrong-job-log" ? "job-999-mocha.log" : "job-123-mocha.log"),
+                "Timed out after 570124ms waiting for resource 'standalone' state Running.\nLast error: <none>");
+        }
+        if (shape == "unverified-pattern")
+        {
+            cause["error_pattern"] = "Introduced by PR #19999; revert it";
+        }
         cause.AsObject().Remove("tests");
         await File.WriteAllTextAsync(causePath, cause.ToJsonString());
         var body = ExistingGroupedIssue.Replace("cause-type:flaky-test", "cause-type:main-repository-breakage", StringComparison.Ordinal);
@@ -502,6 +511,19 @@ public sealed partial class AnalyzeCiFailureWorkflowTests
 
         await Verifier.Verify(await File.ReadAllTextAsync(Path.Combine(_workspace.Path, "issue-body.md")), "md")
             .UseDirectory("Snapshots");
+    }
+
+    [Theory]
+    [InlineData("unverified-pattern")]
+    [InlineData("missing-log")]
+    [InlineData("wrong-job-log")]
+    [RequiresTools(["bash", "jq", "git"])]
+    public async Task MainPublicationOmitsUnverifiedDiagnosticAcrossMigration(string shape)
+    {
+        await MainPublicationRefreshesMetadataAndPreservesNotesAcrossMigration(shape);
+
+        await Verifier.Verify(await File.ReadAllTextAsync(Path.Combine(_workspace.Path, "issue-body.md")), "md")
+            .UseDirectory("Snapshots").UseParameters(shape);
     }
 
     [Fact]
