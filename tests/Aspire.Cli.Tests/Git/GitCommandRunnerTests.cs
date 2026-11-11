@@ -308,7 +308,7 @@ public partial class GitCommandRunnerTests(ITestOutputHelper outputHelper) : IDi
         Assert.Equal("Authentication required: ", stderr.ToString());
         Assert.Empty(interaction.DisplayedRawText);
         Assert.Equal("refs\0blob", GetLoggedOutput(logger, "stdout"));
-        Assert.Equal("Authentication required:", GetLoggedOutput(logger, "stderr"));
+        Assert.Equal("Authentication required: ", GetLoggedOutput(logger, "stderr"));
     }
 
     [Fact]
@@ -325,7 +325,7 @@ public partial class GitCommandRunnerTests(ITestOutputHelper outputHelper) : IDi
         try
         {
             await AsyncTestHelpers.AssertIsTrueRetryAsync(
-                () => GetLoggedOutput(logger, "stdout") == "partial stdout" && GetLoggedOutput(logger, "stderr") == "Enter passphrase:",
+                () => GetLoggedOutput(logger, "stdout") == "partial stdout" && GetLoggedOutput(logger, "stderr") == "Enter passphrase: ",
                 "Git output should be logged before the process exits.");
             Assert.False(run.IsCompleted);
         }
@@ -336,7 +336,7 @@ public partial class GitCommandRunnerTests(ITestOutputHelper outputHelper) : IDi
         }
 
         Assert.Equal("partial stdout", GetLoggedOutput(logger, "stdout"));
-        Assert.Equal("Enter passphrase:", GetLoggedOutput(logger, "stderr"));
+        Assert.Equal("Enter passphrase: ", GetLoggedOutput(logger, "stderr"));
         Assert.Empty(interaction.DisplayedRawText);
     }
 
