@@ -689,13 +689,24 @@ internal sealed class AgentInitCommand : BaseCommand
         // Whether telemetry is actually transmitted stays gated by the single ASPIRE_CLI_TELEMETRY_OPTOUT
         // opt-out, which both the hook scripts and the `aspire agent telemetry` command path re-check at runtime.
         // The hooks only report aspire@aspire-skills skills and Aspire MCP tool usage, so a client gets a
-        // hook only when this run registered that plugin or configured the Aspire MCP server for it.
+        // hook only when this run registered that plugin or configured the Aspire MCP server for it, or
+        // either is already set up. The latter keeps re-runs that skip both choices refreshing the hook.
         // Selecting the aspire skill choice is not enough: skill sources can disable the default source
         // or replace its plugins.
         var aspireConfiguredClients = GetAspireSkillsRegisteredClients(registrationResults, skillSources)
             .Concat(mcpConfiguredClients)
             .ToHashSet();
-        var telemetryHookClients = selectedClients.Where(aspireConfiguredClients.Contains).ToList();
+        var telemetryHookClients = new List<IAgentClient>();
+        foreach (var client in selectedClients)
+        {
+            // The configurator owns hook eligibility; the guard only avoids reading config it would ignore.
+            if (aspireConfiguredClients.Contains(client) ||
+                (client.SupportsTelemetryHooks && await HasExistingAspireSetupAsync(client, workspaceRoot, scope, cancellationToken)))
+            {
+                telemetryHookClients.Add(client);
+            }
+        }
+
         if (telemetryHookClients.Count > 0)
         {
             await ConfigureTelemetryHooksAsync(telemetryHookClients, scope, workspaceRoot, cancellationToken);
@@ -734,6 +745,37 @@ internal sealed class AgentInitCommand : BaseCommand
         return registrationResults
             .Where(static result => result.Status is not AgentConfigurationStatus.Failed)
             .SelectMany(static result => result.Clients);
+    }
+
+    private static async Task<bool> HasExistingAspireSetupAsync(
+        IAgentClient client, DirectoryInfo workspaceRoot, AgentConfigurationScope scope, CancellationToken cancellationToken)
+    {
+        try
+        {
+            // Empty sources limit the check to the built-in aspire-skills plugin or catalog.
+            if (client.HasIntegrationRegistration(workspaceRoot, scope, []))
+            {
+                return true;
+            }
+
+            foreach (var (path, configureServer) in client.GetMcpConfigPaths(scope, workspaceRoot).Where(static target => target.ConfigureServer))
+            {
+                // Probe a discarded in-memory copy with the client's own update logic, so each client's
+                // server container and nesting rules apply. Nothing to add means the server already exists.
+                var (config, configFilePath) = await client.ReadMcpConfigAsync(
+                    path, workspaceRoot, scope, new AgentConfiguration(), cancellationToken);
+                if (!client.UpdateMcpConfig(config, configFilePath, configureServer, scope).Added)
+                {
+                    return true;
+                }
+            }
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or IOException or UnauthorizedAccessException)
+        {
+            // Unreadable config is not evidence of Aspire setup, and hook installation is best effort.
+        }
+
+        return false;
     }
 
     private async Task ConfigureTelemetryHooksAsync(
