@@ -9,6 +9,7 @@ class AspireTooltipProvider extends HTMLElement {
     #timer = null;
     #version = 0;
     #observer = null;
+    #positioningObserver = null;
     #visibilityObserver = null;
     #keyboardModality = false;
     #focusDismissed = false;
@@ -163,6 +164,18 @@ class AspireTooltipProvider extends HTMLElement {
             // tooltip never light-dismisses an open menu or select popover.
             tooltip.setAttribute("popover", "manual");
             tooltip.showTooltip(0);
+            if (this.#positioningAnchor) {
+                // Graph zoom and node layout change SVG transforms without scroll or resize.
+                // Watch only this ancestor chain while open, not every graph node.
+                // CSS animations and unrelated layout shifts can still move the snapshot without an attribute change.
+                this.#positioningObserver = new MutationObserver(() => this.#clear());
+                for (let element = target.anchor; element; element = element.parentElement) {
+                    this.#positioningObserver.observe(element, {
+                        attributes: true,
+                        attributeFilter: ["transform", "style", "class", "viewBox", "x", "y", "width", "height"]
+                    });
+                }
+            }
             const observe = current => {
                 this.#observer.disconnect();
                 this.#observer.observe(target.anchor, {
@@ -229,6 +242,8 @@ class AspireTooltipProvider extends HTMLElement {
         this.#version++;
         this.#observer?.disconnect();
         this.#observer = null;
+        this.#positioningObserver?.disconnect();
+        this.#positioningObserver = null;
         this.#visibilityObserver?.disconnect();
         this.#visibilityObserver = null;
         clearTimeout(this.#timer);
