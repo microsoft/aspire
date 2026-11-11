@@ -5,6 +5,7 @@
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.ApplicationModel.Docker;
+using Aspire.Hosting.Dotnet;
 using Aspire.Hosting.Yarp;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -266,5 +267,22 @@ public static class YarpResourceExtensions
         }
 
         return imageName;
+    }
+    /// <summary>
+    /// Configures YARP for a DotnetProject
+    /// </summary>
+    /// <param name="builder">The resource builder for a DotnetProject.</param>
+    /// <param name="configurationBuilder">The callback to configure YARP</param>
+    /// <returns>The updated resource builder.</returns>
+    public static IResourceBuilder<DotnetProjectResource> AddYarp(this IResourceBuilder<DotnetProjectResource> builder, Action<IYarpConfigurationBuilder> configurationBuilder)
+    {
+        var configBuilder = new YarpProjectConfigurationBuilder(builder);
+        configurationBuilder(configBuilder);
+        return builder
+            .WithIconName("GlobeArrowForward")
+            .WithEnvironment(ctx =>
+            {
+                YarpEnvConfigGenerator.PopulateEnvVariables(ctx.EnvironmentVariables, configBuilder.Routes, configBuilder.Clusters);
+            });
     }
 }
