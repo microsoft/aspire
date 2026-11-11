@@ -189,6 +189,11 @@
         <target state="new">Invalid skill/tool selection '{0}'. Use {1}, '{2}', or '{3}'.</target>
         <note />
       </trans-unit>
+      <trans-unit id="InitCommand_KeepSkillCopiesOptionDescription">
+        <source>Keep copied Aspire skills instead of removing them after configuring skill sources</source>
+        <target state="new">Keep copied Aspire skills instead of removing them after configuring skill sources</target>
+        <note />
+      </trans-unit>
       <trans-unit id="InitCommand_LocalSkillsConflict">
         <source>Copied Aspire skills are not recommended; configured skill sources supersede them
 {0}</source>
@@ -229,11 +234,6 @@
       <trans-unit id="InitCommand_ProjectScope">
         <source>This project (In your workspace, ready to commit with your project)</source>
         <target state="needs-review-translation">Progetto (Installare nella radice dell'area di lavoro; commit eseguito insieme al progetto)</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="InitCommand_RemoveSkillCopiesOptionDescription">
-        <source>Remove copied Aspire skills after configuring skill sources. Defaults to true; pass '--remove-skill-copies=false' to keep them</source>
-        <target state="new">Remove copied Aspire skills after configuring skill sources. Defaults to true; pass '--remove-skill-copies=false' to keep them</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_RemoveSkillCopiesPrompt">

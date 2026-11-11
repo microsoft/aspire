@@ -3,7 +3,7 @@
       "name": "aspire-skill-sources",
       "status": "warning",
       "message": "Copied Aspire skills are not recommended; configured skill sources supersede them",
-      "fix": "Run 'aspire agent init --skills aspire' to configure skill sources and remove these copies.",
+      "fix": "Run 'aspire agent init' to update configuration",
       "files": [
         ".agents/skills/aspire/SKILL.md",
         "~/.agents/skills/aspire/SKILL.md"

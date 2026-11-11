@@ -26,7 +26,7 @@ internal sealed class McpInitCommand : BaseCommand
         Options.Add(_agentInitCommand.AgentsOption);
         Options.Add(AgentInitCommand.s_scopeOption);
         Options.Add(AgentInitCommand.s_skillsOption);
-        Options.Add(AgentInitCommand.s_removeSkillCopiesOption);
+        Options.Add(AgentInitCommand.s_keepSkillCopiesOption);
     }
 
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)

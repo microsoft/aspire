@@ -1019,7 +1019,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         }).BuildServiceProvider();
         var arguments = reason switch
         {
-            "declined" => "--skills aspire --mcp=false --remove-skill-copies=false",
+            "declined" => "--skills aspire --mcp=false --keep-skill-copies",
             "plugin-not-selected" => "--skills none --mcp",
             _ => "--skills aspire --mcp=false"
         };

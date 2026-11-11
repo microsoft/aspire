@@ -403,6 +403,15 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Keep copied Aspire skills instead of removing them after configuring skill sources.
+        /// </summary>
+        internal static string InitCommand_KeepSkillCopiesOptionDescription {
+            get {
+                return ResourceManager.GetString("InitCommand_KeepSkillCopiesOptionDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Copied Aspire skills are not recommended; configured skill sources supersede them {0}.
         /// </summary>
         internal static string InitCommand_LocalSkillsConflict {
@@ -480,15 +489,6 @@ namespace Aspire.Cli.Resources {
         internal static string InitCommand_RemovedSkillCopy {
             get {
                 return ResourceManager.GetString("InitCommand_RemovedSkillCopy", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Remove copied Aspire skills after configuring skill sources. Defaults to true; pass &apos;--remove-skill-copies=false&apos; to keep them.
-        /// </summary>
-        internal static string InitCommand_RemoveSkillCopiesOptionDescription {
-            get {
-                return ResourceManager.GetString("InitCommand_RemoveSkillCopiesOptionDescription", resourceCulture);
             }
         }
         

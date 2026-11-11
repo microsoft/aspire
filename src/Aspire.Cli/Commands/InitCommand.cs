@@ -119,7 +119,7 @@ internal sealed class InitCommand : BaseCommand
         Options.Add(_agentInitCommand.AgentsOption);
         Options.Add(AgentInitCommand.s_scopeOption);
         Options.Add(AgentInitCommand.s_skillsOption);
-        Options.Add(AgentInitCommand.s_removeSkillCopiesOption);
+        Options.Add(AgentInitCommand.s_keepSkillCopiesOption);
     }
 
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
@@ -218,7 +218,7 @@ internal sealed class InitCommand : BaseCommand
             PromptBinding.Create(parseResult, _agentInitCommand.AgentsOption),
             PromptBinding.Create(parseResult, AgentInitCommand.s_skillsOption, CommonAgentApplicators.AspireSkillName),
             PromptBinding.Create(parseResult, AgentInitCommand.s_scopeOption, AgentConfigurationScope.Project),
-            PromptBinding.CreateBoolConfirm(parseResult, AgentInitCommand.s_removeSkillCopiesOption, defaultValue: true),
+            PromptBinding.CreateInvertedBoolConfirm(parseResult, AgentInitCommand.s_keepSkillCopiesOption, defaultValue: true),
             cancellationToken);
 
         if (agentInitResult.ExitCode == CliExitCodes.Success)

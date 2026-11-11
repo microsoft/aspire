@@ -292,8 +292,8 @@
 {0}</value>
     <comment>{0} lists the local skill entry-point paths, one per line.</comment>
   </data>
-  <data name="InitCommand_RemoveSkillCopiesOptionDescription" xml:space="preserve">
-    <value>Remove copied Aspire skills after configuring skill sources. Defaults to true; pass '--remove-skill-copies=false' to keep them</value>
+  <data name="InitCommand_KeepSkillCopiesOptionDescription" xml:space="preserve">
+    <value>Keep copied Aspire skills instead of removing them after configuring skill sources</value>
   </data>
   <data name="InitCommand_RemoveSkillCopiesPrompt" xml:space="preserve">
     <value>Remove the copied Aspire skills listed above after configuring skill sources?</value>

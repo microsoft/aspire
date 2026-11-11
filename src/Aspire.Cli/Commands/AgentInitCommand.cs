@@ -67,7 +67,7 @@ internal sealed class AgentInitCommand : BaseCommand
         Options.Add(AgentsOption);
         Options.Add(s_scopeOption);
         Options.Add(s_skillsOption);
-        Options.Add(s_removeSkillCopiesOption);
+        Options.Add(s_keepSkillCopiesOption);
     }
 
     internal Option<string?> AgentsOption { get; }
@@ -94,14 +94,15 @@ internal sealed class AgentInitCommand : BaseCommand
     };
 
     /// <summary>
-    /// Confirms whether Aspire skills copied by older CLI versions are removed after skill sources are
-    /// configured. Configured skill sources supersede those copies, so omitting the option defaults to "yes";
-    /// <c>--remove-skill-copies=false</c> keeps them. Registered on every command that can configure skill
-    /// sources (<c>aspire agent init</c>, <c>aspire init</c>, <c>aspire new</c>, and <c>aspire mcp init</c>).
+    /// Opts out of removing Aspire skills copied by older CLI versions after skill sources are configured.
+    /// Configured skill sources supersede those copies, so omitting the option prompts with "remove" as the
+    /// default (and removes them non-interactively); <c>--keep-skill-copies</c> keeps them. Registered on every
+    /// command that can configure skill sources (<c>aspire agent init</c>, <c>aspire init</c>, <c>aspire new</c>,
+    /// and <c>aspire mcp init</c>).
     /// </summary>
-    internal static readonly Option<bool?> s_removeSkillCopiesOption = new("--remove-skill-copies")
+    internal static readonly Option<bool?> s_keepSkillCopiesOption = new("--keep-skill-copies")
     {
-        Description = AgentCommandStrings.InitCommand_RemoveSkillCopiesOptionDescription,
+        Description = AgentCommandStrings.InitCommand_KeepSkillCopiesOptionDescription,
         Recursive = true
     };
 
@@ -264,7 +265,7 @@ internal sealed class AgentInitCommand : BaseCommand
             PromptBinding.Create(parseResult, s_skillsOption, CommonAgentApplicators.AspireSkillName),
             PromptBinding.Create(parseResult, s_scopeOption, AgentConfigurationScope.Project),
             PromptBinding.CreateBoolConfirm(parseResult, s_mcpOption, defaultValue: false),
-            PromptBinding.CreateBoolConfirm(parseResult, s_removeSkillCopiesOption, defaultValue: true),
+            PromptBinding.CreateInvertedBoolConfirm(parseResult, s_keepSkillCopiesOption, defaultValue: true),
             cancellationToken);
         return CommandResult.FromExitCode(result.ExitCode);
     }

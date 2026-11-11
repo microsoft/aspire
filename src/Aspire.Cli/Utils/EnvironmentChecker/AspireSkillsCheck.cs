@@ -53,7 +53,7 @@ internal sealed class AspireSkillsCheck(
                 Name = CheckName,
                 Status = EnvironmentCheckStatus.Warning,
                 Message = string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_LocalSkillsConflict, string.Empty).TrimEnd(),
-                Fix = DoctorCommandStrings.AspireSkillsFix,
+                Fix = AgentCommandStrings.DeprecatedConfigFix,
                 Files = displayPaths,
                 Metadata = new JsonObject
                 {
