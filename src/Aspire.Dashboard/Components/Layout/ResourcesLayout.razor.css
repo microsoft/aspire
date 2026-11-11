@@ -53,9 +53,7 @@
        minimums made the row wider than the pane at 540-584px, 720-730px and 960-998px, which pushed the actions out
        of view. */
     --resource-row-identity-extra: calc(var(--resource-row-meta-type-width) + 26px);
-    --resource-row-font-size: var(--aspire-font-size-secondary);
     --resource-row-line-height: var(--lineHeightBase200);
-    --resource-secondary-font-size: var(--aspire-font-size-caption);
     --resource-secondary-line-height: 16px;
     --resource-insight-height: 24px;
     --resource-insight-icon-size: 12px;
