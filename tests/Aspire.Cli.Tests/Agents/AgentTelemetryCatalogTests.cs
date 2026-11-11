@@ -8,7 +8,7 @@ namespace Aspire.Cli.Tests.Agents;
 
 public class AgentTelemetryCatalogTests
 {
-    private const string Allowlist = """
+    private const string CatalogJson = """
         {
           "skills": [ "another-skill", "new-skill" ],
           "references": [ "another-skill/references/guide.yml", "new-skill/references/new.md" ],
@@ -17,9 +17,9 @@ public class AgentTelemetryCatalogTests
         """;
 
     [Fact]
-    public void ReadsAllowlistsFromJson()
+    public void ReadsCatalogFromJson()
     {
-        var catalog = AgentTelemetryCatalog.Parse(Allowlist);
+        var catalog = AgentTelemetryCatalog.Parse(CatalogJson);
         Assert.Equal(["another-skill", "new-skill"], catalog.Skills.Order());
         Assert.Equal(["another-tool", "new_tool"], catalog.Tools.Order());
         Assert.Equal(["another-skill/references/guide.yml", "new-skill/references/new.md"], catalog.References.Order());
@@ -91,7 +91,7 @@ public class AgentTelemetryCatalogTests
 
     private static string Mutate(Action<JsonObject> mutate)
     {
-        var root = JsonNode.Parse(Allowlist)!.AsObject();
+        var root = JsonNode.Parse(CatalogJson)!.AsObject();
         mutate(root);
         return root.ToJsonString();
     }

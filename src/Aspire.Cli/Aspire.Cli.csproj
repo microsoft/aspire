@@ -332,9 +332,9 @@
     <EmbeddedResource Include="$(SharedDir)Mcp\Resources\aspire-32.png" Link="Mcp\Resources\aspire-32.png" />
     <EmbeddedResource Include="$(SharedDir)Mcp\Resources\aspire-48.png" Link="Mcp\Resources\aspire-48.png" />
     <EmbeddedResource Include="$(SharedDir)Mcp\Resources\aspire-64.png" Link="Mcp\Resources\aspire-64.png" />
-    <!-- Allowlisted skill, reference, and MCP tool names read by AgentTelemetryCatalog.
+    <!-- Catalog of skill, reference, and MCP tool names read by AgentTelemetryCatalog.
          The Aspire skills release workflow updates this file through Aspire PRs. -->
-    <EmbeddedResource Include="Agents\Hooks\telemetry-allowlist.json" LogicalName="telemetry-allowlist.json">
+    <EmbeddedResource Include="Agents\Hooks\telemetry-catalog.json" LogicalName="telemetry-catalog.json">
       <WithCulture>false</WithCulture>
     </EmbeddedResource>
   </ItemGroup>

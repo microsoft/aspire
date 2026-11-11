@@ -7,11 +7,11 @@ using System.Text.RegularExpressions;
 namespace Aspire.Cli.Agents.Hooks;
 
 /// <summary>
-/// Reads telemetry allowlists from the embedded <c>telemetry-allowlist.json</c> resource.
+/// Reads telemetry identifiers from the embedded <c>telemetry-catalog.json</c> resource.
 /// </summary>
 internal sealed partial class AgentTelemetryCatalog
 {
-    internal const string AllowlistResourceName = "telemetry-allowlist.json";
+    internal const string CatalogResourceName = "telemetry-catalog.json";
 
     private const string SkillsPropertyName = "skills";
     private const string ReferencesPropertyName = "references";
@@ -33,7 +33,7 @@ internal sealed partial class AgentTelemetryCatalog
     }
 
     /// <summary>
-    /// Parses an allowlist document.
+    /// Parses a catalog document.
     /// </summary>
     /// <remarks>
     /// The document has exactly three properties, each a non-empty, ordinally sorted array of unique strings:
@@ -54,7 +54,7 @@ internal sealed partial class AgentTelemetryCatalog
         if (root.ValueKind is not JsonValueKind.Object ||
             root.EnumerateObject().Any(property => property.Name is not (SkillsPropertyName or ReferencesPropertyName or McpToolsPropertyName)))
         {
-            throw new InvalidDataException("The telemetry allowlist must be an object with only skills, references, and mcpTools properties.");
+            throw new InvalidDataException("The telemetry catalog must be an object with only skills, references, and mcpTools properties.");
         }
 
         var skills = ReadIdentifiers(root, SkillsPropertyName);
@@ -70,7 +70,7 @@ internal sealed partial class AgentTelemetryCatalog
                 reference.Contains('\\') ||
                 segments.Skip(2).Any(segment => segment is "" or "." or ".."))
             {
-                throw new InvalidDataException($"The telemetry allowlist contains an invalid {ReferencesPropertyName} entry.");
+                throw new InvalidDataException($"The telemetry catalog contains an invalid {ReferencesPropertyName} entry.");
             }
         }
 
@@ -85,7 +85,7 @@ internal sealed partial class AgentTelemetryCatalog
         }
         catch (JsonException ex)
         {
-            throw new InvalidDataException("The telemetry allowlist is not valid JSON.", ex);
+            throw new InvalidDataException("The telemetry catalog is not valid JSON.", ex);
         }
     }
 
@@ -94,7 +94,7 @@ internal sealed partial class AgentTelemetryCatalog
         var values = ReadValues(root, propertyName);
         if (values.Any(value => !Identifier().IsMatch(value)))
         {
-            throw new InvalidDataException($"The telemetry allowlist contains an invalid {propertyName} entry.");
+            throw new InvalidDataException($"The telemetry catalog contains an invalid {propertyName} entry.");
         }
 
         return values;
@@ -104,7 +104,7 @@ internal sealed partial class AgentTelemetryCatalog
     {
         if (!root.TryGetProperty(propertyName, out var array) || array.ValueKind is not JsonValueKind.Array)
         {
-            throw new InvalidDataException($"The telemetry allowlist must declare {propertyName} as an array.");
+            throw new InvalidDataException($"The telemetry catalog must declare {propertyName} as an array.");
         }
 
         var values = new List<string>();
@@ -112,7 +112,7 @@ internal sealed partial class AgentTelemetryCatalog
         {
             if (item.ValueKind is not JsonValueKind.String || item.GetString() is not { Length: > 0 } value)
             {
-                throw new InvalidDataException($"The telemetry allowlist contains an invalid {propertyName} entry.");
+                throw new InvalidDataException($"The telemetry catalog contains an invalid {propertyName} entry.");
             }
 
             values.Add(value);
@@ -121,7 +121,7 @@ internal sealed partial class AgentTelemetryCatalog
         var result = new HashSet<string>(values, StringComparer.OrdinalIgnoreCase);
         if (values.Count == 0 || result.Count != values.Count)
         {
-            throw new InvalidDataException($"The telemetry allowlist must declare a non-empty {propertyName} array without duplicates.");
+            throw new InvalidDataException($"The telemetry catalog must declare a non-empty {propertyName} array without duplicates.");
         }
 
         // Sorted arrays keep automated edits deterministic and diffs reviewable.
@@ -129,7 +129,7 @@ internal sealed partial class AgentTelemetryCatalog
         {
             if (string.CompareOrdinal(values[i - 1], values[i]) > 0)
             {
-                throw new InvalidDataException($"The telemetry allowlist {propertyName} array must be sorted ordinally.");
+                throw new InvalidDataException($"The telemetry catalog {propertyName} array must be sorted ordinally.");
             }
         }
 
@@ -138,10 +138,10 @@ internal sealed partial class AgentTelemetryCatalog
 
     private static AgentTelemetryCatalog LoadCanonical()
     {
-        // Read only the compiled allowlist. User-installed files and plugin contents must not
+        // Read only the compiled catalog. User-installed files and plugin contents must not
         // be able to introduce new telemetry dimensions.
-        using var stream = typeof(AgentTelemetryCatalog).Assembly.GetManifestResourceStream(AllowlistResourceName)
-            ?? throw new InvalidDataException("The telemetry allowlist resource is missing.");
+        using var stream = typeof(AgentTelemetryCatalog).Assembly.GetManifestResourceStream(CatalogResourceName)
+            ?? throw new InvalidDataException("The telemetry catalog resource is missing.");
         using var reader = new StreamReader(stream);
         return Parse(reader.ReadToEnd());
     }

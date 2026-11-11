@@ -6,7 +6,7 @@ directly. Plugins provide skills and references; they do not register
 telemetry hooks.
 
 The skills, references, and first-party MCP tools that may be reported are
-listed in [`telemetry-allowlist.json`](telemetry-allowlist.json), which is
+listed in [`telemetry-catalog.json`](telemetry-catalog.json), which is
 embedded in the CLI and read by `AgentTelemetryCatalog`:
 
 ```json
@@ -19,12 +19,12 @@ embedded in the CLI and read by `AgentTelemetryCatalog`:
 
 Each property is required and must be a non-empty, ordinally sorted array of
 unique strings. References are skill-relative paths under a listed skill's
-`references/` directory. `AgentTelemetryCatalogTests` and
-`AgentTelemetryHookTests` validate the embedded file.
+`references/` directory. `AgentTelemetryCatalogTests` validate parsing, and
+`AgentTelemetryHookTests` exercise the embedded catalog.
 
 The release-driven
 [Aspire skills update workflow](https://github.com/microsoft/aspire-skills/blob/dev/.github/workflows/update-aspire.md)
-reviews released skills source and proposes allowlist, code, and test changes
+reviews released skills source and proposes catalog, code, and test changes
 in this repository. Updates ship through normal Aspire pull requests and CLI
 releases, without relying on Aspire-skills bundles or caches.
 
