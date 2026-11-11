@@ -3124,12 +3124,18 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
                     ? layout.OnRowClickAsync(e, layout.GetResourceName(resource))
                     : Task.CompletedTask);
             ToggleCollapse = EventCallback.Factory.Create<MouseEventArgs>(layout, () => layout.OnToggleCollapseAsync(uniqueResourceName));
+            ViewOutput = EventCallback.Factory.Create<MouseEventArgs>(layout, () =>
+                layout._resourceByName.TryGetValue(uniqueResourceName, out var resource)
+                    ? layout.ResourceMenuBuilder.CreateViewOutputMenuItem(resource, layout._resourceByName).OnClick!()
+                    : Task.CompletedTask);
             MenuItems = () => layout._resourceByName.TryGetValue(uniqueResourceName, out var resource) ? layout.GetResourceMenuItems(resource) : [];
         }
 
         public EventCallback<MouseEventArgs> Click { get; }
 
         public EventCallback<MouseEventArgs> ToggleCollapse { get; }
+
+        public EventCallback<MouseEventArgs> ViewOutput { get; }
 
         public Func<IList<MenuButtonItem>> MenuItems { get; }
 

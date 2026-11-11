@@ -507,7 +507,7 @@
                     <FluentIcon Value="@(new Icons.Regular.Size16.Open())" Color="Color.Primary" />
                 </a>
             }
-            @foreach (var command in showLabels ? GetHighlightedCommands(resource) : _isPaneFullCanvas ? GetResourceRowCommands(resource) : GetSidebarCommands(resource))
+            @foreach (var command in showLabels || _isPaneFullCanvas ? GetHighlightedCommands(resource) : GetSidebarCommands(resource))
             {
                 var commandTitle = !string.IsNullOrEmpty(command.GetDisplayDescription()) ? command.GetDisplayDescription() : command.GetDisplayName();
                 if (showLabels)
@@ -523,7 +523,7 @@
                 else
                 {
                     <FluentButton Appearance="ButtonAppearance.Transparent"
-                                  Class="@($"{GetResourceRowActionClass(actionIndex++)} resource-row-highlighted resource-row-command-slot-{highlightedIndex++} {(!command.IsHighlighted && _isPaneFullCanvas ? "resource-row-wide-command" : null)}")"
+                                  Class="@($"{GetResourceRowActionClass(actionIndex++)} resource-row-highlighted resource-row-command-slot-{highlightedIndex++}")"
                                   IconOnly="true"
                                   IconStart="@(IconResolver.ResolveHighlightedCommandIcon(command.IconName, command.IconVariant).WithColor("currentColor"))"
                                   data-tooltip="@commandTitle"
@@ -532,6 +532,19 @@
                                   OnClick="@handlers.Command(command.Name)"
                                   Disabled="@IsCommandDisabled(resource, command)" />
                 }
+            }
+            @if (!showLabels && _isPaneFullCanvas && !resource.IsParameter)
+            {
+                var outputAction = ResourceMenuBuilder.CreateViewOutputMenuItem(resource, _resourceByName);
+                <FluentButton Appearance="ButtonAppearance.Transparent"
+                              Class="@($"{GetResourceRowActionClass(actionIndex++)} resource-row-output")"
+                              IconOnly="true"
+                              data-tooltip="@outputAction.Text"
+                              data-tooltip-positioning="above"
+                              aria-label="@outputAction.Text"
+                              OnClick="@handlers.ViewOutput">
+                    <FluentIcon Value="@outputAction.Icon" Width="16px" Color="Color.Primary" />
+                </FluentButton>
             }
             <AspireMenuButton ButtonAppearance="@(showLabels ? ButtonAppearance.Default : ButtonAppearance.Transparent)"
                               ButtonClass="@(showLabels ? null : "resource-row-action")"

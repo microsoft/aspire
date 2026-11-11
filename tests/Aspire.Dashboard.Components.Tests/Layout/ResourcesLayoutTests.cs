@@ -1516,7 +1516,7 @@ public class ResourcesLayoutTests : DashboardTestContext
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task RowActions_PromoteAvailableLifecycleCommandsThroughExistingExecutor(bool readOnly)
+    public async Task RowActions_UseOnlyHighlightedCommandsInFullPageGrid(bool readOnly)
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         var executed = new List<string>();
@@ -1540,15 +1540,90 @@ public class ResourcesLayoutTests : DashboardTestContext
         cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".resource-row-highlighted")));
         Assert.Equal("stop api", cut.Find(".resource-row-highlighted").GetAttribute("aria-label"));
         ResourceSetupHelpers.ToggleResourceList(cut);
-        cut.WaitForAssertion(() => Assert.Equal(2, cut.FindAll(".resource-row-highlighted").Count));
+        cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".pane-full-canvas .resource-row-highlighted")));
         var buttons = cut.FindAll(".resource-row-highlighted");
-        Assert.Equal(["stop api", "restart api"], buttons.Select(b => b.GetAttribute("aria-label")));
+        Assert.Equal(["stop api"], buttons.Select(b => b.GetAttribute("aria-label")));
         Assert.All(buttons, b => Assert.Equal(readOnly, b.HasAttribute("disabled")));
         if (!readOnly)
         {
-            await cut.InvokeAsync(() => buttons[1].Click());
-            cut.WaitForAssertion(() => Assert.Equal(["restart"], executed));
+            await cut.InvokeAsync(() => buttons[0].Click());
+            cut.WaitForAssertion(() => Assert.Equal(["stop"], executed));
         }
+    }
+
+    [Fact]
+    public void FullPageRowActions_ShowTwoVisibleHighlightsThenOutputAndMenu()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        static CommandViewModel Command(string name, CommandViewModelState state, bool highlighted) =>
+            new(name, state, name, "", confirmationMessage: "", argumentInputs: [], isHighlighted: highlighted, iconName: "", iconVariant: IconVariant.Regular);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources:
+            [
+                ModelTestHelpers.CreateResource("api", state: KnownResourceState.Running, commands:
+                [
+                    Command(CommandViewModel.StopCommand, CommandViewModelState.Enabled, false),
+                    Command("hidden", CommandViewModelState.Hidden, true),
+                    Command("deploy", CommandViewModelState.Enabled, true),
+                    Command("inspect", CommandViewModelState.Disabled, true),
+                    Command("extra", CommandViewModelState.Enabled, true)
+                ]),
+                ModelTestHelpers.CreateResource("setting", resourceType: KnownResourceTypes.Parameter)
+            ], resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
+        ResourceSetupHelpers.ToggleResourceList(cut);
+        cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".pane-full-canvas")));
+
+        Assert.Collection(cut.FindAll("[data-resource-name='api'] .resource-row-actions fluent-button"),
+            button =>
+            {
+                Assert.Equal("deploy api", button.GetAttribute("aria-label"));
+                Assert.False(button.HasAttribute("disabled"));
+            },
+            button =>
+            {
+                Assert.Equal("inspect api", button.GetAttribute("aria-label"));
+                Assert.True(button.HasAttribute("disabled"));
+            },
+            button => Assert.Equal("Console logs", button.GetAttribute("aria-label")),
+            button => Assert.Equal("Actions for api", button.GetAttribute("aria-label")));
+        Assert.Equal(["Actions for setting"],
+            cut.FindAll("[data-resource-name='setting'] .resource-row-actions fluent-button").Select(button => button.GetAttribute("aria-label")));
+    }
+
+    [Theory]
+    [InlineData(false, false, ResourceListDensity.Comfortable)]
+    [InlineData(true, false, ResourceListDensity.Comfortable)]
+    [InlineData(true, true, ResourceListDensity.Comfortable)]
+    [InlineData(false, false, ResourceListDensity.Compact)]
+    [InlineData(true, false, ResourceListDensity.Compact)]
+    [InlineData(true, true, ResourceListDensity.Compact)]
+    public async Task FullPageRowOutput_PrefersTerminalAndFallsBackToConsoleLogs(
+        bool hasTerminal, bool readOnly, ResourceListDensity density)
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var resource = hasTerminal
+            ? TerminalSetupHelpers.CreateTerminalResource("shell-instance", displayName: "shell")
+            : ModelTestHelpers.CreateResource("shell-instance", displayName: "shell");
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true, isReadOnly: readOnly,
+            initialResources: [resource, ModelTestHelpers.CreateResource("api")],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
+        await cut.InvokeAsync(() => Services.GetRequiredService<DashboardViewPreferences>().SetDensityAsync(density));
+        ResourceSetupHelpers.ToggleResourceList(cut);
+        cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".pane-full-canvas")));
+
+        var output = cut.Find("[data-resource-name='shell-instance'] .resource-row-output");
+        var expectTerminal = hasTerminal && !readOnly;
+        Assert.Equal(expectTerminal ? "Terminal" : "Console logs", output.GetAttribute("aria-label"));
+        Assert.False(output.HasAttribute("disabled"));
+        await cut.InvokeAsync(() => output.Click());
+
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        var expectedPath = expectTerminal ? "/terminals/resource/shell" : "/consolelogs/resource/shell";
+        Assert.Equal(navigation.ToAbsoluteUri(expectedPath).AbsoluteUri, navigation.Uri);
     }
 
     [Theory]
