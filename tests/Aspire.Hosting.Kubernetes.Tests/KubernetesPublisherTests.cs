@@ -732,6 +732,27 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void PublishAsync_ReportsThrowingConnectionStringWithOtherEnvironmentErrors()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        builder.AddKubernetesEnvironment("env");
+
+        var db = builder.AddResource(new ThrowingConnectionStringResource("db"));
+
+        builder.AddContainer("web", "nginx")
+            .WithEnvironment("DB", db)
+            .WithEnvironment(context => context.EnvironmentVariables["ALLOWED_HOSTS"] = new[] { "contoso.com" });
+
+        using var app = builder.Build();
+        var ex = Assert.ThrowsAny<Exception>(app.Run);
+
+        var message = ex.ToString();
+        Assert.Contains("Failed to process environment variable 'DB' on resource 'web': connection string unavailable", message);
+        Assert.Contains("Failed to process environment variable 'ALLOWED_HOSTS' on resource 'web': Unsupported value type: String[]", message);
+    }
+
+    [Fact]
     public void PublishAsync_AdditionalResourceWithSameNameAsGeneratedResourceDoesNotOverwriteTemplate()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -1191,6 +1212,11 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
         var deployment = await File.ReadAllTextAsync(deploymentPath);
 
         await Verify(deployment, "yaml");
+    }
+
+    private sealed class ThrowingConnectionStringResource(string name) : Resource(name), IResourceWithConnectionString
+    {
+        public ReferenceExpression ConnectionStringExpression => throw new InvalidOperationException("connection string unavailable");
     }
 
     private sealed class KedaScaledObject() : BaseKubernetesResource("keda.sh/v1alpha1", "ScaledObject")

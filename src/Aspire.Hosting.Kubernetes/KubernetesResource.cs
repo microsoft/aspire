@@ -464,21 +464,22 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
             {
                 var key = environmentVariable.Key;
 
-                // Check if the value contains deferred providers (e.g., Bicep outputs)
-                // that can only be resolved after infrastructure provisioning.
-                // If so, create a deferred HelmValue with the env var key name.
-                if (IsUnresolvedAtPublishTime(environmentVariable.Value) &&
-                    environmentVariable.Value is IValueProvider deferredVp)
-                {
-                    var deferredHelmValue = CreateDeferredHelmValue(key, deferredVp);
-                    ProcessEnvironmentHelmExpression(deferredHelmValue, key);
-                    continue;
-                }
-
                 object value;
                 try
                 {
-                    value = await ProcessValueAsync(environmentContext, executionContext, environmentVariable.Value).ConfigureAwait(false);
+                    // Check if the value contains deferred providers (e.g., Bicep outputs)
+                    // that can only be resolved after infrastructure provisioning.
+                    // If so, create a deferred HelmValue with the env var key name.
+                    // This check reads connection string expressions, which can throw, so it stays inside the per-variable catch.
+                    if (IsUnresolvedAtPublishTime(environmentVariable.Value) &&
+                        environmentVariable.Value is IValueProvider deferredVp)
+                    {
+                        value = CreateDeferredHelmValue(key, deferredVp);
+                    }
+                    else
+                    {
+                        value = await ProcessValueAsync(environmentContext, executionContext, environmentVariable.Value).ConfigureAwait(false);
+                    }
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
