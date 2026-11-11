@@ -281,8 +281,15 @@ Coordinated V2 builds negotiate **`project-with-external-build.v1`**
   means the IDE can launch a project; it does not guarantee that the IDE builds it first. Visual Studio's
   F5 build only covers the startup project's MSBuild dependencies, and path-based resources are
   intentionally not `ProjectReference` items. File apps retain their existing launcher and wait for the
-  final project prebuild so their `#:project` references cannot overlap it.
+  final coordinated project prebuild, preventing overlap with that prebuild. Separate file apps are not
+  mutually serialized in this mode and can still race when sharing `#:project` outputs.
 - Unsupported project launch or persistent lifetime can retain normal process execution.
+
+To avoid that remaining race, chain only the affected file apps in the AppHost with
+`WaitForStart(..., WaitBehavior.StopOnResourceUnavailable)`. Prefer `WaitForStart` to health-based
+`WaitFor` because the dependency orders startup/build activity rather than application readiness;
+`WaitForCompletion` is inappropriate for long-running services. This startup ordering and failure
+coupling are intentional. A manual force-start can bypass the wait when appropriate.
 
 For external-build launch configurations, build configuration, build-only environment, build working
 directory, and build suppression flow through project launch metadata.
@@ -352,8 +359,16 @@ Traversal projects are content-addressed, leased artifacts under **`Aspire:Store
 (the resolved AppHost intermediate-output store). Each compatible group performs aggregate NuGet graph
 restore and parallel MSBuild child builds, de-duplicating shared references within that build context
 without introducing solution-specific properties. Groups and coordinated direct builds run serially.
-Coordinated `.cs` apps are direct build steps; in build-only legacy IDE sessions they retain their existing
-launch path but wait for the final project build so shared `#:project` outputs do not race.
+Coordinated `.cs` apps are direct build steps. In build-only legacy IDE sessions they retain their existing
+launch path and wait for the final coordinated project prebuild, preventing overlap with that prebuild.
+Separate file apps are not mutually serialized in this mode and can still race when sharing `#:project`
+outputs.
+
+To avoid that remaining race, chain only the affected file apps in the AppHost with
+`WaitForStart(..., WaitBehavior.StopOnResourceUnavailable)`. Prefer `WaitForStart` to health-based
+`WaitFor` because the dependency orders startup/build activity rather than application readiness;
+`WaitForCompletion` is inappropriate for long-running services. This startup ordering and failure
+coupling are intentional. A manual force-start can bypass the wait when appropriate.
 
 Aggregate restore does not run each root's `BeforeTargets="Restore"` / `AfterTargets="Restore"` hooks.
 **`Aspire:Dotnet:RestoreProjectsIndividually=true`** opts into serial per-root restore while retaining

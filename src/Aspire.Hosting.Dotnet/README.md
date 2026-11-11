@@ -54,14 +54,30 @@ await builder.build().run();
 
 Before resources start, Aspire collects projects with compatible SDK and environment contexts into
 generated MSBuild traversal projects under the AppHost's intermediate output. Build groups run serially, while projects within
-each traversal group share one NuGet graph restore and can build in parallel. File-based apps use serialized direct builds so their
-`#:project` references cannot build shared outputs concurrently. Launch-profile and `WithEnvironment`
-values are runtime configuration and do not prevent projects from sharing a traversal build. Each
-traditional project is then launched with the `RunCommand` and `RunArguments` resolved from the
-already-built project, so runtime environment variables cannot change which output is selected.
-File-based apps launch with `dotnet run --file <path> --no-build` after their direct build; uncoordinated
-file-based launches use `--no-cache` instead. Start and Restart reuse the coordinated output, matching
-project-based resources. Use the Rebuild command after source changes to rebuild and restart the resource.
+each traversal group share one NuGet graph restore and can build in parallel. Outside legacy project-only IDE
+sessions, file-based apps use serialized direct builds so their `#:project` references cannot build shared
+outputs concurrently. Launch-profile and `WithEnvironment` values are runtime configuration and do not
+prevent projects from sharing a traversal build. Each traditional project is then launched with the
+`RunCommand` and `RunArguments` resolved from the already-built project, so runtime environment variables
+cannot change which output is selected. File-based apps launch with `dotnet run --file <path> --no-build`
+after their direct build; uncoordinated file-based launches use `--no-cache` instead. Start and Restart reuse
+the coordinated output, matching project-based resources. Use the Rebuild command after source changes to
+rebuild and restart the resource.
+
+Legacy project-only IDE sessions keep the existing file-app launch path. File apps wait for the final
+coordinated project prebuild, preventing overlap with that prebuild, but separate file apps are not mutually
+serialized and can still race when sharing `#:project` outputs. Chain only the affected file apps in the
+AppHost, with each app waiting for the previous one:
+
+```csharp
+var first = builder.AddDotnetProject("first", "../first/first.cs");
+var second = builder.AddDotnetProject("second", "../second/second.cs")
+    .WaitForStart(first, WaitBehavior.StopOnResourceUnavailable);
+```
+
+Prefer `WaitForStart` to health-based `WaitFor` because the dependency orders startup/build activity rather
+than application readiness. `WaitForCompletion` is inappropriate for long-running services. This startup
+ordering and failure coupling are intentional. A manual force-start can bypass the wait when appropriate.
 
 Endpoints, environment variables, and service discovery are configured from the project's
 `launchSettings.json` and Kestrel configuration. V2 VB services prefer
