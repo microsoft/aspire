@@ -61,13 +61,17 @@ jobs:
 
           # Discover Aspire.Hosting.* integration projects with [AspireExport] attributes.
           # Find project directories by resolving matched files to their nearest .csproj.
-          # Exclude infrastructure projects that define/analyze the attribute rather than use it.
+          # Exclude infrastructure projects that define/analyze the attribute rather than use it,
+          # and AppHost server projects whose exports form the server's own RPC contract.
+          # Aspire.Hosting.Native.Server also targets a newer TFM than the CLI's generated
+          # AppHostServer project, so referencing it fails restore with NU1201.
           PROJECTS=$(grep -rlE '\[AspireExport(\]|\()' src/Aspire.Hosting.*/ --include='*.cs' \
                       | grep -v '/obj/' | grep -v '/bin/' \
                       | grep -v 'Aspire.Hosting.Analyzers' \
                       | grep -v 'Aspire.Hosting.Integration.Analyzers' \
                       | grep -v 'Aspire.Hosting.CodeGeneration' \
                       | grep -v 'Aspire.Hosting.RemoteHost' \
+                      | grep -v 'Aspire.Hosting.Native.Server' \
                       | while read -r file; do
                           # Walk up from the file to find the directory containing a .csproj
                           dir=$(dirname "$file")
