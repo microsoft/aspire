@@ -157,9 +157,6 @@
   <data name="ResourceLaunchGroupsExcludedByGroup" xml:space="preserve">
     <value>Not in selected group</value>
   </data>
-  <data name="ResourceLaunchGroupsExcludedFromSelection" xml:space="preserve">
-    <value>Excluded from selection</value>
-  </data>
   <data name="ResourceLaunchGroupsExclusionReason" xml:space="preserve">
     <value>Exclusion reason</value>
   </data>
@@ -192,9 +189,6 @@
   </data>
   <data name="ResourceLaunchGroupsYes" xml:space="preserve">
     <value>Yes</value>
-  </data>
-  <data name="ResourceLaunchGroupsNo" xml:space="preserve">
-    <value>No</value>
   </data>
   <data name="ResourcesStateColumnHeader" xml:space="preserve">
     <value>State</value>

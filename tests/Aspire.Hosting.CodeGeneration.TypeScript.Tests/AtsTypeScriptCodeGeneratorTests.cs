@@ -26,6 +26,7 @@ public class AtsTypeScriptCodeGeneratorTests
     [Theory]
     [InlineData("withLaunchGroup")]
     [InlineData("withLaunchGroups")]
+    [InlineData("withOptionalLaunchGroupReference")]
     public void Scanner_LaunchGroupCapabilities_AreExperimental(string methodName)
     {
         var capability = Assert.Single(ScanCapabilitiesFromHostingAssembly(),
@@ -38,6 +39,15 @@ public class AtsTypeScriptCodeGeneratorTests
     public void Language_ReturnsTypeScript()
     {
         Assert.Equal("TypeScript", _generator.Language);
+    }
+
+    [Fact]
+    public void GeneratedCode_IncludesOptionalLaunchGroupReference()
+    {
+        var source = _generator.GenerateDistributedApplication(CreateContextFromBothAssemblies())["aspire.mts"];
+
+        Assert.Contains("withOptionalLaunchGroupReference(dependency:", source);
+        Assert.Contains("Aspire.Hosting/withOptionalLaunchGroupReference", source);
     }
 
     [Fact]

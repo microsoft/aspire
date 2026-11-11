@@ -44,14 +44,14 @@ public sealed class LaunchGroupTests(ITestOutputHelper output)
         Assert.Contains(builderDeclaration, source);
         var resources = typeScript
             ? """
-              await builder.addExecutable("catalog", "sleep", ".", ["600"]).withLaunchGroup("catalog");
-              await builder.addExecutable("basket", "sleep", ".", ["600"]).withLaunchGroup("basket");
+              const basket = await builder.addExecutable("basket", "sleep", ".", ["600"]).withLaunchGroup("basket");
+              await builder.addExecutable("catalog", "sleep", ".", ["600"]).withLaunchGroup("catalog").withOptionalLaunchGroupReference(basket);
               await builder.addExecutable("ungrouped", "sleep", ".", ["600"]);
               """
             : """
               #pragma warning disable ASPIRELAUNCHGROUPS001
-              builder.AddExecutable("catalog", "sleep", ".", "600").WithLaunchGroup("catalog");
-              builder.AddExecutable("basket", "sleep", ".", "600").WithLaunchGroup("basket");
+              var basket = builder.AddExecutable("basket", "sleep", ".", "600").WithLaunchGroup("basket");
+              builder.AddExecutable("catalog", "sleep", ".", "600").WithLaunchGroup("catalog").WithOptionalLaunchGroupReference(basket);
               builder.AddExecutable("ungrouped", "sleep", ".", "600");
               """;
         await File.WriteAllTextAsync(appHostPath, source.Replace(builderDeclaration, $"{builderDeclaration}\n{resources}", StringComparison.Ordinal),

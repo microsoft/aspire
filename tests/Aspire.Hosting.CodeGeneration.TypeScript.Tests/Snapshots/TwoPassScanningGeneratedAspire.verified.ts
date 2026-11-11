@@ -13174,6 +13174,17 @@ export interface ContainerRegistryResource {
      */
     withLaunchGroups(launchGroupNames: string[]): ContainerRegistryResourcePromise;
     /**
+     * Declares a local resource reference that is optional during initial launch-group selection.
+     *
+     * This declares a reference relationship for launch-group validation. It does not add a readiness wait or
+     * change behavior when no launch group is selected. Use it only when the dependent resource can run without
+     * the dependency during initial startup.
+     * @param dependency The optional dependency resource builder.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withOptionalLaunchGroupReference(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ContainerRegistryResourcePromise;
+    /**
      * Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start.
      *
      * The command is considered valid if either:
@@ -13572,6 +13583,17 @@ export interface ContainerRegistryResourcePromise extends PromiseLike<ContainerR
      * @experimental
      */
     withLaunchGroups(launchGroupNames: string[]): ContainerRegistryResourcePromise;
+    /**
+     * Declares a local resource reference that is optional during initial launch-group selection.
+     *
+     * This declares a reference relationship for launch-group validation. It does not add a readiness wait or
+     * change behavior when no launch group is selected. Use it only when the dependent resource can run without
+     * the dependency during initial startup.
+     * @param dependency The optional dependency resource builder.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withOptionalLaunchGroupReference(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ContainerRegistryResourcePromise;
     /**
      * Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start.
      *
@@ -14034,6 +14056,31 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
      */
     withLaunchGroups(launchGroupNames: string[]): ContainerRegistryResourcePromise {
         return new ContainerRegistryResourcePromiseImpl(this._withLaunchGroupsInternal(launchGroupNames), this._client);
+    }
+
+    /** @internal */
+    private async _withOptionalLaunchGroupReferenceInternal(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): Promise<ContainerRegistryResource> {
+        dependency = isPromiseLike(dependency) ? await dependency : dependency;
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, dependency };
+        const result = await this._client.invokeCapability<ContainerRegistryResourceHandle>(
+            'Aspire.Hosting/withOptionalLaunchGroupReference',
+            rpcArgs
+        );
+        return new ContainerRegistryResourceImpl(result, this._client);
+    }
+
+    /**
+     * Declares a local resource reference that is optional during initial launch-group selection.
+     *
+     * This declares a reference relationship for launch-group validation. It does not add a readiness wait or
+     * change behavior when no launch group is selected. Use it only when the dependent resource can run without
+     * the dependency during initial startup.
+     * @param dependency The optional dependency resource builder.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withOptionalLaunchGroupReference(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ContainerRegistryResourcePromise {
+        return new ContainerRegistryResourcePromiseImpl(this._withOptionalLaunchGroupReferenceInternal(dependency), this._client);
     }
 
     /** @internal */
@@ -15393,6 +15440,7 @@ const ContainerRegistryResourcePromiseImpl = $aspireCreateFluentPromiseClass<Con
     ["withDockerfileBaseImage"]: () => ContainerRegistryResourcePromiseImpl,
     ["withLaunchGroup"]: () => ContainerRegistryResourcePromiseImpl,
     ["withLaunchGroups"]: () => ContainerRegistryResourcePromiseImpl,
+    ["withOptionalLaunchGroupReference"]: () => ContainerRegistryResourcePromiseImpl,
     ["withRequiredCommand"]: () => ContainerRegistryResourcePromiseImpl,
     ["withRequiredCommandValidation"]: () => ContainerRegistryResourcePromiseImpl,
     ["withSessionLifetime"]: () => ContainerRegistryResourcePromiseImpl,
@@ -15690,6 +15738,17 @@ export interface ContainerResource {
      * @experimental
      */
     withLaunchGroups(launchGroupNames: string[]): ContainerResourcePromise;
+    /**
+     * Declares a local resource reference that is optional during initial launch-group selection.
+     *
+     * This declares a reference relationship for launch-group validation. It does not add a readiness wait or
+     * change behavior when no launch group is selected. Use it only when the dependent resource can run without
+     * the dependency during initial startup.
+     * @param dependency The optional dependency resource builder.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withOptionalLaunchGroupReference(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ContainerResourcePromise;
     /**
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
@@ -16585,6 +16644,17 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      * @experimental
      */
     withLaunchGroups(launchGroupNames: string[]): ContainerResourcePromise;
+    /**
+     * Declares a local resource reference that is optional during initial launch-group selection.
+     *
+     * This declares a reference relationship for launch-group validation. It does not add a readiness wait or
+     * change behavior when no launch group is selected. Use it only when the dependent resource can run without
+     * the dependency during initial startup.
+     * @param dependency The optional dependency resource builder.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withOptionalLaunchGroupReference(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ContainerResourcePromise;
     /**
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
@@ -17842,6 +17912,31 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
      */
     withLaunchGroups(launchGroupNames: string[]): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._withLaunchGroupsInternal(launchGroupNames), this._client);
+    }
+
+    /** @internal */
+    private async _withOptionalLaunchGroupReferenceInternal(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): Promise<ContainerResource> {
+        dependency = isPromiseLike(dependency) ? await dependency : dependency;
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, dependency };
+        const result = await this._client.invokeCapability<ContainerResourceHandle>(
+            'Aspire.Hosting/withOptionalLaunchGroupReference',
+            rpcArgs
+        );
+        return new ContainerResourceImpl(result, this._client);
+    }
+
+    /**
+     * Declares a local resource reference that is optional during initial launch-group selection.
+     *
+     * This declares a reference relationship for launch-group validation. It does not add a readiness wait or
+     * change behavior when no launch group is selected. Use it only when the dependent resource can run without
+     * the dependency during initial startup.
+     * @param dependency The optional dependency resource builder.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withOptionalLaunchGroupReference(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._withOptionalLaunchGroupReferenceInternal(dependency), this._client);
     }
 
     /** @internal */
@@ -20237,6 +20332,7 @@ const ContainerResourcePromiseImpl = $aspireCreateFluentPromiseClass<ContainerRe
     ["withContainerNetworkAlias"]: () => ContainerResourcePromiseImpl,
     ["withLaunchGroup"]: () => ContainerResourcePromiseImpl,
     ["withLaunchGroups"]: () => ContainerResourcePromiseImpl,
+    ["withOptionalLaunchGroupReference"]: () => ContainerResourcePromiseImpl,
     ["withMcpServer"]: () => ContainerResourcePromiseImpl,
     ["withOtlpExporter"]: () => ContainerResourcePromiseImpl,
     ["publishAsConnectionString"]: () => ContainerResourcePromiseImpl,
@@ -20393,6 +20489,17 @@ export interface CSharpAppResource {
      * @experimental
      */
     withLaunchGroups(launchGroupNames: string[]): CSharpAppResourcePromise;
+    /**
+     * Declares a local resource reference that is optional during initial launch-group selection.
+     *
+     * This declares a reference relationship for launch-group validation. It does not add a readiness wait or
+     * change behavior when no launch group is selected. Use it only when the dependent resource can run without
+     * the dependency during initial startup.
+     * @param dependency The optional dependency resource builder.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withOptionalLaunchGroupReference(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): CSharpAppResourcePromise;
     /**
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
@@ -21128,6 +21235,17 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      * @experimental
      */
     withLaunchGroups(launchGroupNames: string[]): CSharpAppResourcePromise;
+    /**
+     * Declares a local resource reference that is optional during initial launch-group selection.
+     *
+     * This declares a reference relationship for launch-group validation. It does not add a readiness wait or
+     * change behavior when no launch group is selected. Use it only when the dependent resource can run without
+     * the dependency during initial startup.
+     * @param dependency The optional dependency resource builder.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withOptionalLaunchGroupReference(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): CSharpAppResourcePromise;
     /**
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
@@ -21926,6 +22044,31 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
      */
     withLaunchGroups(launchGroupNames: string[]): CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._withLaunchGroupsInternal(launchGroupNames), this._client);
+    }
+
+    /** @internal */
+    private async _withOptionalLaunchGroupReferenceInternal(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): Promise<CSharpAppResource> {
+        dependency = isPromiseLike(dependency) ? await dependency : dependency;
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, dependency };
+        const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
+            'Aspire.Hosting/withOptionalLaunchGroupReference',
+            rpcArgs
+        );
+        return new CSharpAppResourceImpl(result, this._client);
+    }
+
+    /**
+     * Declares a local resource reference that is optional during initial launch-group selection.
+     *
+     * This declares a reference relationship for launch-group validation. It does not add a readiness wait or
+     * change behavior when no launch group is selected. Use it only when the dependent resource can run without
+     * the dependency during initial startup.
+     * @param dependency The optional dependency resource builder.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withOptionalLaunchGroupReference(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromiseImpl(this._withOptionalLaunchGroupReferenceInternal(dependency), this._client);
     }
 
     /** @internal */
@@ -24379,6 +24522,7 @@ const CSharpAppResourcePromiseImpl = $aspireCreateFluentPromiseClass<CSharpAppRe
     ["withDockerfileBaseImage"]: () => CSharpAppResourcePromiseImpl,
     ["withLaunchGroup"]: () => CSharpAppResourcePromiseImpl,
     ["withLaunchGroups"]: () => CSharpAppResourcePromiseImpl,
+    ["withOptionalLaunchGroupReference"]: () => CSharpAppResourcePromiseImpl,
     ["withMcpServer"]: () => CSharpAppResourcePromiseImpl,
     ["withOtlpExporter"]: () => CSharpAppResourcePromiseImpl,
     ["withReplicas"]: () => CSharpAppResourcePromiseImpl,
@@ -24600,6 +24744,17 @@ export interface DotnetToolResource {
      * @experimental
      */
     withLaunchGroups(launchGroupNames: string[]): DotnetToolResourcePromise;
+    /**
+     * Declares a local resource reference that is optional during initial launch-group selection.
+     *
+     * This declares a reference relationship for launch-group validation. It does not add a readiness wait or
+     * change behavior when no launch group is selected. Use it only when the dependent resource can run without
+     * the dependency during initial startup.
+     * @param dependency The optional dependency resource builder.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withOptionalLaunchGroupReference(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): DotnetToolResourcePromise;
     /**
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
@@ -25371,6 +25526,17 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      * @experimental
      */
     withLaunchGroups(launchGroupNames: string[]): DotnetToolResourcePromise;
+    /**
+     * Declares a local resource reference that is optional during initial launch-group selection.
+     *
+     * This declares a reference relationship for launch-group validation. It does not add a readiness wait or
+     * change behavior when no launch group is selected. Use it only when the dependent resource can run without
+     * the dependency during initial startup.
+     * @param dependency The optional dependency resource builder.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withOptionalLaunchGroupReference(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): DotnetToolResourcePromise;
     /**
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
@@ -26327,6 +26493,31 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
      */
     withLaunchGroups(launchGroupNames: string[]): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._withLaunchGroupsInternal(launchGroupNames), this._client);
+    }
+
+    /** @internal */
+    private async _withOptionalLaunchGroupReferenceInternal(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): Promise<DotnetToolResource> {
+        dependency = isPromiseLike(dependency) ? await dependency : dependency;
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, dependency };
+        const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
+            'Aspire.Hosting/withOptionalLaunchGroupReference',
+            rpcArgs
+        );
+        return new DotnetToolResourceImpl(result, this._client);
+    }
+
+    /**
+     * Declares a local resource reference that is optional during initial launch-group selection.
+     *
+     * This declares a reference relationship for launch-group validation. It does not add a readiness wait or
+     * change behavior when no launch group is selected. Use it only when the dependent resource can run without
+     * the dependency during initial startup.
+     * @param dependency The optional dependency resource builder.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withOptionalLaunchGroupReference(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromiseImpl(this._withOptionalLaunchGroupReferenceInternal(dependency), this._client);
     }
 
     /** @internal */
@@ -28708,6 +28899,7 @@ const DotnetToolResourcePromiseImpl = $aspireCreateFluentPromiseClass<DotnetTool
     ["withWorkingDirectory"]: () => DotnetToolResourcePromiseImpl,
     ["withLaunchGroup"]: () => DotnetToolResourcePromiseImpl,
     ["withLaunchGroups"]: () => DotnetToolResourcePromiseImpl,
+    ["withOptionalLaunchGroupReference"]: () => DotnetToolResourcePromiseImpl,
     ["withMcpServer"]: () => DotnetToolResourcePromiseImpl,
     ["withOtlpExporter"]: () => DotnetToolResourcePromiseImpl,
     ["withRequiredCommand"]: () => DotnetToolResourcePromiseImpl,
@@ -28893,6 +29085,17 @@ export interface ExecutableResource {
      * @experimental
      */
     withLaunchGroups(launchGroupNames: string[]): ExecutableResourcePromise;
+    /**
+     * Declares a local resource reference that is optional during initial launch-group selection.
+     *
+     * This declares a reference relationship for launch-group validation. It does not add a readiness wait or
+     * change behavior when no launch group is selected. Use it only when the dependent resource can run without
+     * the dependency during initial startup.
+     * @param dependency The optional dependency resource builder.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withOptionalLaunchGroupReference(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ExecutableResourcePromise;
     /**
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
@@ -29625,6 +29828,17 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      * @experimental
      */
     withLaunchGroups(launchGroupNames: string[]): ExecutableResourcePromise;
+    /**
+     * Declares a local resource reference that is optional during initial launch-group selection.
+     *
+     * This declares a reference relationship for launch-group validation. It does not add a readiness wait or
+     * change behavior when no launch group is selected. Use it only when the dependent resource can run without
+     * the dependency during initial startup.
+     * @param dependency The optional dependency resource builder.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withOptionalLaunchGroupReference(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ExecutableResourcePromise;
     /**
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
@@ -30471,6 +30685,31 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
      */
     withLaunchGroups(launchGroupNames: string[]): ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._withLaunchGroupsInternal(launchGroupNames), this._client);
+    }
+
+    /** @internal */
+    private async _withOptionalLaunchGroupReferenceInternal(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): Promise<ExecutableResource> {
+        dependency = isPromiseLike(dependency) ? await dependency : dependency;
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, dependency };
+        const result = await this._client.invokeCapability<ExecutableResourceHandle>(
+            'Aspire.Hosting/withOptionalLaunchGroupReference',
+            rpcArgs
+        );
+        return new ExecutableResourceImpl(result, this._client);
+    }
+
+    /**
+     * Declares a local resource reference that is optional during initial launch-group selection.
+     *
+     * This declares a reference relationship for launch-group validation. It does not add a readiness wait or
+     * change behavior when no launch group is selected. Use it only when the dependent resource can run without
+     * the dependency during initial startup.
+     * @param dependency The optional dependency resource builder.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withOptionalLaunchGroupReference(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ExecutableResourcePromise {
+        return new ExecutableResourcePromiseImpl(this._withOptionalLaunchGroupReferenceInternal(dependency), this._client);
     }
 
     /** @internal */
@@ -32846,6 +33085,7 @@ const ExecutableResourcePromiseImpl = $aspireCreateFluentPromiseClass<Executable
     ["withWorkingDirectory"]: () => ExecutableResourcePromiseImpl,
     ["withLaunchGroup"]: () => ExecutableResourcePromiseImpl,
     ["withLaunchGroups"]: () => ExecutableResourcePromiseImpl,
+    ["withOptionalLaunchGroupReference"]: () => ExecutableResourcePromiseImpl,
     ["withMcpServer"]: () => ExecutableResourcePromiseImpl,
     ["withOtlpExporter"]: () => ExecutableResourcePromiseImpl,
     ["withRequiredCommand"]: () => ExecutableResourcePromiseImpl,
@@ -33007,6 +33247,17 @@ export interface ExternalServiceResource {
      * @experimental
      */
     withLaunchGroups(launchGroupNames: string[]): ExternalServiceResourcePromise;
+    /**
+     * Declares a local resource reference that is optional during initial launch-group selection.
+     *
+     * This declares a reference relationship for launch-group validation. It does not add a readiness wait or
+     * change behavior when no launch group is selected. Use it only when the dependent resource can run without
+     * the dependency during initial startup.
+     * @param dependency The optional dependency resource builder.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withOptionalLaunchGroupReference(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ExternalServiceResourcePromise;
     /**
      * Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start.
      *
@@ -33411,6 +33662,17 @@ export interface ExternalServiceResourcePromise extends PromiseLike<ExternalServ
      * @experimental
      */
     withLaunchGroups(launchGroupNames: string[]): ExternalServiceResourcePromise;
+    /**
+     * Declares a local resource reference that is optional during initial launch-group selection.
+     *
+     * This declares a reference relationship for launch-group validation. It does not add a readiness wait or
+     * change behavior when no launch group is selected. Use it only when the dependent resource can run without
+     * the dependency during initial startup.
+     * @param dependency The optional dependency resource builder.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withOptionalLaunchGroupReference(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ExternalServiceResourcePromise;
     /**
      * Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start.
      *
@@ -33897,6 +34159,31 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
      */
     withLaunchGroups(launchGroupNames: string[]): ExternalServiceResourcePromise {
         return new ExternalServiceResourcePromiseImpl(this._withLaunchGroupsInternal(launchGroupNames), this._client);
+    }
+
+    /** @internal */
+    private async _withOptionalLaunchGroupReferenceInternal(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): Promise<ExternalServiceResource> {
+        dependency = isPromiseLike(dependency) ? await dependency : dependency;
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, dependency };
+        const result = await this._client.invokeCapability<ExternalServiceResourceHandle>(
+            'Aspire.Hosting/withOptionalLaunchGroupReference',
+            rpcArgs
+        );
+        return new ExternalServiceResourceImpl(result, this._client);
+    }
+
+    /**
+     * Declares a local resource reference that is optional during initial launch-group selection.
+     *
+     * This declares a reference relationship for launch-group validation. It does not add a readiness wait or
+     * change behavior when no launch group is selected. Use it only when the dependent resource can run without
+     * the dependency during initial startup.
+     * @param dependency The optional dependency resource builder.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withOptionalLaunchGroupReference(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ExternalServiceResourcePromise {
+        return new ExternalServiceResourcePromiseImpl(this._withOptionalLaunchGroupReferenceInternal(dependency), this._client);
     }
 
     /** @internal */
@@ -35257,6 +35544,7 @@ const ExternalServiceResourcePromiseImpl = $aspireCreateFluentPromiseClass<Exter
     ["withHttpHealthCheck"]: () => ExternalServiceResourcePromiseImpl,
     ["withLaunchGroup"]: () => ExternalServiceResourcePromiseImpl,
     ["withLaunchGroups"]: () => ExternalServiceResourcePromiseImpl,
+    ["withOptionalLaunchGroupReference"]: () => ExternalServiceResourcePromiseImpl,
     ["withRequiredCommand"]: () => ExternalServiceResourcePromiseImpl,
     ["withRequiredCommandValidation"]: () => ExternalServiceResourcePromiseImpl,
     ["withSessionLifetime"]: () => ExternalServiceResourcePromiseImpl,
@@ -35374,6 +35662,17 @@ export interface ParameterResource {
      * @experimental
      */
     withLaunchGroups(launchGroupNames: string[]): ParameterResourcePromise;
+    /**
+     * Declares a local resource reference that is optional during initial launch-group selection.
+     *
+     * This declares a reference relationship for launch-group validation. It does not add a readiness wait or
+     * change behavior when no launch group is selected. Use it only when the dependent resource can run without
+     * the dependency during initial startup.
+     * @param dependency The optional dependency resource builder.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withOptionalLaunchGroupReference(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ParameterResourcePromise;
     /**
      * Sets the description of the parameter resource.
      * @param description The parameter description.
@@ -35820,6 +36119,17 @@ export interface ParameterResourcePromise extends PromiseLike<ParameterResource>
      * @experimental
      */
     withLaunchGroups(launchGroupNames: string[]): ParameterResourcePromise;
+    /**
+     * Declares a local resource reference that is optional during initial launch-group selection.
+     *
+     * This declares a reference relationship for launch-group validation. It does not add a readiness wait or
+     * change behavior when no launch group is selected. Use it only when the dependent resource can run without
+     * the dependency during initial startup.
+     * @param dependency The optional dependency resource builder.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withOptionalLaunchGroupReference(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ParameterResourcePromise;
     /**
      * Sets the description of the parameter resource.
      * @param description The parameter description.
@@ -36330,6 +36640,31 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
      */
     withLaunchGroups(launchGroupNames: string[]): ParameterResourcePromise {
         return new ParameterResourcePromiseImpl(this._withLaunchGroupsInternal(launchGroupNames), this._client);
+    }
+
+    /** @internal */
+    private async _withOptionalLaunchGroupReferenceInternal(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): Promise<ParameterResource> {
+        dependency = isPromiseLike(dependency) ? await dependency : dependency;
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, dependency };
+        const result = await this._client.invokeCapability<ParameterResourceHandle>(
+            'Aspire.Hosting/withOptionalLaunchGroupReference',
+            rpcArgs
+        );
+        return new ParameterResourceImpl(result, this._client);
+    }
+
+    /**
+     * Declares a local resource reference that is optional during initial launch-group selection.
+     *
+     * This declares a reference relationship for launch-group validation. It does not add a readiness wait or
+     * change behavior when no launch group is selected. Use it only when the dependent resource can run without
+     * the dependency during initial startup.
+     * @param dependency The optional dependency resource builder.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withOptionalLaunchGroupReference(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ParameterResourcePromise {
+        return new ParameterResourcePromiseImpl(this._withOptionalLaunchGroupReferenceInternal(dependency), this._client);
     }
 
     /** @internal */
@@ -37810,6 +38145,7 @@ const ParameterResourcePromiseImpl = $aspireCreateFluentPromiseClass<ParameterRe
     ["withDockerfileBaseImage"]: () => ParameterResourcePromiseImpl,
     ["withLaunchGroup"]: () => ParameterResourcePromiseImpl,
     ["withLaunchGroups"]: () => ParameterResourcePromiseImpl,
+    ["withOptionalLaunchGroupReference"]: () => ParameterResourcePromiseImpl,
     ["withDescription"]: () => ParameterResourcePromiseImpl,
     ["withOptional"]: () => ParameterResourcePromiseImpl,
     ["withRequired"]: () => ParameterResourcePromiseImpl,
@@ -37933,6 +38269,17 @@ export interface ProjectResource {
      * @experimental
      */
     withLaunchGroups(launchGroupNames: string[]): ProjectResourcePromise;
+    /**
+     * Declares a local resource reference that is optional during initial launch-group selection.
+     *
+     * This declares a reference relationship for launch-group validation. It does not add a readiness wait or
+     * change behavior when no launch group is selected. Use it only when the dependent resource can run without
+     * the dependency during initial startup.
+     * @param dependency The optional dependency resource builder.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withOptionalLaunchGroupReference(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ProjectResourcePromise;
     /**
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
@@ -38668,6 +39015,17 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      * @experimental
      */
     withLaunchGroups(launchGroupNames: string[]): ProjectResourcePromise;
+    /**
+     * Declares a local resource reference that is optional during initial launch-group selection.
+     *
+     * This declares a reference relationship for launch-group validation. It does not add a readiness wait or
+     * change behavior when no launch group is selected. Use it only when the dependent resource can run without
+     * the dependency during initial startup.
+     * @param dependency The optional dependency resource builder.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withOptionalLaunchGroupReference(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ProjectResourcePromise;
     /**
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
@@ -39467,6 +39825,31 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
      */
     withLaunchGroups(launchGroupNames: string[]): ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._withLaunchGroupsInternal(launchGroupNames), this._client);
+    }
+
+    /** @internal */
+    private async _withOptionalLaunchGroupReferenceInternal(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): Promise<ProjectResource> {
+        dependency = isPromiseLike(dependency) ? await dependency : dependency;
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, dependency };
+        const result = await this._client.invokeCapability<ProjectResourceHandle>(
+            'Aspire.Hosting/withOptionalLaunchGroupReference',
+            rpcArgs
+        );
+        return new ProjectResourceImpl(result, this._client);
+    }
+
+    /**
+     * Declares a local resource reference that is optional during initial launch-group selection.
+     *
+     * This declares a reference relationship for launch-group validation. It does not add a readiness wait or
+     * change behavior when no launch group is selected. Use it only when the dependent resource can run without
+     * the dependency during initial startup.
+     * @param dependency The optional dependency resource builder.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withOptionalLaunchGroupReference(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ProjectResourcePromise {
+        return new ProjectResourcePromiseImpl(this._withOptionalLaunchGroupReferenceInternal(dependency), this._client);
     }
 
     /** @internal */
@@ -41920,6 +42303,7 @@ const ProjectResourcePromiseImpl = $aspireCreateFluentPromiseClass<ProjectResour
     ["withDockerfileBaseImage"]: () => ProjectResourcePromiseImpl,
     ["withLaunchGroup"]: () => ProjectResourcePromiseImpl,
     ["withLaunchGroups"]: () => ProjectResourcePromiseImpl,
+    ["withOptionalLaunchGroupReference"]: () => ProjectResourcePromiseImpl,
     ["withMcpServer"]: () => ProjectResourcePromiseImpl,
     ["withOtlpExporter"]: () => ProjectResourcePromiseImpl,
     ["withReplicas"]: () => ProjectResourcePromiseImpl,
@@ -42260,6 +42644,17 @@ export interface TestDatabaseResource {
      * @experimental
      */
     withLaunchGroups(launchGroupNames: string[]): TestDatabaseResourcePromise;
+    /**
+     * Declares a local resource reference that is optional during initial launch-group selection.
+     *
+     * This declares a reference relationship for launch-group validation. It does not add a readiness wait or
+     * change behavior when no launch group is selected. Use it only when the dependent resource can run without
+     * the dependency during initial startup.
+     * @param dependency The optional dependency resource builder.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withOptionalLaunchGroupReference(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestDatabaseResourcePromise;
     /**
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
@@ -43155,6 +43550,17 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      * @experimental
      */
     withLaunchGroups(launchGroupNames: string[]): TestDatabaseResourcePromise;
+    /**
+     * Declares a local resource reference that is optional during initial launch-group selection.
+     *
+     * This declares a reference relationship for launch-group validation. It does not add a readiness wait or
+     * change behavior when no launch group is selected. Use it only when the dependent resource can run without
+     * the dependency during initial startup.
+     * @param dependency The optional dependency resource builder.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withOptionalLaunchGroupReference(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestDatabaseResourcePromise;
     /**
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
@@ -44411,6 +44817,31 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
      */
     withLaunchGroups(launchGroupNames: string[]): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._withLaunchGroupsInternal(launchGroupNames), this._client);
+    }
+
+    /** @internal */
+    private async _withOptionalLaunchGroupReferenceInternal(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): Promise<TestDatabaseResource> {
+        dependency = isPromiseLike(dependency) ? await dependency : dependency;
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, dependency };
+        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
+            'Aspire.Hosting/withOptionalLaunchGroupReference',
+            rpcArgs
+        );
+        return new TestDatabaseResourceImpl(result, this._client);
+    }
+
+    /**
+     * Declares a local resource reference that is optional during initial launch-group selection.
+     *
+     * This declares a reference relationship for launch-group validation. It does not add a readiness wait or
+     * change behavior when no launch group is selected. Use it only when the dependent resource can run without
+     * the dependency during initial startup.
+     * @param dependency The optional dependency resource builder.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withOptionalLaunchGroupReference(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromiseImpl(this._withOptionalLaunchGroupReferenceInternal(dependency), this._client);
     }
 
     /** @internal */
@@ -46806,6 +47237,7 @@ const TestDatabaseResourcePromiseImpl = $aspireCreateFluentPromiseClass<TestData
     ["withContainerNetworkAlias"]: () => TestDatabaseResourcePromiseImpl,
     ["withLaunchGroup"]: () => TestDatabaseResourcePromiseImpl,
     ["withLaunchGroups"]: () => TestDatabaseResourcePromiseImpl,
+    ["withOptionalLaunchGroupReference"]: () => TestDatabaseResourcePromiseImpl,
     ["withMcpServer"]: () => TestDatabaseResourcePromiseImpl,
     ["withOtlpExporter"]: () => TestDatabaseResourcePromiseImpl,
     ["publishAsConnectionString"]: () => TestDatabaseResourcePromiseImpl,
@@ -47142,6 +47574,17 @@ export interface TestRedisResource {
      * @experimental
      */
     withLaunchGroups(launchGroupNames: string[]): TestRedisResourcePromise;
+    /**
+     * Declares a local resource reference that is optional during initial launch-group selection.
+     *
+     * This declares a reference relationship for launch-group validation. It does not add a readiness wait or
+     * change behavior when no launch group is selected. Use it only when the dependent resource can run without
+     * the dependency during initial startup.
+     * @param dependency The optional dependency resource builder.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withOptionalLaunchGroupReference(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestRedisResourcePromise;
     /**
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
@@ -48121,6 +48564,17 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      * @experimental
      */
     withLaunchGroups(launchGroupNames: string[]): TestRedisResourcePromise;
+    /**
+     * Declares a local resource reference that is optional during initial launch-group selection.
+     *
+     * This declares a reference relationship for launch-group validation. It does not add a readiness wait or
+     * change behavior when no launch group is selected. Use it only when the dependent resource can run without
+     * the dependency during initial startup.
+     * @param dependency The optional dependency resource builder.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withOptionalLaunchGroupReference(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestRedisResourcePromise;
     /**
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
@@ -49461,6 +49915,31 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
      */
     withLaunchGroups(launchGroupNames: string[]): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._withLaunchGroupsInternal(launchGroupNames), this._client);
+    }
+
+    /** @internal */
+    private async _withOptionalLaunchGroupReferenceInternal(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): Promise<TestRedisResource> {
+        dependency = isPromiseLike(dependency) ? await dependency : dependency;
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, dependency };
+        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
+            'Aspire.Hosting/withOptionalLaunchGroupReference',
+            rpcArgs
+        );
+        return new TestRedisResourceImpl(result, this._client);
+    }
+
+    /**
+     * Declares a local resource reference that is optional during initial launch-group selection.
+     *
+     * This declares a reference relationship for launch-group validation. It does not add a readiness wait or
+     * change behavior when no launch group is selected. Use it only when the dependent resource can run without
+     * the dependency during initial startup.
+     * @param dependency The optional dependency resource builder.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withOptionalLaunchGroupReference(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._withOptionalLaunchGroupReferenceInternal(dependency), this._client);
     }
 
     /** @internal */
@@ -52167,6 +52646,7 @@ const TestRedisResourcePromiseImpl = $aspireCreateFluentPromiseClass<TestRedisRe
     ["withContainerNetworkAlias"]: () => TestRedisResourcePromiseImpl,
     ["withLaunchGroup"]: () => TestRedisResourcePromiseImpl,
     ["withLaunchGroups"]: () => TestRedisResourcePromiseImpl,
+    ["withOptionalLaunchGroupReference"]: () => TestRedisResourcePromiseImpl,
     ["withMcpServer"]: () => TestRedisResourcePromiseImpl,
     ["withOtlpExporter"]: () => TestRedisResourcePromiseImpl,
     ["publishAsConnectionString"]: () => TestRedisResourcePromiseImpl,
@@ -52521,6 +53001,17 @@ export interface TestVaultResource {
      * @experimental
      */
     withLaunchGroups(launchGroupNames: string[]): TestVaultResourcePromise;
+    /**
+     * Declares a local resource reference that is optional during initial launch-group selection.
+     *
+     * This declares a reference relationship for launch-group validation. It does not add a readiness wait or
+     * change behavior when no launch group is selected. Use it only when the dependent resource can run without
+     * the dependency during initial startup.
+     * @param dependency The optional dependency resource builder.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withOptionalLaunchGroupReference(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestVaultResourcePromise;
     /**
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
@@ -53418,6 +53909,17 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      * @experimental
      */
     withLaunchGroups(launchGroupNames: string[]): TestVaultResourcePromise;
+    /**
+     * Declares a local resource reference that is optional during initial launch-group selection.
+     *
+     * This declares a reference relationship for launch-group validation. It does not add a readiness wait or
+     * change behavior when no launch group is selected. Use it only when the dependent resource can run without
+     * the dependency during initial startup.
+     * @param dependency The optional dependency resource builder.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withOptionalLaunchGroupReference(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestVaultResourcePromise;
     /**
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
@@ -54676,6 +55178,31 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
      */
     withLaunchGroups(launchGroupNames: string[]): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._withLaunchGroupsInternal(launchGroupNames), this._client);
+    }
+
+    /** @internal */
+    private async _withOptionalLaunchGroupReferenceInternal(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): Promise<TestVaultResource> {
+        dependency = isPromiseLike(dependency) ? await dependency : dependency;
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, dependency };
+        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
+            'Aspire.Hosting/withOptionalLaunchGroupReference',
+            rpcArgs
+        );
+        return new TestVaultResourceImpl(result, this._client);
+    }
+
+    /**
+     * Declares a local resource reference that is optional during initial launch-group selection.
+     *
+     * This declares a reference relationship for launch-group validation. It does not add a readiness wait or
+     * change behavior when no launch group is selected. Use it only when the dependent resource can run without
+     * the dependency during initial startup.
+     * @param dependency The optional dependency resource builder.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withOptionalLaunchGroupReference(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestVaultResourcePromise {
+        return new TestVaultResourcePromiseImpl(this._withOptionalLaunchGroupReferenceInternal(dependency), this._client);
     }
 
     /** @internal */
@@ -57086,6 +57613,7 @@ const TestVaultResourcePromiseImpl = $aspireCreateFluentPromiseClass<TestVaultRe
     ["withContainerNetworkAlias"]: () => TestVaultResourcePromiseImpl,
     ["withLaunchGroup"]: () => TestVaultResourcePromiseImpl,
     ["withLaunchGroups"]: () => TestVaultResourcePromiseImpl,
+    ["withOptionalLaunchGroupReference"]: () => TestVaultResourcePromiseImpl,
     ["withMcpServer"]: () => TestVaultResourcePromiseImpl,
     ["withOtlpExporter"]: () => TestVaultResourcePromiseImpl,
     ["publishAsConnectionString"]: () => TestVaultResourcePromiseImpl,
@@ -57528,6 +58056,17 @@ export interface Resource {
      */
     withLaunchGroups(launchGroupNames: string[]): ResourcePromise;
     /**
+     * Declares a local resource reference that is optional during initial launch-group selection.
+     *
+     * This declares a reference relationship for launch-group validation. It does not add a readiness wait or
+     * change behavior when no launch group is selected. Use it only when the dependent resource can run without
+     * the dependency during initial startup.
+     * @param dependency The optional dependency resource builder.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withOptionalLaunchGroupReference(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ResourcePromise;
+    /**
      * Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start.
      *
      * The command is considered valid if either:
@@ -57926,6 +58465,17 @@ export interface ResourcePromise extends PromiseLike<Resource> {
      * @experimental
      */
     withLaunchGroups(launchGroupNames: string[]): ResourcePromise;
+    /**
+     * Declares a local resource reference that is optional during initial launch-group selection.
+     *
+     * This declares a reference relationship for launch-group validation. It does not add a readiness wait or
+     * change behavior when no launch group is selected. Use it only when the dependent resource can run without
+     * the dependency during initial startup.
+     * @param dependency The optional dependency resource builder.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withOptionalLaunchGroupReference(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ResourcePromise;
     /**
      * Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start.
      *
@@ -58389,6 +58939,31 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
      */
     withLaunchGroups(launchGroupNames: string[]): ResourcePromise {
         return new ResourcePromiseImpl(this._withLaunchGroupsInternal(launchGroupNames), this._client);
+    }
+
+    /** @internal */
+    private async _withOptionalLaunchGroupReferenceInternal(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): Promise<Resource> {
+        dependency = isPromiseLike(dependency) ? await dependency : dependency;
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, dependency };
+        const result = await this._client.invokeCapability<IResourceHandle>(
+            'Aspire.Hosting/withOptionalLaunchGroupReference',
+            rpcArgs
+        );
+        return new ResourceImpl(result, this._client);
+    }
+
+    /**
+     * Declares a local resource reference that is optional during initial launch-group selection.
+     *
+     * This declares a reference relationship for launch-group validation. It does not add a readiness wait or
+     * change behavior when no launch group is selected. Use it only when the dependent resource can run without
+     * the dependency during initial startup.
+     * @param dependency The optional dependency resource builder.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withOptionalLaunchGroupReference(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ResourcePromise {
+        return new ResourcePromiseImpl(this._withOptionalLaunchGroupReferenceInternal(dependency), this._client);
     }
 
     /** @internal */
@@ -59748,6 +60323,7 @@ const ResourcePromiseImpl = $aspireCreateFluentPromiseClass<Resource, ResourcePr
     ["withDockerfileBaseImage"]: () => ResourcePromiseImpl,
     ["withLaunchGroup"]: () => ResourcePromiseImpl,
     ["withLaunchGroups"]: () => ResourcePromiseImpl,
+    ["withOptionalLaunchGroupReference"]: () => ResourcePromiseImpl,
     ["withRequiredCommand"]: () => ResourcePromiseImpl,
     ["withRequiredCommandValidation"]: () => ResourcePromiseImpl,
     ["withSessionLifetime"]: () => ResourcePromiseImpl,

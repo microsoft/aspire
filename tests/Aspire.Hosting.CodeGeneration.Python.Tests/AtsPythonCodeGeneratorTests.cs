@@ -26,6 +26,15 @@ public class AtsPythonCodeGeneratorTests
     }
 
     [Fact]
+    public void GeneratedCode_IncludesOptionalLaunchGroupReference()
+    {
+        var source = _generator.GenerateDistributedApplication(CreateContextFromBothAssemblies())["aspire_app.py"];
+
+        Assert.Contains("def with_optional_launch_group_reference(self, dependency:", source);
+        Assert.Contains("Aspire.Hosting/withOptionalLaunchGroupReference", source);
+    }
+
+    [Fact]
     public async Task GenerateDistributedApplication_WithTestTypes_GeneratesCorrectOutput()
     {
         // Arrange

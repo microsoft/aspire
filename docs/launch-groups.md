@@ -148,7 +148,7 @@ Resource 'frontend' requires local resource 'server' (the lifetime owner of 'dat
 Add required dependencies to the group; they are not added automatically.
 `WithReference` does not imply a readiness wait: use `WaitFor` when the dependent
 must wait for readiness. If a dependency is genuinely optional at startup, use
-`WithOptionalLaunchGroupDependency(dependency)` on the dependent resource. This
+`WithOptionalLaunchGroupReference(dependency)` on the dependent resource. This
 marks the reference optional for launch-group validation; it does not remove a
 separate `WaitFor` or make the application able to run without the dependency.
 

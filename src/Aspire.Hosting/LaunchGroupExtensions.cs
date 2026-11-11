@@ -92,7 +92,7 @@ public static class LaunchGroupExtensions
     }
 
     /// <summary>
-    /// Declares a local resource dependency that is optional during initial launch-group selection.
+    /// Declares a local resource reference that is optional during initial launch-group selection.
     /// </summary>
     /// <typeparam name="T">The dependent resource type.</typeparam>
     /// <typeparam name="TDependency">The dependency resource type.</typeparam>
@@ -108,12 +108,12 @@ public static class LaunchGroupExtensions
     /// <code lang="csharp">
     /// var frontend = builder.AddProject("frontend", "../Frontend/Frontend.csproj")
     ///     .WithLaunchGroup("frontend")
-    ///     .WithOptionalLaunchGroupDependency(metrics);
+    ///     .WithOptionalLaunchGroupReference(metrics);
     /// </code>
     /// </example>
-    [AspireExportIgnore(Reason = "The experimental launch-group helper is C#-only.")]
+    [AspireExport]
     [Experimental("ASPIRELAUNCHGROUPS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    public static IResourceBuilder<T> WithOptionalLaunchGroupDependency<T, TDependency>(
+    public static IResourceBuilder<T> WithOptionalLaunchGroupReference<T, TDependency>(
         this IResourceBuilder<T> builder,
         IResourceBuilder<TDependency> dependency)
         where T : IResource

@@ -542,11 +542,6 @@
         <target state="new">Not in selected group</target>
         <note />
       </trans-unit>
-      <trans-unit id="ResourceLaunchGroupsExcludedFromSelection">
-        <source>Excluded from selection</source>
-        <target state="new">Excluded from selection</target>
-        <note />
-      </trans-unit>
       <trans-unit id="ResourceLaunchGroupsExclusionReason">
         <source>Exclusion reason</source>
         <target state="new">Exclusion reason</target>
@@ -565,11 +560,6 @@
       <trans-unit id="ResourceLaunchGroupsInheritedFrom">
         <source>Inherited from</source>
         <target state="new">Inherited from</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ResourceLaunchGroupsNo">
-        <source>No</source>
-        <target state="new">No</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceLaunchGroupsNone">

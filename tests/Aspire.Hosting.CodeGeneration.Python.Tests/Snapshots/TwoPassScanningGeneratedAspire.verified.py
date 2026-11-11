@@ -7669,6 +7669,10 @@ class AbstractResource(abc.ABC):
         """Adds a resource to multiple launch groups."""
 
     @abc.abstractmethod
+    def with_optional_launch_group_reference(self, dependency: AbstractResource) -> typing.Self:
+        """Declares a local resource reference that is optional during initial launch-group selection."""
+
+    @abc.abstractmethod
     def with_required_command(self, command: str, *, help_link: str | None = None) -> typing.Self:
         """Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start."""
 
@@ -8176,6 +8180,7 @@ class _BaseResourceKwargs(typing.TypedDict, total=False):
     dockerfile_base_image: DockerfileBaseImageParameters | typing.Literal[True]
     launch_group: str
     launch_groups: typing.Iterable[str]
+    optional_launch_group_reference: AbstractResource
     required_command: str | tuple[str, str]
     required_command_validation: tuple[str, typing.Callable[[RequiredCommandValidationContext], RequiredCommandValidationResult]] | RequiredCommandValidationParameters
     session_lifetime: typing.Literal[True]
@@ -8285,6 +8290,17 @@ class _BaseResource(AbstractResource):
         rpc_args['launchGroupNames'] = _normalize_argument(launch_group_names, typing.Iterable[str])
         result = self._client.invoke_capability(
             'Aspire.Hosting/withLaunchGroups',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
+    def with_optional_launch_group_reference(self, dependency: AbstractResource) -> typing.Self:
+        """Declares a local resource reference that is optional during initial launch-group selection."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['dependency'] = dependency
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withOptionalLaunchGroupReference',
             rpc_args,
         )
         self._handle = self._wrap_builder(result)
@@ -9012,6 +9028,14 @@ class _BaseResource(AbstractResource):
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withLaunchGroups', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'launch_groups'. Expected: Iterable[str]")
+        if (_optional_launch_group_reference := kwargs.pop("optional_launch_group_reference", None)) is not None:
+            _optional_launch_group_reference = _normalize_constructor_value(_optional_launch_group_reference)
+            if _validate_type(_optional_launch_group_reference, AbstractResource):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["dependency"] = typing.cast(AbstractResource, _optional_launch_group_reference)
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withOptionalLaunchGroupReference', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'optional_launch_group_reference'. Expected: AbstractResource")
         if (_required_command := kwargs.pop("required_command", None)) is not None:
             _required_command = _normalize_constructor_value(_required_command)
             if _validate_type(_required_command, str):

@@ -256,7 +256,7 @@ internal sealed class LaunchGroupService(
                 if (waitDependency is null && redirectDependency is null && edge.Kind.HasFlag(DependencyKind.Reference))
                 {
                     remedy += $" If the reference from '{current.Name}' to '{dependency.Name}' is optional, mark it with " +
-                        $"{nameof(LaunchGroupExtensions.WithOptionalLaunchGroupDependency)}.";
+                        $"{nameof(LaunchGroupExtensions.WithOptionalLaunchGroupReference)}.";
                 }
 
                 var names = string.Join(" -> ", path.Select(item => item.Source.Name).Append(path[^1].Target.Name));

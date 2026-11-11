@@ -3432,6 +3432,25 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	//   - options: Optional parameters; see [WithOptionalCallbackOption].
 	WithOptionalCallback(options ...WithOptionalCallbackOption) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 
+	// WithOptionalLaunchGroupReference declares a local resource reference that is
+	// optional during initial launch-group selection.
+	//
+	// This declares a reference relationship for launch-group validation. It does
+	// not add a readiness wait or change behavior when no launch group is selected.
+	// Use it only when the dependent resource can run without the dependency during
+	// initial startup.
+	//
+	// Parameters:
+	//   - dependency: The optional dependency resource builder.
+	//
+	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithOptionalLaunchGroupReference(dependency Resource) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+
 	// WithOptionalString adds an optional string parameter
 	//
 	// Parameters:
@@ -5942,6 +5961,29 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithOptionalCa
 	return s
 }
 
+// WithOptionalLaunchGroupReference declares a local resource reference that is
+// optional during initial launch-group selection.
+func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithOptionalLaunchGroupReference(dependency Resource) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
+	if s.Err() != nil {
+		return s
+	}
+	if dependency != nil {
+		if err := dependency.Err(); err != nil {
+			s.setPropagatedErr(err)
+			return s
+		}
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["dependency"] = serializeValue(dependency)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withOptionalLaunchGroupReference", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
+}
+
 // WithOptionalString adds an optional string parameter
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithOptionalString(options ...WithOptionalStringOption) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.Err() != nil {
@@ -7626,6 +7668,25 @@ type CSharpAppResource interface {
 	// Parameters:
 	//   - options: Optional parameters; see [WithOptionalCallbackOption].
 	WithOptionalCallback(options ...WithOptionalCallbackOption) CSharpAppResource
+
+	// WithOptionalLaunchGroupReference declares a local resource reference that is
+	// optional during initial launch-group selection.
+	//
+	// This declares a reference relationship for launch-group validation. It does
+	// not add a readiness wait or change behavior when no launch group is selected.
+	// Use it only when the dependent resource can run without the dependency during
+	// initial startup.
+	//
+	// Parameters:
+	//   - dependency: The optional dependency resource builder.
+	//
+	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithOptionalLaunchGroupReference(dependency Resource) CSharpAppResource
 
 	// WithOptionalString adds an optional string parameter
 	//
@@ -9760,6 +9821,29 @@ func (s *cSharpAppResource) WithOptionalCallback(options ...WithOptionalCallback
 		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withOptionalCallback", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
+}
+
+// WithOptionalLaunchGroupReference declares a local resource reference that is
+// optional during initial launch-group selection.
+func (s *cSharpAppResource) WithOptionalLaunchGroupReference(dependency Resource) CSharpAppResource {
+	if s.Err() != nil {
+		return s
+	}
+	if dependency != nil {
+		if err := dependency.Err(); err != nil {
+			s.setPropagatedErr(err)
+			return s
+		}
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["dependency"] = serializeValue(dependency)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withOptionalLaunchGroupReference", reqArgs); err != nil {
 		s.setErr(err)
 	}
 	return s
@@ -12539,6 +12623,25 @@ type ContainerRegistryResource interface {
 	//   - options: Optional parameters; see [WithOptionalCallbackOption].
 	WithOptionalCallback(options ...WithOptionalCallbackOption) ContainerRegistryResource
 
+	// WithOptionalLaunchGroupReference declares a local resource reference that is
+	// optional during initial launch-group selection.
+	//
+	// This declares a reference relationship for launch-group validation. It does
+	// not add a readiness wait or change behavior when no launch group is selected.
+	// Use it only when the dependent resource can run without the dependency during
+	// initial startup.
+	//
+	// Parameters:
+	//   - dependency: The optional dependency resource builder.
+	//
+	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithOptionalLaunchGroupReference(dependency Resource) ContainerRegistryResource
+
 	// WithOptionalString adds an optional string parameter
 	//
 	// Parameters:
@@ -13674,6 +13777,29 @@ func (s *containerRegistryResource) WithOptionalCallback(options ...WithOptional
 		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withOptionalCallback", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
+}
+
+// WithOptionalLaunchGroupReference declares a local resource reference that is
+// optional during initial launch-group selection.
+func (s *containerRegistryResource) WithOptionalLaunchGroupReference(dependency Resource) ContainerRegistryResource {
+	if s.Err() != nil {
+		return s
+	}
+	if dependency != nil {
+		if err := dependency.Err(); err != nil {
+			s.setPropagatedErr(err)
+			return s
+		}
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["dependency"] = serializeValue(dependency)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withOptionalLaunchGroupReference", reqArgs); err != nil {
 		s.setErr(err)
 	}
 	return s
@@ -15188,6 +15314,25 @@ type ContainerResource interface {
 	// Parameters:
 	//   - options: Optional parameters; see [WithOptionalCallbackOption].
 	WithOptionalCallback(options ...WithOptionalCallbackOption) ContainerResource
+
+	// WithOptionalLaunchGroupReference declares a local resource reference that is
+	// optional during initial launch-group selection.
+	//
+	// This declares a reference relationship for launch-group validation. It does
+	// not add a readiness wait or change behavior when no launch group is selected.
+	// Use it only when the dependent resource can run without the dependency during
+	// initial startup.
+	//
+	// Parameters:
+	//   - dependency: The optional dependency resource builder.
+	//
+	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithOptionalLaunchGroupReference(dependency Resource) ContainerResource
 
 	// WithOptionalString adds an optional string parameter
 	//
@@ -17691,6 +17836,29 @@ func (s *containerResource) WithOptionalCallback(options ...WithOptionalCallback
 		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withOptionalCallback", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
+}
+
+// WithOptionalLaunchGroupReference declares a local resource reference that is
+// optional during initial launch-group selection.
+func (s *containerResource) WithOptionalLaunchGroupReference(dependency Resource) ContainerResource {
+	if s.Err() != nil {
+		return s
+	}
+	if dependency != nil {
+		if err := dependency.Err(); err != nil {
+			s.setPropagatedErr(err)
+			return s
+		}
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["dependency"] = serializeValue(dependency)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withOptionalLaunchGroupReference", reqArgs); err != nil {
 		s.setErr(err)
 	}
 	return s
@@ -21497,6 +21665,25 @@ type DotnetToolResource interface {
 	//   - options: Optional parameters; see [WithOptionalCallbackOption].
 	WithOptionalCallback(options ...WithOptionalCallbackOption) DotnetToolResource
 
+	// WithOptionalLaunchGroupReference declares a local resource reference that is
+	// optional during initial launch-group selection.
+	//
+	// This declares a reference relationship for launch-group validation. It does
+	// not add a readiness wait or change behavior when no launch group is selected.
+	// Use it only when the dependent resource can run without the dependency during
+	// initial startup.
+	//
+	// Parameters:
+	//   - dependency: The optional dependency resource builder.
+	//
+	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithOptionalLaunchGroupReference(dependency Resource) DotnetToolResource
+
 	// WithOptionalString adds an optional string parameter
 	//
 	// Parameters:
@@ -23676,6 +23863,29 @@ func (s *dotnetToolResource) WithOptionalCallback(options ...WithOptionalCallbac
 		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withOptionalCallback", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
+}
+
+// WithOptionalLaunchGroupReference declares a local resource reference that is
+// optional during initial launch-group selection.
+func (s *dotnetToolResource) WithOptionalLaunchGroupReference(dependency Resource) DotnetToolResource {
+	if s.Err() != nil {
+		return s
+	}
+	if dependency != nil {
+		if err := dependency.Err(); err != nil {
+			s.setPropagatedErr(err)
+			return s
+		}
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["dependency"] = serializeValue(dependency)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withOptionalLaunchGroupReference", reqArgs); err != nil {
 		s.setErr(err)
 	}
 	return s
@@ -26751,6 +26961,25 @@ type ExecutableResource interface {
 	//   - options: Optional parameters; see [WithOptionalCallbackOption].
 	WithOptionalCallback(options ...WithOptionalCallbackOption) ExecutableResource
 
+	// WithOptionalLaunchGroupReference declares a local resource reference that is
+	// optional during initial launch-group selection.
+	//
+	// This declares a reference relationship for launch-group validation. It does
+	// not add a readiness wait or change behavior when no launch group is selected.
+	// Use it only when the dependent resource can run without the dependency during
+	// initial startup.
+	//
+	// Parameters:
+	//   - dependency: The optional dependency resource builder.
+	//
+	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithOptionalLaunchGroupReference(dependency Resource) ExecutableResource
+
 	// WithOptionalString adds an optional string parameter
 	//
 	// Parameters:
@@ -28862,6 +29091,29 @@ func (s *executableResource) WithOptionalCallback(options ...WithOptionalCallbac
 	return s
 }
 
+// WithOptionalLaunchGroupReference declares a local resource reference that is
+// optional during initial launch-group selection.
+func (s *executableResource) WithOptionalLaunchGroupReference(dependency Resource) ExecutableResource {
+	if s.Err() != nil {
+		return s
+	}
+	if dependency != nil {
+		if err := dependency.Err(); err != nil {
+			s.setPropagatedErr(err)
+			return s
+		}
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["dependency"] = serializeValue(dependency)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withOptionalLaunchGroupReference", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
+}
+
 // WithOptionalString adds an optional string parameter
 func (s *executableResource) WithOptionalString(options ...WithOptionalStringOption) ExecutableResource {
 	if s.Err() != nil {
@@ -30338,6 +30590,25 @@ type ExternalServiceResource interface {
 	//   - options: Optional parameters; see [WithOptionalCallbackOption].
 	WithOptionalCallback(options ...WithOptionalCallbackOption) ExternalServiceResource
 
+	// WithOptionalLaunchGroupReference declares a local resource reference that is
+	// optional during initial launch-group selection.
+	//
+	// This declares a reference relationship for launch-group validation. It does
+	// not add a readiness wait or change behavior when no launch group is selected.
+	// Use it only when the dependent resource can run without the dependency during
+	// initial startup.
+	//
+	// Parameters:
+	//   - dependency: The optional dependency resource builder.
+	//
+	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithOptionalLaunchGroupReference(dependency Resource) ExternalServiceResource
+
 	// WithOptionalString adds an optional string parameter
 	//
 	// Parameters:
@@ -31500,6 +31771,29 @@ func (s *externalServiceResource) WithOptionalCallback(options ...WithOptionalCa
 		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withOptionalCallback", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
+}
+
+// WithOptionalLaunchGroupReference declares a local resource reference that is
+// optional during initial launch-group selection.
+func (s *externalServiceResource) WithOptionalLaunchGroupReference(dependency Resource) ExternalServiceResource {
+	if s.Err() != nil {
+		return s
+	}
+	if dependency != nil {
+		if err := dependency.Err(); err != nil {
+			s.setPropagatedErr(err)
+			return s
+		}
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["dependency"] = serializeValue(dependency)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withOptionalLaunchGroupReference", reqArgs); err != nil {
 		s.setErr(err)
 	}
 	return s
@@ -35011,6 +35305,25 @@ type ParameterResource interface {
 	//   - options: Optional parameters; see [WithOptionalCallbackOption].
 	WithOptionalCallback(options ...WithOptionalCallbackOption) ParameterResource
 
+	// WithOptionalLaunchGroupReference declares a local resource reference that is
+	// optional during initial launch-group selection.
+	//
+	// This declares a reference relationship for launch-group validation. It does
+	// not add a readiness wait or change behavior when no launch group is selected.
+	// Use it only when the dependent resource can run without the dependency during
+	// initial startup.
+	//
+	// Parameters:
+	//   - dependency: The optional dependency resource builder.
+	//
+	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithOptionalLaunchGroupReference(dependency Resource) ParameterResource
+
 	// WithOptionalString adds an optional string parameter
 	//
 	// Parameters:
@@ -36264,6 +36577,29 @@ func (s *parameterResource) WithOptionalCallback(options ...WithOptionalCallback
 		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withOptionalCallback", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
+}
+
+// WithOptionalLaunchGroupReference declares a local resource reference that is
+// optional during initial launch-group selection.
+func (s *parameterResource) WithOptionalLaunchGroupReference(dependency Resource) ParameterResource {
+	if s.Err() != nil {
+		return s
+	}
+	if dependency != nil {
+		if err := dependency.Err(); err != nil {
+			s.setPropagatedErr(err)
+			return s
+		}
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["dependency"] = serializeValue(dependency)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withOptionalLaunchGroupReference", reqArgs); err != nil {
 		s.setErr(err)
 	}
 	return s
@@ -38556,6 +38892,25 @@ type ProjectResource interface {
 	//   - options: Optional parameters; see [WithOptionalCallbackOption].
 	WithOptionalCallback(options ...WithOptionalCallbackOption) ProjectResource
 
+	// WithOptionalLaunchGroupReference declares a local resource reference that is
+	// optional during initial launch-group selection.
+	//
+	// This declares a reference relationship for launch-group validation. It does
+	// not add a readiness wait or change behavior when no launch group is selected.
+	// Use it only when the dependent resource can run without the dependency during
+	// initial startup.
+	//
+	// Parameters:
+	//   - dependency: The optional dependency resource builder.
+	//
+	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithOptionalLaunchGroupReference(dependency Resource) ProjectResource
+
 	// WithOptionalString adds an optional string parameter
 	//
 	// Parameters:
@@ -40689,6 +41044,29 @@ func (s *projectResource) WithOptionalCallback(options ...WithOptionalCallbackOp
 		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withOptionalCallback", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
+}
+
+// WithOptionalLaunchGroupReference declares a local resource reference that is
+// optional during initial launch-group selection.
+func (s *projectResource) WithOptionalLaunchGroupReference(dependency Resource) ProjectResource {
+	if s.Err() != nil {
+		return s
+	}
+	if dependency != nil {
+		if err := dependency.Err(); err != nil {
+			s.setPropagatedErr(err)
+			return s
+		}
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["dependency"] = serializeValue(dependency)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withOptionalLaunchGroupReference", reqArgs); err != nil {
 		s.setErr(err)
 	}
 	return s
@@ -44706,6 +45084,25 @@ type TestDatabaseResource interface {
 	//   - options: Optional parameters; see [WithOptionalCallbackOption].
 	WithOptionalCallback(options ...WithOptionalCallbackOption) TestDatabaseResource
 
+	// WithOptionalLaunchGroupReference declares a local resource reference that is
+	// optional during initial launch-group selection.
+	//
+	// This declares a reference relationship for launch-group validation. It does
+	// not add a readiness wait or change behavior when no launch group is selected.
+	// Use it only when the dependent resource can run without the dependency during
+	// initial startup.
+	//
+	// Parameters:
+	//   - dependency: The optional dependency resource builder.
+	//
+	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithOptionalLaunchGroupReference(dependency Resource) TestDatabaseResource
+
 	// WithOptionalString adds an optional string parameter
 	//
 	// Parameters:
@@ -47213,6 +47610,29 @@ func (s *testDatabaseResource) WithOptionalCallback(options ...WithOptionalCallb
 	return s
 }
 
+// WithOptionalLaunchGroupReference declares a local resource reference that is
+// optional during initial launch-group selection.
+func (s *testDatabaseResource) WithOptionalLaunchGroupReference(dependency Resource) TestDatabaseResource {
+	if s.Err() != nil {
+		return s
+	}
+	if dependency != nil {
+		if err := dependency.Err(); err != nil {
+			s.setPropagatedErr(err)
+			return s
+		}
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["dependency"] = serializeValue(dependency)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withOptionalLaunchGroupReference", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
+}
+
 // WithOptionalString adds an optional string parameter
 func (s *testDatabaseResource) WithOptionalString(options ...WithOptionalStringOption) TestDatabaseResource {
 	if s.Err() != nil {
@@ -49267,6 +49687,25 @@ type TestRedisResource interface {
 	// Parameters:
 	//   - options: Optional parameters; see [WithOptionalCallbackOption].
 	WithOptionalCallback(options ...WithOptionalCallbackOption) TestRedisResource
+
+	// WithOptionalLaunchGroupReference declares a local resource reference that is
+	// optional during initial launch-group selection.
+	//
+	// This declares a reference relationship for launch-group validation. It does
+	// not add a readiness wait or change behavior when no launch group is selected.
+	// Use it only when the dependent resource can run without the dependency during
+	// initial startup.
+	//
+	// Parameters:
+	//   - dependency: The optional dependency resource builder.
+	//
+	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithOptionalLaunchGroupReference(dependency Resource) TestRedisResource
 
 	// WithOptionalString adds an optional string parameter
 	//
@@ -52165,6 +52604,29 @@ func (s *testRedisResource) WithOptionalCallback(options ...WithOptionalCallback
 		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withOptionalCallback", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
+}
+
+// WithOptionalLaunchGroupReference declares a local resource reference that is
+// optional during initial launch-group selection.
+func (s *testRedisResource) WithOptionalLaunchGroupReference(dependency Resource) TestRedisResource {
+	if s.Err() != nil {
+		return s
+	}
+	if dependency != nil {
+		if err := dependency.Err(); err != nil {
+			s.setPropagatedErr(err)
+			return s
+		}
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["dependency"] = serializeValue(dependency)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withOptionalLaunchGroupReference", reqArgs); err != nil {
 		s.setErr(err)
 	}
 	return s

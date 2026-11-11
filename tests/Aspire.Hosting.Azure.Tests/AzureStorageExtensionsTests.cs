@@ -44,7 +44,7 @@ public class AzureStorageExtensionsTests(ITestOutputHelper output)
                 "which is not included in launch group 'frontend'. Dependency path: frontend -> blobs -> storage. " +
                 "Edges: frontend --reference--> blobs; blobs --lifetime owner--> storage. " +
                 "Add 'storage' to launch group 'frontend'. " +
-                "If the reference from 'frontend' to 'blobs' is optional, mark it with WithOptionalLaunchGroupDependency.",
+                "If the reference from 'frontend' to 'blobs' is optional, mark it with WithOptionalLaunchGroupReference.",
                 exception.Message);
         }
         else

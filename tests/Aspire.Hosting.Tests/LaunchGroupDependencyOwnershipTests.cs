@@ -36,7 +36,7 @@ public class LaunchGroupDependencyOwnershipTests
             "Resource 'frontend' requires local resource 'server' (the lifetime owner of 'database'), " +
             "which is not included in launch group 'frontend'. Dependency path: frontend -> database -> server. " +
             "Edges: frontend --reference--> database; database --lifetime owner--> server. Add 'server' to launch group 'frontend'. " +
-            "If the reference from 'frontend' to 'database' is optional, mark it with WithOptionalLaunchGroupDependency.",
+            "If the reference from 'frontend' to 'database' is optional, mark it with WithOptionalLaunchGroupReference.",
             exception.Message);
     }
 
@@ -85,7 +85,7 @@ public class LaunchGroupDependencyOwnershipTests
             "which is marked for explicit start. Dependency path: frontend -> database -> server. " +
             "Edges: frontend --reference--> database; database --lifetime owner--> server. " +
             "Remove explicit start from 'server' and ensure it is included in launch group 'frontend'. " +
-            "If the reference from 'frontend' to 'database' is optional, mark it with WithOptionalLaunchGroupDependency.",
+            "If the reference from 'frontend' to 'database' is optional, mark it with WithOptionalLaunchGroupReference.",
             exception.Message);
     }
 
@@ -147,7 +147,7 @@ public class LaunchGroupDependencyOwnershipTests
             "Resource 'frontend' requires local resource 'dependency', which is not included in launch group 'frontend'. " +
             "Dependency path: frontend -> database -> dependency. Edges: frontend --reference--> database; database --reference--> dependency. " +
             "Add 'dependency' to launch group 'frontend'. " +
-            "If the reference from 'database' to 'dependency' is optional, mark it with WithOptionalLaunchGroupDependency.",
+            "If the reference from 'database' to 'dependency' is optional, mark it with WithOptionalLaunchGroupReference.",
             exception.Message);
     }
 
@@ -354,7 +354,7 @@ public class LaunchGroupDependencyOwnershipTests
             "Resource 'child' requires local resource 'dependency', which is not included in launch group 'frontend'. " +
             "Dependency path: child -> dependency. Edges: child --reference--> dependency. " +
             "Add 'dependency' to launch group 'frontend'. " +
-            "If the reference from 'child' to 'dependency' is optional, mark it with WithOptionalLaunchGroupDependency.",
+            "If the reference from 'child' to 'dependency' is optional, mark it with WithOptionalLaunchGroupReference.",
             exception.Message);
         Assert.False(child.Resource.HasAnnotationOfType<ExplicitStartupAnnotation>());
         Assert.False(dependency.Resource.HasAnnotationOfType<ExplicitStartupAnnotation>());
@@ -480,7 +480,7 @@ public class LaunchGroupDependencyOwnershipTests
                 "Resource 'frontend' requires local resource 'server' (the lifetime owner of 'child'), " +
                 "which is not included in launch group 'frontend'. Dependency path: frontend -> child -> server. " +
                 "Edges: frontend --reference--> child; child --lifetime owner--> server. Add 'server' to launch group 'frontend'. " +
-                "If the reference from 'frontend' to 'child' is optional, mark it with WithOptionalLaunchGroupDependency.",
+                "If the reference from 'frontend' to 'child' is optional, mark it with WithOptionalLaunchGroupReference.",
                 exception.Message);
         }
         else
@@ -546,7 +546,7 @@ public class LaunchGroupDependencyOwnershipTests
         builder.Configuration["Aspire:LaunchGroup"] = "frontend";
         var target = builder.AddRedis("target").WithLaunchGroup("backend");
         var redirect = builder.AddRedis("redirect").WithLaunchGroup("frontend")
-            .WithOptionalLaunchGroupDependency(target)
+            .WithOptionalLaunchGroupReference(target)
             .WithConnectionStringRedirection(target.Resource);
         builder.AddExecutable("frontend", "unused", ".").WithLaunchGroup("frontend").WithReference(redirect);
         await using var app = builder.Build();
@@ -583,7 +583,7 @@ public class LaunchGroupDependencyOwnershipTests
 
         var edgeGuidance = wait
             ? "The wait from 'frontend' to 'dependency' requires automatic startup."
-            : "If the reference from 'frontend' to 'dependency' is optional, mark it with WithOptionalLaunchGroupDependency.";
+            : "If the reference from 'frontend' to 'dependency' is optional, mark it with WithOptionalLaunchGroupReference.";
         Assert.Equal(
             "Resource 'frontend' requires local resource 'dependency', which is marked for explicit start. " +
             $"Dependency path: frontend -> dependency. Edges: frontend --{(wait ? "reference/wait" : "reference")}--> dependency. " +
@@ -622,7 +622,7 @@ public class LaunchGroupDependencyOwnershipTests
         var target = builder.AddExecutable("target", "unused", ".").WithLaunchGroup("backend");
         var api = builder.AddExecutable("api", "unused", ".")
             .WithLaunchGroup("frontend")
-            .WithOptionalLaunchGroupDependency(target)
+            .WithOptionalLaunchGroupReference(target)
             .WaitFor(target);
         builder.AddExecutable("frontend", "unused", ".")
             .WithLaunchGroup("frontend")
@@ -713,7 +713,7 @@ public class LaunchGroupDependencyOwnershipTests
             "Resource 'frontend' requires local resource 'missing', which is not included in launch group 'frontend'. " +
             "Dependency path: frontend -> right -> missing. Edges: frontend --reference--> right; right --reference--> missing. " +
             "Add 'missing' to launch group 'frontend'. " +
-            "If the reference from 'right' to 'missing' is optional, mark it with WithOptionalLaunchGroupDependency.",
+            "If the reference from 'right' to 'missing' is optional, mark it with WithOptionalLaunchGroupReference.",
             exception.Message);
         Assert.Equal(resources.Length, annotationsBefore.Count);
         for (var index = 0; index < resources.Length; index++)

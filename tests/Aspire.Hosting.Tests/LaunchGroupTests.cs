@@ -30,7 +30,7 @@ public class LaunchGroupTests(ITestOutputHelper outputHelper)
             [
                 nameof(LaunchGroupExtensions.WithLaunchGroup),
                 nameof(LaunchGroupExtensions.WithLaunchGroups),
-                nameof(LaunchGroupExtensions.WithOptionalLaunchGroupDependency)
+                nameof(LaunchGroupExtensions.WithOptionalLaunchGroupReference)
             ],
             methods.Select(method => method.Name).Order(StringComparer.Ordinal));
 
@@ -224,7 +224,7 @@ public class LaunchGroupTests(ITestOutputHelper outputHelper)
                 "Resource 'frontend' requires local resource 'backend', which is not included in launch group 'frontend'. " +
                 "Dependency path: frontend -> backend. Edges: frontend --reference--> backend. " +
                 "Add 'backend' to launch group 'frontend'. " +
-                "If the reference from 'frontend' to 'backend' is optional, mark it with WithOptionalLaunchGroupDependency.",
+                "If the reference from 'frontend' to 'backend' is optional, mark it with WithOptionalLaunchGroupReference.",
                 exception.Message),
             () => Assert.Equal(0, argumentCallbacks),
             () => Assert.Equal(0, environmentCallbacks));
@@ -600,7 +600,9 @@ public class LaunchGroupTests(ITestOutputHelper outputHelper)
         var backend = builder.AddExecutable("backend", "unused", ".").WithLaunchGroup("backend");
         var frontend = builder.AddExecutable("frontend", "unused", ".")
             .WithLaunchGroup("frontend")
-            .WithOptionalLaunchGroupDependency(backend);
+            .WithOptionalLaunchGroupReference(backend);
+        var callbacks = 0;
+        frontend.WithArgs(_ => Interlocked.Increment(ref callbacks));
         await using var app = builder.Build();
 
         await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
@@ -611,6 +613,7 @@ public class LaunchGroupTests(ITestOutputHelper outputHelper)
             frontend.Resource.Annotations.OfType<ResourceRelationshipAnnotation>(),
             annotation => ReferenceEquals(annotation.Resource, backend.Resource) &&
                 annotation.Type == KnownRelationshipTypes.Reference);
+        Assert.Equal(0, callbacks);
     }
 
     [Fact]
