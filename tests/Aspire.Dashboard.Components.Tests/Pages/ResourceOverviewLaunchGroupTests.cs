@@ -23,11 +23,9 @@ public class ResourceOverviewLaunchGroupTests : DashboardTestContext
 {
     private static readonly (string Name, string Value)[] s_expectedProperties =
     [
-        ("Launch group", "Web"),
         ("Launch groups", "Web, Shared"),
         ("Inherited from", "parent"),
-        ("Explicit start", "Yes"),
-        ("Exclusion reason", "Not in selected group, deferred build")
+        ("Explicit start", "Yes")
     ];
 
     [Fact]
@@ -38,12 +36,97 @@ public class ResourceOverviewLaunchGroupTests : DashboardTestContext
         cut.WaitForAssertion(() => Assert.Equal(["api"], cut.Instance.SelectedResourceNames));
         var values = GetStatusValues(cut);
 
-        Assert.Equal("Web", values["Launch group"]);
-        Assert.Equal("Web, Shared", values["Launch groups"]);
-        Assert.Equal("parent", values["Inherited from"]);
-        Assert.Equal("Yes", values["Explicit start"]);
-        Assert.Equal("Not in selected group, deferred build", values["Exclusion reason"]);
+        Assert.Equal(
+            ["State", "Health state", "Type", "Start time", "Stop time", "Launch groups", "Inherited from", "Explicit start"],
+            values.Keys);
+        Assert.Equal(s_expectedProperties, values.TakeLast(3).Select(pair => (pair.Key, pair.Value)));
         Assert.Equal("Running", values["State"]);
+    }
+
+    [Theory]
+    [InlineData(LaunchGroupBuildType.InitialShared, "Not in active launch group 'Web'")]
+    [InlineData(LaunchGroupBuildType.Deferred, "Not in active launch group 'Web', deferred build")]
+    public void Overview_ExclusionExplainedInStateDetails(LaunchGroupBuildType buildType, string expectedStateDetails)
+    {
+        var cut = RenderOverview(
+            withLaunchGroups: true,
+            customPropertyCount: 0,
+            launchGroup: LaunchGroupTestHelpers.CreateResource(
+                "api",
+                groups: ["Shared"],
+                exclusionReason: LaunchGroupExclusionReason.NotInSelectedGroup,
+                buildType: buildType),
+            state: KnownResourceState.NotStarted);
+
+        cut.WaitForAssertion(() =>
+        {
+            var status = GetStatusValues(cut);
+            Assert.Equal(expectedStateDetails, status["State details"]);
+            Assert.Equal(
+                ["State", "State details", "Type", "Start time", "Stop time", "Launch groups"],
+                status.Keys);
+            Assert.Equal([("Launch groups", "Shared")], GetPropertyValues(cut));
+            Assert.Equal(
+                [("Web", "worker"), ("Shared", "api, cache")],
+                GetGroupValues(cut.Find("[aria-labelledby='overview-status-title']")));
+            var stateDetails = cut.Find("[aria-labelledby='overview-status-title']")
+                .QuerySelectorAll("dt").Single(term => term.TextContent.Trim() == "State details").NextElementSibling!;
+            var tooltipTarget = Assert.Single(stateDetails.QuerySelectorAll("[tabindex]"));
+            Assert.Equal("Web", tooltipTarget.TextContent.Trim());
+        });
+    }
+
+    [Fact]
+    public async Task Overview_ManualStartReplacesExclusionWithCurrentStateDetails()
+    {
+        var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        var cut = RenderOverview(
+            withLaunchGroups: true,
+            customPropertyCount: 0,
+            state: KnownResourceState.NotStarted,
+            resourceChannel: channel);
+
+        cut.WaitForAssertion(() =>
+            Assert.Equal("Not in active launch group 'Web', deferred build", GetStatusValues(cut)["State details"]));
+        var launchGroup = cut.Instance.ResourceByName["api"].LaunchGroup;
+
+        foreach (var state in new[] { KnownResourceState.Running, KnownResourceState.FailedToStart, KnownResourceState.Exited })
+        {
+            var updatedResource = ModelTestHelpers.CreateResource("api", state: state);
+            updatedResource.LaunchGroup = launchGroup;
+            await channel.Writer.WriteAsync([
+                new ResourceViewModelChange(ResourceViewModelChangeType.Upsert, updatedResource)
+            ]);
+
+            cut.WaitForAssertion(() =>
+            {
+                var status = GetStatusValues(cut);
+                var expectedState = state switch
+                {
+                    KnownResourceState.Running => "Running",
+                    KnownResourceState.FailedToStart => "Failed to start",
+                    _ => "Exited"
+                };
+                Assert.Equal(expectedState, status["State"]);
+                if (state == KnownResourceState.Running)
+                {
+                    Assert.Equal(
+                        ["State", "Health state", "Type", "Start time", "Stop time", "Launch groups", "Inherited from", "Explicit start"],
+                        status.Keys);
+                }
+                else
+                {
+                    var expectedDescription = state == KnownResourceState.FailedToStart
+                        ? $"{updatedResource.ResourceTypeDisplayName} failed to start."
+                        : $"{updatedResource.ResourceTypeDisplayName} is no longer running.";
+                    Assert.Equal(expectedDescription, status["State details"]);
+                }
+                Assert.Equal(s_expectedProperties, GetPropertyValues(cut));
+                Assert.Equal(
+                    [("Web", "api, worker"), ("Shared", "api, cache")],
+                    GetGroupValues(cut.Find("[aria-labelledby='overview-status-title']")));
+            });
+        }
     }
 
     [Fact]
@@ -66,7 +149,7 @@ public class ResourceOverviewLaunchGroupTests : DashboardTestContext
         cut.WaitForAssertion(() =>
         {
             var properties = GetPropertyValues(cut);
-            Assert.Equal(16, properties.Length);
+            Assert.Equal(14, properties.Length);
             Assert.Equal(s_expectedProperties, properties.Skip(11));
         });
 
@@ -95,8 +178,8 @@ public class ResourceOverviewLaunchGroupTests : DashboardTestContext
         cut.WaitForAssertion(() =>
         {
             var status = GetStatusValues(cut);
-            Assert.Equal(["Launch group", "Launch groups"], status.Keys.TakeLast(2));
-            Assert.Equal([("Launch group", "Web"), ("Launch groups", "Web")], GetPropertyValues(cut));
+            Assert.Equal("Launch groups", status.Keys.Last());
+            Assert.Equal([("Launch groups", "Web")], GetPropertyValues(cut));
         });
     }
 
@@ -108,10 +191,10 @@ public class ResourceOverviewLaunchGroupTests : DashboardTestContext
         cut.WaitForAssertion(() =>
         {
             Assert.Equal(
-                [("Web", "api, worker"), ("Web", "api, worker"), ("Shared", "api, cache")],
+                [("Web", "api, worker"), ("Shared", "api, cache")],
                 GetGroupValues(cut.Find("[aria-labelledby='overview-status-title']")));
             Assert.Equal(
-                [("Web", "api, worker"), ("Web", "api, worker"), ("Shared", "api, cache")],
+                [("Web", "api, worker"), ("Shared", "api, cache")],
                 GetGroupValues(cut.Find("[aria-labelledby='overview-properties-title']")));
         });
     }
@@ -124,10 +207,10 @@ public class ResourceOverviewLaunchGroupTests : DashboardTestContext
         cut.WaitForAssertion(() =>
         {
             Assert.Equal(
-                [("Web", "api, worker"), ("Web", "api, worker"), ("Shared", "api, cache")],
+                [("Web", "api, worker"), ("Shared", "api, cache")],
                 GetGroupValues(cut.Find("[aria-labelledby='overview-status-title']")));
             Assert.Equal(
-                [("Web", "api, worker"), ("Web", "api, worker"), ("Shared", "api, cache")],
+                [("Web", "api, worker"), ("Shared", "api, cache")],
                 GetGroupValues(cut.Find("[aria-labelledby='overview-properties-title']")));
         });
 
@@ -139,10 +222,10 @@ public class ResourceOverviewLaunchGroupTests : DashboardTestContext
         cut.WaitForAssertion(() =>
         {
             Assert.Equal(
-                [("Web", "api, api-rebuilder, worker"), ("Web", "api, api-rebuilder, worker"), ("Shared", "api, cache")],
+                [("Web", "api, api-rebuilder, worker"), ("Shared", "api, cache")],
                 GetGroupValues(cut.Find("[aria-labelledby='overview-status-title']")));
             Assert.Equal(
-                [("Web", "api, api-rebuilder, worker"), ("Web", "api, api-rebuilder, worker"), ("Shared", "api, cache")],
+                [("Web", "api, api-rebuilder, worker"), ("Shared", "api, cache")],
                 GetGroupValues(cut.Find("[aria-labelledby='overview-properties-title']")));
         });
     }
@@ -161,13 +244,15 @@ public class ResourceOverviewLaunchGroupTests : DashboardTestContext
     private IRenderedComponent<ResourcesLayout> RenderOverview(
         bool withLaunchGroups,
         int customPropertyCount,
-        LaunchGroupResourceInfo? launchGroup = null)
+        LaunchGroupResourceInfo? launchGroup = null,
+        KnownResourceState state = KnownResourceState.Running,
+        Channel<IReadOnlyList<ResourceViewModelChange>>? resourceChannel = null)
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         var properties = Enumerable.Range(1, customPropertyCount).ToDictionary(
             number => $"custom-{number:D2}",
             number => new ResourcePropertyViewModel($"custom-{number:D2}", Value.ForString($"value-{number}"), false, null, 0, null, false));
-        var resource = ModelTestHelpers.CreateResource("api", state: KnownResourceState.Running, properties: properties);
+        var resource = ModelTestHelpers.CreateResource("api", state: state, properties: properties);
         var resources = new List<ResourceViewModel>
         {
             resource,
@@ -175,7 +260,7 @@ public class ResourceOverviewLaunchGroupTests : DashboardTestContext
             ModelTestHelpers.CreateResource("worker-1", displayName: "worker", hidden: true),
             ModelTestHelpers.CreateResource("worker-2", displayName: "worker")
         };
-        var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        var channel = resourceChannel ?? Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
         IDashboardClient client = withLaunchGroups
             ? new LaunchGroupTestDashboardClient(
                 LaunchGroupTestHelpers.CreateInformation(

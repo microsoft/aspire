@@ -154,7 +154,18 @@
                     @if (GetStateDescription(resource, stateViewModel.Text) is { } stateDescription)
                     {
                         <dt>@ControlsStringsLoc[nameof(ControlsStrings.ResourceDetailsStateDescriptionHeader)]</dt>
-                        <dd>@stateDescription</dd>
+                        <dd>
+                            @if (ResourceStateViewModel.GetLaunchGroupStateDescription(resource) is { } launchGroupDescription)
+                            {
+                                <LaunchGroupValue Value="@stateDescription"
+                                                  Groups="@(new[] { launchGroupDescription.Group })"
+                                                  TextFormat="@ColumnsLoc[launchGroupDescription.ResourceName]" />
+                            }
+                            else
+                            {
+                                @stateDescription
+                            }
+                        </dd>
                     }
                     @if (resource.HealthStatus is { } healthStatus)
                     {
@@ -195,11 +206,7 @@
                         {
                             <dt>@property.KnownProperty!.GetDisplayName(Loc)</dt>
                             <dd>
-                                @if (property.Name == LaunchGroupDisplayHelpers.SelectedGroupPropertyKey)
-                                {
-                                    <LaunchGroupValue Value="@property.Value.StringValue" Groups="@LaunchGroupDisplayHelpers.GetSelectedGroups(launchGroup)" />
-                                }
-                                else if (property.Name == LaunchGroupDisplayHelpers.EffectiveMembershipPropertyKey)
+                                @if (property.Name == LaunchGroupDisplayHelpers.EffectiveMembershipPropertyKey)
                                 {
                                     <LaunchGroupValue Value="@property.Value.StringValue" Groups="@launchGroup.Groups" />
                                 }

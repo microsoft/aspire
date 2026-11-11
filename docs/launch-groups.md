@@ -11,20 +11,20 @@ Suppress `ASPIRELAUNCHGROUPS001` to opt in when calling them from C#.
 ```csharp
 #pragma warning disable ASPIRELAUNCHGROUPS001
 
-var database = builder.AddPostgres("database").WithLaunchGroup("catalog");
-var cache = builder.AddRedis("cache").WithLaunchGroup("basket");
+var database = builder.AddPostgres("database").WithLaunchGroups("catalog");
+var cache = builder.AddRedis("cache").WithLaunchGroups("basket");
 var catalog = builder.AddDotnetProject("catalog", "../Catalog/Catalog.csproj")
-    .WithLaunchGroup("catalog")
+    .WithLaunchGroups("catalog")
     .WithReference(database)
     .WaitFor(database);
 ```
 
-`WithLaunchGroup` and `WithLaunchGroups` are additive. Names are case-insensitive.
-Valid group names are inferred from `WithLaunchGroup` and `WithLaunchGroups`
-membership. To explicitly define the valid names, including groups with no members,
+`WithLaunchGroups` accepts one or more names and is additive. Names are case-insensitive.
+Valid group names are inferred from resource membership.
+To explicitly define the valid names, including groups with no members,
 use the `Aspire:LaunchGroups` configuration array. Configuration definitions enable
 launch group support automatically, without any launch group API calls.
-`WithLaunchGroup` and `WithLaunchGroups` also register the required support.
+`WithLaunchGroups` also registers the required support.
 Undefined membership and invalid selections fail before resources start. Select
 exactly one scalar name, not an array, object, or comma- or semicolon-separated list.
 Selecting a group when no names or resource memberships are defined also fails
@@ -42,7 +42,7 @@ For example, define groups in the AppHost's `appsettings.json`:
 ```
 
 `Aspire:LaunchGroups` defines the valid names; resource membership is still configured
-with `WithLaunchGroup` or `WithLaunchGroups`. `Aspire:LaunchGroup` selects the active
+with `WithLaunchGroups`. `Aspire:LaunchGroup` selects the active
 group. Definitions added to the builder's configuration before
 `Build()` are also supported. Configuration changes do not switch a running session.
 
@@ -98,7 +98,7 @@ For example, `catalogdb` inherits both groups from its PostgreSQL server, while
 ```csharp
 var postgres = builder.AddPostgres("postgres").WithLaunchGroups("catalog", "frontend");
 var catalogDb = postgres.AddDatabase("catalogdb");
-var operationsDb = postgres.AddDatabase("operationsdb").WithLaunchGroup("operations");
+var operationsDb = postgres.AddDatabase("operationsdb").WithLaunchGroups("operations");
 ```
 
 The same lookup is recursive. A structural child below `catalogdb` with no direct
@@ -231,14 +231,17 @@ direct memberships, and a resource with multiple memberships can match each grou
 Filtering only changes the visible rows. It does not change automatic startup,
 lifecycle controls, or the AppHost's selected group.
 
-Resource details show **Launch group** (the selected group) and **Launch groups**
-(the resource's effective memberships) in both Status and Properties.
+Resource details show **Launch groups** (the resource's effective memberships)
+in both Status and Properties, without repeating the AppHost's active group.
 Hover over or focus a group to see its effective members, including
 resources that inherit membership. Hidden members appear when **Show hidden resources**
 is enabled. Details also show the inheritance source,
-explicit-start setting, and exclusion reason when relevant. If an excluded
-resource's build is deferred, the exclusion reason reads
-**Not in selected group, deferred build** rather than showing a separate build row.
+and explicit-start setting when relevant. For a resource excluded from initial
+startup, **State details** explains **Not in active launch group 'catalog'**.
+If its build is deferred, the explanation adds **, deferred build**.
+Hover over or focus the active group's name in the explanation to see its members.
+After a manual Start, state details describe the current lifecycle state instead,
+including any startup failure, rather than continuing to show the initial exclusion.
 
 The JSON metadata uses one `exclusionReason` enum: `None`, `NotInSelectedGroup`,
 or `ExemptFromSelection`. Exempt resources retain their ordinary startup behavior.
@@ -293,8 +296,8 @@ projects. Run the commands from the AppHost directory.
 #pragma warning disable ASPIRELAUNCHGROUPS001
 
 var builder = DistributedApplication.CreateBuilder(args);
-builder.AddDotnetProject("alpha", "../Alpha/Alpha.csproj").WithLaunchGroup("alpha");
-builder.AddDotnetProject("beta", "../Beta/Beta.csproj").WithLaunchGroup("beta");
+builder.AddDotnetProject("alpha", "../Alpha/Alpha.csproj").WithLaunchGroups("alpha");
+builder.AddDotnetProject("beta", "../Beta/Beta.csproj").WithLaunchGroups("beta");
 builder.Build().Run();
 ```
 
@@ -328,9 +331,9 @@ Use either snippet in place of the resources in the earlier AppHost:
 
 ```csharp
 var backend = builder.AddDotnetProject("backend", "../Backend/Backend.csproj")
-    .WithLaunchGroup("frontend");
+    .WithLaunchGroups("frontend");
 builder.AddDotnetProject("frontend", "../Frontend/Frontend.csproj")
-    .WithLaunchGroup("frontend")
+    .WithLaunchGroups("frontend")
     .WithReference(backend)
     .WaitFor(backend);
 ```
@@ -344,9 +347,9 @@ declare the relationship explicitly so preflight can see it:
 
 ```csharp
 var backend = builder.AddDotnetProject("backend", "../Backend/Backend.csproj")
-    .WithLaunchGroup("frontend");
+    .WithLaunchGroups("frontend");
 builder.AddDotnetProject("frontend", "../Frontend/Frontend.csproj")
-    .WithLaunchGroup("frontend")
+    .WithLaunchGroups("frontend")
     .WithReferenceRelationship(backend.Resource)
     .WithEnvironment(context => context.EnvironmentVariables["BACKEND_URL"] = backend.GetEndpoint("http"));
 ```
@@ -372,7 +375,7 @@ registration with:
 #pragma warning disable ASPIREPERSISTENCE001
 
 builder.AddDotnetProject("beta", "../Beta/Beta.csproj")
-    .WithLaunchGroup("beta")
+    .WithLaunchGroups("beta")
     .WithPersistentLifetime();
 ```
 

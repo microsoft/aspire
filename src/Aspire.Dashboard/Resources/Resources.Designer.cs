@@ -952,33 +952,6 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Not in selected group.
-        /// </summary>
-        public static string ResourceLaunchGroupsExcludedByGroup {
-            get {
-                return ResourceManager.GetString("ResourceLaunchGroupsExcludedByGroup", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Not in selected group, deferred build.
-        /// </summary>
-        public static string ResourceLaunchGroupsExcludedByGroupDeferred {
-            get {
-                return ResourceManager.GetString("ResourceLaunchGroupsExcludedByGroupDeferred", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Exclusion reason.
-        /// </summary>
-        public static string ResourceLaunchGroupsExclusionReason {
-            get {
-                return ResourceManager.GetString("ResourceLaunchGroupsExclusionReason", resourceCulture);
-            }
-        }
-
-        /// <summary>
         ///   Looks up a localized string similar to Explicit start.
         /// </summary>
         public static string ResourceLaunchGroupsExplicitStart {
@@ -1011,15 +984,6 @@ namespace Aspire.Dashboard.Resources {
         public static string ResourceLaunchGroupsNone {
             get {
                 return ResourceManager.GetString("ResourceLaunchGroupsNone", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Launch group.
-        /// </summary>
-        public static string ResourceLaunchGroupsSelectedGroup {
-            get {
-                return ResourceManager.GetString("ResourceLaunchGroupsSelectedGroup", resourceCulture);
             }
         }
 

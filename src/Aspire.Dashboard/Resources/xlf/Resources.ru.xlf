@@ -502,21 +502,6 @@
         <target state="new">Launch groups</target>
         <note />
       </trans-unit>
-      <trans-unit id="ResourceLaunchGroupsExcludedByGroup">
-        <source>Not in selected group</source>
-        <target state="new">Not in selected group</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ResourceLaunchGroupsExcludedByGroupDeferred">
-        <source>Not in selected group, deferred build</source>
-        <target state="new">Not in selected group, deferred build</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ResourceLaunchGroupsExclusionReason">
-        <source>Exclusion reason</source>
-        <target state="new">Exclusion reason</target>
-        <note />
-      </trans-unit>
       <trans-unit id="ResourceLaunchGroupsExplicitStart">
         <source>Explicit start</source>
         <target state="new">Explicit start</target>
@@ -535,11 +520,6 @@
       <trans-unit id="ResourceLaunchGroupsNone">
         <source>None</source>
         <target state="new">None</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ResourceLaunchGroupsSelectedGroup">
-        <source>Launch group</source>
-        <target state="new">Launch group</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceLaunchGroupsUngrouped">

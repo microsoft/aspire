@@ -4,6 +4,7 @@
 #pragma warning disable ASPIREDOTNETPROJECT001 // Tests the experimental file-based .NET project support.
 #pragma warning disable ASPIRELAUNCHGROUPS001 // Tests the experimental launch-group APIs.
 
+using System.Globalization;
 using System.Text.RegularExpressions;
 using Aspire.Dashboard.Tests.Integration.Playwright.Infrastructure;
 using Aspire.Hosting;
@@ -53,7 +54,7 @@ public sealed class LaunchGroupRealAppHostTests(PlaywrightFixture playwrightFixt
                     ReplicaResourceName,
                     replicaSourcePath,
                     options => options.ExcludeLaunchProfile = true)
-                .WithLaunchGroup(FrontendGroup)
+                .WithLaunchGroups(FrontendGroup)
                 .WithReplicas(2);
 
             // Launch-group inheritance follows IResourceWithParent structural chains, not UI-only relationship annotations.
@@ -66,7 +67,7 @@ public sealed class LaunchGroupRealAppHostTests(PlaywrightFixture playwrightFixt
                 .WithReferenceRelationship(replica);
 
             builder.AddExecutable(BackendResourceName, "dotnet", workspacePath, "--info")
-                .WithLaunchGroup(BackendGroup);
+                .WithLaunchGroups(BackendGroup);
 
             builder.AddDotnetProject(
                     DeferredResourceName,
@@ -160,11 +161,9 @@ public sealed class LaunchGroupRealAppHostTests(PlaywrightFixture playwrightFixt
             Assert.False(string.IsNullOrEmpty(firstReplicaName));
             await firstReplicaRow.Locator(".resource-row-link").ClickAsync();
             await Assertions.Expect(page.Locator("h1.resource-title")).ToHaveTextAsync(firstReplicaName);
-            await AssertOverviewPropertyAsync(page, Resources.Resources.ResourceLaunchGroupsSelectedGroup, FrontendGroup);
             await AssertOverviewPropertyAsync(page, Resources.Resources.ResourceLaunchGroupsEffectiveMembership, FrontendGroup);
             await AssertOverviewPropertyAbsentAsync(page, Resources.Resources.ResourceLaunchGroupsInheritedFrom);
             await AssertOverviewPropertyAbsentAsync(page, Resources.Resources.ResourceLaunchGroupsExplicitStart);
-            await AssertOverviewPropertyAbsentAsync(page, Resources.Resources.ResourceLaunchGroupsExclusionReason);
 
             var statusGroup = page.Locator("[aria-labelledby='overview-status-title'] .launch-group-value").First;
             var propertiesGroup = page.Locator("[aria-labelledby='overview-properties-title'] .launch-group-value").First;
@@ -194,27 +193,37 @@ public sealed class LaunchGroupRealAppHostTests(PlaywrightFixture playwrightFixt
             await Assertions.Expect(statusGroup).ToHaveAttributeAsync("data-tooltip", visibleMembers);
 
             await OpenResourceAsync(page, ChildResourceName);
-            await AssertOverviewPropertyAsync(page, Resources.Resources.ResourceLaunchGroupsSelectedGroup, FrontendGroup);
             await AssertOverviewPropertyAsync(page, Resources.Resources.ResourceLaunchGroupsEffectiveMembership, FrontendGroup);
             await AssertOverviewPropertyAsync(page, Resources.Resources.ResourceLaunchGroupsInheritedFrom, ReplicaResourceName);
             await AssertOverviewPropertyAsync(page, Resources.Resources.ResourceLaunchGroupsExplicitStart, Resources.Resources.ResourceLaunchGroupsYes);
-            await AssertOverviewPropertyAbsentAsync(page, Resources.Resources.ResourceLaunchGroupsExclusionReason);
 
+            var exclusionDescription = string.Format(
+                CultureInfo.CurrentCulture, Resources.Columns.StateColumnResourceNotInLaunchGroup, FrontendGroup);
             await OpenResourceAsync(page, ReferencedResourceName);
             await AssertOverviewPropertyAsync(page, Resources.Resources.ResourceLaunchGroupsEffectiveMembership, Resources.Resources.ResourceLaunchGroupsUngrouped);
             await AssertOverviewPropertyAbsentAsync(page, Resources.Resources.ResourceLaunchGroupsInheritedFrom);
             await AssertOverviewPropertyAsync(page, Resources.Resources.ResourceLaunchGroupsExplicitStart, Resources.Resources.ResourceLaunchGroupsYes);
-            await AssertOverviewPropertyAsync(page, Resources.Resources.ResourceLaunchGroupsExclusionReason, Resources.Resources.ResourceLaunchGroupsExcludedByGroup);
+            await AssertOverviewPropertyAsync(page, Resources.ControlsStrings.ResourceDetailsStateDescriptionHeader, exclusionDescription);
 
             await OpenResourceAsync(page, BackendResourceName);
             await AssertOverviewPropertyAsync(page, Resources.Resources.ResourceLaunchGroupsEffectiveMembership, BackendGroup);
             await AssertOverviewPropertyAbsentAsync(page, Resources.Resources.ResourceLaunchGroupsExplicitStart);
-            await AssertOverviewPropertyAsync(page, Resources.Resources.ResourceLaunchGroupsExclusionReason, Resources.Resources.ResourceLaunchGroupsExcludedByGroup);
+            await AssertOverviewPropertyAsync(page, Resources.ControlsStrings.ResourceDetailsStateDescriptionHeader, exclusionDescription);
 
             await OpenResourceAsync(page, DeferredResourceName);
             await AssertOverviewPropertyAsync(page, Resources.Resources.ResourceLaunchGroupsEffectiveMembership, Resources.Resources.ResourceLaunchGroupsUngrouped);
             await AssertOverviewPropertyAsync(page, Resources.Resources.ResourceLaunchGroupsExplicitStart, Resources.Resources.ResourceLaunchGroupsYes);
-            await AssertOverviewPropertyAsync(page, Resources.Resources.ResourceLaunchGroupsExclusionReason, Resources.Resources.ResourceLaunchGroupsExcludedByGroupDeferred);
+            await AssertOverviewPropertyAsync(
+                page,
+                Resources.ControlsStrings.ResourceDetailsStateDescriptionHeader,
+                string.Format(CultureInfo.CurrentCulture, Resources.Columns.StateColumnResourceNotInLaunchGroupDeferred, FrontendGroup));
+            var stateDetails = page.Locator("[aria-labelledby='overview-status-title'] .launch-group-value").First;
+            await Assertions.Expect(stateDetails).ToHaveTextAsync(FrontendGroup);
+            await Assertions.Expect(stateDetails).ToHaveAttributeAsync("data-tooltip", visibleMembers);
+            await stateDetails.FocusAsync();
+            await Assertions.Expect(tooltip).ToHaveTextAsync(visibleMembers);
+            await stateDetails.HoverAsync();
+            await Assertions.Expect(tooltip).ToHaveTextAsync(visibleMembers);
 
             await OpenResourceAsync(page, ChildResourceName);
             await filterTrigger.ClickAsync();

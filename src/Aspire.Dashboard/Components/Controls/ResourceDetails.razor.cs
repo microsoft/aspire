@@ -240,6 +240,20 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
             LaunchGroupValue.AddValueComponents(_valueComponents, launchGroup, ShowHiddenResources);
         }
 
+        if (_valueComponents is not null && ResourceStateViewModel.GetLaunchGroupStateDescription(Resource) is { } description)
+        {
+            _valueComponents[StateDescriptionPropertyKey] = new ComponentMetadata
+            {
+                Type = typeof(LaunchGroupValue),
+                Parameters =
+                {
+                    ["Groups"] = new[] { description.Group },
+                    ["TextFormat"] = ColumnsLoc[description.ResourceName].Value,
+                    ["ShowHiddenResources"] = ShowHiddenResources
+                }
+            };
+        }
+
         UpdateTelemetryProperties();
     }
 

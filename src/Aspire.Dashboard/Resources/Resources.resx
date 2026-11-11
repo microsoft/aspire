@@ -142,9 +142,6 @@
   <data name="ResourceLaunchGroupsHeader" xml:space="preserve">
     <value>Launch groups</value>
   </data>
-  <data name="ResourceLaunchGroupsSelectedGroup" xml:space="preserve">
-    <value>Launch group</value>
-  </data>
   <data name="ResourceLaunchGroupsEffectiveMembership" xml:space="preserve">
     <value>Launch groups</value>
   </data>
@@ -153,15 +150,6 @@
   </data>
   <data name="ResourceLaunchGroupsExplicitStart" xml:space="preserve">
     <value>Explicit start</value>
-  </data>
-  <data name="ResourceLaunchGroupsExcludedByGroup" xml:space="preserve">
-    <value>Not in selected group</value>
-  </data>
-  <data name="ResourceLaunchGroupsExclusionReason" xml:space="preserve">
-    <value>Exclusion reason</value>
-  </data>
-  <data name="ResourceLaunchGroupsExcludedByGroupDeferred" xml:space="preserve">
-    <value>Not in selected group, deferred build</value>
   </data>
   <data name="ResourceLaunchGroupsNone" xml:space="preserve">
     <value>None</value>

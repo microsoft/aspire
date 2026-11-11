@@ -175,7 +175,6 @@ internal sealed record ResourceLaunchGroupViewModel(
 
 internal static class LaunchGroupDisplayHelpers
 {
-    internal const string SelectedGroupPropertyKey = "resource-launch-group-selected-group";
     internal const string EffectiveMembershipPropertyKey = "resource-launch-group-effective-membership";
 
     internal static IEnumerable<ResourcePropertyViewModel> GetProperties(ResourceLaunchGroupViewModel? launchGroup, IStringLocalizer<Resources.Resources> loc)
@@ -188,7 +187,6 @@ internal static class LaunchGroupDisplayHelpers
         var sortOrder = int.MaxValue - 7;
         var properties = new List<ResourcePropertyViewModel>
         {
-            CreateProperty(SelectedGroupPropertyKey, nameof(Resources.Resources.ResourceLaunchGroupsSelectedGroup), GetSelectedGroupText(launchGroup, loc), sortOrder++),
             CreateProperty(EffectiveMembershipPropertyKey, nameof(Resources.Resources.ResourceLaunchGroupsEffectiveMembership), GetGroupsText(launchGroup, loc), sortOrder++)
         };
         if (launchGroup.InheritedFrom is { Length: > 0 } inheritedFrom)
@@ -199,20 +197,7 @@ internal static class LaunchGroupDisplayHelpers
         {
             properties.Add(CreateProperty("resource-launch-group-explicit-start", nameof(Resources.Resources.ResourceLaunchGroupsExplicitStart), loc[nameof(Resources.Resources.ResourceLaunchGroupsYes)], sortOrder++));
         }
-        if (launchGroup.ExclusionReason == LaunchGroupExclusionReason.NotInSelectedGroup)
-        {
-            var exclusionReason = launchGroup.BuildType == LaunchGroupBuildType.Deferred
-                ? loc[nameof(Resources.Resources.ResourceLaunchGroupsExcludedByGroupDeferred)]
-                : loc[nameof(Resources.Resources.ResourceLaunchGroupsExcludedByGroup)];
-            properties.Add(CreateProperty("resource-launch-group-exclusion-reason", nameof(Resources.Resources.ResourceLaunchGroupsExclusionReason), exclusionReason, sortOrder));
-        }
-
         return properties;
-    }
-
-    internal static IReadOnlyList<string> GetSelectedGroups(ResourceLaunchGroupViewModel launchGroup)
-    {
-        return launchGroup.SelectedGroup is { } selectedGroup ? [selectedGroup] : [];
     }
 
     private static ResourcePropertyViewModel CreateProperty(string key, string displayNameResourceName, string value, int sortOrder)
@@ -225,11 +210,6 @@ internal static class LaunchGroupDisplayHelpers
             sortOrder: sortOrder,
             displayName: null,
             isHighlighted: false);
-    }
-
-    internal static string GetSelectedGroupText(ResourceLaunchGroupViewModel launchGroup, IStringLocalizer<Resources.Resources> loc)
-    {
-        return launchGroup.SelectedGroup ?? loc[nameof(Resources.Resources.ResourceLaunchGroupsNone)];
     }
 
     internal static string GetGroupsText(ResourceLaunchGroupViewModel launchGroup, IStringLocalizer<Resources.Resources> loc)

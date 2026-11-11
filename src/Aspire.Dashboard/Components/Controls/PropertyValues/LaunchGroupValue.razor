@@ -11,6 +11,10 @@ else
         {
             <text>, </text>
         }
+        @if (_textPrefix.Length > 0)
+        {
+            <FluentHighlighter HighlightedText="@HighlightText" Text="@_textPrefix" />
+        }
         @if (DashboardClient.LaunchGroups is { } information)
         {
             var members = GetMembersText(information, group);
@@ -19,6 +23,10 @@ else
         else
         {
             <FluentHighlighter HighlightedText="@HighlightText" Text="@group" />
+        }
+        @if (_textSuffix.Length > 0)
+        {
+            <FluentHighlighter HighlightedText="@HighlightText" Text="@_textSuffix" />
         }
     }
 }

@@ -454,9 +454,9 @@ public class ResourceDetailsTests : DashboardTestContext
     }
 
     [Theory]
-    [InlineData(LaunchGroupBuildType.InitialShared, "Not in selected group")]
-    [InlineData(LaunchGroupBuildType.Deferred, "Not in selected group, deferred build")]
-    public void Render_LaunchGroupMetadataShowsDistinctReadOnlyProperties(LaunchGroupBuildType buildType, string exclusionReason)
+    [InlineData(LaunchGroupBuildType.InitialShared, "Not in active launch group 'Web'")]
+    [InlineData(LaunchGroupBuildType.Deferred, "Not in active launch group 'Web', deferred build")]
+    public void Render_LaunchGroupMetadataShowsMembershipAndStateDetails(LaunchGroupBuildType buildType, string stateDetails)
     {
         ResourceSetupHelpers.SetupResourceDetails(this);
         var resource = ModelTestHelpers.CreateResource("app1", state: KnownResourceState.NotStarted);
@@ -492,13 +492,13 @@ public class ResourceDetailsTests : DashboardTestContext
         var properties = cut.Instance.FilteredResourceProperties.ToDictionary(
             property => property.DisplayName,
             property => property.Value.StringValue);
-        Assert.Equal("Web", properties["Launch group"]);
+        Assert.Equal(
+            ["Explicit start", "Inherited from", "Launch groups", "State details"],
+            properties.Keys.Order(StringComparer.Ordinal));
         Assert.Equal("Web, Shared", properties["Launch groups"]);
         Assert.Equal("parent", properties["Inherited from"]);
         Assert.Equal("Yes", properties["Explicit start"]);
-        Assert.Equal(exclusionReason, properties["Exclusion reason"]);
-        Assert.False(properties.ContainsKey("Build disposition"));
-        Assert.False(properties.ContainsKey("Excluded from selection"));
+        Assert.Equal(stateDetails, properties["State details"]);
 
         cut.WaitForAssertion(() =>
         {
@@ -524,6 +524,19 @@ public class ResourceDetailsTests : DashboardTestContext
                 [("Web", "app1, app1-rebuilder, worker"), ("Web", "app1, app1-rebuilder, worker"), ("Shared", "app1, cache")],
                 groupValues);
         });
+
+        var startedResource = ModelTestHelpers.CreateResource("app1", state: KnownResourceState.FailedToStart);
+        client.LaunchGroups!.ApplyToResource(startedResource);
+        cut.Render(builder => builder.Add(component => component.Resource, startedResource));
+
+        var updatedProperties = cut.Instance.FilteredResourceProperties.ToDictionary(
+            property => property.DisplayName,
+            property => property.Value.StringValue);
+        Assert.Equal(properties.Keys.Order(StringComparer.Ordinal), updatedProperties.Keys.Order(StringComparer.Ordinal));
+        Assert.Equal($"{startedResource.ResourceTypeDisplayName} failed to start.", updatedProperties["State details"]);
+        Assert.Equal(
+            ["Web", "Shared"],
+            cut.FindAll(".launch-group-value").Select(element => element.TextContent.Trim()));
     }
 
     [Fact]
