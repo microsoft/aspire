@@ -3,6 +3,7 @@
 
 using System.Diagnostics;
 using System.Text;
+using Aspire.Cli.Diagnostics;
 using Aspire.Cli.Git;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
@@ -208,7 +209,7 @@ public partial class GitCommandRunnerTests(ITestOutputHelper outputHelper) : IDi
         var output = await runner.RunProcessAsync(startInfo, captureCancellationOutput: false, GitCommandMode.Captured, TestContext.Current.CancellationToken);
 
         Assert.Equal("first\r\nsecond\0last", output);
-        Assert.Equal(output, GetLoggedOutput(logger, "stdout"));
+        Assert.Equal(output.ReplaceLineEndings(string.Empty), GetLoggedOutput(logger, "stdout").ReplaceLineEndings(string.Empty));
     }
 
     [Theory]
@@ -236,8 +237,33 @@ public partial class GitCommandRunnerTests(ITestOutputHelper outputHelper) : IDi
             Assert.Equal(ErrorStrings.GitCommandFailed, exception.Message);
         }
 
-        Assert.Equal(expectedOutput, GetLoggedOutput(logger, "stdout"));
-        Assert.Equal(expectedError, GetLoggedOutput(logger, "stderr"));
+        Assert.Equal(expectedOutput.ReplaceLineEndings(string.Empty), GetLoggedOutput(logger, "stdout").ReplaceLineEndings(string.Empty));
+        Assert.Equal(expectedError.ReplaceLineEndings(string.Empty), GetLoggedOutput(logger, "stderr").ReplaceLineEndings(string.Empty));
+    }
+
+    [Fact]
+    public async Task RunProcess_LogFileDoesNotAddBlankLinesAndPreservesRawOutput()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var logPath = Path.Combine(workspace.Path, "git.log");
+        var startInfo = CreateShellStartInfo(
+            "printf 'stdout\\n'; printf 'stderr\\n' >&2",
+            "[Console]::Out.WriteLine('stdout'); [Console]::Error.WriteLine('stderr')");
+        using (var provider = new FileLoggerProvider(logPath, new TestStartupErrorWriter()))
+        using (var loggerFactory = LoggerFactory.Create(builder => builder.SetMinimumLevel(LogLevel.Debug).AddProvider(provider)))
+        {
+            var runner = new GitCommandRunner(TestHelpers.CreateInteractiveHostEnvironment(), new TestInteractionService(),
+                _consoleEnvironment, loggerFactory.CreateLogger<GitCommandRunner>());
+
+            var output = await runner.RunProcessAsync(startInfo, captureCancellationOutput: false, GitCommandMode.Captured, TestContext.Current.CancellationToken);
+
+            Assert.Equal("stdout" + Environment.NewLine, output);
+        }
+
+        var logLines = await File.ReadAllLinesAsync(logPath, TestContext.Current.CancellationToken);
+        Assert.All(logLines, Assert.NotEmpty);
+        Assert.Single(logLines, line => line.EndsWith("Git stdout: stdout", StringComparison.Ordinal));
+        Assert.Single(logLines, line => line.EndsWith("Git stderr: stderr", StringComparison.Ordinal));
     }
 
     [Theory]
@@ -282,7 +308,7 @@ public partial class GitCommandRunnerTests(ITestOutputHelper outputHelper) : IDi
         Assert.Equal("Authentication required: ", stderr.ToString());
         Assert.Empty(interaction.DisplayedRawText);
         Assert.Equal("refs\0blob", GetLoggedOutput(logger, "stdout"));
-        Assert.Equal("Authentication required: ", GetLoggedOutput(logger, "stderr"));
+        Assert.Equal("Authentication required:", GetLoggedOutput(logger, "stderr"));
     }
 
     [Fact]
@@ -299,7 +325,7 @@ public partial class GitCommandRunnerTests(ITestOutputHelper outputHelper) : IDi
         try
         {
             await AsyncTestHelpers.AssertIsTrueRetryAsync(
-                () => GetLoggedOutput(logger, "stdout") == "partial stdout" && GetLoggedOutput(logger, "stderr") == "Enter passphrase: ",
+                () => GetLoggedOutput(logger, "stdout") == "partial stdout" && GetLoggedOutput(logger, "stderr") == "Enter passphrase:",
                 "Git output should be logged before the process exits.");
             Assert.False(run.IsCompleted);
         }
@@ -310,7 +336,7 @@ public partial class GitCommandRunnerTests(ITestOutputHelper outputHelper) : IDi
         }
 
         Assert.Equal("partial stdout", GetLoggedOutput(logger, "stdout"));
-        Assert.Equal("Enter passphrase: ", GetLoggedOutput(logger, "stderr"));
+        Assert.Equal("Enter passphrase:", GetLoggedOutput(logger, "stderr"));
         Assert.Empty(interaction.DisplayedRawText);
     }
 
