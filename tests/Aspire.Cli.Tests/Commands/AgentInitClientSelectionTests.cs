@@ -1459,6 +1459,7 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
     [InlineData("claude", "disabled-plugin", false)]
     [InlineData("claude", "null-plugins", false)]
     [InlineData("claude", "null-plugin-value", false)]
+    [InlineData("claude", "null-plugins-with-mcp", true)]
     [InlineData("claude", "malformed-mcp", false)]
     [InlineData("claude", "none", false)]
     public async Task AgentInit_ExistingAspireSetupWithoutSelection_RefreshesHook(string clientId, string existing, bool expectHook)
@@ -1481,17 +1482,22 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
         services.AddSingleton<IEnvironment>(new TestEnvironment());
         using var provider = services.BuildServiceProvider();
         var client = provider.GetServices<IAgentClient>().Single(client => string.Equals(client.Id, clientId, StringComparisons.AgentClientId));
-        var (path, content) = existing switch
+        var mcpPath = client.GetMcpConfigPath(AgentConfigurationScope.Global, workspace.WorkspaceRoot);
+        var pluginPath = client.GetIntegrationConfigPath(AgentConfigurationScope.Global, workspace.WorkspaceRoot);
+        const string aspireMcp = """{"mcpServers":{"aspire":{"command":"aspire","args":["agent","mcp"]}}}""";
+        const string nullPlugins = """{"enabledPlugins":null}""";
+        (string Path, string Content)[] files = existing switch
         {
-            "mcp" => (client.GetMcpConfigPath(AgentConfigurationScope.Global, workspace.WorkspaceRoot), """{"mcpServers":{"aspire":{"command":"aspire","args":["agent","mcp"]}}}"""),
-            "malformed-mcp" => (client.GetMcpConfigPath(AgentConfigurationScope.Global, workspace.WorkspaceRoot), "{broken"),
-            "plugin" => (client.GetIntegrationConfigPath(AgentConfigurationScope.Global, workspace.WorkspaceRoot), """{"enabledPlugins":{"aspire@aspire-skills":true}}"""),
-            "disabled-plugin" => (client.GetIntegrationConfigPath(AgentConfigurationScope.Global, workspace.WorkspaceRoot), """{"enabledPlugins":{"aspire@aspire-skills":false}}"""),
-                        "null-plugins" => (client.GetIntegrationConfigPath(AgentConfigurationScope.Global, workspace.WorkspaceRoot), """{"enabledPlugins":null}"""),
-                        "null-plugin-value" => (client.GetIntegrationConfigPath(AgentConfigurationScope.Global, workspace.WorkspaceRoot), """{"enabledPlugins":{"aspire@aspire-skills":null}}"""),
-            _ => ((string?)null, (string?)null)
+            "mcp" => [(mcpPath, aspireMcp)],
+            "malformed-mcp" => [(mcpPath, "{broken")],
+            "plugin" => [(pluginPath, """{"enabledPlugins":{"aspire@aspire-skills":true}}""")],
+            "disabled-plugin" => [(pluginPath, """{"enabledPlugins":{"aspire@aspire-skills":false}}""")],
+            "null-plugins" => [(pluginPath, nullPlugins)],
+            "null-plugin-value" => [(pluginPath, """{"enabledPlugins":{"aspire@aspire-skills":null}}""")],
+            "null-plugins-with-mcp" => [(pluginPath, nullPlugins), (mcpPath, aspireMcp)],
+            _ => []
         };
-        if (path is not null)
+        foreach (var (path, content) in files)
         {
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             await File.WriteAllTextAsync(path, content);
@@ -1501,7 +1507,7 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
             $"agent init --agents {clientId} --scope global --skills playwright-cli --mcp=false");
         Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
         Assert.Equal(expectHook ? [clientId] : [], hooks.SelectedClientIds);
-        if (path is not null)
+        foreach (var (path, content) in files)
         {
             Assert.Equal(content, await File.ReadAllTextAsync(path));
         }
