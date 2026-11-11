@@ -4,6 +4,7 @@
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Aspire.Cli.Agents.ClaudeCode;
 using Aspire.Cli.Agents.Copilot;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
@@ -138,12 +139,7 @@ internal sealed class AgentTelemetryHook(IEnvironment environment)
     {
         try
         {
-            if (source == AgentTelemetryProtocol.ClaudeSource
-                && (environment.IsFlagEnabled("COPILOT_CLI")
-                    || string.Equals(
-                        environment.GetEnvironmentVariable(CopilotAppInstallationDetector.AgentEnvironmentVariable),
-                        CopilotAppInstallationDetector.AgentEnvironmentValue,
-                        StringComparison.Ordinal)))
+            if (source == AgentTelemetryProtocol.ClaudeSource && GetCopilotHostClientName(environment) is not null)
             {
                 return true;
             }
@@ -155,10 +151,8 @@ internal sealed class AgentTelemetryHook(IEnvironment environment)
 
             return source switch
             {
-                AgentTelemetryProtocol.CopilotSource => HasProjectHook(
-                    Path.Combine(root, ".github", "hooks", AgentTelemetryProtocol.CopilotHookFileName), "postToolUse", "exec", nested: false),
-                AgentTelemetryProtocol.ClaudeSource => HasProjectHook(
-                    Path.Combine(root, ".claude", "settings.json"), "PostToolUse", "command", nested: true),
+                AgentTelemetryProtocol.CopilotSource => CopilotAgentClient.HasProjectTelemetryHook(root),
+                AgentTelemetryProtocol.ClaudeSource => ClaudeCodeAgentClient.HasProjectTelemetryHook(root),
                 _ => false,
             };
         }
@@ -183,54 +177,25 @@ internal sealed class AgentTelemetryHook(IEnvironment environment)
         return null;
     }
 
-    // Copilot hook files list handlers directly under the event:
-    //   {"hooks":{"postToolUse":[{"exec":"/path/to/aspire","args":["agent","telemetry","--hook","--source","copilot","--scope","project"]}]}}
-    // Claude settings nest handlers in matcher groups:
-    //   {"hooks":{"PostToolUse":[{"matcher":"...","hooks":[{"command":"/path/to/aspire","args":[...,"--scope","project"]}]}]}}
-    private static bool HasProjectHook(string path, string eventName, string executableProperty, bool nested)
-    {
-        if (!File.Exists(path)
-            || JsonNode.Parse(File.ReadAllText(path)) is not JsonObject settings
-            || settings["hooks"] is not JsonObject hooks
-            || hooks[eventName] is not JsonArray entries)
-        {
-            return false;
-        }
-
-        var handlers = nested
-            ? entries.SelectMany(entry => entry is JsonObject { } group && group["hooks"] is JsonArray groupHooks ? groupHooks : [])
-            : entries;
-
-        return handlers.Any(handler => IsAspireHook(handler, executableProperty)
-            && handler!["args"] is JsonArray args
-            && args.Select(arg => arg?.GetValueKind() == JsonValueKind.String ? arg.GetValue<string>() : null)
-                .SkipWhile(arg => arg != AgentTelemetryProtocol.ScopeOptionName)
-                .Skip(1)
-                .FirstOrDefault() == AgentTelemetryProtocol.ProjectScope);
-    }
-
     /// <summary>
-    /// Determines whether a hook handler runs Aspire's telemetry hook.
+    /// Determines whether a hook handler's executable and arguments run Aspire's telemetry hook.
     /// </summary>
-    /// <param name="node">The hook handler entry.</param>
-    /// <param name="executableProperty">The handler property holding the executable: <c>command</c> for Claude, <c>exec</c> for Copilot.</param>
-    internal static bool IsAspireHook(JsonNode? node, string executableProperty)
+    /// <remarks>
+    /// Each agent client owns its hook file layout and passes the handler's executable and arguments here, so this
+    /// matches only the CLI invocation that <see cref="GetHookCommand"/> writes, plus legacy hook scripts.
+    /// </remarks>
+    internal static bool IsHookInvocation(JsonNode? executableNode, JsonNode? argsNode)
     {
         // Match legacy scripts or our exact CLI invocation, not arbitrary Aspire commands. Trailing
         // arguments are allowed because current hooks append --source and --scope.
-        if (node is not JsonObject hook)
-        {
-            return false;
-        }
-        var executable = hook[executableProperty] is JsonValue executableValue && executableValue.TryGetValue<string>(out var executableText)
-            ? executableText : null;
+        var executable = GetString(executableNode);
         if (ReferencesTelemetryScript(executable))
         {
             return true;
         }
-        if (hook["args"] is JsonArray args)
+        if (argsNode is JsonArray args)
         {
-            var values = args.Select(arg => arg is JsonValue value && value.TryGetValue<string>(out var text) ? text : null).ToArray();
+            var values = args.Select(GetString).ToArray();
             var (currentCommand, _) = GetCommand(AgentTelemetryProtocol.HookOptionName);
             var executableName = Path.GetFileNameWithoutExtension(executable);
             var isDotnet = string.Equals(executableName, "dotnet", StringComparison.OrdinalIgnoreCase);
@@ -246,6 +211,18 @@ internal sealed class AgentTelemetryHook(IEnvironment environment)
 
         return false;
     }
+
+    /// <summary>
+    /// Determines whether a hook handler runs Aspire's telemetry hook installed at project scope.
+    /// </summary>
+    internal static bool IsProjectHookInvocation(JsonNode? executableNode, JsonNode? argsNode)
+        => IsHookInvocation(executableNode, argsNode)
+            && argsNode is JsonArray args
+            && args.Select(GetString).SkipWhile(arg => arg != AgentTelemetryProtocol.ScopeOptionName).Skip(1).FirstOrDefault()
+                == AgentTelemetryProtocol.ProjectScope;
+
+    private static string? GetString(JsonNode? node)
+        => node is JsonValue value && value.TryGetValue<string>(out var text) ? text : null;
 
     private static bool ReferencesTelemetryScript(string? value)
         => value is not null
@@ -368,15 +345,23 @@ internal sealed class AgentTelemetryHook(IEnvironment environment)
         }
     }
 
-    // The app also sets COPILOT_CLI, so its specific runtime marker must take precedence.
     private static string GetClientName(JsonElement data, IEnvironment environment) =>
-        environment.GetEnvironmentVariable(CopilotAppInstallationDetector.AgentEnvironmentVariable) switch
+        GetCopilotHostClientName(environment) switch
         {
-            CopilotAppInstallationDetector.AgentEnvironmentValue => "copilot-app",
-            _ when environment.IsFlagEnabled("COPILOT_CLI") => "copilot-cli",
+            { } copilotClientName => copilotClientName,
             _ when Property(data, "hook_event_name") is not null => IsVsCode(data) ? "vscode" : "claude-code",
             _ when Property(data, "toolArgs") is not null => "copilot-cli",
             _ => "unknown"
+        };
+
+    // Gets the Copilot host running the hook, or null outside Copilot. The app also sets COPILOT_CLI, so its
+    // specific runtime marker must take precedence.
+    private static string? GetCopilotHostClientName(IEnvironment environment)
+        => environment.GetEnvironmentVariable(CopilotAppInstallationDetector.AgentEnvironmentVariable) switch
+        {
+            CopilotAppInstallationDetector.AgentEnvironmentValue => "copilot-app",
+            _ when environment.IsFlagEnabled("COPILOT_CLI") => "copilot-cli",
+            _ => null
         };
 
     private static bool IsVsCode(JsonElement data)

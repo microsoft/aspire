@@ -16,6 +16,11 @@ internal sealed class CopilotAgentClient(
 {
     public const string ClientId = "copilot";
 
+    /// <summary>
+    /// The hook file name used at both user scope (<c>~/.copilot/hooks</c>) and project scope (<c>.github/hooks</c>).
+    /// </summary>
+    internal const string TelemetryHookFileName = "aspire-telemetry.json";
+
     private static readonly McpConfigFileHelper.Configuration s_mcp = new()
     {
         ServersPropertyName = "mcpServers",
@@ -128,10 +133,10 @@ internal sealed class CopilotAgentClient(
             // https://docs.github.com/en/copilot/reference/hooks-reference#hooks-locations
             // https://docs.github.com/en/copilot/reference/hooks-reference#cloud-agent-execution-environment
             var hooksDirectory = scope is AgentConfigurationScope.Project
-                ? Path.Combine(workspaceRoot.FullName, ".github", "hooks")
+                ? GetProjectHooksDirectory(workspaceRoot.FullName)
                 : Path.Combine(GetSettingsDirectory(), "hooks");
             Directory.CreateDirectory(hooksDirectory);
-            var filePath = Path.Combine(hooksDirectory, AgentTelemetryProtocol.CopilotHookFileName);
+            var filePath = Path.Combine(hooksDirectory, TelemetryHookFileName);
             var (command, args) = AgentTelemetryHook.GetHookCommand(AgentTelemetryProtocol.CopilotSource, scope);
             var config = new JsonObject
             {
@@ -162,7 +167,28 @@ internal sealed class CopilotAgentClient(
         }
     }
 
+    /// <summary>
+    /// Determines whether the repository installs Aspire's Copilot telemetry hook at project scope.
+    /// </summary>
+    /// <remarks>
+    /// A user-scope hook uses this to defer to the project hook so one tool call is recorded once. Callers handle
+    /// I/O and JSON failures. Copilot lists handlers directly under the event:
+    /// <c>{"hooks":{"postToolUse":[{"exec":"/path/to/aspire","args":[...,"--scope","project"]}]}}</c>
+    /// </remarks>
+    internal static bool HasProjectTelemetryHook(string repositoryRoot)
+    {
+        var path = Path.Combine(GetProjectHooksDirectory(repositoryRoot), TelemetryHookFileName);
+
+        return File.Exists(path)
+            && JsonNode.Parse(File.ReadAllText(path)) is JsonObject config
+            && config["hooks"] is JsonObject hooks
+            && hooks["postToolUse"] is JsonArray postToolUse
+            && postToolUse.OfType<JsonObject>().Any(hook => AgentTelemetryHook.IsProjectHookInvocation(hook["exec"], hook["args"]));
+    }
+
     public override string ToString() => Id;
+
+    private static string GetProjectHooksDirectory(string workspaceRoot) => Path.Combine(workspaceRoot, ".github", "hooks");
 
     private string GetSettingsDirectory()
         => AgentPath.Expand(CopilotPaths.GetConfigDirectory(context.HomeDirectory, environment), context);

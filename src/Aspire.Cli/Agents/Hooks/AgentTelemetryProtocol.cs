@@ -34,9 +34,4 @@ internal static class AgentTelemetryProtocol
     // Values for --scope: where the hook configuration was installed.
     internal const string UserScope = "user";
     internal const string ProjectScope = "project";
-
-    /// <summary>
-    /// The Copilot hook file name used at both user scope (<c>~/.copilot/hooks</c>) and project scope (<c>.github/hooks</c>).
-    /// </summary>
-    internal const string CopilotHookFileName = "aspire-telemetry.json";
 }

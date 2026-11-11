@@ -230,7 +230,7 @@ internal sealed class ClaudeCodeAgentClient(
             }
             for (var hookIndex = hooks.Count - 1; hookIndex >= 0; hookIndex--)
             {
-                if (AgentTelemetryHook.IsAspireHook(hooks[hookIndex], executableProperty: "command"))
+                if (hooks[hookIndex] is JsonObject hook && AgentTelemetryHook.IsHookInvocation(hook["command"], hook["args"]))
                 {
                     hooks.RemoveAt(hookIndex);
                 }
@@ -240,6 +240,28 @@ internal sealed class ClaudeCodeAgentClient(
                 postToolUse.RemoveAt(groupIndex);
             }
         }
+    }
+
+    /// <summary>
+    /// Determines whether the repository's shared Claude settings install Aspire's telemetry hook at project scope.
+    /// </summary>
+    /// <remarks>
+    /// A user-scope hook uses this to defer to the project hook so one tool call is recorded once. Callers handle
+    /// I/O and JSON failures. Claude nests handlers in matcher groups:
+    /// <c>{"hooks":{"PostToolUse":[{"matcher":"...","hooks":[{"command":"/path/to/aspire","args":[...,"--scope","project"]}]}]}}</c>
+    /// </remarks>
+    internal static bool HasProjectTelemetryHook(string repositoryRoot)
+    {
+        var settingsPath = Path.Combine(repositoryRoot, ClaudeCodePaths.ConfigDirectoryName, "settings.json");
+
+        return File.Exists(settingsPath)
+            && JsonNode.Parse(File.ReadAllText(settingsPath)) is JsonObject settings
+            && settings["hooks"] is JsonObject hooks
+            && hooks["PostToolUse"] is JsonArray postToolUse
+            && postToolUse.OfType<JsonObject>()
+                .SelectMany(group => group["hooks"] as JsonArray ?? [])
+                .OfType<JsonObject>()
+                .Any(hook => AgentTelemetryHook.IsProjectHookInvocation(hook["command"], hook["args"]));
     }
 
     private string ManagedSettingsDirectory

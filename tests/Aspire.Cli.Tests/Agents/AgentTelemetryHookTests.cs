@@ -424,7 +424,7 @@ public class AgentTelemetryHookTests(ITestOutputHelper outputHelper)
 
     private static string GetProjectHookPath(DirectoryInfo root, string source)
         => source == AgentTelemetryProtocol.CopilotSource
-            ? Path.Combine(root.FullName, ".github", "hooks", AgentTelemetryProtocol.CopilotHookFileName)
+            ? Path.Combine(root.FullName, ".github", "hooks", CopilotAgentClient.TelemetryHookFileName)
             : Path.Combine(root.FullName, ".claude", "settings.json");
 
     // Writes the minimal shape each client reads; TelemetryHookConfiguratorTests covers the full files init writes.
