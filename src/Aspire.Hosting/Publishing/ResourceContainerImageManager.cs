@@ -589,7 +589,7 @@ internal sealed class ResourceContainerImageManager(
             arguments.Add(MsBuildResponseFileFactory.CreatePropertyArgument("ContainerImageFormat", format));
         }
 
-        AddTargetPlatformArguments(arguments, options.TargetPlatform);
+        AddTargetPlatformArguments(arguments, options.TargetPlatform, projectMetadata.IsFileBasedApp);
 
         if (resource.TryGetLastAnnotation<DockerfileBaseImageAnnotation>(out var baseImageAnnotation) &&
             baseImageAnnotation.RuntimeImage is string baseImage)
@@ -797,7 +797,7 @@ internal sealed class ResourceContainerImageManager(
                     "-getProperty:ContainerWorkingDirectory",
                     "-v:q"
                 };
-            AddTargetPlatformArguments(arguments, options.TargetPlatform);
+            AddTargetPlatformArguments(arguments, options.TargetPlatform, projectMetadata.IsFileBasedApp);
             if (buildContext.ResponseFile is not null)
             {
                 arguments.Add(buildContext.ResponseFile.Argument);
@@ -862,7 +862,8 @@ internal sealed class ResourceContainerImageManager(
 
     private static void AddTargetPlatformArguments(
             List<string> arguments,
-            ContainerTargetPlatform? targetPlatform)
+            ContainerTargetPlatform? targetPlatform,
+            bool isFileBasedApp)
     {
         if (targetPlatform is null)
         {
@@ -872,12 +873,22 @@ internal sealed class ResourceContainerImageManager(
         var runtimeIdentifiers = targetPlatform.Value.ToMSBuildRuntimeIdentifierString();
         if (runtimeIdentifiers.Contains(';'))
         {
-            // ArgumentList preserves "linux-x64;linux-arm64" as one argument, but MSBuild still
-            // splits property switches on ';' (https://github.com/dotnet/msbuild/issues/471).
-            // Percent-escaping the separator would make the SDK see one RID, so quote the list instead.
             var runtimeIdentifierList = runtimeIdentifiers.Split(';');
-            arguments.Add(MsBuildResponseFileFactory.CreateListPropertyArgument("RuntimeIdentifiers", runtimeIdentifierList));
-            arguments.Add(MsBuildResponseFileFactory.CreateListPropertyArgument("ContainerRuntimeIdentifiers", runtimeIdentifierList));
+            if (isFileBasedApp)
+            {
+                // "dotnet publish app.cs" passes property switches to the virtual project as global properties
+                // without MSBuild's switch parser, so quoting the list fails with NETSDK1083 for '"linux-x64'.
+                arguments.Add(MsBuildResponseFileFactory.CreateFileBasedAppListPropertyArgument("RuntimeIdentifiers", runtimeIdentifierList));
+                arguments.Add(MsBuildResponseFileFactory.CreateFileBasedAppListPropertyArgument("ContainerRuntimeIdentifiers", runtimeIdentifierList));
+            }
+            else
+            {
+                // ArgumentList preserves "linux-x64;linux-arm64" as one argument, but MSBuild still
+                // splits property switches on ';' (https://github.com/dotnet/msbuild/issues/471).
+                // Percent-escaping the separator would make the SDK see one RID, so quote the list instead.
+                arguments.Add(MsBuildResponseFileFactory.CreateListPropertyArgument("RuntimeIdentifiers", runtimeIdentifierList));
+                arguments.Add(MsBuildResponseFileFactory.CreateListPropertyArgument("ContainerRuntimeIdentifiers", runtimeIdentifierList));
+            }
         }
         else
         {

@@ -75,6 +75,11 @@ internal static class MsBuildResponseFileFactory
     public static string CreateListPropertyArgument(string name, IEnumerable<string> values) =>
         $"--property:{EscapePropertyValue(name)}=\"{string.Join(';', values.Select(EscapePropertyValue))}\"";
 
+    // The .NET CLI parses property switches for file-based apps instead of MSBuild. It keeps quotes literally
+    // and appends ';' segments without '=' to the previous value, so list values must be passed unquoted.
+    public static string CreateFileBasedAppListPropertyArgument(string name, IEnumerable<string> values) =>
+        $"--property:{EscapePropertyValue(name)}={string.Join(';', values.Select(EscapePropertyValue))}";
+
     internal static void TryDeleteDirectory(DirectoryInfo directory, ILogger logger)
     {
         try

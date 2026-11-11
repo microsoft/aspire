@@ -85,6 +85,75 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
     }
 
     [Fact]
+    [RequiresFeature(TestFeature.ContainerImageBuild)]
+    public async Task CanBuildMultiPlatformArchiveFromFileBasedCSharpApp()
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        var appPath = Path.Combine(workspace.WorkspaceRoot.FullName, "app.cs");
+        await File.WriteAllTextAsync(appPath, """
+            #:property PublishAot=false
+
+            Console.WriteLine("file app");
+            """);
+        var archivePath = Path.Combine(workspace.WorkspaceRoot.FullName, "app.tar");
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.Services.AddLogging(logging => logging.AddXunit(output));
+#pragma warning disable CS0618 // Verify publishing compatibility for legacy CSharpApp resources.
+        var resource = builder.AddCSharpApp("file-app", appPath, options => options.ExcludeLaunchProfile = true)
+            .WithContainerBuildOptions(context =>
+            {
+                context.Destination = ContainerImageDestination.Archive;
+                context.ImageFormat = ContainerImageFormat.Oci;
+                context.OutputPath = archivePath;
+                context.TargetPlatform = ContainerTargetPlatform.AllLinux;
+            });
+#pragma warning restore CS0618
+        using var app = builder.Build();
+        var imageBuilder = app.Services.GetRequiredService<IResourceContainerImageManager>();
+
+        await imageBuilder.BuildImageAsync(resource.Resource, TestContext.Current.CancellationToken);
+
+        Assert.Equal(["linux/amd64", "linux/arm64"], ReadOciArchivePlatforms(archivePath).Order());
+    }
+
+    private static IEnumerable<string> ReadOciArchivePlatforms(string archivePath)
+    {
+        var entries = new Dictionary<string, byte[]>(StringComparer.Ordinal);
+        using (var reader = new System.Formats.Tar.TarReader(File.OpenRead(archivePath)))
+        {
+            while (reader.GetNextEntry() is { } entry)
+            {
+                if (entry.DataStream is not null)
+                {
+                    using var buffer = new MemoryStream();
+                    entry.DataStream.CopyTo(buffer);
+                    entries[entry.Name] = buffer.ToArray();
+                }
+            }
+        }
+
+        var platforms = new List<string>();
+        var pending = new Queue<byte[]>([entries["index.json"]]);
+        while (pending.TryDequeue(out var indexContent))
+        {
+            using var index = JsonDocument.Parse(indexContent);
+            foreach (var manifest in index.RootElement.GetProperty("manifests").EnumerateArray())
+            {
+                if (manifest.GetProperty("mediaType").GetString() == "application/vnd.oci.image.index.v1+json")
+                {
+                    pending.Enqueue(entries["blobs/" + manifest.GetProperty("digest").GetString()!.Replace(':', '/')]);
+                }
+                else if (manifest.TryGetProperty("platform", out var platform))
+                {
+                    platforms.Add($"{platform.GetProperty("os").GetString()}/{platform.GetProperty("architecture").GetString()}");
+                }
+            }
+        }
+
+        return platforms;
+    }
+
+    [Fact]
     [RequiresFeature(TestFeature.ContainerRuntime | TestFeature.ContainerImageBuild)]
     public async Task CanBuildImageFromProjectResourceWithCustomBaseImage()
     {
@@ -1202,8 +1271,11 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
 
         await imageBuilder.BuildImageAsync(resource.Resource, TestContext.Current.CancellationToken);
 
-        const string runtimeIdentifiersArgument = "--property:RuntimeIdentifiers=\"linux-x64;linux-arm64\"";
-        const string containerRuntimeIdentifiersArgument = "--property:ContainerRuntimeIdentifiers=\"linux-x64;linux-arm64\"";
+        // MSBuild splits unquoted property switches on ';', but the .NET CLI parses them for file-based apps
+        // and keeps quotes literally, so each path needs a different list form.
+        var runtimeIdentifierList = fileBased ? "linux-x64;linux-arm64" : "\"linux-x64;linux-arm64\"";
+        var runtimeIdentifiersArgument = $"--property:RuntimeIdentifiers={runtimeIdentifierList}";
+        var containerRuntimeIdentifiersArgument = $"--property:ContainerRuntimeIdentifiers={runtimeIdentifierList}";
         Assert.Collection(
             processRunner.ProcessSpecs,
             publish => Assert.Equal(
@@ -1221,11 +1293,10 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
                 ],
                 query.ArgumentList));
 
-        // A fake runner cannot detect MSBuild splitting a single argv entry on ';'.
-        // Round-trip each command's emitted properties through a project with no SDK or restore.
+        // A fake runner cannot detect the CLI or MSBuild splitting a single argv entry on ';'.
+        // Round-trip each command's emitted properties through the same command-line parser as the real build.
         // The SDK expands RID lists into items, so an escaped ';' must not turn the list into one RID.
-        var probePath = Path.Combine(workspace.WorkspaceRoot.FullName, "properties.proj");
-        await File.WriteAllTextAsync(probePath, """
+        const string probeContent = """
             <Project>
               <PropertyGroup>
                 <ContainerWorkingDirectory Condition="'$(RuntimeIdentifiers)' == 'linux-x64;linux-arm64' and '$(ContainerRuntimeIdentifiers)' == 'linux-x64;linux-arm64'">/release-app</ContainerWorkingDirectory>
@@ -1235,7 +1306,25 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
                 <ProbeContainerRuntimeIdentifier Include="$(ContainerRuntimeIdentifiers)" />
               </ItemGroup>
             </Project>
-            """, TestContext.Current.CancellationToken);
+            """;
+        string[] probeCommand;
+        if (fileBased)
+        {
+            // "dotnet build app.cs" evaluates the virtual project, which imports Directory.Build.props.
+            await File.WriteAllTextAsync(projectPath, "Console.WriteLine();", TestContext.Current.CancellationToken);
+            await File.WriteAllTextAsync(
+                Path.Combine(workspace.WorkspaceRoot.FullName, "Directory.Build.props"),
+                probeContent,
+                TestContext.Current.CancellationToken);
+            probeCommand = ["build", projectPath];
+        }
+        else
+        {
+            // Use a project with no SDK or restore.
+            var probePath = Path.Combine(workspace.WorkspaceRoot.FullName, "properties.proj");
+            await File.WriteAllTextAsync(probePath, probeContent, TestContext.Current.CancellationToken);
+            probeCommand = ["msbuild", probePath];
+        }
 
         foreach (var command in processRunner.ProcessSpecs)
         {
@@ -1245,7 +1334,7 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
             {
                 ArgumentList =
                 [
-                    "msbuild", probePath, "-nologo",
+                    .. probeCommand, "-nologo",
                     "-getProperty:RuntimeIdentifiers,ContainerRuntimeIdentifiers,ContainerWorkingDirectory",
                     "-getItem:ProbeRuntimeIdentifier,ProbeContainerRuntimeIdentifier",
                     .. propertyArguments
