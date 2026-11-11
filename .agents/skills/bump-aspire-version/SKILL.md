@@ -1,6 +1,6 @@
 ---
 name: bump-aspire-version
-description: Bumps the Aspire repository product version in eng/Versions.props using previous version-bump commits as guidance. Use when asked to bump Aspire branding, advance the repository to a new major or minor version (including after a new release branch is created), or create a version-bump PR. Not for external dependency, SDK, or container-image updates.
+description: Bumps the Aspire repository product version in eng/Versions.props using previous version-bump commits as guidance. Use when asked to bump Aspire branding, advance the repository to a new major or minor version, or create a version-bump PR. Not for external dependency, SDK, or container-image updates.
 ---
 
 # Bump the Aspire repository version
