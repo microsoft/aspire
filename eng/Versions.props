@@ -105,8 +105,6 @@
     <MicrosoftEntityFrameworkCoreDesignVersion>11.0.0</MicrosoftEntityFrameworkCoreDesignVersion>
     <MicrosoftEntityFrameworkCoreSqlServerVersion>11.0.0</MicrosoftEntityFrameworkCoreSqlServerVersion>
     <MicrosoftEntityFrameworkCoreToolsVersion>11.0.0</MicrosoftEntityFrameworkCoreToolsVersion>
-    <!-- Npgsql 11 RC1 requires this exact EF Core version until its stable provider ships. -->
-    <MicrosoftEntityFrameworkCoreNpgsqlVersion>11.0.0-rc.3.26522.148</MicrosoftEntityFrameworkCoreNpgsqlVersion>
     <!-- ASP.NET Core -->
     <MicrosoftAspNetCoreComponentsGatewayCliVersion>11.0.0</MicrosoftAspNetCoreComponentsGatewayCliVersion>
     <MicrosoftAspNetCoreComponentsWebAssemblyVersion>11.0.0</MicrosoftAspNetCoreComponentsWebAssemblyVersion>
