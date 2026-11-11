@@ -29,6 +29,12 @@ When automatic CLI bundle setup fails, `ASPIRE009` includes the setup command's 
 | `ASPIREEXPORT018` | Warning | The source-generated Aspire export provider contract is experimental and may change or be removed in future releases. | [src/Aspire.Hosting/Ats/AspireExportProviderAttribute.cs](../src/Aspire.Hosting/Ats/AspireExportProviderAttribute.cs) |
 | `ASPIREPIPELINES005` | Warning | Pipeline output diffing APIs are experimental and may change or be removed in future releases. Suppress this diagnostic to opt in. | [src/Aspire.Hosting/PipelineOutputDiffingExtensions.cs](../src/Aspire.Hosting/PipelineOutputDiffingExtensions.cs) |
 
+### Retired Experimental API Warnings
+
+| Diagnostic ID | Description | Location |
+| ------------- | ----------- | -------- |
+| `ASPIREMCP001` | MCP endpoint declaration via `WithMcpServer` is stable and no longer requires suppression. This declares an existing server for Aspire tooling discovery and proxying; it does not implement or configure an MCP transport. | [src/Aspire.Hosting/McpServerResourceBuilderExtensions.cs](../src/Aspire.Hosting/McpServerResourceBuilderExtensions.cs) |
+
 ## Analyzer Warnings
 
 | Diagnostic ID | Severity | Description | Location |
