@@ -84,15 +84,26 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
         Assert.True(new FileInfo(archivePath).Length > 0);
     }
 
-    [Fact]
+    [Theory]
     [RequiresFeature(TestFeature.ContainerImageBuild)]
-    public async Task CanBuildMultiPlatformArchiveFromFileBasedCSharpApp()
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public async Task CanBuildMultiPlatformArchiveFromFileBasedCSharpApp(bool withBuildEnvironment, bool withProjectRuntimeIdentifiers)
     {
         using var workspace = TemporaryWorkspace.Create(output);
         var appPath = Path.Combine(workspace.WorkspaceRoot.FullName, "app.cs");
-        await File.WriteAllTextAsync(appPath, """
-            #:property PublishAot=false
+        // Project-defined singular RIDs take precedence over the plural lists unless publishing clears them.
+        var runtimeIdentifierDirectives = withProjectRuntimeIdentifiers
+            ? """
+              #:property RuntimeIdentifier=linux-x64
+              #:property ContainerRuntimeIdentifier=linux-x64
 
+              """
+            : string.Empty;
+        await File.WriteAllTextAsync(appPath, $"""
+            #:property PublishAot=false
+            {runtimeIdentifierDirectives}
             Console.WriteLine("file app");
             """);
         var archivePath = Path.Combine(workspace.WorkspaceRoot.FullName, "app.tar");
@@ -108,6 +119,15 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
                 context.TargetPlatform = ContainerTargetPlatform.AllLinux;
             });
 #pragma warning restore CS0618
+        if (withBuildEnvironment)
+        {
+            // A build environment passes properties through a response file, which the file-based app CLI parses itself.
+            resource.WithDotnetProgramBuildEnvironment(context =>
+            {
+                context.EnvironmentVariables["AspireBuildEnvironmentProbe"] = "value with spaces";
+                return Task.CompletedTask;
+            });
+        }
         using var app = builder.Build();
         var imageBuilder = app.Services.GetRequiredService<IResourceContainerImageManager>();
 
@@ -116,36 +136,25 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
         Assert.Equal(["linux/amd64", "linux/arm64"], ReadOciArchivePlatforms(archivePath).Order());
     }
 
-    private static IEnumerable<string> ReadOciArchivePlatforms(string archivePath)
+    private static List<string> ReadOciArchivePlatforms(string archivePath)
     {
-        var entries = new Dictionary<string, byte[]>(StringComparer.Ordinal);
-        using (var reader = new System.Formats.Tar.TarReader(File.OpenRead(archivePath)))
-        {
-            while (reader.GetNextEntry() is { } entry)
-            {
-                if (entry.DataStream is not null)
-                {
-                    using var buffer = new MemoryStream();
-                    entry.DataStream.CopyTo(buffer);
-                    entries[entry.Name] = buffer.ToArray();
-                }
-            }
-        }
-
         var platforms = new List<string>();
-        var pending = new Queue<byte[]>([entries["index.json"]]);
-        while (pending.TryDequeue(out var indexContent))
+        var pending = new Queue<string>(["index.json"]);
+        while (pending.TryDequeue(out var indexEntryName))
         {
-            using var index = JsonDocument.Parse(indexContent);
+            using var index = JsonDocument.Parse(TestContainerImageArchive.ReadEntryText(archivePath, indexEntryName));
             foreach (var manifest in index.RootElement.GetProperty("manifests").EnumerateArray())
             {
                 if (manifest.GetProperty("mediaType").GetString() == "application/vnd.oci.image.index.v1+json")
                 {
-                    pending.Enqueue(entries["blobs/" + manifest.GetProperty("digest").GetString()!.Replace(':', '/')]);
+                    pending.Enqueue("blobs/" + manifest.GetProperty("digest").GetString()!.Replace(':', '/'));
                 }
                 else if (manifest.TryGetProperty("platform", out var platform))
                 {
-                    platforms.Add($"{platform.GetProperty("os").GetString()}/{platform.GetProperty("architecture").GetString()}");
+                    // A single-platform image can record an empty platform, so keep it in the result for the assertion.
+                    var os = platform.TryGetProperty("os", out var osElement) ? osElement.GetString() : null;
+                    var architecture = platform.TryGetProperty("architecture", out var architectureElement) ? architectureElement.GetString() : null;
+                    platforms.Add($"{os}/{architecture}");
                 }
             }
         }
@@ -1276,28 +1285,38 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
         var runtimeIdentifierList = fileBased ? "linux-x64;linux-arm64" : "\"linux-x64;linux-arm64\"";
         var runtimeIdentifiersArgument = $"--property:RuntimeIdentifiers={runtimeIdentifierList}";
         var containerRuntimeIdentifiersArgument = $"--property:ContainerRuntimeIdentifiers={runtimeIdentifierList}";
+        string[] targetPlatformArguments =
+        [
+            "--property:RuntimeIdentifier=", "--property:ContainerRuntimeIdentifier=",
+            runtimeIdentifiersArgument, containerRuntimeIdentifiersArgument
+        ];
         Assert.Collection(
             processRunner.ProcessSpecs,
             publish => Assert.Equal(
                 [
                     "publish", projectPath, "--configuration", "Release", "/t:PublishContainer",
                     "--property:ContainerRepository=program", "--property:ContainerImageTag=latest",
-                    "--property:LocalRegistry=Docker", runtimeIdentifiersArgument, containerRuntimeIdentifiersArgument
+                    "--property:LocalRegistry=Docker", .. targetPlatformArguments
                 ],
                 publish.ArgumentList),
             query => Assert.Equal(
                 [
                     fileBased ? "build" : "msbuild", projectPath, "-p:Configuration=Release",
                     "-getProperty:ContainerWorkingDirectory", "-v:q",
-                    runtimeIdentifiersArgument, containerRuntimeIdentifiersArgument
+                    .. targetPlatformArguments
                 ],
                 query.ArgumentList));
 
         // A fake runner cannot detect the CLI or MSBuild splitting a single argv entry on ';'.
         // Round-trip each command's emitted properties through the same command-line parser as the real build.
         // The SDK expands RID lists into items, so an escaped ';' must not turn the list into one RID.
+        // Project-defined singular RIDs must be cleared because the SDK prefers them over the lists.
         const string probeContent = """
             <Project>
+              <PropertyGroup>
+                <RuntimeIdentifier>linux-x64</RuntimeIdentifier>
+                <ContainerRuntimeIdentifier>linux-x64</ContainerRuntimeIdentifier>
+              </PropertyGroup>
               <PropertyGroup>
                 <ContainerWorkingDirectory Condition="'$(RuntimeIdentifiers)' == 'linux-x64;linux-arm64' and '$(ContainerRuntimeIdentifiers)' == 'linux-x64;linux-arm64'">/release-app</ContainerWorkingDirectory>
               </PropertyGroup>
@@ -1335,7 +1354,7 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
                 ArgumentList =
                 [
                     .. probeCommand, "-nologo",
-                    "-getProperty:RuntimeIdentifiers,ContainerRuntimeIdentifiers,ContainerWorkingDirectory",
+                    "-getProperty:RuntimeIdentifier,ContainerRuntimeIdentifier,RuntimeIdentifiers,ContainerRuntimeIdentifiers,ContainerWorkingDirectory",
                     "-getItem:ProbeRuntimeIdentifier,ProbeContainerRuntimeIdentifier",
                     .. propertyArguments
                 ],
@@ -1349,6 +1368,8 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
                 Assert.Equal(0, result.ExitCode);
                 using var document = JsonDocument.Parse(string.Join(Environment.NewLine, result.ProcessOutput));
                 var properties = document.RootElement.GetProperty("Properties");
+                Assert.Equal(string.Empty, properties.GetProperty("RuntimeIdentifier").GetString());
+                Assert.Equal(string.Empty, properties.GetProperty("ContainerRuntimeIdentifier").GetString());
                 Assert.Equal("linux-x64;linux-arm64", properties.GetProperty("RuntimeIdentifiers").GetString());
                 Assert.Equal("linux-x64;linux-arm64", properties.GetProperty("ContainerRuntimeIdentifiers").GetString());
                 Assert.Equal("/release-app", properties.GetProperty("ContainerWorkingDirectory").GetString());

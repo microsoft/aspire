@@ -14,6 +14,7 @@ internal static class MsBuildResponseFileFactory
 {
     public static async Task<MsBuildResponseFile?> CreateAsync(
         IReadOnlyDictionary<string, string> properties,
+        bool isFileBasedApp,
         ILogger logger,
         CancellationToken cancellationToken)
     {
@@ -52,8 +53,12 @@ internal static class MsBuildResponseFileFactory
                 // MSBuild's response-file tokenizer splits on all Unicode whitespace. Quoting the complete switch
                 // keeps those characters in the property value; percent escaping handles embedded quotes,
                 // backslashes, and line-breaking whitespace without relying on platform quoting rules.
+                // The .NET CLI parses switches for file-based apps itself and does not recognize a quoted switch,
+                // so it would fall back to MSBuild. Its parser consumes a trailing ';', which also keeps it from
+                // trimming trailing Unicode whitespace from the value.
+                var argument = CreatePropertyArgument(name, value);
                 await writer.WriteLineAsync(
-                    $"\"{CreatePropertyArgument(name, value)}\"".AsMemory(),
+                    (isFileBasedApp ? $"{argument};" : $"\"{argument}\"").AsMemory(),
                     cancellationToken).ConfigureAwait(false);
             }
 

@@ -783,6 +783,7 @@ internal sealed class ResourceContainerImageManager(
 
         var responseFile = await MsBuildResponseFileFactory.CreateAsync(
             environment,
+            projectMetadata.IsFileBasedApp,
             logger,
             cancellationToken).ConfigureAwait(false);
         var workingDirectory = projectMetadata.BuildWorkingDirectory ??
@@ -901,6 +902,10 @@ internal sealed class ResourceContainerImageManager(
         var runtimeIdentifiers = targetPlatform.Value.ToMSBuildRuntimeIdentifierString();
         if (runtimeIdentifiers.Contains(';'))
         {
+            // The SDK prefers singular RIDs and can derive the container RID from RuntimeIdentifier.
+            // Clear both so inherited or project defaults cannot turn an explicit multi-platform build into a single image.
+            arguments.Add(MsBuildResponseFileFactory.CreatePropertyArgument("RuntimeIdentifier", string.Empty));
+            arguments.Add(MsBuildResponseFileFactory.CreatePropertyArgument("ContainerRuntimeIdentifier", string.Empty));
             var runtimeIdentifierList = runtimeIdentifiers.Split(';');
             if (isFileBasedApp)
             {
