@@ -11,6 +11,7 @@ using Aspire.Dashboard.Resources;
 using Aspire.Dashboard.Tests.Shared;
 using Aspire.Tests.Shared.DashboardModel;
 using Bunit;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Aspire.Dashboard.Components.Tests.Pages;
@@ -37,6 +38,7 @@ public partial class ResourcesTests
             isEnabled: true, initialResources: [resource, firstParameter, secondParameter],
             resourceChannelProvider: () => channel);
         ResourceSetupHelpers.SetupResourcesPage(this, viewport, dashboardClient);
+        Services.GetRequiredService<DimensionManager>().InvokeOnViewportSizeChanged(new ViewportSize(1920, 1080));
         FluentUISetupHelpers.SetupFluentAnchor(this);
         var cut = Render<Components.Legacy.Pages.Resources>(builder => builder.AddCascadingValue(viewport));
         await cut.InvokeAsync(() => cut.Instance.PageViewModel.SelectedResource = resource);
