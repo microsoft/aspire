@@ -507,7 +507,7 @@ public class ParameterResource : Resource, IExpressionValue
         return task.Exception is { InnerExceptions: [MissingParameterValueException] };
     }
 
-    private MissingParameterValueException? CreateMissingValueException(string? value)
+    internal MissingParameterValueException? CreateMissingValueException(string? value)
     {
         if (!Required || !string.IsNullOrEmpty(value))
         {

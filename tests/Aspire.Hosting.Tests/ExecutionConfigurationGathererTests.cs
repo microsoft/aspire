@@ -295,6 +295,30 @@ public class ExecutionConfigurationGathererTests
         Assert.DoesNotContain(result.EnvironmentVariables, variable => variable.Key == "OPTIONAL_VALUE");
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ResolveAsync_EmptyOptionalParameterEnvironmentVariable_PreservesEmptyValue(bool secret)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var optional = builder.AddParameter("optional-selector", "", secret: secret)
+            .WithOptional();
+        var consumer = builder.AddExecutable("api", "unused", ".")
+            .WithEnvironment("OPTIONAL_SELECTOR", optional)
+            .Resource;
+        await builder.BuildAsync();
+
+        var context = new ExecutionConfigurationGathererContext();
+        await new EnvironmentVariablesExecutionConfigurationGatherer()
+            .GatherAsync(context, consumer, NullLogger.Instance, builder.ExecutionContext);
+        var result = await context.ResolveAsync(consumer, NullLogger.Instance, builder.ExecutionContext);
+
+        Assert.Null(result.Exception);
+        var environmentVariable = Assert.Single(result.EnvironmentVariables);
+        Assert.Equal("OPTIONAL_SELECTOR", environmentVariable.Key);
+        Assert.Equal("", environmentVariable.Value);
+    }
+
     [Fact]
     public async Task ResolveAsync_SensitiveEnvironmentVariableWithoutServices_ResolvesValue()
     {

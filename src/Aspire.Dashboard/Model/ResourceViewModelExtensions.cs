@@ -168,6 +168,55 @@ internal static class ResourceViewModelExtensions
         return dependencies.Length > 0;
     }
 
+    public static ImmutableArray<string> GetMissingParameterDependencies(this ResourceViewModel resource, IEnumerable<ResourceViewModel> allResources)
+    {
+        var missingParameters = new SortedSet<string>(StringComparers.ResourceName);
+        var visited = new HashSet<string>(StringComparers.ResourceName);
+        var pending = new Stack<ResourceViewModel>();
+        pending.Push(resource);
+
+        while (pending.TryPop(out var current))
+        {
+            if (!visited.Add(current.Name))
+            {
+                continue;
+            }
+
+            if (current.IsParameter && current.KnownState is KnownResourceState.ValueMissing)
+            {
+                missingParameters.Add(current.Name);
+            }
+
+            foreach (var relationship in current.Relationships)
+            {
+                if (relationship.Type is not (KnownRelationshipTypes.Reference or KnownRelationshipTypes.WaitFor))
+                {
+                    continue;
+                }
+
+                var matchingResource = FindResourceByName(relationship.ResourceName, allResources);
+                if (matchingResource is not null)
+                {
+                    pending.Push(matchingResource);
+                }
+                else
+                {
+                    // Relationships can name the logical resource rather than a DCP replica.
+                    // Follow every replica, since each can reference different parameters.
+                    foreach (var candidate in allResources)
+                    {
+                        if (string.Equals(candidate.DisplayName, relationship.ResourceName, StringComparisons.ResourceName))
+                        {
+                            pending.Push(candidate);
+                        }
+                    }
+                }
+            }
+        }
+
+        return [.. missingParameters];
+    }
+
     private static ResourceViewModel? FindResourceByName(string name, IEnumerable<ResourceViewModel> allResources)
     {
         foreach (var resource in allResources)

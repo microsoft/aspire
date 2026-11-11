@@ -103,6 +103,22 @@ internal class ResourceStateViewModel(string text, Icon icon, Color color)
     /// </remarks>
     internal static string GetResourceStateTooltip(ResourceViewModel resource, IStringLocalizer<Columns> loc, IEnumerable<ResourceViewModel>? allResources = null)
     {
+        var tooltip = GetResourceStateTooltipCore(resource, loc, allResources);
+        if (allResources is not null
+            && resource.KnownState is KnownResourceState.Starting or KnownResourceState.FailedToStart or KnownResourceState.Waiting)
+        {
+            var missingParameters = resource.GetMissingParameterDependencies(allResources);
+            if (missingParameters.Length > 0)
+            {
+                return $"{tooltip} {loc.GetString(nameof(Columns.StateColumnResourceMissingParameters), string.Join(", ", missingParameters))}";
+            }
+        }
+
+        return tooltip;
+    }
+
+    private static string GetResourceStateTooltipCore(ResourceViewModel resource, IStringLocalizer<Columns> loc, IEnumerable<ResourceViewModel>? allResources)
+    {
         if (resource.IsFailedToStart())
         {
             return loc.GetString(nameof(Columns.StateColumnResourceFailedToStart), resource.ResourceTypeDisplayName);
