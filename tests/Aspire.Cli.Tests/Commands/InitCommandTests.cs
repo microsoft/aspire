@@ -821,6 +821,56 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task InitCommand_WhenRootGoModuleExists_PreservesModuleAndWorkspace()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        const string moduleContent = "module existing\n\ngo 1.26\n";
+        const string workspaceContent = "go 1.26\n\nuse .\n";
+        const string sourceContent = "package main\n\nfunc main() {}\n";
+        File.WriteAllText(Path.Combine(workspace.Path, "go.mod"), moduleContent);
+        File.WriteAllText(Path.Combine(workspace.Path, "go.work"), workspaceContent);
+        File.WriteAllText(Path.Combine(workspace.Path, "main.go"), sourceContent);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.LanguageServiceFactory = sp => new TestLanguageService
+            {
+                DefaultProject = sp.GetRequiredService<IAppHostProjectFactory>().GetProject(
+                    DefaultLanguageDiscovery.AllLanguages.Single(language => language.LanguageId.Value == KnownLanguageId.Go))
+            };
+        });
+        services.AddSingleton<IAppHostServerProjectFactory>(_ => new TestAppHostServerProjectFactory
+        {
+            CreateAsyncCallback = (path, _) =>
+                Task.FromResult<IAppHostServerProject>(new FakeSucceedingAppHostServerProject(path))
+        });
+        services.AddSingleton<IAppHostServerSessionFactory>(FakeAppHostServerSessionFactory.CreateForScaffolding(
+            new Dictionary<string, string>
+            {
+                ["apphost.go"] = "package main\n",
+                ["go.mod"] = "module apphost\n\ngo 1.26\n",
+                [".gitignore"] = ".aspire/\n"
+            }));
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var command = serviceProvider.GetRequiredService<RootCommand>();
+        var exitCode = await command.Parse("init --language go --non-interactive --suppress-agent-init")
+            .InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(moduleContent, File.ReadAllText(Path.Combine(workspace.Path, "go.mod")));
+        Assert.Equal(workspaceContent, File.ReadAllText(Path.Combine(workspace.Path, "go.work")));
+        Assert.Equal(sourceContent, File.ReadAllText(Path.Combine(workspace.Path, "main.go")));
+        Assert.Equal("module apphost\n\ngo 1.26\n", File.ReadAllText(Path.Combine(workspace.Path, "aspire-apphost", "go.mod")));
+        Assert.Equal(
+            $"go {Aspire.Cli.Utils.EnvironmentChecker.GoAppHostToolingCheck.MinimumGoVersion}\n\nuse .\n",
+            File.ReadAllText(Path.Combine(workspace.Path, "aspire-apphost", "go.work")));
+        var config = AspireConfigFile.Load(workspace.Path);
+        Assert.Equal("aspire-apphost/apphost.go", config?.AppHost?.Path);
+        Assert.Equal(KnownLanguageId.Go, config?.AppHost?.Language);
+    }
+
+    [Fact]
     public async Task InitCommand_WhenTypeScriptSelected_RecordsTheJavaScriptHostingPackageWithoutAspireAdd()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
