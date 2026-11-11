@@ -370,7 +370,7 @@ Read the bundle jobs, including failed and skipped steps. Classify the current f
 
 Missing logs are a collection problem, not evidence of a known test failure. Use fetch diagnostics, annotations, and structured results; never substitute a prior cause's diagnostic for missing current evidence. Do not infer failed tests from logs.
 
-Before claiming that a failed job has no diagnostic, inspect the complete failing-step log, including its final test summary; focused excerpts can omit the actual failure. Follow prerequisite failures upstream instead of using a downstream missing-artifact or packaging symptom as the cause. Log-only failures remain job diagnostics, not invented structured test observations.
+Job-log attachments contain sanitized focused excerpts, not complete logs. Inspect the available excerpt and all other collected diagnostics before deciding what they establish. If the diagnostic or final test summary is absent, report that full-log inspection was unavailable from the prepared evidence; treat it as a collection limitation, not evidence that no diagnostic exists or that no failure occurred. Follow prerequisite failures upstream instead of using a downstream missing-artifact or packaging symptom as the cause. Log-only failures remain job diagnostics, not invented structured test observations.
 
 A job's `runner_failure` records a confirmed hosted-runner-loss annotation. Missing results from that interrupted job do not invalidate the other jobs' observations. Classify a confirmed runner-loss job with no observed test failures as `transient-infra` and cover it with an infrastructure cause. If results were captured, retain and classify those observations using their actual diagnostics.
 

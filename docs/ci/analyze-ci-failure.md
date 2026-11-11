@@ -100,9 +100,12 @@ response bodies as well as headers. Transient GET responses have at most three
 attempts; a server-requested wait over five seconds fails instead of retrying
 earlier than GitHub permits.
 
-Log acquisition retains at most 10 MiB per job and records bounded partial
-content on stream failure or truncation. HTTP errors expose the method, API
-path and status, not response bodies, authorization headers or signed queries.
+Log acquisition reads at most 10 MiB per job, then stores sanitized focused
+excerpts rather than complete logs. Acquisition errors and truncation are
+recorded; an excerpt that omits a diagnostic or final summary is a collection
+limitation, not evidence that the full log contains no diagnostic. HTTP errors
+expose the method, API path and status, not response bodies, authorization
+headers or signed queries.
 Artifact limits apply to actual received bytes, including partial files from
 failed downloads, in addition to metadata and extraction checks.
 
