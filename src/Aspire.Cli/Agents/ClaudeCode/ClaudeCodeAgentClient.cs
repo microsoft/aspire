@@ -19,8 +19,7 @@ internal sealed class ClaudeCodeAgentClient(
     private static readonly McpConfigFileHelper.Configuration s_mcp = new() { ServersPropertyName = "mcpServers" };
 
     /// <summary>
-    /// <c>PostToolUse</c> <c>matcher</c> for the Aspire MCP tools. Skills and reads use <see cref="TelemetryHookSkillIf"/>
-    /// and <see cref="TelemetryHookReadIf"/>.
+    /// <c>PostToolUse</c> <c>matcher</c> for the Aspire MCP tools. Reads use <see cref="TelemetryHookReadIf"/>.
     /// </summary>
     /// <remarks>
     /// Claude Code matches unanchored, so the explicit anchors keep each matcher from matching other tool names
@@ -28,19 +27,15 @@ internal sealed class ClaudeCodeAgentClient(
     /// </remarks>
     internal static string TelemetryHookMcpMatcher { get; } = $"^(?:{AgentTelemetryHook.McpMatcher})$";
 
-    internal const string TelemetryHookSkillMatcher = "^Skill$";
-
     /// <summary>
-    /// Handler <c>if</c> rule that limits Skill hooks to Aspire skills.
+    /// <c>PostToolUse</c> <c>matcher</c> for the Skill tool.
     /// </summary>
     /// <remarks>
-    /// Without a space before <c>*</c>, the rule is a plain prefix match, the same way <c>Bash(ls*)</c> matches <c>lsof</c>
-    /// (https://code.claude.com/docs/en/permissions#wildcard-patterns). Claude matches Skill rules against the skill's own
-    /// name and the name in Claude's invocation (https://code.claude.com/docs/en/skills#restrict-claudes-skill-access).
-    /// Both start with <c>aspire</c> for every canonical skill, whether invoked as <c>aspire-init</c> or through the plugin
-    /// as <c>aspire:aspire-init</c>.
+    /// The hook runs for every skill, and the classifier drops non-Aspire skills. A handler <c>if</c> rule such as
+    /// <c>Skill(aspire*)</c> would avoid starting the CLI for other skills, but Claude Code does not evaluate <c>if</c>
+    /// rules against Skill input (https://github.com/anthropics/claude-code/issues/95819).
     /// </remarks>
-    internal const string TelemetryHookSkillIf = "Skill(aspire*)";
+    internal const string TelemetryHookSkillMatcher = "^Skill$";
 
     internal const string TelemetryHookReadMatcher = "^Read$";
 
@@ -200,7 +195,7 @@ internal sealed class ClaudeCodeAgentClient(
         // Run directly, without a shell, and only for tools or skill file reads the classifier can
         // track so Claude does not launch the CLI on every tool call or read.
         // https://docs.claude.com/en/docs/claude-code/hooks
-        postToolUse.Add(CreateHookGroup(TelemetryHookSkillMatcher, TelemetryHookSkillIf));
+        postToolUse.Add(CreateHookGroup(TelemetryHookSkillMatcher, condition: null));
         postToolUse.Add(CreateHookGroup(TelemetryHookMcpMatcher, condition: null));
         postToolUse.Add(CreateHookGroup(TelemetryHookReadMatcher, TelemetryHookReadIf));
 
