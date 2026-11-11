@@ -113,7 +113,7 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
 
         var postToolUse = await ReadClaudePostToolUseAsync(home).DefaultTimeout();
         Assert.Collection(postToolUse,
-            group => AssertClaudeGroup(group, ClaudeCodeAgentClient.TelemetryHookSkillMatcher, ClaudeCodeAgentClient.TelemetryHookSkillIf),
+            group => AssertClaudeGroup(group, ClaudeCodeAgentClient.TelemetryHookSkillMatcher, condition: null),
             group => AssertClaudeGroup(group, ClaudeCodeAgentClient.TelemetryHookMcpMatcher, condition: null),
             group => AssertClaudeGroup(group, ClaudeCodeAgentClient.TelemetryHookReadMatcher, ClaudeCodeAgentClient.TelemetryHookReadIf));
     }
@@ -187,7 +187,7 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
         var groups = await ReadClaudePostToolUseAsync(home);
         Assert.Collection(groups,
             group => Assert.True(GroupContainsCommand(group, "echo keep") && (string?)group!["matcher"] == "*"),
-            group => AssertClaudeGroup(group, ClaudeCodeAgentClient.TelemetryHookSkillMatcher, ClaudeCodeAgentClient.TelemetryHookSkillIf),
+            group => AssertClaudeGroup(group, ClaudeCodeAgentClient.TelemetryHookSkillMatcher, condition: null),
             group => AssertClaudeGroup(group, ClaudeCodeAgentClient.TelemetryHookMcpMatcher, condition: null),
             group => AssertClaudeGroup(group, ClaudeCodeAgentClient.TelemetryHookReadMatcher, ClaudeCodeAgentClient.TelemetryHookReadIf));
     }
@@ -219,7 +219,7 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
 
         var groups = await ReadClaudePostToolUseAsync(home).DefaultTimeout();
         Assert.Collection(groups,
-            group => AssertClaudeGroup(group, ClaudeCodeAgentClient.TelemetryHookSkillMatcher, ClaudeCodeAgentClient.TelemetryHookSkillIf),
+            group => AssertClaudeGroup(group, ClaudeCodeAgentClient.TelemetryHookSkillMatcher, condition: null),
             group => AssertClaudeGroup(group, ClaudeCodeAgentClient.TelemetryHookMcpMatcher, condition: null),
             group => AssertClaudeGroup(group, ClaudeCodeAgentClient.TelemetryHookReadMatcher, ClaudeCodeAgentClient.TelemetryHookReadIf));
     }
