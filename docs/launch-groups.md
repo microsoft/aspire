@@ -138,6 +138,13 @@ require its local lifetime owner; select the owner, not the child, for automatic
 startup. A `WaitForCompletion` on a resource without a lifetime is ignored. `WaitFor`
 and `WaitForStart` can still add a separate wait for its parent.
 
+For example, if `frontend` references `database` and waits for its excluded
+`server`, the error identifies the full path and the wait:
+
+```text
+Resource 'frontend' requires local resource 'server' (the lifetime owner of 'database'), which is not included in launch group 'frontend'. Dependency path: frontend -> database -> server. Edges: frontend --reference--> database; database --lifetime owner--> server. Add 'server' to launch group 'frontend'. The wait from 'frontend' to 'server' requires automatic startup.
+```
+
 Add required dependencies to the group; they are not added automatically.
 `WithReference` does not imply a readiness wait: use `WaitFor` when the dependent
 must wait for readiness. If a dependency is genuinely optional at startup, use
@@ -162,6 +169,13 @@ start. The summary separates visible local execution resources eligible for auto
 startup, excluded by the selected group, or already configured for explicit start.
 A second summary lists coordinated .NET builds planned initially and builds deferred
 until a later cold Start.
+
+For example, with three executable resources and no coordinated .NET builds:
+
+```text
+Launch group 'frontend' (visible resources): eligible for automatic startup: frontend; excluded by group: backend, manual; explicit start: manual.
+Coordinated builds: initial: (none); eager for persistent resources: (none); shared with initial builds: (none); deferred: (none). AppHost project-reference builds may also run eagerly.
+```
 
 The summary reports decisions, not dependency activation. A required dependency that
 is missing from the group still fails preflight instead of moving into the eligible
@@ -250,9 +264,8 @@ There are eager cases that do not imply automatic runtime startup:
 
 Build ownership remains capability-based. An extension host that owns project builds
 does not also use AppHost-owned coordinated builds. Without a selected group, normal
-full-run build behavior applies. Publishing is unchanged. Further work on fully lazy
-persistent and legacy builds is tracked in
-[issue #22075](https://github.com/microsoft/aspire/issues/22075).
+full-run build behavior applies. Publishing is unchanged. Fully lazy persistent and
+legacy builds are not included.
 
 ### Try selective builds and cold Start
 
