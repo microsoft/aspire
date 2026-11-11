@@ -14,13 +14,11 @@ using System.Xml.Linq;
 
 const string Usage = "<X.Y or X.Y.Z> --branch <target branch> --milestone <open milestone> [--api-diff-release-branch <release/X.Y>]";
 
-// The scheduled API/ATS diff workflows and their doc name the newest release branch.
-// The order must match the patterns in RetargetApiDiffs.
+// The scheduled API/ATS diff workflows name the newest release branch.
 string[] apiDiffPaths =
 [
     ".github/workflows/generate-api-diffs.yml",
     ".github/workflows/generate-ats-diffs.yml",
-    "docs/ci/typescript-api-compat.md",
 ];
 
 try
@@ -203,18 +201,14 @@ static string[] RetargetApiDiffs(string[] paths, string[] files, string releaseB
     // Keep main and swap only the single release branch.
     var matrix = Pattern(@"(?<=\x27\[""main"","")release/[0-9]+\.[0-9]+(?=""\]\x27)");
 
-    // The doc names the scheduled branch as: matrix (currently `release/17.0`).
-    var docNote = Pattern(@"(?<=\(currently `)release/[0-9]+\.[0-9]+(?=`\))");
-
-    Regex[] patterns = [matrix, matrix, docNote];
     var results = new string[files.Length];
     for (var i = 0; i < files.Length; i++)
     {
-        if (patterns[i].Matches(files[i]).Count != 1)
+        if (matrix.Matches(files[i]).Count != 1)
         {
             throw new InvalidOperationException($"Expected exactly one scheduled release branch in {paths[i]}.");
         }
-        results[i] = patterns[i].Replace(files[i], releaseBranch);
+        results[i] = matrix.Replace(files[i], releaseBranch);
     }
 
     return results;

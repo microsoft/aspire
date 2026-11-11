@@ -81,8 +81,7 @@ bumps or any bump that does not follow a newly created release branch.
 
    The script replaces the previous release branch in the scheduled
    `target_branch` matrix of `.github/workflows/generate-api-diffs.yml` and
-   `.github/workflows/generate-ats-diffs.yml`, and the "currently `release/<old>`"
-   note in `docs/ci/typescript-api-compat.md`. It fails unless each file has
+   `.github/workflows/generate-ats-diffs.yml`. It fails unless each workflow has
    exactly one match.
 3. Check whether the previous release's shipped baselines reached `main`. Those are
    the `src/**/api/*.cs` and `src/**/api/*.ats.txt` files from the automated
