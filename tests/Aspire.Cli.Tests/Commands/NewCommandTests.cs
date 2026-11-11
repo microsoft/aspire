@@ -1007,7 +1007,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Equal(KnownLanguageId.Go, scaffoldedLanguageId);
         Assert.NotNull(promptedTemplates);
-        Assert.Contains((KnownTemplateId.GoStarter, "Starter App (Go API + Redis, Go AppHost)"), promptedTemplates);
+        Assert.Contains((KnownTemplateId.GoStarter, "Starter App (Go API/React, Go AppHost)"), promptedTemplates);
         Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "output", "apphost.go")));
     }
 

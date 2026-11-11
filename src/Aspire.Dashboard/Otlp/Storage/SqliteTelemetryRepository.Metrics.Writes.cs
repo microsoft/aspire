@@ -169,13 +169,13 @@ public sealed partial class SqliteTelemetryRepository
             case Metric.DataOneofCase.Gauge:
                 foreach (var point in metric.Gauge.DataPoints)
                 {
-                    AddNumberMetricPoint(connection, transaction, context, cachedInstrument.InstrumentId, point, ingestionState, pointBatch);
+                    AddNumberMetricPoint(connection, transaction, context, cachedInstrument.InstrumentId, cachedInstrument.Summary.AggregationTemporality, point, ingestionState, pointBatch);
                 }
                 break;
             case Metric.DataOneofCase.Sum:
                 foreach (var point in metric.Sum.DataPoints)
                 {
-                    AddNumberMetricPoint(connection, transaction, context, cachedInstrument.InstrumentId, point, ingestionState, pointBatch);
+                    AddNumberMetricPoint(connection, transaction, context, cachedInstrument.InstrumentId, cachedInstrument.Summary.AggregationTemporality, point, ingestionState, pointBatch);
                 }
                 break;
             case Metric.DataOneofCase.Histogram:
@@ -193,6 +193,7 @@ public sealed partial class SqliteTelemetryRepository
         IDbTransaction transaction,
         AddContext context,
         long instrumentId,
+        OtlpAggregationTemporality temporality,
         NumberDataPoint point,
         MetricIngestionState ingestionState,
         MetricPointBatch pointBatch)
@@ -211,7 +212,10 @@ public sealed partial class SqliteTelemetryRepository
             var latest = dimension.LatestPoint;
             var latestPointType = pendingLatest?.PointType ?? latest?.PointType;
             var latestEndTimeUnixNano = pendingLatest?.EndTimeUnixNano ?? latest?.EndTimeUnixNano;
-            var sameValue = latestPointType == pointType && (pendingLatest is not null
+            // Merging repeated values suits a level, which stays the same until it changes. Each delta is a separate change
+            // at its own time, which a merged value would lose: exports can omit their start time, so only the time of the
+            // last one would be known. Delta histograms are retained separately for the same reason.
+            var sameValue = temporality != OtlpAggregationTemporality.Delta && latestPointType == pointType && (pendingLatest is not null
                 ? pointType == LongPointType ? pendingLatest.IntegerValue == point.AsInt : pendingLatest.DoubleValue == point.AsDouble
                 : pointType == LongPointType ? latest?.IntegerValue == point.AsInt : latest?.DoubleValue == point.AsDouble);
             var endTimeUnixNano = checked((long)point.TimeUnixNano);

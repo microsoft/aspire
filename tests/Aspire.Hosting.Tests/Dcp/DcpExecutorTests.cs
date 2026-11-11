@@ -418,6 +418,49 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task RunApplicationAsync_WithoutContainers_DoesNotProbeContainerRuntime()
+    {
+        // 'dcp info' probes the container runtime CLI, which can hang on busy Windows runners (microsoft/aspire#21771).
+        var builder = DistributedApplication.CreateBuilder();
+        builder.AddExecutable("app", "app", ".");
+
+        var kubernetesService = new TestKubernetesService();
+        var dcpDependencyCheckService = new TestDcpDependencyCheckService();
+
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, dcpDependencyCheckService: dcpDependencyCheckService);
+
+        await appExecutor.RunApplicationAsync();
+
+        Assert.Single(kubernetesService.CreatedResources.OfType<Executable>());
+        Assert.Equal(0, dcpDependencyCheckService.GetDcpInfoCallCount);
+        Assert.Equal(1, dcpDependencyCheckService.GetDcpVersionCallCount);
+    }
+
+    [Fact]
+    public async Task RunApplicationAsync_WithContainers_ProbesContainerRuntime()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.AddContainer("container", "image");
+
+        var kubernetesService = new TestKubernetesService();
+        var dcpDependencyCheckService = new TestDcpDependencyCheckService();
+
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, dcpDependencyCheckService: dcpDependencyCheckService);
+
+        await appExecutor.RunApplicationAsync();
+
+        Assert.Single(kubernetesService.CreatedResources.OfType<Container>());
+        Assert.NotEqual(0, dcpDependencyCheckService.GetDcpInfoCallCount);
+        Assert.Equal(0, dcpDependencyCheckService.GetDcpVersionCallCount);
+    }
+
+    [Fact]
     public async Task DockerfileContainerBuildSpecIncludesPlatform()
     {
         using var tempDockerfileContext = await DockerfileUtils.CreateTemporaryDockerfileAsync(outputHelper);
@@ -12037,7 +12080,8 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         ILogger<ContainerCreator>? containerCreatorLogger = null,
         ILogger<DcpExecutor>? logger = null,
         DistributedApplicationOptions? distributedApplicationOptions = null,
-        ProxylessEndpointPortAllocator? proxylessEndpointPortAllocator = null)
+        ProxylessEndpointPortAllocator? proxylessEndpointPortAllocator = null,
+        IDcpDependencyCheckService? dcpDependencyCheckService = null)
     {
         if (configuration == null)
         {
@@ -12078,7 +12122,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
 
         var aspireStore = new AspireStore(Path.Join(aspireStoreDirectory, ".aspire"), fileSystemService);
         var hostEnv = hostEnvironment ?? new TestHostEnvironment();
-        var dcpDependencyCheckService = new TestDcpDependencyCheckService();
+        dcpDependencyCheckService ??= new TestDcpDependencyCheckService();
 
         var appResources = new DcpAppResourceStore();
         // These executors are never disposed, so keep their reservations out of the process-wide registry.

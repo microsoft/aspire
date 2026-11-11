@@ -4,6 +4,8 @@
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using Aspire.Cli.Agents;
+using Aspire.Cli.Agents.ClaudeCode;
+using Aspire.Cli.Agents.Copilot;
 using Aspire.Cli.Agents.Hooks;
 using Aspire.Cli.Mcp;
 using Aspire.Cli.Tests.Utils;
@@ -226,8 +228,8 @@ public class AgentTelemetryHookTests(ITestOutputHelper outputHelper)
     [InlineData("mcp__other__list_resources", false, false)]
     public void ClaudeMatchersSelectOnlyTrackedTools(string toolName, bool expectedTool, bool expectedRead)
     {
-        Assert.Equal(expectedTool, MatchesAsClaude(toolName, AgentTelemetryHook.ClaudeToolMatcher));
-        Assert.Equal(expectedRead, MatchesAsClaude(toolName, AgentTelemetryHook.ClaudeReadMatcher));
+        Assert.Equal(expectedTool, MatchesAsClaude(toolName, ClaudeCodeAgentClient.TelemetryHookToolMatcher));
+        Assert.Equal(expectedRead, MatchesAsClaude(toolName, ClaudeCodeAgentClient.TelemetryHookReadMatcher));
     }
 
     [Fact]
@@ -239,7 +241,7 @@ public class AgentTelemetryHookTests(ITestOutputHelper outputHelper)
             {
                 var toolName = prefix + tool;
                 Assert.True(MatchesAsCopilot(toolName), toolName);
-                Assert.True(MatchesAsClaude(toolName, AgentTelemetryHook.ClaudeToolMatcher), toolName);
+                Assert.True(MatchesAsClaude(toolName, ClaudeCodeAgentClient.TelemetryHookToolMatcher), toolName);
                 Assert.NotNull(AgentTelemetryHook.Classify(
                     $$$"""{"toolName":"{{{toolName}}}","toolArgs":{}}""",
                     new TestEnvironment(),
@@ -464,7 +466,7 @@ public class AgentTelemetryHookTests(ITestOutputHelper outputHelper)
                 {
                     ["PostToolUse"] = new JsonArray(new JsonObject
                     {
-                        ["matcher"] = AgentTelemetryHook.ClaudeToolMatcher,
+                        ["matcher"] = ClaudeCodeAgentClient.TelemetryHookToolMatcher,
                         ["hooks"] = new JsonArray(new JsonObject { ["type"] = "command", ["command"] = invocation.Command, ["args"] = args })
                     })
                 }
@@ -477,21 +479,21 @@ public class AgentTelemetryHookTests(ITestOutputHelper outputHelper)
     // https://docs.github.com/en/copilot/reference/hooks-reference
     // https://code.claude.com/docs/en/hooks#matcher-patterns
     private static bool MatchesAsCopilot(string toolName) =>
-        Regex.IsMatch(toolName, $"^(?:{AgentTelemetryHook.CopilotToolMatcher})$", RegexOptions.ECMAScript);
+        Regex.IsMatch(toolName, $"^(?:{CopilotAgentClient.TelemetryHookMatcher})$", RegexOptions.ECMAScript);
 
     private static bool MatchesAsClaude(string toolName, string matcher) =>
         Regex.IsMatch(toolName, matcher, RegexOptions.ECMAScript);
 
-    // Emulates the subset of Claude permission-rule globs that ClaudeReadIf uses. "//" anchors the pattern at
+    // Emulates the subset of Claude permission-rule globs that TelemetryHookReadIf uses. "//" anchors the pattern at
     // the filesystem root, "**/" spans any number of directories, and "*" stays within one path segment:
     //   Read(//**/skills/aspire*/**) matches /c/Users/user/.claude/skills/aspire-init/SKILL.md
     // https://code.claude.com/docs/en/permissions
     private static bool MatchesClaudeReadIf(string path)
     {
         const string RulePrefix = "Read(/";
-        Assert.StartsWith(RulePrefix + "/", AgentTelemetryHook.ClaudeReadIf);
-        Assert.EndsWith(")", AgentTelemetryHook.ClaudeReadIf);
-        var glob = AgentTelemetryHook.ClaudeReadIf[RulePrefix.Length..^1];
+        Assert.StartsWith(RulePrefix + "/", ClaudeCodeAgentClient.TelemetryHookReadIf);
+        Assert.EndsWith(")", ClaudeCodeAgentClient.TelemetryHookReadIf);
+        var glob = ClaudeCodeAgentClient.TelemetryHookReadIf[RulePrefix.Length..^1];
         var pattern = Regex.Escape(glob)
             .Replace(@"\*\*/", "(?:.*/)?")
             .Replace(@"/\*\*", "/.*")

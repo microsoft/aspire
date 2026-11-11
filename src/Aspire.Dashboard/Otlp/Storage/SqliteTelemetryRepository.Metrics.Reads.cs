@@ -13,9 +13,8 @@ namespace Aspire.Dashboard.Otlp.Storage;
 public sealed partial class SqliteTelemetryRepository
 {
     private const int MaxMetricReadBatchSize = 500;
-    // Buckets are only an index prefilter. Keep exact interval checks for windows within a bucket.
-    private static readonly string s_metricPointRangeFilterSql = string.Create(CultureInfo.InvariantCulture, $"p.start_time_unix_nano <= @EndUnixNano AND p.end_time_unix_nano >= r.start_time_unix_nano AND p.end_time_bucket >= r.start_time_unix_nano / {MetricTimeBucketWidthUnixNano}");
-    private static readonly string s_metricSourcePointRangeFilterSql = string.Create(CultureInfo.InvariantCulture, $"source.start_time_unix_nano <= @EndUnixNano AND source.end_time_unix_nano >= r.start_time_unix_nano AND source.end_time_bucket >= r.start_time_unix_nano / {MetricTimeBucketWidthUnixNano}");
+    private static readonly string s_metricPointRangeFilterSql = GetMetricPointRangeFilterSql(point: "p", instrument: "i");
+    private static readonly string s_metricSourcePointRangeFilterSql = GetMetricPointRangeFilterSql(point: "source", instrument: "i");
     private static readonly string s_selectedMetricPointsCteSql = $"""
         selected_metric_points AS (
             SELECT
@@ -44,8 +43,18 @@ public sealed partial class SqliteTelemetryRepository
         ranked_metric_points AS (
             SELECT
                 p.*,
+                -- Points of a dimension at the same time are the same observation exported again, and the newest one wins.
+                -- A delta number is observed at its end, like in the range filter and rollups. Its stored start is the
+                -- previous export's end, which out-of-order exports can repeat: [10s, 20s], [0s, 10s] then [20s, 30s] are
+                -- stored with starts of 10s, 20s and 10s, and partitioning by start would drop the first one.
                 ROW_NUMBER() OVER (
-                    PARTITION BY p.start_time_unix_nano, p.dimension_id, p.histogram_aggregation_id
+                    PARTITION BY
+                        CASE
+                            WHEN p.point_type <> {HistogramPointType} AND p.aggregation_temporality = {(int)OtlpAggregationTemporality.Delta}
+                                THEN p.end_time_unix_nano
+                            ELSE p.start_time_unix_nano
+                        END,
+                        p.dimension_id, p.histogram_aggregation_id
                     ORDER BY p.point_id DESC) AS point_rank
             FROM selected_metric_points p
         ),
@@ -55,8 +64,37 @@ public sealed partial class SqliteTelemetryRepository
             WHERE point_rank = 1
         )
         """;
+    // Below long.MaxValue (about 9.22e18) by more than the rounding in a floating point total.
+    private const string MaxSafeRollupIntegerMagnitude = "9.0e18";
+
+    /// <summary>
+    /// Gets the filter for the points of a dimension in its query range, joined to the range as <c>r</c>.
+    /// </summary>
+    private static string GetMetricPointRangeFilterSql(string point, string instrument) => string.Create(CultureInfo.InvariantCulture, $"""
+        {point}.end_time_unix_nano >= r.start_time_unix_nano
+        -- Buckets are only an index prefilter. The exact checks still apply to windows within a bucket.
+        AND {point}.end_time_bucket >= r.start_time_unix_nano / {MetricTimeBucketWidthUnixNano}
+        -- A level or histogram interval overlapping the window is part of it, but a delta number is observed at its end,
+        -- which belongs to (start, end], like a chart interval. One after the window would otherwise join a rollup in the
+        -- window and move its sum out of it. One at the start belongs to the interval before, which a refreshing chart
+        -- keeps from its previous read. Its start isn't checked: a delta's stored start is the previous export's end,
+        -- which is after its own end when it arrives out of order, e.g. [20s, 10s] for an export at 10s after one at 20s.
+        AND CASE
+            WHEN {point}.point_type <> {HistogramPointType} AND {instrument}.aggregation_temporality = {(int)OtlpAggregationTemporality.Delta}
+                THEN {point}.end_time_unix_nano > r.start_time_unix_nano AND {point}.end_time_unix_nano <= @EndUnixNano
+            ELSE {point}.start_time_unix_nano <= @EndUnixNano
+        END
+        """);
+
     // An aggregation identity separates cumulative resets within one rollup. Delta points each
     // have their own identity and retain their interval start, so no delta observations are discarded.
+    // A rollup keeps the largest number, which is right for a level, but delta numbers are changes that the
+    // counter charts add up, so the ones in a rollup become their sum, observed once. Each one is observed at its end,
+    // and its start is the previous export's end however long ago that was, so delta numbers are grouped by their end:
+    // grouping by start would move a sparse export into the rollup of an earlier one. Like a chart interval, a group
+    // includes its end and not its start, so an export at 120s is in the same chart interval as its group. SUM throws when integers
+    // overflow, which would stop the instrument's charts loading, so it only runs when the magnitudes can't reach
+    // the integer range. A larger sum is returned as a double point, because integer_value can't hold it.
     // Cumulative representatives start at their earliest source interval, not the rounded bucket
     // boundary: rounding a reset at 3.5s to 3s would lower the preceding window's count.
     private static readonly string s_rolledUpMetricPointsCteSql = $"""
@@ -64,8 +102,19 @@ public sealed partial class SqliteTelemetryRepository
         bucketed_metric_points AS (
             SELECT
                 p.*,
-                (p.start_time_unix_nano / @PointIntervalUnixNano) * @PointIntervalUnixNano AS rollup_start_time_unix_nano
+                CASE
+                    WHEN p.point_type <> {HistogramPointType} AND p.aggregation_temporality = {(int)OtlpAggregationTemporality.Delta}
+                        THEN ((p.end_time_unix_nano - 1) / @PointIntervalUnixNano) * @PointIntervalUnixNano
+                    ELSE (p.start_time_unix_nano / @PointIntervalUnixNano) * @PointIntervalUnixNano
+                END AS rollup_start_time_unix_nano
             FROM effective_metric_points p
+        ),
+        measured_metric_points AS (
+            SELECT
+                p.*,
+                TOTAL(CASE WHEN p.aggregation_temporality = {(int)OtlpAggregationTemporality.Delta} THEN ABS(p.integer_value * 1.0 * p.repeat_count) END) OVER (
+                    PARTITION BY p.dimension_id, p.point_type, p.rollup_start_time_unix_nano, p.histogram_aggregation_id) < {MaxSafeRollupIntegerMagnitude} AS rollup_integer_sum_is_safe
+            FROM bucketed_metric_points p
         ),
         ranked_rollup_metric_points AS (
             SELECT
@@ -76,6 +125,12 @@ public sealed partial class SqliteTelemetryRepository
                     PARTITION BY p.dimension_id, p.point_type, p.rollup_start_time_unix_nano, p.histogram_aggregation_id) AS rollup_end_time_unix_nano,
                 SUM(p.repeat_count) OVER (
                     PARTITION BY p.dimension_id, p.point_type, p.rollup_start_time_unix_nano, p.histogram_aggregation_id) AS rollup_repeat_count,
+                SUM(CASE WHEN p.aggregation_temporality = {(int)OtlpAggregationTemporality.Delta} AND p.rollup_integer_sum_is_safe THEN p.integer_value * p.repeat_count END) OVER (
+                    PARTITION BY p.dimension_id, p.point_type, p.rollup_start_time_unix_nano, p.histogram_aggregation_id) AS rollup_integer_sum,
+                TOTAL(CASE WHEN p.aggregation_temporality = {(int)OtlpAggregationTemporality.Delta} THEN p.integer_value * 1.0 * p.repeat_count END) OVER (
+                    PARTITION BY p.dimension_id, p.point_type, p.rollup_start_time_unix_nano, p.histogram_aggregation_id) AS rollup_integer_total,
+                SUM(CASE WHEN p.aggregation_temporality = {(int)OtlpAggregationTemporality.Delta} THEN p.double_value * p.repeat_count END) OVER (
+                    PARTITION BY p.dimension_id, p.point_type, p.rollup_start_time_unix_nano, p.histogram_aggregation_id) AS rollup_double_sum,
                 ROW_NUMBER() OVER (
                     PARTITION BY p.dimension_id, p.point_type, p.rollup_start_time_unix_nano, p.histogram_aggregation_id
                     ORDER BY
@@ -83,22 +138,35 @@ public sealed partial class SqliteTelemetryRepository
                         p.integer_value DESC,
                         p.double_value DESC,
                         p.point_id DESC) AS rollup_rank
-            FROM bucketed_metric_points p
+            FROM measured_metric_points p
         ),
         rolled_up_metric_points AS (
             SELECT
                 p.point_id,
                 p.dimension_id,
-                p.point_type,
+                CASE
+                    WHEN p.point_type = {LongPointType} AND p.aggregation_temporality = {(int)OtlpAggregationTemporality.Delta} AND NOT p.rollup_integer_sum_is_safe THEN {DoublePointType}
+                    ELSE p.point_type
+                END AS point_type,
                 CASE
                     WHEN p.point_type = {HistogramPointType} AND p.aggregation_temporality = {(int)OtlpAggregationTemporality.Delta} THEN p.start_time_unix_nano
                     WHEN p.point_type = {HistogramPointType} THEN p.rollup_source_start_time_unix_nano
                     ELSE p.rollup_start_time_unix_nano
                 END AS start_time_unix_nano,
                 p.rollup_end_time_unix_nano AS end_time_unix_nano,
-                p.rollup_repeat_count AS repeat_count,
-                p.integer_value,
-                p.double_value,
+                CASE
+                    WHEN p.point_type <> {HistogramPointType} AND p.aggregation_temporality = {(int)OtlpAggregationTemporality.Delta} THEN 1
+                    ELSE p.rollup_repeat_count
+                END AS repeat_count,
+                CASE
+                    WHEN p.aggregation_temporality = {(int)OtlpAggregationTemporality.Delta} THEN p.rollup_integer_sum
+                    ELSE p.integer_value
+                END AS integer_value,
+                CASE
+                    WHEN p.point_type = {LongPointType} AND p.aggregation_temporality = {(int)OtlpAggregationTemporality.Delta} AND NOT p.rollup_integer_sum_is_safe THEN p.rollup_integer_total
+                    WHEN p.aggregation_temporality = {(int)OtlpAggregationTemporality.Delta} THEN p.rollup_double_sum
+                    ELSE p.double_value
+                END AS double_value,
                 p.histogram_sum,
                 p.histogram_count,
                 p.histogram_aggregation_start_unix_nano,
@@ -264,7 +332,9 @@ public sealed partial class SqliteTelemetryRepository
                 p.histogram_aggregation_start_unix_nano AS HistogramAggregationStartUnixNano,
                 p.histogram_aggregation_id AS HistogramAggregationId,
                 p.aggregation_temporality AS AggregationTemporality,
+                stored.point_type AS SourcePointType,
                 stored.start_time_unix_nano AS SourceStartTimeUnixNano,
+                stored.end_time_unix_nano AS SourceEndTimeUnixNano,
                 stored.bucket_counts AS BucketCounts,
                 stored.explicit_bounds AS ExplicitBounds
             FROM rolled_up_metric_points p
@@ -292,7 +362,10 @@ public sealed partial class SqliteTelemetryRepository
                 MetricValueBase value = point.PointType switch
                 {
                     LongPointType => new MetricValue<long>(point.IntegerValue!.Value, checked((ulong)point.StartTimeUnixNano), checked((ulong)point.EndTimeUnixNano)),
-                    DoublePointType => new MetricValue<double>(point.DoubleValue!.Value, checked((ulong)point.StartTimeUnixNano), checked((ulong)point.EndTimeUnixNano)),
+                    // Stored values are finite, but SQLite's SUM of a delta rollup overflows to infinity when the values add
+                    // up to more than a double can hold, e.g. two exports of 1e308. Infinity isn't a usable metric value:
+                    // tables would show it and chart serialization can't. The largest finite value still reads as off the scale.
+                    DoublePointType => new MetricValue<double>(Math.Clamp(point.DoubleValue!.Value, double.MinValue, double.MaxValue), checked((ulong)point.StartTimeUnixNano), checked((ulong)point.EndTimeUnixNano)),
                     HistogramPointType => CreateHistogramValue(point),
                     _ => throw new InvalidOperationException($"Unknown metric point type '{point.PointType}'.")
                 };
@@ -496,28 +569,37 @@ public sealed partial class SqliteTelemetryRepository
                 source.point_type AS PointType,
                 source.histogram_aggregation_id AS HistogramAggregationId,
                 source.start_time_unix_nano AS SourceStartTimeUnixNano,
+                source.end_time_unix_nano AS SourceEndTimeUnixNano,
                 e.time_unix_nano AS TimeUnixNano,
                 e.exemplar_value AS ExemplarValue,
                 e.span_id AS SpanId,
                 e.trace_id AS TraceId
             FROM telemetry_metric_exemplars e
             JOIN telemetry_metric_points source INDEXED BY ix_telemetry_metric_points_time ON source.point_id = e.point_id
+            JOIN telemetry_metric_dimensions d ON d.dimension_id = source.dimension_id
+            JOIN telemetry_metric_instruments i ON i.instrument_id = d.instrument_id
             JOIN metric_dimension_query_ranges r ON r.dimension_id = source.dimension_id
             WHERE {s_metricSourcePointRangeFilterSql}
               AND e.time_unix_nano >= r.start_time_unix_nano
               AND e.time_unix_nano <= @EndUnixNano;
             """, queryParameters, transaction).AsList();
         var pointIntervalUnixNano = dataPointInterval is { } interval ? interval.Ticks * TimeSpan.NanosecondsPerTick : (long?)null;
-        // Match the SQL partition using source timestamps, independently of the displayed start.
-        // A cumulative reset's representative can start at 3.5s while its SQL group starts at 3s.
+        // Match the SQL partition using source timestamps and types, independently of the displayed start and type.
+        // A cumulative reset's representative can start at 3.5s while its SQL group starts at 3s, and an integer sum too
+        // large for an integer is returned as a double, next to the double rollup of the same interval.
+        var temporalities = new Dictionary<long, int>();
+        foreach (var point in points)
+        {
+            temporalities[point.DimensionId] = point.AggregationTemporality;
+        }
         var pointIds = points.ToDictionary(
-            point => GetPointKey(point.DimensionId, point.PointType, point.SourceStartTimeUnixNano, point.HistogramAggregationId),
+            point => GetPointKey(point.DimensionId, point.SourcePointType, point.SourceStartTimeUnixNano, point.SourceEndTimeUnixNano, point.HistogramAggregationId),
             point => point.PointId);
         var mappedRecords = new List<(long PointId, MetricExemplarRecord Record)>();
         foreach (var record in records)
         {
             if (pointIds.TryGetValue(GetPointKey(record.DimensionId, record.PointType, record.SourceStartTimeUnixNano,
-                record.HistogramAggregationId), out var pointId))
+                record.SourceEndTimeUnixNano, record.HistogramAggregationId), out var pointId))
             {
                 mappedRecords.Add((pointId, record));
             }
@@ -540,10 +622,12 @@ public sealed partial class SqliteTelemetryRepository
                 }))
             .ToLookup(pair => pair.Key, pair => pair.Value);
 
-        MetricPointKey GetPointKey(long dimensionId, int pointType, long sourceStartTimeUnixNano, long? aggregationId)
+        MetricPointKey GetPointKey(long dimensionId, int pointType, long sourceStartTimeUnixNano, long sourceEndTimeUnixNano, long? aggregationId)
         {
+            var isDeltaNumber = pointType != HistogramPointType &&
+                temporalities.GetValueOrDefault(dimensionId) == (int)OtlpAggregationTemporality.Delta;
             var groupStartTimeUnixNano = pointIntervalUnixNano is { } intervalUnixNano
-                ? (sourceStartTimeUnixNano / intervalUnixNano) * intervalUnixNano
+                ? ((isDeltaNumber ? sourceEndTimeUnixNano - 1 : sourceStartTimeUnixNano) / intervalUnixNano) * intervalUnixNano
                 : sourceStartTimeUnixNano;
             return new MetricPointKey(dimensionId, pointType, groupStartTimeUnixNano, aggregationId);
         }
@@ -571,7 +655,9 @@ public sealed partial class SqliteTelemetryRepository
     {
         public required long DimensionId { get; init; }
         public required long StartTimeUnixNano { get; init; }
+        public required int SourcePointType { get; init; }
         public required long SourceStartTimeUnixNano { get; init; }
+        public required long SourceEndTimeUnixNano { get; init; }
         public required long RepeatCount { get; init; }
         public double? HistogramSum { get; init; }
         public long? HistogramAggregationStartUnixNano { get; init; }
@@ -596,6 +682,7 @@ public sealed partial class SqliteTelemetryRepository
         public required int PointType { get; init; }
         public long? HistogramAggregationId { get; init; }
         public required long SourceStartTimeUnixNano { get; init; }
+        public required long SourceEndTimeUnixNano { get; init; }
         public required long TimeUnixNano { get; init; }
         public required double ExemplarValue { get; init; }
         public required string SpanId { get; init; }

@@ -24,39 +24,10 @@ internal sealed class AgentTelemetryHook(IEnvironment environment)
     private const string ContinueResponse = """{"continue":true}""";
     private static readonly string[] s_mcpPrefixes = ["aspire-", "mcp__aspire__", "mcp_aspire_"];
 
-    /// <summary>
-    /// Copilot user-level <c>postToolUse</c> <c>matcher</c> for the skill and Aspire MCP tools.
-    /// </summary>
-    /// <remarks>
-    /// Copilot matchers see only the tool name, so matching file-read tools would launch the CLI for every
-    /// read in every repository. Copilot anchors the pattern itself, and the explicit anchors keep it identical
-    /// in shape to the Claude patterns (https://docs.github.com/en/copilot/reference/hooks-reference).
-    /// </remarks>
-    internal static string CopilotToolMatcher { get; } = $"^(?:[Ss]kill|{McpMatcher})$";
-
-    /// <summary>
-    /// Claude Code <c>PostToolUse</c> <c>matcher</c> for the Skill and Aspire MCP tools. Reads use <see cref="ClaudeReadIf"/>.
-    /// </summary>
-    /// <remarks>
-    /// Claude Code matches unanchored, so the explicit anchors keep <c>Skill</c> from matching other tool names
-    /// (https://code.claude.com/docs/en/hooks#matcher-patterns).
-    /// </remarks>
-    internal static string ClaudeToolMatcher { get; } = $"^(?:Skill|{McpMatcher})$";
-
-    internal const string ClaudeReadMatcher = "^Read$";
-
-    /// <summary>
-    /// Claude Code handler <c>if</c> rule that limits Read hooks to files under an Aspire skill directory.
-    /// </summary>
-    /// <remarks>
-    /// Every canonical skill name starts with <c>aspire</c>. <c>//**/</c> matches at any absolute depth, so this covers
-    /// plugin, user, and project skill installs (https://code.claude.com/docs/en/hooks#filter-by-tool-name-and-arguments-with-the-if-field).
-    /// </remarks>
-    internal const string ClaudeReadIf = "Read(//**/skills/aspire*/**)";
-
     // Matches the tool names Classify recognizes through s_mcpPrefixes, for example aspire-list_resources
     // (Copilot), mcp__aspire__list_resources (Claude Code), and mcp_aspire_list_resources (VS Code).
-    private static string McpMatcher => string.Join('|', s_mcpPrefixes.Select(prefix => prefix + ".+"));
+    // Clients build their hook matchers from this so they cannot drift from the classifier.
+    internal static string McpMatcher => string.Join('|', s_mcpPrefixes.Select(prefix => prefix + ".+"));
 
     internal static (string Command, string[] Args) GetCommand(string mode)
     {
@@ -230,13 +201,56 @@ internal sealed class AgentTelemetryHook(IEnvironment environment)
             ? entries.SelectMany(entry => entry is JsonObject { } group && group["hooks"] is JsonArray groupHooks ? groupHooks : [])
             : entries;
 
-        return handlers.Any(handler => TelemetryHookSettings.IsAspireHook(handler, executableProperty)
+        return handlers.Any(handler => IsAspireHook(handler, executableProperty)
             && handler!["args"] is JsonArray args
             && args.Select(arg => arg?.GetValueKind() == JsonValueKind.String ? arg.GetValue<string>() : null)
                 .SkipWhile(arg => arg != AgentTelemetryProtocol.ScopeOptionName)
                 .Skip(1)
                 .FirstOrDefault() == AgentTelemetryProtocol.ProjectScope);
     }
+
+    /// <summary>
+    /// Determines whether a hook handler runs Aspire's telemetry hook.
+    /// </summary>
+    /// <param name="node">The hook handler entry.</param>
+    /// <param name="executableProperty">The handler property holding the executable: <c>command</c> for Claude, <c>exec</c> for Copilot.</param>
+    internal static bool IsAspireHook(JsonNode? node, string executableProperty)
+    {
+        // Match legacy scripts or our exact CLI invocation, not arbitrary Aspire commands. Trailing
+        // arguments are allowed because current hooks append --source and --scope.
+        if (node is not JsonObject hook)
+        {
+            return false;
+        }
+        var executable = hook[executableProperty] is JsonValue executableValue && executableValue.TryGetValue<string>(out var executableText)
+            ? executableText : null;
+        if (ReferencesTelemetryScript(executable))
+        {
+            return true;
+        }
+        if (hook["args"] is JsonArray args)
+        {
+            var values = args.Select(arg => arg is JsonValue value && value.TryGetValue<string>(out var text) ? text : null).ToArray();
+            var (currentCommand, _) = GetCommand(AgentTelemetryProtocol.HookOptionName);
+            var executableName = Path.GetFileNameWithoutExtension(executable);
+            var isDotnet = string.Equals(executableName, "dotnet", StringComparison.OrdinalIgnoreCase);
+            var isDirectAspireInvocation = !isDotnet
+                && values is [AgentTelemetryProtocol.AgentCommandName, AgentTelemetryProtocol.TelemetryCommandName, AgentTelemetryProtocol.HookOptionName, ..]
+                && (executable == currentCommand || string.Equals(executableName, "aspire", StringComparison.OrdinalIgnoreCase));
+            var isManagedAspireInvocation = isDotnet
+                && values is [var assemblyPath, AgentTelemetryProtocol.AgentCommandName, AgentTelemetryProtocol.TelemetryCommandName, AgentTelemetryProtocol.HookOptionName, ..]
+                && string.Equals(Path.GetFileName(assemblyPath), "aspire.dll", StringComparison.OrdinalIgnoreCase);
+
+            return isDirectAspireInvocation || isManagedAspireInvocation || values.Any(ReferencesTelemetryScript);
+        }
+
+        return false;
+    }
+
+    private static bool ReferencesTelemetryScript(string? value)
+        => value is not null
+            && (value.Contains(TelemetryHookInstaller.ShellResourceName, StringComparison.OrdinalIgnoreCase)
+                || value.Contains(TelemetryHookInstaller.PowerShellResourceName, StringComparison.OrdinalIgnoreCase));
 
     internal static int GetMaxPayloadCharacters(string? configuredValue)
     {

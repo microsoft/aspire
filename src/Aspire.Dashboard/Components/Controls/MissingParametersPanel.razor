@@ -43,6 +43,7 @@
                                     <FluentTextInput Id="@field.ViewModel.ElementId"
                                                      Class="aspire-input missing-parameter-control"
                                                      @bind-Value="field.ViewModel.Value"
+                                                     @bind-Value:after="@(() => OnInputChangedAsync(field.ViewModel))"
                                                      Placeholder="@field.ViewModel.Input.Placeholder"
                                                      Required="@field.ViewModel.Input.Required"
                                                      Immediate="true"
@@ -81,6 +82,7 @@
                                                       TOption="SelectViewModel<string>" TValue="string"
                                                       Class="aspire-input missing-parameter-control"
                                                       @bind-Value="field.ViewModel.Value"
+                                                      @bind-Value:after="@(() => OnInputChangedAsync(field.ViewModel))"
                                                       Placeholder="@field.ViewModel.Input.Placeholder"
                                                       Required="@field.ViewModel.Input.Required"
                                                       Items="@field.ViewModel.SelectOptions"
@@ -99,9 +101,9 @@
                                                             TOption="SelectViewModel<string>" TValue="SelectViewModel<string>"
                                                             Class="aspire-input missing-parameter-control"
                                                             @bind-Value="field.ViewModel.SelectedOption"
-                                                            @bind-Value:after="@(() => UpdateChoiceValueState(field.ViewModel))"
+                                                            @bind-Value:after="@(() => UpdateChoiceValueStateAsync(field.ViewModel))"
                                                             @bind-ImmediateText:get="field.ViewModel.SelectedOption?.Name ?? field.ViewModel.Value"
-                                                            @bind-ImmediateText:set="@(text => OnChoiceTextChanged(field.ViewModel, text))"
+                                                            @bind-ImmediateText:set="@(text => OnChoiceTextChangedAsync(field.ViewModel, text))"
                                                             Immediate="true"
                                                             ImmediateDelay="@FluentUIExtensions.InputDelay"
                                                             Placeholder="@field.ViewModel.Input.Placeholder"
@@ -123,6 +125,7 @@
                                     <FluentCheckbox Id="@field.ViewModel.ElementId"
                                                     Class="aspire-checkbox"
                                                     @bind-Value="field.ViewModel.IsChecked"
+                                                    @bind-Value:after="@(() => OnInputChangedAsync(field.ViewModel))"
                                                     Label="@field.ViewModel.Input.Label"
                                                     AriaLabel="@field.ViewModel.Input.Label"
                                                     Disabled="@IsEditorDisabled(editor)"
@@ -133,6 +136,7 @@
                                                        Id="@field.ViewModel.ElementId"
                                                        Class="aspire-input missing-parameter-control"
                                                        @bind-Value="field.ViewModel.NumberValue"
+                                                       @bind-Value:after="@(() => OnInputChangedAsync(field.ViewModel))"
                                                        Placeholder="@field.ViewModel.Input.Placeholder"
                                                        Required="@field.ViewModel.Input.Required"
                                                        Immediate="true"
@@ -142,15 +146,18 @@
                                 case InputType.File:
                                     var fileButtonId = $"{field.ViewModel.ElementId}-file-upload";
                                     <div class="missing-parameter-file">
-                                        <FluentInputFile Id="@field.ViewModel.ElementId"
-                                                         DragDropZoneVisible="false"
-                                                         Mode="InputFileMode.Stream"
-                                                         AnchorId="@fileButtonId"
-                                                         Accept="@field.ViewModel.Input.FileFilter"
-                                                         Multiple="@field.ViewModel.Input.AllowMultipleFiles"
-                                                         MaximumFileSize="@GetMaxFileSize(field.ViewModel)"
-                                                         Disabled="@IsEditorDisabled(editor)"
-                                                         OnInputFileChange="@(args => OnInputFileChangeAsync(editor, args))" />
+                                        @if (!IsSetByFileCommand(editor))
+                                        {
+                                            <FluentInputFile Id="@field.ViewModel.ElementId"
+                                                             DragDropZoneVisible="false"
+                                                             Mode="InputFileMode.Stream"
+                                                             AnchorId="@fileButtonId"
+                                                             Accept="@field.ViewModel.Input.FileFilter"
+                                                             Multiple="@field.ViewModel.Input.AllowMultipleFiles"
+                                                             MaximumFileSize="@GetMaxFileSize(field.ViewModel)"
+                                                             Disabled="@IsEditorDisabled(editor)"
+                                                             OnInputFileChange="@(args => OnInputFileChangeAsync(editor, args))" />
+                                        }
                                         @if (field.ViewModel.FileReferences.Count > 0)
                                         {
                                             <div class="missing-parameter-files">
@@ -174,7 +181,8 @@
                                                       Appearance="ButtonAppearance.Primary"
                                                       Class="aspire-button"
                                                       IconStart="@(new Icons.Regular.Size16.FolderOpen())"
-                                                      Disabled="@IsEditorDisabled(editor)">
+                                                      Disabled="@IsEditorDisabled(editor)"
+                                                      OnClick="@(() => OnFileButtonClickAsync(editor))">
                                             @GetFileButtonText(editor)
                                         </FluentButton>
                                     </div>
@@ -191,6 +199,7 @@
                     <label class="missing-parameters-save">
                         <FluentCheckbox Class="aspire-checkbox"
                                         @bind-Value="SaveToUserSecrets"
+                                        Disabled="@DashboardClient.IsReadOnly"
                                         AriaLabel="@Loc[nameof(Dashboard.Resources.Resources.MissingParametersSaveToUserSecrets)]" />
                         <span>@Loc[nameof(Dashboard.Resources.Resources.MissingParametersSaveToUserSecrets)]</span>
                     </label>

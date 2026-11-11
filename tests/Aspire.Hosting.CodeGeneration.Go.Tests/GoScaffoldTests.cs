@@ -27,6 +27,16 @@ public class GoScaffoldTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void Scaffold_ReliesOnBuildForResourceErrors()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var appHost = Scaffold(workspace)["apphost.go"];
+
+        Assert.DoesNotContain(".Err()", appHost, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Scaffold_WritesFilesWithLfLineEndings()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -46,7 +56,10 @@ public class GoScaffoldTests(ITestOutputHelper outputHelper)
         // An existing working tree keeps CRLF until its files are re-created: delete the go-starter directory, then
         // run `git checkout -- <directory>`.
         var starterRoot = Path.Combine(AppContext.BaseDirectory, "go-starter");
-        var starterFiles = Directory.EnumerateFiles(starterRoot, "*", SearchOption.AllDirectories).ToList();
+        // The frontend includes a PNG logo; line endings only apply to text template files.
+        var starterFiles = Directory.EnumerateFiles(starterRoot, "*", SearchOption.AllDirectories)
+            .Where(file => !string.Equals(Path.GetExtension(file), ".png", StringComparison.OrdinalIgnoreCase))
+            .ToList();
         Assert.NotEmpty(starterFiles);
 
         Assert.Empty(starterFiles
