@@ -47,6 +47,7 @@ public class GitRepositoryTests(ITestOutputHelper outputHelper)
             Assert.Null(result);
             Assert.Equal("Git stdout: ", stdout.Message);
             Assert.StartsWith("Git stderr: fatal: not a git repository", stderr.Message, StringComparison.Ordinal);
+            Assert.Equal(stderr.Message.TrimEnd(), stderr.Message);
         }
     }
 

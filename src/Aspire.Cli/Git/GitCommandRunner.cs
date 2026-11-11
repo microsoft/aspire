@@ -377,9 +377,10 @@ internal sealed class GitCommandRunner(ICliHostEnvironment hostEnvironment, IInt
                 // Log both streams independently of normal console routing for troubleshooting.
                 // With --debug or --log-level Debug, these records intentionally also appear on
                 // the console, including captured stdout and otherwise deferred background diagnostics.
+                // Loggers append their own newline; trim only the logged copy to avoid blank separators.
                 var stdout = ReadOutputAsync(process.StandardOutput, output =>
                 {
-                    logger.LogDebug("Git stdout: {Output}", output);
+                    logger.LogDebug("Git stdout: {Output}", output.TrimEnd());
                     if (forwardStandardOutput)
                     {
                         consoleEnvironment.Out.Profile.Out.Writer.Write(output);
@@ -387,7 +388,7 @@ internal sealed class GitCommandRunner(ICliHostEnvironment hostEnvironment, IInt
                 }, token);
                 var stderr = ReadOutputAsync(process.StandardError, output =>
                 {
-                    logger.LogDebug("Git stderr: {Output}", output);
+                    logger.LogDebug("Git stderr: {Output}", output.TrimEnd());
                     if (forwardStandardError)
                     {
                         consoleEnvironment.Error.Profile.Out.Writer.Write(output);
