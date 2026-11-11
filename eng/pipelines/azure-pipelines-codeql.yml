@@ -46,10 +46,6 @@ jobs:
 
   steps:
 
-  - task: UseDotNet@2
-    inputs:
-      useGlobalJson: true
-
   # Install Node.js, yarn, and vsce so the VS Code extension can be built
   - task: UseNode@1
     displayName: Install node.js
@@ -83,6 +79,8 @@ jobs:
   - task: CodeQL3000Init@0
     displayName: CodeQL Initialize
 
+  # build.cmd bootstraps the SDK from global.json. UseDotNet@2's global.json
+  # mode excludes prerelease SDKs and fails before that bootstrap runs.
   - script: build.cmd
       -restore -build
       -configuration $(_BuildConfig)

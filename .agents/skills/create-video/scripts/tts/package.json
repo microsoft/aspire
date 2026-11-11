@@ -1,0 +1,12 @@
+{
+  "name": "create-video-tts",
+  "private": true,
+  "description": "The voice of the create-video skill: speaks narration through the Microsoft Edge voice service.",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "msedge-tts": "2.1.0"
+  }
+}

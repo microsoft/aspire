@@ -61,6 +61,15 @@ public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
             CliE2ETestHelpers.WriteLocalChannelSettings(workspace.WorkspaceRoot.FullName, localChannel.SdkVersion);
         }
 
+        // Init supplies SDK sources without the restore cache metadata. Establish a restored
+        // baseline before saving it so the stale-cache assertions exercise an actual prior restore.
+        await auto.RunCommandAsync("aspire restore --non-interactive", counter, TimeSpan.FromMinutes(3));
+        await auto.RunCommandAsync("cp -a .aspire/modules ~/typescript-sdk-baseline", counter);
+        var baselineSdkPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "modules", "aspire.mts");
+        var baselineSdk = File.ReadAllText(baselineSdkPath);
+        var baselineHashPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "modules", ".codegen-hash");
+        var baselineHash = File.ReadAllText(baselineHashPath);
+
         // Step 2: Add two integrations.
         await auto.TypeAsync("aspire add Aspire.Hosting.Redis");
         await auto.EnterAsync();
@@ -70,11 +79,18 @@ public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
         await auto.EnterAsync();
         await auto.WaitForAspireAddSuccessAsync(counter, TimeSpan.FromMinutes(2));
 
+        // Add already regenerated the SDK; put back the stale files before exercising restore.
+        await auto.RunCommandAsync("rm -rf .aspire/modules && cp -a ~/typescript-sdk-baseline .aspire/modules", counter);
+        Assert.Equal(baselineSdk, File.ReadAllText(baselineSdkPath));
+        Assert.Equal(baselineHash, File.ReadAllText(baselineHashPath));
+
         // Step 3: Run aspire restore and verify success.
         await auto.TypeAsync("aspire restore");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("SDK code restored successfully", timeout: TimeSpan.FromMinutes(3));
         await auto.WaitForSuccessPromptAsync(counter);
+
+        Assert.NotEqual(baselineHash, File.ReadAllText(baselineHashPath));
 
         var lockFilePath = Path.Combine(
             workspace.WorkspaceRoot.FullName,
@@ -84,6 +100,32 @@ public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
             throw new InvalidOperationException(
                 $"Expected {TypeScriptAppHostToolchainTestHelpers.GetDisplayName(toolchain)} restore to create '{lockFilePath}'.");
         }
+
+        var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.mts");
+        File.WriteAllText(appHostPath, """
+            import { createBuilder, SqlServerReplCommand, type SqlServerReplOptions } from './.aspire/modules/aspire.mjs';
+
+            const builder = await createBuilder();
+            await builder.addRedis("cache");
+            await builder.addSqlServer("sql-default").withRepl();
+            await builder.addSqlServer("sql-empty-options").withRepl({});
+            await builder.addSqlServer("sql-configured").withRepl({
+                configure: async (options: SqlServerReplOptions) => {
+                    const command: string = await options.command.get();
+                    await options.command.set(command);
+
+                    const version17: "/opt/mssql-tools/bin/sqlcmd" = SqlServerReplCommand.Version17;
+                    const version18: "/opt/mssql-tools18/bin/sqlcmd" = SqlServerReplCommand.Version18;
+                    await options.command.set(version17);
+                    await options.command.set(version18);
+                    await options.command.set("/custom tools/sqlcmd-wrapper");
+
+                    // @ts-expect-error Commands must remain string paths, not numeric versions.
+                    await options.command.set(18);
+                }
+            });
+            await builder.build().run();
+            """);
 
         await auto.TypeAsync(TypeScriptAppHostToolchainTestHelpers.GetTypeCheckCommand(toolchain, "tsconfig.apphost.json"));
         await auto.EnterAsync();
@@ -187,11 +229,17 @@ public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
         var codegenHashPath = Path.Combine(modulesDir, ".codegen-hash");
         var initialCodegenHash = File.Exists(codegenHashPath) ? File.ReadAllText(codegenHashPath) : null;
 
+        await auto.RunCommandAsync("cp -a .aspire/modules ~/typescript-sdk-baseline", counter);
+
         // Step 2: Add a new integration that is not present in the initial generated SDK.
         await auto.TypeAsync("aspire add Aspire.Hosting.Redis");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("The package Aspire.Hosting.", timeout: TimeSpan.FromMinutes(2));
         await auto.WaitForSuccessPromptAsync(counter);
+
+        await auto.RunCommandAsync("rm -rf .aspire/modules && cp -a ~/typescript-sdk-baseline .aspire/modules", counter);
+        Assert.Equal(initialAspireTs, File.ReadAllText(aspireModulePath));
+        Assert.Equal(initialCodegenHash, File.ReadAllText(codegenHashPath));
 
         // Step 3: Run aspire restore and verify the generated SDK picks up the new exports.
         await auto.TypeAsync("aspire restore");

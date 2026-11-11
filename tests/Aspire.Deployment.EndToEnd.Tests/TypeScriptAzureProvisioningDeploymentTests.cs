@@ -10,6 +10,7 @@ namespace Aspire.Deployment.EndToEnd.Tests;
 public sealed class TypeScriptAzureProvisioningDeploymentTests(ITestOutputHelper output)
 {
     [Fact]
+    [ActiveIssue("https://github.com/microsoft/aspire/issues/20815")]
     public Task DeployAppConfigurationWithProvisioningOverrides()
     {
         return DeployAsync(

@@ -144,7 +144,14 @@ public partial class MetricTable : ChartBase
 
                 if (traceValuesByPercentile.Values.All(value => value is null))
                 {
-                    continue;
+                    // Incompatible bounds can leave valid exemplars without percentile values.
+                    // Keep their interval visible, but still omit empty chart windows.
+                    var startTime = i > 0 ? xValues[i - 1] : (DateTimeOffset?)null;
+                    var endTime = i < xValues.Count - 1 ? xValue : (DateTimeOffset?)null;
+                    if (!exemplars.Exists(exemplar => IsExemplarInInterval(exemplar, startTime, endTime)))
+                    {
+                        continue;
+                    }
                 }
 
                 if (OnlyShowValueChangesInTable && valueDiffs.All(diff => DoubleEquals(diff, 0)))
@@ -156,11 +163,12 @@ public partial class MetricTable : ChartBase
 
                 MetricViewBase CreateHistogramMetricView()
                 {
-                    var percentiles = new SortedDictionary<int, (string Name, double? Value, ValueDirectionChange Direction)>();
+                    var percentiles = new SortedDictionary<int, (string Name, double? Value, ValueDirectionChange? Direction)>();
                     for (var traceIndex = 0; traceIndex < traces.Count; traceIndex++)
                     {
                         var trace = traces[traceIndex];
-                        percentiles.Add(trace.Percentile!.Value, (trace.Name, trace.Values[i], GetDirectionChange(valueDiffs[traceIndex])));
+                        ValueDirectionChange? direction = trace.Values[i] is not null ? GetDirectionChange(valueDiffs[traceIndex]) : null;
+                        percentiles.Add(trace.Percentile!.Value, (trace.Name, trace.Values[i], direction));
                     }
 
                     return new HistogramMetricView
@@ -209,7 +217,7 @@ public partial class MetricTable : ChartBase
             var endTime = (i != newMetrics.Count - 1) ? current.DateTime : (DateTimeOffset?)null;
             var startTime = (i > 0) ? newMetrics.GetKeyAtIndex(i - 1) : (DateTimeOffset?)null;
 
-            var currentExemplars = exemplars.Where(e => (e.Start >= startTime || startTime == null) && (e.Start < endTime || endTime == null)).ToList();
+            var currentExemplars = exemplars.Where(exemplar => IsExemplarInInterval(exemplar, startTime, endTime)).ToList();
             current.Exemplars.AddRange(currentExemplars);
         }
 
@@ -218,6 +226,12 @@ public partial class MetricTable : ChartBase
         var latestCurrentMetric = _metrics.Keys.OfType<DateTimeOffset?>().LastOrDefault();
         addedXValues = newMetrics.Keys.Where(newKey => newKey > latestCurrentMetric || latestCurrentMetric == null).ToHashSet();
         return newMetrics;
+    }
+
+    private static bool IsExemplarInInterval(ChartExemplar exemplar, DateTimeOffset? startTime, DateTimeOffset? endTime)
+    {
+        return (startTime is null || exemplar.Start >= startTime.Value) &&
+            (endTime is null || exemplar.Start < endTime.Value);
     }
 
     private static bool DoubleEquals(double? a, double? b)
@@ -294,7 +308,7 @@ public partial class MetricTable : ChartBase
 
     public record HistogramMetricView : MetricViewBase
     {
-        public required SortedDictionary<int, (string Name, double? Value, ValueDirectionChange Direction)> Percentiles { get; init; }
+        public required SortedDictionary<int, (string Name, double? Value, ValueDirectionChange? Direction)> Percentiles { get; init; }
     }
 
     private (Icon Icon, string Title)? GetIconAndTitleForDirection(ValueDirectionChange? directionChange)

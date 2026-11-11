@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource Azure publishing/provisioning contracts with synthetic metadata.
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Utils;
 using Azure.Provisioning.WebPubSub;
@@ -164,6 +165,53 @@ public class AzureWebPubSubExtensionsTests(ITestOutputHelper output)
         Assert.Equal("wps1", wps.Resource.Name);
         await Verify(manifest.BicepText, extension: "bicep");
             
+    }
+
+    [Fact]
+    public async Task AddEventHandlerWithLiteralUrlTemplateKeepsPlaceholders()
+    {
+        // A URL template without references is written to Bicep as a literal. Its {hub} and {event}
+        // placeholders must keep single braces, whether the expression comes from ReferenceExpression.Create
+        // or from ReferenceExpressionBuilder, which polyglot app hosts use.
+        using var builder = TestDistributedApplicationBuilder.Create(output);
+
+        var urlBuilder = new ReferenceExpressionBuilder();
+        urlBuilder.AppendLiteral("http://fake2.com/events/{hub}/{event}");
+
+        var wps = builder.AddAzureWebPubSub("wps1");
+        wps.AddHub("hub1")
+            .AddEventHandler($"http://fake1.com/events/{{hub}}/{{event}}")
+            .AddEventHandler(urlBuilder.Build());
+
+        wps.Resource.Outputs["endpoint"] = "https://mywebpubsubendpoint";
+        var manifest = await AzureManifestUtils.GetManifestWithBicep(wps.Resource);
+        output.WriteLine(manifest.BicepText);
+
+        await Verify(manifest.BicepText, extension: "bicep");
+    }
+
+    [Fact]
+    public async Task AddEventHandlerWithConditionalUrlUsesParameter()
+    {
+        // A conditional expression has no manifest expressions either, but it is not a literal:
+        // its URL must be passed as a parameter, not written as a URL template.
+        using var builder = TestDistributedApplicationBuilder.Create(output);
+
+        var useProduction = builder.AddParameter("use-production");
+        var url = ReferenceExpression.CreateConditional(
+            useProduction.Resource,
+            bool.TrueString,
+            ReferenceExpression.Create($"https://prod.example.com/events"),
+            ReferenceExpression.Create($"https://test.example.com/events"));
+
+        var wps = builder.AddAzureWebPubSub("wps1");
+        wps.AddHub("hub1").AddEventHandler(url);
+
+        wps.Resource.Outputs["endpoint"] = "https://mywebpubsubendpoint";
+        var manifest = await AzureManifestUtils.GetManifestWithBicep(wps.Resource);
+        output.WriteLine(manifest.BicepText);
+
+        await Verify(manifest.BicepText, extension: "bicep");
     }
 
     [Fact]
@@ -391,3 +439,4 @@ public class AzureWebPubSubExtensionsTests(ITestOutputHelper output)
         public string ProjectPath => "projectA";
     }
 }
+#pragma warning restore CS0618

@@ -58,6 +58,22 @@ public class CodeGenerationResolverTests
         Assert.Equal("TypeScript", exporter.Language);
     }
 
+    [Fact]
+    public void CodeGeneratorResolver_ResolvesGoApiReferenceExporterWithoutItLivingOnTheCodeGenerator()
+    {
+        using var serviceProvider = CreateServiceProvider();
+        var assemblyLoader = CreateAssemblyLoader();
+        var resolver = new CodeGeneratorResolver(serviceProvider, assemblyLoader, NullLogger<CodeGeneratorResolver>.Instance);
+
+        var generator = resolver.GetCodeGenerator("Go");
+        Assert.NotNull(generator);
+        Assert.IsNotAssignableFrom<IApiReferenceExporter>(generator);
+
+        var exporter = resolver.GetApiReferenceExporter("Go");
+        Assert.NotNull(exporter);
+        Assert.Equal("Go", exporter.Language);
+    }
+
     /// <summary>
     /// A documented API that no generator produces would be worse than no documentation at all, so
     /// discovering exporters independently must not make one reachable for an unsupported language.
@@ -85,6 +101,37 @@ public class CodeGenerationResolverTests
         Assert.NotNull(resolver.GetLanguageSupport("python"));
         Assert.NotNull(resolver.GetLanguageSupport("rust"));
         Assert.NotNull(resolver.GetLanguageSupport("typescript/nodejs"));
+    }
+
+    [Fact]
+    public void LanguageSupportResolver_ResolvesSerializedIntegrationHostSpec()
+    {
+        using var serviceProvider = CreateServiceProvider();
+        var resolver = new LanguageSupportResolver(
+            serviceProvider, CreateAssemblyLoader(), NullLogger<LanguageSupportResolver>.Instance);
+        var languageSupport = resolver.GetLanguageSupport("typescript/nodejs");
+        Assert.NotNull(languageSupport);
+
+        var spec = LanguageService.GetIntegrationHostSpec(languageSupport);
+
+        Assert.NotNull(spec);
+        Assert.Equal("node", spec.Execute.Command);
+        Assert.Equal(["--import", "tsx", "{entryPoint}"], spec.Execute.Args);
+        Assert.NotNull(spec.InstallDependencies);
+        Assert.Equal("npm", spec.InstallDependencies.Command);
+        Assert.Equal(["install"], spec.InstallDependencies.Args);
+    }
+
+    [Fact]
+    public void LanguageSupportResolver_ProviderWithoutIntegrationHostHookReturnsNull()
+    {
+        using var serviceProvider = CreateServiceProvider();
+        var resolver = new LanguageSupportResolver(
+            serviceProvider, CreateAssemblyLoader(), NullLogger<LanguageSupportResolver>.Instance);
+        var languageSupport = resolver.GetLanguageSupport("go");
+        Assert.NotNull(languageSupport);
+
+        Assert.Null(LanguageService.GetIntegrationHostSpec(languageSupport));
     }
 
     private static ServiceProvider CreateServiceProvider() => new ServiceCollection().BuildServiceProvider();

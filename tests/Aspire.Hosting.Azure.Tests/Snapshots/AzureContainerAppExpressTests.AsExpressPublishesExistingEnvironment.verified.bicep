@@ -11,7 +11,7 @@ param existing_resource_group string
 
 param env_acr_outputs_name string
 
-resource env 'Microsoft.App/managedEnvironments@2025-07-01' existing = {
+resource env 'Microsoft.App/managedEnvironments@2026-07-01' existing = {
   name: existing_name
   scope: resourceGroup(existing_resource_group)
 }
@@ -47,3 +47,5 @@ output AZURE_CONTAINER_APPS_ENVIRONMENT_NAME string = env.name
 output AZURE_CONTAINER_APPS_ENVIRONMENT_ID string = env.id
 
 output AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN string = env.properties.defaultDomain
+
+output AZURE_CONTAINER_APPS_ENVIRONMENT_LOCATION string = toLower(replace(env.location, ' ', ''))

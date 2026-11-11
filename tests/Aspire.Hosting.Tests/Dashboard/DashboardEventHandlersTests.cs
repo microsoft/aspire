@@ -12,6 +12,7 @@ using Aspire.Hosting.Dashboard;
 using Aspire.Hosting.Dcp;
 using Aspire.Hosting.Devcontainers.Codespaces;
 using Aspire.Hosting.Tests.Utils;
+using Aspire.Shared;
 using Aspire.Shared.ConsoleLogs;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
@@ -223,15 +224,22 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
     }
 
     [Theory]
-    [InlineData("localhost:8080", 8080, "1234", "cert", "aspire-extension-run-123-", "aspire-extension-run-123-dashboard", true)]
-    [InlineData("localhost:8080", 8080, "1234", "cert", "aspire-extension-run-123", "aspire-extension-run-123-dashboard", false)]
-    [InlineData(null, null, null, null, null, null, null)]
-    public async Task BeforeStartAsync_DashboardContainsDebugSessionInfo(string? debugSessionPort, int? expectedDebugSessionPort, string? debugSessionToken, string? debugSessionCert, string? dcpInstanceIdPrefix, string? expectedDcpInstanceId, bool? telemetryEnabled)
+    [InlineData("localhost:8080", 8080, "1234", "cert", "aspire-extension-run-123-", "aspire-extension-run-123-dashboard", "true", true)]
+    [InlineData("localhost:8080", 8080, "1234", "cert", "aspire-extension-run-123", "aspire-extension-run-123-dashboard", "false", false)]
+    [InlineData(null, null, null, null, null, null, "1", true)]
+    [InlineData(null, null, null, null, null, null, "0", false)]
+    [InlineData(null, null, null, null, null, null, null, null)]
+    public async Task BeforeStartAsync_DashboardContainsDebugSessionInfo(string? debugSessionPort, int? expectedDebugSessionPort, string? debugSessionToken, string? debugSessionCert, string? dcpInstanceIdPrefix, string? expectedDcpInstanceId, string? telemetryOptOut, bool? expectedTelemetryOptOut)
     {
         // Arrange
         var resourceLoggerService = new ResourceLoggerService();
         var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create();
-        var configurationBuilder = new ConfigurationBuilder();
+        var configurationBuilder = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["ASPIRE_DASHBOARD_TELEMETRY_OPTOUT"] = telemetryOptOut,
+            [KnownAspNetCoreConfigNames.Urls] = "http://localhost:8080",
+            [KnownConfigNames.DashboardOtlpGrpcEndpointUrl] = "http://localhost:4317"
+        });
 
         if (debugSessionPort is not null)
         {
@@ -254,14 +262,12 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
         }
 
         var configuration = configurationBuilder.Build();
-        var dashboardOptions = Options.Create(new DashboardOptions
+        var dashboardOptions = new DashboardOptions();
+        new ConfigureDefaultDashboardOptions(configuration, Options.Create(new DcpOptions
         {
-            TelemetryOptOut = telemetryEnabled,
-            DashboardPath = typeof(DashboardEventHandlersTests).Assembly.Location,
-            DashboardUrl = "http://localhost:8080",
-            OtlpGrpcEndpointUrl = "http://localhost:4317"
-        });
-        var hook = CreateHook(resourceLoggerService, resourceNotificationService, configuration, dashboardOptions: dashboardOptions);
+            DashboardPath = typeof(DashboardEventHandlersTests).Assembly.Location
+        })).Configure(dashboardOptions);
+        var hook = CreateHook(resourceLoggerService, resourceNotificationService, configuration, dashboardOptions: Options.Create(dashboardOptions));
 
         var model = new DistributedApplicationModel(new ResourceCollection());
 
@@ -288,11 +294,11 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
         var environmentVariables = dashboardEnvironment.EnvironmentVariables.ToDictionary();
 
         // Assert
-        Assert.Equal(expectedDebugSessionPort?.ToString(), environmentVariables.GetValueOrDefault(DashboardConfigNames.DebugSessionPortName.EnvVarName));
-        Assert.Equal(debugSessionToken, environmentVariables.GetValueOrDefault(DashboardConfigNames.DebugSessionTokenName.EnvVarName));
-        Assert.Equal(debugSessionCert, environmentVariables.GetValueOrDefault(DashboardConfigNames.DebugSessionServerCertificateName.EnvVarName));
-        Assert.Equal(expectedDcpInstanceId, environmentVariables.GetValueOrDefault(DashboardConfigNames.DebugSessionDcpInstanceIdName.EnvVarName));
-        Assert.Equal(telemetryEnabled, bool.TryParse(environmentVariables.GetValueOrDefault(DashboardConfigNames.DebugSessionTelemetryOptOutName.EnvVarName), out var b) ? b : null);
+        Assert.Equal(expectedDebugSessionPort?.ToString(), environmentVariables.GetValueOrDefault(DashboardConfigNames.Legacy.DebugSessionPortName.EnvVarName));
+        Assert.Equal(debugSessionToken, environmentVariables.GetValueOrDefault(DashboardConfigNames.Legacy.DebugSessionTokenName.EnvVarName));
+        Assert.Equal(debugSessionCert, environmentVariables.GetValueOrDefault(DashboardConfigNames.Legacy.DebugSessionServerCertificateName.EnvVarName));
+        Assert.Equal(expectedDcpInstanceId, environmentVariables.GetValueOrDefault(DashboardConfigNames.Legacy.DebugSessionDcpInstanceIdName.EnvVarName));
+        Assert.Equal(expectedTelemetryOptOut?.ToString(), environmentVariables.GetValueOrDefault(DashboardConfigNames.Legacy.DebugSessionTelemetryOptOutName.EnvVarName));
     }
 
     [Fact]
@@ -380,6 +386,7 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
             configureExplicitAliases ? explicitApplicationName : "My App",
             environmentVariables[DashboardConfigNames.DashboardApplicationName.EnvVarName]);
         Assert.Equal(expectedPersistenceMode, environmentVariables[DashboardConfigNames.DashboardPersistenceModeName.EnvVarName]);
+        Assert.Equal(KnownDashboardLaunchContexts.AppHost, environmentVariables[DashboardConfigNames.DashboardLaunchContextName.EnvVarName]);
     }
 
     [Theory]
@@ -425,6 +432,67 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
         {
             Assert.Equal(expectedDataDirectory, environmentVariables[DashboardConfigNames.DashboardDataDirectoryName.EnvVarName]);
         }
+    }
+
+    [Theory]
+    [InlineData("Dashboard:Data:Directory", "ASPIRE_DASHBOARD_DATA_DIRECTORY")]
+    [InlineData("ASPIRE_DASHBOARD_DATA_DIRECTORY", "ASPIRE_DASHBOARD_DATA_DIRECTORY")]
+    [InlineData("aspire_dashboard_data_directory", "aspire_dashboard_data_directory")]
+    public async Task ConfigureEnvironmentVariables_ResolvesRelativeDashboardDataDirectoryFromAppHostDirectory(string dataDirectoryKey, string forwardedEnvironmentVariable)
+    {
+        // The dashboard process runs with its own install directory as the working directory, so a relative
+        // data directory must be resolved against the AppHost before it's forwarded.
+        var appHostDirectory = Path.Combine(Path.GetTempPath(), "apphost-project");
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["AppHost:Directory"] = appHostDirectory,
+                [dataDirectoryKey] = Path.Combine(".", "dashboard-data")
+            })
+            .Build();
+        var environmentVariables = await ConfigureDashboardEnvironmentVariablesAsync(configuration);
+
+        Assert.Equal(
+            Path.Combine(appHostDirectory, "dashboard-data"),
+            environmentVariables[forwardedEnvironmentVariable]);
+    }
+
+    [Fact]
+    public async Task ConfigureEnvironmentVariables_PreservesAbsoluteDashboardDataDirectory()
+    {
+        var absoluteDataDirectory = Path.Combine(Path.GetTempPath(), "shared-dashboard-data");
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["AppHost:Directory"] = Path.Combine(Path.GetTempPath(), "apphost-project"),
+                [DashboardConfigNames.DashboardDataDirectoryName.ConfigKey] = absoluteDataDirectory
+            })
+            .Build();
+        var environmentVariables = await ConfigureDashboardEnvironmentVariablesAsync(configuration);
+
+        Assert.Equal(absoluteDataDirectory, environmentVariables[DashboardConfigNames.DashboardDataDirectoryName.EnvVarName]);
+    }
+
+    private static async Task<Dictionary<string, object>> ConfigureDashboardEnvironmentVariablesAsync(IConfiguration configuration)
+    {
+        var dashboardOptions = Options.Create(new DashboardOptions
+        {
+            DashboardPath = "test.dll",
+            DashboardUrl = "http://localhost:8080",
+            OtlpGrpcEndpointUrl = "http://localhost:4317",
+        });
+        var hook = CreateHook(new ResourceLoggerService(), ResourceNotificationServiceTestHelpers.Create(), configuration, dashboardOptions: dashboardOptions);
+        var environmentVariables = new Dictionary<string, object>();
+        var dashboardResource = new ExecutableResource("aspire-dashboard", "dashboard.exe", ".");
+        var model = new DistributedApplicationModel([dashboardResource]);
+        var context = new DistributedApplicationExecutionContext(new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run)
+        {
+            Services = new TestServiceProvider().AddService(model)
+        });
+
+        await hook.ConfigureEnvironmentVariables(new EnvironmentCallbackContext(context, environmentVariables: environmentVariables, resource: dashboardResource));
+
+        return environmentVariables;
     }
 
     [Theory]

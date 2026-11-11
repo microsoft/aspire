@@ -19,13 +19,26 @@ export function initializeChart(id, traces, exemplarTrace, rangeStartTime, range
     var data = [];
     for (var i = 0; i < traces.length; i++) {
         var name = traces[i].name || "Value";
+        // Colors are assigned by slot in a fixed order so a series keeps its color across re-renders.
+        var color = themeColors.series[i % themeColors.series.length];
         var t = {
             x: traces[i].x,
             y: traces[i].y,
             name: name,
             text: traces[i].tooltips,
             hoverinfo: 'text',
-            stackgroup: "one"
+            stackgroup: "one",
+            line: {
+                color: color,
+                width: 2,
+                // Spline gives smooth curves instead of jagged straight segments between ticks.
+                // Smoothing is kept moderate (max is 1.3) so curves don't visibly overshoot the
+                // actual values, e.g. dipping below zero between two zero-valued points.
+                shape: 'spline',
+                smoothing: 0.4
+            },
+            // A translucent fill keeps the stacked areas readable without overpowering the lines.
+            fillcolor: withAlpha(color, themeColors.isDark ? 0.22 : 0.16)
         };
         data.push(t);
     }
@@ -40,12 +53,18 @@ export function initializeChart(id, traces, exemplarTrace, rangeStartTime, range
         mode: 'markers',
         type: 'scatter',
         marker: {
-            size: 16,
+            size: 9,
             color: themeColors.pointColor,
+            // A ring in the surface color separates the marker from the lines and fills underneath.
             line: {
                 color: themeColors.backgroundColor,
-                width: 1
+                width: 2
             }
+        },
+        hoverlabel: {
+            bgcolor: themeColors.pointColor,
+            bordercolor: themeColors.pointColor,
+            font: { color: themeColors.pointTextColor }
         }
     };
     data.push(points);
@@ -54,26 +73,54 @@ export function initializeChart(id, traces, exemplarTrace, rangeStartTime, range
     var layout = {
         paper_bgcolor: themeColors.backgroundColor,
         plot_bgcolor: themeColors.backgroundColor,
-        margin: { t: 0, r: 0, b: 40, l: 50 },
-        xaxis: {
-            type: 'date',
-            range: [rangeEndTime, rangeStartTime],
-            fixedrange: true,
-            tickformat: "%X",
+        font: {
+            family: themeColors.fontFamily,
             color: themeColors.textColor
         },
+        // Top margin leaves room for the legend, which sits above the plot area.
+        margin: { t: 36, r: 16, b: 36, l: 56 },
+        xaxis: getXAxisLayout(themeColors, rangeStartTime, rangeEndTime),
         yaxis: {
             rangemode: "tozero",
             fixedrange: true,
-            color: themeColors.textColor
+            automargin: true,
+            nticks: 6,
+            // Recessive dotted gridlines: they guide the eye without competing with the data.
+            showgrid: true,
+            gridcolor: themeColors.gridColor,
+            gridwidth: 1,
+            griddash: 'dot',
+            zeroline: false,
+            showline: false,
+            ticks: '',
+            ticklen: 0,
+            tickfont: { color: themeColors.mutedTextColor, size: 11 }
         },
         hovermode: "closest",
+        hoverlabel: {
+            bgcolor: themeColors.surfaceColor,
+            bordercolor: themeColors.strokeColor,
+            font: {
+                family: themeColors.fontFamily,
+                color: themeColors.textColor,
+                size: 12
+            },
+            align: 'left'
+        },
         showlegend: true,
         legend: {
             orientation: "h",
+            x: 0,
+            xanchor: "left",
+            y: 1.02,
+            yanchor: "bottom",
+            bgcolor: 'rgba(0,0,0,0)',
             font: {
-                color: themeColors.textColor
+                color: themeColors.textColor,
+                size: 12
             },
+            itemsizing: 'constant',
+            itemwidth: 30,
             traceorder: "normal",
             itemclick: false,
             itemdoubleclick: false
@@ -189,13 +236,7 @@ export function updateChart(id, traces, exemplarTrace, rangeStartTime, rangeEndT
     };
 
     var layout = {
-        xaxis: {
-            type: 'date',
-            range: [rangeEndTime, rangeStartTime],
-            fixedrange: true,
-            tickformat: "%X",
-            color: themeColors.textColor
-        }
+        xaxis: getXAxisLayout(themeColors, rangeStartTime, rangeEndTime)
     };
 
     Plotly.update(chartDiv, data, layout);
@@ -203,14 +244,61 @@ export function updateChart(id, traces, exemplarTrace, rangeStartTime, rangeEndT
     fixTraceLineRendering(chartDiv);
 }
 
+function getXAxisLayout(themeColors, rangeStartTime, rangeEndTime) {
+    return {
+        type: 'date',
+        range: [rangeEndTime, rangeStartTime],
+        fixedrange: true,
+        tickformat: "%X",
+        showgrid: false,
+        zeroline: false,
+        showline: true,
+        linecolor: themeColors.strokeColor,
+        ticks: 'outside',
+        ticklen: 4,
+        tickcolor: themeColors.strokeColor,
+        tickfont: { color: themeColors.mutedTextColor, size: 11 },
+        // Vertical crosshair at the hovered point makes it easy to read the time against the axis.
+        showspikes: true,
+        spikemode: 'across',
+        spikesnap: 'data',
+        spikethickness: 1,
+        spikedash: 'dot',
+        spikecolor: themeColors.mutedTextColor
+    };
+}
+
+// Categorical series palette, validated for color-vision deficiency separation on adjacent
+// series in both modes. The dark column is the same hues stepped for a dark surface rather
+// than an automatic inversion. Order matters: it's what keeps adjacent series distinguishable.
+const lightSeriesColors = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#6250d6', '#e34948'];
+const darkSeriesColors = ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#008300', '#9085e9', '#e66767'];
+
 function getThemeColors() {
     // Get colors from the current light/dark theme.
     var style = getComputedStyle(document.body);
+    var isDark = document.documentElement.dataset.theme === "dark";
     return {
-        backgroundColor: style.getPropertyValue("--colorNeutralBackground2"),
-        textColor: style.getPropertyValue("--colorNeutralForeground1"),
-        pointColor: style.getPropertyValue("--colorBrandBackground")
+        isDark: isDark,
+        series: isDark ? darkSeriesColors : lightSeriesColors,
+        backgroundColor: style.getPropertyValue("--colorNeutralBackground2").trim(),
+        surfaceColor: style.getPropertyValue("--colorNeutralBackground1").trim(),
+        textColor: style.getPropertyValue("--colorNeutralForeground1").trim(),
+        mutedTextColor: style.getPropertyValue("--colorNeutralForeground3").trim(),
+        gridColor: style.getPropertyValue("--colorNeutralStroke2").trim(),
+        strokeColor: style.getPropertyValue("--colorNeutralStroke1").trim(),
+        pointColor: style.getPropertyValue("--colorBrandBackground").trim(),
+        pointTextColor: style.getPropertyValue("--colorNeutralForegroundOnBrand").trim() || "#ffffff",
+        fontFamily: style.fontFamily
     };
+}
+
+function withAlpha(hexColor, alpha) {
+    // Expects '#rrggbb' from the series palette and returns an rgba() string for translucent fills.
+    var r = parseInt(hexColor.substring(1, 3), 16);
+    var g = parseInt(hexColor.substring(3, 5), 16);
+    var b = parseInt(hexColor.substring(5, 7), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
 function fixTraceLineRendering(chartDiv) {

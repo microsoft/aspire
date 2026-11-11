@@ -4,112 +4,112 @@
     <body>
       <trans-unit id="ApiNotFound">
         <source>API item '{0}' not found. Use 'aspire docs api search' or 'aspire docs api list &lt;scope&gt;' to find available identifiers.</source>
-        <target state="new">API item '{0}' not found. Use 'aspire docs api search' or 'aspire docs api list &lt;scope&gt;' to find available identifiers.</target>
+        <target state="translated">Item de API ''{0}'' não encontrado. Use "aspire docs api search'' ou ''aspire docs api list &lt;scope&gt;" para localizar identificadores disponíveis.</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
         <source>Browse and search Aspire API reference documentation from aspire.dev</source>
-        <target state="new">Browse and search Aspire API reference documentation from aspire.dev</target>
+        <target state="translated">Navegue e pesquise na documentação de Referência de API do Aspire em aspire.dev</target>
         <note />
       </trans-unit>
       <trans-unit id="FormatOptionDescription">
         <source>Output format (Table or Json)</source>
-        <target state="new">Output format (Table or Json)</target>
+        <target state="translated">Formato de saída (Tabela ou Json)</target>
         <note />
       </trans-unit>
       <trans-unit id="FoundApiEntries">
         <source>Found {0} API entries under '{1}'.</source>
-        <target state="new">Found {0} API entries under '{1}'.</target>
+        <target state="translated">Encontradas {0} entradas de API em ''{1}''.</target>
         <note />
       </trans-unit>
       <trans-unit id="FoundSearchResults">
         <source>Found {0} API results for '{1}'.</source>
-        <target state="new">Found {0} API results for '{1}'.</target>
+        <target state="translated">Encontrados {0} resultados de API para ''{1}''.</target>
         <note />
       </trans-unit>
       <trans-unit id="GetDescription">
         <source>Get the markdown for an API reference item by its identifier</source>
-        <target state="new">Get the markdown for an API reference item by its identifier</target>
+        <target state="translated">Obter o markdown de um item de Referência de API por seu identificador</target>
         <note />
       </trans-unit>
       <trans-unit id="HeaderGroup">
         <source>Group</source>
-        <target state="new">Group</target>
+        <target state="translated">Grupo</target>
         <note />
       </trans-unit>
       <trans-unit id="HeaderId">
         <source>Id</source>
-        <target state="new">Id</target>
+        <target state="translated">Identificador</target>
         <note />
       </trans-unit>
       <trans-unit id="HeaderKind">
         <source>Kind</source>
-        <target state="new">Kind</target>
+        <target state="translated">Variante</target>
         <note />
       </trans-unit>
       <trans-unit id="HeaderLanguage">
         <source>Language</source>
-        <target state="new">Language</target>
+        <target state="translated">Linguagem</target>
         <note />
       </trans-unit>
       <trans-unit id="HeaderName">
         <source>Name</source>
-        <target state="new">Name</target>
+        <target state="translated">Nome</target>
         <note />
       </trans-unit>
       <trans-unit id="HeaderScore">
         <source>Score</source>
-        <target state="new">Score</target>
+        <target state="translated">Pontuação</target>
         <note />
       </trans-unit>
       <trans-unit id="IdArgumentDescription">
         <source>The API identifier (for example, 'csharp/aspire.azure.ai.inference/aspireazureaiinferenceextensions')</source>
-        <target state="new">The API identifier (for example, 'csharp/aspire.azure.ai.inference/aspireazureaiinferenceextensions')</target>
+        <target state="translated">O identificador de API (por exemplo, ''csharp/thezure.ai.inference/bufferazureaiinferenceextensions'')</target>
         <note />
       </trans-unit>
       <trans-unit id="LanguageOptionDescription">
         <source>Limit results to a specific API language</source>
-        <target state="new">Limit results to a specific API language</target>
+        <target state="translated">Limitar os resultados a uma linguagem de API específica</target>
         <note />
       </trans-unit>
       <trans-unit id="LimitOptionDescription">
         <source>Maximum number of search results to return (default: 5, max: 10)</source>
-        <target state="new">Maximum number of search results to return (default: 5, max: 10)</target>
+        <target state="translated">Número máximo de resultados da pesquisa a serem retornados (padrão: 5, máx. 10)</target>
         <note />
       </trans-unit>
       <trans-unit id="ListDescription">
         <source>List API entries under a parent scope</source>
-        <target state="new">List API entries under a parent scope</target>
+        <target state="translated">Listar entradas de API em um escopo pai</target>
         <note />
       </trans-unit>
       <trans-unit id="LoadingApiDocumentation">
         <source>Loading API documentation...</source>
-        <target state="new">Loading API documentation...</target>
+        <target state="translated">Carregando documentação da API...</target>
         <note />
       </trans-unit>
       <trans-unit id="NoApiEntriesFound">
         <source>No API entries found under '{0}'.</source>
-        <target state="new">No API entries found under '{0}'.</target>
+        <target state="translated">Nenhuma entrada de API encontrada em ''{0}''.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoResultsFound">
         <source>No API results found for '{0}'. Try different search terms.</source>
-        <target state="new">No API results found for '{0}'. Try different search terms.</target>
+        <target state="translated">Nenhum resultado de API encontrado para '{0}'. Tente termos de pesquisa diferentes.</target>
         <note />
       </trans-unit>
       <trans-unit id="QueryArgumentDescription">
         <source>The search query</source>
-        <target state="new">The search query</target>
+        <target state="translated">A consulta de pesquisa</target>
         <note />
       </trans-unit>
       <trans-unit id="ScopeArgumentDescription">
         <source>The parent API scope to browse (for example, 'csharp' or 'typescript/aspire.hosting.azure.appconfiguration')</source>
-        <target state="new">The parent API scope to browse (for example, 'csharp' or 'typescript/aspire.hosting.azure.appconfiguration')</target>
+        <target state="translated">O escopo da API pai a ser pesquisado (por exemplo, ''csharp'' ou ''typescript/pool.hosting.azure.appconfiguration'')</target>
         <note />
       </trans-unit>
       <trans-unit id="SearchDescription">
         <source>Search Aspire API reference documentation by keywords</source>
-        <target state="new">Search Aspire API reference documentation by keywords</target>
+        <target state="translated">Pesquisar documentação de Referência de API do Graph por palavras-chave</target>
         <note />
       </trans-unit>
     </body>

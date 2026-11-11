@@ -143,6 +143,7 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
                             {
                                 change.Notification.LinkUrl = notification.LinkUrl;
                             }
+                            change.Notification.RelatedResourceNames.AddRange(notification.RelatedResourceNames);
                         }
                         else if (interaction.InteractionInfo is InputsInteractionInfo inputs)
                         {
@@ -276,6 +277,10 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
         if (!string.IsNullOrEmpty(input.FileFilter))
         {
             dto.FileFilter = input.FileFilter;
+        }
+        if (input.RelatedResourceName is not null)
+        {
+            dto.RelatedResourceName = input.RelatedResourceName;
         }
         dto.ValidationErrors.AddRange(input.ValidationErrors);
         return dto;

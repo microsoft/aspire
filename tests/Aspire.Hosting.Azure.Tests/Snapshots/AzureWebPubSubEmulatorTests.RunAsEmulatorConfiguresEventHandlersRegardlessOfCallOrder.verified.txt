@@ -1,0 +1,39 @@
+﻿{
+  WebPubSub: {
+    Hubs: {
+      chat: {
+        EventHandlers: [
+          {
+            UrlTemplate: http://host.docker.internal:5000/events/{hub}/{event},
+            EventPattern: *,
+            SystemEvents: [
+              connect,
+              connected,
+              disconnected
+            ]
+          },
+          {
+            UrlTemplate: http://example.com/events,
+            EventPattern: message
+          }
+        ]
+      },
+      notifications: {
+        EventHandlers: [
+          {
+            UrlTemplate: http://example.com/notifications,
+            EventPattern: *
+          }
+        ]
+      },
+      chat__room: {
+        EventHandlers: [
+          {
+            UrlTemplate: http://example.com/special,
+            EventPattern: *
+          }
+        ]
+      }
+    }
+  }
+}

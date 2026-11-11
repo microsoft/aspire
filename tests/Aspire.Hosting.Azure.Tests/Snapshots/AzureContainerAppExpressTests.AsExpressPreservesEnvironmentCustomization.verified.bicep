@@ -38,8 +38,9 @@ resource env_law 'Microsoft.OperationalInsights/workspaces@2025-02-01' = {
   tags: tags
 }
 
-resource env 'Microsoft.App/managedEnvironments@2026-03-02-preview' = {
+resource env 'Microsoft.App/managedEnvironments@2026-07-01' = {
   name: take('env${uniqueString(resourceGroup().id)}', 24)
+  tags: tags
   location: location
   properties: {
     appLogsConfiguration: {
@@ -57,7 +58,6 @@ resource env 'Microsoft.App/managedEnvironments@2026-03-02-preview' = {
     ]
     environmentMode: 'Express'
   }
-  tags: tags
 }
 
 output AZURE_LOG_ANALYTICS_WORKSPACE_NAME string = env_law.name
@@ -75,3 +75,5 @@ output AZURE_CONTAINER_APPS_ENVIRONMENT_NAME string = env.name
 output AZURE_CONTAINER_APPS_ENVIRONMENT_ID string = env.id
 
 output AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN string = env.properties.defaultDomain
+
+output AZURE_CONTAINER_APPS_ENVIRONMENT_LOCATION string = toLower(replace(env.location, ' ', ''))

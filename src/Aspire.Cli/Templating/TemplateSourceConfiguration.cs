@@ -1,0 +1,234 @@
+// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+
+using System.Globalization;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using Aspire.Cli.Configuration;
+using Aspire.Cli.Git;
+using Aspire.Cli.Resources;
+
+namespace Aspire.Cli.Templating;
+
+internal static class TemplateSourceConfiguration
+{
+    internal static Dictionary<string, T> MergeSources<T>(
+        IEnumerable<KeyValuePair<string, T>> inherited, IEnumerable<KeyValuePair<string, T>> configured)
+    {
+        var sources = new Dictionary<string, T>(StringComparers.TemplateSourceName);
+        foreach (var (name, source) in inherited.Concat(configured))
+        {
+            // Replace the entire definition, not individual fields: a local directory
+            // override must not retain an inherited repository or branch.
+            sources.Remove(name);
+            sources.Add(name, source);
+        }
+
+        return sources;
+    }
+
+    public static ConfiguredTemplateSource Parse(JsonElement value, string settingPath, bool requireComplete)
+    {
+        if (value.ValueKind is not JsonValueKind.Object)
+        {
+            throw new TemplateSourceConfigurationException(settingPath, NewCommandStrings.InvalidConfiguredTemplateSource);
+        }
+
+        string? path = null;
+        string? repository = null;
+        string? reference = null;
+        string? displayName = null;
+        foreach (var property in value.EnumerateObject())
+        {
+            var field = property.Name.ToLowerInvariant();
+            if (field is not ("repository" or "ref" or "path" or "displayname"))
+            {
+                // Ignore fields from newer CLIs, matching typed configuration deserialization.
+                continue;
+            }
+            if (field == "displayname")
+            {
+                displayName = property.Value.ValueKind switch
+                {
+                    JsonValueKind.Null => null,
+                    JsonValueKind.String => property.Value.GetString(),
+                    _ => throw new TemplateSourceConfigurationException($"{settingPath}.{property.Name}", NewCommandStrings.TemplateSourceDisplayNameInvalid)
+                };
+                continue;
+            }
+            var text = property.Value.ValueKind is JsonValueKind.Null
+                ? null
+                : ReadString(property.Value, $"{settingPath}.{property.Name}");
+            switch (field)
+            {
+                case "path":
+                    path = text;
+                    break;
+                case "repository":
+                    repository = text;
+                    break;
+                case "ref":
+                    reference = text;
+                    break;
+            }
+        }
+
+        return Parse(path, repository, reference, displayName, settingPath, requireComplete);
+    }
+
+    public static ConfiguredTemplateSource Parse(
+        string? path, string? repository, string? reference, string? displayName, string settingPath, bool requireComplete)
+    {
+        if (displayName?.Any(char.IsControl) is true)
+        {
+            throw new TemplateSourceConfigurationException($"{settingPath}.displayName", NewCommandStrings.TemplateSourceDisplayNameInvalid);
+        }
+        displayName = string.IsNullOrWhiteSpace(displayName) ? null : displayName;
+        foreach (var (field, value) in new[] { ("path", path), ("repository", repository), ("ref", reference) })
+        {
+            if (value is not null)
+            {
+                ValidateString(value, $"{settingPath}.{field}");
+            }
+        }
+
+        if (repository is null)
+        {
+            if (path is not null)
+            {
+                if (reference is null && Path.IsPathFullyQualified(path))
+                {
+                    return new(new TemplateSource(path, null, null), displayName);
+                }
+                ValidateRepositoryPath(path, $"{settingPath}.path");
+            }
+            if (requireComplete)
+            {
+                throw new TemplateSourceConfigurationException(settingPath, NewCommandStrings.TemplateSourceMissingLocation);
+            }
+            return new(null, displayName);
+        }
+
+        ValidateRepository(repository, $"{settingPath}.repository");
+        path ??= ".";
+        ValidateRepositoryPath(path, $"{settingPath}.path");
+        return new(new TemplateSource(path, repository, reference), displayName);
+    }
+
+    public static string ReadString(JsonElement value, string settingPath)
+    {
+        if (value.ValueKind is not JsonValueKind.String ||
+            value.GetString() is not { } text)
+        {
+            throw new TemplateSourceConfigurationException(settingPath, NewCommandStrings.TemplateSourceStringRequired);
+        }
+        ValidateString(text, settingPath);
+        return text;
+    }
+
+    private static void ValidateString(string value, string settingPath)
+    {
+        if (string.IsNullOrWhiteSpace(value) || value.Any(char.IsControl))
+        {
+            throw new TemplateSourceConfigurationException(settingPath, NewCommandStrings.TemplateSourceStringRequired);
+        }
+    }
+
+    public static void ValidateRepository(string repository, string settingPath)
+    {
+        if (!GitHelpers.IsValidRepositoryUrl(repository))
+        {
+            throw new TemplateSourceConfigurationException(settingPath, NewCommandStrings.TemplateSourceInvalidRepository);
+        }
+    }
+
+    public static void ValidateName(string name)
+    {
+        if (!SourceNameValidator.IsValid(name))
+        {
+            throw new TemplateSourceConfigurationException(AspireConfigFile.TemplateSourcesSectionName, NewCommandStrings.TemplateSourceNameRequired);
+        }
+    }
+
+    public static void ValidateRepositoryPath(string path, string settingPath)
+    {
+        try
+        {
+            TemplateSource.GetRepositoryRelativePath(path, Path.GetFullPath("."));
+        }
+        catch (Exception ex) when (ex is TemplateDiscoveryException or ArgumentException or NotSupportedException)
+        {
+            throw new TemplateSourceConfigurationException(settingPath, NewCommandStrings.TemplateRepositoryPathInvalid);
+        }
+    }
+
+    public static string GetPropertyName(JsonObject settings, string key, StringComparison comparison) =>
+        settings.Select(property => property.Key).FirstOrDefault(name => name.Equals(key, comparison)) ?? key;
+
+    public static string ResolveEditKey(JsonObject settings, string key)
+    {
+        var parts = key.Replace(':', '.').Split('.');
+        if (!parts[0].Equals(AspireConfigFile.TemplateSourcesSectionName, StringComparison.OrdinalIgnoreCase))
+        {
+            return key;
+        }
+        parts[0] = GetPropertyName(settings, AspireConfigFile.TemplateSourcesSectionName, StringComparison.OrdinalIgnoreCase);
+        if (parts.Length > 1 && settings[parts[0]] is JsonObject sources)
+        {
+            parts[1] = GetPropertyName(sources, parts[1], StringComparisons.TemplateSourceName);
+            if (parts.Length > 2 && sources[parts[1]] is JsonObject source)
+            {
+                parts[2] = GetPropertyName(source, parts[2], StringComparison.OrdinalIgnoreCase);
+            }
+        }
+
+        return string.Join('.', parts);
+    }
+
+    public static string ValidateEditKey(JsonObject settings, string key)
+    {
+        key = ResolveEditKey(settings, key);
+        var parts = key.Replace(':', '.').Split('.');
+        if (!parts[0].Equals(AspireConfigFile.TemplateSourcesSectionName, StringComparison.OrdinalIgnoreCase))
+        {
+            return key;
+        }
+        if (parts.Length < 2)
+        {
+            throw new TemplateSourceConfigurationException(AspireConfigFile.TemplateSourcesSectionName, NewCommandStrings.TemplateSourcesMustBeObject);
+        }
+        ValidateName(parts[1]);
+        if (parts.Length > 3 || (parts.Length == 3 && parts[2].ToLowerInvariant() is not ("repository" or "ref" or "path" or "displayname")))
+        {
+            throw new TemplateSourceConfigurationException(key.Replace(':', '.'), NewCommandStrings.TemplateSourceUnknownField);
+        }
+        if (settings[parts[0]] is { } templates && templates is not JsonObject)
+        {
+            throw new TemplateSourceConfigurationException(AspireConfigFile.TemplateSourcesSectionName, NewCommandStrings.TemplateSourcesMustBeObject);
+        }
+        if (parts.Length == 3 && settings[parts[0]]?[parts[1]] is JsonValue)
+        {
+            // The general config setter replaces scalar parents with objects. Do not silently
+            // discard an existing directory/repository string when adding source fields.
+            throw new TemplateSourceConfigurationException($"{AspireConfigFile.TemplateSourcesSectionName}.{parts[1]}",
+                string.Format(CultureInfo.CurrentCulture, NewCommandStrings.TemplateSourceCannotExtendString, $"{AspireConfigFile.TemplateSourcesSectionName}.{parts[1]}"));
+        }
+
+        return key;
+    }
+
+    public static void ValidateEditedSource(JsonObject settings, string key)
+    {
+        var parts = key.Replace(':', '.').Split('.');
+        if (parts[0].Equals(AspireConfigFile.TemplateSourcesSectionName, StringComparison.OrdinalIgnoreCase))
+        {
+            using var document = JsonDocument.Parse(settings[parts[0]]![parts[1]]!.ToJsonString());
+            Parse(document.RootElement, $"{AspireConfigFile.TemplateSourcesSectionName}.{parts[1]}", requireComplete: false);
+        }
+    }
+}
+
+internal sealed record ConfiguredTemplateSource(TemplateSource? Template, string? DisplayName);
+
+internal sealed class TemplateSourceConfigurationException(string settingPath, string reason)
+    : Exception(string.Format(CultureInfo.CurrentCulture, NewCommandStrings.TemplateSourceSettingInvalid, settingPath, reason));

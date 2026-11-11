@@ -684,6 +684,7 @@ public class ResourceOutgoingPeerResolverTests
         public TaskCompletionSource<Activity?> ActivityOnSubscribe { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public bool IsEnabled => true;
         public Task WhenConnected => Task.CompletedTask;
+        public Task WhenResourcesReady => Task.CompletedTask;
         public string ApplicationName => "ApplicationName";
         public string? MinRequiredVersion => null;
         public DashboardConnectionState ConnectionState => DashboardConnectionState.Connected;

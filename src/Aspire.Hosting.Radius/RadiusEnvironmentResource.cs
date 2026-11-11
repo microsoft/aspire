@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIRECOMPUTE002
-#pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIRERADIUS006 // Secret-store validation/apply steps are experimental; consumed internally by the integration.
 
 using System.Diagnostics.CodeAnalysis;
@@ -199,6 +198,10 @@ public sealed class RadiusEnvironmentResource : Resource, IComputeEnvironmentRes
 
         return property switch
         {
+            EndpointProperty.BrowserOrigins or EndpointProperty.PrimaryBrowserOrigin =>
+                throw new NotSupportedException(
+                    $"Radius environment '{Name}' cannot provide browser origins for endpoint '{endpoint.Name}' on resource '{endpointReference.Resource.Name}' because its service DNS is cluster-local and does not establish a browser-facing address. " +
+                    "Supply an explicit deployment origin parameter or reference a public gateway endpoint."),
             EndpointProperty.Url => IsDefaultPort(scheme, port.Value)
                 ? ReferenceExpression.Create($"{scheme}://{host.Value}")
                 : ReferenceExpression.Create($"{scheme}://{host.Value}:{RadiusServiceDiscovery.ToInvariantString(port.Value)}"),

@@ -2,8 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREAZURE003
-#pragma warning disable ASPIREAZURE001
-#pragma warning disable ASPIREPIPELINES002
 
 using Aspire.Dashboard.Model;
 using Aspire.Hosting.ApplicationModel;
@@ -53,11 +51,16 @@ internal sealed class AzureResourcePreparer(
         }
 
         await BuildRoleAssignmentAnnotations(model, azureResources, cancellationToken).ConfigureAwait(false);
+        foreach (var roleAssignment in model.Resources.OfType<AzureRoleAssignmentResource>())
+        {
+            roleAssignment.TargetAzureResource.RegisterRoleAssignmentScope(roleAssignment);
+        }
         PropagateReferencedDeploymentPrerequisites(model);
 
         if (executionContext.IsRunMode)
         {
             AddPerResourceCommands(azureResources);
+            AddTenantResourceSuffixCommandArgument(model);
         }
 
         // set the ProvisioningBuildOptions on the resource, if necessary
@@ -83,6 +86,14 @@ internal sealed class AzureResourcePreparer(
 
             foreach (var command in AzureProvisioningController.ResourceCommandDefinitions)
             {
+                if (bicepResource.HasAnnotationOfType<TenantScopedResourceAnnotation>() &&
+                    command.Command is AzureProvisioningController.AzureResourceCommand.ChangeLocation or
+                        AzureProvisioningController.AzureResourceCommand.GetAzureResource or
+                        AzureProvisioningController.AzureResourceCommand.DeleteAzureResource)
+                {
+                    continue;
+                }
+
                 AddOrReplaceCommand(
                     resource.Resource,
                     command.Name,
@@ -107,6 +118,38 @@ internal sealed class AzureResourcePreparer(
 
     private static string GetDeploymentStateResourceName((IResource Resource, IAzureResource AzureResource) resource)
         => resource.AzureResource is AzureBicepResource bicepResource ? bicepResource.Name : resource.Resource.Name;
+
+    internal static bool RequiresTenantResourceSuffix(DistributedApplicationModel model) =>
+        GetAzureResourcesFromAppModel(model).Any(resource =>
+            resource.AzureResource.HasAnnotationOfType<TenantScopedResourceAnnotation>());
+
+    private static void AddTenantResourceSuffixCommandArgument(DistributedApplicationModel model)
+    {
+        if (!RequiresTenantResourceSuffix(model) ||
+            model.Resources.OfType<AzureEnvironmentResource>().SingleOrDefault() is not { } environment)
+        {
+            return;
+        }
+
+        var command = AzureProvisioningController.EnvironmentCommandDefinitions.Single(
+            command => command.Name == AzureProvisioningController.ChangeAzureContextCommandName);
+        AddOrReplaceCommand(
+            environment,
+            command.Name,
+            command.DisplayName,
+            context => command.ExecuteCommand(context.Services.GetRequiredService<AzureProvisioningController>(), context),
+            new CommandOptions
+            {
+                Description = command.Description,
+                ConfirmationMessage = command.ConfirmationMessage,
+                IconName = command.IconName,
+                IconVariant = command.IconVariant,
+                IsHighlighted = command.IsHighlighted,
+                Arguments = AzureProvisioningController.CreateAzureContextCommandArguments(includeTenantResourceSuffix: true),
+                ValidateArguments = command.ValidateArguments,
+                UpdateState = context => context.Services.GetRequiredService<AzureProvisioningController>().GetEnvironmentCommandState()
+            });
+    }
 
     private static void AddOrReplaceCommand(
         IResource resource,
@@ -314,7 +357,7 @@ internal sealed class AzureResourcePreparer(
                 if (executionContext.IsPublishMode)
                 {
                     var roleAssignments = GetAllRoleAssignments(resource);
-                    if (roleAssignments.Count > 0)
+                    if (roleAssignments.Count > 0 || resource.HasAnnotationOfType<ManagedIdentityRequiredAnnotation>())
                     {
                         var (identityResource, roleAssignmentResources) = CreateIdentityAndRoleAssignmentResources(resource, roleAssignments);
 
@@ -433,8 +476,6 @@ internal sealed class AzureResourcePreparer(
             {
                 ProvisioningBuildOptions = options.Value.ProvisioningBuildOptions,
             };
-
-            ApplyExistingResourceScope(roleAssignmentResource, targetResource);
 
             roleAssignmentResources.Add(roleAssignmentResource);
         }
@@ -558,6 +599,10 @@ internal sealed class AzureResourcePreparer(
         foreach (var resource in appModel.Resources.OfType<AzureBicepResource>().ToArray())
         {
             var prerequisiteResources = resource.GetExplicitAzureReferences()
+                // A role needs its target provisioned to resolve scope, not the target's own
+                // grants. Inheriting those grants would create cycles for reciprocal assignments.
+                .Where(reference => resource is not AzureRoleAssignmentResource roleAssignment ||
+                    reference != roleAssignment.TargetAzureResource)
                 .SelectMany(reference => reference.Annotations.OfType<DeploymentPrerequisitesAnnotation>())
                 .SelectMany(annotation => annotation.Resources)
                 .Where(prerequisite => prerequisite != resource)
@@ -584,18 +629,7 @@ internal sealed class AzureResourcePreparer(
             ProvisioningBuildOptions = options.Value.ProvisioningBuildOptions,
         };
 
-        ApplyExistingResourceScope(roleAssignmentResource, targetResource);
-
         return roleAssignmentResource;
-    }
-
-    private static void ApplyExistingResourceScope(AzureBicepResource roleAssignmentResource, AzureProvisioningResource targetResource)
-    {
-        if (targetResource.TryGetLastAnnotation<ExistingAzureResourceAnnotation>(out var existingAnnotation) &&
-            AzureBicepResourceScope.FromExistingResourceAnnotation(existingAnnotation) is { } scope)
-        {
-            roleAssignmentResource.Scope = scope;
-        }
     }
 
     private void AddGlobalRoleAssignmentsInfrastructure(

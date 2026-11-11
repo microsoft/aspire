@@ -80,6 +80,11 @@ Just as `AddAzureContainerAppEnvironment("aca")` creates a single resource that 
 
 ### Integration Points
 
+The .NET service examples require `Aspire.Hosting.Dotnet` in the AppHost
+(`aspire add Aspire.Hosting.Dotnet`). Use actual AppHost-relative project paths; see the
+[project migration guide](../migrate-from-addproject.md). The AKS-specific APIs in this
+section remain the proposed architecture described by this spec.
+
 ```text
 ┌─────────────────────────────────────────────────────────────┐
 │                     User's AppHost                          │
@@ -95,7 +100,7 @@ Just as `AddAzureContainerAppEnvironment("aca")` creates a single resource that 
 │  var db = builder.AddAzureSqlServer("sql")                  │
 │      .WithPrivateEndpoint(subnet);  ← existing pattern      │
 │                                                             │
-│  builder.AddProject<MyApi>()                                │
+│  builder.AddDotnetProject("api", "../Api/Api.csproj")         │
 │      .WithReference(db)                                     │
 │      .WithAzureWorkloadIdentity(identity);  ← new           │
 └─────────────────────────────────────────────────────────────┘
@@ -305,13 +310,13 @@ Workload identity enables pods to authenticate to Azure services using federated
 **User API** (same as ACA):
 ```csharp
 // Automatic — identity auto-created when referencing Azure resources
-builder.AddProject<MyApi>()
+builder.AddDotnetProject("api", "../Api/Api.csproj")
     .WithComputeEnvironment(aks)
     .WithReference(blobStorage);  // gets identity + workload identity + role assignments
 
 // Explicit — bring your own identity
 var identity = builder.AddAzureUserAssignedIdentity("api-identity");
-builder.AddProject<MyApi>()
+builder.AddDotnetProject("api", "../Api/Api.csproj")
     .WithComputeEnvironment(aks)
     .WithAzureUserAssignedIdentity(identity);
 ```
@@ -618,13 +623,12 @@ aks.AddGateway("admin-portal").WithLoadBalancer(lb2);
 
 What `AddLoadBalancer` does:
 - Flips internal flags on the AKS environment so its emitted Bicep uses the
-  `2025-09-02-preview` API version and includes both
+  `2026-07-02-preview` API version and includes both
   `properties.ingressProfile.gatewayAPI.installation: 'Standard'` and
   `properties.ingressProfile.applicationLoadBalancer.enabled: true`. The preview API
-  shape is injected via `AksPreviewIngressProfileInjector`, which uses a small reflection
-  shim onto `ProvisionableConstruct.DefineProperty<T>` because the underlying
-  `ManagedClusterIngressProfile` type is `internal` in `Azure.Provisioning.ContainerService`
-  and cannot be subclassed like the other preview-Bicep injectors do. (These flags are
+  shape uses the SDK's typed `GatewayApiInstallation` property and an
+  `AksPreviewIngressProfile` subclass that adds `applicationLoadBalancer.enabled`
+  through `ProvisionableConstruct.DefineProperty<T>`. (These flags are
   internal-only — the cluster-level toggles are intentionally not exposed as separate
   public extensions to keep the surface small and prevent users from opting into the
   preview API by accident.)

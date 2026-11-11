@@ -20,20 +20,20 @@ public class Hex1bPtySocketTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public void Configure_OnUnix_LeavesEnvironmentAndFilesystemUnchanged(bool hasOverride)
+    public void CreateSocketPath_OnUnix_LeavesEnvironmentAndFilesystemUnchanged(bool hasOverride)
     {
         Assert.SkipUnless(!OperatingSystem.IsWindows(), "Unix PTYs do not use the Windows proxy socket.");
 
         RemoteExecutor.Invoke(static hasOverrideValue =>
         {
-            var root = Directory.CreateTempSubdirectory();
+            var root = CreateSocketTestDirectory();
             try
             {
                 var directory = Path.Combine(root.FullName, "custom");
                 var value = bool.Parse(hasOverrideValue) ? directory : null;
                 Environment.SetEnvironmentVariable(Hex1bPtySocketHelper.SocketDirectoryEnvironmentVariable, value);
 
-                Hex1bPtySocketHelper.Configure();
+                Assert.Null(Hex1bPtySocketHelper.CreateSocketPath());
 
                 Assert.Equal(value, Environment.GetEnvironmentVariable(Hex1bPtySocketHelper.SocketDirectoryEnvironmentVariable));
                 Assert.False(Directory.Exists(directory));
@@ -57,7 +57,7 @@ public class Hex1bPtySocketTests
 
         RemoteExecutor.Invoke(static async (placementValue, existingDirectoryValue) =>
         {
-            var root = Directory.CreateTempSubdirectory();
+            var root = CreateSocketTestDirectory();
             try
             {
                 var directory = Path.Combine(root.FullName, "custom");
@@ -66,9 +66,9 @@ public class Hex1bPtySocketTests
                     SocketPermissionHelper.CreateDirectory(directory, repairExisting: false);
                 }
 
-                // Normalize an existing override without confusing it with the terminal child's environment.
-                Environment.SetEnvironmentVariable(Hex1bPtySocketHelper.SocketDirectoryEnvironmentVariable,
-                    Path.Combine(directory, "..", "custom"));
+                // Normalize the socket path, not the caller's environment override.
+                var originalOverride = Path.Combine(directory, "..", "custom");
+                Environment.SetEnvironmentVariable(Hex1bPtySocketHelper.SocketDirectoryEnvironmentVariable, originalOverride);
                 await using (var service = TestTerminalService.Create())
                 {
                     await using var terminal = service.CreateTerminal(new TerminalLaunchOptions
@@ -79,7 +79,7 @@ public class Hex1bPtySocketTests
                         EnvironmentVariables = { [Hex1bPtySocketHelper.SocketDirectoryEnvironmentVariable] = Path.Combine(root.FullName, "child") }
                     });
 
-                    Assert.Equal(directory, Environment.GetEnvironmentVariable(Hex1bPtySocketHelper.SocketDirectoryEnvironmentVariable));
+                    Assert.Equal(originalOverride, Environment.GetEnvironmentVariable(Hex1bPtySocketHelper.SocketDirectoryEnvironmentVariable));
                     var security = new DirectoryInfo(directory).GetAccessControl();
                     Assert.True(security.AreAccessRulesProtected);
                     using var identity = WindowsIdentity.GetCurrent();
@@ -89,10 +89,10 @@ public class Hex1bPtySocketTests
                     Assert.Equal(AccessControlType.Allow, rule.AccessControlType);
                     Assert.Equal(FileSystemRights.FullControl, rule.FileSystemRights);
                     Assert.Equal(InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, rule.InheritanceFlags);
-                    Assert.Empty(Directory.EnumerateFileSystemEntries(directory));
+                    Assert.Empty(Directory.EnumerateFileSystemEntries(Path.Combine(directory, "proxy")));
                 }
 
-                Assert.Equal(directory, Environment.GetEnvironmentVariable(Hex1bPtySocketHelper.SocketDirectoryEnvironmentVariable));
+                Assert.Equal(originalOverride, Environment.GetEnvironmentVariable(Hex1bPtySocketHelper.SocketDirectoryEnvironmentVariable));
                 Assert.True(Directory.Exists(directory));
             }
             finally
@@ -111,7 +111,7 @@ public class Hex1bPtySocketTests
 
         RemoteExecutor.Invoke(static async sharedRootValue =>
         {
-            var root = Directory.CreateTempSubdirectory();
+            var root = CreateSocketTestDirectory();
             try
             {
                 Directory.CreateDirectory(Path.Combine(root.FullName, ".aspire"));
@@ -146,7 +146,7 @@ public class Hex1bPtySocketTests
 
         RemoteExecutor.Invoke(static async () =>
         {
-            var root = Directory.CreateTempSubdirectory();
+            var root = CreateSocketTestDirectory();
             try
             {
                 var directory = Directory.CreateDirectory(Path.Combine(root.FullName, "custom"));
@@ -180,6 +180,55 @@ public class Hex1bPtySocketTests
     }
 
     [Fact]
+    public void CreateSocketPath_Default_DoesNotSetEnvironment()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "Windows PTY socket paths.");
+
+        RemoteExecutor.Invoke(static () =>
+        {
+            Environment.SetEnvironmentVariable(Hex1bPtySocketHelper.SocketDirectoryEnvironmentVariable, null);
+            var socketPath = Hex1bPtySocketHelper.CreateSocketPath();
+
+            Assert.NotNull(socketPath);
+            Assert.Equal(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".aspire", "pty", "proxy"),
+                Path.GetDirectoryName(socketPath));
+            Assert.False(Path.Exists(socketPath));
+            Assert.Null(Environment.GetEnvironmentVariable(Hex1bPtySocketHelper.SocketDirectoryEnvironmentVariable));
+        }).Dispose();
+    }
+
+    [Fact]
+    public void CreateTerminal_OverlongSocketPath_FailsBeforeCreatingDirectory()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "Windows PTY socket paths.");
+
+        RemoteExecutor.Invoke(static async () =>
+        {
+            var root = CreateSocketTestDirectory();
+            try
+            {
+                var directory = Path.Combine(root.FullName, new string('a', 108));
+                Environment.SetEnvironmentVariable(Hex1bPtySocketHelper.SocketDirectoryEnvironmentVariable, directory);
+                await using var service = TestTerminalService.Create();
+
+                Assert.Throws<ArgumentOutOfRangeException>(() => service.CreateTerminal(new TerminalLaunchOptions
+                {
+                    Title = "Rejected terminal",
+                    Executable = "not-started"
+                }));
+
+                Assert.Empty(service.ListAll());
+                Assert.False(Directory.Exists(directory));
+                Assert.Equal(directory, Environment.GetEnvironmentVariable(Hex1bPtySocketHelper.SocketDirectoryEnvironmentVariable));
+            }
+            finally
+            {
+                root.Delete(recursive: true);
+            }
+        }).Dispose();
+    }
+
+    [Fact]
     [SupportedOSPlatform("windows")]
     public void Start_ConcurrentDeferredTerminals_UsePrivateSockets()
     {
@@ -187,16 +236,21 @@ public class Hex1bPtySocketTests
 
         RemoteExecutor.Invoke(static async () =>
         {
-            var root = Directory.CreateTempSubdirectory();
+            var root = CreateSocketTestDirectory();
             try
             {
-                // Windows adds a 12-character temporary directory name. Under the runner's
-                // AppData\Local\Temp this leaves too little room for Hex1b's 47-character
-                // "hex1bpty-{32 hex digits}.socket" name. Move the allocated directory to the
-                // shorter profile path; MoveTo fails rather than reusing an existing directory.
-                root.MoveTo(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), root.Name));
                 var directory = Path.Combine(root.FullName, ".aspire", "pty");
                 _ = new UnixDomainSocketEndPoint(Path.Combine(directory, $"hex1bpty-{new string('0', 32)}.socket"));
+                var overrideDirectory = SocketPermissionHelper.CreateDirectory(directory, repairExisting: false);
+                var overrideSecurity = overrideDirectory.GetAccessControl();
+                overrideSecurity.AddAccessRule(new FileSystemAccessRule(
+                    new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null),
+                    FileSystemRights.FullControl,
+                    InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit,
+                    PropagationFlags.None,
+                    AccessControlType.Allow));
+                overrideDirectory.SetAccessControl(overrideSecurity);
+                var originalPermissions = overrideDirectory.GetAccessControl().GetSecurityDescriptorSddlForm(AccessControlSections.All);
                 Environment.SetEnvironmentVariable(Hex1bPtySocketHelper.SocketDirectoryEnvironmentVariable, directory);
                 await using (var service = TestTerminalService.Create())
                 {
@@ -205,6 +259,7 @@ public class Hex1bPtySocketTests
                         Title = "Dock",
                         Executable = "cmd.exe",
                         Arguments = ["/d", "/q", "/k", "echo dock-ready"],
+                        EnvironmentVariables = { [Hex1bPtySocketHelper.SocketDirectoryEnvironmentVariable] = Path.Combine(root.FullName, "child") },
                         Placement = TerminalPlacement.Dock
                     });
                     await using var prompt = service.CreateTerminal(new TerminalLaunchOptions
@@ -215,18 +270,25 @@ public class Hex1bPtySocketTests
                         Placement = TerminalPlacement.Dialog
                     });
 
-                    Assert.Empty(Directory.EnumerateFileSystemEntries(directory));
+                    Assert.Equal(directory, Environment.GetEnvironmentVariable(Hex1bPtySocketHelper.SocketDirectoryEnvironmentVariable));
+                    // Deferred startup must use the snapshotted paths, not reread the environment.
+                    var laterDirectory = Path.Combine(root.FullName, "later");
+                    Environment.SetEnvironmentVariable(Hex1bPtySocketHelper.SocketDirectoryEnvironmentVariable, laterDirectory);
+                    Assert.Empty(Directory.EnumerateFileSystemEntries(Path.Combine(directory, "proxy")));
                     await Task.WhenAll(
                         dock.WaitForTextAsync("dock-ready"),
                         prompt.WaitForTextAsync("prompt-ready")).DefaultTimeout();
 
-                    var sockets = Directory.GetFiles(directory, "*.socket");
+                    var sockets = Directory.GetFiles(Path.Combine(directory, "proxy"), "*.socket");
                     Assert.Equal(2, sockets.Length);
+                    Assert.False(Directory.Exists(laterDirectory));
+                    Assert.False(Directory.Exists(Path.Combine(root.FullName, "child")));
+                    Assert.Equal(originalPermissions, overrideDirectory.GetAccessControl().GetSecurityDescriptorSddlForm(AccessControlSections.All));
                     using var identity = WindowsIdentity.GetCurrent();
                     var system = new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null);
                     foreach (var socket in sockets)
                     {
-                        // The pinned Hex1b helper adds SYSTEM but must never grant other ordinary users access.
+                        // The helper must never grant other ordinary users access.
                         var rules = new FileInfo(socket).GetAccessControl()
                             .GetAccessRules(true, true, typeof(SecurityIdentifier)).Cast<FileSystemAccessRule>().ToArray();
                         Assert.Contains(rules, rule => rule.IdentityReference.Equals(identity.User));
@@ -239,13 +301,26 @@ public class Hex1bPtySocketTests
                     }
                 }
 
-                Assert.Empty(Directory.EnumerateFileSystemEntries(directory));
-                Assert.Equal(directory, Environment.GetEnvironmentVariable(Hex1bPtySocketHelper.SocketDirectoryEnvironmentVariable));
+                Assert.Empty(Directory.EnumerateFileSystemEntries(Path.Combine(directory, "proxy")));
+                Assert.Equal(Path.Combine(root.FullName, "later"), Environment.GetEnvironmentVariable(Hex1bPtySocketHelper.SocketDirectoryEnvironmentVariable));
             }
             finally
             {
                 root.Delete(recursive: true);
             }
         }).Dispose();
+    }
+
+    private static DirectoryInfo CreateSocketTestDirectory()
+    {
+        var directory = Directory.CreateTempSubdirectory();
+        if (OperatingSystem.IsWindows())
+        {
+            // Leave room for "hex1bpty-{32 hex digits}.socket" within sockaddr_un.
+            // MoveTo fails rather than reusing an existing directory.
+            directory.MoveTo(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), directory.Name));
+        }
+
+        return directory;
     }
 }

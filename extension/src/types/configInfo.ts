@@ -60,6 +60,13 @@ export const pipelineStepListJsonCapability = 'pipeline-step-list-json.v1';
 export const describeIncludeDisabledCommandsCapability = 'describe-include-disabled-commands.v1';
 
 /**
+ * Capability advertised by the CLI when `aspire describe` accepts `--apphost-pid` to bind an
+ * explicit AppHost path to one running process. Keep in sync with
+ * `KnownCapabilities.DescribeAppHostPid` in src/Aspire.Cli/Utils/ExtensionHelper.cs.
+ */
+export const describeAppHostPidCapability = 'describe-apphost-pid.v1';
+
+/**
  * Capability advertised by the CLI when `aspire ls --format json --stream` emits AppHost
  * candidates as newline-delimited JSON. Tooling uses this to avoid probing localized CLI errors
  * for CLIs that do not recognize the hidden streaming flag.
@@ -75,11 +82,25 @@ export const lsJsonStreamCapability = 'ls-json-stream.v1';
 export const isolatedLaunchCapability = 'isolated-launch.v1';
 
 /**
+ * Capability advertised by the CLI when `aspire agent mcp` is supported. Tooling uses this to
+ * gate automatic pinned MCP server registration so an older CLI that does not advertise support
+ * is never assumed to understand the command.
+ * Keep in sync with `KnownCapabilities.AgentMcp` in src/Aspire.Cli/Utils/ExtensionHelper.cs.
+ */
+export const agentMcpCapability = 'agent-mcp.v1';
+
+/**
  * Capability advertised by the CLI when `aspire run` accepts `--launch-profile`.
  * Tooling uses this to avoid passing the option to older CLIs that reject it.
  * Keep in sync with `KnownCapabilities.LaunchProfile` in src/Aspire.Cli/Utils/ExtensionHelper.cs.
  */
 export const launchProfileCapability = 'launch-profile.v1';
+
+/**
+ * CLI terminal commands select an exact resource instance and no longer accept `--replica`.
+ * Keep in sync with `KnownCapabilities.TerminalInstanceSelection` in src/Aspire.Cli/Utils/ExtensionHelper.cs.
+ */
+export const terminalInstanceSelectionCapability = 'terminal-instance-selection.v1';
 
 /**
  * First Aspire CLI version that accepts `aspire run --isolated`.

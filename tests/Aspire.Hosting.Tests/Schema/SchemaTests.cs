@@ -1,11 +1,11 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable CS0618 // Type or member is obsolete
-#pragma warning disable ASPIREPIPELINES001
+#pragma warning disable CS0618 // Retain legacy project manifest/schema and existing obsolete-API compatibility coverage.
 
 using System.Text.Json;
 using Aspire.Hosting.Tests.Helpers;
+using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Azure.Provisioning.KeyVault;
 using Json.Schema;
@@ -45,6 +45,27 @@ public class SchemaTests
                 { "ConnectionStringParameter", (IDistributedApplicationBuilder builder) =>
                     {
                         builder.AddConnectionString("foo");
+                    }
+                },
+
+                { "SymbolicAndConcreteValues", (IDistributedApplicationBuilder builder) =>
+                    {
+                        var host = builder.AddParameter("public-host");
+                        var frontend = builder.AddContainer("frontend", "image").WithHttpEndpoint(targetPort: 8080);
+                        var tls = frontend.GetEndpoint("http").Property(EndpointProperty.TlsEnabled);
+                        var custom = new TestManifestValue("{frontend.customProperty}", (_, _) =>
+                            ValueTask.FromResult<string?>("path with spaces"));
+                        var selected = ReferenceExpression.CreateConditional(tls, bool.FalseString,
+                            ReferenceExpression.Create($"https://{host}/{custom}?tls={tls}"), ReferenceExpression.Empty);
+                        var wrapper = new TestManifestValue(selected.ValueExpression, (_, _) =>
+                            throw new InvalidOperationException("A symbolic wrapper must not be evaluated."), selected);
+                        var formatted = new TestManifestValue("prefix/{public-host.value}", (_, _) =>
+                            throw new InvalidOperationException("A symbolic wrapper must not be evaluated."), host.Resource);
+                        builder.AddContainer("backend", "image")
+                            .WithEnvironment("URL", wrapper)
+                            .WithEnvironment("ORIGIN", frontend.GetEndpoint("http").PrimaryBrowserOrigin)
+                            .WithEnvironment("ORIGINS", frontend.GetEndpoint("http").BrowserOrigins)
+                            .WithEnvironment("ENCODED", ReferenceExpression.Create($"{formatted:uri}"));
                     }
                 },
 

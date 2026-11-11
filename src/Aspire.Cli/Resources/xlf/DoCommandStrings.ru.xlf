@@ -4,7 +4,7 @@
     <body>
       <trans-unit id="Description">
         <source>Execute a specific pipeline step and its dependencies</source>
-        <target state="needs-review-translation">Выполнение определенного шага конвейера и его зависимостей. (Предварительный просмотр)</target>
+        <target state="translated">Выполнение определенного шага конвейера и его зависимостей</target>
         <note />
       </trans-unit>
       <trans-unit id="GeneratingArtifacts">
@@ -14,7 +14,7 @@
       </trans-unit>
       <trans-unit id="ListStepsRequiresStep">
         <source>The 'step' argument is required when using --list-steps. Example: 'aspire do deploy --list-steps'. Common starting steps are 'build', 'publish' and 'deploy'. See https://aspire.dev/reference/cli/commands/aspire-do/ for the full list of pipeline steps.</source>
-        <target state="new">The 'step' argument is required when using --list-steps. Example: 'aspire do deploy --list-steps'. Common starting steps are 'build', 'publish' and 'deploy'. See https://aspire.dev/reference/cli/commands/aspire-do/ for the full list of pipeline steps.</target>
+        <target state="translated">Аргумент "step" необходим при использовании --list-steps. Пример: "aspire do deploy --list-steps". Распространенные начальные шаги: "build", "publish" и "deploy". См. https://aspire.dev/reference/cli/commands/aspire-do/ для получения полного списка шагов конвейера.</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationCanceled">
@@ -34,17 +34,17 @@
       </trans-unit>
       <trans-unit id="OutputPathArgumentDescription">
         <source>The optional output path for artifacts</source>
-        <target state="needs-review-translation">Необязательный выходной путь для артефактов.</target>
+        <target state="translated">Необязательный выходной путь для артефактов</target>
         <note />
       </trans-unit>
       <trans-unit id="StepArgumentDescription">
         <source>The name of the step to execute</source>
-        <target state="needs-review-translation">Имя выполняемого шага.</target>
+        <target state="translated">Наименование шага, который нужно выполнить</target>
         <note />
       </trans-unit>
       <trans-unit id="StepArgumentRequired">
         <source>The 'step' argument is required.</source>
-        <target state="new">The 'step' argument is required.</target>
+        <target state="translated">Аргумент "step" необходим.</target>
         <note />
       </trans-unit>
     </body>

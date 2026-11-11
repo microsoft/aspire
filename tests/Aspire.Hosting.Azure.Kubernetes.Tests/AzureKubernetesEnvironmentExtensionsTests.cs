@@ -3,7 +3,6 @@
 
 #pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIRECOMPUTE003 // Type is for evaluation purposes only
-#pragma warning disable ASPIREPIPELINES001 // PipelineStepAnnotation is evaluation-only
 
 using System.Runtime.CompilerServices;
 using Aspire.Hosting.ApplicationModel;
@@ -11,6 +10,10 @@ using Aspire.Hosting.Azure.Kubernetes;
 using Aspire.Hosting.Kubernetes;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Utils;
+using Azure.Provisioning.Authorization;
+using Azure.Provisioning.ContainerService;
+using Azure.Provisioning.Expressions;
+using Azure.Provisioning.Resources;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Azure.Tests;
@@ -38,6 +41,29 @@ public class AzureKubernetesEnvironmentExtensionsTests(ITestOutputHelper outputH
     }
 
     [Fact]
+    public async Task AddAzureKubernetesEnvironment_ConfigureInfrastructureCanSelectFreeTier()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(
+            outputHelper,
+            workspace,
+            operation: DistributedApplicationOperation.Run);
+
+        var aks = builder.AddAzureKubernetesEnvironment("aks")
+            .ConfigureInfrastructure(infrastructure =>
+            {
+                var cluster = infrastructure.GetProvisionableResources()
+                    .OfType<ContainerServiceManagedCluster>()
+                    .Single();
+
+                cluster.Sku.Tier = ManagedClusterSkuTier.Free;
+            });
+
+        var manifest = await AzureManifestUtils.GetManifestWithBicep(aks.Resource);
+        await Verify(manifest.BicepText, extension: "bicep");
+    }
+
+    [Fact]
     public void AddNodePool_ReturnsNodePoolResource()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -58,6 +84,7 @@ public class AzureKubernetesEnvironmentExtensionsTests(ITestOutputHelper outputH
         Assert.Equal(0, gpuPool.Resource.Config.MinCount);
         Assert.Equal(5, gpuPool.Resource.Config.MaxCount);
         Assert.Equal(AksNodePoolMode.User, gpuPool.Resource.Config.Mode);
+        Assert.Null(gpuPool.Resource.Config.OsSku);
         Assert.Same(aks.Resource, gpuPool.Resource.AksParent);
     }
 
@@ -79,6 +106,210 @@ public class AzureKubernetesEnvironmentExtensionsTests(ITestOutputHelper outputH
         Assert.Equal(1, defaultPool.MinCount);
         Assert.Equal(3, defaultPool.MaxCount);
         Assert.Equal(AksNodePoolMode.System, defaultPool.Mode);
+        Assert.Null(defaultPool.OsSku);
+    }
+
+    [Theory]
+    [InlineData(DistributedApplicationOperation.Run)]
+    [InlineData(DistributedApplicationOperation.Publish)]
+    public void NodePoolCallbacks_ConfigureIndependentPools(DistributedApplicationOperation operation)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace, operation);
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+
+        var result = aks.WithSystemNodePool(pool =>
+        {
+            pool.VmSize = "Standard_D4s_v5";
+            pool.MinCount = 2;
+            pool.MaxCount = 4;
+            pool.OsSku = "AzureLinux";
+        });
+        var workers = aks.AddNodePool("workers", pool =>
+        {
+            pool.MinCount = 0;
+            pool.MaxCount = 5;
+            pool.OsSku = "Ubuntu";
+        });
+        var defaults = aks.AddNodePool("defaults", _ => { });
+
+        Assert.Same(aks, result);
+        Assert.Collection(aks.Resource.NodePools,
+            pool => Assert.Equal(new AksNodePoolConfig("system", "Standard_D4s_v5", 2, 4, AksNodePoolMode.System, "AzureLinux"), pool),
+            pool => Assert.Same(workers.Resource.Config, pool),
+            pool => Assert.Same(defaults.Resource.Config, pool));
+        Assert.Equal(new AksNodePoolConfig("workers", "Standard_D2s_v5", 0, 5, AksNodePoolMode.User, "Ubuntu"), workers.Resource.Config);
+        Assert.Equal(new AksNodePoolConfig("defaults", "Standard_D2s_v5", 1, 3, AksNodePoolMode.User), defaults.Resource.Config);
+    }
+
+    [Fact]
+    public async Task NodePoolCallbacks_ComposeConfigurationUntilBicepGeneration()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+        AksNodePoolConfig? systemConfig = null;
+        AksNodePoolConfig? workerConfig = null;
+        aks.WithSystemNodePool(pool =>
+        {
+            systemConfig = pool;
+            pool.MinCount = -1;
+            pool.OsSku = "AzureLinux";
+        });
+        var workers = aks.AddNodePool("workers", pool =>
+        {
+            workerConfig = pool;
+            pool.MinCount = -1;
+            pool.OsSku = "Ubuntu";
+        });
+
+        Assert.NotNull(systemConfig);
+        Assert.NotNull(workerConfig);
+        Assert.Same(systemConfig, aks.Resource.NodePools[0]);
+        Assert.Same(workerConfig, workers.Resource.Config);
+        Assert.NotSame(systemConfig, workerConfig);
+        systemConfig.MinCount = 1;
+        systemConfig.OsSku = "Ubuntu";
+        workers.Resource.Config.OsSku = "AzureLinux";
+        workers.Resource.Config.VmSize = "Standard_D4s_v5";
+        workers.Resource.Config.MinCount = 2;
+        workers.Resource.Config.MaxCount = 4;
+
+        var manifest = await AzureManifestUtils.GetManifestWithBicep(aks.Resource);
+
+        systemConfig.OsSku = "AzureLinux";
+        workerConfig.OsSku = "Ubuntu";
+        workerConfig.MinCount = 0;
+        var regenerated = await AzureManifestUtils.GetManifestWithBicep(aks.Resource);
+
+        await Verify(new
+        {
+            Initial = manifest.BicepText,
+            Regenerated = regenerated.BicepText
+        });
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void WithSystemNodePool_SubsequentCallResetsOptions(bool useCallback)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
+        var aks = builder.AddAzureKubernetesEnvironment("aks")
+            .WithSystemNodePool(pool => pool.OsSku = "AzureLinux");
+        var workers = aks.AddNodePool("workers", pool => pool.OsSku = "Ubuntu");
+
+        if (useCallback)
+        {
+            aks.WithSystemNodePool(_ => { });
+        }
+        else
+        {
+            aks.WithSystemNodePool();
+        }
+
+        Assert.Collection(aks.Resource.NodePools,
+            pool => Assert.Equal(new AksNodePoolConfig("system", "Standard_D2s_v5", 1, 3, AksNodePoolMode.System), pool),
+            pool => Assert.Same(workers.Resource.Config, pool));
+    }
+
+    [Theory]
+    [InlineData(null, 1, 3, null)]
+    [InlineData("", 1, 3, null)]
+    [InlineData(" ", 1, 3, null)]
+    [InlineData("Standard_D2s_v5", -1, 3, null)]
+    [InlineData("Standard_D2s_v5", 1, -1, null)]
+    [InlineData("Standard_D2s_v5", 4, 3, null)]
+    [InlineData("Standard_D2s_v5", 1, 3, "")]
+    [InlineData("Standard_D2s_v5", 1, 3, " ")]
+    public async Task NodePoolConfiguration_ValidatesFinalValuesDuringBicepGeneration(string? vmSize, int minCount, int maxCount, string? osSku)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+        void Configure(AksNodePoolConfig pool)
+        {
+            pool.VmSize = vmSize!;
+            pool.MinCount = minCount;
+            pool.MaxCount = maxCount;
+            pool.OsSku = osSku;
+        }
+
+        aks.WithSystemNodePool(_ => { });
+        var workers = aks.AddNodePool("workers", _ => { });
+        Configure(aks.Resource.NodePools[0]);
+        Configure(workers.Resource.Config);
+
+        await Assert.ThrowsAnyAsync<ArgumentException>(() => AzureManifestUtils.GetManifestWithBicep(aks.Resource));
+
+        aks.WithSystemNodePool();
+        await Assert.ThrowsAnyAsync<ArgumentException>(() => AzureManifestUtils.GetManifestWithBicep(aks.Resource));
+    }
+
+    [Fact]
+    public void NodePoolCallbacks_RejectNullArguments()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+        var original = Assert.Single(aks.Resource.NodePools);
+        IResourceBuilder<AzureKubernetesEnvironmentResource> nullBuilder = null!;
+
+        Assert.Throws<ArgumentNullException>(() => aks.WithSystemNodePool((Action<AksNodePoolConfig>)null!));
+        Assert.Throws<ArgumentNullException>(() => aks.AddNodePool("workers", (Action<AksNodePoolConfig>)null!));
+        Assert.Throws<ArgumentNullException>(() => nullBuilder.WithSystemNodePool(_ => { }));
+        Assert.Throws<ArgumentNullException>(() => nullBuilder.AddNodePool("workers", _ => { }));
+        Assert.Throws<ArgumentException>(() => aks.AddNodePool("", _ => { }));
+        Assert.Same(original, Assert.Single(aks.Resource.NodePools));
+    }
+
+    [Fact]
+    public async Task WithSystemNodePool_RejectsZeroCountsDuringBicepGeneration()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+        aks.WithSystemNodePool(pool => pool.MinCount = 0);
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => AzureManifestUtils.GetManifestWithBicep(aks.Resource));
+
+        aks.WithSystemNodePool(pool => pool.MaxCount = 0);
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => AzureManifestUtils.GetManifestWithBicep(aks.Resource));
+    }
+
+    [Fact]
+    public void NodePoolCallbacks_PropagateExceptionsWithoutMutatingModel()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+        var original = Assert.Single(aks.Resource.NodePools);
+        var error = new InvalidOperationException("Callback failed.");
+
+        Assert.Same(error, Assert.Throws<InvalidOperationException>(() => aks.WithSystemNodePool(_ => throw error)));
+        Assert.Same(error, Assert.Throws<InvalidOperationException>(() => aks.AddNodePool("workers", _ => throw error)));
+        Assert.Same(original, Assert.Single(aks.Resource.NodePools));
+    }
+
+    [Theory]
+    [InlineData(null, null)]
+    [InlineData("AzureLinux", "AzureLinux")]
+    [InlineData("AzureLinux", "Ubuntu")]
+    [InlineData(null, "FutureLinuxSku")]
+    public async Task NodePoolCallbacks_BicepReflectsOsSku(string? systemOsSku, string? workerOsSku)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
+        var aks = builder.AddAzureKubernetesEnvironment("aks")
+            .WithSystemNodePool(pool => pool.OsSku = systemOsSku);
+        aks.AddNodePool("workers", pool => pool.OsSku = workerOsSku);
+        aks.AddNodePool("defaults");
+
+        var manifest = await AzureManifestUtils.GetManifestWithBicep(aks.Resource);
+        var regenerated = await AzureManifestUtils.GetManifestWithBicep(aks.Resource);
+        Assert.Equal(manifest.BicepText, regenerated.BicepText);
+        await Verify(manifest.BicepText, extension: "bicep")
+            .UseParameters(systemOsSku, workerOsSku);
     }
 
     [Fact]
@@ -229,22 +460,181 @@ public class AzureKubernetesEnvironmentExtensionsTests(ITestOutputHelper outputH
         Assert.IsAssignableFrom<IAzureNspAssociationTarget>(aks.Resource);
     }
 
-    [Fact]
-    public void AsExisting_WorksOnAksResource()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AsExisting_GeneratesExistingCluster(bool crossResourceGroup)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        using var builder = AzureKubernetesTestBuilder.Create(
-            outputHelper,
-            workspace,
-            operation: DistributedApplicationOperation.Run);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
 
-        var nameParam = builder.AddParameter("aks-name");
-        var rgParam = builder.AddParameter("aks-rg");
+        var name = builder.AddParameter("cluster-name");
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+        if (crossResourceGroup)
+        {
+            aks.AsExistingInResourceGroup(
+                name,
+                builder.AddParameter("cluster-rg"),
+                builder.AddParameter("cluster-subscription"));
+        }
+        else
+        {
+            aks.AsExisting(name, null);
+        }
 
+        var manifest = await AzureManifestUtils.GetManifestWithBicep(aks.Resource);
+        await Verify(manifest.BicepText, extension: "bicep").UseParameters(crossResourceGroup);
+    }
+
+    [Theory]
+    [InlineData(DistributedApplicationOperation.Run, "AsExisting", true)]
+    [InlineData(DistributedApplicationOperation.Publish, "AsExisting", true)]
+    [InlineData(DistributedApplicationOperation.Run, "RunAsExisting", true)]
+    [InlineData(DistributedApplicationOperation.Publish, "RunAsExisting", false)]
+    [InlineData(DistributedApplicationOperation.Run, "PublishAsExisting", false)]
+    [InlineData(DistributedApplicationOperation.Publish, "PublishAsExisting", true)]
+    public async Task ExistingResourceApis_RespectExecutionMode(
+        DistributedApplicationOperation operation,
+        string method,
+        bool existing)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace, operation);
+        var name = builder.AddParameter("cluster-name");
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+
+        _ = method switch
+        {
+            "AsExisting" => aks.AsExisting(name, null),
+            "RunAsExisting" => aks.RunAsExisting(name, null),
+            "PublishAsExisting" => aks.PublishAsExisting(name, null),
+            _ => throw new InvalidOperationException($"Unexpected API '{method}'.")
+        };
+
+        aks.ConfigureInfrastructure(infrastructure =>
+        {
+            var cluster = Assert.Single(infrastructure.GetProvisionableResources().OfType<ContainerServiceManagedCluster>());
+            Assert.Equal(existing, cluster.IsExistingResource);
+        });
+        await AzureManifestUtils.GetManifestWithBicep(aks.Resource);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AddAsExistingResource_ReusesReference(bool existing)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+        if (existing)
+        {
+            aks.AsExistingInResourceGroup("existing-cluster", "existing-rg", "existing-subscription");
+        }
+
+        var referenceResource = new AzureProvisioningResource("reference", infrastructure =>
+        {
+            var first = aks.Resource.AddAsExistingResource(infrastructure);
+            var second = aks.Resource.AddAsExistingResource(infrastructure);
+            Assert.Same(first, second);
+            Assert.Single(infrastructure.GetProvisionableResources().OfType<ContainerServiceManagedCluster>());
+        });
+
+        var manifest = await AzureManifestUtils.GetManifestWithBicep(referenceResource);
+        await Verify(manifest.BicepText, extension: "bicep").UseParameters(existing);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task ExistingCluster_RoleTargetsClusterScopeInsteadOfSupportingScope(bool inheritedSubscription, bool callbackScope)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+        var clusterGroup = builder.AddParameter("cluster-group", "cluster-rg");
+        if (inheritedSubscription)
+        {
+            aks.AsExisting(builder.AddParameter("cluster-name", "existing-cluster"), clusterGroup);
+        }
+        else
+        {
+            aks.AsExistingInResourceGroup(
+                builder.AddParameter("cluster-name", "existing-cluster"),
+                clusterGroup,
+                builder.AddParameter("cluster-subscription", "00000000-0000-0000-0000-000000000001"));
+        }
+
+        var supportingScope = new AzureBicepResourceScope(
+            builder.AddParameter("supporting-group", "supporting-rg").Resource,
+            builder.AddParameter("supporting-subscription", "00000000-0000-0000-0000-000000000002").Resource);
+        if (callbackScope)
+        {
+            aks.Resource.Scope = new AzureBicepResourceScope(
+                clusterGroup.Resource,
+                inheritedSubscription ? "initial-subscription" : builder.Resources.OfType<ParameterResource>().Single(parameter => parameter.Name == "cluster-subscription"));
+            aks.ConfigureInfrastructure(infrastructure => infrastructure.AspireResource.Scope = supportingScope);
+        }
+        else
+        {
+            aks.Resource.Scope = supportingScope;
+        }
+
+        var roles = builder.AddResource(new AzureRoleAssignmentResource("cluster-roles", aks.Resource, null, null, infrastructure =>
+        {
+            var cluster = aks.Resource.AddAsExistingResource(infrastructure);
+            infrastructure.Add(new RoleAssignment("cluster_reader")
+            {
+                Name = "00000000-0000-0000-0000-000000000003",
+                Scope = new IdentifierExpression(cluster.BicepIdentifier),
+                PrincipalId = Guid.Parse("00000000-0000-0000-0000-000000000004"),
+                PrincipalType = RoleManagementPrincipalType.ServicePrincipal,
+                RoleDefinitionId = BicepFunction.GetSubscriptionResourceId("Microsoft.Authorization/roleDefinitions", ArmBuiltInRole.Reader.ToString())
+            });
+        }));
+
+        await using var app = builder.Build();
+        await app.RunAsync();
+
+        Assert.Same(supportingScope, aks.Resource.Scope);
+        Assert.Same(clusterGroup.Resource, roles.Resource.Scope!.ResourceGroup);
+        Assert.Same(
+            inheritedSubscription ? supportingScope.Subscription : builder.Resources.OfType<ParameterResource>().Single(parameter => parameter.Name == "cluster-subscription"),
+            roles.Resource.Scope.Subscription);
+        Assert.Contains(aks.Resource, roles.Resource.References);
+
+        var mainBicep = await File.ReadAllTextAsync(Path.Combine(workspace.Path, "main.bicep"));
+        var clusterBicep = await File.ReadAllTextAsync(Path.Combine(workspace.Path, "aks", "aks.bicep"));
+        var roleBicep = await File.ReadAllTextAsync(Path.Combine(workspace.Path, "cluster-roles", "cluster-roles.bicep"));
+        await Verify(mainBicep, "bicep")
+            .UseParameters(inheritedSubscription, callbackScope)
+            .AppendContentAsFile(clusterBicep, "bicep")
+            .AppendContentAsFile(roleBicep, "bicep");
+    }
+
+    [Fact]
+    public async Task AddAsExistingResource_InheritsModuleSubscriptionAcrossTemplates()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
         var aks = builder.AddAzureKubernetesEnvironment("aks")
-            .AsExisting(nameParam, rgParam);
+            .AsExisting(
+                builder.AddParameter("cluster-name", "existing-cluster"),
+                builder.AddParameter("cluster-group", "cluster-rg"));
+        aks.Resource.Scope = new AzureBicepResourceScope("initial-rg", "initial-subscription");
+        aks.ConfigureInfrastructure(infrastructure =>
+            infrastructure.AspireResource.Scope = new AzureBicepResourceScope("supporting-rg", "cluster-subscription"));
 
-        Assert.NotNull(aks);
+        var referenceResource = new AzureProvisioningResource("reference", infrastructure =>
+            aks.Resource.AddAsExistingResource(infrastructure))
+        {
+            Scope = new AzureBicepResourceScope("consumer-rg", "consumer-subscription")
+        };
+
+        var manifest = await AzureManifestUtils.GetManifestWithBicep(referenceResource);
+        await Verify(manifest.BicepText, "bicep");
     }
 
     [Fact]
@@ -387,6 +777,514 @@ public class AzureKubernetesEnvironmentExtensionsTests(ITestOutputHelper outputH
         Assert.Same(aks.Resource.DefaultContainerRegistry, annotation.Registry);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task WithContainerRegistry_CrossResourceGroupPublishesScopedKubeletRole(bool parameterizedScope)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
+        var registry = builder.AddAzureContainerRegistry("registry");
+        if (parameterizedScope)
+        {
+            registry.PublishAsExistingInResourceGroup(
+                builder.AddParameter("registry-name", "existingacr"),
+                builder.AddParameter("registry-group", "registry-rg"),
+                builder.AddParameter("registry-subscription", "00000000-0000-0000-0000-000000000001"));
+        }
+        else
+        {
+            registry.PublishAsExisting("existingacr", "registry-rg");
+        }
+
+        var aks = builder.AddAzureKubernetesEnvironment("aks")
+            .WithContainerRegistry(registry);
+        builder.AddContainer("api", "myimage").WithHttpEndpoint(targetPort: 8080);
+
+        await using var app = builder.Build();
+        await app.RunAsync();
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var roles = Assert.Single(model.Resources.OfType<AzureRoleAssignmentResource>(),
+            resource => resource.Name == "aks-kubelet-identity-roles-registry");
+        Assert.Same(registry.Resource, roles.TargetAzureResource);
+        Assert.Same(aks.Resource.KubeletIdentity, roles.IdentityResource);
+        Assert.Equal(aks.Resource.KubeletIdentity!.PrincipalId.ValueExpression,
+            Assert.IsType<BicepOutputReference>(roles.Parameters["principalId"]).ValueExpression);
+        Assert.NotNull(roles.Scope);
+        Assert.False(aks.Resource.Parameters.ContainsKey("acrName"));
+        Assert.Equal("{aks.outputs.kubeletIdentityObjectId}", aks.Resource.KubeletIdentityObjectId.ValueExpression);
+
+        var mainBicep = await File.ReadAllTextAsync(Path.Combine(workspace.Path, "main.bicep"));
+        var aksBicep = await File.ReadAllTextAsync(Path.Combine(workspace.Path, "aks", "aks.bicep"));
+        var roleBicep = await File.ReadAllTextAsync(Path.Combine(workspace.Path, roles.Name, $"{roles.Name}.bicep"));
+        var registryBicep = await File.ReadAllTextAsync(Path.Combine(workspace.Path, "registry", "registry.bicep"));
+        var controlPlaneBicep = await File.ReadAllTextAsync(Path.Combine(workspace.Path, "aks-control-plane-identity", "aks-control-plane-identity.bicep"));
+        var kubeletBicep = await File.ReadAllTextAsync(Path.Combine(workspace.Path, "aks-kubelet-identity", "aks-kubelet-identity.bicep"));
+        var operatorBicep = await File.ReadAllTextAsync(Path.Combine(workspace.Path, "aks-control-plane-identity-roles-aks-kubelet-identity", "aks-control-plane-identity-roles-aks-kubelet-identity.bicep"));
+        await Verify(mainBicep, "bicep")
+            .UseParameters(parameterizedScope)
+            .AppendContentAsFile(aksBicep, "bicep")
+            .AppendContentAsFile(roleBicep, "bicep")
+            .AppendContentAsFile(registryBicep, "bicep")
+            .AppendContentAsFile(controlPlaneBicep, "bicep")
+            .AppendContentAsFile(kubeletBicep, "bicep")
+            .AppendContentAsFile(operatorBicep, "bicep");
+    }
+
+    [Fact]
+    public async Task WithContainerRegistry_CrossResourceGroupUsesFinalRegistryAndPreparesOnce()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
+        var first = builder.AddAzureContainerRegistry("first").PublishAsExisting("firstacr", "first-rg");
+        var final = builder.AddAzureContainerRegistry("final");
+        var aks = builder.AddAzureKubernetesEnvironment("aks")
+            .WithContainerRegistry(first)
+            .WithContainerRegistry(final);
+        final.PublishAsExisting("finalacr", "final-rg");
+
+        await using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var provisioningRoles = Assert.Single(model.Resources.OfType<AzureRoleAssignmentResource>(),
+            resource => resource.Name == "aks-kubelet-identity-roles-final");
+        Assert.Equal("final-rg", provisioningRoles.Scope!.ResourceGroup);
+        Assert.Same(final.Resource, provisioningRoles.TargetAzureResource);
+        Assert.Same(aks.Resource.KubeletIdentity, provisioningRoles.IdentityResource);
+        Assert.Collection(model.Resources.OfType<AzureUserAssignedIdentityResource>(),
+            identity => Assert.Same(aks.Resource.ControlPlaneIdentity, identity),
+            identity => Assert.Same(aks.Resource.KubeletIdentity, identity));
+    }
+
+    [Fact]
+    public async Task WithContainerRegistry_SharedCrossGroupRegistryGrantsEachKubeletRole()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
+        var registry = builder.AddAzureContainerRegistry("registry").PublishAsExisting("existingacr", "registry-rg");
+        var first = builder.AddAzureKubernetesEnvironment("first").WithContainerRegistry(registry);
+        var second = builder.AddAzureKubernetesEnvironment("second").WithContainerRegistry(registry);
+
+        await using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+        var roles = app.Services.GetRequiredService<DistributedApplicationModel>().Resources
+            .OfType<AzureRoleAssignmentResource>().Where(resource => resource.TargetAzureResource == registry.Resource);
+        Assert.Collection(roles,
+            role => Assert.Same(first.Resource.KubeletIdentity, role.IdentityResource),
+            role => Assert.Same(second.Resource.KubeletIdentity, role.IdentityResource));
+    }
+
+    [Fact]
+    public async Task WithContainerRegistry_UnscopedExistingRegistryUsesKubeletIdentity()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
+        var registry = builder.AddAzureContainerRegistry("registry").PublishAsExisting("existingacr", resourceGroup: null);
+        var aks = builder.AddAzureKubernetesEnvironment("aks").WithContainerRegistry(registry);
+
+        await using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var roles = Assert.Single(app.Services.GetRequiredService<DistributedApplicationModel>().Resources
+            .OfType<AzureRoleAssignmentResource>(), resource => resource.TargetAzureResource == registry.Resource);
+        Assert.Same(aks.Resource.KubeletIdentity, roles.IdentityResource);
+        Assert.Null(roles.Scope);
+        var manifest = await AzureManifestUtils.GetManifestWithBicep(aks.Resource);
+        await Verify(manifest.BicepText, "bicep");
+    }
+
+    [Fact]
+    public async Task WithContainerRegistry_RunModeDoesNotProvisionClusterIdentities()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(
+            outputHelper, workspace, operation: DistributedApplicationOperation.Run);
+        var registry = builder.AddAzureContainerRegistry("registry").RunAsExisting("existingacr", "registry-rg");
+        var aks = builder.AddAzureKubernetesEnvironment("aks").WithContainerRegistry(registry);
+
+        Assert.Null(aks.Resource.ControlPlaneIdentity);
+        Assert.Null(aks.Resource.KubeletIdentity);
+        Assert.Empty(builder.Resources.OfType<AzureUserAssignedIdentityResource>());
+        var manifest = await AzureManifestUtils.GetManifestWithBicep(aks.Resource);
+        await Verify(manifest.BicepText, "bicep");
+    }
+
+    [Fact]
+    public async Task DefaultRegistry_GrantsPullOnlyToKubeletAndOperatorOnlyToControlPlane()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+
+        await using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var roles = app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<AzureRoleAssignmentResource>();
+        Assert.Collection(roles,
+            role =>
+            {
+                Assert.Same(aks.Resource.ControlPlaneIdentity, role.IdentityResource);
+                Assert.Same(aks.Resource.KubeletIdentity, role.TargetAzureResource);
+                Assert.Contains(role, aks.Resource.References);
+            },
+            role =>
+            {
+                Assert.Same(aks.Resource.KubeletIdentity, role.IdentityResource);
+                Assert.Same(aks.Resource.DefaultContainerRegistry, role.TargetAzureResource);
+                Assert.Contains(role, aks.Resource.References);
+            });
+        Assert.Collection(aks.Resource.KubeletIdentity!.Annotations.OfType<RoleAssignmentAnnotation>(),
+            annotation => Assert.Collection(annotation.Roles,
+                role => Assert.Equal(new RoleDefinition("7f951dda-4ed3-4680-a7ca-43fe172d538d", "AcrPull"), role)));
+        Assert.Collection(aks.Resource.ControlPlaneIdentity!.Annotations.OfType<RoleAssignmentAnnotation>(),
+            annotation => Assert.Collection(annotation.Roles,
+                role => Assert.Equal(new RoleDefinition("f1a07417-d97a-45cb-824c-7a7467783830", "ManagedIdentityOperator"), role)));
+    }
+
+    [Fact]
+    public async Task ExistingCluster_DoesNotProvisionReplacementIdentities()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
+        var aks = builder.AddAzureKubernetesEnvironment("aks")
+            .AsExistingInResourceGroup("existing-cluster", "existing-rg", "existing-subscription");
+
+        await using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        Assert.Empty(model.Resources.OfType<AzureUserAssignedIdentityResource>());
+        var roles = Assert.Single(model.Resources.OfType<AzureRoleAssignmentResource>());
+        Assert.Same(aks.Resource.DefaultContainerRegistry, roles.TargetAzureResource);
+        Assert.Null(roles.IdentityResource);
+        Assert.Contains(aks.Resource, roles.References);
+        Assert.Empty(aks.Resource.References.OfType<AzureUserAssignedIdentityResource>());
+        var manifest = await AzureManifestUtils.GetManifestWithBicep(aks.Resource);
+        await Verify(manifest.BicepText, "bicep");
+    }
+
+    [Theory]
+    [InlineData("new")]
+    [InlineData("existing")]
+    [InlineData("group")]
+    [InlineData("subscription")]
+    [InlineData("callback")]
+    [InlineData("new-scoped")]
+    public async Task ExistingCluster_RegistryRoleUsesRegistryScope(string registryScenario)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
+        var registry = builder.AddAzureContainerRegistry("registry");
+        switch (registryScenario)
+        {
+            case "new":
+                break;
+            case "existing":
+                registry.PublishAsExisting("existingacr", resourceGroup: null);
+                break;
+            case "group":
+                registry.PublishAsExisting("existingacr", "registry-rg");
+                break;
+            case "subscription":
+                registry.PublishAsExistingInResourceGroup(
+                    builder.AddParameter("registry-name", "existingacr"),
+                    builder.AddParameter("registry-group", "registry-rg"),
+                    builder.AddParameter("registry-subscription", "00000000-0000-0000-0000-000000000002"));
+                break;
+            case "callback":
+            case "new-scoped":
+                if (registryScenario == "callback")
+                {
+                    registry.PublishAsExisting("existingacr", "annotation-rg");
+                }
+                registry.ConfigureInfrastructure(infrastructure =>
+                    infrastructure.AspireResource.Scope = new AzureBicepResourceScope(
+                        "registry-rg", "00000000-0000-0000-0000-000000000002"));
+                break;
+            default:
+                throw new InvalidOperationException($"Unexpected registry scenario '{registryScenario}'.");
+        }
+
+        var aks = builder.AddAzureKubernetesEnvironment("aks")
+            .AsExistingInResourceGroup(
+                builder.AddParameter("cluster-name", "existing-cluster"),
+                builder.AddParameter("cluster-group", "cluster-rg"),
+                builder.AddParameter("cluster-subscription", "00000000-0000-0000-0000-000000000001"))
+            .WithContainerRegistry(registry);
+
+        await using var app = builder.Build();
+        await app.RunAsync();
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var roles = Assert.Single(model.Resources.OfType<AzureRoleAssignmentResource>());
+        Assert.Same(registry.Resource, roles.TargetAzureResource);
+        Assert.Null(roles.IdentityResource);
+        Assert.Empty(model.Resources.OfType<AzureUserAssignedIdentityResource>());
+        Assert.Contains(aks.Resource, roles.References);
+        Assert.Contains(registry.Resource, roles.References);
+        Assert.Equal(aks.Resource.KubeletIdentityObjectId.ValueExpression,
+            Assert.IsType<BicepOutputReference>(roles.Parameters["principalId"]).ValueExpression);
+        Assert.False(roles.Parameters.ContainsKey("clusterId"));
+        Assert.False(aks.Resource.Parameters.ContainsKey("acrName"));
+
+        var mainBicep = await File.ReadAllTextAsync(Path.Combine(workspace.Path, "main.bicep"));
+        var aksBicep = await File.ReadAllTextAsync(Path.Combine(workspace.Path, "aks", "aks.bicep"));
+        var roleBicep = await File.ReadAllTextAsync(Path.Combine(workspace.Path, roles.Name, $"{roles.Name}.bicep"));
+        var registryBicep = await File.ReadAllTextAsync(Path.Combine(workspace.Path, "registry", "registry.bicep"));
+        await Verify(mainBicep, "bicep")
+            .UseParameters(registryScenario)
+            .AppendContentAsFile(aksBicep, "bicep")
+            .AppendContentAsFile(roleBicep, "bicep")
+            .AppendContentAsFile(registryBicep, "bicep");
+    }
+
+    [Fact]
+    public async Task ExistingClusters_SharedFinalRegistryPreparesRolesOncePerCluster()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
+        var firstRegistry = builder.AddAzureContainerRegistry("first").PublishAsExisting("firstacr", "first-rg");
+        var finalRegistry = builder.AddAzureContainerRegistry("final").PublishAsExisting("finalacr", "final-rg");
+        var first = builder.AddAzureKubernetesEnvironment("first-aks")
+            .AsExistingInResourceGroup("first-cluster", "cluster-rg", "cluster-subscription")
+            .WithContainerRegistry(firstRegistry)
+            .WithContainerRegistry(finalRegistry);
+        var second = builder.AddAzureKubernetesEnvironment("second-aks")
+            .AsExistingInResourceGroup("second-cluster", "cluster-rg", "cluster-subscription")
+            .WithContainerRegistry(finalRegistry);
+
+        await using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        Assert.Empty(model.Resources.OfType<AzureUserAssignedIdentityResource>());
+        Assert.Collection(model.Resources.OfType<AzureRoleAssignmentResource>(),
+            role =>
+            {
+                Assert.Same(finalRegistry.Resource, role.TargetAzureResource);
+                Assert.Equal("final-rg", role.Scope!.ResourceGroup);
+                Assert.Contains(first.Resource, role.References);
+            },
+            role =>
+            {
+                Assert.Same(finalRegistry.Resource, role.TargetAzureResource);
+                Assert.Equal("final-rg", role.Scope!.ResourceGroup);
+                Assert.Contains(second.Resource, role.References);
+            });
+    }
+
+    [Fact]
+    public async Task ExcludedEnvironment_DoesNotPrepareIdentities()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
+        builder.AddAzureKubernetesEnvironment("aks").WithAnnotation(ManifestPublishingCallbackAnnotation.Ignore);
+
+        await using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        Assert.Empty(model.Resources.OfType<AzureUserAssignedIdentityResource>());
+        Assert.Empty(model.Resources.OfType<AzureRoleAssignmentResource>());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ClusterScope_IsInheritedByIdentitiesAndOperatorRole(bool configuredScope)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+        var scope = configuredScope
+            ? new AzureBicepResourceScope(
+                builder.AddParameter("cluster-group", "cluster-rg").Resource,
+                builder.AddParameter("cluster-subscription", "00000000-0000-0000-0000-000000000001").Resource)
+            : new AzureBicepResourceScope("cluster-rg", "00000000-0000-0000-0000-000000000001");
+        if (configuredScope)
+        {
+            aks.ConfigureInfrastructure(infrastructure => infrastructure.AspireResource.Scope = scope);
+        }
+        else
+        {
+            aks.Resource.Scope = scope;
+        }
+
+        await using var app = builder.Build();
+        await app.RunAsync();
+
+        Assert.Same(scope, aks.Resource.ControlPlaneIdentity!.Scope);
+        Assert.Same(scope, aks.Resource.KubeletIdentity!.Scope);
+        var operatorRole = Assert.Single(app.Services.GetRequiredService<DistributedApplicationModel>()
+            .Resources.OfType<AzureRoleAssignmentResource>(),
+            role => role.TargetAzureResource == aks.Resource.KubeletIdentity);
+        Assert.Same(scope, operatorRole.Scope);
+        var registryRole = Assert.Single(app.Services.GetRequiredService<DistributedApplicationModel>()
+            .Resources.OfType<AzureRoleAssignmentResource>(),
+            role => role.TargetAzureResource == aks.Resource.DefaultContainerRegistry);
+        Assert.Null(registryRole.Scope);
+
+        var mainBicep = await File.ReadAllTextAsync(Path.Combine(workspace.Path, "main.bicep"));
+        var aksBicep = await File.ReadAllTextAsync(Path.Combine(workspace.Path, "aks", "aks.bicep"));
+        var operatorBicep = await File.ReadAllTextAsync(Path.Combine(workspace.Path, operatorRole.Name, $"{operatorRole.Name}.bicep"));
+        var registryBicep = await File.ReadAllTextAsync(Path.Combine(workspace.Path, "aks-acr", "aks-acr.bicep"));
+        var controlPlaneBicep = await File.ReadAllTextAsync(Path.Combine(workspace.Path, "aks-control-plane-identity", "aks-control-plane-identity.bicep"));
+        var kubeletBicep = await File.ReadAllTextAsync(Path.Combine(workspace.Path, "aks-kubelet-identity", "aks-kubelet-identity.bicep"));
+        var registryRoleBicep = await File.ReadAllTextAsync(Path.Combine(workspace.Path, registryRole.Name, $"{registryRole.Name}.bicep"));
+        await Verify(mainBicep, "bicep")
+            .UseParameters(configuredScope)
+            .AppendContentAsFile(aksBicep, "bicep")
+            .AppendContentAsFile(operatorBicep, "bicep")
+            .AppendContentAsFile(registryBicep, "bicep")
+            .AppendContentAsFile(controlPlaneBicep, "bicep")
+            .AppendContentAsFile(kubeletBicep, "bicep")
+            .AppendContentAsFile(registryRoleBicep, "bicep");
+    }
+
+    [Fact]
+    public async Task IdentityNameCollisionFailsBeforeRegisteringEitherIdentity()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
+        builder.AddParameter("aks-kubelet-identity");
+        builder.AddAzureKubernetesEnvironment("aks");
+
+        await using var app = builder.Build();
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(
+            () => ExecuteBeforeStartHooksAsync(app, default));
+        Assert.Contains("aks-kubelet-identity", exception.Message);
+        Assert.Empty(app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<AzureUserAssignedIdentityResource>());
+    }
+
+    [Fact]
+    public async Task WithContainerRegistry_ExplicitScopeOverridesExistingAnnotationScope()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
+        var registry = builder.AddAzureContainerRegistry("registry").PublishAsExisting("existingacr", "annotation-rg");
+        registry.Resource.Scope = new AzureBicepResourceScope("explicit-rg", "00000000-0000-0000-0000-000000000001");
+        builder.AddAzureKubernetesEnvironment("aks").WithContainerRegistry(registry);
+
+        await using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var roles = Assert.Single(app.Services.GetRequiredService<DistributedApplicationModel>().Resources
+            .OfType<AzureRoleAssignmentResource>(), resource => resource.TargetAzureResource == registry.Resource);
+        Assert.Same(registry.Resource.Scope, roles.Scope);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RegistryAndSubnetCallbacks_ApplyFinalScopeToRoleModules(bool parameterizedScope)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
+        var registry = builder.AddAzureContainerRegistry("registry").PublishAsExisting("existingacr", "annotation-registry-rg");
+        var network = builder.AddAzureVirtualNetwork("network", "10.0.0.0/16")
+            .PublishAsExisting("existingvnet", "annotation-network-rg");
+        var registryScope = parameterizedScope
+            ? new AzureBicepResourceScope(
+                builder.AddParameter("registry-group", "registry-rg").Resource,
+                builder.AddParameter("registry-subscription", "00000000-0000-0000-0000-000000000001").Resource)
+            : new AzureBicepResourceScope("registry-rg", "00000000-0000-0000-0000-000000000001");
+        var networkScope = parameterizedScope
+            ? new AzureBicepResourceScope(
+                builder.AddParameter("network-group", "network-rg").Resource,
+                builder.AddParameter("network-subscription", "00000000-0000-0000-0000-000000000002").Resource)
+            : new AzureBicepResourceScope("network-rg", "00000000-0000-0000-0000-000000000002");
+        registry.ConfigureInfrastructure(infrastructure => infrastructure.AspireResource.Scope = registryScope);
+        network.ConfigureInfrastructure(infrastructure => infrastructure.AspireResource.Scope = networkScope);
+        var aks = builder.AddAzureKubernetesEnvironment("aks")
+            .WithContainerRegistry(registry)
+            .WithSubnet(network.AddSubnet("subnet", "10.0.0.0/22"));
+
+        await using var app = builder.Build();
+        await app.RunAsync();
+
+        var roles = app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<AzureRoleAssignmentResource>();
+        var registryRole = Assert.Single(roles, role => role.TargetAzureResource == registry.Resource);
+        var networkRole = Assert.Single(roles, role => role.TargetAzureResource == network.Resource);
+        Assert.Same(registryScope, registry.Resource.Scope);
+        Assert.Same(registryScope, registryRole.Scope);
+        Assert.Same(aks.Resource.KubeletIdentity, registryRole.IdentityResource);
+        Assert.Same(networkScope, network.Resource.Scope);
+        Assert.Same(networkScope, networkRole.Scope);
+        Assert.Same(aks.Resource.ControlPlaneIdentity, networkRole.IdentityResource);
+        Assert.Contains(registryRole, aks.Resource.References);
+        Assert.Contains(networkRole, aks.Resource.References);
+
+        var mainBicep = await File.ReadAllTextAsync(Path.Combine(workspace.Path, "main.bicep"));
+        var registryBicep = await File.ReadAllTextAsync(Path.Combine(workspace.Path, "registry", "registry.bicep"));
+        var registryRoleBicep = await File.ReadAllTextAsync(Path.Combine(workspace.Path, registryRole.Name, $"{registryRole.Name}.bicep"));
+        var networkBicep = await File.ReadAllTextAsync(Path.Combine(workspace.Path, "network", "network.bicep"));
+        var networkRoleBicep = await File.ReadAllTextAsync(Path.Combine(workspace.Path, networkRole.Name, $"{networkRole.Name}.bicep"));
+        var aksBicep = await File.ReadAllTextAsync(Path.Combine(workspace.Path, "aks", "aks.bicep"));
+        var controlPlaneBicep = await File.ReadAllTextAsync(Path.Combine(workspace.Path, "aks-control-plane-identity", "aks-control-plane-identity.bicep"));
+        var kubeletBicep = await File.ReadAllTextAsync(Path.Combine(workspace.Path, "aks-kubelet-identity", "aks-kubelet-identity.bicep"));
+        var operatorRoleName = "aks-control-plane-identity-roles-aks-kubelet-identity";
+        var operatorBicep = await File.ReadAllTextAsync(Path.Combine(workspace.Path, operatorRoleName, $"{operatorRoleName}.bicep"));
+        await Verify(mainBicep, "bicep")
+            .UseParameters(parameterizedScope)
+            .AppendContentAsFile(registryBicep, "bicep")
+            .AppendContentAsFile(registryRoleBicep, "bicep")
+            .AppendContentAsFile(networkBicep, "bicep")
+            .AppendContentAsFile(networkRoleBicep, "bicep")
+            .AppendContentAsFile(aksBicep, "bicep")
+            .AppendContentAsFile(controlPlaneBicep, "bicep")
+            .AppendContentAsFile(kubeletBicep, "bicep")
+            .AppendContentAsFile(operatorBicep, "bicep");
+    }
+
+    [Fact]
+    public async Task WithSubnet_GrantsControlPlaneNetworkAccessForFinalEnvironmentAndPoolSubnets()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
+        var firstNetwork = builder.AddAzureVirtualNetwork("first-network", "10.0.0.0/16");
+        var finalNetwork = builder.AddAzureVirtualNetwork("final-network", "10.1.0.0/16");
+        var poolNetwork = builder.AddAzureVirtualNetwork("pool-network", "10.2.0.0/16")
+            .PublishAsExisting("pool-vnet", "network-rg");
+        var aks = builder.AddAzureKubernetesEnvironment("aks")
+            .WithSubnet(firstNetwork.AddSubnet("first-subnet", "10.0.0.0/22"))
+            .WithSubnet(finalNetwork.AddSubnet("final-subnet", "10.1.0.0/22"));
+        aks.AddNodePool("workload", "Standard_D2s_v5")
+            .WithSubnet(poolNetwork.AddSubnet("pool-subnet", "10.2.0.0/22"));
+        aks.AddNodePool("second", "Standard_D2s_v5")
+            .WithSubnet(poolNetwork.AddSubnet("second-subnet", "10.2.4.0/22"));
+
+        await using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var roles = app.Services.GetRequiredService<DistributedApplicationModel>().Resources
+            .OfType<AzureRoleAssignmentResource>().Where(role => role.TargetAzureResource is AzureVirtualNetworkResource);
+        Assert.Collection(roles,
+            role =>
+            {
+                Assert.Same(aks.Resource.ControlPlaneIdentity, role.IdentityResource);
+                Assert.Same(poolNetwork.Resource, role.TargetAzureResource);
+                Assert.Equal("network-rg", role.Scope!.ResourceGroup);
+                Assert.Contains(role, aks.Resource.References);
+            },
+            role =>
+            {
+                Assert.Same(aks.Resource.ControlPlaneIdentity, role.IdentityResource);
+                Assert.Same(finalNetwork.Resource, role.TargetAzureResource);
+                Assert.Null(role.Scope);
+                Assert.Contains(role, aks.Resource.References);
+            });
+        foreach (var annotation in aks.Resource.ControlPlaneIdentity!.Annotations.OfType<RoleAssignmentAnnotation>()
+            .Where(annotation => annotation.Target is AzureVirtualNetworkResource))
+        {
+            Assert.Collection(annotation.Roles,
+                role => Assert.Equal(new RoleDefinition("4d97b98b-1d4f-4787-a291-c67834d212e7", "NetworkContributor"), role));
+        }
+    }
+
     [Fact]
     public void WithSystemNodePool_CustomVmSize()
     {
@@ -519,8 +1417,41 @@ public class AzureKubernetesEnvironmentExtensionsTests(ITestOutputHelper outputH
     [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "ExecuteBeforeStartHooksAsync")]
     private static extern Task ExecuteBeforeStartHooksAsync(DistributedApplication app, CancellationToken cancellationToken);
 
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public void RequiresPreviewIngressApi_DependsOnApplicationLoadBalancer(bool gatewayApiEnabled, bool applicationLoadBalancerEnabled)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
+
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+        aks.Resource.GatewayApiEnabled = gatewayApiEnabled;
+        aks.Resource.ApplicationLoadBalancerEnabled = applicationLoadBalancerEnabled;
+
+        Assert.Equal(applicationLoadBalancerEnabled, aks.Resource.RequiresPreviewIngressApi);
+    }
+
     [Fact]
-    public async Task AddLoadBalancer_BicepEnablesIngressProfileAndUsesPreviewApi()
+    public async Task GatewayApiEnabled_BicepUsesStableApi()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
+
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+        aks.Resource.GatewayApiEnabled = true;
+
+        var manifest = await AzureManifestUtils.GetManifestWithBicep(aks.Resource);
+        Assert.Contains("resource aks 'Microsoft.ContainerService/managedClusters@2026-07-01' = {", manifest.BicepText);
+        Assert.Contains("installation: 'Standard'", manifest.BicepText);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AddLoadBalancer_BicepEnablesIngressProfileAndUsesPreviewApi(bool existing)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
@@ -530,10 +1461,15 @@ public class AzureKubernetesEnvironmentExtensionsTests(ITestOutputHelper outputH
         var albSubnet = vnet.AddSubnet("alb", "10.0.4.0/24");
 
         var aks = builder.AddAzureKubernetesEnvironment("aks").WithSubnet(aksSubnet);
+        if (existing)
+        {
+            aks.AsExisting(builder.AddParameter("cluster-name"), null);
+        }
+
         aks.AddLoadBalancer("lb", albSubnet);
 
         var manifest = await AzureManifestUtils.GetManifestWithBicep(aks.Resource);
-        await Verify(manifest.BicepText, extension: "bicep");
+        await Verify(manifest.BicepText, extension: "bicep").UseParameters(existing);
     }
 
     [Fact]

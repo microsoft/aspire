@@ -18,12 +18,19 @@ public class RoutedComponentTrimmingTests
             DynamicallyAccessedMemberTypes.PublicProperties |
             DynamicallyAccessedMemberTypes.NonPublicProperties;
 
-        var preservedTypes = typeof(DashboardWebApplication).GetConstructors()
-            .SelectMany(constructor => constructor.GetCustomAttributes<DynamicDependencyAttribute>())
+        var dashboardAssembly = typeof(DashboardWebApplication).Assembly;
+        var legacyPreservationMethod = typeof(DashboardExperienceComponents).GetMethod(
+            "PreserveLegacyComponents",
+            BindingFlags.Static | BindingFlags.NonPublic)!;
+        var preservationMembers = typeof(DashboardWebApplication).GetConstructors().Cast<MemberInfo>()
+            .Append(legacyPreservationMethod);
+        var preservedTypes = preservationMembers
+            .SelectMany(member => member.GetCustomAttributes<DynamicDependencyAttribute>())
             .Where(dependency => (dependency.MemberTypes & requiredMembers) == requiredMembers)
-            .Select(dependency => dependency.Type)
+            .Select(dependency => dependency.Type ?? dashboardAssembly.GetType(dependency.TypeName!))
+            .OfType<Type>()
             .ToHashSet();
-        var routedComponents = typeof(DashboardWebApplication).Assembly.GetTypes()
+        var routedComponents = dashboardAssembly.GetTypes()
             .Where(type => type.IsDefined(typeof(RouteAttribute), inherit: false))
             .ToList();
 

@@ -1,19 +1,213 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREPIPELINES002 // Type is for evaluation purposes only
-
 using System.Text.Json.Nodes;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure.Provisioning;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Utils;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Hosting.Azure.Tests;
 
 public class BicepUtilitiesTests(ITestOutputHelper testOutputHelper)
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task SetScopeAsync_ExistingComputeEnvironmentDoesNotChangeModuleScope(bool appService)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        AzureBicepResource resource = appService
+            ? builder.AddAzureAppServiceEnvironment("env")
+                .AsExistingInResourceGroup("existing-env", "existing-rg", "existing-subscription").Resource
+            : builder.AddAzureContainerAppEnvironment("env")
+                .AsExistingInResourceGroup("existing-env", "existing-rg", "existing-subscription").Resource;
+
+        var scope = new JsonObject();
+        await BicepUtilities.SetScopeAsync(scope, resource);
+
+        Assert.Single(scope);
+        Assert.Null(scope["resourceGroup"]);
+
+        resource.Scope = new AzureBicepResourceScope("module-rg", "module-subscription");
+        await BicepUtilities.SetScopeAsync(scope, resource);
+
+        Assert.Equal("module-rg", scope["resourceGroup"]?.GetValue<string>());
+        Assert.Equal("module-subscription", scope["subscription"]?.GetValue<string>());
+
+        using var template = resource.GetBicepTemplateFile();
+        await Verify(await File.ReadAllTextAsync(template.Path), "bicep").UseParameters(appService);
+    }
+
+    [Fact]
+    public async Task SetScopeAsync_ExistingComputeRoleTargetDoesNotReenterTemplateGeneration()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var environment = builder.AddAzureContainerAppEnvironment("env")
+            .AsExistingInResourceGroup("existing-env", "existing-rg", "existing-subscription");
+        var configurationCount = 0;
+        environment.ConfigureInfrastructure(_ => configurationCount++);
+        var roles = new AzureRoleAssignmentResource("roles", environment.Resource, null, null, infrastructure =>
+            environment.Resource.AddAsExistingResource(infrastructure));
+        environment.Resource.RegisterRoleAssignmentScope(roles);
+
+        var moduleScope = new JsonObject();
+        await BicepUtilities.SetScopeAsync(moduleScope, environment.Resource);
+        await BicepUtilities.SetScopeAsync(moduleScope, environment.Resource);
+
+        Assert.Equal(1, configurationCount);
+        Assert.Single(moduleScope);
+        Assert.Null(moduleScope["resourceGroup"]);
+        Assert.Equal("existing-rg", roles.Scope!.ResourceGroup);
+        Assert.Equal("existing-subscription", roles.Scope.Subscription);
+        Assert.Contains(environment.Resource, roles.References);
+        using var template = roles.GetBicepTemplateFile();
+        await Verify(await File.ReadAllTextAsync(template.Path), "bicep");
+    }
+
+    [Fact]
+    public async Task SetScopeAsync_ExistingResourceStillUsesAnnotationScope()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var resource = builder.AddAzureStorage("storage")
+            .AsExistingInResourceGroup("existing-storage", "existing-rg", "existing-subscription").Resource;
+
+        var scope = new JsonObject();
+        await BicepUtilities.SetScopeAsync(scope, resource);
+
+        Assert.Equal("existing-rg", scope["resourceGroup"]?.GetValue<string>());
+        Assert.Equal("existing-subscription", scope["subscription"]?.GetValue<string>());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task SetScopeAsync_ExistingComputeEnvironmentWithModuleScopedReferenceUsesAnnotationScope(bool foundryProject)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        AzureBicepResource resource;
+        if (foundryProject)
+        {
+            resource = builder.AddFoundry("foundry")
+                .AsExistingInResourceGroup("existing-account", "existing-rg", "existing-subscription")
+                .AddProject("project")
+                .AsExistingInResourceGroup("existing-project", "existing-rg", "existing-subscription").Resource;
+        }
+        else
+        {
+            var identity = builder.AddAzureUserAssignedIdentity("identity")
+                .AsExistingInResourceGroup("existing-identity", "existing-rg", "existing-subscription");
+            resource = builder.AddAzureSandboxGroup("sandbox")
+                .WithAcrPullIdentity(identity)
+                .AsExistingInResourceGroup("existing-sandbox", "existing-rg", "existing-subscription").Resource;
+        }
+
+        var scope = new JsonObject();
+        await BicepUtilities.SetScopeAsync(scope, resource);
+
+        Assert.Equal("existing-rg", scope["resourceGroup"]?.GetValue<string>());
+        Assert.Equal("existing-subscription", scope["subscription"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task SetScopeAsync_ModuleScopedComputeReferencesPreserveExplicitScope()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var identity = builder.AddAzureUserAssignedIdentity("identity")
+            .AsExistingInResourceGroup("existing-identity", "existing-rg", "existing-subscription");
+        var resource = builder.AddAzureSandboxGroup("sandbox")
+            .WithAcrPullIdentity(identity)
+            .AsExistingInResourceGroup("existing-sandbox", "existing-rg", "existing-subscription").Resource;
+        var explicitScope = new AzureBicepResourceScope("module-rg", "module-subscription");
+        resource.Scope = explicitScope;
+        var roles = new AzureRoleAssignmentResource("roles", resource, null, null, infrastructure =>
+            resource.AddAsExistingResource(infrastructure));
+        resource.RegisterRoleAssignmentScope(roles);
+        var consumer = new AzureProvisioningResource("consumer", infrastructure =>
+            resource.AddAsExistingResource(infrastructure))
+        {
+            Scope = new AzureBicepResourceScope("consumer-rg", "consumer-subscription")
+        };
+
+        // Generate the consumer first so the reference cannot depend on prior source materialization.
+        var consumerBicep = consumer.GetBicepTemplateString();
+        var scope = new JsonObject();
+        await BicepUtilities.SetScopeAsync(scope, resource);
+
+        Assert.Equal("module-rg", scope["resourceGroup"]?.GetValue<string>());
+        Assert.Equal("module-subscription", scope["subscription"]?.GetValue<string>());
+        Assert.Same(explicitScope, resource.Scope);
+        Assert.Same(explicitScope, roles.Scope);
+        await Verify(resource.GetBicepTemplateString(), "bicep")
+            .AppendContentAsFile(roles.GetBicepTemplateString(), "bicep")
+            .AppendContentAsFile(consumerBicep, "bicep");
+    }
+
+    [Theory]
+    [InlineData(DistributedApplicationOperation.Run, null, "", null)]
+    [InlineData(DistributedApplicationOperation.Run, "dev-a", "dev-a", null)]
+    [InlineData(DistributedApplicationOperation.Publish, "production", "production", null)]
+    [InlineData(DistributedApplicationOperation.Run, "dev-a", "explicit", "explicit")]
+    [InlineData(DistributedApplicationOperation.Publish, "production", "explicit", "explicit")]
+    public async Task TenantResourceSuffix_ResolvesConfigurationAndExplicitOverrides(
+        DistributedApplicationOperation operation, string? configuredSuffix, string expectedSuffix, string? parameterOverride)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(operation, testOutputHelper);
+        builder.Configuration["Azure:TenantResourceSuffix"] = configuredSuffix;
+        var resource = builder.AddBicepTemplateString("registration", "param tenantResourceSuffix string = ''");
+        if (parameterOverride is null)
+        {
+            resource.WithParameter(AzureBicepResource.KnownParameters.TenantResourceSuffix);
+        }
+        else
+        {
+            resource.WithParameter(AzureBicepResource.KnownParameters.TenantResourceSuffix, parameterOverride);
+        }
+        using var app = builder.Build();
+        var parameters = new JsonObject();
+
+        await BicepUtilities.SetParametersAsync(parameters, resource.Resource, builder.ExecutionContext, skipKnownValues: true);
+
+        Assert.Equal(expectedSuffix, parameters["tenantResourceSuffix"]!["value"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task TenantResourceSuffix_ChangesInvalidateDeploymentChecksum()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        builder.Configuration["Azure:TenantResourceSuffix"] = "dev-a";
+        var deploymentState = ProvisioningTestHelpers.CreateUserSecretsManager();
+        builder.Services.AddSingleton<IDeploymentStateManager>(deploymentState);
+        var resource = builder.AddBicepTemplateString("registration", "param tenantResourceSuffix string = ''")
+            .WithParameter(AzureBicepResource.KnownParameters.TenantResourceSuffix);
+        using var app = builder.Build();
+        var parameters = new JsonObject();
+        await BicepUtilities.SetParametersAsync(parameters, resource.Resource, builder.ExecutionContext);
+        var originalChecksum = BicepUtilities.GetChecksum(resource.Resource, parameters, null);
+        var cached = await deploymentState.AcquireSectionAsync("Azure:Deployments:registration");
+        cached.Data[BicepUtilities.DeploymentStateParametersKey] = parameters.ToJsonString();
+
+        Assert.Equal(originalChecksum, await BicepUtilities.GetCurrentChecksumAsync(
+            resource.Resource, cached, builder.ExecutionContext, NullLogger.Instance));
+
+        var azureState = await deploymentState.AcquireSectionAsync("Azure");
+        azureState.Data["TenantResourceSuffix"] = "dev-b";
+        await deploymentState.SaveSectionAsync(azureState);
+
+        var changedChecksum = await BicepUtilities.GetCurrentChecksumAsync(
+            resource.Resource, cached, builder.ExecutionContext, NullLogger.Instance);
+        Assert.NotNull(changedChecksum);
+        Assert.NotEqual(originalChecksum, changedChecksum);
+
+        azureState.Data["TenantResourceSuffix"] = string.Empty;
+        await deploymentState.SaveSectionAsync(azureState);
+        parameters.Clear();
+        await BicepUtilities.SetParametersAsync(parameters, resource.Resource, builder.ExecutionContext);
+        Assert.Equal(string.Empty, parameters["tenantResourceSuffix"]!["value"]!.GetValue<string>());
+    }
+
     [Fact]
     public async Task SetParametersTranslatesParametersToARMCompatibleJsonParameters()
     {

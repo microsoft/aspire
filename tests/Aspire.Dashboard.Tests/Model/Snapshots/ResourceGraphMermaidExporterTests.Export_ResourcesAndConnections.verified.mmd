@@ -1,0 +1,11 @@
+﻿flowchart LR
+    resource0["api (1)"]
+    resource1["api (2)"]
+    resource2["cache"]
+    resource3["isolated"]
+    resource4["web"]
+    resource0 --> resource2
+    resource0 --> resource4
+    resource1 --> resource2
+    resource4 --> resource0
+    resource4 --> resource1

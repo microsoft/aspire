@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json.schemastore.org/component-detection-manifest.json",
+  "version": 1,
+  "registrations": [
+    {
+      "component": {
+        "type": "git",
+        "git": {
+          "repositoryUrl": "https://github.com/OrchardCMS/OrchardCore",
+          "commitHash": "c393b8890871a61332af40647765422dd2bd78f3"
+        }
+      },
+      "developmentDependency": true
+    },
+    {
+      "component": {
+        "type": "nuget",
+        "nuget": {
+          "name": "Microsoft.Playwright",
+          "version": "1.64.0"
+        }
+      },
+      "developmentDependency": true
+    },
+    {
+      "component": {
+        "type": "nuget",
+        "nuget": {
+          "name": "SkiaSharp",
+          "version": "4.153.1"
+        }
+      },
+      "developmentDependency": true
+    },
+    {
+      "component": {
+        "type": "nuget",
+        "nuget": {
+          "name": "SkiaSharp.NativeAssets.Linux",
+          "version": "4.153.1"
+        }
+      },
+      "developmentDependency": true
+    },
+    {
+      "component": {
+        "type": "nuget",
+        "nuget": {
+          "name": "TextMateSharp.Grammars",
+          "version": "2.0.4"
+        }
+      },
+      "developmentDependency": true
+    }
+  ]
+}

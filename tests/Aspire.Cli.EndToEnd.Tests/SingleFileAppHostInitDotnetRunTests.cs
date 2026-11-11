@@ -69,7 +69,11 @@ public sealed class SingleFileAppHostInitDotnetRunTests(ITestOutputHelper output
 
         Assert.True(File.Exists(appHostCs), $"Expected apphost.cs to exist at: {appHostCs}");
         Assert.True(File.Exists(aspireConfigJson), $"Expected aspire.config.json to exist at: {aspireConfigJson}");
-        Assert.Contains("#:property AspireUseCliBundle=true", File.ReadAllText(appHostCs));
+        var appHostSource = File.ReadAllText(appHostCs);
+        Assert.StartsWith("#:package Aspire.Hosting.AppHost@", appHostSource);
+        Assert.Contains("#:package Aspire.Hosting.Dotnet@", appHostSource);
+        Assert.DoesNotContain("#:sdk Aspire.AppHost.Sdk@", appHostSource);
+        Assert.Contains("#:property AspireUseCliBundle=true", appHostSource);
         Assert.True(
             File.Exists(appHostRunJson),
             $"Expected apphost.run.json to exist at: {appHostRunJson}. "
@@ -91,13 +95,27 @@ public sealed class SingleFileAppHostInitDotnetRunTests(ITestOutputHelper output
         Assert.False(string.IsNullOrWhiteSpace(httpsEnv["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"]?.GetValue<string>()));
         Assert.False(string.IsNullOrWhiteSpace(httpsEnv["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"]?.GetValue<string>()));
 
-        // The generated AppHost opts into the CLI bundle, so `dotnet run` delegates to the
+        // The generated AppHost uses the CLI bundle by default, so `dotnet run` delegates to the
         // CLI and displays its startup message instead of the direct AppHost log message.
+        // Before that, the file-based runner does a cold NuGet restore of apphost.cs against nuget.org
+        // (the generated NuGet.config only adds the local hive), then builds and starts the AppHost.
+        // That is the same work `aspire run` does, so use the same budget, but fail fast if
+        // `dotnet run` exits with an error instead of waiting the whole budget for the ready line.
         await auto.TypeAsync("dotnet run apphost.cs");
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync(
-            "Press CTRL+C to stop the AppHost and exit.",
-            timeout: TimeSpan.FromMinutes(1));
+        var dotnetRunErrorPrompt = new CellPatternSearcher()
+            .FindPattern(counter.Value.ToString())
+            .RightText(" ERR:");
+        await auto.WaitUntilAsync(s =>
+        {
+            if (dotnetRunErrorPrompt.Search(s).Count > 0)
+            {
+                throw new InvalidOperationException(
+                    $"`dotnet run apphost.cs` exited with an error prompt [{counter.Value} ERR:*] before the AppHost was ready.");
+            }
+
+            return s.ContainsText("Press CTRL+C to stop the AppHost and exit.");
+        }, timeout: CliE2EAutomatorHelpers.AspireRunReadyTimeout, description: "Press CTRL+C message (dotnet run apphost.cs started)");
 
         // Stop the running AppHost with Ctrl+C and wait for the shell prompt.
         await auto.Ctrl().KeyAsync(Hex1bKey.C);

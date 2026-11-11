@@ -16,6 +16,12 @@ internal static class DotnetSdkUtils
     // RC builds remain below this SemVer floor so they must be explicitly verified before being enabled.
     private static readonly SemVersion s_minimumFileBasedMultiThreadedBuildVersion =
         SemVersion.Parse("11.0.100-rtm.26473.104");
+    // ResolveWebAssemblyProjectReferences is provided by the .NET 11 Static Web Assets SDK:
+    // https://github.com/dotnet/sdk/blob/c0fb107a5474a2993546bc574fd7a6daac9fd7aa/src/StaticWebAssetsSdk/Sdk/Sdk.targets
+    // Running it against an older SDK fails MSBuild (MSB4057), so callers must probe the active
+    // SDK before invoking the target: https://github.com/microsoft/aspire/issues/20417
+    private static readonly SemVersion s_minimumWebAssemblyProjectReferenceResolutionVersion =
+        SemVersion.Parse("11.0.100-rc.1");
 
     public static bool SupportsMultiThreadedBuild(SemVersion? version) =>
         version is not null &&
@@ -24,6 +30,10 @@ internal static class DotnetSdkUtils
     public static bool SupportsFileBasedMultiThreadedBuild(SemVersion? version) =>
         version is not null &&
         SemVersion.ComparePrecedence(version, s_minimumFileBasedMultiThreadedBuildVersion) >= 0;
+
+    public static bool SupportsWebAssemblyProjectReferenceResolution(SemVersion? version) =>
+        version is not null &&
+        SemVersion.ComparePrecedence(version, s_minimumWebAssemblyProjectReferenceResolutionVersion) >= 0;
 
     public static string? FindNearestGlobalJson(string workingDirectory)
     {

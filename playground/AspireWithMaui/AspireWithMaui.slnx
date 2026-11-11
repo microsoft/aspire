@@ -5,8 +5,8 @@
     <Platform Name="x86" />
   </Configurations>
   <Folder Name="/Components/">
-    <Project Path="../../src/Components/Aspire.Azure.AI.Inference/Aspire.Azure.AI.Inference.csproj" />
-    <Project Path="../../src/Components/Aspire.Azure.AI.OpenAI/Aspire.Azure.AI.OpenAI.csproj" />
+    <Project Path="../../src/Components/Aspire.Azure.AI.Extensions.OpenAI/Aspire.Azure.AI.Extensions.OpenAI.csproj" />
+    <Project Path="../../src/Components/Aspire.Azure.AI.Projects/Aspire.Azure.AI.Projects.csproj" />
     <Project Path="../../src/Components/Aspire.Azure.Data.Tables/Aspire.Azure.Data.Tables.csproj" />
     <Project Path="../../src/Components/Aspire.Azure.Messaging.EventHubs/Aspire.Azure.Messaging.EventHubs.csproj" />
     <Project Path="../../src/Components/Aspire.Azure.Messaging.ServiceBus/Aspire.Azure.Messaging.ServiceBus.csproj" />
@@ -26,7 +26,6 @@
     <Project Path="../../src/Components/Aspire.Microsoft.EntityFrameworkCore.SqlServer/Aspire.Microsoft.EntityFrameworkCore.SqlServer.csproj" />
     <Project Path="../../src/Components/Aspire.Microsoft.Extensions.Configuration.AzureAppConfiguration/Aspire.Microsoft.Extensions.Configuration.AzureAppConfiguration.csproj" />
     <Project Path="../../src/Components/Aspire.Milvus.Client/Aspire.Milvus.Client.csproj" />
-    <Project Path="../../src/Components/Aspire.MongoDB.Driver.v2/Aspire.MongoDB.Driver.v2.csproj" />
     <Project Path="../../src/Components/Aspire.MongoDB.Driver/Aspire.MongoDB.Driver.csproj" />
     <Project Path="../../src/Components/Aspire.MySqlConnector/Aspire.MySqlConnector.csproj" />
     <Project Path="../../src/Components/Aspire.NATS.Net/Aspire.NATS.Net.csproj" />
@@ -36,7 +35,6 @@
     <Project Path="../../src/Components/Aspire.Oracle.EntityFrameworkCore/Aspire.Oracle.EntityFrameworkCore.csproj" />
     <Project Path="../../src/Components/Aspire.Pomelo.EntityFrameworkCore.MySql/Aspire.Pomelo.EntityFrameworkCore.MySql.csproj" />
     <Project Path="../../src/Components/Aspire.Qdrant.Client/Aspire.Qdrant.Client.csproj" />
-    <Project Path="../../src/Components/Aspire.RabbitMQ.Client.v6/Aspire.RabbitMQ.Client.v6.csproj" />
     <Project Path="../../src/Components/Aspire.RabbitMQ.Client/Aspire.RabbitMQ.Client.csproj" />
     <Project Path="../../src/Components/Aspire.Seq/Aspire.Seq.csproj" />
     <Project Path="../../src/Components/Aspire.StackExchange.Redis.DistributedCaching/Aspire.StackExchange.Redis.DistributedCaching.csproj" />
@@ -367,8 +365,8 @@
     <Project Path="../../tests/Aspire.Cli.Tests/Aspire.Cli.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Components/">
-    <Project Path="../../tests/Aspire.Azure.AI.Inference.Tests/Aspire.Azure.AI.Inference.Tests.csproj" />
-    <Project Path="../../tests/Aspire.Azure.AI.OpenAI.Tests/Aspire.Azure.AI.OpenAI.Tests.csproj" />
+    <Project Path="../../tests/Aspire.Azure.AI.Extensions.OpenAI.Tests/Aspire.Azure.AI.Extensions.OpenAI.Tests.csproj" />
+    <Project Path="../../tests/Aspire.Azure.AI.Projects.Tests/Aspire.Azure.AI.Projects.Tests.csproj" />
     <Project Path="../../tests/Aspire.Azure.Data.Tables.Tests/Aspire.Azure.Data.Tables.Tests.csproj" />
     <Project Path="../../tests/Aspire.Azure.Messaging.EventHubs.Tests/Aspire.Azure.Messaging.EventHubs.Tests.csproj" />
     <Project Path="../../tests/Aspire.Azure.Messaging.ServiceBus.Tests/Aspire.Azure.Messaging.ServiceBus.Tests.csproj" />
@@ -390,7 +388,6 @@
     <Project Path="../../tests/Aspire.Microsoft.Extensions.Configuration.AzureAppConfiguration.Tests/Aspire.Microsoft.Extensions.Configuration.AzureAppConfiguration.Tests.csproj" />
     <Project Path="../../tests/Aspire.Milvus.Client.Tests/Aspire.Milvus.Client.Tests.csproj" />
     <Project Path="../../tests/Aspire.MongoDB.Driver.Tests/Aspire.MongoDB.Driver.Tests.csproj" />
-    <Project Path="../../tests/Aspire.MongoDB.Driver.v2.Tests/Aspire.MongoDB.Driver.v2.Tests.csproj" />
     <Project Path="../../tests/Aspire.MySqlConnector.Tests/Aspire.MySqlConnector.Tests.csproj" />
     <Project Path="../../tests/Aspire.NATS.Net.Tests/Aspire.NATS.Net.Tests.csproj" />
     <Project Path="../../tests/Aspire.Npgsql.EntityFrameworkCore.PostgreSQL.Tests/Aspire.Npgsql.EntityFrameworkCore.PostgreSQL.Tests.csproj" />
@@ -400,7 +397,6 @@
     <Project Path="../../tests/Aspire.Pomelo.EntityFrameworkCore.MySql.Tests/Aspire.Pomelo.EntityFrameworkCore.MySql.Tests.csproj" />
     <Project Path="../../tests/Aspire.Qdrant.Client.Tests/Aspire.Qdrant.Client.Tests.csproj" />
     <Project Path="../../tests/Aspire.RabbitMQ.Client.Tests/Aspire.RabbitMQ.Client.Tests.csproj" />
-    <Project Path="../../tests/Aspire.RabbitMQ.Client.v6.Tests/Aspire.RabbitMQ.Client.v6.Tests.csproj" />
     <Project Path="../../tests/Aspire.Seq.Tests/Aspire.Seq.Tests.csproj" />
     <Project Path="../../tests/Aspire.StackExchange.Redis.DistributedCaching.Tests/Aspire.StackExchange.Redis.DistributedCaching.Tests.csproj" />
     <Project Path="../../tests/Aspire.StackExchange.Redis.OutputCaching.Tests/Aspire.StackExchange.Redis.OutputCaching.Tests.csproj" />

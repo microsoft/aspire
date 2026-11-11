@@ -1,0 +1,6 @@
+﻿{
+  settings.txt:
+First: True
+Second: True
+
+}

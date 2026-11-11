@@ -49,6 +49,8 @@ After restore, `dotnet` commands run from this repo use the repo-local SDK becau
 
 First run `./restore.sh` (macOS and Linux) or `.\restore.cmd` (Windows) to install the repo-local .NET SDK. Then build with `./build.sh` (macOS and Linux) or `.\build.cmd` (Windows).
 
+The repository uses the .NET 11 SDK pinned in `global.json` and .NET 10/11 runtimes. The default library target is `net10.0`; multitargeted libraries also target `net11.0`. The CLI targets `net11.0`. .NET 8/9 SDKs and runtimes are not needed for local builds or tests. MSBuild tasks retain a `net472` target for Visual Studio, and compiler-hosted analyzers retain `netstandard2.0`.
+
 Builds treat warnings as errors, except for the repository-wide `WarningsNotAsErrors` policy. The build entry points evaluate `eng/WarningPolicy.proj`, which imports `Directory.Build.props`, with the build's configuration and MSBuild property arguments. They forward the resulting exemptions through Arcade's `-warnNotAsError` option so they also apply to its standalone NuGet restore. Additional exemptions supplied with that option are merged with the evaluated policy; warning codes do not need to be duplicated in the scripts. Cleanup (`-clean`) skips this evaluation and does not require installing the SDK.
 
 NuGet auditing uses `https://data.nuget.org/v3/index.json` for vulnerability metadata, independently of the package download feeds. Vulnerability findings remain visible as warnings by default. Pass `/p:TreatNuGetAuditWarningsAsErrors=true` to make them errors instead. Arcade disables auditing for official builds; this behavior is unchanged. These exemptions do not remediate vulnerable dependencies.
@@ -65,6 +67,9 @@ In your shell or in VS Code:
 dotnet restore playground/TestShop/TestShop.AppHost/TestShop.AppHost.csproj
 dotnet run --project playground/TestShop/TestShop.AppHost/TestShop.AppHost.csproj
 ```
+
+`dotnet run` delegates to `aspire run` for local orchestration. To publish deployment
+artifacts, use `aspire publish` instead of passing `--operation publish` to `dotnet run`.
 
 Or, if you are using Visual Studio:
 
@@ -109,6 +114,38 @@ To test changes from a specific pull request locally, see [dogfooding-pull-reque
 
 To validate how the CLI resolves `Aspire.*` packages for **staging** and **stable** release-branch builds (including making an installed PR build behave like a staging build), see [cli-staging-validation.md](/docs/cli-staging-validation.md).
 
+The Go CLI E2E scenarios in `GoCodegenValidationTests` cover interactive initialization,
+non-interactive initialization in an empty directory and alongside an existing Go application,
+SDK refresh, and Go build/vet checks. `GoStarterTemplateTests.RestoreAndBuildGoStarterFromStablePackages`
+requires a stable-shaped local hive; normal prerelease PR archives skip that test.
+
+**Prerequisite:** use an already-built stable-shaped local-hive archive containing the CLI
+and matching packages at an unpublished stable version. Building one with
+`localhive --version 17.0.99 --archive` currently fails during packing with `NU5104`
+because stable component packages depend on prerelease .NET 11 packages. This also
+affects Linux; changing the RID does not avoid the package-version restriction.
+The test command below does not prepare that archive or validate a stable native bundle.
+
+Given such an archive, exercise both classes on Linux with Docker:
+
+```bash
+ASPIRE_E2E_ARCHIVE="/path/to/stable-shaped-localhive.tar.gz" \
+  dotnet test --project tests/Aspire.Cli.EndToEnd.Tests/Aspire.Cli.EndToEnd.Tests.csproj --no-launch-profile -- \
+    --filter-class "*.GoCodegenValidationTests" --filter-class "*.GoStarterTemplateTests" \
+    --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"
+```
+
+Use an unpublished stable version for the local hive. The stable starter test runs the CLI
+with a stable identity, an isolated NuGet cache and the hive as its package source. It checks
+the exact Go and Redis package pins, regenerates the SDK and compiles/vets it. The separate
+`CreateAndRunGoStarterProject` scenario verifies startup using the archive's normal channel.
+
+### NuGet configuration in CLI unit tests
+
+Use `NuGetTestHelper.CreateClient()` or `CreateService()` for tests that compose real NuGet configuration, and `NuGetTestHelper.LoadSettings()` for native settings assertions. These helpers preserve directory-level configuration inheritance while replacing the runner's user-wide settings with a controlled baseline and excluding machine-wide settings by default. Supply `TestMachineWideSettings` explicitly when testing machine-wide policy.
+
+`TemporaryWorkspace.CreateForCli()` isolates Aspire settings, not NuGet settings. Do not change process-wide environment variables to isolate NuGet configuration in parallel tests.
+
 ## Coding Agents
 
 Aspire uses GitHub Copilot automatic code review on pull requests. We expect Copilot review comments to be reviewed and addressed before merging, either by making the requested change or by explaining why a suggested change is not needed.
@@ -149,6 +186,8 @@ Make sure you [build the repo](#build-the-repo) from command line at least once 
 ## Area-specific guidance
 
 ### Localization
+
+Shared metadata in `Directory.Build.targets` automatically configures resource/designer pairs in each project's `Resources` and `Properties` directories. Add a neutral resource as `Name.resx` with its matching `Name.Designer.cs`; both files must exist before the shared generator metadata applies, and no per-file project entries are needed. Dotted neutral names such as `Errors.Validation.resx` are supported. Resource classes use `ResXFileCodeGenerator` (internal) by default. The Dashboard sets `ResxCodeGenerator` to `PublicResXFileCodeGenerator` to keep its resource classes public. Culture-specific files such as `Name.fr.resx` should not have checked-in designers and are not configured for designer generation. Unrelated designers such as `Settings.Designer.cs` and linked resources outside these project-local directories are unchanged. This is still Visual Studio custom-tool generation, not build-time source generation: keep the checked-in designer file synchronized with the neutral resource file.
 
 If you are contributing to Aspire.Dashboard, please ensure that all strings are localized. If necessary,
 create a new resx file under `src/Aspire.Dashboard/Resources`. To reference a string, ensure the `IStringLocalizer` for the resx file is
@@ -213,6 +252,10 @@ cd playground/rust
 ```
 
 On Windows, use `..\..\run-aspire.cmd` instead. Use [`localhive`](#creating-a-local-aspire-build-with-localhive) when you need to validate the complete locally built product, including packages and the bundle payload.
+
+To debug the CLI in VS Code, install the Microsoft C# extension, open the repository root, and select **Debug Aspire CLI** in **Run and Debug**. Set a breakpoint and press <kbd>F5</kbd>. The launch configuration builds the CLI in Debug mode and runs the managed assembly in the integrated terminal so interactive prompts work.
+
+The configuration defaults to `--help`. Edit `args` in [`.vscode/launch.json`](../.vscode/launch.json) to pass a command and its options as separate array entries. For app-specific commands such as `run`, also set `cwd` to the directory containing your AppHost. Follow the [VS Code setup instructions](#using-vs-code) if the repository SDK is not available.
 
 ### Generating local NuGet packages
 

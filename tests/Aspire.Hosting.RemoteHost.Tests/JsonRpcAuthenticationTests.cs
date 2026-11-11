@@ -6,10 +6,13 @@ using System.Net.Sockets;
 using System.Text.Json;
 using Aspire.Hosting.RemoteHost.Ats;
 using Aspire.Hosting.RemoteHost.Diagnostics;
+using Aspire.Shared;
 using Aspire.Tests.Utils;
+using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using StreamJsonRpc;
 using Xunit;
@@ -22,6 +25,8 @@ public sealed class JsonRpcAuthenticationTests(ITestOutputHelper outputHelper)
     {
         { "cancelToken", ["ct_missing"] },
         { "invokeCapability", ["test-capability", null] },
+        { "registerAsIntegrationHost", ["registration"] },
+        { "invokeGuestCallback", ["callback", null] },
         { "getCapabilities", [] },
         { "generateCode", ["TypeScript"] },
         { "scaffoldAppHost", ["TypeScript", "/tmp/apphost", "AppHost"] },
@@ -144,6 +149,107 @@ public sealed class JsonRpcAuthenticationTests(ITestOutputHelper outputHelper)
         Assert.Equal(originalMode, File.GetUnixFileMode(target.FullName));
     }
 
+    [Fact]
+    public async Task ConnectionSetupFailure_ClosesClientStreamAndLogsError()
+    {
+        using var workspace = CreateSocketWorkspace();
+        var socketPath = OperatingSystem.IsWindows()
+            ? $"aspire-remotehost-test-{Guid.NewGuid():N}"
+            : Path.Combine(workspace.Path, "rpc", "rpc.sock");
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["REMOTE_APP_HOST_SOCKET_PATH"] = socketPath
+        }).Build();
+        using var services = new ServiceCollection().BuildServiceProvider();
+        var logger = new RecordingLogger<JsonRpcServer>();
+        using var server = new JsonRpcServer(
+            configuration,
+            services.GetRequiredService<IServiceScopeFactory>(),
+            logger,
+            new RemoteHostProfilingTelemetry(configuration));
+
+        await server.StartAsync(TestContext.Current.CancellationToken);
+        await server.Listening.DefaultTimeout();
+        await using var stream = await RemoteHostTestServer.ConnectToServerAsync(socketPath, TestContext.Current.CancellationToken);
+
+        Assert.Equal(0, await stream.ReadAsync(new byte[1], TestContext.Current.CancellationToken).AsTask()
+            .WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken));
+        var entry = Assert.Single(logger.Entries, entry => entry.Level >= LogLevel.Warning);
+        Assert.Equal(LogLevel.Error, entry.Level);
+        var error = Assert.IsType<InvalidOperationException>(entry.Exception);
+        Assert.Equal($"No service for type '{typeof(RemoteAppHostService).FullName}' has been registered.", error.Message);
+        Assert.Matches("^Client [0-9a-f]{8} unexpected error$", entry.Message);
+
+        await server.StopAsync(TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
+    public async Task Listening_CompletesBeforeFirstConnectionAttempt()
+    {
+        // Host startup does not wait for BackgroundService.ExecuteAsync to create the endpoint
+        // (https://github.com/microsoft/aspire/issues/18840). Repeat to cover that scheduling race.
+        for (var i = 0; i < 20; i++)
+        {
+            using var workspace = CreateSocketWorkspace();
+            await using var server = await RemoteHostTestServer.StartAsync(workspace, existingDirectory: true);
+            await using var client = await server.ConnectAsync();
+
+            Assert.Equal("pong", await client.InvokeAsync<string>("ping"));
+        }
+    }
+
+    [Fact]
+    public async Task Listening_FaultsWhenServerFailsBeforeListening()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        using var workspace = CreateSocketWorkspace();
+        var blockingFile = Path.Combine(workspace.Path, "not-a-directory");
+        await File.WriteAllTextAsync(blockingFile, string.Empty, TestContext.Current.CancellationToken);
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["REMOTE_APP_HOST_SOCKET_PATH"] = Path.Combine(blockingFile, "rpc.sock")
+        }).Build();
+        using var services = new ServiceCollection().BuildServiceProvider();
+        using var server = new JsonRpcServer(
+            configuration,
+            services.GetRequiredService<IServiceScopeFactory>(),
+            NullLogger<JsonRpcServer>.Instance,
+            new RemoteHostProfilingTelemetry(configuration));
+
+        await server.StartAsync(TestContext.Current.CancellationToken);
+
+        var error = await Assert.ThrowsAnyAsync<IOException>(() => server.Listening.DefaultTimeout());
+        Assert.Same(error, await Assert.ThrowsAnyAsync<IOException>(() => server.ExecuteTask!.DefaultTimeout()));
+    }
+
+    [Fact]
+    public async Task Listening_IsCanceledWhenServerStopsBeforeListening()
+    {
+        using var workspace = CreateSocketWorkspace();
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["REMOTE_APP_HOST_SOCKET_PATH"] = OperatingSystem.IsWindows()
+                ? $"aspire-remotehost-test-{Guid.NewGuid():N}"
+                : Path.Combine(workspace.Path, "rpc", "rpc.sock")
+        }).Build();
+        using var services = new ServiceCollection().BuildServiceProvider();
+        using var server = new JsonRpcServer(
+            configuration,
+            services.GetRequiredService<IServiceScopeFactory>(),
+            NullLogger<JsonRpcServer>.Instance,
+            new RemoteHostProfilingTelemetry(configuration));
+
+        using var stopped = new CancellationTokenSource();
+        stopped.Cancel();
+        await server.StartAsync(stopped.Token);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => server.Listening.DefaultTimeout());
+    }
+
     private TemporaryWorkspace CreateSocketWorkspace()
     {
         // The default workspace path includes the assembly name and can exceed Unix socket
@@ -187,9 +293,24 @@ public sealed class JsonRpcAuthenticationTests(ITestOutputHelper outputHelper)
             });
 
             ConfigureServices(builder.Services);
+            builder.ConfigureContainer(new DefaultServiceProviderFactory(new ServiceProviderOptions
+            {
+                ValidateOnBuild = true,
+                ValidateScopes = true
+            }));
 
             var host = builder.Build();
             await host.StartAsync();
+            try
+            {
+                await host.Services.GetServices<IHostedService>().OfType<JsonRpcServer>().Single().Listening.DefaultTimeout();
+            }
+            catch
+            {
+                await host.StopAsync();
+                host.Dispose();
+                throw;
+            }
 
             return new RemoteHostTestServer(host, socketPath);
         }
@@ -230,6 +351,14 @@ public sealed class JsonRpcAuthenticationTests(ITestOutputHelper outputHelper)
             services.AddSingleton<Language.LanguageSupportResolver>();
             services.AddScoped<Language.LanguageService>();
 
+            // CodeGenerationService depends on ExternalCapabilityRegistry + IntegrationHostLauncher
+            services.AddSingleton<Ats.ExternalCapabilityRegistry>();
+            services.AddSingleton<Language.IntegrationHostLauncher>();
+            services.AddSingleton(sp => new Language.IntegrationHostConfiguration(sp.GetRequiredService<IConfiguration>()));
+            services.AddSingleton<Language.IntegrationHostProcessLauncher>();
+            services.AddSingleton<IChildProcessFactory, ChildProcessFactory>();
+            services.AddSingleton(TimeProvider.System);
+
             services.AddScoped<JsonRpcAuthenticationState>();
             services.AddScoped<HandleRegistry>();
             services.AddScoped<CancellationTokenRegistry>();
@@ -242,42 +371,40 @@ public sealed class JsonRpcAuthenticationTests(ITestOutputHelper outputHelper)
             services.AddScoped<RemoteAppHostService>();
         }
 
-        private static async Task<Stream> ConnectToServerAsync(string socketPath, CancellationToken cancellationToken)
+        // Callers must first observe JsonRpcServer.Listening, so a single connection attempt is expected to succeed.
+        public static async Task<Stream> ConnectToServerAsync(string socketPath, CancellationToken cancellationToken)
         {
-            using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
+            // Bounds the single attempt (including time queued on the thread pool) so a stalled connect fails instead of hanging.
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutCts.CancelAfter(TestConstants.DefaultTimeoutTimeSpan);
 
-            Exception? lastException = null;
-
-            while (!linkedCts.Token.IsCancellationRequested)
+            if (OperatingSystem.IsWindows())
             {
+                var pipeClient = new NamedPipeClientStream(".", socketPath, PipeDirection.InOut, PipeOptions.Asynchronous);
                 try
                 {
-                    if (OperatingSystem.IsWindows())
-                    {
-                        var pipeClient = new NamedPipeClientStream(".", socketPath, PipeDirection.InOut, PipeOptions.Asynchronous);
-                        await pipeClient.ConnectAsync(linkedCts.Token);
-                        return pipeClient;
-                    }
-
-                    var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
-                    await socket.ConnectAsync(new UnixDomainSocketEndPoint(socketPath), linkedCts.Token);
-                    return new NetworkStream(socket, ownsSocket: true);
+                    // A zero timeout makes one attempt instead of polling until the pipe appears.
+                    await pipeClient.ConnectAsync(timeout: 0, timeoutCts.Token);
+                    return pipeClient;
                 }
-                catch (Exception ex) when (ex is IOException or SocketException or TimeoutException or OperationCanceledException)
+                catch
                 {
-                    lastException = ex;
-
-                    if (timeoutCts.IsCancellationRequested)
-                    {
-                        break;
-                    }
-
-                    await Task.Delay(100, cancellationToken);
+                    await pipeClient.DisposeAsync();
+                    throw;
                 }
             }
 
-            throw new TimeoutException($"Timed out connecting to test RPC server '{socketPath}'.", lastException);
+            var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+            try
+            {
+                await socket.ConnectAsync(new UnixDomainSocketEndPoint(socketPath), timeoutCts.Token);
+                return new NetworkStream(socket, ownsSocket: true);
+            }
+            catch
+            {
+                socket.Dispose();
+                throw;
+            }
         }
     }
 

@@ -45,6 +45,11 @@ public class AspireOpenAIClientBuilder(IHostApplicationBuilder hostBuilder, stri
     public bool DisableTracing { get; } = disableTracing;
 
     /// <summary>
+    /// Gets a flag indicating whether metrics should be disabled.
+    /// </summary>
+    public bool DisableMetrics { get; init; }
+
+    /// <summary>
     /// Gets a flag indicating whether potentially sensitive information should be included in telemetry.
     /// </summary>
     public bool EnableSensitiveTelemetryData { get; } = enableSensitiveTelemetryData;
@@ -61,7 +66,10 @@ public class AspireOpenAIClientBuilder(IHostApplicationBuilder hostBuilder, stri
         string? deploymentName = null;
 
         var configuration = HostBuilder.Configuration;
-        if (configuration.TryGetConnectionString(ConnectionName, out var connectionString))
+        // Azure clients also accept a bare endpoint such as "https://account.openai.azure.com".
+        // In that form the model/deployment is supplied by settings, not connection-string fields.
+        if (configuration.TryGetConnectionString(ConnectionName, out var connectionString) &&
+            !Uri.TryCreate(connectionString, UriKind.Absolute, out _))
         {
             // Some hosting solutions require named deployments, while others identify the target directly by model name.
             var connectionBuilder = new DbConnectionStringBuilder { ConnectionString = connectionString };

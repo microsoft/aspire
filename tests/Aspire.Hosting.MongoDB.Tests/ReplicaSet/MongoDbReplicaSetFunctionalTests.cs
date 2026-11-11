@@ -104,12 +104,14 @@ public class MongoDbReplicaSetFunctionalTests(ITestOutputHelper testOutputHelper
         await app.StopAsync();
     }
 
-    [Fact]
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
     [RequiresFeature(TestFeature.Docker)]
     [RequiresFeature(TestFeature.DevCert)]
-    public async Task VerifyMongoExpressConnectsToAReplicaSetMember()
+    public async Task VerifyMongoExpressConnectsToAReplicaSetMember(bool addCompanionBeforeMember)
     {
-        var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
+        using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
         var pipeline = new ResiliencePipelineBuilder()
             .AddRetry(new() { MaxRetryAttempts = 30, Delay = TimeSpan.FromSeconds(3) })
             .Build();
@@ -119,8 +121,18 @@ public class MongoDbReplicaSetFunctionalTests(ITestOutputHelper testOutputHelper
         // NOTE: Members of a replica set serve TLS and have no primary until the set has been initiated, so this covers the
         // companion admin UI against the hardest shape of MongoDB server this integration can produce.
         var mongoExpress = null as IResourceBuilder<MongoExpressContainerResource>;
-        var mongo = builder.AddMongoDB("mongo1").WithMongoExpress(configureContainer: c => mongoExpress = c);
-        var rs = builder.AddMongoDBReplicaSet("rs0").WithMember(mongo);
+        var mongo = builder.AddMongoDB("mongo1");
+        var rs = builder.AddMongoDBReplicaSet("rs0");
+        if (addCompanionBeforeMember)
+        {
+            mongo.WithMongoExpress(configureContainer: c => mongoExpress = c);
+            rs.WithMember(mongo);
+        }
+        else
+        {
+            rs.WithMember(mongo);
+            mongo.WithMongoExpress(configureContainer: c => mongoExpress = c);
+        }
 
         Assert.NotNull(mongoExpress);
 

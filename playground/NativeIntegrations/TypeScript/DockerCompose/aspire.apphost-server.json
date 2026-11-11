@@ -1,0 +1,9 @@
+{
+  "protocolVersion": 2,
+  "packageName": "example.ts.docker-compose",
+  "metadata": "provider-contract.json",
+  "sdkFiles": {
+    "docker-compose.mts": "docker-compose.mts"
+  },
+  "exports": ["docker-compose.mts"]
+}

@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Dashboard.Components.Controls;
 using Aspire.Dashboard.Model.Interaction;
 using Microsoft.AspNetCore.Components;
 using Microsoft.FluentUI.AspNetCore.Components;
@@ -10,6 +11,7 @@ namespace Aspire.Dashboard.Components.Dialogs;
 public partial class InteractionsTerminalDialog
 {
     private InteractionsTerminalDialogViewModel? _content;
+    private TerminalToolbarState _terminalState = new();
 
     [Parameter]
     public InteractionsTerminalDialogViewModel Content { get; set; } = default!;
@@ -25,6 +27,10 @@ public partial class InteractionsTerminalDialog
     {
         if (_content != Content)
         {
+            if (!string.Equals(_content?.TerminalId, Content.TerminalId, StringComparison.Ordinal))
+            {
+                _terminalState = new();
+            }
             _content?.OnInteractionUpdated = null;
             _content = Content;
             _content.OnInteractionUpdated = () => InvokeAsync(StateHasChanged);
@@ -32,6 +38,8 @@ public partial class InteractionsTerminalDialog
     }
 
     private Task CancelAsync() => Dialog.CloseAsync(DialogResult.Ok("cancel"));
+
+    private void OnTerminalToolbarStateChanged(TerminalToolbarState state) => _terminalState = state;
 
     public void Dispose()
     {

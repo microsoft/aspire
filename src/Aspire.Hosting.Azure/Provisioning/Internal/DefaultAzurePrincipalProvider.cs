@@ -3,6 +3,7 @@
 
 using System.Text.Json;
 using Azure.Core;
+using Azure.Identity;
 
 namespace Aspire.Hosting.Azure.Provisioning.Internal;
 
@@ -26,7 +27,16 @@ internal sealed class DefaultAzurePrincipalProvider(ITokenCredentialProvider tok
     public async Task<AzurePrincipal> GetPrincipalAsync(CancellationToken cancellationToken = default)
     {
         var credential = tokenCredentialProvider.TokenCredential;
-        var response = await credential.GetTokenAsync(new(["https://graph.windows.net/.default"]), cancellationToken).ConfigureAwait(false);
+        const string scope = "https://graph.windows.net/.default";
+        AccessToken response;
+        try
+        {
+            response = await credential.GetTokenAsync(new([scope]), cancellationToken).ConfigureAwait(false);
+        }
+        catch (AuthenticationFailedException ex)
+        {
+            throw new AuthenticationFailedException($"Azure principal authentication failed for token scope '{scope}'. Refresh the configured credential before deploying.", ex);
+        }
 
         static AzurePrincipal ParseToken(in AccessToken response)
         {

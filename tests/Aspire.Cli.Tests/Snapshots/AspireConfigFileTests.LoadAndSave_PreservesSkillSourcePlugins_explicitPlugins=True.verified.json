@@ -1,0 +1,15 @@
+﻿{
+  "channel": "daily",
+  "skillSources": {
+    "default": {
+      "enabled": false
+    },
+    "team": {
+      "repository": "example/local",
+      "plugins": [
+        "local",
+        "release"
+      ]
+    }
+  }
+}

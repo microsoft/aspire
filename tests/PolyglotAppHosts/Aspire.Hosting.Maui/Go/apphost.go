@@ -9,7 +9,7 @@ import (
 func main() {
 	builder, err := aspire.CreateBuilder()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	maui := builder.AddMauiProject("mauiapp", "../../../../AspireWithMaui/AspireWithMaui.MauiClient/AspireWithMaui.MauiClient.csproj")
@@ -20,14 +20,14 @@ func main() {
 	maui.AddiOSDevice("mauiapp-ios-device", &aspire.AddiOSDeviceOptions{DeviceId: aspire.StringPtr("00008030-001234567890123A")}).WithOtlpDevTunnel()
 	maui.AddiOSSimulator("mauiapp-ios-simulator", &aspire.AddiOSSimulatorOptions{SimulatorId: aspire.StringPtr("E25BBE37-69BA-4720-B6FD-D54C97791E79")}).WithOtlpDevTunnel()
 	if err = maui.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	app, err := builder.Build()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 	if err := app.Run(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 }

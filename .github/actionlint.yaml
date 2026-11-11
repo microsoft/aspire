@@ -1,3 +1,7 @@
+self-hosted-runner:
+  labels:
+    - 8-core-ubuntu-latest
+
 paths:
   .github/workflows/{extension-changelog,pr-docs-check,release-notes-generate,release-update-support-mdx}.lock.yml:
     ignore:

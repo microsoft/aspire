@@ -107,6 +107,7 @@ public class LayoutDiscoveryReparsePointTests(ITestOutputHelper outputHelper)
         var dashboardPath = Path.Combine(versionedDashboard, BundleDiscovery.GetExecutableFileName(BundleDiscovery.DashboardExecutableName));
         File.WriteAllText(dashboardPath, "stub");
         File.WriteAllText(BundleDiscovery.GetDcpExecutablePath(versionedDcp), "stub");
+        CreateTerminalHostPayload(versionsDir);
 
         // Create a single bundle/ link pointing at the versioned directory.
         var bundleLink = Path.Combine(layoutRoot, BundleDiscovery.BundleDirectoryName);
@@ -229,6 +230,7 @@ public class LayoutDiscoveryReparsePointTests(ITestOutputHelper outputHelper)
         var componentRoot = useBundleDirectory
             ? Path.Combine(layoutRoot, BundleDiscovery.BundleDirectoryName)
             : layoutRoot;
+        CreateTerminalHostPayload(componentRoot);
         var managedDir = Directory.CreateDirectory(Path.Combine(componentRoot, BundleDiscovery.ManagedDirectoryName));
         Directory.CreateDirectory(Path.Combine(componentRoot, BundleDiscovery.DcpDirectoryName));
         File.WriteAllText(
@@ -263,6 +265,7 @@ public class LayoutDiscoveryReparsePointTests(ITestOutputHelper outputHelper)
         var componentRoot = useBundleDirectory
             ? Path.Combine(layoutRoot, BundleDiscovery.BundleDirectoryName)
             : layoutRoot;
+        CreateTerminalHostPayload(componentRoot);
         var managedDir = Directory.CreateDirectory(Path.Combine(componentRoot, BundleDiscovery.ManagedDirectoryName));
         var dcpDir = Directory.CreateDirectory(Path.Combine(componentRoot, BundleDiscovery.DcpDirectoryName));
         File.WriteAllText(
@@ -314,5 +317,16 @@ public class LayoutDiscoveryReparsePointTests(ITestOutputHelper outputHelper)
             Path.Combine(dashboardDir, BundleDiscovery.GetExecutableFileName(BundleDiscovery.DashboardExecutableName)),
             "stub");
         File.WriteAllText(BundleDiscovery.GetDcpExecutablePath(dcpDir), "stub");
+        CreateTerminalHostPayload(bundleDir);
+    }
+
+    private static void CreateTerminalHostPayload(string componentRoot)
+    {
+        foreach (var file in TerminalHostPayload.GetRequiredFiles(System.Runtime.InteropServices.RuntimeInformation.RuntimeIdentifier))
+        {
+            var path = Path.Combine(componentRoot, BundleDiscovery.TerminalHostDirectoryName, file);
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllText(path, "stub");
+        }
     }
 }

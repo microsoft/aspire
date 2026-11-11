@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREPIPELINES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-#pragma warning disable ASPIREPIPELINES002
 #pragma warning disable ASPIREPIPELINES003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIRECONTAINERRUNTIME001
 
@@ -28,6 +26,9 @@ namespace Aspire.Hosting.Docker;
 [AspireExport(ExposeProperties = true, ExposeMethods = true)]
 public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentResource, IComputeEnvironmentWithVolumeMounts
 {
+    /// <inheritdoc/>
+    public override string ResourceTypeDisplayName => "Docker Compose Environment";
+
     private const string DockerComposeUpTag = "docker-compose-up";
 
     /// <summary>
@@ -51,6 +52,8 @@ public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentRes
     /// These will be populated into a top-level .env file adjacent to the Docker Compose file.
     /// </summary>
     internal Dictionary<string, CapturedEnvironmentVariable> CapturedEnvironmentVariables { get; } = [];
+
+    internal EndpointPropertyInputCache EndpointInputs { get; } = new();
 
     internal Dictionary<IResource, DockerComposeServiceResource> ResourceMapping { get; } = new(new ResourceNameComparer());
 
@@ -271,6 +274,7 @@ public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentRes
 
     private Task PublishAsync(PipelineStepContext context)
     {
+        EndpointInputs.ReserveModelNames(context.Model.Resources);
         var outputPath = PublishingContextUtils.GetEnvironmentOutputPath(context, this);
         var imageBuilder = context.Services.GetRequiredService<IResourceContainerImageManager>();
 

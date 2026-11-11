@@ -1,0 +1,98 @@
+@using Aspire.Dashboard.Resources
+
+<div class="tag-editor">
+    @if (_tags.Count > 0)
+    {
+        <ul class="tag-list" aria-label="@Loc[nameof(Dashboard.Resources.Resources.ResourceTagsLabel)]">
+            @foreach (var tag in _tags)
+            {
+                <li class="tag-chip" @key="tag">
+                    <FluentIcon Value="@(new Icons.Filled.Size16.Tag())" Width="12px" Color="Color.Custom" CustomColor="@ColorGenerator.Instance.GetColorVariableByKey(tag)" />
+                    <span class="tag-chip-name">@tag</span>
+                    @if (IsAppHostTag(tag))
+                    {
+                        <span class="tag-chip-lock" role="img"
+                              data-tooltip="@Loc[nameof(Dashboard.Resources.Resources.ResourceTagsAppHostDefined)]"
+                              aria-label="@Loc[nameof(Dashboard.Resources.Resources.ResourceTagsAppHostDefined)]">
+                            <FluentIcon Value="@(new Icons.Regular.Size12.LockClosed())" Width="10px" Color="Color.Custom" CustomColor="currentColor" />
+                        </span>
+                    }
+                    else
+                    {
+                        <button type="button"
+                                class="tag-chip-remove"
+                                data-tooltip="@string.Format(CultureInfo.CurrentCulture, Loc[nameof(Dashboard.Resources.Resources.ResourceTagsRemove)], tag)"
+                                aria-label="@string.Format(CultureInfo.CurrentCulture, Loc[nameof(Dashboard.Resources.Resources.ResourceTagsRemove)], tag)"
+                                @onclick="@(() => RemoveTag(tag))">
+                            <FluentIcon Value="@(new Icons.Regular.Size12.Dismiss())" Width="10px" Color="Color.Custom" CustomColor="currentColor" />
+                        </button>
+                    }
+                </li>
+            }
+        </ul>
+    }
+
+    @if (_isEditing)
+    {
+        var activeOptionId = _activeIndex >= 0 && _activeIndex < _options.Count ? GetOptionId(_activeIndex) : null;
+        <div class="tag-input-container">
+            <FluentIcon Value="@(new Icons.Regular.Size16.Tag())" Width="12px" Color="Color.Custom" CustomColor="var(--colorNeutralForeground3)" />
+            @* The suggestions follow the ARIA combobox pattern: focus stays in the input while the arrow keys move the active option. *@
+            <input @ref="_input"
+                   class="tag-input"
+                   type="text"
+                   role="combobox"
+                   autocomplete="off"
+                   spellcheck="false"
+                   maxlength="@ResourceTagStore.MaxTagLength"
+                   placeholder="@Loc[nameof(Dashboard.Resources.Resources.ResourceTagsInputPlaceholder)]"
+                   aria-label="@string.Format(CultureInfo.CurrentCulture, Loc[nameof(Dashboard.Resources.Resources.ResourceTagsInputLabel)], ResourceName)"
+                   aria-autocomplete="list"
+                   aria-expanded="@((_options.Count > 0).ToString().ToLowerInvariant())"
+                   aria-controls="@ListboxId"
+                   aria-activedescendant="@activeOptionId"
+                   @bind="_text"
+                   @bind:event="oninput"
+                   @bind:after="UpdateOptions"
+                   @onkeydown="OnKeyDown"
+                   @onfocusout="CloseEditor" />
+
+            @if (_options.Count > 0)
+            {
+                <ul id="@ListboxId" class="tag-suggestions" role="listbox" aria-label="@Loc[nameof(Dashboard.Resources.Resources.ResourceTagsSuggestions)]">
+                    @for (var i = 0; i < _options.Count; i++)
+                    {
+                        var index = i;
+                        var option = _options[i];
+                        @* Keep focus in the input when an option is clicked, so the editor stays open to add more tags. *@
+                        <li id="@GetOptionId(index)"
+                            role="option"
+                            class="tag-suggestion @(index == _activeIndex ? "active" : string.Empty)"
+                            aria-selected="@((index == _activeIndex).ToString().ToLowerInvariant())"
+                            @key="@($"{option.IsNew}:{option.Tag}")"
+                            @onmousedown:preventDefault="true"
+                            @onclick="@(() => AddTag(option.Tag))">
+                            @if (option.IsNew)
+                            {
+                                <FluentIcon Value="@(new Icons.Regular.Size12.Add())" Width="12px" Color="Color.Custom" CustomColor="var(--colorNeutralForeground2)" />
+                                <span class="tag-suggestion-text">@string.Format(CultureInfo.CurrentCulture, Loc[nameof(Dashboard.Resources.Resources.ResourceTagsCreate)], option.Tag)</span>
+                            }
+                            else
+                            {
+                                <FluentIcon Value="@(new Icons.Filled.Size16.Tag())" Width="12px" Color="Color.Custom" CustomColor="@ColorGenerator.Instance.GetColorVariableByKey(option.Tag)" />
+                                <span class="tag-suggestion-text"><FluentHighlighter HighlightedText="@_text" Text="@option.Tag" /></span>
+                            }
+                        </li>
+                    }
+                </ul>
+            }
+        </div>
+    }
+    else
+    {
+        <button @ref="_addButton" type="button" class="tag-add" @onclick="StartEditing">
+            <FluentIcon Value="@(new Icons.Regular.Size12.Add())" Width="12px" Color="Color.Custom" CustomColor="currentColor" />
+            <span>@Loc[nameof(Dashboard.Resources.Resources.ResourceTagsAdd)]</span>
+        </button>
+    }
+</div>

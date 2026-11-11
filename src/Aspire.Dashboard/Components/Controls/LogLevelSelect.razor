@@ -1,18 +1,14 @@
-﻿@inject IStringLocalizer<Resources.StructuredLogs> Loc
-
-@{
-    var logLevelSelectId = $"log-level-select-{Guid.NewGuid():N}";
-}
+@inject IStringLocalizer<Resources.StructuredLogs> Loc
 
 @if (ViewportInformation.IsDesktop)
 {
-    <label for="@logLevelSelectId">@Loc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsLevels)]</label>
+    <label for="@_logLevelSelectId">@Loc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsLevels)]</label>
 
     <DesktopToolbarDivider />
 
     <FluentSelect TOption="SelectViewModel<LogLevel?>" TValue="SelectViewModel<LogLevel?>"
                   Class="toolbar-select"
-                  Id="@logLevelSelectId"
+                  Id="@_logLevelSelectId"
                   Items="@LogLevels"
                   Position="SelectPosition.Below"
                   OptionText="@(c => c?.Name)"
@@ -26,7 +22,7 @@ else
     <div>
         <FluentSelect TOption="SelectViewModel<LogLevel?>" TValue="SelectViewModel<LogLevel?>"
                       Class="toolbar-select"
-                      Id="@logLevelSelectId"
+                      Id="@_logLevelSelectId"
                       Items="@LogLevels"
                       Position="SelectPosition.Below"
                       OptionText="@(c => c?.Name)"

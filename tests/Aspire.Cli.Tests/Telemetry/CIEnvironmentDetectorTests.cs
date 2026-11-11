@@ -13,8 +13,10 @@ public class CIEnvironmentDetectorTests
     [Fact]
     public void IsCIEnvironment_ReturnsFalse_WhenNoVariablesSet()
     {
-        var detector = new CIEnvironmentDetector(new TestEnvironment());
+        var environment = new TestEnvironment();
+        var detector = new CIEnvironmentDetector(environment);
 
+        Assert.False(CIEnvironmentDetector.IsCIEnvironment(environment));
         Assert.False(detector.IsCIEnvironment());
     }
 
@@ -57,6 +59,7 @@ public class CIEnvironmentDetectorTests
             var environment = new TestEnvironment(new Dictionary<string, string?> { [variableName] = value });
             var detector = new CIEnvironmentDetector(environment);
 
+            Assert.Equal(expected, CIEnvironmentDetector.IsCIEnvironment(environment));
             Assert.Equal(expected, detector.IsCIEnvironment());
         }
     }
@@ -86,6 +89,7 @@ public class CIEnvironmentDetectorTests
             });
             var detector = new CIEnvironmentDetector(environment);
 
+            Assert.Equal(expected, CIEnvironmentDetector.IsCIEnvironment(environment));
             Assert.Equal(expected, detector.IsCIEnvironment());
         }
     }
@@ -106,6 +110,7 @@ public class CIEnvironmentDetectorTests
             var environment = new TestEnvironment(new Dictionary<string, string?> { [variableName] = value });
             var detector = new CIEnvironmentDetector(environment);
 
+            Assert.Equal(expected, CIEnvironmentDetector.IsCIEnvironment(environment));
             Assert.Equal(expected, detector.IsCIEnvironment());
         }
     }
@@ -124,6 +129,7 @@ public class CIEnvironmentDetectorTests
         });
         var detector = new CIEnvironmentDetector(environment);
 
+        Assert.True(CIEnvironmentDetector.IsCIEnvironment(environment));
         Assert.True(detector.IsCIEnvironment());
     }
 
@@ -138,6 +144,7 @@ public class CIEnvironmentDetectorTests
         var environment = new TestEnvironment(new Dictionary<string, string?> { [variableName] = "true" });
         var detector = new CIEnvironmentDetector(environment);
 
+        Assert.False(CIEnvironmentDetector.IsCIEnvironment(environment));
         Assert.False(detector.IsCIEnvironment());
     }
 
@@ -159,6 +166,7 @@ public class CIEnvironmentDetectorTests
 
         var detector = provider.GetRequiredService<ICIEnvironmentDetector>();
 
+        Assert.Equal(expected, CIEnvironmentDetector.IsCIEnvironment(environment));
         Assert.Equal(expected, detector.IsCIEnvironment());
     }
 
@@ -172,6 +180,7 @@ public class CIEnvironmentDetectorTests
         });
         var detector = new CIEnvironmentDetector(environment);
 
+        Assert.False(CIEnvironmentDetector.IsCIEnvironment(environment));
         Assert.False(detector.IsCIEnvironment());
     }
 }

@@ -51,7 +51,7 @@ public partial class PlotlyChart : ChartBase
         return $"""
                 <b>{HttpUtility.HtmlEncode(title)}</b><br />
                 {Loc[nameof(ControlsStrings.PlotlyChartValue)]}: {formattedValue}<br />
-                {Loc[nameof(ControlsStrings.PlotlyChartTime)]}: {FormatHelpers.FormatTime(TimeProvider, TimeProvider.ToLocal(xValue))}
+                {Loc[nameof(ControlsStrings.PlotlyChartTime)]}: {FormatHelpers.FormatTime(TimeProvider, xValue)}
                 """;
     }
 
@@ -174,7 +174,7 @@ public partial class PlotlyChart : ChartBase
 
             var tooltip = FormatTooltip(title, exemplar.Value, exemplar.Start);
 
-            exemplarTraceDto.X.Add(exemplar.Start);
+            exemplarTraceDto.X.Add(TimeProvider.ToLocalDateTimeOffset(exemplar.Start));
             exemplarTraceDto.Y.Add(exemplar.Value);
             exemplarTraceDto.Tooltips.Add(tooltip);
             exemplarTraceDto.TraceData.Add(new PlotlyTraceData(exemplar.TraceId, exemplar.SpanId));

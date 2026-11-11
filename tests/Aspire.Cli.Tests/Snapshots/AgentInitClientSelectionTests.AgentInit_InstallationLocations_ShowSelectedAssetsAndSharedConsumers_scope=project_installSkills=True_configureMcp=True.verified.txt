@@ -1,0 +1,14 @@
+﻿{
+  Agents: [
+    GitHub Copilot,
+    Claude Code,
+    OpenCode
+  ],
+  Results: [
+    Installed skills:
+  Skills: dotnet-inspect
+  Locations: .agents/skills (GitHub Copilot, OpenCode)
+  [dim]Shared files may be discovered by agents that aren't selected.[/],
+    Configure Aspire MCP for GitHub Copilot at <workspace>/.mcp.json
+  ]
+}

@@ -4,6 +4,7 @@ name: Organization-funded Copilot reviews
 
 on:
   pull_request_target:
+    # zizmor: ignore[dangerous-triggers] - the workflow never checks out pull request code or consumes pull request artifacts
     branches: [main, 'release/**']
     # opened: a contributor creates a PR (including a draft); request its initial review.
     # synchronize: commits are pushed or force-pushed to the PR branch; review the new head.

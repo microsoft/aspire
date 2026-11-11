@@ -18,6 +18,7 @@ on:
       - .github/aw/actions-lock.json
       - .github/actionlint.yaml
       - .github/workflows/validate-agentic-workflows.yml
+      - .github/workflows/auto-sec/*.js
 
 permissions:
   contents: read
@@ -25,6 +26,7 @@ permissions:
 jobs:
   validate:
     name: Compile, lint, and test agentic workflows
+    if: ${{ github.repository == 'microsoft/aspire' }}
     runs-on: ubuntu-latest
 
     steps:
@@ -46,8 +48,10 @@ jobs:
         run: |
           # Purging catches source deletions that leave orphaned generated workflows. Refreshing
           # action pins ensures a committed edit to actions-lock.json cannot survive validation.
+          # Match local generation even in forks or checkouts without a canonical origin remote.
           gh aw compile --purge --force-refresh-action-pins \
-            --validate --no-check-update
+            --validate --no-check-update --schedule-seed microsoft/aspire
+          node .github/workflows/auto-sec/publication-guard.js
 
       - name: Verify generated files are up to date
         run: |

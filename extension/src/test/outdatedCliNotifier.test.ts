@@ -144,6 +144,76 @@ suite('outdatedCliNotifier', () => {
         notifier.dispose();
     });
 
+    for (const { currentVersion, recommendedVersion, displayedCurrentVersion, displayedRecommendedVersion } of [
+        {
+            currentVersion: '13.6.0+abc123',
+            recommendedVersion: '13.6.1',
+            displayedCurrentVersion: '13.6.0',
+            displayedRecommendedVersion: '13.6.1',
+        },
+        {
+            currentVersion: '13.6.0',
+            recommendedVersion: '13.6.1+def456',
+            displayedCurrentVersion: '13.6.0',
+            displayedRecommendedVersion: '13.6.1',
+        },
+        {
+            currentVersion: '13.6.0-preview.1+abc123',
+            recommendedVersion: '13.6.0-preview.2+def456',
+            displayedCurrentVersion: '13.6.0-preview.1',
+            displayedRecommendedVersion: '13.6.0-preview.2',
+        },
+    ]) {
+        test(`uses Doctor's current version and omits recommended build metadata for ${currentVersion} to ${recommendedVersion}`, async () => {
+            const { notifier, versionProvider, surface } = createNotifier();
+            versionProvider.identity = {
+                cliPath: '/cli/aspire',
+                version: currentVersion,
+                executableIdentity: defaultExecutableIdentity,
+            };
+            versionProvider.recommendation = {
+                status: 'available',
+                currentVersion: displayedCurrentVersion,
+                version: recommendedVersion,
+            };
+            surface.selection = strings.updateAspireCliAction;
+
+            await notifier.notifyIfOutdated(windowCliPathTarget, '/cli/aspire');
+
+            assert.deepStrictEqual(surface.warnings, [{
+                message: `Aspire CLI ${displayedCurrentVersion} at /cli/aspire has a newer version available for its current channel: ${displayedRecommendedVersion}.`,
+                actions: [strings.updateAspireCliAction, strings.dontShowAgainLabel],
+            }]);
+            assert.deepStrictEqual(surface.commands, [{
+                command: 'aspire-vscode.updateSelf',
+                args: [windowCliPathTarget, '/cli/aspire'],
+            }]);
+            notifier.dispose();
+        });
+    }
+
+    test('preserves build metadata in the persisted suppression identity', async () => {
+        const values = new Set<string>();
+        const { notifier, versionProvider, surface } = createNotifier(Date.now, createSuppressionStore(values));
+        versionProvider.identity = {
+            cliPath: '/cli/aspire',
+            version: '13.6.0+abc123',
+            executableIdentity: defaultExecutableIdentity,
+        };
+        versionProvider.recommendation = {
+            status: 'available',
+            currentVersion: '13.6.0',
+            version: '13.6.1',
+        };
+        surface.selection = strings.dontShowAgainLabel;
+
+        await notifier.notifyIfOutdated(windowCliPathTarget, '/cli/aspire');
+
+        assert.deepStrictEqual([...values].map(key => key.split('\u0000')[1]), ['13.6.0+abc123']);
+        assert.deepStrictEqual(surface.commands, []);
+        notifier.dispose();
+    });
+
     test("Don't Show Again persists for the exact CLI path and version", async () => {
         const values = new Set<string>();
         const first = createNotifier(Date.now, createSuppressionStore(values));

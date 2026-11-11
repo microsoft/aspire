@@ -3,7 +3,7 @@
     height: 100%;
     min-width: 0;
     min-height: 0;
-    padding: 0 8px 8px;
+    padding: 0 12px 12px;
     box-sizing: border-box;
     --colorNeutralForeground2: var(--colorNeutralForeground3);
     --colorNeutralForeground1Hover: var(--colorNeutralForeground1);
@@ -20,9 +20,9 @@
     min-width: 0;
     min-height: 0;
     box-sizing: border-box;
-    background: #0d1117;
-    border: 2px solid #3a4250;
-    border-radius: 6px;
+    background: var(--terminal-background, var(--colorNeutralBackground1));
+    border: 1px solid var(--colorNeutralStroke1);
+    border-radius: var(--aspire-radius-small);
     overflow: hidden;
 }
 
@@ -41,37 +41,103 @@
 
 .terminal-footer {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
     flex: 0 0 auto;
-    gap: 8px;
+    gap: var(--aspire-space-2);
     min-height: 34px;
     padding: 4px 8px;
+    border-top: 1px solid var(--colorNeutralStroke1);
     background: var(--colorNeutralBackground2);
-    color: var(--colorNeutralForeground2);
-    font-size: var(--fontSizeBase200);
+    color: var(--colorNeutralForeground1);
+    font-size: var(--aspire-font-size-secondary);
     line-height: var(--lineHeightBase200);
     /* Fluent controls consume these tokens inside their shadow roots. */
     --fontSizeBase300: var(--fontSizeBase200);
     --lineHeightBase300: var(--lineHeightBase200);
+    /* Controls belong to the dashboard theme, not the independently selected terminal palette. */
+    --colorNeutralForeground2: var(--colorNeutralForeground1);
+}
+
+.terminal-focus-hint kbd {
+    margin-inline-end: 2px;
+    padding: 1px 4px;
+    border: 1px solid var(--colorNeutralStroke2);
+    border-radius: var(--aspire-radius-small);
+    background-color: color-mix(in srgb, var(--colorNeutralBackground3) 60%, var(--colorNeutralStroke2));
+    color: var(--colorNeutralForeground1);
+    font-size: 0.875em;
 }
 
 .terminal-controls {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 6px;
+    justify-content: flex-end;
+    gap: var(--aspire-space-3);
+    min-width: 0;
     margin-inline-start: auto;
 }
 
-.terminal-size-select {
-    width: auto;
+.terminal-select-label {
+    white-space: nowrap;
+}
+
+.terminal-font-controls,
+.terminal-size-controls,
+.terminal-palette-controls {
+    display: flex;
+    align-items: center;
+    gap: var(--aspire-space-1);
+}
+
+.terminal-font-controls {
+    gap: 2px;
+    padding: 2px;
+    border: 1px solid var(--colorNeutralStroke1);
+    border-radius: var(--aspire-control-radius);
+    background: var(--colorNeutralBackground1);
+}
+
+.terminal-controls ::deep .toolbar-button {
+    width: 24px;
+    min-width: 24px;
+    height: 24px;
+    min-height: 24px;
+    padding: 0;
+}
+
+.terminal-controls ::deep .toolbar-button::part(control) {
+    width: 24px;
+    min-width: 24px;
+    height: 24px;
+    min-height: 24px;
+    padding: 0;
+}
+
+.terminal-controls ::deep .toolbar-button svg {
+    height: 16px;
+}
+
+/* The select's field wrapper has an empty grid row that otherwise offsets its visible border. */
+.terminal-controls ::deep .terminal-size-select,
+.terminal-controls ::deep .terminal-palette-select {
     height: var(--aspire-control-height);
     min-height: var(--aspire-control-height);
+}
+
+.terminal-controls ::deep .terminal-size-select,
+.terminal-controls ::deep .terminal-palette-select {
+    --aspire-dropdown-min-width: 110px;
+    width: 110px;
+    min-width: 0;
 }
 
 .terminal-font-size {
     min-width: 32px;
     text-align: center;
+    font-weight: var(--aspire-font-weight-semibold);
     font-variant-numeric: tabular-nums;
 }
 
@@ -88,25 +154,19 @@
 }
 
 .terminal-titlebar {
+    --terminal-titlebar-border-color: var(--colorNeutralStroke1);
     display: flex;
     align-items: center;
     flex: 0 0 30px;
     min-width: 0;
-    padding: 0 14px;
+    min-height: 36px;
+    padding: 0 12px;
     padding-inline-end: 8px;
     box-sizing: border-box;
-    background: linear-gradient(180deg, #1a2029 0%, #161b22 100%);
-    border-bottom: 1px solid #30363d;
-    color: #8b949e;
-    font: 12px ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
-}
-
-.terminal-title {
-    flex: 1;
-    min-width: 0;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    background: var(--colorNeutralBackground2);
+    border-bottom: 1px solid var(--terminal-titlebar-border-color);
+    color: var(--colorNeutralForeground2);
+    font: var(--fontSizeBase200) var(--fontFamilyBase);
 }
 
 .terminal-titlebar ::deep .terminal-open-window {
@@ -121,7 +181,7 @@
     flex: 0 0 auto;
     margin-inline-start: 12px;
     padding-inline-start: 12px;
-    border-inline-start: 1px solid #30363d;
+    border-inline-start: 1px solid var(--colorNeutralStroke1);
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
 }
@@ -131,11 +191,14 @@
     flex: 1;
     min-width: 0;
     min-height: 0;
-    padding: 6px;
+    padding: 12px;
     box-sizing: border-box;
 }
 
 .terminal-container {
+    /* Terminal palettes are independent of the dashboard theme. Keep contrast against the palette and tint focus with the dashboard brand. */
+    --terminal-border-color: color-mix(in srgb, var(--terminal-foreground, var(--colorNeutralForeground1)) 60%, var(--terminal-background, var(--colorNeutralBackground1)));
+    --terminal-focus-color: color-mix(in srgb, var(--colorBrandStroke1) 15%, color-mix(in srgb, var(--terminal-foreground, var(--colorNeutralForeground1)) 70%, var(--terminal-background, var(--colorNeutralBackground1))));
     position: relative;
     isolation: isolate;
     width: 100%;
@@ -146,17 +209,54 @@
 }
 
 .terminal-container::after {
-    /* Paint focus above the composited canvas without resizing the terminal or intercepting input. */
+    /* Paint the boundary above the composited canvas without resizing it or intercepting input. */
     content: "";
     position: absolute;
     inset: 0;
     z-index: 1;
     pointer-events: none;
+    outline: 1px solid var(--terminal-border-color);
+    outline-offset: -1px;
 }
 
-.terminal-container ::deep ::part(selection-highlight) {
-    background: var(--colorBrandBackground);
-    opacity: 0.3;
+.terminal-disconnected .terminal-container {
+    opacity: 0.55;
+}
+
+.terminal-overlays {
+    position: absolute;
+    inset-inline-start: 12px;
+    inset-inline-end: 12px;
+    top: 12px;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    gap: var(--aspire-space-2);
+    max-height: calc(100% - 24px);
+    overflow: auto;
+    /* Only the visible banner/icon intercepts input; retained output stays accessible around it. */
+    pointer-events: none;
+}
+
+.terminal-overlays > ::deep * {
+    pointer-events: auto;
+}
+
+.terminal-overlays-collapsed {
+    inset-inline-start: 20px;
+    inset-inline-end: 20px;
+    top: 20px;
+    max-height: calc(100% - 40px);
+}
+
+.terminal-container:focus-within::after {
+    outline-color: var(--terminal-focus-color);
+}
+
+/* :focus-visible inside Hex1b's shadow root cannot be selected from this stylesheet. */
+.terminal-container:focus-within:not(:has([data-aspire-pointer-input="true"]))::after {
+    outline: var(--strokeWidthThick) solid var(--terminal-focus-color);
+    outline-offset: calc(-1 * var(--strokeWidthThick));
 }
 
 .terminal-view ::deep .terminal-selection-actions {
@@ -175,7 +275,7 @@
     min-width: 0;
     height: 100%;
     min-height: 0;
-    border-radius: var(--borderRadiusMedium);
+    border-radius: var(--aspire-radius-small);
     box-shadow: 0 2px 8px rgb(0 0 0 / 30%);
 }
 
@@ -193,24 +293,49 @@
     cursor: progress;
 }
 
+@media (prefers-contrast: more) {
+    .terminal-container:focus-within::after {
+        outline-width: var(--strokeWidthThick);
+        outline-offset: calc(-1 * var(--strokeWidthThick));
+    }
+}
+
 @media (forced-colors: active) {
-    .terminal-container ::deep ::part(selection-highlight) {
-        background: Highlight;
-        forced-color-adjust: none;
+    .terminal-container {
+        --terminal-border-color: CanvasText;
+        --terminal-focus-color: Highlight;
+    }
+
+    .terminal-disconnected .terminal-container {
+        opacity: 1;
     }
 }
 
 .terminal-error {
-    position: absolute;
-    inset-inline: 12px;
-    top: 12px;
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
-    gap: 12px;
+    gap: var(--aspire-space-3);
     padding: 12px;
     border: 1px solid var(--colorNeutralStroke1);
-    border-radius: var(--border-radius);
-    background: var(--colorNeutralBackground1);
+    border-radius: var(--aspire-control-radius);
+    background: var(--colorNeutralBackground2);
     color: var(--colorNeutralForeground1);
+}
+
+.terminal-error span {
+    flex: 1 1 200px;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.terminal-error ::deep fluent-button {
+    --colorNeutralBackground1: var(--colorNeutralBackground2);
+    flex: 0 0 auto;
+    white-space: nowrap;
+}
+
+.terminal-error ::deep fluent-button::part(control) {
+    white-space: nowrap;
 }

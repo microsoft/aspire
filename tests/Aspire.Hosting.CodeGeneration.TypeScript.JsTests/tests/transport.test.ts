@@ -734,7 +734,7 @@ describe('callback invocation protocol', () => {
         }
     });
 
-    it('DTO writeback: returns original args when callback returns undefined', async () => {
+    it('DTO writeback: returns only assigned properties when callback returns undefined', async () => {
         const { fixture, client } = await connectFixture();
 
         // Simulates a void callback that mutates a DTO property
@@ -744,11 +744,40 @@ describe('callback invocation protocol', () => {
         });
 
         try {
-            const result = await fixture.invokeCallback(id, { p0: { name: 'original' } });
-            // The writeback protocol returns the original args object (with mutations)
-            const resultObj = result as Record<string, unknown>;
-            expect(resultObj.p0).toBeDefined();
-            expect((resultObj.p0 as any).name).toBe('mutated');
+            const result = await fixture.invokeCallback(id, { p0: { name: 'original', unchanged: true } });
+            expect(result).toEqual({ p0: { name: 'mutated' } });
+        } finally {
+            unregisterCallback(id);
+            await fixture.cleanup(client);
+        }
+    });
+
+    it.each([
+        ['no-op', (_options: Record<string, unknown>) => {}, {}],
+        ['explicit default', (options: Record<string, unknown>) => { options.columns = 132; }, { columns: 132 }],
+        ['partial update', (options: Record<string, unknown>) => { options.rows = 60; }, { rows: 60 }],
+        ['property definition', (options: Record<string, unknown>) => { Object.defineProperty(options, 'rows', { value: 50 }); }, { rows: 50 }],
+    ])('DTO writeback preserves assignment intent: %s', async (_name, configure, expected) => {
+        const { fixture, client } = await connectFixture();
+        const id = registerCallback(configure);
+        try {
+            const result = await fixture.invokeCallback(id, { p0: { columns: 132, rows: 50 } });
+            expect(result).toEqual({ p0: expected });
+        } finally {
+            unregisterCallback(id);
+            await fixture.cleanup(client);
+        }
+    });
+
+    it('DTO writeback preserves nested object and array mutations', async () => {
+        const { fixture, client } = await connectFixture();
+        const id = registerCallback((options: { nested: { name: string }; values: number[] }) => {
+            options.nested.name = 'updated';
+            options.values.push(2);
+        });
+        try {
+            const result = await fixture.invokeCallback(id, { p0: { nested: { name: 'original' }, values: [1], unchanged: true } });
+            expect(result).toEqual({ p0: { nested: { name: 'updated' }, values: [1, 2] } });
         } finally {
             unregisterCallback(id);
             await fixture.cleanup(client);

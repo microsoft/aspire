@@ -4,7 +4,7 @@
     <body>
       <trans-unit id="Description">
         <source>Execute a specific pipeline step and its dependencies</source>
-        <target state="needs-review-translation">特定のパイプライン ステップとその依存関係を実行します。(プレビュー)</target>
+        <target state="translated">特定のパイプライン ステップとその依存関係を実行する</target>
         <note />
       </trans-unit>
       <trans-unit id="GeneratingArtifacts">
@@ -14,7 +14,7 @@
       </trans-unit>
       <trans-unit id="ListStepsRequiresStep">
         <source>The 'step' argument is required when using --list-steps. Example: 'aspire do deploy --list-steps'. Common starting steps are 'build', 'publish' and 'deploy'. See https://aspire.dev/reference/cli/commands/aspire-do/ for the full list of pipeline steps.</source>
-        <target state="new">The 'step' argument is required when using --list-steps. Example: 'aspire do deploy --list-steps'. Common starting steps are 'build', 'publish' and 'deploy'. See https://aspire.dev/reference/cli/commands/aspire-do/ for the full list of pipeline steps.</target>
+        <target state="translated">--list-steps を使用する場合は、'step' 引数が必要です。例: 'aspire do deploy --list-steps'。一般的な開始ステップは、'build'、'publish'、'deploy' です。パイプライン ステップの完全な一覧については、https://aspire.dev/reference/cli/commands/aspire-do/ を参照してください。</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationCanceled">
@@ -34,17 +34,17 @@
       </trans-unit>
       <trans-unit id="OutputPathArgumentDescription">
         <source>The optional output path for artifacts</source>
-        <target state="needs-review-translation">成果物の省略可能な出力パス。</target>
+        <target state="translated">成果物のオプションの出力パスです</target>
         <note />
       </trans-unit>
       <trans-unit id="StepArgumentDescription">
         <source>The name of the step to execute</source>
-        <target state="needs-review-translation">実行するステップの名前です。</target>
+        <target state="translated">実行するステップの名前です</target>
         <note />
       </trans-unit>
       <trans-unit id="StepArgumentRequired">
         <source>The 'step' argument is required.</source>
-        <target state="new">The 'step' argument is required.</target>
+        <target state="translated">'step' 引数が必要です。</target>
         <note />
       </trans-unit>
     </body>

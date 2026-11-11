@@ -3,7 +3,6 @@
 
 using System.Threading.Channels;
 using Aspire.Dashboard.Components.Layout;
-using Aspire.Dashboard.Components.Pages;
 using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Telemetry;
@@ -32,12 +31,9 @@ public partial class TerminalDockTests
         var processed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         client.OnTerminalUpdateProcessed = _ => processed.TrySetResult();
         TerminalSetupHelpers.SetupTerminalComponents(this, client);
-        var sender = new TestDashboardTelemetrySender { IsTelemetryEnabled = telemetryEnabled };
-        Services.AddSingleton<IDashboardTelemetrySender>(sender);
-        var telemetryService = Services.GetRequiredService<DashboardTelemetryService>();
-        await telemetryService.InitializeAsync();
-        Assert.Equal(Enumerable.Repeat(TelemetryEndpoints.TelemetryPostProperty,
-            telemetryEnabled ? telemetryService._defaultProperties.Count : 0), DrainTelemetryEvents(sender));
+        using var fixture = new DashboardTelemetryFixture(reportedTelemetryEnabled: telemetryEnabled);
+        Services.AddSingleton(fixture.Telemetry);
+        Assert.Empty(DrainTelemetryEvents(fixture));
         var cut = Render<TerminalDock>();
         Assert.Null(cut.Instance.TelemetryContext);
 
@@ -46,7 +42,7 @@ public partial class TerminalDockTests
         await processed.Task.DefaultTimeout();
         Assert.Equal(renderCount, cut.RenderCount);
         Assert.Null(cut.Instance.TelemetryContext);
-        Assert.Empty(DrainTelemetryEvents(sender));
+        Assert.Empty(DrainTelemetryEvents(fixture));
 
         switch (action)
         {
@@ -71,9 +67,9 @@ public partial class TerminalDockTests
         AssertDockTelemetryProperties(firstContext, trigger);
         Assert.Equal(telemetryEnabled ? new[]
         {
-            "/telemetry/userTask - $aspire/dashboard/component/initialize",
-            "/telemetry/operation - $aspire/dashboard/component/paramsSet"
-        } : [], DrainTelemetryEvents(sender));
+            TelemetryEventKeys.ComponentInitialize,
+            TelemetryEventKeys.ParametersSet
+        } : [], DrainTelemetryEvents(fixture));
 
         await updates.Writer.WriteAsync(TerminalSetupHelpers.Change(TerminalChangeType.Activated, "second"));
         cut.WaitForAssertion(() => Assert.Equal("second", cut.Find("[role=tab][aria-selected=true]").TextContent.Trim()));
@@ -85,12 +81,12 @@ public partial class TerminalDockTests
         cut.WaitForAssertion(() => Assert.Equal("second", cut.Find("[role=tab][aria-selected=true]").TextContent.Trim()));
         Assert.Same(firstContext, cut.Instance.TelemetryContext);
         AssertDockTelemetryProperties(firstContext, trigger);
-        Assert.Empty(DrainTelemetryEvents(sender));
+        Assert.Empty(DrainTelemetryEvents(fixture));
 
         await cut.InvokeAsync(cut.Instance.ToggleAsync);
         Assert.Null(cut.Instance.TelemetryContext);
-        Assert.Equal(telemetryEnabled ? new[] { "/telemetry/operation - $aspire/dashboard/component/dispose" } : [],
-            DrainTelemetryEvents(sender));
+        Assert.Equal(telemetryEnabled ? new[] { TelemetryEventKeys.ComponentDispose } : [],
+            DrainTelemetryEvents(fixture));
 
         if (trigger == "User")
         {
@@ -110,30 +106,30 @@ public partial class TerminalDockTests
         Assert.Null(cut.Instance.TelemetryContext);
         Assert.Equal(telemetryEnabled ? new[]
         {
-            "/telemetry/userTask - $aspire/dashboard/component/initialize",
-            "/telemetry/operation - $aspire/dashboard/component/paramsSet",
-            "/telemetry/operation - $aspire/dashboard/component/dispose"
-        } : [], DrainTelemetryEvents(sender));
+            TelemetryEventKeys.ComponentInitialize,
+            TelemetryEventKeys.ParametersSet,
+            TelemetryEventKeys.ComponentDispose
+        } : [], DrainTelemetryEvents(fixture));
     }
 
     private static void AssertDockTelemetryProperties(ComponentTelemetryContext context, string trigger)
     {
         (string, string)[] expected =
         [
-            ("Aspire.Dashboard.ComponentId", "TerminalDock"),
-            ("Aspire.Dashboard.ComponentType", "Control"),
-            ("Aspire.Dashboard.TerminalDock.Trigger", trigger)
+            ("aspire.dashboard.component.id", "TerminalDock"),
+            ("aspire.dashboard.component.type", "Control"),
+            ("aspire.dashboard.terminal_dock.trigger", trigger)
         ];
         Assert.Equal(expected, context.Properties.OrderBy(p => p.Key)
             .Select(p => (p.Key, Assert.IsType<string>(p.Value.Value))));
     }
 
-    private static string[] DrainTelemetryEvents(TestDashboardTelemetrySender sender)
+    private static string[] DrainTelemetryEvents(DashboardTelemetryFixture fixture)
     {
         List<string> events = [];
-        while (sender.ContextChannel.Reader.TryRead(out var operation))
+        while (fixture.LogChannel.Reader.TryRead(out var log))
         {
-            events.Add(operation.Name);
+            events.Add(Assert.IsType<string>(log.Message));
         }
         return events.ToArray();
     }

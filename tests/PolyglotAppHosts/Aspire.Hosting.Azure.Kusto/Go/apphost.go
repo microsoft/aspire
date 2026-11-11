@@ -9,7 +9,7 @@ import (
 func main() {
 	builder, err := aspire.CreateBuilder()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	kusto := builder.AddAzureKustoCluster("kusto").
@@ -19,45 +19,45 @@ func main() {
 			},
 		})
 	if kusto.Err() != nil {
-		log.Fatalf(aspire.FormatError(kusto.Err()))
+		log.Fatal(aspire.FormatError(kusto.Err()))
 	}
 
 	kusto.ConfigureInfrastructure(func(infrastructure aspire.AzureResourceInfrastructure) {
 		cluster := infrastructure.GetKustoCluster()
 		if err := cluster.SetIsStreamingIngestEnabled(true).Err(); err != nil {
-			log.Fatalf(aspire.FormatError(err))
+			log.Fatal(aspire.FormatError(err))
 		}
 		if _, err := cluster.IsStreamingIngestEnabled(); err != nil {
-			log.Fatalf(aspire.FormatError(err))
+			log.Fatal(aspire.FormatError(err))
 		}
 		database := infrastructure.AddKustoReadWriteDatabase("proxyDatabase")
 		if err := database.SetParent(cluster).Err(); err != nil {
-			log.Fatalf(aspire.FormatError(err))
+			log.Fatal(aspire.FormatError(err))
 		}
 		if err := database.SetName("ProxyDatabase").Err(); err != nil {
-			log.Fatalf(aspire.FormatError(err))
+			log.Fatal(aspire.FormatError(err))
 		}
 		if _, err := database.Name(); err != nil {
-			log.Fatalf(aspire.FormatError(err))
+			log.Fatal(aspire.FormatError(err))
 		}
 		// Exercise the derived AddTo export; adding to the same infrastructure is idempotent.
 		if err := database.AddTo(infrastructure); err != nil {
-			log.Fatalf(aspire.FormatError(err))
+			log.Fatal(aspire.FormatError(err))
 		}
 	})
 	if kusto.Err() != nil {
-		log.Fatalf(aspire.FormatError(kusto.Err()))
+		log.Fatal(aspire.FormatError(kusto.Err()))
 	}
 
 	defaultDatabase := kusto.AddReadWriteDatabase("samples")
 	if defaultDatabase.Err() != nil {
-		log.Fatalf(aspire.FormatError(defaultDatabase.Err()))
+		log.Fatal(aspire.FormatError(defaultDatabase.Err()))
 	}
 	customDatabase := kusto.AddReadWriteDatabase("analytics", &aspire.AddReadWriteDatabaseOptions{
 		DatabaseName: aspire.StringPtr("AnalyticsDb"),
 	})
 	if customDatabase.Err() != nil {
-		log.Fatalf(aspire.FormatError(customDatabase.Err()))
+		log.Fatal(aspire.FormatError(customDatabase.Err()))
 	}
 
 	defaultDatabase.WithCreationScript(".create database Samples ifnotexists")
@@ -81,9 +81,9 @@ func main() {
 
 	app, err := builder.Build()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 	if err := app.Run(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 }

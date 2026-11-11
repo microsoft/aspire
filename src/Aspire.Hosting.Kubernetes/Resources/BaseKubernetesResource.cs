@@ -25,6 +25,7 @@ public abstract class BaseKubernetesResource(string apiVersion, string kind) : B
     /// which provides properties for managing the resource’s unique identifier (UID), name, namespace, generation,
     /// and other relevant details like annotations, labels, and owner references.
     /// </remarks>
+    [AspireExport]
     [YamlMember(Alias = "metadata", Order = -1)]
     public ObjectMetaV1 Metadata { get; set; } = new();
 }

@@ -27,9 +27,21 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void ConfigInfo_AdvertisesDescribeAppHostPid()
+    {
+        Assert.Contains(KnownCapabilities.DescribeAppHostPid, KnownCapabilities.GetAdvertisedCapabilities());
+    }
+
+    [Fact]
     public void ConfigInfo_AdvertisesIsolatedLaunch()
     {
         Assert.Contains(KnownCapabilities.IsolatedLaunch, KnownCapabilities.GetAdvertisedCapabilities());
+    }
+
+    [Fact]
+    public void ConfigInfo_AdvertisesAgentMcp()
+    {
+        Assert.Contains(KnownCapabilities.AgentMcp, KnownCapabilities.GetAdvertisedCapabilities());
     }
 
     [Fact]
@@ -45,12 +57,18 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void ConfigInfo_AdvertisesTerminalInstanceSelection()
+    {
+        Assert.Contains(KnownCapabilities.TerminalInstanceSelection, KnownCapabilities.GetAdvertisedCapabilities());
+    }
+
+    [Fact]
     public void ConfigInfoJson_UsesCamelCasePropertyNames()
     {
         var info = new Aspire.Cli.Commands.ConfigInfo(
             LocalSettingsPath: "local.json",
             GlobalSettingsPath: "global.json",
-            AvailableFeatures: [new Aspire.Cli.Commands.FeatureInfo("featureA", "Description", DefaultValue: false)],
+            AvailableFeatures: [new Aspire.Cli.Commands.FeatureInfo("featureA", "Description", DefaultValue: false, ProjectOnly: false)],
             LocalSettingsSchema: new Aspire.Cli.Commands.SettingsSchema([]),
             GlobalSettingsSchema: new Aspire.Cli.Commands.SettingsSchema([]),
             ConfigFileSchema: new Aspire.Cli.Commands.SettingsSchema([]),
@@ -129,6 +147,21 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal("bar", settings["foo"]?.ToString());
     }
 
+    [Theory]
+    [InlineData("features.appHostServerV2")]
+    [InlineData("features:appHostServerV2")]
+    public async Task ConfigSetCommand_RejectsGlobalAppHostServerV2(string key)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
+
+        var exitCode = await command.Parse($"config set {key} true --global").InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+    }
+
     [Fact]
     public async Task DocsSourceUrls_CanBeConfiguredViaAspireConfig()
     {
@@ -203,6 +236,46 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal("string", nssDbPaths.Type);
         Assert.Contains("NSS database paths", nssDbPaths.Description);
+    }
+
+    [Fact]
+    public async Task ContainerTunnelBaseImage_CanBeConfiguredViaAspireConfig()
+    {
+        const string image = "example.com/aspire-tunnel:configured";
+
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(configPath, "{}");
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
+        var result = command.Parse($"config set {AspireConfigContainerTunnel.BaseImageConfigKey} {image}");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+        Assert.Equal(0, exitCode);
+
+        var settings = JsonNode.Parse(await File.ReadAllTextAsync(configPath))?.AsObject();
+        Assert.NotNull(settings);
+        Assert.Equal(image, settings["containerTunnel"]?["baseImage"]?.ToString());
+
+        var reloadedServices = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var reloadedProvider = reloadedServices.BuildServiceProvider();
+        var configuration = reloadedProvider.GetRequiredService<IConfiguration>();
+
+        Assert.Equal(image, configuration[AspireConfigContainerTunnel.BaseImageConfigPath]);
+    }
+
+    [Fact]
+    public void ConfigInfo_AdvertisesContainerTunnelBaseImage()
+    {
+        var schema = Aspire.Cli.Commands.SettingsSchemaBuilder.BuildConfigFileSchema(excludeLocalOnly: false);
+
+        var containerTunnel = Assert.Single(schema.Properties, property => property.Name == AspireConfigContainerTunnel.SectionName);
+        var baseImage = Assert.Single(containerTunnel.SubProperties!, property => property.Name == AspireConfigContainerTunnel.BaseImagePropertyName);
+
+        Assert.Equal("string", baseImage.Type);
+        Assert.Contains("Base image", baseImage.Description);
     }
 
     [Fact]
@@ -351,6 +424,65 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(10, exitCode);
+    }
+
+    [Fact]
+    public async Task ConfigCommands_BracketArrayPathsRoundTrip()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var settingsPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(settingsPath, """{"plugins":["aspire","other"]}""");
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
+
+        Assert.Equal(CliExitCodes.Success, await command.Parse("config set plugins[0] deployment").InvokeAsync().DefaultTimeout());
+
+        var interaction = new TestInteractionService();
+        var readerServices = CliTestHelper.CreateServiceCollection(workspace, outputHelper,
+            options => options.InteractionServiceFactory = _ => interaction);
+        using var readerProvider = readerServices.BuildServiceProvider();
+        var readerCommand = readerProvider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
+        Assert.Equal(CliExitCodes.Success, await readerCommand.Parse("config get plugins[0]").InvokeAsync().DefaultTimeout());
+        Assert.Equal(["deployment"], interaction.DisplayedPlainText);
+        Assert.Equal(CliExitCodes.Success, await readerCommand.Parse("config delete plugins[0]").InvokeAsync().DefaultTimeout());
+
+        await Verify(await File.ReadAllTextAsync(settingsPath), "json");
+    }
+
+    [Theory]
+    [InlineData("config set plugins[2] deployment")]
+    [InlineData("config set plugins[-1] deployment")]
+    [InlineData("config get plugins[-1]")]
+    [InlineData("config delete plugins[-1]")]
+    [InlineData("config delete custom[0]")]
+    [InlineData("config set templateSources[0] deployment")]
+    [InlineData("config set templateSources.team.repository[0] deployment")]
+    public async Task ConfigCommands_InvalidArrayPathsReportErrorsAndPreserveFile(string commandLine)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var settingsPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        const string original = """
+            {
+              "plugins": ["aspire"],
+              "custom": {"0": "value"},
+              "templateSources": {
+                "team": {"repository": "https://github.com/example/team"}
+              }
+            }
+            """;
+        await File.WriteAllTextAsync(settingsPath, original);
+        var interaction = new TestInteractionService();
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper,
+            options => options.InteractionServiceFactory = _ => interaction);
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
+
+        Assert.Equal(CliExitCodes.InvalidCommand, await command.Parse(commandLine).InvokeAsync().DefaultTimeout());
+
+        Assert.Single(interaction.DisplayedErrors);
+        Assert.Empty(interaction.DisplayedSuccess);
+        Assert.Equal(original, await File.ReadAllTextAsync(settingsPath));
     }
 
     [Fact]
@@ -532,75 +664,6 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task ConfigListCommand_WithAllFlag_DoesNotListHiddenFeature()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var outputWriter = new TestOutputTextWriter(outputHelper);
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
-        {
-            options.OutputTextWriter = outputWriter;
-        });
-        using var provider = services.BuildServiceProvider();
-
-        var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
-
-        var listResult = command.Parse("config list --all");
-        var listExitCode = await listResult.InvokeAsync().DefaultTimeout();
-        Assert.Equal(0, listExitCode);
-
-        var output = string.Join("\n", outputWriter.Logs);
-        // A non-hidden feature is listed, proving the available-features section rendered...
-        Assert.Contains(KnownFeatures.ShowAllTemplates, output);
-        // ...but the hidden aspireSkillsRemoteFetchEnabled feature must not be advertised.
-        Assert.DoesNotContain(KnownFeatures.AspireSkillsRemoteFetchEnabled, output);
-    }
-
-    [Fact]
-    public async Task ConfigInfoJson_DoesNotAdvertiseHiddenFeature()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var outputWriter = new TestOutputTextWriter(outputHelper);
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
-        {
-            options.OutputTextWriter = outputWriter;
-        });
-        using var provider = services.BuildServiceProvider();
-
-        var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
-
-        var infoResult = command.Parse("config info --json");
-        var infoExitCode = await infoResult.InvokeAsync().DefaultTimeout();
-        Assert.Equal(0, infoExitCode);
-
-        // The only place a feature name reaches the JSON is availableFeatures (SettingsSchemaBuilder
-        // does not enumerate feature flags), so asserting on the name token reliably proves exclusion.
-        var output = string.Join("\n", outputWriter.Logs);
-        // A non-hidden feature is present, proving availableFeatures was emitted...
-        Assert.Contains(KnownFeatures.ShowAllTemplates, output);
-        // ...but the hidden aspireSkillsRemoteFetchEnabled feature must not appear.
-        Assert.DoesNotContain(KnownFeatures.AspireSkillsRemoteFetchEnabled, output);
-    }
-
-    [Fact]
-    public void HiddenFeature_WhenSetExplicitly_IsStillHonored()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var services = CliTestHelper.CreateServiceCollection(
-            workspace,
-            outputHelper,
-            // Hiding a feature only removes it from discovery; a value set directly in
-            // configuration must still be honored by IFeatures.
-            options => options.ConfigurationCallback += config =>
-            {
-                config[$"{KnownFeatures.FeaturePrefix}:{KnownFeatures.AspireSkillsRemoteFetchEnabled}"] = "true";
-            });
-        using var provider = services.BuildServiceProvider();
-
-        var featureFlags = provider.GetRequiredService<IFeatures>();
-        Assert.True(featureFlags.IsFeatureEnabled(KnownFeatures.AspireSkillsRemoteFetchEnabled, defaultValue: false));
-    }
-
-    [Fact]
     public async Task FeatureFlags_WhenSetToTrue_ReturnsTrue()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -741,7 +804,6 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
 
     [Theory]
     [InlineData("experimentalPolyglotJava")]
-    [InlineData("experimentalPolyglotGo")]
     [InlineData("experimentalPolyglotPython")]
     [InlineData("experimentalPolyglotRust")]
     public async Task ConfigSetCommand_ExperimentalPolyglotFeature_CreatesLoadableLocalConfig(string featureName)

@@ -74,7 +74,7 @@ $classes     = [System.Collections.Generic.HashSet[string]]::new()
 # Extract partitions using the ExtractTestPartitions tool
 $partitionsFile = Join-Path ([System.IO.Path]::GetTempPath()) "partitions-$([System.Guid]::NewGuid()).txt"
 try {
-  $toolPath = Join-Path $RepoRoot "artifacts/bin/ExtractTestPartitions/Release/net8.0/ExtractTestPartitions.dll"
+  $toolPath = Join-Path $RepoRoot "artifacts/bin/ExtractTestPartitions/Release/net10.0/ExtractTestPartitions.dll"
 
   # Build the tool if it doesn't exist
   if (-not (Test-Path $toolPath)) {

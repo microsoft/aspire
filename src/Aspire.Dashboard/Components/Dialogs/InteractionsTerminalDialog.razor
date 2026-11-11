@@ -7,10 +7,16 @@
             @((MarkupString)Content.Message)
         </div>
         <div class="interaction-terminal-container">
-            <TerminalView EndpointPathAndQuery="@EndpointPathAndQuery"
-                          Chromeless="true"
-                          AutoFit="true"
-                          ShowDimensionsPicker="false" />
+            <div class="interaction-terminal-titlebar">
+                <TerminalTitle State="@_terminalState" />
+            </div>
+            <div class="interaction-terminal-body">
+                <TerminalView EndpointPathAndQuery="@EndpointPathAndQuery"
+                              Chromeless="true"
+                              AutoFit="true"
+                              ShowDimensionsPicker="false"
+                              OnToolbarStateChanged="@OnTerminalToolbarStateChanged" />
+            </div>
         </div>
     </ChildContent>
 

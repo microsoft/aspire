@@ -3,6 +3,7 @@ package aspire
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -99,44 +100,60 @@ func FormatError(err error) string {
 		return ""
 	}
 	var capErr *CapabilityError
-	if errors.As(err, &capErr) {
+	if !errors.As(err, &capErr) {
+		return err.Error()
+	}
+	if joined, ok := err.(interface{ Unwrap() []error }); ok {
 		var b strings.Builder
-		b.WriteString("Capability Error: ")
-		b.WriteString(capErr.Message())
-		if code := capErr.Code(); code != "" {
-			b.WriteString("\n  Code: ")
-			b.WriteString(code)
-		}
-		if cap := capErr.Capability(); cap != "" {
-			b.WriteString("\n  Capability: ")
-			b.WriteString(cap)
-		}
-		if capErr.err.Details != nil {
-			d := capErr.err.Details
-			if d.Parameter != nil {
-				b.WriteString("\n  Parameter: ")
-				b.WriteString(*d.Parameter)
+		for _, child := range joined.Unwrap() {
+			formatted := FormatError(child)
+			if formatted == "" {
+				continue
 			}
-			if d.Expected != nil {
-				b.WriteString("\n  Expected: ")
-				b.WriteString(*d.Expected)
+			if b.Len() > 0 {
+				b.WriteByte('\n')
 			}
-			if d.Actual != nil {
-				b.WriteString("\n  Actual: ")
-				b.WriteString(*d.Actual)
-			}
+			b.WriteString(formatted)
 		}
 		return b.String()
 	}
-	return err.Error()
+	var b strings.Builder
+	b.WriteString("Capability Error: ")
+	b.WriteString(capErr.Message())
+	if code := capErr.Code(); code != "" {
+		b.WriteString("\n  Code: ")
+		b.WriteString(code)
+	}
+	if cap := capErr.Capability(); cap != "" {
+		b.WriteString("\n  Capability: ")
+		b.WriteString(cap)
+	}
+	if capErr.err.Details != nil {
+		d := capErr.err.Details
+		if d.Parameter != nil {
+			b.WriteString("\n  Parameter: ")
+			b.WriteString(*d.Parameter)
+		}
+		if d.Expected != nil {
+			b.WriteString("\n  Expected: ")
+			b.WriteString(*d.Expected)
+		}
+		if d.Actual != nil {
+			b.WriteString("\n  Actual: ")
+			b.WriteString(*d.Actual)
+		}
+	}
+	return b.String()
 }
 
 // CancellationToken wraps a context.Context to provide cooperative cancellation.
 // Use NewCancellationToken to create one; call Cancel() to cancel it.
 // Pass token.Context() to any standard Go library that accepts a context.
 type CancellationToken struct {
-	ctx    context.Context
-	cancel context.CancelFunc
+	ctx        context.Context
+	cancel     context.CancelFunc
+	cancelOnce sync.Once
+	notify     func()
 }
 
 // NewCancellationToken creates a new cancellation token backed by a cancellable
@@ -152,12 +169,25 @@ func newCancellationTokenFrom(parent context.Context) *CancellationToken {
 	return &CancellationToken{ctx: ctx, cancel: cancel}
 }
 
+func newRemoteCancellationToken(c *client, id string) *CancellationToken {
+	token := newCancellationTokenFrom(context.Background())
+	token.notify = func() {
+		go c.cancelToken(id)
+	}
+	return token
+}
+
 // Cancel cancels the token and propagates cancellation to the underlying context.
 func (ct *CancellationToken) Cancel() {
 	if ct == nil {
 		return
 	}
-	ct.cancel()
+	ct.cancelOnce.Do(func() {
+		ct.cancel()
+		if ct.notify != nil {
+			ct.notify()
+		}
+	})
 }
 
 // IsCancelled returns true if the token has been canceled.
@@ -226,36 +256,47 @@ type handleWrapperFactory func(handle *handle, client *client) any
 // Lookups consult the per-client wrapper registry; ReferenceExpression and any
 // generated handle types must be registered via client.registerHandleWrapper
 // before the first capability invocation that could return them.
-func wrapIfHandle(value any, c *client) any {
-	if isMarshaledHandle(value) {
-		m := value.(map[string]any)
-		h := &handle{
-			HandleID: m["$handle"].(string),
-			TypeID:   m["$type"].(string),
+// The value comes off the wire, so a handle envelope whose $handle or $type is
+// not a string is reported as an error instead of being trusted.
+func wrapIfHandle(value any, c *client) (any, error) {
+	if m, ok := value.(map[string]any); ok && isMarshaledHandle(m) {
+		handleID, idIsString := m["$handle"].(string)
+		typeID, typeIsString := m["$type"].(string)
+		if !idIsString || !typeIsString {
+			return nil, fmt.Errorf("aspire: malformed handle in AppHost message: $handle is %T and $type is %T, both must be strings", m["$handle"], m["$type"])
 		}
+		h := &handle{HandleID: handleID, TypeID: typeID}
 		if c != nil {
 			if factory := c.lookupWrapper(h.TypeID); factory != nil {
-				return factory(h, c)
+				return factory(h, c), nil
 			}
 		}
-		return h
+		return h, nil
 	}
 
 	if s, ok := value.([]any); ok {
 		for i, v := range s {
-			s[i] = wrapIfHandle(v, c)
+			wrapped, err := wrapIfHandle(v, c)
+			if err != nil {
+				return nil, err
+			}
+			s[i] = wrapped
 		}
-		return s
+		return s, nil
 	}
 
 	if m, ok := value.(map[string]any); ok {
 		for k, v := range m {
-			m[k] = wrapIfHandle(v, c)
+			wrapped, err := wrapIfHandle(v, c)
+			if err != nil {
+				return nil, err
+			}
+			m[k] = wrapped
 		}
-		return m
+		return m, nil
 	}
 
-	return value
+	return value, nil
 }
 
 // ── connection ────────────────────────────────────────────────────────────────
@@ -269,7 +310,7 @@ type connection struct {
 	reader  *bufio.Reader
 	client  *client
 
-	writeQueue chan map[string]any
+	writeQueue chan []byte
 	done       chan struct{}
 
 	mu      sync.Mutex
@@ -285,7 +326,7 @@ func newConnection(rawConn io.ReadWriteCloser, c *client, onClose func(error)) *
 		rawConn:    rawConn,
 		reader:     bufio.NewReader(rawConn),
 		client:     c,
-		writeQueue: make(chan map[string]any, 64),
+		writeQueue: make(chan []byte, 64),
 		done:       make(chan struct{}),
 		pending:    make(map[int64]chan map[string]any),
 		onClose:    onClose,
@@ -334,7 +375,7 @@ func (c *connection) writeLoop() {
 	for {
 		select {
 		case msg := <-c.writeQueue:
-			if err := writeMessage(c.rawConn, msg); err != nil {
+			if err := writeMessageBody(c.rawConn, msg); err != nil {
 				c.close(err)
 				return
 			}
@@ -374,8 +415,22 @@ func (c *connection) dispatch(msg map[string]any) {
 }
 
 func (c *connection) enqueue(msg map[string]any) {
+	body, err := json.Marshal(msg)
+	if err != nil {
+		// A user callback can return an unencodable value. Fail that callback,
+		// not every unrelated pending call on the connection.
+		body, err = json.Marshal(map[string]any{
+			"jsonrpc": "2.0",
+			"id":      msg["id"],
+			"error":   map[string]any{"code": -32603, "message": fmt.Sprintf("Callback result encoding failed: %v", err)},
+		})
+		if err != nil {
+			c.close(err)
+			return
+		}
+	}
 	select {
-	case c.writeQueue <- msg:
+	case c.writeQueue <- body:
 	case <-c.done:
 	}
 }
@@ -394,6 +449,35 @@ func (c *connection) handleCallbackRequest(message map[string]any) {
 		}
 		return
 	}
+
+	// Callbacks run on their own goroutine, so a panic in user code would
+	// otherwise terminate the whole process. Answer the AppHost with the error
+	// the other runtimes send for a throwing callback (-32603, "Callback
+	// execution failed: <message>"). Only the panic value is reported; the stack
+	// stays inside the process.
+	completed := false
+	defer func() {
+		if r := recover(); r != nil {
+			code := -32603
+			message := fmt.Sprintf("Callback execution failed: %v", r)
+			if err, ok := r.(*callbackArgumentError); ok {
+				code = -32602
+				message = err.Error()
+			}
+			c.enqueue(map[string]any{
+				"jsonrpc": "2.0",
+				"id":      requestID,
+				"error":   map[string]any{"code": code, "message": message},
+			})
+		} else if !completed {
+			// runtime.Goexit runs defers without a recoverable panic value.
+			c.enqueue(map[string]any{
+				"jsonrpc": "2.0",
+				"id":      requestID,
+				"error":   map[string]any{"code": -32603, "message": "Callback execution failed: goroutine exited without returning"},
+			})
+		}
+	}()
 
 	params, _ := message["params"].([]any)
 	var callbackID string
@@ -419,17 +503,21 @@ func (c *connection) handleCallbackRequest(message map[string]any) {
 			"result":  result,
 		})
 	}
+	completed = true
 }
 
 // sendRequest sends a JSON-RPC request over the write queue and blocks until
 // the matching response arrives or the supplied context is canceled.
 //
 // The ctx argument is the primary unblock mechanism for the Go caller. The
-// existing per-CancellationToken server-notification goroutine spawned by
-// client.registerCancellation continues to notify the AppHost, but this
-// method does not need to wait for that round-trip — it returns ctx.Err()
-// as soon as ctx is done.
+// watcher that client.registerCancellation attaches to a CancellationToken
+// also notifies the AppHost, but this method does not need to wait for that
+// round-trip — it returns ctx.Err() as soon as ctx is done.
 func (c *connection) sendRequest(ctx context.Context, method string, params []any) (any, error) {
+	return c.sendRequestQueued(ctx, method, params, nil)
+}
+
+func (c *connection) sendRequestQueued(ctx context.Context, method string, params []any, onQueued func()) (any, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -445,6 +533,10 @@ func (c *connection) sendRequest(ctx context.Context, method string, params []an
 		"method":  method,
 		"params":  params,
 	}
+	body, err := json.Marshal(msg)
+	if err != nil {
+		return nil, fmt.Errorf("aspire: encode %s request: %w", method, err)
+	}
 
 	c.mu.Lock()
 	if c.closed {
@@ -455,7 +547,10 @@ func (c *connection) sendRequest(ctx context.Context, method string, params []an
 	c.mu.Unlock()
 
 	select {
-	case c.writeQueue <- msg:
+	case c.writeQueue <- body:
+		if onQueued != nil {
+			onQueued()
+		}
 	case <-ctx.Done():
 		c.mu.Lock()
 		delete(c.pending, id)
@@ -511,15 +606,54 @@ type client struct {
 	callbacksMu     sync.RWMutex
 	callbacks       map[string]func(...any) any
 	callbackCounter atomic.Int64
+
+	// cancellationsMu guards the per-client cancellation registry, which maps
+	// each cancellation ID handed to the AppHost to the function that detaches
+	// its watcher from the token's context.
+	cancellationsMu     sync.Mutex
+	cancellations       map[string]*cancellationRegistration
+	cancellationCounter atomic.Int64
+
+	// errMu guards errs.
+	errMu sync.Mutex
+	errs  []error
+}
+
+type cancellationRegistration struct {
+	token *CancellationToken
+	stop  func() bool
 }
 
 // newClient constructs a client; callers must invoke connect before using it.
 func newClient(socketPath string) *client {
 	return &client{
-		socketPath: socketPath,
-		wrappers:   make(map[string]handleWrapperFactory),
-		callbacks:  make(map[string]func(...any) any),
+		socketPath:    socketPath,
+		wrappers:      make(map[string]handleWrapperFactory),
+		callbacks:     make(map[string]func(...any) any),
+		cancellations: make(map[string]*cancellationRegistration),
 	}
+}
+
+// recordErr remembers an error owned by a handle of this client, so the builder
+// can surface failures that only ever reached child handles.
+// It is safe to call concurrently and on a nil client.
+func (c *client) recordErr(err error) {
+	if c == nil || err == nil {
+		return
+	}
+	c.errMu.Lock()
+	defer c.errMu.Unlock()
+	c.errs = append(c.errs, err)
+}
+
+// combinedError returns every error passed to recordErr.
+func (c *client) combinedError() error {
+	if c == nil {
+		return nil
+	}
+	c.errMu.Lock()
+	defer c.errMu.Unlock()
+	return errors.Join(c.errs...)
 }
 
 // registerHandleWrapper registers a factory for wrapping handles of a specific
@@ -576,13 +710,21 @@ func (c *client) invokeCallback(callbackID string, args any) (any, error) {
 		for i := 0; ; i++ {
 			key := fmt.Sprintf("p%d", i)
 			if val, exists := argsMap[key]; exists {
-				positionalArgs = append(positionalArgs, wrapIfHandle(val, c))
+				wrapped, err := wrapIfHandle(val, c)
+				if err != nil {
+					return nil, err
+				}
+				positionalArgs = append(positionalArgs, wrapped)
 			} else {
 				break
 			}
 		}
 	} else if args != nil {
-		positionalArgs = append(positionalArgs, wrapIfHandle(args, c))
+		wrapped, err := wrapIfHandle(args, c)
+		if err != nil {
+			return nil, err
+		}
+		positionalArgs = append(positionalArgs, wrapped)
 	}
 
 	result := callback(positionalArgs...)
@@ -597,42 +739,92 @@ func (c *client) invokeCallback(callbackID string, args any) (any, error) {
 }
 
 // registerCancellation registers a cancellation token with the server and
-// returns its ID. A goroutine is spawned to notify the server when the token
-// is canceled.
+// returns its ID. The server is notified when the token is canceled, until
+// releaseCancellations detaches the watcher once the capability call returns.
+//
+// The ID combines a per-client counter with the clock, like callback IDs. The
+// AppHost keys its cancellation registry by this ID and hands every request
+// that reuses an ID the same CancellationTokenSource, so two tokens registered
+// in the same clock tick must not share one.
 func (c *client) registerCancellation(token *CancellationToken) string {
 	if token == nil {
 		return ""
 	}
-	id := fmt.Sprintf("ct_%d", time.Now().UnixNano())
-	go func() {
-		<-token.ctx.Done()
-		c.cancelToken(id)
-	}()
+	id := fmt.Sprintf("ct_%d_%d", c.cancellationCounter.Add(1), time.Now().UnixMilli())
+	c.cancellationsMu.Lock()
+	c.cancellations[id] = &cancellationRegistration{token: token}
+	c.cancellationsMu.Unlock()
 	return id
+}
+
+// Arm watchers only after the request carrying their IDs is on the FIFO write
+// queue. Otherwise an already canceled token can reach the host before the
+// invocation that registers it, and the host ignores unknown cancellation IDs.
+func (c *client) startCancellations(args map[string]any) {
+	c.cancellationsMu.Lock()
+	defer c.cancellationsMu.Unlock()
+	for _, v := range args {
+		if id, ok := v.(string); ok {
+			if registration := c.cancellations[id]; registration != nil && registration.stop == nil {
+				registration.stop = context.AfterFunc(registration.token.ctx, func() { c.cancelToken(id) })
+			}
+		}
+	}
+}
+
+// releaseCancellations detaches the watchers of the cancellation IDs carried
+// in args. invokeCapability calls it when the call returns, so a long-lived
+// token used for many calls does not keep one watcher per call. Generated code
+// and ReferenceExpression.GetValue only ever put these IDs in top-level args.
+func (c *client) releaseCancellations(args map[string]any) {
+	c.cancellationsMu.Lock()
+	defer c.cancellationsMu.Unlock()
+	for _, v := range args {
+		id, ok := v.(string)
+		if !ok {
+			continue
+		}
+		if registration, found := c.cancellations[id]; found {
+			// Cancellation closes Done before running AfterFunc. Do not stop a
+			// canceled token's notification when its local call returns first.
+			if registration.stop != nil && registration.token.ctx.Err() == nil {
+				registration.stop()
+			}
+			delete(c.cancellations, id)
+		}
+	}
 }
 
 // connect establishes the connection to the AppHost server and starts the
 // background reader and writer goroutines.
 func (c *client) connect(ctx context.Context, timeout time.Duration) error {
 	c.mu.Lock()
-	if c.conn != nil {
-		c.mu.Unlock()
+	connected := c.conn != nil
+	c.mu.Unlock()
+	if connected {
 		return nil
 	}
 
+	// Dial without holding c.mu: the dial can take up to timeout, and
+	// sendRequest, disconnect and onDisconnect all wait on the same lock.
 	rawConn, err := openConnection(c.socketPath, timeout)
 	if err != nil {
-		c.mu.Unlock()
 		return fmt.Errorf("failed to connect to AppHost: %w", err)
 	}
 
 	authToken := os.Getenv("ASPIRE_REMOTE_APPHOST_TOKEN")
 	if authToken == "" {
 		cErr := rawConn.Close()
-		c.mu.Unlock()
 		return errors.Join(errors.New("ASPIRE_REMOTE_APPHOST_TOKEN environment variable is not set"), cErr)
 	}
 
+	c.mu.Lock()
+	if c.conn != nil {
+		// A concurrent connect installed its connection while this one was dialing.
+		c.mu.Unlock()
+		_ = rawConn.Close()
+		return nil
+	}
 	conn := newConnection(rawConn, c, c.onConnectionClose)
 	c.conn = conn
 	c.mu.Unlock()
@@ -659,18 +851,28 @@ func (c *client) onDisconnect(callback func()) {
 // drives both server-side cancellation (if a CancellationToken is registered
 // in args) and local short-circuit on cancel.
 func (c *client) invokeCapability(ctx context.Context, capabilityID string, args map[string]any) (any, error) {
+	defer c.releaseCancellations(args)
+
 	if err := validateCapabilityArgs(capabilityID, args); err != nil {
 		return nil, err
 	}
 
-	result, err := c.sendRequest(ctx, "invokeCapability", []any{capabilityID, c.marshalTransportValue(args)})
+	c.mu.Lock()
+	conn := c.conn
+	c.mu.Unlock()
+	if conn == nil {
+		return nil, errors.New("not connected to AppHost")
+	}
+	result, err := conn.sendRequestQueued(ctx, "invokeCapability", []any{capabilityID, c.marshalTransportValue(args)}, func() {
+		c.startCancellations(args)
+	})
 	if err != nil {
 		return nil, err
 	}
 	if hasAtsErr, atsErr := tryGetAtsError(result); hasAtsErr {
 		return nil, &CapabilityError{err: atsErr}
 	}
-	return wrapIfHandle(result, c), nil
+	return wrapIfHandle(result, c)
 }
 
 func (c *client) marshalTransportValue(value any) any {
@@ -712,7 +914,9 @@ func (c *client) authenticate(ctx context.Context, token string) error {
 }
 
 func (c *client) cancelToken(tokenID string) bool {
-	result, err := c.sendRequest(context.Background(), "cancelToken", []any{tokenID})
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	result, err := c.sendRequest(ctx, "cancelToken", []any{tokenID})
 	if err != nil {
 		return false
 	}
@@ -764,10 +968,42 @@ func (c *client) onConnectionClose(_ error) {
 
 // ── Package-level I/O helpers ─────────────────────────────────────────────────
 
+// rpcError is the error object of a JSON-RPC error response. Error returns the
+// message alone; the code and the optional data stay reachable for callers that
+// need them:
+//
+//	var rpcErr interface{ Code() int }
+//	if errors.As(err, &rpcErr) { ... }
+type rpcError struct {
+	code    int
+	message string
+	data    any
+}
+
+func (e *rpcError) Error() string { return e.message }
+func (e *rpcError) Code() int     { return e.code }
+func (e *rpcError) Data() any     { return e.data }
+
 func extractResult(response map[string]any) (any, error) {
 	if errObj, hasErr := response["error"]; hasErr {
 		errMap, _ := errObj.(map[string]any)
-		return nil, errors.New(getString(errMap, "message"))
+		rpcErr := &rpcError{message: getString(errMap, "message"), data: errMap["data"]}
+		// A decoded response carries the code as json.Number; the error that
+		// connection.close synthesizes for pending requests carries an int.
+		switch code := errMap["code"].(type) {
+		case json.Number:
+			if parsed, err := code.Int64(); err == nil {
+				rpcErr.code = int(parsed)
+			}
+		case float64:
+			rpcErr.code = int(code)
+		case int:
+			rpcErr.code = code
+		}
+		if rpcErr.message == "" {
+			rpcErr.message = fmt.Sprintf("AppHost returned a JSON-RPC error (code %d)", rpcErr.code)
+		}
+		return nil, rpcErr
 	}
 	return response["result"], nil
 }
@@ -777,24 +1013,55 @@ func writeMessage(w io.Writer, msg map[string]any) error {
 	if err != nil {
 		return err
 	}
+	return writeMessageBody(w, body)
+}
+
+func writeMessageBody(w io.Writer, body []byte) error {
 	header := fmt.Sprintf("Content-Length: %d\r\n\r\n", len(body))
-	if _, err = w.Write([]byte(header)); err != nil {
+	if _, err := w.Write([]byte(header)); err != nil {
 		return err
 	}
-	_, err = w.Write(body)
+	_, err := w.Write(body)
 	return err
 }
 
+// maxMessageSize caps the Content-Length accepted from the AppHost so a corrupt
+// or hostile stream cannot make readMessage allocate an arbitrarily large body.
+// It matches the cap in the Python runtime.
+const maxMessageSize = 64 * 1024 * 1024
+const maxHeaderSize = 8 * 1024
+const maxHeaderCount = 16
+
 func readMessage(reader *bufio.Reader) (map[string]any, error) {
 	headers := make(map[string]string)
+	headerSize := 0
+	headerCount := 0
 	for {
-		line, err := reader.ReadString('\n')
-		if err != nil {
-			return nil, err
+		// Accumulate fragments only within the total budget, including a line
+		// with no newline. Example: "Content-Length: 42\r\n\r\n{...}".
+		var lineBytes []byte
+		for {
+			fragment, err := reader.ReadSlice('\n')
+			headerSize += len(fragment)
+			if headerSize > maxHeaderSize {
+				return nil, errors.New("AppHost message headers exceed 8192 bytes")
+			}
+			lineBytes = append(lineBytes, fragment...)
+			if err == bufio.ErrBufferFull {
+				continue
+			}
+			if err != nil {
+				return nil, err
+			}
+			break
 		}
-		line = strings.TrimSpace(line)
+		line := strings.TrimSpace(string(lineBytes))
 		if line == "" {
 			break
+		}
+		headerCount++
+		if headerCount > maxHeaderCount {
+			return nil, errors.New("AppHost message has more than 16 headers")
 		}
 		parts := strings.SplitN(line, ":", 2)
 		if len(parts) == 2 {
@@ -807,6 +1074,9 @@ func readMessage(reader *bufio.Reader) (map[string]any, error) {
 	if err != nil || length <= 0 {
 		return nil, errors.New("invalid content-length")
 	}
+	if length > maxMessageSize {
+		return nil, fmt.Errorf("content-length %d exceeds the maximum message size of %d bytes", length, maxMessageSize)
+	}
 
 	body := make([]byte, length)
 	_, err = io.ReadFull(reader, body)
@@ -814,8 +1084,19 @@ func readMessage(reader *bufio.Reader) (map[string]any, error) {
 		return nil, err
 	}
 
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	// Preserve integer tokens until decodeAs knows the generated target type. Decoding through float64
+	// first would lose precision for signed and unsigned 64-bit values above 2^53.
+	decoder.UseNumber()
 	var message map[string]any
-	if err := json.Unmarshal(body, &message); err != nil {
+	if err := decoder.Decode(&message); err != nil {
+		return nil, err
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); err != io.EOF {
+		if err == nil {
+			return nil, errors.New("AppHost message body contains multiple JSON values")
+		}
 		return nil, err
 	}
 	return message, nil
@@ -860,7 +1141,12 @@ func openConnection(socketPath string, timeout time.Duration) (io.ReadWriteClose
 }
 
 func openNamedPipe(path string) (io.ReadWriteCloser, error) {
-	f, err := os.OpenFile(path, os.O_RDWR, 0)
+	// Go 1.26 supports Windows FILE_FLAG_* bits in os.OpenFile.
+	// Overlapped I/O lets the background read and authentication write run
+	// concurrently and allows Close to cancel a pending read.
+	// https://go.dev/doc/go1.26#os
+	const fileFlagOverlapped = 0x40000000
+	f, err := os.OpenFile(path, os.O_RDWR|fileFlagOverlapped, 0)
 	if err != nil {
 		return nil, err
 	}

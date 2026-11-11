@@ -180,7 +180,12 @@ public sealed class BicepValueProxy
 
     private void EnsureLiteralType(Type targetType)
     {
-        if (_value.Kind != BicepValueKind.Literal && _valueType == typeof(object))
+        // Bicep parameters are strings even when the target SDK property is an enum.
+        // Only expressions can cross that boundary; a string literal still needs a typed enum.
+        if (_value.Kind != BicepValueKind.Literal &&
+            (_valueType == typeof(object) ||
+             (_value.Kind == BicepValueKind.Expression && _valueType == typeof(string) &&
+              (Nullable.GetUnderlyingType(targetType) ?? targetType).IsEnum)))
         {
             return;
         }

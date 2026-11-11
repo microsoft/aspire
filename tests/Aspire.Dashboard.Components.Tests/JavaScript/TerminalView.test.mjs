@@ -3,16 +3,18 @@
 
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, mock, test } from "node:test";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
+import { join, relative, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const dashboard = new URL("../../../src/Aspire.Dashboard/", import.meta.url);
 const assets = new URL("wwwroot/js/hex1b-web-terminal/", dashboard);
-const { WebTerminal, MIN_FONT_SIZE, MAX_FONT_SIZE } = await import(new URL("dist/index.js", assets));
+const { WebTerminal, MIN_FONT_SIZE, MAX_FONT_SIZE, defaultDarkPalette, defaultLightPalette } = await import(new URL("dist/index.min.js", assets));
 const source = await readFile(new URL("Components/Controls/TerminalView.razor.js", dashboard), "utf8");
 // Remap the public browser asset import to its checked-in location for Node,
 // without changing the adapter implementation under test.
 const terminal = await import(`data:text/javascript;base64,${Buffer.from(source.replace(
-    '"../../js/hex1b-web-terminal/dist/index.js"', JSON.stringify(new URL("dist/index.js", assets).href)
+    '"../../js/hex1b-web-terminal/dist/index.min.js"', JSON.stringify(new URL("dist/index.min.js", assets).href)
 )).toString("base64")}`);
 
 let attempts;
@@ -24,6 +26,8 @@ let snapshots;
 let serial;
 const globals = new Map();
 let originalMount;
+let themeObservers;
+let mediaQueries;
 
 function setGlobal(name, value) {
     globals.set(name, Object.getOwnPropertyDescriptor(globalThis, name));
@@ -40,10 +44,48 @@ beforeEach(() => {
     ids = [];
     snapshots = [];
     serial = 0;
-    setGlobal("window", { isSecureContext: true });
+    themeObservers = [];
+    mediaQueries = new Map();
+    const storage = new Map();
+    setGlobal("localStorage", {
+        getItem: key => storage.get(key) ?? null,
+        setItem: (key, value) => storage.set(key, value),
+        removeItem: key => storage.delete(key),
+        clear: () => storage.clear(),
+    });
+    setGlobal("window", Object.assign(new EventTarget(), { isSecureContext: true, matchMedia(query) {
+        if (!mediaQueries.has(query)) {
+            mediaQueries.set(query, Object.assign(new EventTarget(), { matches: false }));
+        }
+        return mediaQueries.get(query);
+    } }));
     setGlobal("navigator", { gpu: {} });
-    setGlobal("document", { activeElement: null, body: {}, hasFocus: () => true, visibilityState: "visible" });
-    setGlobal("getComputedStyle", element => ({ visibility: element.visibility ?? "visible" }));
+    setGlobal("document", {
+        activeElement: null,
+        body: { append() {} },
+        documentElement: { dataset: { theme: "dark" } },
+        createElement: tag => tag === "canvas"
+            ? { getContext: () => ({ fillStyle: "" }) }
+            : { style: {}, remove() {} },
+        hasFocus: () => true,
+        visibilityState: "visible",
+    });
+    setGlobal("getComputedStyle", element => ({
+        visibility: element.visibility ?? "visible", color: "rgb(100, 100, 100)",
+        getPropertyValue: name => ({
+            "--terminal-background": "#0d1117",
+            "--colorNeutralForeground1": "#ffffff",
+        })[name] ?? "none",
+    }));
+    setGlobal("MutationObserver", class {
+        constructor(callback) {
+            this.callback = callback;
+            this.disconnected = false;
+            themeObservers.push(this);
+        }
+        observe(element, options) { this.element = element; this.options = options; }
+        disconnect() { this.disconnected = true; }
+    });
     setGlobal("requestAnimationFrame", callback => {
         frames.set(++serial, callback);
         return serial;
@@ -66,14 +108,34 @@ beforeEach(() => {
     originalMount = WebTerminal.mount;
     WebTerminal.mount = (element, options) => {
         const ready = Promise.withResolvers();
+        const status = {
+            textContent: "", dataset: { level: "info" }, attributes: new Set(),
+            toggleAttribute(name, enabled) {
+                if (enabled) this.attributes.add(name);
+                else this.attributes.delete(name);
+            },
+        };
+        const shadow = {
+            styles: [],
+            querySelector: selector => selector === ".inspection-message" ? status : {},
+            append(style) { this.styles.push(style.textContent); },
+        };
         const client = {
-            element: { parentElement: element, contains: value => value === client.element },
+            element: {
+                parentElement: element, shadowRoot: shadow, dataset: {}, style: {}, attributes: new Set(),
+                contains: value => value === client.element,
+                toggleAttribute(name, force) { force ? this.attributes.add(name) : this.attributes.delete(name); return !!force; },
+            },
             connected: true,
             peer: { id: "browser-1", primaryId: "cli-1", isPrimary: false },
             geometry: { columns: 100, rows: 30 },
             sizing: { ...options.sizing },
             readOnly: options.readOnly,
             readOnlyCalls: [],
+            colorMode: options.colorMode,
+            colorModeCalls: [],
+            scrollbar: options.scrollbar,
+            scrollbarCalls: [],
             sizingCalls: [],
             primaryRequests: 0,
             focusCalls: 0,
@@ -93,6 +155,14 @@ beforeEach(() => {
                 this.readOnly = readOnly;
                 this.readOnlyCalls.push(readOnly);
             },
+            setScrollbar(scrollbar) {
+                this.scrollbar = scrollbar;
+                this.scrollbarCalls.push(scrollbar);
+            },
+            setColorMode(colorMode) {
+                this.colorMode = colorMode;
+                this.colorModeCalls.push(colorMode);
+            },
             focus() { this.focusCalls++; document.activeElement = this.element; },
             clearSelection() {
                 this.selectionClears++;
@@ -108,6 +178,8 @@ beforeEach(() => {
             close(code, reason = "", wasClean = true) {
                 client.connected = false;
                 options.onClose({ code, reason, wasClean });
+                // Match the worker's closed notification followed by its error-level status.
+                options.onStatus(`View disconnected (${code}${reason ? `: ${reason}` : ""}). Attach another view to reconnect.`, "error");
             },
             role(primary) {
                 client.peer = { ...client.peer, primaryId: primary ? client.peer.id : "cli-1", isPrimary: primary };
@@ -179,12 +251,13 @@ function selectionEvent(attempt, overrides = {}) {
 }
 
 function mount({ visible = true, dotNetRef, options = {} } = {}) {
-    const element = {
+    const view = { style: { setProperty(name, value) { this[name] = value; } } };
+    const element = Object.assign(new EventTarget(), {
         clientWidth: visible ? 800 : 0,
         clientHeight: visible ? 600 : 0,
         contains: value => value === element || value?.parentElement === element,
-        closest: () => null,
-    };
+        closest: selector => selector === ".terminal-view" ? view : null,
+    });
     const controls = [];
     const template = { firstElementChild: { cloneNode() {
         const control = selectionControl();
@@ -198,20 +271,20 @@ function mount({ visible = true, dotNetRef, options = {} } = {}) {
         focus() { document.activeElement = this; },
     }));
     const footer = Object.assign(new EventTarget(), {
+        querySelector: () => null,
         querySelectorAll: () => footerControls,
+        contains: element => element === footer || footerControls.includes(element),
         focus() { document.activeElement = this; },
     });
     const viewId = options.viewId ?? `view-${++serial}`;
-    const id = terminal.initTerminal(element, "wss://dashboard/api/terminal?resource=app&replica=1",
+    const id = terminal.initTerminal(element, "wss://dashboard/api/terminal?resource=app-instance-1",
         dotNetRef ?? { invokeMethodAsync: (name, value) => {
             assert.equal(name, "OnTerminalStateChanged");
             snapshots.push(value);
         } },
         { label: "Localized terminal input", ...options, viewId }, template, footer);
     ids.push(id);
-    return {
-        id, element, controls, footer, footerControls, viewId,
-    };
+    return { id, element, view, controls, footer, footerControls, viewId };
 }
 
 async function settle() {
@@ -232,6 +305,42 @@ function retry() {
     callback();
     return delay;
 }
+
+test("pointer focus styling ends on keyboard navigation outside the terminal without changing focus", async () => {
+    const { element } = mount();
+    const { client } = attempts[0];
+    attempts[0].resolve();
+    await settle();
+    const focusCalls = client.focusCalls;
+    const pointer = new Event("pointerdown", { cancelable: true });
+    element.dispatchEvent(pointer);
+    assert.equal(client.element.dataset.aspirePointerInput, "true");
+    assert.equal(pointer.defaultPrevented, false);
+
+    const keyboard = Object.assign(new Event("keydown", { cancelable: true }), { key: "Tab" });
+    window.dispatchEvent(keyboard);
+    assert.equal(client.element.dataset.aspirePointerInput, undefined);
+    assert.equal(keyboard.defaultPrevented, false);
+    assert.equal(client.focusCalls, focusCalls);
+});
+
+test("pointer focus listeners follow replacement clients and are removed on disposal", async () => {
+    const { id, element } = mount();
+    attempts[0].resolve();
+    await settle();
+    const original = attempts[0].client;
+    terminal.reconnectTerminal(id, "wss://dashboard/api/terminal?resource=other-instance-1");
+    attempts[1].resolve();
+    await settle();
+    const replacement = attempts[1].client;
+    element.dispatchEvent(new Event("pointerdown"));
+    assert.equal(original.element.dataset.aspirePointerInput, undefined);
+    assert.equal(replacement.element.dataset.aspirePointerInput, "true");
+
+    terminal.disposeTerminal(id);
+    window.dispatchEvent(new Event("keydown"));
+    assert.equal(replacement.element.dataset.aspirePointerInput, "true");
+});
 
 for (const [name, rects, position] of [
     ["single line", [{ left: 20, top: 10, width: 60, height: 20 }], { left: "86px", top: "36px" }],
@@ -275,6 +384,325 @@ for (const [name, ranges, text, visible] of [
         assert.equal(attempts[0].client.selectionClears, 0);
     });
 }
+
+for (const [theme, background] of [["light", "#d5d0df"], ["dark", "#312e3c"]]) {
+    test(`terminal mounts with the Aspire ${theme} palette and unchanged neutral and selection colors`, async () => {
+        document.documentElement.dataset.theme = theme;
+        terminal.setTerminalPalette(theme);
+        const { view } = mount();
+        const attempt = attempts[0];
+        assert.equal(attempt.options.colorMode, theme);
+        for (const [palette, defaults] of [
+            [attempt.options.lightModePalette, defaultLightPalette],
+            [attempt.options.darkModePalette, defaultDarkPalette],
+        ]) {
+            const { ansi, background: paletteBackground, ...unchanged } = palette;
+            const { ansi: defaultAnsi, background: defaultBackground, ...defaultUnchanged } = defaults;
+            assert.deepEqual(unchanged, defaultUnchanged);
+            assert.equal(ansi.length, 16);
+            for (const index of [0, 7, 8, 15]) {
+                assert.equal(ansi[index], defaultAnsi[index]);
+            }
+            for (const color of [paletteBackground, ...ansi]) {
+                assert.match(color, /^#[0-9a-f]{6}$/);
+            }
+        }
+        assert.equal(view.style["--terminal-background"], background);
+        attempt.resolve();
+        await settle();
+        assert.equal(attempt.client.colorMode, theme);
+    });
+}
+
+test("chromatic ANSI text meets contrast targets on both Aspire backgrounds", () => {
+    // WCAG relative luminance uses linearized sRGB, not perceptual OKLCH lightness.
+    // https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html
+    const luminance = hex => {
+        const channels = hex.slice(1).match(/../g).map(channel => parseInt(channel, 16) / 255)
+            .map(channel => channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4);
+        return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
+    };
+    mount();
+    for (const palette of [attempts[0].options.lightModePalette, attempts[0].options.darkModePalette]) {
+        const background = luminance(palette.background);
+        for (const index of [1, 2, 3, 4, 5, 6, 9, 10, 11, 12, 13, 14]) {
+            const foreground = luminance(palette.ansi[index]);
+            const contrast = (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05);
+            assert.ok(contrast >= (index < 8 ? 5 : 6),
+                `ANSI ${index} on ${palette.background} has contrast ${contrast}`);
+        }
+    }
+});
+
+for (const [preference, pageTheme] of [["dark", "light"], ["light", "dark"]]) {
+    test(`saved ${preference} palette overrides ${pageTheme} Dashboard on mount and theme changes`, async () => {
+        terminal.setTerminalPalette(preference);
+        assert.equal(localStorage.getItem("Aspire.TerminalPalette"), JSON.stringify(preference));
+        assert.equal(terminal.getTerminalPalette(), preference);
+        document.documentElement.dataset.theme = pageTheme;
+        mount();
+        const attempt = attempts[0];
+        assert.equal(attempt.options.colorMode, preference);
+        attempt.resolve();
+        await settle();
+        for (const theme of ["light", "dark"]) {
+            document.documentElement.dataset.theme = theme;
+            themeObservers[0].callback();
+            assert.equal(attempt.client.colorMode, preference);
+        }
+    });
+}
+
+test("palette override updates every view including pending and hidden mounts without disrupting input", async () => {
+    const first = mount();
+    const pending = mount();
+    const hidden = mount({ visible: false });
+    attempts[0].resolve();
+    await settle();
+    const client = attempts[0].client;
+    const focus = client.focusCalls;
+    const selection = client.selection;
+    terminal.setTerminalPalette("light");
+    attempts[1].resolve();
+    await settle();
+    assert.equal(client.colorMode, "light");
+    assert.equal(attempts[1].client.colorMode, "light");
+    assert.equal(hidden.view.style["--terminal-background"], attempts[0].options.lightModePalette.background);
+    assert.equal(client.focusCalls, focus);
+    assert.equal(client.selection, selection);
+    assert.equal(client.selectionClears, 0);
+    assert.deepEqual(client.sizingCalls, []);
+    assert.equal(attempts.length, 2);
+    terminal.setTerminalPalette("dark");
+    assert.equal(client.colorMode, "dark");
+    terminal.reconnectTerminal(first.id, "wss://dashboard/api/terminal?resource=app-instance-1");
+    assert.equal(attempts[2].options.colorMode, "dark");
+    assert.equal(document.documentElement.dataset.theme, "dark");
+});
+
+test("cross-window storage changes and cleared preferences update palettes and stop after disposal", async () => {
+    const { id } = mount();
+    attempts[0].resolve();
+    await settle();
+    const client = attempts[0].client;
+    const changed = (key, storageArea = localStorage) => {
+        const event = new Event("storage");
+        Object.assign(event, { key, storageArea });
+        window.dispatchEvent(event);
+    };
+    localStorage.setItem("Aspire.TerminalPalette", '"light"');
+    changed("another-setting");
+    changed("Aspire.TerminalPalette", {});
+    assert.equal(client.colorMode, "dark");
+    changed("Aspire.TerminalPalette");
+    assert.equal(client.colorMode, "light");
+    localStorage.clear();
+    changed(null);
+    assert.equal(client.colorMode, "dark");
+    terminal.disposeTerminal(id);
+    const calls = [...client.colorModeCalls];
+    localStorage.setItem("Aspire.TerminalPalette", '"light"');
+    changed("Aspire.TerminalPalette");
+    terminal.setTerminalPalette("dark");
+    assert.deepEqual(client.colorModeCalls, calls);
+});
+
+for (const stored of [null, '"dashboard"']) {
+    test(`missing or former theme-following preference (${stored}) uses Dark independently of site theme`, async () => {
+        if (stored !== null) {
+            localStorage.setItem("Aspire.TerminalPalette", stored);
+        }
+        document.documentElement.dataset.theme = "light";
+        const { id } = mount();
+        attempts[0].resolve();
+        await settle();
+        assert.equal(terminal.getToolbarState(id).palette, "dark");
+        assert.equal(attempts[0].client.colorMode, "dark");
+        for (const theme of ["dark", "light"]) {
+            document.documentElement.dataset.theme = theme;
+            themeObservers[0].callback();
+            assert.equal(attempts[0].client.colorMode, "dark");
+        }
+        assert.equal(console.warn.mock.calls.length, 0);
+    });
+}
+
+test("unavailable or corrupt palette storage logs a warning and uses Dark", () => {
+    for (const value of ["invalid-json", '"unknown"', "null", "1"]) {
+        localStorage.setItem("Aspire.TerminalPalette", value);
+        assert.equal(terminal.getTerminalPalette(), "dark");
+    }
+    mock.method(localStorage, "getItem", () => { throw new Error("Storage disabled"); });
+    assert.equal(terminal.getTerminalPalette(), "dark");
+    assert.equal(console.warn.mock.calls.length, 5);
+});
+
+test("failed or invalid palette writes do not change the mounted palette", async () => {
+    mount();
+    attempts[0].resolve();
+    await settle();
+    assert.throws(() => terminal.setTerminalPalette("invalid"), TypeError);
+    assert.throws(() => terminal.setTerminalPalette("dashboard"), TypeError);
+    mock.method(localStorage, "setItem", () => { throw new Error("Storage disabled"); });
+    assert.throws(() => terminal.setTerminalPalette("light"), /Storage disabled/);
+    assert.equal(attempts[0].client.colorMode, "dark");
+});
+
+test("footer labels the asynchronously generated palette combobox and disconnects its observer", () => {
+    const { id, footer } = mount();
+    const button = { setAttribute: mock.fn() };
+    footer.querySelector = () => ({
+        getAttribute: () => "Terminal palette",
+        querySelector: () => button,
+    });
+    const observer = themeObservers.find(o => o.element === footer);
+    observer.callback();
+    assert.deepEqual(button.setAttribute.mock.calls[0].arguments, ["aria-label", "Terminal palette"]);
+    terminal.disposeTerminal(id);
+    assert.equal(observer.disconnected, true);
+});
+
+test("footer palette changes update toolbar selections even for read-only and disconnected views", async () => {
+    const first = mount({ readOnly: true });
+    const second = mount({ visible: false });
+    terminal.setPaletteFromHost(first.id, "light");
+    assert.equal(terminal.getToolbarState(first.id).palette, "light");
+    assert.equal(terminal.getToolbarState(second.id).palette, "light");
+    assert.equal(attempts.length, 1);
+    assert.deepEqual(attempts[0].client.sizingCalls, []);
+    assert.equal(localStorage.getItem("Aspire.TerminalPalette"), '"light"');
+});
+
+test("footer palette save failure preserves selection, surfaces a dismissible error and allows retry", () => {
+    const { id } = mount();
+    const setter = mock.method(localStorage, "setItem", () => { throw new Error("Storage disabled"); });
+    terminal.setPaletteFromHost(id, "light");
+    assert.equal(terminal.getToolbarState(id).palette, "dark");
+    assert.equal(terminal.getToolbarState(id).error, "palette-failed");
+    terminal.dismissError(id);
+    assert.equal(terminal.getToolbarState(id).error, null);
+    terminal.setPaletteFromHost(id, "light");
+    setter.mock.restore();
+    terminal.setPaletteFromHost(id, "light");
+    assert.equal(terminal.getToolbarState(id).palette, "light");
+    assert.equal(terminal.getToolbarState(id).error, null);
+    assert.equal(attempts.length, 1);
+});
+
+test("palette, theme and contrast changes replace the complete overlay without reconnecting", async () => {
+    const { id, view } = mount();
+    const attempt = attempts[0];
+    const initial = attempt.options.scrollbar;
+    assert.equal(initial.placement, "overlay");
+    assert.equal(initial.markers, true);
+    assert.equal(typeof initial.render, "function");
+    assert.equal(themeObservers[0].element, document.documentElement);
+    assert.deepEqual(themeObservers[0].options, { attributes: true, attributeFilter: ["data-theme"] });
+
+    // Include a theme change before the asynchronous mount has returned its handle.
+    document.documentElement.dataset.theme = "light";
+    themeObservers[0].callback();
+    terminal.setTerminalPalette("light");
+    attempt.resolve();
+    await settle();
+    assert.notEqual(attempt.client.scrollbar.render, initial.render);
+    assert.equal(attempt.options.colorMode, "dark");
+    assert.equal(attempt.client.colorMode, "light");
+    assert.equal(view.style["--terminal-background"], attempt.options.lightModePalette.background);
+    const focusCalls = attempt.client.focusCalls;
+    const selection = attempt.client.selection;
+    function paintedTrack(trackColor) {
+        const painted = [];
+        const context = {
+            globalAlpha: 1,
+            save() {},
+            restore() {},
+            beginPath() {},
+            roundRect() {},
+            fill() { painted.push({ color: this.fillStyle, opacity: this.globalAlpha }); },
+            fillRect() { painted.push({ color: this.fillStyle, opacity: this.globalAlpha }); },
+        };
+        attempt.client.scrollbar.render({
+            context, opacity: 1,
+            track: { left: 0, top: 0, width: 8, height: 40 },
+            thumb: { left: 0, top: 0, width: 0, height: 0 },
+            markers: [],
+            colors: { track: trackColor },
+            interaction: { focused: false, dragging: false },
+        });
+        return painted;
+    }
+    for (const [theme, palette] of [["dark", attempt.options.darkModePalette], ["light", attempt.options.lightModePalette]]) {
+        terminal.setTerminalPalette(theme);
+        document.documentElement.dataset.theme = theme;
+        themeObservers[0].callback();
+        assert.equal(attempt.client.colorMode, theme);
+        assert.equal(view.style["--terminal-background"], palette.background);
+        // The upstream frame, not the snapshotted appearance, supplies the palette color.
+        const trackColor = theme === "dark" ? "#837f82" : "#848189";
+        assert.deepEqual(paintedTrack(trackColor), [{ color: trackColor, opacity: 0.35 }]);
+    }
+    for (const query of ["(forced-colors: active)", "(prefers-contrast: more)"]) {
+        const previous = attempt.client.scrollbar;
+        const media = mediaQueries.get(query);
+        media.matches = true;
+        media.dispatchEvent(new Event("change"));
+        assert.notEqual(attempt.client.scrollbar.render, previous.render);
+        assert.equal(attempt.client.scrollbar.placement, "overlay");
+        assert.equal(attempt.client.scrollbar.markers, true);
+        assert.equal(attempt.client.colorMode, "light");
+        assert.deepEqual(paintedTrack("#848189"), [{ color: "rgb(100, 100, 100)", opacity: 1 }]);
+    }
+    mediaQueries.get("(forced-colors: active)").matches = false;
+    mediaQueries.get("(forced-colors: active)").dispatchEvent(new Event("change"));
+    assert.deepEqual(paintedTrack("#848189"), [{ color: "#848189", opacity: 1 }]);
+    assert.equal(attempts.length, 1);
+    assert.deepEqual(attempt.client.sizingCalls, []);
+    assert.equal(attempt.client.selectionClears, 0);
+    assert.equal(attempt.client.selection, selection);
+    assert.equal(attempt.client.focusCalls, focusCalls);
+    terminal.reconnectTerminal(id, "wss://dashboard/api/terminal?resource=app-instance-1");
+    assert.equal(attempts[1].options.scrollbar, attempt.client.scrollbar);
+    assert.equal(attempts[1].options.colorMode, "light");
+    assert.deepEqual(attempts[1].options.lightModePalette, attempt.options.lightModePalette);
+    assert.deepEqual(attempts[1].options.darkModePalette, attempt.options.darkModePalette);
+    attempts[1].resolve();
+    await settle();
+    attempts[1].close(1006);
+    retry();
+    assert.equal(attempts[2].options.colorMode, "light");
+});
+
+test("a hidden terminal mounts with the latest selected palette when revealed", () => {
+    const { element, view } = mount({ visible: false });
+    document.documentElement.dataset.theme = "light";
+    terminal.setTerminalPalette("light");
+    themeObservers[0].callback();
+    assert.equal(attempts.length, 0);
+    assert.equal(view.style["--terminal-background"], "#d5d0df");
+    element.clientWidth = 800;
+    element.clientHeight = 600;
+    observers[0].callback();
+    assert.equal(attempts[0].options.colorMode, "light");
+});
+
+test("theme observers and accessibility listeners are released on disposal", async () => {
+    const { id } = mount();
+    const attempt = attempts[0];
+    attempt.resolve();
+    await settle();
+    terminal.disposeTerminal(id);
+    const calls = attempt.client.scrollbarCalls.length;
+    const colorModeCalls = [...attempt.client.colorModeCalls];
+    assert.equal(themeObservers[0].disconnected, true);
+    themeObservers[0].callback();
+    for (const media of mediaQueries.values()) {
+        media.dispatchEvent(new Event("change"));
+    }
+    assert.equal(attempt.client.scrollbarCalls.length, calls);
+    assert.deepEqual(attempt.client.colorModeCalls, colorModeCalls);
+    assert.equal(attempt.client.disposed, true);
+});
 
 test("selection copy control follows the single-cell threshold in both directions", () => {
     const { controls } = mount();
@@ -488,12 +916,143 @@ test("reconnect removes selection controls, listeners and stale clipboard callba
     assert.equal(controls[1].actions.removed, true);
 });
 
+test("metadata before mount completion is coalesced and updates read-only views", async () => {
+    const { id } = mount({ options: { readOnly: true } });
+    const { options } = attempts[0];
+    options.onTitleChange("build <app>");
+    options.onWorkingDirectoryChange({ uri: "file://host/work/my%20app", host: "host", path: "/work/my app" });
+    options.onProgressChange({ state: "normal", percentage: 42 });
+    attempts[0].resolve();
+    await settle();
+    assert.equal(snapshots.length, 1);
+    assert.equal(snapshots[0].title, "build <app>");
+    assert.equal(snapshots[0].workingDirectory, "/work/my app");
+    assert.equal(snapshots[0].workingDirectoryUri, "file://host/work/my%20app");
+    assert.equal(snapshots[0].progressState, "normal");
+    assert.equal(snapshots[0].progressPercentage, 42);
+    for (const progress of [
+        { state: "indeterminate", percentage: null },
+        { state: "error", percentage: 30 },
+        { state: "warning", percentage: 50 },
+        { state: "none", percentage: null },
+    ]) {
+        options.onProgressChange(progress);
+        await settle();
+        assert.equal(snapshots.at(-1).progressState, progress.state);
+        assert.equal(snapshots.at(-1).progressPercentage, progress.percentage);
+    }
+    options.onTitleChange("");
+    options.onWorkingDirectoryChange({ uri: null, host: null, path: null });
+    await settle();
+    assert.equal(terminal.getToolbarState(id).title, "");
+    assert.equal(terminal.getToolbarState(id).workingDirectory, null);
+    assert.equal(attempts[0].client.primaryRequests, 0);
+});
+
+test("metadata survives transport loss but not endpoint replacement or stale callbacks", async () => {
+    const { id } = mount();
+    const old = attempts[0];
+    old.options.onTitleChange("old title");
+    old.options.onWorkingDirectoryChange({ uri: "file:///old", host: "", path: "/old" });
+    old.options.onProgressChange({ state: "normal", percentage: 20 });
+    old.resolve();
+    await settle();
+    old.close(1006);
+    await settle();
+    assert.equal(terminal.getToolbarState(id).title, "old title");
+    assert.equal(terminal.getToolbarState(id).connected, false);
+    terminal.reconnectTerminal(id, "wss://dashboard/api/terminal?resource=new");
+    const expected = terminal.getToolbarState(id);
+    assert.equal(expected.title, "");
+    assert.equal(expected.workingDirectory, null);
+    assert.equal(expected.progressState, "none");
+    old.options.onTitleChange("stale title");
+    old.options.onWorkingDirectoryChange({ uri: "file:///stale", host: "", path: "/stale" });
+    old.options.onProgressChange({ state: "error", percentage: 99 });
+    assert.deepEqual(terminal.getToolbarState(id), expected);
+    terminal.disposeTerminal(id);
+    attempts[1].options.onTitleChange("disposed");
+    assert.equal(terminal.getToolbarState(id), null);
+});
+
+test("history chrome suppression preserves errors and selection feedback and disconnects on release", async () => {
+    const { id } = mount();
+    attempts[0].resolve();
+    await settle();
+    const shadow = attempts[0].client.element.shadowRoot;
+    const status = shadow.querySelector(".inspection-message");
+    const observer = themeObservers.find(observer => observer.element === status);
+    assert.ok(observer);
+    assert.match(shadow.styles[0], /\.return-live \{ display: none !important; \}/);
+    assert.match(shadow.styles[0], /\.inspection-message\[data-aspire-history-unavailable\] \{ display: none !important; \}/);
+    for (const [text, level, hidden] of [
+        ["42 rows above live", "info", true],
+        ["0 rows above live", "info", true],
+        ["Selection copied", "info", false],
+        ["Navigation rejected", "error", false],
+        ["42 rows above live", "error", false],
+        ["Text history is not available for this terminal view", "error", false],
+        ["Text history is not available for this terminal view", "info", false],
+        ["", "info", false],
+    ]) {
+        status.textContent = text;
+        status.dataset.level = level;
+        observer.callback();
+        assert.equal(status.attributes.has("data-aspire-history-position"), hidden);
+        assert.equal(status.attributes.has("data-aspire-history-unavailable"),
+            text === "Text history is not available for this terminal view");
+    }
+    terminal.reconnectTerminal(id, attempts[0].options.url);
+    assert.equal(observer.disconnected, true);
+    attempts[1].resolve();
+    await settle();
+    const replacement = themeObservers.at(-1);
+    terminal.disposeTerminal(id);
+    assert.equal(replacement.disconnected, true);
+});
+
+for (const code of [1006, 4000]) {
+    test(`disconnect ${code} suppresses only redundant connection status on the retained screen`, async () => {
+        const { id } = mount();
+        const old = attempts[0];
+        old.resolve();
+        await settle();
+        const status = old.client.element.shadowRoot.querySelector(".inspection-message");
+        const observer = themeObservers.find(observer => observer.element === status);
+        assert.match(old.client.element.shadowRoot.styles[0], /data-aspire-disconnected-status/);
+        status.textContent = "Terminal view is not connected";
+        status.dataset.level = "error";
+        observer.callback();
+        assert.equal(status.attributes.has("data-aspire-disconnected-status"), false);
+
+        old.close(code);
+        await settle();
+        assert.notEqual(observer.disconnected, true);
+        for (const [text, hidden] of [
+            ["Terminal view is not connected", true],
+            ["Scrollbar: Terminal view is not connected", true],
+            ["Copy failed: Terminal view is not connected", true],
+            ["Input action failed: Terminal view is not connected", true],
+            ["Clipboard writing is unavailable", false],
+            ["Navigation rejected", false],
+            ["Selection copied", false],
+        ]) {
+            status.textContent = text;
+            observer.callback();
+            assert.equal(status.attributes.has("data-aspire-disconnected-status"), hidden, text);
+        }
+        terminal.disposeTerminal(id);
+        assert.equal(observer.disconnected, true);
+    });
+}
+
 test("init returns an id while mount waits for its first connected frame", async () => {
     const { id } = mount();
     assert.equal(terminal.getToolbarState(id).connected, false);
     assert.equal(attempts[0].options.label, "Localized terminal input");
-    assert.equal(attempts[0].options.url, "wss://dashboard/api/terminal?resource=app&replica=1");
+    assert.equal(attempts[0].options.url, "wss://dashboard/api/terminal?resource=app-instance-1");
     assert.equal(attempts[0].options.renderer, "auto");
+    assert.equal(attempts[0].options.padding, 3);
     attempts[0].options.onStatus("Socket open", "ready");
     attempts[0].role(false);
     await settle();
@@ -501,12 +1060,15 @@ test("init returns an id while mount waits for its first connected frame", async
     attempts[0].resolve();
     await settle();
     assert.deepEqual(snapshots.at(-1), {
-        terminalId: id, generation: 1, status: "viewer", connected: true,
+        terminalId: id, generation: 1, status: "viewer", connected: true, disconnected: false, retriesExhausted: false,
+        title: "", workingDirectory: null, workingDirectoryUri: null,
+        progressState: "none", progressPercentage: null,
         isPrimary: false, canTakeControl: true, sizeMode: "font", sizeKey: "100x30",
+        palette: "dark",
         fontPx: 13, fontControlsEnabled: true, sizeSelectEnabled: true,
         fitEnabled: true,
         canDecreaseFontSize: true, canIncreaseFontSize: true,
-        cols: 100, rows: 30, error: null,
+        cols: 100, rows: 30, error: null, connectionError: null,
     });
     assert.equal(attempts[0].client.primaryRequests, 0);
     assert.equal(typeof attempts[0].options.onInput, "function");
@@ -514,6 +1076,41 @@ test("init returns an id while mount waits for its first connected frame", async
     assert.equal(attempts[0].options.actions, undefined);
     assert.equal(attempts[0].options.readOnly, false);
 });
+
+test("web link detection requires modifier clicks and preserves default OSC 8 handling", () => {
+    mount();
+    const links = attempts[0].options.links;
+    assert.equal(links.osc8, undefined);
+    assert.equal(links.detection.activation, "modifierClick");
+    assert.equal(links.detection.rules.length, 1);
+    assert.equal(links.detection.rules[0].builtin, "url");
+});
+
+for (const target of ["https://aspire.dev/docs?view=terminal#links", "http://localhost:5000/"]) {
+    test(`detected web link opens safely: ${target}`, () => {
+        mount();
+        const opened = [];
+        window.open = (...args) => opened.push(args);
+        attempts[0].options.links.detection.rules[0].action({}, {
+            source: "detected", ruleId: "web", kind: "uri", text: target, target,
+            ranges: [{ row: 0, startColumn: 0, endColumn: target.length }], revision: 1,
+        });
+        assert.deepEqual(opened, [[target, "_blank", "noopener,noreferrer"]]);
+    });
+}
+
+for (const target of ["javascript:alert(1)", "data:text/html,test", "file:///tmp/test", "/relative", "custom://host", "mailto:test@example.com"]) {
+    test(`detected web link rejects non-web destination: ${target}`, () => {
+        mount();
+        const opened = [];
+        window.open = (...args) => opened.push(args);
+        assert.throws(() => attempts[0].options.links.detection.rules[0].action({}, {
+            source: "detected", ruleId: "web", kind: "uri", text: target, target,
+            ranges: [{ row: 0, startColumn: 0, endColumn: target.length }], revision: 1,
+        }));
+        assert.deepEqual(opened, []);
+    });
+}
 
 test("opening a terminal focuses input after the first frame without taking primary", async () => {
     document.activeElement = { tagName: "BUTTON" };
@@ -684,7 +1281,7 @@ test("Firefox keeps WebGL2 on automatic retries and explicit reconnects", async 
     assert.equal(attempts[1].options.renderer, "webgl2");
     attempts[1].resolve();
     await settle();
-    terminal.reconnectTerminal(id, "wss://dashboard/api/terminal?resource=other&replica=2");
+    terminal.reconnectTerminal(id, "wss://dashboard/api/terminal?resource=other-instance-2");
     assert.equal(attempts[2].options.renderer, "webgl2");
     attempts[2].resolve();
     await settle();
@@ -709,7 +1306,7 @@ test("mount failure reports an error and retries with a fresh abortable generati
 
 test("resource reconnect aborts pending mount and ignores late completion and callbacks", async () => {
     const { id } = mount();
-    assert.equal(terminal.reconnectTerminal(id, "wss://dashboard/api/terminal?resource=other&replica=2"), 2);
+    assert.equal(terminal.reconnectTerminal(id, "wss://dashboard/api/terminal?resource=other-instance-2"), 2);
     assert.equal(attempts[0].options.signal.aborted, true);
     attempts[1].resolve();
     await settle();
@@ -730,16 +1327,17 @@ test("a disconnect schedules only one retry and restores focus only if still app
     await settle();
     document.activeElement = attempts[0].client.element;
     attempts[0].client.connected = false;
-    attempts[0].options.onStatus("closed", "error");
-    attempts[0].options.onStatus("closed again", "error");
+    attempts[0].close(1006);
+    attempts[0].close(1006);
     await settle();
     assert.equal(timers.size, 1);
-    assert.equal(attempts[0].client.disposed, true);
+    assert.equal(attempts[0].client.disposed, false);
     retry();
     document.activeElement = document.body;
     attempts[1].resolve();
     await settle();
     assert.equal(attempts[1].client.focusCalls, 1);
+    assert.equal(attempts[0].client.disposed, true);
     assert.equal(terminal.getToolbarState(id).connected, true);
 });
 
@@ -858,29 +1456,70 @@ test("clipboard permission denial does not clear an existing sizing error", asyn
     assert.equal(terminal.getToolbarState(id).error, "sizing-failed");
 });
 
-test("terminal status errors remain visible and dismiss without replacing the client", async () => {
-    const { id } = mount();
+test("connected terminal status errors are console-only without replacing the client", async () => {
+    mount();
     attempts[0].resolve();
     await settle();
     const client = attempts[0].client;
     client.screenText = "Retained terminal output";
+    const before = terminal.getTerminalSnapshot(attempts[0].element);
     attempts[0].options.onStatus("Selection UI failed: invalid control", "error");
     await settle();
-    const before = terminal.getTerminalSnapshot(attempts[0].element);
-    assert.equal(before.error, "input-failed");
-    document.activeElement = { tagName: "BUTTON" };
-
-    terminal.dismissError(id);
-    await settle();
-
-    assert.deepEqual(terminal.getTerminalSnapshot(attempts[0].element), { ...before, error: null });
+    assert.deepEqual(terminal.getTerminalSnapshot(attempts[0].element), before);
     assert.equal(snapshots.at(-1).error, null);
-    assert.equal(document.activeElement, client.element);
+    assert.deepEqual(console.log.mock.calls.at(-1).arguments, [
+        "Dashboard terminal status error.", "Selection UI failed: invalid control",
+    ]);
     assert.equal(client.disposed, false);
     assert.equal(client.selectionClears, 0);
     assert.equal(client.primaryRequests, 0);
     assert.equal(attempts.length, 1);
     assert.equal(timers.size, 0);
+});
+
+for (const failure of ["sizing", "palette"]) {
+    test(`input status and error callbacks preserve an existing ${failure} error in either order`, async () => {
+        const { id } = mount();
+        attempts[0].resolve();
+        await settle();
+        const attempt = attempts[0];
+        if (failure === "sizing") {
+            attempt.client.requestPrimary = () => { throw new Error("Resize failed"); };
+            terminal.fitToContainer(id);
+        } else {
+            mock.method(localStorage, "setItem", () => { throw new Error("Storage disabled"); });
+            terminal.setPaletteFromHost(id, "light");
+        }
+        const before = terminal.getToolbarState(id);
+        assert.equal(before.error, `${failure}-failed`);
+        const error = new DOMException("Read permission denied.", "NotAllowedError");
+        for (const statusFirst of [true, false]) {
+            const callbacks = [
+                () => attempt.options.onStatus(`Input action failed: ${error.message}`, "error"),
+                () => attempt.options.onInputError(error),
+            ];
+            for (const callback of statusFirst ? callbacks : callbacks.toReversed()) {
+                callback();
+            }
+            await settle();
+            assert.deepEqual(terminal.getToolbarState(id), before);
+        }
+        assert.equal(attempt.client.disposed, false);
+        assert.equal(attempts.length, 1);
+        assert.equal(timers.size, 0);
+    });
+}
+
+test("disconnected terminal status errors remain visible and schedule reconnect", async () => {
+    const { id } = mount();
+    attempts[0].resolve();
+    await settle();
+    attempts[0].client.connected = false;
+    attempts[0].options.onStatus("Renderer device lost.", "error");
+    await settle();
+    assert.equal(terminal.getToolbarState(id).error, "mount-failed");
+    assert.equal(attempts[0].client.disposed, true);
+    assert.equal(timers.size, 1);
 });
 
 test("dismissing a sizing error keeps the existing connection", async () => {
@@ -896,7 +1535,7 @@ test("dismissing a sizing error keeps the existing connection", async () => {
     assert.equal(attempts.length, 1);
 });
 
-test("a delayed dismiss cannot hide a connection failure or cancel its retry", async () => {
+test("a delayed dismiss cannot hide the disconnected state or cancel its retry", async () => {
     const { id } = mount();
     attempts[0].resolve();
     await settle();
@@ -904,9 +1543,10 @@ test("a delayed dismiss cannot hide a connection failure or cancel its retry", a
     attempts[0].close(1006);
     await settle();
     terminal.dismissError(id);
-    assert.equal(terminal.getToolbarState(id).error, "mount-failed");
+    assert.equal(terminal.getToolbarState(id).error, null);
+    assert.equal(terminal.getToolbarState(id).disconnected, true);
     assert.equal(timers.size, 1);
-    assert.equal(attempts[0].client.disposed, true);
+    assert.equal(attempts[0].client.disposed, false);
 });
 
 test("remote role changes authoritatively switch primary, viewer and unclaimed states", async () => {
@@ -981,11 +1621,27 @@ test("automatic retries are bounded and explicit reconnect resets the exhausted 
     }
     assert.equal(attempts.length, 31);
     assert.equal(timers.size, 0);
-    assert.equal(terminal.getToolbarState(id).error, "disconnected");
+    assert.equal(terminal.getToolbarState(id).error, "mount-failed");
     terminal.reconnectTerminal(id, "wss://dashboard/api/terminal?resource=app");
     attempts.at(-1).reject();
     await settle();
     assert.equal(retry(), 500);
+});
+
+test("refreshing an unavailable terminal preserves its mount error through transport retries and exhaustion", async () => {
+    const { id } = mount();
+    for (let i = 0; i <= 30; i++) {
+        attempts.at(-1).close(1006);
+        attempts.at(-1).reject();
+        await settle();
+        assert.equal(terminal.getToolbarState(id).disconnected, true);
+        assert.equal(terminal.getToolbarState(id).error, "mount-failed");
+        if (i < 30) {
+            retry();
+        }
+    }
+    assert.equal(timers.size, 0);
+    assert.equal(attempts.length, 31);
 });
 
 function clickFooter(footer, control, { selectOption = false, ...options } = {}) {
@@ -1125,6 +1781,24 @@ test("disposing unregisters the footer focus listener", async () => {
     assert.equal(attempts[0].client.focusCalls, 1);
 });
 
+test("late layout activation refits without stealing focus from footer controls", async () => {
+    const { id, footerControls } = mount({ options: { autoFit: true } });
+    const { client } = attempts[0];
+    attempts[0].resolve();
+    await settle();
+    attempts[0].role(true);
+    const focusCalls = client.focusCalls;
+    const sizingCalls = client.sizingCalls.length;
+    for (const control of footerControls) {
+        control.focus();
+        terminal.refreshLayout(id);
+        await settle();
+        assert.equal(document.activeElement, control);
+    }
+    assert.equal(client.focusCalls, focusCalls);
+    assert.equal(client.sizingCalls.length, sizingCalls + footerControls.length);
+});
+
 test("font preference follows its surface across remounts but not another surface", async () => {
     const first = mount({ options: { sizeMemoryKey: "memory:dock" } });
     attempts[0].resolve();
@@ -1194,6 +1868,40 @@ test("font stepper states use package bounds instead of the former xterm range",
     assert.equal(state.canIncreaseFontSize, false);
 });
 
+test("the toolbar follows rendered font metrics when a follower is expanded or resized", async () => {
+    const { id } = mount();
+    const attempt = attempts[0];
+    attempt.client.geometry = { columns: 80, rows: 24, cellWidth: 10, cellHeight: 20 };
+    attempt.resolve();
+    await settle();
+    for (const [cellHeight, fontPx] of [[16.25, 13], [40, 32], [10, 8]]) {
+        attempt.options.onLayoutChange({ cellWidth: cellHeight / 2, cellHeight });
+        assert.equal(terminal.getToolbarState(id).fontPx, fontPx);
+    }
+    assert.equal(attempt.client.primaryRequests, 0, "Metric notifications must not take sizing ownership");
+    assert.deepEqual(attempt.client.sizingCalls, []);
+});
+
+test("explicit card expansion reapplies automatic sizing once without reconnecting or fighting later resizes", async () => {
+    const { id, element } = mount({ options: { autoFit: true, sizeMemoryKey: "expansion" } });
+    const attempt = attempts[0];
+    attempt.resolve();
+    await settle();
+    attempt.role(true);
+    terminal.setFontSizeFromHost(id, 18);
+    attempt.role(false);
+    element.clientWidth = 1600;
+    element.clientHeight = 900;
+    terminal.refreshLayout(id);
+    assert.equal(attempt.client.primaryRequests, 2);
+    attempt.role(true);
+    assert.deepEqual(attempt.client.sizingCalls.at(-1), { mode: "auto", fontSize: 18 });
+    attempt.role(false);
+    observers[0].callback();
+    assert.equal(attempt.client.primaryRequests, 2);
+    assert.equal(attempts.length, 1);
+});
+
 test("container-sized surfaces retain the font stepper but reject fixed presets", async () => {
     const { id } = mount({ options: { chromeless: true, showDimensions: false } });
     attempts[0].resolve();
@@ -1235,6 +1943,31 @@ test("opening an auto-fit surface takes primary once and preserves font size acr
         { mode: "auto", fontSize: 18 },
     ]);
     assert.equal(attempts.length, 1);
+});
+
+test("endpoint rebinding applies fixed sizing before mount even without a later policy update", async () => {
+    const { id, element } = mount({ options: { autoFit: true } });
+    attempts[0].resolve();
+    await settle();
+    attempts[0].role(true);
+
+    terminal.reconnectTerminal(id, "wss://dashboard/api/terminal?resource=fixed", false);
+    const fixed = attempts[1];
+    fixed.resolve();
+    await settle();
+    fixed.role(true);
+    element.clientWidth = 1000;
+    element.clientHeight = 700;
+    observers[0].callback();
+    assert.equal(fixed.client.primaryRequests, 0);
+    assert.deepEqual(fixed.client.sizingCalls, []);
+
+    terminal.reconnectTerminal(id, "wss://dashboard/api/terminal?resource=auto", true);
+    attempts[2].resolve();
+    await settle();
+    assert.equal(attempts[2].client.primaryRequests, 1);
+    attempts[2].role(true);
+    assert.deepEqual(attempts[2].client.sizingCalls, [{ mode: "auto", fontSize: 13 }]);
 });
 
 test("auto-fit waits for a visible writable view and does not size a deactivated pane", async () => {
@@ -1429,9 +2162,11 @@ test("authoritative close keeps the existing presentation read-only without remo
     attempts[0].resolve();
     await settle();
     attempts[0].close(4000);
-    attempts[0].options.onStatus("Late transport error", "error");
+    attempts[0].options.onStatus("View disconnected (4000). Attach another view to reconnect.", "error");
     await settle();
     assert.equal(terminal.getTerminalSnapshot(element).ended, true);
+    assert.equal(terminal.getToolbarState(id).disconnected, true);
+    assert.equal(attempts[0].options.preserveOnDisconnect, true);
     assert.equal(attempts[0].client.disposed, false);
     assert.equal(timers.size, 0);
     terminal.setReadOnly(id, false);
@@ -1443,18 +2178,40 @@ test("authoritative close keeps the existing presentation read-only without remo
     assert.equal(attempts[0].client.primaryRequests, 0);
 });
 
-test("completion before the mount continuation cannot revive the connected state", async () => {
-    const { id, element } = mount({ options: { autoFit: true } });
-    attempts[0].resolve();
-    attempts[0].close(4000);
-    await settle();
-    assert.equal(terminal.getTerminalSnapshot(element).ended, true);
-    assert.equal(terminal.getToolbarState(id).connected, false);
-    assert.equal(terminal.getToolbarState(id).error, null);
-    assert.equal(attempts[0].client.readOnly, true);
-    assert.equal(attempts[0].client.primaryRequests, 0);
-    assert.equal(timers.size, 0);
-});
+for (const reconnect of [false, true]) {
+    for (const code of [4000, 1000, 1001, 1006]) {
+        test(`close ${code} before the ${reconnect ? "replacement" : "initial"} mount continuation retains only the latest frame`, async () => {
+            const { id, element } = mount({ options: { autoFit: true } });
+            const original = attempts[0];
+            if (reconnect) {
+                original.client.screenText = "Old screen";
+                original.resolve();
+                await settle();
+                original.close(1006);
+                retry();
+                assert.equal(original.client.disposed, false);
+            }
+            const replacement = attempts.at(-1);
+            replacement.client.screenText = "Newest final frame";
+            replacement.resolve();
+            replacement.close(code);
+            await settle();
+            assert.equal(terminal.getTerminalSnapshot(element).ended, code === 4000);
+            assert.equal(terminal.getTerminalSnapshot(element).screenText, "Newest final frame");
+            assert.equal(terminal.getToolbarState(id).connected, false);
+            assert.equal(terminal.getToolbarState(id).error, null);
+            assert.equal(replacement.client.readOnly, code === 4000);
+            assert.equal(replacement.client.primaryRequests, 0);
+            assert.equal(replacement.client.disposed, false);
+            assert.equal(replacement.options.signal.aborted, false);
+            if (reconnect) {
+                assert.equal(original.client.disposed, true);
+                assert.equal(original.options.signal.aborted, true);
+            }
+            assert.equal(timers.size, code === 4000 ? 0 : 1);
+        });
+    }
+}
 
 for (const code of [1000, 1001, 1006]) {
     for (const mounted of [false, true]) {
@@ -1469,6 +2226,8 @@ for (const code of [1000, 1001, 1006]) {
             await settle();
             assert.equal(terminal.getTerminalSnapshot(element).ended, false);
             assert.equal(terminal.getToolbarState(id).connected, false);
+            assert.equal(attempts[0].options.signal.aborted, !mounted);
+            assert.equal(attempts[0].client.disposed, false);
             assert.equal(timers.size, 1);
             assert.equal(retry(), 500);
             attempts[1].resolve();
@@ -1476,6 +2235,30 @@ for (const code of [1000, 1001, 1006]) {
             assert.equal(terminal.getToolbarState(id).connected, true);
         });
     }
+}
+
+for (const action of ["dispose", "rebind"]) {
+    test(`${action} releases a pending frame before deferred transport cleanup`, async () => {
+        const { id } = mount();
+        const original = attempts[0];
+        original.resolve();
+        original.close(1006);
+        if (action === "dispose") {
+            terminal.disposeTerminal(id);
+        } else {
+            terminal.reconnectTerminal(id, "wss://dashboard/api/terminal?resource=next");
+            attempts[1].resolve();
+        }
+        await settle();
+        assert.equal(original.client.disposed, true);
+        assert.equal(original.options.signal.aborted, true);
+        assert.equal(timers.size, 0);
+        if (action === "rebind") {
+            assert.equal(attempts[1].client.disposed, false);
+            assert.equal(terminal.getToolbarState(id).connected, true);
+            assert.equal(terminal.getToolbarState(id).error, null);
+        }
+    });
 }
 
 test("rebind ignores authoritative close from the old connection", async () => {
@@ -1491,6 +2274,371 @@ test("rebind ignores authoritative close from the old connection", async () => {
     assert.equal(timers.size, 0);
 });
 
+test("transport retries retain the last screen until a replacement frame arrives", async () => {
+    const { id, element } = mount();
+    const original = attempts[0];
+    original.client.screenText = "Final output with graphics";
+    original.resolve();
+    await settle();
+    original.close(1006);
+    await settle();
+    assert.equal(original.client.disposed, false);
+    assert.equal(original.options.signal.aborted, false);
+    assert.equal(terminal.getToolbarState(id).disconnected, true);
+    assert.equal(terminal.getTerminalSnapshot(element).screenText, "Final output with graphics");
+    assert.equal(terminal.getToolbarState(id).sizeKey, "100x30");
+
+    retry();
+    assert.equal(terminal.getToolbarState(id).sizeKey, "100x30");
+    assert.equal(terminal.getToolbarState(id).sizeSelectEnabled, false);
+    attempts[1].reject();
+    await settle();
+    assert.equal(original.client.disposed, false);
+    assert.equal(terminal.getTerminalSnapshot(element).screenText, "Final output with graphics");
+    assert.equal(terminal.getToolbarState(id).disconnected, true);
+    assert.equal(terminal.getToolbarState(id).sizeKey, "100x30");
+    terminal.setTerminalPalette("light");
+    assert.equal(original.client.colorMode, "light");
+    retry();
+    const replacement = attempts[2];
+    replacement.client.geometry = { columns: 97, rows: 38 };
+    replacement.client.screenText = "Reconnected output";
+    replacement.resolve();
+    await settle();
+    assert.equal(original.client.disposed, true);
+    assert.equal(original.options.signal.aborted, true);
+    assert.equal(terminal.getToolbarState(id).disconnected, false);
+    assert.equal(terminal.getToolbarState(id).sizeKey, "97x38");
+    assert.equal(terminal.getTerminalSnapshot(element).screenText, "Reconnected output");
+});
+
+for (const action of ["dispose", "rebind"]) {
+    test(`${action} releases a retained screen and cancels its pending replacement`, async () => {
+        const { id } = mount();
+        attempts[0].resolve();
+        await settle();
+        attempts[0].close(1006);
+        retry();
+        if (action === "dispose") {
+            terminal.disposeTerminal(id);
+        } else {
+            terminal.reconnectTerminal(id, "wss://dashboard/api/terminal?resource=other");
+            assert.equal(terminal.getToolbarState(id).disconnected, false);
+        }
+        assert.equal(attempts[0].client.disposed, true);
+        assert.equal(attempts[0].options.signal.aborted, true);
+        assert.equal(attempts[1].options.signal.aborted, true);
+        attempts[1].resolve();
+        await settle();
+        assert.equal(attempts[1].client.disposed, true);
+    });
+}
+
+test("exhausted retries keep the final screen until the view is disposed", async () => {
+    const { id, element } = mount();
+    attempts[0].client.screenText = "Final output";
+    attempts[0].resolve();
+    await settle();
+    attempts[0].close(1006);
+    for (let i = 0; i < 30; i++) {
+        retry();
+        attempts.at(-1).reject();
+        await settle();
+    }
+    assert.equal(timers.size, 0);
+    assert.equal(terminal.getToolbarState(id).error, "disconnected");
+    assert.equal(terminal.getToolbarState(id).retriesExhausted, true);
+    assert.equal(terminal.getToolbarState(id).disconnected, true);
+    assert.equal(terminal.getTerminalSnapshot(element).screenText, "Final output");
+    assert.equal(attempts[0].client.disposed, false);
+    terminal.disposeTerminal(id);
+    assert.equal(attempts[0].client.disposed, true);
+});
+
+test("failed automatic retries preserve palette errors until dismissal", async () => {
+    const { id, element } = mount();
+    const original = attempts[0];
+    original.client.screenText = "Retained output";
+    original.resolve();
+    await settle();
+    original.close(1006);
+    retry();
+    mock.method(localStorage, "setItem", () => { throw new Error("Storage disabled"); });
+    terminal.setPaletteFromHost(id, "light");
+    attempts[1].reject();
+    await settle();
+    assert.equal(terminal.getToolbarState(id).error, "palette-failed");
+    assert.equal(terminal.getTerminalSnapshot(element).screenText, "Retained output");
+    assert.equal(original.client.disposed, false);
+    terminal.dismissError(id);
+    assert.equal(terminal.getToolbarState(id).error, null);
+    assert.equal(timers.size, 1);
+});
+
+test("palette failures and dismissal preserve retry exhaustion until an explicit reconnect", async () => {
+    const { id } = mount({ options: { readOnly: true } });
+    attempts[0].resolve();
+    await settle();
+    attempts[0].close(1006);
+    for (let i = 0; i < 30; i++) {
+        retry();
+        attempts.at(-1).reject();
+        await settle();
+    }
+    mock.method(localStorage, "setItem", () => { throw new Error("Storage disabled"); });
+    terminal.setPaletteFromHost(id, "light");
+    assert.equal(terminal.getToolbarState(id).error, "palette-failed");
+    assert.equal(terminal.getToolbarState(id).retriesExhausted, true);
+    terminal.dismissError(id);
+    assert.equal(terminal.getToolbarState(id).error, "disconnected");
+    assert.equal(terminal.getToolbarState(id).retriesExhausted, true);
+    assert.equal(timers.size, 0);
+    terminal.reconnectTerminal(id, attempts[0].options.url);
+    assert.equal(terminal.getToolbarState(id).retriesExhausted, false);
+    attempts.at(-1).resolve();
+    await settle();
+    assert.equal(terminal.getToolbarState(id).connected, true);
+});
+
+test("successful resource restart resets exhausted retries and preserves the screen until a new frame", async () => {
+    const { id, element } = mount();
+    const original = attempts[0];
+    original.client.screenText = "Previous final output";
+    original.resolve();
+    await settle();
+    original.close(1006);
+    for (let i = 0; i < 30; i++) {
+        retry();
+        attempts.at(-1).reject();
+        await settle();
+    }
+    assert.equal(timers.size, 0);
+    terminal.restartTerminal(id);
+    assert.equal(attempts.length, 32);
+    assert.equal(terminal.getTerminalSnapshot(element).screenText, "Previous final output");
+    assert.equal(original.client.disposed, false);
+    attempts.at(-1).reject();
+    await settle();
+    assert.equal(retry(), 500, "A restarted workload gets a fresh retry budget");
+    attempts.at(-1).client.screenText = "Restarted output";
+    attempts.at(-1).resolve();
+    await settle();
+    assert.equal(terminal.getToolbarState(id).connected, true);
+    assert.equal(terminal.getTerminalSnapshot(element).screenText, "Restarted output");
+    assert.equal(original.client.disposed, true);
+});
+
+test("successful resource restart explicitly reopens an ended endpoint without clearing its final frame", async () => {
+    const { id, element } = mount();
+    const original = attempts[0];
+    original.client.screenText = "Completed workload output";
+    original.resolve();
+    await settle();
+    original.close(4000);
+    terminal.reconnectTerminal(id, original.options.url);
+    assert.equal(attempts.length, 1, "Ordinary reconnects cannot reopen an ended endpoint");
+    terminal.restartTerminal(id);
+    assert.equal(attempts.length, 2);
+    assert.equal(attempts[1].options.url, original.options.url);
+    assert.equal(terminal.getTerminalSnapshot(element).ended, false);
+    assert.equal(terminal.getTerminalSnapshot(element).screenText, "Completed workload output");
+    assert.equal(original.client.disposed, false);
+    assert.equal(original.options.signal.aborted, false);
+    attempts[1].resolve();
+    await settle();
+    assert.equal(terminal.getToolbarState(id).connected, true);
+    assert.equal(original.client.disposed, true);
+    terminal.restartTerminal(id);
+    assert.equal(attempts.length, 2, "A view that already recovered is not remounted");
+});
+
+test("renderer failures surface an error rather than retaining an unusable view", async () => {
+    const { id } = mount();
+    attempts[0].resolve();
+    await settle();
+    attempts[0].client.connected = false;
+    attempts[0].options.onStatus("Renderer failed", "error");
+    await settle();
+    assert.equal(terminal.getToolbarState(id).error, "mount-failed");
+    assert.equal(terminal.getToolbarState(id).disconnected, false);
+    assert.equal(attempts[0].client.disposed, true);
+    assert.equal(timers.size, 1);
+});
+
+for (const prefix of ["Scrollbar", "Scrollbar tooltip", "Link detection", "Selection UI failed"]) {
+    for (const pendingReplacement of [false, true]) {
+        test(`${prefix} errors after disconnect preserve the renderer ${pendingReplacement ? "during" : "before"} replacement mounting`, async () => {
+            const { id, element } = mount();
+            const original = attempts[0];
+            original.client.screenText = "Retained output with graphics";
+            original.resolve();
+            await settle();
+            const markerOperation = Promise.withResolvers();
+            const reported = markerOperation.promise.catch(error =>
+                original.options.onStatus(`${prefix}: ${error.message}`, "error"));
+            original.close(1006);
+            if (pendingReplacement) {
+                retry();
+            }
+            markerOperation.reject(new Error("Terminal disconnected before the marker operation completed."));
+            await reported;
+            await settle();
+            assert.equal(original.client.disposed, false);
+            assert.equal(original.options.signal.aborted, false);
+            assert.equal(terminal.getTerminalSnapshot(element).screenText, "Retained output with graphics");
+            assert.equal(terminal.getToolbarState(id).error, null);
+            assert.equal(terminal.getToolbarState(id).disconnected, true);
+            if (!pendingReplacement) {
+                assert.equal(timers.size, 1);
+                retry();
+            }
+            attempts[1].client.screenText = "Reconnected output";
+            attempts[1].resolve();
+            await settle();
+            assert.equal(original.client.disposed, true);
+            assert.equal(terminal.getTerminalSnapshot(element).screenText, "Reconnected output");
+            assert.equal(terminal.getToolbarState(id).connected, true);
+        });
+    }
+}
+
+for (const pendingReplacement of [false, true]) {
+    test(`fatal retained renderer errors release the view ${pendingReplacement ? "during" : "before"} replacement mounting`, async () => {
+        const { id, element } = mount();
+        const original = attempts[0];
+        original.client.screenText = "Retained output";
+        original.resolve();
+        await settle();
+        original.close(1006);
+        if (pendingReplacement) {
+            retry();
+        }
+        original.options.onStatus("WebGL2 context lost", "error");
+        await settle();
+        assert.equal(original.client.disposed, true);
+        assert.equal(original.options.signal.aborted, true);
+        assert.equal(terminal.getTerminalSnapshot(element).screenText, "");
+        assert.equal(terminal.getToolbarState(id).error, "mount-failed");
+        if (!pendingReplacement) {
+            assert.equal(timers.size, 1);
+            retry();
+        }
+        const replacement = attempts[1];
+        assert.equal(replacement.options.signal.aborted, false);
+        assert.equal(replacement.client.disposed, false);
+        replacement.client.screenText = "New output";
+        replacement.resolve();
+        await settle();
+        assert.equal(terminal.getTerminalSnapshot(element).screenText, "New output");
+        assert.equal(terminal.getToolbarState(id).connected, true);
+        assert.equal(terminal.getToolbarState(id).error, null);
+        original.options.onStatus("Late renderer error", "error");
+        assert.equal(terminal.getToolbarState(id).error, null);
+        assert.equal(replacement.client.disposed, false);
+    });
+}
+
+for (const failure of ["mount", "retained", "completed"]) {
+    test(`palette failure and dismissal preserve ${failure} projection failure`, async () => {
+        const { id, element } = mount();
+        const original = attempts[0];
+        if (failure !== "mount") {
+            original.resolve();
+            await settle();
+            original.close(failure === "completed" ? 4000 : 1006);
+            original.options.onStatus("WebGL2 context lost", "error");
+        } else {
+            original.close(1006);
+            original.reject();
+            await settle();
+        }
+        const connectionError = failure === "completed" ? "renderer-failed" : "mount-failed";
+        assert.equal(terminal.getToolbarState(id).connectionError, connectionError);
+        mock.method(localStorage, "setItem", () => { throw new Error("Storage disabled"); });
+        terminal.setPaletteFromHost(id, "light");
+        assert.equal(terminal.getToolbarState(id).error, "palette-failed");
+        assert.equal(terminal.getToolbarState(id).connectionError, connectionError);
+        terminal.dismissError(id);
+        assert.equal(terminal.getToolbarState(id).error, connectionError);
+        assert.equal(terminal.getToolbarState(id).connectionError, connectionError);
+        assert.equal(terminal.getTerminalSnapshot(element).screenText, "");
+        assert.equal(terminal.getTerminalSnapshot(element).ended, failure === "completed");
+        if (failure === "completed") {
+            terminal.restartTerminal(id);
+        } else {
+            retry();
+        }
+        assert.equal(terminal.getToolbarState(id).connectionError, "mount-failed");
+        attempts.at(-1).client.screenText = "Recovered output";
+        attempts.at(-1).resolve();
+        await settle();
+        assert.equal(terminal.getToolbarState(id).connectionError, null);
+        assert.equal(terminal.getToolbarState(id).error, null);
+        assert.equal(terminal.getTerminalSnapshot(element).screenText, "Recovered output");
+    });
+}
+
+test("fatal retained renderer failure after a frameless ended retry preserves completed recovery", async () => {
+    const { id, element } = mount();
+    const original = attempts[0];
+    original.client.screenText = "Retained final output";
+    original.resolve();
+    await settle();
+    original.close(1006);
+    retry();
+    const replacement = attempts[1];
+    replacement.close(4000);
+    replacement.reject();
+    await settle();
+    assert.equal(terminal.getTerminalSnapshot(element).ended, true);
+    assert.equal(terminal.getTerminalSnapshot(element).screenText, "Retained final output");
+    original.options.onStatus("WebGL2 context lost", "error");
+    assert.equal(original.client.disposed, true);
+    assert.equal(original.options.signal.aborted, true);
+    assert.equal(terminal.getTerminalSnapshot(element).screenText, "");
+    assert.equal(terminal.getTerminalSnapshot(element).ended, true);
+    assert.equal(terminal.getToolbarState(id).connectionError, "renderer-failed");
+    assert.equal(terminal.getToolbarState(id).disconnected, true);
+    assert.equal(timers.size, 0);
+    terminal.reconnectTerminal(id, original.options.url);
+    assert.equal(attempts.length, 2);
+    terminal.restartTerminal(id);
+    assert.equal(attempts.length, 3);
+    attempts[2].resolve();
+    await settle();
+    assert.equal(terminal.getToolbarState(id).connected, true);
+    assert.equal(terminal.getToolbarState(id).connectionError, null);
+});
+
+test("fatal completed renderer errors release output without reopening the ended endpoint", async () => {
+    const { id, element } = mount();
+    const original = attempts[0];
+    original.client.screenText = "Completed output";
+    original.resolve();
+    await settle();
+    original.close(4000);
+    original.options.onStatus("Scrollbar: Terminal disconnected before the marker operation completed.", "error");
+    assert.equal(original.client.disposed, false);
+    assert.equal(terminal.getToolbarState(id).error, null);
+    original.options.onStatus("WebGL2 context lost", "error");
+    assert.equal(original.client.disposed, true);
+    assert.equal(original.options.signal.aborted, true);
+    assert.equal(terminal.getTerminalSnapshot(element).screenText, "");
+    assert.equal(terminal.getTerminalSnapshot(element).ended, true);
+    assert.equal(terminal.getToolbarState(id).error, "renderer-failed");
+    assert.equal(timers.size, 0);
+    terminal.reconnectTerminal(id, original.options.url);
+    assert.equal(attempts.length, 1);
+    original.options.onStatus("Late transport failure", "error");
+    assert.equal(terminal.getToolbarState(id).error, "renderer-failed");
+    terminal.restartTerminal(id);
+    assert.equal(attempts.length, 2);
+    attempts[1].resolve();
+    await settle();
+    assert.equal(terminal.getToolbarState(id).connected, true);
+    assert.equal(terminal.getToolbarState(id).error, null);
+});
+
 test("disposing a view ignores later native close callbacks", async () => {
     const { id } = mount();
     terminal.disposeTerminal(id);
@@ -1503,63 +2651,75 @@ test("disposing a view ignores later native close callbacks", async () => {
     assert.equal(attempts.length, 1);
 });
 
-test("frontend manifest, lockfile, vendored package and backend use the exact paired version", async () => {
+test("frontend manifest, lockfile, minified bundle and backend use the exact paired version", async () => {
     const manifest = JSON.parse(await readFile(new URL("package.json", dashboard), "utf8"));
     const lockfile = JSON.parse(await readFile(new URL("package-lock.json", dashboard), "utf8"));
-    const vendored = JSON.parse(await readFile(new URL("package.json", assets), "utf8"));
+    const bundle = await readFile(new URL("dist/index.min.js", assets), "utf8");
     const version = manifest.dependencies["@hex1b/web-terminal"];
-    assert.equal(version, "0.168.0");
-    assert.equal(vendored.version, version);
+    assert.equal(version, "0.173.0");
+    assert.equal(bundle.split(/\r?\n/, 1)[0], `// @hex1b/web-terminal ${version}; minified with Terser. See ../LICENSE.`);
     assert.equal(lockfile.packages[""].dependencies["@hex1b/web-terminal"], version);
     assert.equal(lockfile.packages["node_modules/@hex1b/web-terminal"].version, version);
+    const tools = JSON.parse(await readFile(new URL("../../.config/dotnet-tools.json", dashboard), "utf8"));
+    assert.equal(tools.tools["hex1b.tool"].version, version);
+    const mcp = JSON.parse(await readFile(new URL("../../.mcp.json", dashboard), "utf8"));
+    assert.equal(mcp.servers.hex1b.args[0], `Hex1b.McpServer@${version}`);
 
     // Central package rows have the form:
-    //   <PackageVersion Include="Hex1b" Version="0.168.0" />
-    // Match the exact Include value, not Hex1b.Tool or Hex1b.McpServer;
+    //   <PackageVersion Include="Hex1b" Version="0.173.0" />
+    // Match each exact Include value;
     // whitespace, attribute order and either XML quote style are allowed.
     const packages = await readFile(new URL("../../Directory.Packages.props", dashboard), "utf8");
-    const declarations = [...packages.matchAll(/<PackageVersion\b[^>]*\/>/g)]
-        .map(match => match[0])
-        .filter(declaration => /\bInclude\s*=\s*["']Hex1b["']/.test(declaration));
-    assert.equal(declarations.length, 1, "Expected exactly one central Hex1b library version.");
-    const backendVersion = declarations[0].match(/\bVersion\s*=\s*["']([^"']+)["']/);
-    assert.ok(backendVersion, "The paired Hex1b library must have an explicit central version.");
-    assert.equal(backendVersion[1], version);
+    const declarations = [...packages.matchAll(/<PackageVersion\b[^>]*\/>/g)].map(match => match[0]);
+    for (const packageName of ["Hex1b", "Hex1b.McpServer", "Hex1b.Tool"]) {
+        const pairedDeclarations = declarations.filter(declaration =>
+            declaration.match(/\bInclude\s*=\s*["']([^"']+)["']/)?.[1] === packageName);
+        assert.equal(pairedDeclarations.length, 1, `Expected exactly one central ${packageName} version.`);
+        const backendVersion = pairedDeclarations[0].match(/\bVersion\s*=\s*["']([^"']+)["']/);
+        assert.ok(backendVersion, `The paired ${packageName} package must have an explicit central version.`);
+        assert.equal(backendVersion[1], version);
+    }
 });
 
-test("checked-in deployment includes the worker and licensed font without npm installation", async () => {
-    for (const name of [
-        "dist/index.js",
-        "dist/terminal-worker.js",
-        "dist/webgpu-backend.js",
-        "dist/webgl2-backend.js",
-        "dist/hyperlinks.js",
+test("checked-in deployment contains only the minified bundle, font and required licenses without npm installation", async () => {
+    const entries = await readdir(assets, { recursive: true, withFileTypes: true });
+    const files = entries.filter(entry => entry.isFile())
+        .map(entry => relative(fileURLToPath(assets), join(entry.parentPath, entry.name)).split(sep).join("/"))
+        .sort();
+    assert.deepEqual(files, [
+        "LICENSE",
         "dist/fonts/cascadia-mono-nf/CascadiaMonoNF.woff2",
         "dist/fonts/cascadia-mono-nf/LICENSE.txt",
-        "dist/fonts/cascadia-mono-nf/README.md",
-        "LICENSE",
-        "README.md",
-    ]) {
+        "dist/index.min.js",
+    ]);
+    for (const name of files) {
         assert.ok((await readFile(new URL(name, assets))).length > 0, `Missing or empty vendored asset: ${name}`);
     }
 });
 
-test("entry, module worker and bundled font URLs preserve PathBase and same origin", async () => {
+test("entry, both bundled module workers and font URLs preserve PathBase and same origin", async () => {
     // Inspect the emitted forms:
-    //   import { WebTerminal, ... } from "../../js/.../dist/index.js";
-    //   new Worker(new URL("./terminal-worker.js", import.meta.url), ...);
-    //   new URL("./fonts/.../CascadiaMonoNF.woff2", import.meta.url).href;
+    //   import { WebTerminal, ... } from "../../js/.../dist/index.min.js";
+    //   new URL(import.meta.url); t.hash=`hex1b-${e}-worker`;
+    //   new URL("./fonts/.../CascadiaMonoNF.woff2",import.meta.url).href;
+    // Minification renames local functions and parameters, not these URL shapes.
     // Keeping these module-relative URLs avoids both PathBase escapes and
     // blob/cross-origin worker URLs that require relaxing the dashboard CSP.
     const entryReference = source.match(/from "([^"]+)"/)[1];
     const entryUrl = new URL(entryReference, "https://dashboard.example/nested/aspire/Components/Controls/TerminalView.razor.js");
-    assert.equal(entryUrl.href, "https://dashboard.example/nested/aspire/js/hex1b-web-terminal/dist/index.js");
-    const clientSource = await readFile(new URL("dist/web-terminal.js", assets), "utf8");
-    const workerReference = clientSource.match(/new Worker\(new URL\("([^"]+)", import\.meta\.url\)/)[1];
-    assert.equal(new URL(workerReference, entryUrl).href,
-        "https://dashboard.example/nested/aspire/js/hex1b-web-terminal/dist/terminal-worker.js");
-    const fontSource = await readFile(new URL("dist/terminal-font.js", assets), "utf8");
-    const fontReference = fontSource.match(/new URL\("([^"]+)", import\.meta\.url\)/)[1];
+    assert.equal(entryUrl.href, "https://dashboard.example/nested/aspire/js/hex1b-web-terminal/dist/index.min.js");
+    const clientSource = await readFile(new URL("dist/index.min.js", assets), "utf8");
+    assert.match(clientSource, /new URL\(import\.meta\.url\)/);
+    assert.match(clientSource, /\.hash=`hex1b-\$\{[\w$]+\}-worker`/);
+    assert.match(clientSource, /globalThis instanceof DedicatedWorkerGlobalScope/);
+    for (const kind of ["terminal", "link-detection"]) {
+        assert.match(clientSource, new RegExp(`case\\s*"#hex1b-${kind}-worker":`));
+        const workerUrl = new URL(`${entryUrl.href}?v=alpha`);
+        workerUrl.hash = `hex1b-${kind}-worker`;
+        assert.equal(workerUrl.href,
+            `https://dashboard.example/nested/aspire/js/hex1b-web-terminal/dist/index.min.js?v=alpha#hex1b-${kind}-worker`);
+    }
+    const fontReference = clientSource.match(/new URL\("([^"]+\.woff2)",import\.meta\.url\)/)[1];
     assert.equal(new URL(fontReference, entryUrl).href,
         "https://dashboard.example/nested/aspire/js/hex1b-web-terminal/dist/fonts/cascadia-mono-nf/CascadiaMonoNF.woff2");
 });

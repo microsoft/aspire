@@ -9,7 +9,7 @@ import (
 func main() {
 	builder, err := aspire.CreateBuilder()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	compose := builder.AddDockerComposeEnvironment("compose")
@@ -28,7 +28,7 @@ func main() {
 	compose.WithDashboard()
 
 	compose.ConfigureDashboard(func(dashboard aspire.DockerComposeAspireDashboardResource) {
-		dashboard.WithHostPort(&aspire.WithHostPortOptions{Port: aspire.Float64Ptr(18888)})
+		dashboard.WithHostPort(&aspire.WithHostPortOptions{Port: aspire.IntPtr(18888)})
 		dashboard.WithForwardedHeaders(&aspire.WithForwardedHeadersOptions{Enabled: aspire.BoolPtr(true)})
 
 		_, _ = dashboard.Name()
@@ -78,14 +78,14 @@ func main() {
 	_, _ = compose.DashboardEnabled()
 	_, _ = compose.Name()
 	if err = compose.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	app, err := builder.Build()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 	if err := app.Run(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 }

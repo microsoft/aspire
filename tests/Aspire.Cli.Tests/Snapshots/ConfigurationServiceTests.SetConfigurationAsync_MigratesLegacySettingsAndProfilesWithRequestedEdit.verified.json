@@ -1,0 +1,20 @@
+﻿{
+  "appHost": {
+    "path": "updated/AppHost.csproj",
+    "language": "csharp"
+  },
+  "sdk": {
+    "version": "17.0.0"
+  },
+  "features": {
+    "defaultWatchEnabled": false
+  },
+  "profiles": {
+    "default": {
+      "applicationUrl": "https://localhost:5001",
+      "environmentVariables": {
+        "EXAMPLE": "value"
+      }
+    }
+  }
+}

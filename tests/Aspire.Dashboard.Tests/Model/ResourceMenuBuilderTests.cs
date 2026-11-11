@@ -57,6 +57,7 @@ public sealed class ResourceMenuBuilderTests : IDisposable
             dataSource,
             new TestStringLocalizer<ControlsStrings>(),
             new TestStringLocalizer<Resources.Resources>(),
+            new TestStringLocalizer<TerminalStrings>(),
             _iconResolver,
             _dialogService,
             dashboardClient);
@@ -99,6 +100,7 @@ public sealed class ResourceMenuBuilderTests : IDisposable
             EventCallback<CommandViewModel>.Empty,
             (_, _) => false,
             showViewDetails: true,
+            showTerminalItem: true,
             showConsoleLogsItem: true,
             showUrls: true);
 
@@ -150,6 +152,7 @@ public sealed class ResourceMenuBuilderTests : IDisposable
             EventCallback<CommandViewModel>.Empty,
             (_, _) => false,
             showViewDetails: true,
+            showTerminalItem: true,
             showConsoleLogsItem: true,
             showUrls: true);
 
@@ -160,6 +163,42 @@ public sealed class ResourceMenuBuilderTests : IDisposable
             e => Assert.Equal("Localized:ViewJson", e.Text),
             e => Assert.True(e.IsDivider),
             e => Assert.Equal("Localized:ResourceActionTracesText", e.Text));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void AddMenuItems_TerminalVisibilityDoesNotRemoveConsoleLogs(bool showTerminalItem)
+    {
+        var resource = ModelTestHelpers.CreateResource(properties: new Dictionary<string, ResourcePropertyViewModel>
+        {
+            [KnownProperties.Terminal.Enabled] = new ResourcePropertyViewModel(
+                KnownProperties.Terminal.Enabled, Google.Protobuf.WellKnownTypes.Value.ForString("true"),
+                isValueSensitive: false, knownProperty: null, sortOrder: 0, displayName: null, isHighlighted: false)
+        });
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var menuBuilder = CreateResourceMenuBuilder(repositoryContext.Repository, new TestDashboardClient(isEnabled: true));
+        var menuItems = new List<MenuButtonItem>();
+        menuBuilder.AddMenuItems(
+            menuItems,
+            resource,
+            new Dictionary<string, ResourceViewModel> { [resource.Name] = resource },
+            EventCallback.Empty,
+            EventCallback<CommandViewModel>.Empty,
+            (_, _) => false,
+            showViewDetails: true,
+            showTerminalItem: showTerminalItem,
+            showConsoleLogsItem: true,
+            showUrls: false);
+
+        var expectedItems = new List<string> { "Localized:ActionViewDetailsText" };
+        if (showTerminalItem)
+        {
+            expectedItems.Add("Localized:TerminalTitle");
+        }
+        expectedItems.Add("Localized:ResourceActionConsoleLogsText");
+        expectedItems.Add("Localized:ViewJson");
+        Assert.Equal(expectedItems, menuItems.Select(item => item.Text));
     }
 
     [Fact]
@@ -201,6 +240,7 @@ public sealed class ResourceMenuBuilderTests : IDisposable
             EventCallback<CommandViewModel>.Empty,
             (_, _) => false,
             showViewDetails: true,
+            showTerminalItem: true,
             showConsoleLogsItem: true,
             showUrls: true);
 
@@ -238,6 +278,7 @@ public sealed class ResourceMenuBuilderTests : IDisposable
             EventCallback<CommandViewModel>.Empty,
             (_, _) => false,
             showViewDetails: true,
+            showTerminalItem: true,
             showConsoleLogsItem: true,
             showUrls: true);
 
@@ -272,6 +313,7 @@ public sealed class ResourceMenuBuilderTests : IDisposable
             EventCallback<CommandViewModel>.Empty,
             (_, _) => false,
             showViewDetails: true,
+            showTerminalItem: true,
             showConsoleLogsItem: true,
             showUrls: true);
 
@@ -319,6 +361,7 @@ public sealed class ResourceMenuBuilderTests : IDisposable
             EventCallback<CommandViewModel>.Empty,
             (_, _) => false,
             showViewDetails: false,
+            showTerminalItem: true,
             showConsoleLogsItem: false,
             showUrls: false);
 
@@ -358,6 +401,7 @@ public sealed class ResourceMenuBuilderTests : IDisposable
             EventCallback<CommandViewModel>.Empty,
             (_, _) => false,
             showViewDetails: false,
+            showTerminalItem: true,
             showConsoleLogsItem: false,
             showUrls: false);
 
@@ -400,6 +444,7 @@ public sealed class ResourceMenuBuilderTests : IDisposable
             EventCallback<CommandViewModel>.Empty,
             (_, _) => false,
             showViewDetails: false,
+            showTerminalItem: true,
             showConsoleLogsItem: false,
             showUrls: false);
 
@@ -442,6 +487,7 @@ public sealed class ResourceMenuBuilderTests : IDisposable
             EventCallback<CommandViewModel>.Empty,
             (_, _) => false,
             showViewDetails: false,
+            showTerminalItem: true,
             showConsoleLogsItem: false,
             showUrls: false);
 

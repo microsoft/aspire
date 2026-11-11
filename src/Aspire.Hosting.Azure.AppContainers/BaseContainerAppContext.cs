@@ -184,7 +184,7 @@ internal abstract class BaseContainerAppContext(IResource resource, ContainerApp
         }
     }
 
-    private BicepValue<string> GetEndpointValue(EndpointMapping mapping, EndpointProperty property)
+    private BicepValue<string> GetEndpointValue(EndpointMapping mapping, EndpointReferenceExpression reference)
     {
         var (scheme, host, port, targetPort, isHttpIngress, external, tlsEnabled) = mapping;
 
@@ -200,8 +200,14 @@ internal abstract class BaseContainerAppContext(IResource resource, ContainerApp
             return $"{prefix}{host}{suffix}";
         }
 
-        return property switch
+        return reference.Property switch
         {
+            EndpointProperty.BrowserOrigins or EndpointProperty.PrimaryBrowserOrigin when isHttpIngress && external =>
+                GetHostValue($"{scheme}://"),
+            EndpointProperty.BrowserOrigins or EndpointProperty.PrimaryBrowserOrigin =>
+                throw new NotSupportedException(
+                    $"Azure Container Apps cannot provide browser origins for endpoint '{reference.Endpoint.EndpointName}' on resource '{reference.Endpoint.Resource.Name}' because it is not an external HTTP(S) endpoint. " +
+                    "Reference an external HTTP(S) endpoint or supply an explicit origin parameter."),
             EndpointProperty.Url => GetHostValue($"{scheme}://", suffix: isHttpIngress ? null : $":{port}"),
             EndpointProperty.Host or EndpointProperty.IPV4Host => GetHostValue(),
             EndpointProperty.Port => port.ToString(CultureInfo.InvariantCulture),
@@ -252,7 +258,7 @@ internal abstract class BaseContainerAppContext(IResource resource, ContainerApp
 
             var mapping = context._endpointMapping[ep.EndpointName];
 
-            var url = GetEndpointValue(mapping, EndpointProperty.Url);
+            var url = GetEndpointValue(mapping, ep.Property(EndpointProperty.Url));
 
             return (url, secretType);
         }
@@ -278,6 +284,13 @@ internal abstract class BaseContainerAppContext(IResource resource, ContainerApp
         {
             return (AllocateParameter(output, secretType: secretType), secretType);
         }
+
+#pragma warning disable ASPIREAZURE003 // IBicepOutputReferenceProvider is experimental.
+        if (value is IBicepOutputReferenceProvider outputProvider && outputProvider.GetOutputReference() is { } providedOutput)
+        {
+            return ProcessValue(providedOutput, secretType, parent);
+        }
+#pragma warning restore ASPIREAZURE003
 
 #pragma warning disable CS0618 // Type or member is obsolete
         if (value is BicepSecretOutputReference)
@@ -306,7 +319,8 @@ internal abstract class BaseContainerAppContext(IResource resource, ContainerApp
 
             // Express cannot use a standard environment's private DNS either. Check visibility
             // before delegating, while the original endpoint metadata is still available.
-            if (epExpr.Property is EndpointProperty.Url or EndpointProperty.Host or EndpointProperty.IPV4Host or EndpointProperty.HostAndPort)
+            if (epExpr.Property is EndpointProperty.Url or EndpointProperty.Host or EndpointProperty.IPV4Host or EndpointProperty.HostAndPort or
+                EndpointProperty.BrowserOrigins or EndpointProperty.PrimaryBrowserOrigin)
             {
                 ValidateExpressEndpointReference(epExpr.Endpoint);
             }
@@ -317,7 +331,7 @@ internal abstract class BaseContainerAppContext(IResource resource, ContainerApp
 
             var mapping = context._endpointMapping[epExpr.Endpoint.EndpointName];
 
-            var val = GetEndpointValue(mapping, epExpr.Property);
+            var val = GetEndpointValue(mapping, epExpr);
 
             return (val, secretType);
         }
@@ -551,7 +565,6 @@ internal abstract class BaseContainerAppContext(IResource resource, ContainerApp
         ]);
     }
 
-#pragma warning disable ASPIREPROBES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
     protected void AddProbes(ContainerAppContainer containerAppContainer)
     {
         if (!Resource.TryGetAnnotationsOfType<ProbeAnnotation>(out var probeAnnotations))
@@ -579,7 +592,7 @@ internal abstract class BaseContainerAppContext(IResource resource, ContainerApp
                     HttpGet = new()
                     {
                         Path = endpointProbeAnnotation.Path,
-                        Port = AsInt(GetEndpointValue(endpointMapping, EndpointProperty.TargetPort)),
+                        Port = AsInt(GetEndpointValue(endpointMapping, endpointProbeAnnotation.EndpointReference.Property(EndpointProperty.TargetPort))),
                         Scheme = scheme is "https" ? ContainerAppHttpScheme.Https : ContainerAppHttpScheme.Http,
                     },
                 };
@@ -603,7 +616,6 @@ internal abstract class BaseContainerAppContext(IResource resource, ContainerApp
             }
         }
     }
-#pragma warning restore ASPIREPROBES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
     protected enum SecretType
     {

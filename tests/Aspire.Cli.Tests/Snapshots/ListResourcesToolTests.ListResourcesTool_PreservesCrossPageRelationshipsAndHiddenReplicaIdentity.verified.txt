@@ -1,0 +1,35 @@
+﻿resource_name is the identifier of resources.
+Console logs for a resource can provide more information about why a resource is not in a running state.
+Command names and argument names can be passed to execute_resource_command. Current and default argument values are never included.
+Use next_offset with the same limit to retrieve the next page. An absent next_offset means there are no more resources.
+Each page reads current state; restart from offset 0 if resource membership changes while paging.
+
+# PAGINATION
+
+{
+  "offset": 0,
+  "limit": 1,
+  "total": 302,
+  "next_offset": 1
+}
+
+# RESOURCE DATA
+
+[
+  {
+    "name": "api",
+    "waiting_for": [
+      "redis-visible",
+      "redis-hidden"
+    ],
+    "dashboard_url": "http://localhost:18888?resource=api",
+    "urls": [],
+    "relationships": [
+      {
+        "type": "Reference",
+        "resource_name": "redis-visible"
+      }
+    ],
+    "commands": {}
+  }
+]

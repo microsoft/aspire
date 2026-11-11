@@ -11,6 +11,7 @@ using Aspire.Cli.Layout;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
+using Aspire.Shared;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
 
@@ -130,7 +131,8 @@ internal sealed class DashboardRunCommand : BaseCommand
         {
             // Dashboard output is captured in the CLI log instead of written to the console,
             // so include debug details without increasing console verbosity.
-            ["Logging__LogLevel__Default"] = LogLevel.Debug.ToString()
+            ["Logging__LogLevel__Default"] = LogLevel.Debug.ToString(),
+            [DashboardConfigNames.DashboardLaunchContextName.EnvVarName] = KnownDashboardLaunchContexts.Cli
         };
         layoutLease?.AddEnvironment(environmentVariables);
         if (!allowAnonymous && !ConfigSettingHasValue(unmatchedTokens, _environment, KnownConfigNames.DashboardUnsecuredAllowAnonymous))

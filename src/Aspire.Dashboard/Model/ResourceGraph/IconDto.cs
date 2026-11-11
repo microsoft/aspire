@@ -10,6 +10,10 @@ public sealed class IconDto
     public required string? Tooltip { get; init; }
 }
 
-internal sealed record GraphIconsDto(GraphMenuIconDto Menu);
+internal sealed record GraphIconsDto(GraphMenuIconDto Menu, GraphHiddenIconDto Hidden, GraphGameStringsDto Game);
 
 internal sealed record GraphMenuIconDto(string Path, string LabelFormat);
+
+internal sealed record GraphHiddenIconDto(string Path, string Tooltip);
+
+internal sealed record GraphGameStringsDto(string Instructions, string Exit, string ExitLabel, string SoundOn, string SoundOff, string ModeNormal, string ModeHardCore, string HardCoreWarning, string HardCoreStopped);

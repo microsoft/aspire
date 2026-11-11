@@ -9,27 +9,27 @@
       </trans-unit>
       <trans-unit id="DashboardDisabledExceptionMessage">
         <source>The dashboard is not enabled for this application.</source>
-        <target state="new">The dashboard is not enabled for this application.</target>
+        <target state="translated">Das Dashboard ist für diese Anwendung nicht aktiviert.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardTestingPublishModeExceptionMessage">
         <source>Dashboard testing is not supported in publish mode.</source>
-        <target state="new">Dashboard testing is not supported in publish mode.</target>
+        <target state="translated">Das Testen von Dashboards wird im Veröffentlichungsmodus nicht unterstützt.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardUrlApplicationNotStartedExceptionMessage">
         <source>The application must be started before retrieving the dashboard URL.</source>
-        <target state="new">The application must be started before retrieving the dashboard URL.</target>
+        <target state="translated">Die Anwendung muss vor dem Abrufen der Dashboard-URL gestartet werden.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardUrlPublishModeExceptionMessage">
         <source>The dashboard URL is not available in publish mode.</source>
-        <target state="new">The dashboard URL is not available in publish mode.</target>
+        <target state="translated">Die Dashboard-URL ist im Veröffentlichungsmodus nicht verfügbar.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardUrlUnavailableExceptionMessage">
         <source>The dashboard URL is not available.</source>
-        <target state="new">The dashboard URL is not available.</target>
+        <target state="translated">Die Dashboard-URL ist nicht verfügbar.</target>
         <note />
       </trans-unit>
       <trans-unit id="EndpointForResourceNotFoundExceptionMessage">

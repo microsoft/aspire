@@ -68,11 +68,13 @@ export interface ActivityBar {
 }
 
 export interface Menu {
+    hasItem(name: string): Promise<boolean>;
     select(...path: string[]): Promise<Menu | undefined>;
     close(): Promise<void>;
 }
 
 export interface InputBox {
+    getText(): Promise<string>;
     setText(text: string): Promise<void>;
     getPlaceHolder(): Promise<string>;
     getTitle(): Promise<string | undefined>;
@@ -139,7 +141,11 @@ export const SideBarView = extester.SideBarView as new () => SideBarView;
 export const Workbench = extester.Workbench as new () => Workbench;
 export const By = extester.By as { css(selector: string): Locator };
 export const InputBox = extester.InputBox as { create(timeout?: number): Promise<InputBox> };
-export const BottomBarPanel = extester.BottomBarPanel as new () => { openTerminalView(): Promise<TerminalView> };
+export const BottomBarPanel = extester.BottomBarPanel as new () => {
+    getRect(): Promise<{ height: number }>;
+    toggle(open: boolean): Promise<void>;
+    openTerminalView(): Promise<TerminalView>;
+};
 export const EditorView = extester.EditorView as new () => EditorView;
 export const WebView = extester.WebView as new () => WebView;
 export const ModalDialog = extester.ModalDialog as new () => ModalDialog;

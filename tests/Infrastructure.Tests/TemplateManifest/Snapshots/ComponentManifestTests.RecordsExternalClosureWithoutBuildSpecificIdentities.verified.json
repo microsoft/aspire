@@ -1,0 +1,33 @@
+﻿{
+  "$schema": "https://json.schemastore.org/component-detection-manifest.json",
+  "version": 1,
+  "registrations": [
+    {
+      "component": {
+        "type": "npm",
+        "npm": {
+          "name": "@scope/dependency",
+          "version": "3.0.0"
+        }
+      }
+    },
+    {
+      "component": {
+        "type": "nuget",
+        "nuget": {
+          "name": "external.dependency",
+          "version": "1.0.0"
+        }
+      }
+    },
+    {
+      "component": {
+        "type": "nuget",
+        "nuget": {
+          "name": "external.dependency",
+          "version": "2.0.0"
+        }
+      }
+    }
+  ]
+}

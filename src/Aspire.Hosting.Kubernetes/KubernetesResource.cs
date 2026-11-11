@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREPIPELINES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIRECOMPUTE002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREPROJECTS001 // ProjectLaunchDefaultsAnnotation is experimental.
 #pragma warning disable ASPIRECONNECTIONSTRINGS001 // Connection-string reference metadata is experimental.
@@ -56,9 +55,7 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
     internal List<string> Commands { get; } = [];
     internal List<VolumeMountV1> Volumes { get; } = [];
     internal List<PersistentVolumeClaim> PersistentVolumeClaims { get; } = [];
-#pragma warning disable ASPIREPROBES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
     internal List<(ProbeType Type, ProbeV1 Probe)> Probes { get; } = [];
-#pragma warning restore ASPIREPROBES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
     /// <summary>
     /// </summary>
@@ -322,7 +319,6 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
         }
     }
 
-#pragma warning disable ASPIREPROBES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
     private void ProcessProbes()
     {
         if (!resource.TryGetAnnotationsOfType<ProbeAnnotation>(out var probeAnnotations))
@@ -359,7 +355,6 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
             }
         }
     }
-#pragma warning restore ASPIREPROBES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
     private async Task ProcessArgumentsAsync(KubernetesEnvironmentContext environmentContext, DistributedApplicationExecutionContext executionContext, CancellationToken cancellationToken)
     {
@@ -600,15 +595,24 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
                     continue;
                 }
 
+                // TLS state comes from the endpoint annotation; the Kubernetes endpoint mapping does not track it.
+                if (epExpr.Property == EndpointProperty.TlsEnabled)
+                {
+                    return epExpr.Endpoint.TlsEnabled ? bool.TrueString : bool.FalseString;
+                }
+
                 var referencedResource = epExpr.Endpoint.Resource == this
                     ? this
                     : await context.CreateKubernetesResourceAsync(epExpr.Endpoint.Resource, executionContext, default).ConfigureAwait(false);
 
                 var mapping = referencedResource.EndpointMappings[epExpr.Endpoint.EndpointName];
 
-                var val = GetEndpointValue(mapping, epExpr.Property, embedded && epExpr.Property is EndpointProperty.Port or EndpointProperty.TargetPort);
-
-                return val;
+                return epExpr.Property switch
+                {
+                    EndpointProperty.BrowserOrigins or EndpointProperty.PrimaryBrowserOrigin =>
+                        await ProcessValueAsync(context, executionContext, context.GetEndpointInput(epExpr, executionContext), embedded).ConfigureAwait(false),
+                    _ => GetEndpointValue(mapping, epExpr.Property, embedded && epExpr.Property is EndpointProperty.Port or EndpointProperty.TargetPort)
+                };
             }
 
             if (value is ReferenceExpression expr)

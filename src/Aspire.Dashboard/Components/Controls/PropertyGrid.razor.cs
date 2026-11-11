@@ -1,4 +1,4 @@
-// Licensed to the .NET Foundation under one or more agreements.
+﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Dashboard.Components.Controls.Grid;
@@ -44,6 +44,11 @@ public interface IPropertyGridItem
     /// Overrides the value to visualize. If <see langword="null"/>, <see cref="Value"/> is visualized.
     /// </summary>
     public string? ValueToVisualize => null;
+
+    /// <summary>
+    /// Gets the initial visualizer format, overriding automatic format detection. Users can still change the format.
+    /// </summary>
+    public string? TextVisualizerFormat => null;
 
     /// <summary>
     /// Gets whether this item's value is sensitive and should be masked.
@@ -139,6 +144,9 @@ public partial class PropertyGrid<TItem> where TItem : IPropertyGridItem
 
     [Parameter]
     public DataGridGeneratedHeaderType GenerateHeader { get; set; } = DataGridGeneratedHeaderType.Default;
+
+    [Parameter]
+    public DataGridRowSize RowSize { get; set; } = DataGridRowSize.Medium;
 
     [Parameter]
     public string? Class { get; set; }

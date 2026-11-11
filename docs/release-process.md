@@ -55,6 +55,12 @@ To support this, the release flow now creates the GitHub release as a **draft**:
 4. **The release manager publishes the draft manually as a final step** — see [Step 5: Publish the draft release](#step-5-publish-the-draft-release).
 5. Publishing the draft fires `release: [published]`, which kicks off downstream workflows that need the live release: `release-update-support-mdx` (opens a PR on `microsoft/aspire.dev`) and `homebrew-validate-release` (validates the cask against the live download URLs). Both subscribe to `published` rather than `released` because GitHub does not reliably fire `released` when a release is published from a draft.
 
+The release-existence check uses the same GitHub App token as release creation.
+GitHub requires push access to see draft releases; a read-only automatic
+`GITHUB_TOKEN` reports an existing draft as missing. Keeping this lookup on the
+App token preserves retries without granting write permissions to the automatic
+token.
+
 ## Installer channels
 
 Aspire ships through several channels. The release pipeline either submits the bump itself or validates a bump submitted upstream; the per-channel docs describe manifest shape, validation modes, and dogfooding workflows in detail.

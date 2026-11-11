@@ -1,55 +1,160 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Dashboard.Components.CustomIcons;
+using Aspire.Dashboard.Components.Layout;
+using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
+using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
+using Microsoft.Extensions.Options;
+using Microsoft.FluentUI.AspNetCore.Components;
+using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
 namespace Aspire.Dashboard.Components.Dialogs;
 
+/// <summary>
+/// The tabs of the help dialog.
+/// </summary>
+public enum HelpDialogTab
+{
+    Documentation,
+    KeyboardShortcuts,
+    AIAgents
+}
+
+/// <summary>
+/// The dashboard's help: documentation links, keyboard shortcuts and how AI agents use the dashboard, each in a tab.
+/// </summary>
 public partial class HelpDialog
 {
+    private const string TabIdPrefix = "help-tab-";
+    private const string AspireDocumentationUrl = "https://aspire.dev/";
+    private const string ReportIssueUrl = "https://github.com/microsoft/aspire/issues/new/choose";
+    // The invite that aspire.dev links from its community page.
+    private const string DiscordUrl = "https://discord.com/invite/raNPcaaSj8";
+
+    private HelpDialogTab _activeTab;
+
+    /// <summary>
+    /// The tab to open on.
+    /// </summary>
+    [Parameter]
+    public HelpDialogTab Content { get; set; } = HelpDialogTab.KeyboardShortcuts;
+
     [Inject]
     public required IStringLocalizer<Resources.Dialogs> Loc { get; init; }
 
     [Inject]
-    public required ShortcutManager ShortcutManager { get; init; }
+    public required IStringLocalizer<Resources.Layout> LayoutLoc { get; init; }
 
-    private List<KeyboardShortcutCategory> GetShortcutsByCategory()
+    [Inject]
+    public required IOptionsMonitor<DashboardOptions> Options { get; init; }
+
+    [Inject]
+    public required IDashboardClient DashboardClient { get; init; }
+
+    [Inject]
+    public required DashboardViewPreferences ViewPreferences { get; init; }
+
+    [Inject]
+    public required ISessionStorage SessionStorage { get; init; }
+
+    [Inject]
+    public required NavigationManager NavigationManager { get; init; }
+
+    [CascadingParameter]
+    public IDialogInstance? Dialog { get; set; }
+
+    private bool IsAgentHelpEnabled => Options.CurrentValue.UI.DisableAgentHelp != true;
+
+    // The game is played on the resource graph, which needs the resource service and can be disabled.
+    private bool IsGameAvailable => DashboardClient.IsEnabled && ViewPreferences.IsGraphEnabled;
+
+    protected override void OnInitialized()
     {
-        List<KeyboardShortcutCategory> categories =
-        [
-            new(Loc[nameof(Resources.Dialogs.HelpDialogCategoryPanels)],
-            [
-                new KeyboardShortcut(AspireKeyboardShortcut.IncreasePanelSize, ["+"], Loc[nameof(Resources.Dialogs.HelpDialogIncreasePanelSize)]),
-                new KeyboardShortcut(AspireKeyboardShortcut.DecreasePanelSize, ["-"], Loc[nameof(Resources.Dialogs.HelpDialogDecreasePanelSize)]),
-                new KeyboardShortcut(AspireKeyboardShortcut.ResetPanelSize, ["shift", "r"], Loc[nameof(Resources.Dialogs.HelpDialogResetPanelSize)]),
-                new KeyboardShortcut(AspireKeyboardShortcut.ToggleOrientation, ["shift", "t"], Loc[nameof(Resources.Dialogs.HelpDialogTogglePanelOrientation)]),
-                new KeyboardShortcut(AspireKeyboardShortcut.ClosePanel, ["shift", "x"], Loc[nameof(Resources.Dialogs.HelpDialogTogglePanelOpen)]),
-            ]),
-            new(Loc[nameof(Resources.Dialogs.HelpDialogCategoryPageNavigation)],
-            [
-                new KeyboardShortcut(AspireKeyboardShortcut.GoToResources, ["r"], Loc[nameof(Resources.Dialogs.HelpDialogGoToResources)]),
-                new KeyboardShortcut(AspireKeyboardShortcut.GoToConsoleLogs, ["c"], Loc[nameof(Resources.Dialogs.HelpDialogGoToConsoleLogs)]),
-                new KeyboardShortcut(AspireKeyboardShortcut.GoToStructuredLogs, ["s"], Loc[nameof(Resources.Dialogs.HelpDialogGoToStructuredLogs)]),
-                new KeyboardShortcut(AspireKeyboardShortcut.GoToTraces, ["t"], Loc[nameof(Resources.Dialogs.HelpDialogGoToTraces)]),
-                new KeyboardShortcut(AspireKeyboardShortcut.GoToMetrics, ["m"], Loc[nameof(Resources.Dialogs.HelpDialogGoToMetrics)]),
-            ]),
-            new(Loc[nameof(Resources.Dialogs.HelpDialogCategoryNavigation)],
-            [
-                new KeyboardShortcut(AspireKeyboardShortcut.Help, ["?"], Loc[nameof(Resources.Dialogs.HelpDialogGoToHelp)]),
-                new KeyboardShortcut(AspireKeyboardShortcut.Settings, ["shift", "s"], Loc[nameof(Resources.Dialogs.HelpDialogGoToSettings)]),
-                new KeyboardShortcut(AspireKeyboardShortcut.ToggleTerminalDock, ["`"], Loc[nameof(Resources.Dialogs.HelpDialogToggleTerminalDock)]),
-            ])
-        ];
+        // Agent help can be disabled, which removes its tab. Open on the documentation then, rather than on no tab.
+        _activeTab = Content is HelpDialogTab.AIAgents && !IsAgentHelpEnabled ? HelpDialogTab.Documentation : Content;
+    }
 
-        foreach (var category in categories)
+    private static string GetTabId(HelpDialogTab tab) => $"{TabIdPrefix}{tab}";
+
+    private void OnTabChanged(FluentTab? tab)
+    {
+        if (tab?.Id is { } id
+            && id.StartsWith(TabIdPrefix, StringComparison.Ordinal)
+            && Enum.TryParse<HelpDialogTab>(id[TabIdPrefix.Length..], out var activeTab))
         {
-            category.Shortcuts.RemoveAll(shortcut => !ShortcutManager.IsShortcutAvailable(shortcut.Shortcut));
+            _activeTab = activeTab;
+        }
+    }
+
+    private async Task OpenResourceGraphAsync()
+    {
+        await ViewPreferences.SetGroupOverviewAsync(GroupOverview.Graph);
+
+        // Entering the resources view restores the last selection, which would show only those resources. Forget it
+        // so the game starts with all of them, the same way clearing the selection in the resource list does.
+        await SessionStorage.SetAsync(BrowserStorageKeys.LastSelectedResources, new List<string>());
+
+        // Close first: the layout returns focus to the help button once the dialog is gone.
+        if (Dialog is not null)
+        {
+            await Dialog.CloseAsync();
         }
 
-        categories.RemoveAll(category => category.Shortcuts.Count == 0);
-
-        return categories;
+        NavigationManager.NavigateTo(DashboardUrls.ResourceListUrl());
     }
+
+    private List<HelpLinkSection> GetLinkSections() =>
+    [
+        new("learn", Loc[nameof(Resources.Dialogs.HelpDialogLearnHeading)],
+        [
+            new(LayoutLoc[nameof(Resources.Layout.MainLayoutAspireDashboardHelpLink)],
+                Loc[nameof(Resources.Dialogs.HelpDialogDashboardDocumentationDescription)],
+                MainLayout.DashboardDocumentationUrl,
+                new Icons.Regular.Size24.Book()),
+            new(Loc[nameof(Resources.Dialogs.HelpDialogAspireDocumentationTitle)],
+                Loc[nameof(Resources.Dialogs.HelpDialogAspireDocumentationDescription)],
+                AspireDocumentationUrl,
+                new Icons.Regular.Size24.Globe())
+        ]),
+        new("community", Loc[nameof(Resources.Dialogs.HelpDialogCommunityHeading)],
+        [
+            new(Loc[nameof(Resources.Dialogs.HelpDialogDiscordTitle)],
+                Loc[nameof(Resources.Dialogs.HelpDialogDiscordDescription)],
+                DiscordUrl,
+                new AspireIcons.Size24.Discord()),
+            new(LayoutLoc[nameof(Resources.Layout.MainLayoutAspireRepoLink)],
+                Loc[nameof(Resources.Dialogs.HelpDialogRepoDescription)],
+                MainLayout.AspireRepoUrl,
+                new AspireIcons.Size24.GitHub()),
+            new(Loc[nameof(Resources.Dialogs.HelpDialogReportIssueTitle)],
+                Loc[nameof(Resources.Dialogs.HelpDialogReportIssueDescription)],
+                ReportIssueUrl,
+                new Icons.Regular.Size24.Bug()),
+            new(Loc[nameof(Resources.Dialogs.HelpDialogDashboardFeedbackTitle)],
+                Loc[nameof(Resources.Dialogs.HelpDialogDashboardFeedbackDescription)],
+                DashboardFeedbackDialog.DiscussionUrl,
+                new Icons.Regular.Size24.ChatHelp()),
+            .. IsGameAvailable
+                ? new HelpLink[]
+                {
+                    new(Loc[nameof(Resources.Dialogs.HelpDialogGameTitle)],
+                        Loc[nameof(Resources.Dialogs.HelpDialogGameDescription)],
+                        DashboardUrls.GraphUrl(),
+                        new Icons.Regular.Size24.Games(),
+                        OpenResourceGraphAsync)
+                }
+                : []
+        ])
+    ];
+
+    /// <summary>
+    /// A link in the help dialog. It opens in a new tab, unless <paramref name="OnClick"/> handles it inside the dashboard.
+    /// </summary>
+    private sealed record HelpLink(string Title, string Description, string Url, Icon Icon, Func<Task>? OnClick = null);
+
+    private sealed record HelpLinkSection(string Id, string Heading, List<HelpLink> Links);
 }

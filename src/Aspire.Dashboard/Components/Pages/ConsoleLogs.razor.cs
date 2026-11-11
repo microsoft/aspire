@@ -1,4 +1,4 @@
-// Licensed to the .NET Foundation under one or more agreements.
+﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Concurrent;
@@ -23,13 +23,11 @@ using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
 using IToastService = Microsoft.FluentUI.AspNetCore.Components.INotificationService;
 using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
-using MenuItemRole = Microsoft.FluentUI.AspNetCore.Components.MenuItemRole;
 
 namespace Aspire.Dashboard.Components.Pages;
 
 public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry, IAsyncDisposable, IPageWithSessionAndUrlState<ConsoleLogs.ConsoleLogsViewModel, ConsoleLogs.ConsoleLogsPageState>
 {
-    private static readonly Icon s_checkmarkIcon = new Icons.Regular.Size16.Checkmark();
     private static readonly TimeSpan s_noLogsMessageDelay = TimeSpan.FromSeconds(1.5);
 
     [DebuggerDisplay("Resource = {Resource.Name}, IsCancellationRequested = {CancellationToken.IsCancellationRequested}")]
@@ -137,14 +135,31 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     [CascadingParameter]
     public required ViewportInformation ViewportInformation { get; init; }
 
+    /// <summary>
+    /// The resources layout hosting this page. When present, the layout's resource pane selects the resource
+    /// and displays resource commands, so the page doesn't display its own resource selector.
+    /// </summary>
+    [CascadingParameter]
+    public ResourcesLayout? ResourcesLayout { get; set; }
+
     [Parameter]
     public string? ResourceName { get; set; }
 
-    private record struct LogEntryToWrite(string ResourceName, LogEntry LogEntry, int? LineNumber);
+    /// <summary>
+    /// Gets or sets the resources selected in the resource list when several resources are selected. Their console
+    /// logs are displayed together, like the logs of all resources.
+    /// </summary>
+    [Parameter]
+    [SupplyParameterFromQuery(Name = DashboardUrls.ResourceSelectionQueryName)]
+    public string[]? SelectedResourceNames { get; set; }
+
+    // Entries keep the subscription that read them. Changing the selection cancels the old subscriptions and clears the
+    // displayed logs, but batches they already queued are still in the channel, so the reader drops those.
+    private record struct LogEntryToWrite(ConsoleLogsSubscription Subscription, LogEntry LogEntry, int? LineNumber);
 
     private readonly CancellationTokenSource _resourceSubscriptionCts = new();
     private readonly ConcurrentDictionary<string, ResourceViewModel> _resourceByName = new(StringComparers.ResourceName);
-    private readonly Channel<LogEntryToWrite> _logEntryChannel = Channel.CreateUnbounded<LogEntryToWrite>(new UnboundedChannelOptions
+    private readonly Channel<IReadOnlyList<LogEntryToWrite>> _logEntryChannel = Channel.CreateUnbounded<IReadOnlyList<LogEntryToWrite>>(new UnboundedChannelOptions
     {
         SingleReader = true,
         SingleWriter = false
@@ -155,40 +170,19 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     private Task? _logEntryChannelReaderTask;
     private readonly ConcurrentDictionary<string, ConsoleLogsSubscription> _consoleLogsSubscriptions = new(StringComparers.ResourceName);
     private bool _isSubscribedToAll;
+    // The single resource whose logs are shown, or null for every resource. It's set for a missing resource's
+    // placeholder too, so its page knows the logs it shows belong to it. See OnParametersSetAsync.
+    private string? _subscribedResourceName;
+    private IReadOnlyList<string>? _allResourcesSelection;
     internal LogEntries _logEntries = null!;
     private readonly object _updateLogsLock = new object();
     private CancellationTokenSource? _showNoLogsMessageCts;
     private Task? _showNoLogsMessageDelayTask;
     private LogViewer? _logViewerRef;
-    private Controls.TerminalView? _terminalViewRef;
-    private bool _selectedResourceHasTerminal;
-    private string? _terminalResourceName;
-    private int _terminalReplicaIndex;
-
-    // View toggle for terminal resources. The page surfaces both LogViewer
-    // and TerminalView in MainSection (both stay mounted so flipping does
-    // not tear down the PTY or the log subscription) and uses CSS to hide
-    // the inactive one. For non-terminal resources only LogViewer is shown
-    // and this field is unused.
-    //
-    // The default is chosen once per resource selection (see SubscribeAsync):
-    // a live (Running) terminal resource defaults to Terminal because its PTY
-    // is the surface the user came for, while every other case (non-terminal,
-    // or a terminal resource that isn't live yet or has already exited)
-    // defaults to Console so pre-PTY hosting messages (WaitFor, startup
-    // failures) and post-PTY exit output stay visible. After that initial
-    // default there is no state-driven auto-switching: later refreshes such
-    // as a filter/clear change (which also route through SubscribeAsync)
-    // preserve the current view, and the user can flip either way via the
-    // ⋯ menu picker.
-    private ConsoleLogsView _activeView = ConsoleLogsView.Console;
-    // Tracks the view that was rendered to the DOM on the previous render
-    // pass. Revealing Terminal starts a deferred mount or refreshes selection
-    // overlays without disposing the client or changing producer dimensions.
-    private ConsoleLogsView? _lastRenderedView;
 
     // UI
     private SelectViewModel<ResourceTypeDetails> _allResource = null!;
+    private SelectViewModel<ResourceTypeDetails>? _missingResource;
     private AspirePageContentLayout? _contentLayout;
     private readonly List<CommandViewModel> _highlightedCommands = new();
     private readonly List<MenuButtonItem> _logsMenuItems = new();
@@ -214,7 +208,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         _resourceSubscriptionToken = _resourceSubscriptionCts.Token;
         _logEntries = new(DashboardUIHelpers.GetVirtualizedItemCount(Options.Value.Frontend.MaxConsoleLogCount));
         _allResource = new() { Id = null, Name = ControlsStringsLoc[nameof(ControlsStrings.LabelAll)] };
-        PageViewModel = new ConsoleLogsViewModel { SelectedResource = _allResource, Status = Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsLoadingResources)] };
+        PageViewModel = new ConsoleLogsViewModel { SelectedResource = GetFallbackOption(), Status = Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsLoadingResources)] };
         _logEntryChannelReaderTask = StartLogEntryChannelReaderTask();
 
         _consoleLogsFiltersChangedSubscription = ConsoleLogsManager.OnFiltersChanged(async () =>
@@ -222,10 +216,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
             var isAllSelected = IsAllSelected();
             var selectedResourceName = PageViewModel.SelectedResource.Id?.InstanceId;
 
-            // A filter change (e.g. clearing the console logs) is not a resource
-            // selection change, so preserve the user's current view instead of
-            // snapping back to the default.
-            await SubscribeAsync(isAllSelected, selectedResourceName, resetView: false);
+            await SubscribeAsync(isAllSelected, selectedResourceName);
         });
 
         var consoleSettingsResult = await LocalStorage.GetUnprotectedAsync<ConsoleLogConsoleSettings>(BrowserStorageKeys.ConsoleLogConsoleSettings);
@@ -335,7 +326,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
                         // so if there is no selected resource when we
                         // receive an added resource, and that added resource name == ResourceName,
                         // we should mark it as selected
-                        if (ResourceName is not null && PageViewModel.SelectedResource is null && changeType == ResourceViewModelChangeType.Upsert && string.Equals(ResourceName, resource.Name, StringComparisons.ResourceName))
+                        if (ResourceName is not null && IsMissingResourceSelected() && changeType == ResourceViewModelChangeType.Upsert && string.Equals(ResourceName, resource.Name, StringComparisons.ResourceName))
                         {
                             SetSelectedResourceOption(resource);
                             needsRender = true;
@@ -373,32 +364,57 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
             var hasNewLogEntry = false;
             lock (_updateLogsLock)
             {
-                foreach (var (resourceName, logEntry, lineNumber) in batch)
+                // Insert the read entries together: initial loads of several resources interleave their histories,
+                // which LogEntries merges in one pass instead of moving the buffer for each entry.
+                var entriesToInsert = new List<LogEntry>();
+                foreach (var logBatch in batch)
                 {
-                    // Console logs are filtered in the UI by the timestamp of the log entry.
-                    var timestampFilterDate = ConsoleLogsManager.GetFilterDate(resourceName);
-
-                    if (lineNumber != null)
+                    foreach (var (subscription, logEntry, lineNumber) in logBatch)
                     {
-                        // Set the base line number using the reported line number of the first log line.
-                        _logEntries.BaseLineNumber ??= lineNumber;
-                    }
+                        // A canceled subscription's entries belong to a selection that's no longer displayed.
+                        if (subscription.CancellationToken.IsCancellationRequested)
+                        {
+                            continue;
+                        }
 
-                    // Check if log entry is not displayed because of remove.
-                    if (logEntry.Timestamp is not null && timestampFilterDate is not null && !(logEntry.Timestamp > timestampFilterDate))
-                    {
-                        continue;
-                    }
+                        var resourceName = subscription.Resource.Name;
+                        // Console logs are filtered in the UI by the timestamp of the log entry.
+                        var timestampFilterDate = ConsoleLogsManager.GetFilterDate(resourceName);
 
-                    // Check if log entry is not displayed because of pause.
-                    if (_logEntries.ProcessPauseFilters(logEntry))
-                    {
-                        continue;
-                    }
+                        if (lineNumber != null)
+                        {
+                            // Set the base line number using the reported line number of the first log line.
+                            _logEntries.BaseLineNumber ??= lineNumber;
+                        }
 
-                    _logEntries.InsertSorted(logEntry);
-                    hasNewLogEntry = true;
+                        // Check if log entry is not displayed because of remove.
+                        if (logEntry.Timestamp is not null && timestampFilterDate is not null && !(logEntry.Timestamp > timestampFilterDate))
+                        {
+                            continue;
+                        }
+
+                        // Check if log entry is not displayed because of pause.
+                        if (_logEntries.ProcessPauseFilters(logEntry))
+                        {
+                            continue;
+                        }
+
+                        if (logEntry.Type is LogEntryType.Pause)
+                        {
+                            // A pause filters the entries read after it, so it's inserted before them.
+                            _logEntries.InsertSortedRange(entriesToInsert);
+                            entriesToInsert.Clear();
+                            _logEntries.InsertSorted(logEntry);
+                        }
+                        else
+                        {
+                            entriesToInsert.Add(logEntry);
+                        }
+                        hasNewLogEntry = true;
+                    }
                 }
+
+                _logEntries.InsertSortedRange(entriesToInsert);
             }
 
             await InvokeAsync(async () =>
@@ -416,8 +432,28 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     private SelectViewModel<ResourceTypeDetails> GetSelectedOption()
     {
         Debug.Assert(_resources is not null);
-        return _resources.GetResource(Logger, ResourceName, canSelectGrouping: true, fallbackViewModel: _allResource);
+        return _resources.GetResource(Logger, ResourceName, canSelectGrouping: true, fallbackViewModel: GetFallbackOption());
     }
+
+    // A page about one resource never falls back to every resource's logs: when the resource isn't known, for example
+    // a replica that was replaced, the page selects a placeholder for it and shows no logs. The layout's header says
+    // the resource wasn't found. If the resource appears later, the resource subscription selects it.
+    private SelectViewModel<ResourceTypeDetails> GetFallbackOption()
+    {
+        if (ResourceName is null)
+        {
+            return _allResource;
+        }
+
+        if (_missingResource is null || !string.Equals(_missingResource.Name, ResourceName, StringComparisons.ResourceName))
+        {
+            _missingResource = new() { Id = null, Name = ResourceName };
+        }
+
+        return _missingResource;
+    }
+
+    private bool IsMissingResourceSelected() => _missingResource is not null && PageViewModel.SelectedResource == _missingResource;
 
     private void SetStatus(ConsoleLogsViewModel viewModel, string statusName)
     {
@@ -428,9 +464,19 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     protected override async Task OnParametersSetAsync()
     {
         Logger.LogDebug("Initializing console logs view model.");
-        if (await this.InitializeViewModelAsync())
+
+        // In the resources layout, the resource list owns the selection. The page doesn't restore a resource
+        // remembered in the session, which could differ from the selection.
+        if (ResourcesLayout is null)
         {
-            return;
+            if (await this.InitializeViewModelAsync())
+            {
+                return;
+            }
+        }
+        else
+        {
+            await UpdateViewModelFromQueryAsync(PageViewModel);
         }
 
         UpdateMenuButtons();
@@ -442,9 +488,16 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         // Check if subscription needs to change
         var needsNewSubscription = false;
 
+        var allResourcesSelection = SelectedResourceNames is { Length: > 1 } && ResourcesLayout is not null ? SelectedResourceNames : null;
+
         if (isAllSelected != _isSubscribedToAll)
         {
             Logger.LogDebug("Switching to or from 'All' mode");
+            needsNewSubscription = true;
+        }
+        else if (isAllSelected && !(_allResourcesSelection ?? []).SequenceEqual(allResourcesSelection ?? [], StringComparers.ResourceName))
+        {
+            Logger.LogDebug("Switching the resources displayed in 'All' mode");
             needsNewSubscription = true;
         }
         else if (!string.IsNullOrEmpty(selectedResourceName) && !_consoleLogsSubscriptions.ContainsKey(selectedResourceName))
@@ -452,90 +505,32 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
             Logger.LogDebug("Switching to different single resource: {ResourceName}", selectedResourceName);
             needsNewSubscription = true;
         }
+        else if (IsMissingResourceSelected() && !string.Equals(_subscribedResourceName, ResourceName, StringComparisons.ResourceName))
+        {
+            // Navigated to a resource that doesn't exist, from another resource's logs. Those logs must not keep
+            // streaming under the missing resource's header. When the shown resource is deleted instead, the
+            // placeholder replaces it without a navigation and the subscribed name matches, so its logs are kept.
+            Logger.LogDebug("Switching to missing resource: {ResourceName}", ResourceName);
+            needsNewSubscription = true;
+        }
+
+        _allResourcesSelection = allResourcesSelection;
 
         if (needsNewSubscription)
         {
-            await SubscribeAsync(isAllSelected, selectedResourceName, resetView: true);
+            await SubscribeAsync(isAllSelected, selectedResourceName);
         }
 
         UpdateTelemetryProperties();
     }
 
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        // Notify the terminal after its wrapper becomes visible so a deferred
-        // mount and selection overlays see the new layout.
-        if (_selectedResourceHasTerminal &&
-            _activeView == ConsoleLogsView.Terminal &&
-            _lastRenderedView != ConsoleLogsView.Terminal &&
-            _terminalViewRef is { } terminalForLayout)
-        {
-            await terminalForLayout.RefreshLayoutAsync();
-        }
-
-        _lastRenderedView = _activeView;
-    }
-
-    private async Task SubscribeAsync(bool isAllSelected, string? selectedResourceName, bool resetView)
+    private async Task SubscribeAsync(bool isAllSelected, string? selectedResourceName)
     {
         Logger.LogDebug("Subscription change needed. IsAllSelected: {IsAllSelected}, SelectedResource: {SelectedResource}", isAllSelected, selectedResourceName);
-
-        // Detect whether the selected resource has terminal support
-        _selectedResourceHasTerminal = false;
-        _terminalResourceName = null;
-        _terminalReplicaIndex = 0;
-
-        // Only (re)default the view on an actual resource-selection change.
-        // SubscribeAsync also runs on filter changes (clearing the console logs
-        // routes through ConsoleLogsManager.OnFiltersChanged), and those
-        // refreshes must preserve whatever view the user is currently on rather
-        // than snapping back to the default.
-        if (resetView)
-        {
-            // Default the view to Console on every resource change. A terminal-
-            // enabled resource that isn't live yet (Waiting/Starting) or has already
-            // stopped (Exited/Finished/FailedToStart) has no active PTY, so Console
-            // is where the useful output lives: pre-PTY hosting messages (WaitFor,
-            // startup failures) and post-PTY exit messages. When the resource is
-            // live (Running) the PTY is the primary surface, so we flip the default
-            // to Terminal below.
-            _activeView = ConsoleLogsView.Console;
-        }
 
         var selectedResource = selectedResourceName is not null
             ? _resourceByName.GetValueOrDefault(selectedResourceName)
             : null;
-
-        if (!DashboardClient.IsReadOnly &&
-            !isAllSelected && selectedResource is not null &&
-            selectedResource.HasTerminal() &&
-            selectedResource.TryGetTerminalReplicaInfo(out var replicaIndex, out _))
-        {
-            _selectedResourceHasTerminal = true;
-            _terminalResourceName = selectedResource.DisplayName;
-            _terminalReplicaIndex = replicaIndex;
-            Logger.LogDebug("Resource '{ResourceName}' has terminal at replica {ReplicaIndex}", selectedResourceName, replicaIndex);
-
-            // When the resource is live (Running) its PTY is active, so make the
-            // terminal the default view on selection — that's the surface the
-            // user came for. Non-running terminal resources stay on Console so
-            // pre-PTY hosting messages and post-PTY exit output remain visible
-            // immediately. Gated on resetView so a filter refresh (e.g. clearing
-            // logs) never overrides a manual view choice. The user can still flip
-            // either way via the ⋯ menu.
-            if (resetView && selectedResource.IsRunningState())
-            {
-                _activeView = ConsoleLogsView.Terminal;
-            }
-
-            // Intentionally fall through to the normal subscription path so
-            // the resource's console log stream is collected even while the
-            // user is on the Terminal view. The Console view in the View
-            // dropdown shows these logs and they're needed for pre-PTY
-            // hosting messages (WaitFor, startup failures) and post-PTY
-            // exit messages — flipping to the Terminal view should never
-            // cause us to miss anything from the console stream.
-        }
 
         // Cancel all existing subscriptions
         await CancelAllSubscriptionsAsync();
@@ -556,17 +551,22 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         {
             // Subscribe to all available resources
             _isSubscribedToAll = true;
+            _subscribedResourceName = null;
             await SubscribeToAllResourcesAsync();
         }
         else if (selectedResource is not null)
         {
             // Subscribe to single resource
             _isSubscribedToAll = false;
+            _subscribedResourceName = selectedResource.Name;
             await SubscribeToSingleResourceAsync(selectedResource);
         }
         else
         {
-            Logger.LogDebug("Unexpected state. Unknown resource '{ResourceName}' selected.", selectedResourceName);
+            // A missing resource's placeholder, or a resource that isn't known yet: no logs until the resource appears.
+            _isSubscribedToAll = false;
+            _subscribedResourceName = IsMissingResourceSelected() ? ResourceName : selectedResourceName;
+            Logger.LogDebug("No resource to subscribe to for '{ResourceName}'.", _subscribedResourceName);
         }
 
         if (!_consoleLogsSubscriptions.IsEmpty)
@@ -574,12 +574,6 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
             StartNoLogsMessageDelay();
         }
 
-        // Rebuild the options menu now that _selectedResourceHasTerminal
-        // reflects the new selection. The earlier UpdateMenuButtons() call
-        // in OnParametersSetAsync ran before this method updated the flag,
-        // so without this the menu keeps the previous resource's shape —
-        // e.g. the Console/Terminal view toggle would linger on a resource
-        // that has no WithTerminal(), and be missing on the reverse switch.
         UpdateMenuButtons();
     }
 
@@ -588,12 +582,20 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         if (isAllSelected)
         {
             return _resourceByName.Values
-                .Where(resource => !resource.IsResourceHidden(_showHiddenResources))
+                .Where(IsIncludedInAllResources)
                 .Any(resource => resource.ConsoleLogsLoaded);
         }
 
         return selectedResource?.ConsoleLogsLoaded == true;
     }
+
+    /// <summary>
+    /// Gets a value indicating whether a resource's console logs are displayed in 'All' mode. When several resources
+    /// are selected in the resource list, only they are displayed.
+    /// </summary>
+    private bool IsIncludedInAllResources(ResourceViewModel resource) => _allResourcesSelection is { } selection
+        ? ResourcesLayout.IsResourceInSelection(resource, selection)
+        : !resource.IsResourceHidden(_showHiddenResources);
 
     private string GetNoLogsMessage() => _consoleLogsWereLoaded
         ? Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsNoLogsFound)]
@@ -612,108 +614,62 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
 
         var selectedResource = GetSelectedResource();
 
-        // View toggle (Console / Terminal): only meaningful for terminal-
-        // enabled resources; keeps the menu identical to today for the common
-        // no-terminal case.
-        if (_selectedResourceHasTerminal)
+        _logsMenuItems.Add(new()
         {
-            // Model the two view options as checkable menu items so the picker
-            // exposes the current selection to assistive technology, not just to
-            // sighted users. FluentMenuItem only emits role="menuitemcheckbox" and
-            // the reflected aria-checked state (which screen readers announce) when
-            // the item carries a checkable Role; a leading icon alone conveys the
-            // selection visually but is silent to a screen reader. The checkbox role
-            // also controls whether the explicit checkmark indicator is displayed.
-            // Supplying the icon places it in the dashboard's start column and applies
-            // the accent color instead of using Fluent's neutral fallback indicator.
-            _logsMenuItems.Add(new()
-            {
-                OnClick = () => HandleViewChangedAsync(nameof(ConsoleLogsView.Console)),
-                Text = Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsViewConsoleOption)],
-                Icon = s_checkmarkIcon,
-                Role = MenuItemRole.Checkbox,
-                Checked = _activeView == ConsoleLogsView.Console,
-            });
+            IsDisabled = PageViewModel.SelectedResource is null && !_isSubscribedToAll,
+            OnClick = DownloadLogsAsync,
+            Text = Loc[nameof(Dashboard.Resources.ConsoleLogs.DownloadLogs)],
+            Icon = new Icons.Regular.Size16.ArrowDownload()
+        });
 
-            _logsMenuItems.Add(new()
-            {
-                OnClick = () => HandleViewChangedAsync(nameof(ConsoleLogsView.Terminal)),
-                Text = Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsViewTerminalOption)],
-                Icon = s_checkmarkIcon,
-                Role = MenuItemRole.Checkbox,
-                Checked = _activeView == ConsoleLogsView.Terminal,
-            });
+        _logsMenuItems.Add(new()
+        {
+            IsDivider = true
+        });
 
-            if (_activeView == ConsoleLogsView.Console)
-            {
-                _logsMenuItems.Add(new()
+        // Only show the "Hide hidden resources" menu item when viewing all resources
+        // Use IsAllSelected() instead of _isSubscribedToAll because UpdateMenuButtons()
+        // can be called before the subscription is established
+        if (IsAllSelected())
+        {
+            CommonMenuItems.AddToggleHiddenResourcesMenuItem(
+                _logsMenuItems,
+                ControlsStringsLoc,
+                _showHiddenResources,
+                _resourceByName.Values,
+                SessionStorage,
+                EventCallback.Factory.Create<bool>(this, async
+                value =>
                 {
-                    IsDivider = true
-                });
-            }
+                    _showHiddenResources = value;
+                    UpdateResourcesList();
+                    UpdateMenuButtons();
+
+                    await this.RefreshIfMobileAsync(_contentLayout);
+                }));
         }
 
-        if (_activeView == ConsoleLogsView.Console)
+        _logsMenuItems.Add(new()
         {
-            // Console-view items: preserved from the original menu.
-            _logsMenuItems.Add(new()
-            {
-                IsDisabled = PageViewModel.SelectedResource is null && !_isSubscribedToAll,
-                OnClick = DownloadLogsAsync,
-                Text = Loc[nameof(Dashboard.Resources.ConsoleLogs.DownloadLogs)],
-                Icon = new Icons.Regular.Size16.ArrowDownload()
-            });
+            OnClick = () => ToggleTimestampAsync(showTimestamp: !_showTimestamp, isTimestampUtc: _isTimestampUtc),
+            Text = _showTimestamp ? Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsTimestampHide)] : Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsTimestampShow)],
+            Icon = new Icons.Regular.Size16.CalendarClock()
+        });
 
-            _logsMenuItems.Add(new()
-            {
-                IsDivider = true
-            });
+        _logsMenuItems.Add(new()
+        {
+            OnClick = () => ToggleTimestampAsync(showTimestamp: _showTimestamp, isTimestampUtc: !_isTimestampUtc),
+            Text = Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsTimestampShowUtc)],
+            Icon = _isTimestampUtc ? new Icons.Regular.Size16.CheckboxChecked() : new Icons.Regular.Size16.CheckboxUnchecked(),
+            IsDisabled = !_showTimestamp
+        });
 
-            // Only show the "Hide hidden resources" menu item when viewing all resources
-            // Use IsAllSelected() instead of _isSubscribedToAll because UpdateMenuButtons()
-            // can be called before the subscription is established
-            if (IsAllSelected())
-            {
-                CommonMenuItems.AddToggleHiddenResourcesMenuItem(
-                    _logsMenuItems,
-                    ControlsStringsLoc,
-                    _showHiddenResources,
-                    _resourceByName.Values,
-                    SessionStorage,
-                    EventCallback.Factory.Create<bool>(this, async
-                    value =>
-                    {
-                        _showHiddenResources = value;
-                        UpdateResourcesList();
-                        UpdateMenuButtons();
-
-                        await this.RefreshIfMobileAsync(_contentLayout);
-                    }));
-            }
-
-            _logsMenuItems.Add(new()
-            {
-                OnClick = () => ToggleTimestampAsync(showTimestamp: !_showTimestamp, isTimestampUtc: _isTimestampUtc),
-                Text = _showTimestamp ? Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsTimestampHide)] : Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsTimestampShow)],
-                Icon = new Icons.Regular.Size16.CalendarClock()
-            });
-
-            _logsMenuItems.Add(new()
-            {
-                OnClick = () => ToggleTimestampAsync(showTimestamp: _showTimestamp, isTimestampUtc: !_isTimestampUtc),
-                Text = Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsTimestampShowUtc)],
-                Icon = _isTimestampUtc ? new Icons.Regular.Size16.CheckboxChecked() : new Icons.Regular.Size16.CheckboxUnchecked(),
-                IsDisabled = !_showTimestamp
-            });
-
-            _logsMenuItems.Add(new()
-            {
-                OnClick = () => ToggleWrapLogsAsync(noWrapLogs: !_noWrapLogs),
-                Text = _noWrapLogs ? Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsWrapLogs)] : Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsNoWrapLogs)],
-                Icon = _noWrapLogs ? new Icons.Regular.Size16.TextWrap() : new Icons.Regular.Size16.TextWrapOff()
-            });
-        }
-
+        _logsMenuItems.Add(new()
+        {
+            OnClick = () => ToggleWrapLogsAsync(noWrapLogs: !_noWrapLogs),
+            Text = _noWrapLogs ? Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsWrapLogs)] : Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsNoWrapLogs)],
+            Icon = _noWrapLogs ? new Icons.Regular.Size16.TextWrap() : new Icons.Regular.Size16.TextWrapOff()
+        });
         if (selectedResource != null)
         {
             if (ViewportInformation.IsDesktop)
@@ -727,12 +683,13 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
                 _resourceByName,
                 EventCallback.Factory.Create(this, () =>
                 {
-                    NavigationManager.NavigateTo(DashboardUrls.ResourcesUrl(resource: selectedResource.Name));
+                    NavigationManager.NavigateTo(DashboardUrls.ResourceOverviewUrl(selectedResource.Name));
                     return Task.CompletedTask;
                 }),
                 EventCallback.Factory.Create<CommandViewModel>(this, ExecuteResourceCommandAsync),
                 (resource, command) => DashboardCommandExecutor.IsExecuting(resource.Name, command.Name),
                 showViewDetails: true,
+                showTerminalItem: true,
                 showConsoleLogsItem: false,
                 showUrls: true);
         }
@@ -812,7 +769,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     private async Task SubscribeToAllResourcesAsync()
     {
         var availableResources = _resourceByName.Values
-            .Where(r => !r.IsResourceHidden(_showHiddenResources))
+            .Where(IsIncludedInAllResources)
             .ToList();
 
         Logger.LogDebug("Subscribing to {ResourceCount} resources for 'All' view.", availableResources.Count);
@@ -917,35 +874,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         bool showHiddenResources,
         out SelectViewModel<ResourceTypeDetails>? optionToSelect)
     {
-        var builder = ImmutableList.CreateBuilder<SelectViewModel<ResourceTypeDetails>>();
-
-        foreach (var grouping in resourcesByName
-            .Where(r => !r.Value.IsResourceHidden(showHiddenResources))
-            .OrderBy(c => c.Value, ResourceViewModelNameComparer.Instance)
-            .GroupBy(r => r.Value.DisplayName, StringComparers.ResourceName))
-        {
-            string resourceName;
-
-            if (grouping.Count() > 1)
-            {
-                resourceName = grouping.Key;
-
-                builder.Add(new SelectViewModel<ResourceTypeDetails>
-                {
-                    Id = ResourceTypeDetails.CreateResourceGrouping(resourceName, true),
-                    Name = resourceName
-                });
-            }
-            else
-            {
-                resourceName = grouping.First().Value.DisplayName;
-            }
-
-            foreach (var resource in grouping.Select(g => g.Value).OrderBy(r => r, ResourceViewModelNameComparer.Instance))
-            {
-                builder.Add(ToOption(resource, grouping.Count() > 1, resourceName));
-            }
-        }
+        var builder = ResourceSelectHelpers.CreateOptions(resourcesByName, resourceUnknownStateText, showHiddenResources).ToBuilder();
 
         // If there are multiple resources, add "All" option.
         // If there is one resource then it is automatically selected.
@@ -962,35 +891,6 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
 
         return builder.ToImmutableList();
 
-        SelectViewModel<ResourceTypeDetails> ToOption(ResourceViewModel resource, bool isReplica, string resourceName)
-        {
-            var id = isReplica
-                ? ResourceTypeDetails.CreateReplicaInstance(resource.Name, resourceName)
-                : ResourceTypeDetails.CreateSingleton(resource.Name, resourceName);
-
-            return new SelectViewModel<ResourceTypeDetails>
-            {
-                Id = id,
-                Name = GetDisplayText()
-            };
-
-            string GetDisplayText()
-            {
-                var resourceName = ResourceViewModel.GetResourceName(resource, resourcesByName);
-
-                if (resource.HasNoState())
-                {
-                    return $"{resourceName} ({resourceUnknownStateText})";
-                }
-
-                if (resource.IsRunningState())
-                {
-                    return resourceName;
-                }
-
-                return $"{resourceName} ({resource.State})";
-            }
-        }
     }
 
     private void UpdateResourcesList()
@@ -1035,9 +935,11 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
                     var pauseIntervals = PauseManager.ConsoleLogPauseIntervals;
                     Logger.LogDebug("Adding {PauseIntervalsCount} pause intervals on initial logs load.", pauseIntervals.Length);
 
-                    foreach (var priorPause in pauseIntervals)
+                    if (pauseIntervals.Length > 0)
                     {
-                        _logEntryChannel.Writer.TryWrite(new LogEntryToWrite(subscription.Resource.Name, LogEntry.CreatePause(GetResourceName(subscription.Resource), priorPause.Start, priorPause.End), LineNumber: null));
+                        _logEntryChannel.Writer.TryWrite(pauseIntervals
+                            .Select(priorPause => new LogEntryToWrite(subscription, LogEntry.CreatePause(GetResourceName(subscription.Resource), priorPause.Start, priorPause.End), LineNumber: null))
+                            .ToArray());
                     }
                 }
 
@@ -1053,12 +955,13 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
                         continue;
                     }
 
-                    foreach (var (lineNumber, content, isErrorOutput) in batch)
-                    {
-                        var logEntry = logParser.CreateLogEntry(content, isErrorOutput, resourcePrefix);
-
-                        _logEntryChannel.Writer.TryWrite(new LogEntryToWrite(subscription.Resource.Name, logEntry, lineNumber));
-                    }
+                    // Publish the source batch atomically. Publishing each parsed line separately
+                    // lets the reader drain a partial batch and render an intermediate end anchor.
+                    var logEntries = batch.Select(line => new LogEntryToWrite(
+                        subscription,
+                        logParser.CreateLogEntry(line.Content, line.IsErrorMessage, resourcePrefix),
+                        line.LineNumber)).ToArray();
+                    _logEntryChannel.Writer.TryWrite(logEntries);
                 }
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
@@ -1112,7 +1015,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
 
             // If we're subscribed to all resources and this is a new resource, subscribe to it
             if (_isSubscribedToAll && !_consoleLogsSubscriptions.ContainsKey(resource.Name) &&
-                !resource.IsResourceHidden(_showHiddenResources))
+                IsIncludedInAllResources(resource))
             {
                 await SubscribeToSingleResourceAsync(resource);
             }
@@ -1138,9 +1041,17 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
 
             if (string.Equals(PageViewModel.SelectedResource.Id?.InstanceId, resource.Name, StringComparisons.ResourceName))
             {
-                // The selected resource was deleted
-                PageViewModel.SelectedResource = _allResource;
-                await HandleSelectedOptionChangedAsync();
+                // The selected resource was deleted. A page about that resource keeps the logs it has and selects the
+                // placeholder for the missing resource, rather than switching to every resource's logs.
+                if (ResourceName is not null)
+                {
+                    PageViewModel.SelectedResource = GetFallbackOption();
+                }
+                else
+                {
+                    PageViewModel.SelectedResource = _allResource;
+                    await HandleSelectedOptionChangedAsync();
+                }
             }
 
             UpdateResourcesList();
@@ -1160,11 +1071,13 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         await JS.DownloadFileAsync(GetFileName(), stream);
     }
 
-    private string GetFileName()
+    internal string GetFileName()
     {
+        // A missing resource's placeholder has no ID, only the requested name. Its logs can still be downloaded, for
+        // example the logs kept from a replica that was removed.
         var fileNamePrefix = _isSubscribedToAll
             ? "AllResources"
-            : string.Join("_", PageViewModel.SelectedResource.Id!.InstanceId!.Split(Path.GetInvalidFileNameChars()));
+            : string.Join("_", (PageViewModel.SelectedResource.Id?.InstanceId ?? PageViewModel.SelectedResource.Name).Split(Path.GetInvalidFileNameChars()));
 
         return $"{fileNamePrefix}-{TimeProvider.GetLocalNow().ToString("yyyyMMddhhmmss", CultureInfo.InvariantCulture)}.txt";
     }
@@ -1210,7 +1123,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
                     foreach (var subscription in _consoleLogsSubscriptions.Values)
                     {
                         Logger.LogDebug("Inserting new pause log entry for {Resource} starting at {StartTimestamp}.", subscription.Resource.Name, timestamp);
-                        _logEntryChannel.Writer.TryWrite(new LogEntryToWrite(subscription.Resource.Name, LogEntry.CreatePause(GetResourceName(subscription.Resource), timestamp), LineNumber: null));
+                        _logEntryChannel.Writer.TryWrite([new LogEntryToWrite(subscription, LogEntry.CreatePause(GetResourceName(subscription.Resource), timestamp), LineNumber: null)]);
                     }
                 }
                 else
@@ -1272,7 +1185,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
                 viewModel.Status ??= Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsLogsNotYetAvailable)];
                 return Task.CompletedTask;
             }
-            else if (TryGetSingleResource() is { } r)
+            else if (ResourcesLayout is null && TryGetSingleResource() is { } r)
             {
                 // If there is no resource selected and there is only one resource available, select it.
                 viewModel.SelectedResource = _resources.GetResource(Logger, r.Name, canSelectGrouping: false, fallbackViewModel: _allResource);
@@ -1293,7 +1206,8 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
 
     public string GetUrlFromSerializableViewModel(ConsoleLogsPageState serializable)
     {
-        return DashboardUrls.ConsoleLogsUrl(serializable.SelectedResource);
+        var url = DashboardUrls.ConsoleLogsUrl(serializable.SelectedResource);
+        return serializable.SelectedResource is null && ResourcesLayout is not null ? ResourcesLayout.AddSelectionToUrl(url) : url;
     }
 
     public ConsoleLogsPageState ConvertViewModelToSerializable()
@@ -1304,59 +1218,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         return new ConsoleLogsPageState(selectedResourceName);
     }
 
-    private Task HandleViewChangedAsync(string? newView)
-    {
-        if (newView is null)
-        {
-            return Task.CompletedTask;
-        }
-
-        // Parse defensively so a bad enum value can't tear down the page.
-        // The menu-item click handlers pass nameof(...) literals today, but
-        // this indirection keeps the entry point safe if it grows a new
-        // caller.
-        if (!Enum.TryParse<ConsoleLogsView>(newView, ignoreCase: true, out var parsed))
-        {
-            return Task.CompletedTask;
-        }
-
-        // Menu items for Terminal are only rendered when the current
-        // resource supports terminal (see UpdateMenuButtons — Terminal
-        // menu items are gated on _selectedResourceHasTerminal). But
-        // a Terminal click can still land here after the selection has
-        // moved to a non-terminal resource (e.g. the user clicked
-        // Terminal on the menu, then the resource-selector re-selected
-        // a shell-less resource before this handler ran). Switching to
-        // Terminal in that state hides the search/menu toolbar (the
-        // razor markup only renders it for Console view or
-        // terminal-enabled resources) and leaves the page in a broken
-        // state until the user selects another resource. Fall back to
-        // Console when the current selection can't host a terminal.
-        if (parsed == ConsoleLogsView.Terminal && !_selectedResourceHasTerminal)
-        {
-            parsed = ConsoleLogsView.Console;
-        }
-
-        _activeView = parsed;
-        UpdateMenuButtons();
-        StateHasChanged();
-        return Task.CompletedTask;
-    }
-
-    // Test-only accessors. The view-toggle behavior is reachable from bUnit
-    // only by inspecting the internal state — the user-visible signal
-    // (display:none on a wrapper div) is awkward to assert against in
-    // bUnit. These mirror existing internal hooks (e.g. _logEntries) used
-    // by ConsoleLogsTests.
-    internal ConsoleLogsView ActiveViewForTest => _activeView;
-    internal Task HandleViewChangedForTestAsync(string? newView) => HandleViewChangedAsync(newView);
     internal IReadOnlyList<MenuButtonItem> LogsMenuItemsForTest => _logsMenuItems;
-    // Lets a test wait for a background resource-subscription update (a state
-    // transition delivered via the resource channel) to actually be applied
-    // before asserting, so a "view is unchanged" assertion can't pass simply
-    // because the update hasn't been processed yet.
-    internal ResourceViewModel? GetResourceSnapshotForTest(string resourceName) =>
-        _resourceByName.TryGetValue(resourceName, out var resource) ? resource : null;
 
     // IComponentWithTelemetry impl
     public ComponentTelemetryContext TelemetryContext { get; } = new(ComponentType.Page, TelemetryComponentIds.ConsoleLogs);
@@ -1368,16 +1230,4 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         ], Logger);
     }
 
-    /// <summary>
-    /// The two MainSection contents the <see cref="ConsoleLogs"/> page can show
-    /// for a resource that has <c>WithTerminal()</c> applied. Non-terminal
-    /// resources implicitly always show <see cref="Console"/>.
-    /// </summary>
-    public enum ConsoleLogsView
-    {
-        /// <summary>The resource's standard log stream (LogViewer).</summary>
-        Console,
-        /// <summary>The interactive Hex1b terminal (TerminalView).</summary>
-        Terminal,
-    }
 }

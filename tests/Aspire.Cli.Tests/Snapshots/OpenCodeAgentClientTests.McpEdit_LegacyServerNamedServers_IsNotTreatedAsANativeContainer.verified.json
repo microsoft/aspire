@@ -1,0 +1,20 @@
+﻿{
+  "mcp": {
+    "servers": {
+      "type": "local",
+      "command": [
+        "custom-mcp"
+      ]
+    },
+    "aspire": {
+      "type": "local",
+      "command": [
+        "aspire",
+        "agent",
+        "mcp"
+      ],
+      "enabled": true
+    }
+  },
+  "$schema": "https://opencode.ai/config.json"
+}

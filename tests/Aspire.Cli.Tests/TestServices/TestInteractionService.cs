@@ -46,8 +46,11 @@ internal sealed class TestInteractionService : IInteractionService
 
     // Call tracking
     public List<StringPromptCall> StringPromptCalls { get; } = [];
+    public List<bool> StringPromptLogResponses { get; } = [];
     public List<FilePathPromptCall> FilePathPromptCalls { get; } = [];
     public List<BooleanPromptCall> BooleanPromptCalls { get; } = [];
+    public List<(string PromptText, string? DefaultValue, IReadOnlyList<object> PreSelected, bool Optional)> MultiSelectionPromptCalls { get; } = [];
+    public List<IReadOnlyList<(string Label, SelectionChoiceGroup? Group, string DisplayLabel)>> GroupedSelectionPromptCalls { get; } = [];
     public List<string> DisplayedErrors { get; } = [];
     public List<string> ValidationFailures { get; } = [];
     public List<(KnownEmoji Emoji, string Message, ConsoleOutput? ConsoleOverride)> DisplayedMessages { get; } = [];
@@ -129,7 +132,7 @@ internal sealed class TestInteractionService : IInteractionService
         }
     }
 
-    public Task<string> PromptForStringAsync(string promptText, Func<string, ValidationResult>? validator = null, bool isSecret = false, bool required = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default)
+    public Task<string> PromptForStringAsync(string promptText, Func<string, ValidationResult>? validator = null, bool isSecret = false, bool required = false, PromptBinding<string?>? binding = null, bool logResponse = true, CancellationToken cancellationToken = default)
     {
         var (wasProvided, value, _) = PromptBinding.Resolve(binding);
         if (wasProvided && value is not null)
@@ -137,7 +140,8 @@ internal sealed class TestInteractionService : IInteractionService
             return Task.FromResult(value);
         }
 
-        StringPromptCalls.Add(new StringPromptCall(promptText, binding?.DefaultValue, isSecret));
+        StringPromptCalls.Add(new StringPromptCall(promptText, binding?.DefaultValue, isSecret, required));
+        StringPromptLogResponses.Add(logResponse);
 
         return PromptForResponseAsync(validator, binding, cancellationToken);
     }
@@ -178,6 +182,13 @@ internal sealed class TestInteractionService : IInteractionService
         }
 
         return Task.FromResult(binding?.DefaultValue ?? string.Empty);
+    }
+
+    public Task<T> PromptForSelectionAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, Func<T, SelectionChoiceGroup?> choiceGroup, Func<T, string> groupedChoiceFormatter, PromptBinding<string?>? binding = null, bool echoSelected = true, CancellationToken cancellationToken = default) where T : notnull
+    {
+        var choicesList = choices.ToArray();
+        GroupedSelectionPromptCalls.Add(choicesList.Select(choice => (choiceFormatter(choice), choiceGroup(choice), groupedChoiceFormatter(choice))).ToArray());
+        return PromptForSelectionAsync(promptText, choicesList, choiceFormatter, binding, echoSelected, cancellationToken);
     }
 
     public Task<T> PromptForSelectionAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, PromptBinding<string?>? binding = null, bool echoSelected = true, CancellationToken cancellationToken = default) where T : notnull
@@ -223,6 +234,19 @@ internal sealed class TestInteractionService : IInteractionService
 
     public Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, IEnumerable<T>? preSelected = null, bool optional = false, PromptBinding<string?>? binding = null, bool echoSelected = true, IEnumerable<T>? bindingChoices = null, CancellationToken cancellationToken = default) where T : notnull
     {
+        var (wasProvided, value, _) = PromptBinding.Resolve(binding);
+        if (wasProvided && value is not null)
+        {
+            var matched = ConsoleInteractionService.MatchChoices(value, (bindingChoices ?? choices).ToArray(), choiceFormatter)
+                ?? throw new InvalidOperationException($"Invalid selection '{value}' for {promptText}");
+            return Task.FromResult(matched);
+        }
+
+        lock (_displayLock)
+        {
+            MultiSelectionPromptCalls.Add((promptText, binding?.DefaultValue, preSelected?.Cast<object>().ToArray() ?? [], optional));
+        }
+
         if (_shouldCancel || cancellationToken.IsCancellationRequested)
         {
             throw new OperationCanceledException();
@@ -413,7 +437,7 @@ internal enum ResponseType
     Boolean
 }
 
-internal sealed record StringPromptCall(string PromptText, string? DefaultValue, bool IsSecret);
+internal sealed record StringPromptCall(string PromptText, string? DefaultValue, bool IsSecret, bool Required);
 internal sealed record FilePathPromptCall(string PromptText, string? DefaultValue, bool Directory);
 internal sealed record SelectionPromptCall<T>(string PromptText, IEnumerable<T> Choices, Func<T, string> ChoiceFormatter);
 internal sealed record BooleanPromptCall(string PromptText, bool DefaultValue);

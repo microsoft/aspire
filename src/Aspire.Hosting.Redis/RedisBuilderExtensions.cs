@@ -11,7 +11,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 #pragma warning disable ASPIRECERTIFICATES001
-#pragma warning disable ASPIREDOCKERFILEBUILDER001
 #pragma warning disable ASPIRETERMINAL001
 
 namespace Aspire.Hosting;
@@ -150,8 +149,12 @@ public static class RedisBuilderExtensions
                 }
                 else
                 {
+                    // Arguments added after this callback (for example by WithArgs) follow the script, where
+                    // `sh -c` binds them to positional parameters. Forward them to redis-server via "$@";
+                    // the argument after the script becomes $0, so pass a placeholder for it.
                     context.Args.Add("-c");
-                    context.Args.Add(string.Join(' ', additionalArgs));
+                    context.Args.Add(string.Join(' ', additionalArgs) + " \"$@\"");
+                    context.Args.Add("redis-server");
                 }
 
                 return Task.CompletedTask;
@@ -470,13 +473,11 @@ public static class RedisBuilderExtensions
             {
                 resourceBuilder.WithRelationship(redisResource, KnownRelationshipTypes.Manages);
 
-#pragma warning disable CS0618 // DisplayOrder is obsolete but must still be set to prioritize this URL.
                 resourceBuilder.ApplicationBuilder.CreateResourceBuilder(redisResource).WithUrlForEndpoint(endpoint, url =>
                 {
                     url.DisplayText = displayText;
                     url.DisplayOrder = 1;
                 });
-#pragma warning restore CS0618
             }
 
             return Task.CompletedTask;

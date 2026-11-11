@@ -6,6 +6,9 @@ using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Agents;
+using Aspire.Cli.Agents.AspireSkills;
+using Aspire.Cli.Agents.ClaudeCode;
+using Aspire.Cli.Agents.OpenCode;
 using Aspire.Cli.Certificates;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
@@ -17,6 +20,7 @@ using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Scaffolding;
 using Aspire.Cli.Templating;
+using Aspire.Cli.Utils;
 using Aspire.Hosting;
 using Aspire.Hosting.Utils;
 using Aspire.Shared;
@@ -110,8 +114,10 @@ internal sealed class InitCommand : BaseCommand
         Options.Add(_channelOption);
         Options.Add(_languageOption);
         Options.Add(_fileBasedOption);
+        Options.Add(ConfigSourceService.s_useSourceOption);
         Options.Add(NewCommand.s_suppressAgentInitOption);
-        Options.Add(AgentInitCommand.s_skillLocationsOption);
+        Options.Add(_agentInitCommand.AgentsOption);
+        Options.Add(AgentInitCommand.s_scopeOption);
         Options.Add(AgentInitCommand.s_skillsOption);
     }
 
@@ -143,14 +149,41 @@ internal sealed class InitCommand : BaseCommand
             solutionFile = await _solutionLocator.FindSolutionFileAsync(workingDirectory, cancellationToken);
         }
 
+        var configurationDirectory = workingDirectory;
+        if (solutionFile is not null)
+        {
+            var appHostDirectory = GetSolutionAppHostDirectory(solutionFile);
+            // A new template creates its own config beside the AppHost, hiding any parent
+            // config. Existing AppHosts keep using their nearest configuration instead.
+            configurationDirectory = appHostDirectory.Exists
+                ? ConfigurationHelper.GetConfigRootDirectory(appHostDirectory)
+                : appHostDirectory;
+        }
+        var configSource = await ConfigSources.SelectForInitializationAsync(configurationDirectory, parseResult, cancellationToken);
+
         // Step 3: Drop the skeleton AppHost and any related config files needed for that mode.
-        var dropResult = isCSharp
-            ? await DropCSharpSkeletonAsync(workingDirectory, solutionFile, cancellationToken)
-            : await DropPolyglotSkeletonAsync(selectedProject.LanguageId, workingDirectory, cancellationToken);
+        int dropResult;
+        try
+        {
+            dropResult = isCSharp
+                ? await DropCSharpSkeletonAsync(workingDirectory, solutionFile, cancellationToken)
+                : await DropPolyglotSkeletonAsync(selectedProject.LanguageId, workingDirectory, cancellationToken);
+        }
+        catch (ProjectUpdaterException ex)
+        {
+            return CommandResult.Failure(CliExitCodes.FailedToCreateNewProject, ex.Message);
+        }
 
         if (dropResult != CliExitCodes.Success)
         {
             return CommandResult.Failure(dropResult, InteractionServiceStrings.ProjectCouldNotBeCreated);
+        }
+
+        if (configSource is not null)
+        {
+            // Apply the source after scaffolding so it merges with the generated configuration
+            // and a failed skeleton drop does not persist a new binding.
+            await ConfigSources.MaterializeAsync(configSource, configurationDirectory, cancellationToken);
         }
 
         // Persist the prompted language selection now that the skeleton drop succeeded.
@@ -172,26 +205,23 @@ internal sealed class InitCommand : BaseCommand
         // MCP remains an explicit opt-in through standalone `aspire agent init`.
         var workspaceRoot = solutionFile?.Directory ?? workingDirectory;
         var agentInitBinding = PromptBinding.CreateInvertedBoolConfirm(parseResult, NewCommand.s_suppressAgentInitOption, defaultValue: true);
-        var skillLocationsBinding = PromptBinding.Create(parseResult, AgentInitCommand.s_skillLocationsOption);
-        var skillsBinding = PromptBinding.Create(parseResult, AgentInitCommand.s_skillsOption);
-        // aspire init creates an AppHost in an existing repo, so pre-select every bundle skill
-        // (which includes aspireify as the natural follow-up wiring skill). This chained flow
-        // never registers `--mcp`, so MCP configuration is unavailable here by construction —
+        // aspire init creates an AppHost in an existing repo, so pre-select Aspire agent assets.
+        // This chained flow never registers `--mcp`, so MCP configuration is unavailable here by construction —
         // it remains reachable only through standalone `aspire agent init`.
         var agentInitResult = await _agentInitCommand.PromptAndChainAsync(
             InteractionService,
             CliExitCodes.Success,
             workspaceRoot,
+            configurationDirectory,
             agentInitBinding,
-            skillLocationsBinding,
-            skillsBinding,
+            PromptBinding.Create(parseResult, _agentInitCommand.AgentsOption),
+            PromptBinding.Create(parseResult, AgentInitCommand.s_skillsOption, CommonAgentApplicators.AspireSkillName),
+            PromptBinding.Create(parseResult, AgentInitCommand.s_scopeOption, AgentConfigurationScope.Project),
             cancellationToken);
 
-        // Step 5: Print follow-up commands only when the user selected the one-time init skill.
-        if (agentInitResult.ExitCode == CliExitCodes.Success &&
-            agentInitResult.SelectedSkills.Any(static skill => skill.HasName(CommonAgentApplicators.AspireifySkillName)))
+        if (agentInitResult.ExitCode == CliExitCodes.Success)
         {
-            var commands = GetAspireifyCommands(agentInitResult.SelectedLocations);
+            var commands = GetAspireifyCommands(agentInitResult);
             if (commands.Count > 0)
             {
                 InteractionService.DisplayEmptyLine();
@@ -224,26 +254,64 @@ internal sealed class InitCommand : BaseCommand
         if (value is not null)
         {
             InteractionService.DisplayMessage(
-                KnownEmojis.Warning,
+                KnownEmojis.PoliceCarLight,
                 string.Format(CultureInfo.CurrentCulture, InitCommandStrings.DeprecatedOptionWarning, optionName));
         }
     }
 
-    private static IReadOnlyList<string> GetAspireifyCommands(IReadOnlyList<SkillLocation> selectedLocations)
+    private static IReadOnlyList<string> GetAspireifyCommands(AgentInitExecutionResult agentInitResult)
     {
+        var registeredClients = agentInitResult.RegistrationResults
+            .Where(result => result.Status is AgentConfigurationStatus.Configured or AgentConfigurationStatus.Unchanged)
+            .SelectMany(result => result.Clients.Where(client =>
+                result.Configuration is { } configuration &&
+                HasAspireifyRegistration(client, configuration, agentInitResult.SkillSources)))
+            .ToArray();
         var commands = new List<string>();
 
-        if (selectedLocations.Contains(SkillLocation.ClaudeCode))
+        if (registeredClients.Any(client => string.Equals(client.Id, ClaudeCodeAgentClient.ClientId, StringComparisons.AgentClientId)))
         {
             commands.Add("claude \"run the aspireify skill\"");
         }
 
-        if (selectedLocations.Contains(SkillLocation.OpenCode))
+        if (registeredClients.Any(client => string.Equals(client.Id, OpenCodeAgentClient.ClientId, StringComparisons.AgentClientId)))
         {
             commands.Add("opencode --prompt \"run the aspireify skill\"");
         }
 
         return commands;
+    }
+
+    // No-op registrations and custom plugins do not prove Aspireify is available.
+    // OpenCode must contain an official catalog belonging to an enabled source,
+    // not just an old registration or an unused V1/V2 catalog setting.
+    private static bool HasAspireifyRegistration(IAgentClient client, JsonObject configuration, IReadOnlyList<SkillSource> sources)
+    {
+        if (client.Id == OpenCodeAgentClient.ClientId)
+        {
+            return AspireSkillsRemoteConfiguration.ReadOpenCodeSkills(configuration)?
+                .Select(AspireSkillsRemoteConfiguration.String)
+                .Any(catalog => AspireSkillsRemoteConfiguration.IsOpenCodeCatalog(catalog, SkillSource.BuiltIn) &&
+                    sources.Any(source => AspireSkillsRemoteConfiguration.IsOpenCodeCatalog(catalog, source))) is true;
+        }
+
+        return sources.Any(source => (source.Plugins ?? ["aspire"]).Contains("aspire", StringComparer.Ordinal) &&
+            IsOfficialAspireSkillsRepository(source.GetRepositoryUrl()));
+    }
+
+    private static bool IsOfficialAspireSkillsRepository(string repositoryUrl)
+    {
+        repositoryUrl = AspireSkillsRemoteConfiguration.NormalizeRepositoryUrl(repositoryUrl);
+        if (Uri.TryCreate(repositoryUrl, UriKind.Absolute, out var uri))
+        {
+            return uri.Scheme is "https" or "ssh" &&
+                uri.Host.Equals("github.com", StringComparison.OrdinalIgnoreCase) &&
+                uri.AbsolutePath.Equals($"/{AspireSkillsRemoteConfiguration.Repository}", StringComparison.OrdinalIgnoreCase);
+        }
+
+        // SCP-style Git addresses have no URI scheme, e.g. git@github.com:microsoft/aspire-skills.git.
+        // https://git-scm.com/docs/git-clone#URLS
+        return string.Equals(repositoryUrl, $"git@github.com:{AspireSkillsRemoteConfiguration.Repository}", StringComparison.OrdinalIgnoreCase);
     }
 
     private async Task<int> DropCSharpSkeletonAsync(DirectoryInfo workingDirectory, FileInfo? solutionFile, CancellationToken cancellationToken)
@@ -256,6 +324,9 @@ internal sealed class InitCommand : BaseCommand
         return await DropCSharpSingleFileSkeletonAsync(workingDirectory, cancellationToken);
     }
 
+    private static DirectoryInfo GetSolutionAppHostDirectory(FileInfo solutionFile)
+        => new(Path.Combine(solutionFile.Directory!.FullName, $"{Path.GetFileNameWithoutExtension(solutionFile.Name)}.AppHost"));
+
     private async Task<int> DropCSharpSingleFileSkeletonAsync(DirectoryInfo workingDirectory, CancellationToken cancellationToken)
     {
         // Ensure the workspace has a NuGet.config that exposes the running CLI binary's
@@ -264,13 +335,13 @@ internal sealed class InitCommand : BaseCommand
         // early return so re-running `aspire init` against a workspace produced by a
         // previous broken CLI (which left apphost.cs without a workspace NuGet.config)
         // recovers cleanly. The config is also required so MSBuild can resolve
-        // `#:sdk Aspire.AppHost.Sdk@<version>` from the SDK directive — both for
+        // `#:package Aspire.Hosting.AppHost@<version>` from the package directive — both for
         // `aspire add` (`dotnet package add --file apphost.cs`) and for
         // `dotnet run --file apphost.cs`. Without it, any non-stable channel (PR/run
         // hives, locally-built `local-*`/`dev-*` hives, the staging channel, etc.) is
-        // invisible and SDK resolution fails. `NuGetConfigMerger` underneath creates a
-        // new file or merges missing sources into an existing one.
-        var createdNuGetConfig = await _templateNuGetConfigService.CreateOrUpdateNuGetConfigWithoutPromptAsync(
+        // invisible and SDK resolution fails. Shared NuGet policy is persisted into a
+        // new or existing workspace configuration.
+        var createdNuGetConfig = await _templateNuGetConfigService.ConfigureDotNetAppHostNuGetConfigAsync(
             channelName: _executionContext.IdentityChannel,
             outputPath: workingDirectory.FullName,
             cancellationToken).ConfigureAwait(false);
@@ -286,16 +357,10 @@ internal sealed class InitCommand : BaseCommand
             return CliExitCodes.Success;
         }
 
-        // Drop bare single-file apphost. Pin the SDK version so later operations
-        // (project updating, version parsing in ProjectUpdater/FallbackProjectParser)
-        // can locate and update the directive — they expect the @<version> form.
-        // Use IdentitySdkVersion (build-metadata stripped) rather than IdentityVersion:
-        // the directive references the published Aspire.AppHost.Sdk NuGet package, whose
-        // version never carries a +<sha> suffix. This also matches the empty-apphost
-        // template path (CliTemplateFactory.EmptyTemplate) so both emit the same form.
+        // NuGet package versions omit the CLI build-metadata suffix.
         var aspireVersion = _executionContext.IdentitySdkVersion;
         var appHostContent = $$"""
-            #:sdk Aspire.AppHost.Sdk@{{aspireVersion}}
+            {{CliTemplateFactory.GetCSharpAppHostDirectives(aspireVersion)}}
             #:property AspireUseCliBundle=true
 
             var builder = DistributedApplication.CreateBuilder(args);
@@ -350,9 +415,9 @@ internal sealed class InitCommand : BaseCommand
     private async Task<int> DropCSharpProjectSkeletonAsync(FileInfo solutionFile, CancellationToken cancellationToken)
     {
         var solutionDir = solutionFile.Directory!;
-        var solutionName = Path.GetFileNameWithoutExtension(solutionFile.Name);
-        var appHostDirName = $"{solutionName}.AppHost";
-        var appHostDirPath = Path.Combine(solutionDir.FullName, appHostDirName);
+        var appHostDirectory = GetSolutionAppHostDirectory(solutionFile);
+        var appHostDirName = appHostDirectory.Name;
+        var appHostDirPath = appHostDirectory.FullName;
 
         // Drop the solution-directory NuGet.config BEFORE the AppHost-dir-already-exists
         // early return so re-running `aspire init` against a workspace produced by a
@@ -361,18 +426,16 @@ internal sealed class InitCommand : BaseCommand
         // `_runner.NewProjectAsync` so the aspire-apphost template's built-in `restore`
         // post-action (template.json post-action id "restore", conditioned on
         // !skipRestore which defaults to false) can resolve the
-        // `Aspire.AppHost.Sdk/<version>` reference from the channel-matched hive. The
+        // `Aspire.Hosting.AppHost` reference from the channel-matched hive. The
         // post-action currently runs with continueOnError=true so a missing nuget.config
         // wouldn't fail init, but its restore would still emit confusing errors and waste
         // work — and a future template change that drops continueOnError would break init
         // outright.
         //
         // Source: CliExecutionContext.IdentityChannel (stable / staging / daily / pr-<N> /
-        // local). NuGetConfigMerger underneath creates a new file or merges missing
-        // sources into an existing one, so adding hives later is handled the same way as
-        // for templates. Mirrors what DropCSharpSingleFileSkeletonAsync already does for
-        // the apphost.cs path on every channel.
-        var createdNuGetConfig = await _templateNuGetConfigService.CreateOrUpdateNuGetConfigWithoutPromptAsync(
+        // local). Persist the shared NuGet policy into a new or existing workspace
+        // configuration, as the single-file AppHost path does.
+        var createdNuGetConfig = await _templateNuGetConfigService.ConfigureDotNetAppHostNuGetConfigAsync(
             channelName: _executionContext.IdentityChannel,
             outputPath: solutionDir.FullName,
             cancellationToken).ConfigureAwait(false);
@@ -559,7 +622,7 @@ internal sealed class InitCommand : BaseCommand
                 catch (JsonException ex)
                 {
                     InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, InitCommandStrings.FailedToParseExistingConfig, AspireConfigFile.FileName, configPath, ex.Message));
-                    InteractionService.DisplayMessage(KnownEmojis.Warning, string.Format(CultureInfo.CurrentCulture, InitCommandStrings.FixOrRemoveConfigAndRerun, AspireConfigFile.FileName));
+                    InteractionService.DisplayMessage(KnownEmojis.PoliceCarLight, string.Format(CultureInfo.CurrentCulture, InitCommandStrings.FixOrRemoveConfigAndRerun, AspireConfigFile.FileName));
                     return (CliExitCodes.FailedToCreateNewProject, default);
                 }
             }
@@ -651,7 +714,8 @@ internal sealed class InitCommand : BaseCommand
             };
         }
 
-        File.WriteAllText(configPath, JsonSerializer.Serialize(settings, JsonSourceGenerationContext.RelaxedEscaping.JsonObject));
+        var configJson = JsonSerializer.Serialize(settings, JsonSourceGenerationContext.RelaxedEscaping.JsonObject);
+        File.WriteAllText(configPath, ConfigurationHelper.EnsureFinalNewline(configJson));
 
         InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, string.Format(CultureInfo.CurrentCulture, InitCommandStrings.CreatedFile, AspireConfigFile.FileName));
         return (CliExitCodes.Success, effectivePorts);
@@ -666,7 +730,7 @@ internal sealed class InitCommand : BaseCommand
     /// <c>staging</c> on a CLI without the staging feature flag, or a stale <c>pr-{N}</c> on a
     /// machine without the matching hive). Persisting these would pin a name no PSM rule can
     /// satisfy and zero out polyglot <c>aspire add</c> discovery via
-    /// <c>IntegrationPackageSearchService.cs</c> line 28-30.</description></item>
+    /// <see cref="IntegrationPackageSearchService"/>.</description></item>
     /// <item><description>The matched channel is <see cref="PackageChannelType.Implicit"/>.
     /// In production the only Implicit channel created by <c>PackagingService.GetChannelsAsync</c>
     /// is <c>default</c> (the unscoped nuget.org aggregator), which no CLI identity ever
@@ -845,7 +909,8 @@ internal sealed class InitCommand : BaseCommand
             }
         };
 
-        File.WriteAllText(path, JsonSerializer.Serialize(settings, JsonSourceGenerationContext.RelaxedEscaping.JsonObject));
+        var runJson = JsonSerializer.Serialize(settings, JsonSourceGenerationContext.RelaxedEscaping.JsonObject);
+        File.WriteAllText(path, ConfigurationHelper.EnsureFinalNewline(runJson));
 
         InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, string.Format(CultureInfo.CurrentCulture, InitCommandStrings.CreatedFile, fileName));
     }

@@ -15,9 +15,8 @@ namespace Aspire.Cli.Projects;
 /// for the AppHost server child.
 /// </summary>
 /// <param name="IsolateConsoleForGracefulShutdown">
-/// When <see langword="true"/>, spawn the guest via
-/// <see cref="IsolatedProcess"/> so it lands in its own hidden console
-/// group. Required on Windows so the graceful CTRL+C signal (issued by
+/// When <see langword="true"/>, spawn the guest into its own hidden console
+/// (<see cref="System.Diagnostics.ProcessStartInfo.CreateNoWindow"/>). Required on Windows so the graceful CTRL+C signal (issued by
 /// <see cref="ProcessTreeGracefulShutdownService"/>) can target the guest
 /// without also signalling the CLI itself. No-op on Unix where SIGTERM is sufficient.
 /// </param>

@@ -14,9 +14,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Needed until Pomelo MySQL EF supports net9.0 - https://github.com/microsoft/aspire/pull/6948 -->
-    <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" VersionOverride="$(MicrosoftExtensionsDiagnosticsHealthChecksEntityFrameworkCoreLTSVersion)" />
-
+    <!-- Match the EF9 health checks used by the referenced Pomelo integration. -->
+    <PackageVersion Update="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="9.0.20" />
     <PackageReference Include="Testcontainers.MySql" />
   </ItemGroup>
   <ItemGroup>

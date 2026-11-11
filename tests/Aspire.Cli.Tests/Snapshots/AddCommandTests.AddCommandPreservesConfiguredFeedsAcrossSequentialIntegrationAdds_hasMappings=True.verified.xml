@@ -1,0 +1,77 @@
+﻿<configurations>
+  <Contoso.Hosting.One>
+    <configuration>
+      <packageSources>
+        <clear />
+        <add key="sdk" value="https://example.com/sdk" />
+        <add key="public" value="https://example.com/public" />
+        <add key="aspire-integration-team" value="https://example.com/team" />
+      </packageSources>
+      <packageSourceMapping>
+        <clear />
+        <packageSource key="sdk">
+          <package pattern="Aspire*" />
+        </packageSource>
+        <packageSource key="public">
+          <package pattern="*" />
+        </packageSource>
+        <packageSource key="aspire-integration-team">
+          <package pattern="Contoso.Hosting.One" />
+        </packageSource>
+      </packageSourceMapping>
+    </configuration>
+  </Contoso.Hosting.One>
+  <Fabrikam.Hosting.Two>
+    <configuration>
+      <packageSources>
+        <clear />
+        <add key="sdk" value="https://example.com/sdk" />
+        <add key="public" value="https://example.com/public" />
+        <add key="aspire-integration-team" value="https://example.com/team" />
+        <add key="aspire-integration-other" value="https://example.com/other" />
+      </packageSources>
+      <packageSourceMapping>
+        <clear />
+        <packageSource key="sdk">
+          <package pattern="Aspire*" />
+        </packageSource>
+        <packageSource key="public">
+          <package pattern="*" />
+        </packageSource>
+        <packageSource key="aspire-integration-team">
+          <package pattern="Contoso.Hosting.One" />
+        </packageSource>
+        <packageSource key="aspire-integration-other">
+          <package pattern="Fabrikam.Hosting.Two" />
+        </packageSource>
+      </packageSourceMapping>
+    </configuration>
+  </Fabrikam.Hosting.Two>
+  <Contoso.Hosting.Three>
+    <configuration>
+      <packageSources>
+        <clear />
+        <add key="sdk" value="https://example.com/sdk" />
+        <add key="public" value="https://example.com/public" />
+        <add key="aspire-integration-team" value="https://example.com/team" />
+        <add key="aspire-integration-other" value="https://example.com/other" />
+      </packageSources>
+      <packageSourceMapping>
+        <clear />
+        <packageSource key="sdk">
+          <package pattern="Aspire*" />
+        </packageSource>
+        <packageSource key="public">
+          <package pattern="*" />
+        </packageSource>
+        <packageSource key="aspire-integration-other">
+          <package pattern="Fabrikam.Hosting.Two" />
+        </packageSource>
+        <packageSource key="aspire-integration-team">
+          <package pattern="Contoso.Hosting.One" />
+          <package pattern="Contoso.Hosting.Three" />
+        </packageSource>
+      </packageSourceMapping>
+    </configuration>
+  </Contoso.Hosting.Three>
+</configurations>

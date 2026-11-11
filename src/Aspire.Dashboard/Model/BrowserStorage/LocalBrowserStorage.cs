@@ -60,6 +60,18 @@ public class LocalBrowserStorage : BrowserStorageBase, ILocalStorage
         await SetJsonAsync(key, json).ConfigureAwait(false);
     }
 
+    public Task<StorageResult<string>> GetRawUnprotectedAsync(string key)
+        => ReadAsync(key, async () =>
+        {
+            var text = await _jsRuntime.InvokeAsync<string?>("localStorage.getItem", key).ConfigureAwait(false);
+            return text is null ? new StorageResult<string>(false, null) : new StorageResult<string>(true, text);
+        });
+
+    public async Task SetRawUnprotectedAsync(string key, string value)
+    {
+        await SetJsonAsync(key, value).ConfigureAwait(false);
+    }
+
     private ValueTask SetJsonAsync(string key, string json)
         => _jsRuntime.InvokeVoidAsync("localStorage.setItem", key, json);
 }

@@ -17,7 +17,7 @@ public class ConformanceTests : ConformanceTests<QueueServiceClient, AzureStorag
     // Roles: Storage Queue Data Contributor
     public const string ServiceUri = "https://aspirestoragetests.queue.core.windows.net";
 
-    private static readonly Lazy<bool> s_canConnectToServer = new(GetCanConnect);
+    private static readonly Lazy<bool> s_canConnectToServer = new(() => GetCanConnectToServer(GetCanConnect));
 
     protected override ServiceLifetime ServiceLifetime => ServiceLifetime.Singleton;
 
@@ -108,6 +108,16 @@ public class ConformanceTests : ConformanceTests<QueueServiceClient, AzureStorag
     protected override void SetMetrics(AzureStorageQueuesSettings options, bool enabled)
         => throw new NotImplementedException();
 
+    // When the server isn't reachable, make TriggerActivity fail fast instead of letting the component fall back to
+    // DefaultAzureCredential, whose credential chain can take longer than the RemoteExecutor timeout.
+    protected override void ConfigureActivitySourceTestOptions(AzureStorageQueuesSettings options)
+    {
+        if (!CanConnectToServer)
+        {
+            options.Credential = UnavailableTokenCredential.Instance;
+        }
+    }
+
     protected override void SetTracing(AzureStorageQueuesSettings options, bool enabled)
         => options.DisableTracing = !enabled;
 
@@ -125,6 +135,10 @@ public class ConformanceTests : ConformanceTests<QueueServiceClient, AzureStorag
     [Fact]
     public void TracingEnablesTheRightActivitySource_Keyed()
         => RemoteInvokeWithLogging(() => new ConformanceTests().ActivitySourceTest(key: "key"), Output);
+
+    [Fact]
+    public void TracingTestDoesNotLaunchDeveloperCredentialTools()
+        => RemoteActivitySourceTestDoesNotLaunchDeveloperCredentialTools(() => new ConformanceTests().ActivitySourceTest(key: null));
 
     private static bool GetCanConnect()
     {

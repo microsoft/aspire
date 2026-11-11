@@ -506,9 +506,7 @@ public static class AzureCosmosExtensions
             .WithUrlForEndpoint(dataExplorerEndpointName, c =>
             {
                 c.DisplayText = "Manage";
-#pragma warning disable CS0618 // DisplayOrder is obsolete but must still be set to prioritize this URL.
                 c.DisplayOrder = 1;
-#pragma warning restore CS0618
             });
 
         if (builder.ApplicationBuilder.ExecutionContext.IsRunMode)
@@ -539,7 +537,7 @@ public static class AzureCosmosExtensions
     /// var cosmosdb = builder.AddAzureCosmosDB("cache")
     ///     .WithAccessKeyAuthentication();
     ///
-    /// builder.AddProject&lt;Projects.ProductService&gt;()
+    /// builder.AddDotnetProject("productservice", "../ProductService/ProductService.csproj")
     ///     .WithReference(cosmosdb);
     ///
     /// builder.Build().Run();

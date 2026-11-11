@@ -4,11 +4,11 @@
     <span class="result-count" aria-live="polite" aria-atomic="true">
         @if (DisplayedItemCount is { } displayedItemCount && displayedItemCount < TotalItemCount && PartialText is not null)
         {
-            @((MarkupString)string.Format(PartialText, displayedItemCount, TotalItemCount))
+            @((MarkupString)string.Format(CultureInfo.CurrentCulture, PartialText, displayedItemCount.ToString("N0", CultureInfo.CurrentCulture), TotalItemCount.ToString("N0", CultureInfo.CurrentCulture)))
         }
         else
         {
-            @((MarkupString)string.Format(TotalItemCount == 1 ? SingularText : PluralText, TotalItemCount))
+            @((MarkupString)string.Format(CultureInfo.CurrentCulture, TotalItemCount == 1 ? SingularText : PluralText, TotalItemCount.ToString("N0", CultureInfo.CurrentCulture)))
         }
     </span>
 

@@ -1,12 +1,9 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREPIPELINES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREPIPELINES003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-#pragma warning disable ASPIREFILESYSTEM001 // Type is for evaluation purposes only
 #pragma warning disable ASPIREPERSISTENCE001 // Persistence annotation APIs are experimental.
 
-using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Text;
 using Aspire.Hosting.Ats;
@@ -289,6 +286,11 @@ public static class ContainerResourceBuilderExtensions
     /// <para>
     /// The <paramref name="target"/> path specifies the path the file or directory will be mounted inside the container's file system.
     /// </para>
+    /// <para>
+    /// Adding a bind mount that is identical to an existing one (same source, target and read-only setting) has no effect. Adding a bind mount
+    /// to a target that already has a different mount throws an <see cref="InvalidOperationException"/>, because container runtimes reject
+    /// duplicate mount targets.
+    /// </para>
     /// <example>
     /// Adds a bind mount that will mount the <c>config</c> directory in the app host project directory, to the container's file system at the path <c>/database/config</c>,
     /// and mark it read-only so that the container cannot modify it:
@@ -324,6 +326,28 @@ public static class ContainerResourceBuilderExtensions
 
         // If the source is a rooted path, use it directly without resolution
         var sourcePath = Path.IsPathRooted(source) ? source : Path.GetFullPath(source, builder.ApplicationBuilder.AppHostDirectory);
+
+        // Container runtimes reject two mounts with the same target, so an identical bind mount is a
+        // no-op (e.g. when re-applied by layered extension methods or event handlers that run on every
+        // restart) and a conflicting one fails fast instead of failing later when the container starts.
+        var normalizedTarget = NormalizeContainerMountTarget(target);
+        var existing = builder.Resource.Annotations.OfType<ContainerMountAnnotation>()
+            .FirstOrDefault(m => string.Equals(NormalizeContainerMountTarget(m.Target), normalizedTarget, StringComparison.Ordinal));
+        if (existing is not null)
+        {
+            if (existing.Type == ContainerMountType.BindMount &&
+                IsSameBindMountSource(existing.Source, sourcePath) &&
+                existing.IsReadOnly == isReadOnly)
+            {
+                return builder;
+            }
+
+            var existingKind = existing.Type == ContainerMountType.BindMount ? "bind mount" : "volume";
+            throw new InvalidOperationException(
+                $"Resource '{builder.Resource.Name}' already has a {existingKind} '{existing.Source ?? "(anonymous)"}'{(existing.IsReadOnly ? " (read-only)" : "")} mounted at '{existing.Target}'. " +
+                $"Cannot also bind mount '{sourcePath}'{(isReadOnly ? " (read-only)" : "")} to the same target.");
+        }
+
         var annotation = new ContainerMountAnnotation(sourcePath, target, ContainerMountType.BindMount, isReadOnly);
         return builder.WithAnnotation(annotation);
     }
@@ -1026,8 +1050,15 @@ public static class ContainerResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    /// <ats-remarks>
+    /// <para>
+    /// Use the callback's Dockerfile builder to define the image's stages and instructions.
+    /// </para>
+    /// <para>
+    /// The build context path is relative to the AppHost directory unless it is fully qualified.
+    /// </para>
+    /// </ats-remarks>
     [AspireExport]
-    [Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<ContainerResource> AddDockerfileBuilder(this IDistributedApplicationBuilder builder, [ResourceName] string name, string contextPath, Func<DockerfileBuilderCallbackContext, Task> callback, string? stage = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -1075,7 +1106,6 @@ public static class ContainerResourceBuilderExtensions
     /// </remarks>
     /// <remarks>This synchronous overload is not available in polyglot app hosts. Use the overload that accepts a <see cref="Func{T, TResult}"/>.</remarks>
     [AspireExportIgnore(Reason = "This synchronous overload is excluded from the polyglot surface; only the async callback overload is exported.")]
-    [Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<ContainerResource> AddDockerfileBuilder(this IDistributedApplicationBuilder builder, [ResourceName] string name, string contextPath, Action<DockerfileBuilderCallbackContext> callback, string? stage = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -1633,6 +1663,62 @@ public static class ContainerResourceBuilderExtensions
         return builder.WithContainerFiles(destinationPath, callback, defaultOwner, defaultGroup, umask);
     }
 
+    // Container runtimes clean Linux mount destinations (Go's path.Clean) before detecting duplicates, so
+    // '/mnt/data', '/mnt/data/', '/mnt//data' and '/mnt/./data' all name the same target. Targets are container
+    // paths, so host Path APIs must not be used. Non-POSIX targets (e.g. Windows containers) are compared verbatim.
+    private static string NormalizeContainerMountTarget(string target)
+    {
+        if (!target.StartsWith('/'))
+        {
+            return target;
+        }
+
+        var segments = new List<string>();
+        foreach (var segment in target.Split('/', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (segment == ".")
+            {
+                continue;
+            }
+
+            if (segment == "..")
+            {
+                if (segments.Count > 0)
+                {
+                    segments.RemoveAt(segments.Count - 1);
+                }
+
+                continue;
+            }
+
+            segments.Add(segment);
+        }
+
+        return "/" + string.Join('/', segments);
+    }
+
+    private static bool IsSameBindMountSource(string? existingSource, string source)
+    {
+        if (existingSource is null)
+        {
+            return false;
+        }
+
+        // Only normalize (and on Windows, case-fold) fully qualified host paths. Rooted but unqualified paths
+        // (such as a Docker socket path on Windows) are resolved by the container runtime, possibly on a
+        // case-sensitive file system, so they must match exactly.
+        if (!Path.IsPathFullyQualified(existingSource) || !Path.IsPathFullyQualified(source))
+        {
+            return string.Equals(existingSource, source, StringComparison.Ordinal);
+        }
+
+        var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        return string.Equals(
+            Path.TrimEndingDirectorySeparator(Path.GetFullPath(existingSource)),
+            Path.TrimEndingDirectorySeparator(Path.GetFullPath(source)),
+            comparison);
+    }
+
     private static int? GetIntegralContainerFilesOption(double? value, string paramName, int minValue, int maxValue)
     {
         if (value is null)
@@ -1692,8 +1778,16 @@ public static class ContainerResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    /// <ats-remarks>
+    /// <para>
+    /// Calling this method multiple times composes callbacks, which are invoked in registration order
+    /// to build the final Dockerfile.
+    /// </para>
+    /// <para>
+    /// The build context path is relative to the AppHost directory unless it is fully qualified.
+    /// </para>
+    /// </ats-remarks>
     [AspireExport]
-    [Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<T> WithDockerfileBuilder<T>(this IResourceBuilder<T> builder, string contextPath, Func<DockerfileBuilderCallbackContext, Task> callback, string? stage = null) where T : ContainerResource
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -1798,7 +1892,6 @@ public static class ContainerResourceBuilderExtensions
     /// </remarks>
     /// <remarks>This synchronous overload is not available in polyglot app hosts. Use the overload that accepts a <see cref="Func{T, TResult}"/>.</remarks>
     [AspireExportIgnore(Reason = "This synchronous overload is excluded from the polyglot surface; only the async callback overload is exported.")]
-    [Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<T> WithDockerfileBuilder<T>(this IResourceBuilder<T> builder, string contextPath, Action<DockerfileBuilderCallbackContext> callback, string? stage = null) where T : ContainerResource
     {
         ArgumentNullException.ThrowIfNull(callback);
@@ -1838,8 +1931,11 @@ public static class ContainerResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    /// <ats-remarks>
+    /// For multi-stage Dockerfiles, specify separate build and runtime base images.
+    /// Images that are not specified use the integration's defaults. At least one base image must be specified.
+    /// </ats-remarks>
     [AspireExport]
-    [Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<T> WithDockerfileBaseImage<T>(this IResourceBuilder<T> builder, string? buildImage = null, string? runtimeImage = null) where T : IResource
     {
         ArgumentNullException.ThrowIfNull(builder);

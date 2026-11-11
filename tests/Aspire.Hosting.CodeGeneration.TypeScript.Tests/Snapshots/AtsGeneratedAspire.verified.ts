@@ -93,6 +93,9 @@ type TestRedisResourceHandle = Handle<'Aspire.Hosting.CodeGeneration.TypeScript.
 /** Test context type with exposed instance methods. Verifies [AspireExport(ExposeMethods=true)] generates async methods. */
 type TestResourceContextHandle = Handle<'Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestResourceContext'>;
 
+/** Handle to TestReturnValueContext */
+type TestReturnValueContextHandle = Handle<'Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestReturnValueContext'>;
+
 /** Handle to TestVaultResource */
 type TestVaultResourceHandle = Handle<'Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestVaultResource'>;
 
@@ -629,6 +632,202 @@ const TestResourceContextPromiseImpl = $aspireCreateFluentPromiseClass<TestResou
     ["getValueAsync"]: null,
     ["setValueAsync"]: () => TestResourceContextPromiseImpl,
     ["validateAsync"]: null,
+}));
+
+// ============================================================================
+// TestReturnValueContext
+// ============================================================================
+
+export interface TestReturnValueContext {
+    toJSON(): MarshalledHandle;
+    /** Invokes the GetNullableString method */
+    getNullableString(): Promise<string | null>;
+    /** Invokes the GetNullableStringTaskAsync method */
+    getNullableStringTaskAsync(): Promise<string | null>;
+    /** Invokes the GetNullableStringValueTaskAsync method */
+    getNullableStringValueTaskAsync(): Promise<string | null>;
+    /** Invokes the GetString method */
+    getString(): Promise<string>;
+    /** Invokes the GetStringTaskAsync method */
+    getStringTaskAsync(): Promise<string>;
+    /** Invokes the GetStringValueTaskAsync method */
+    getStringValueTaskAsync(): Promise<string>;
+    /** Invokes the GetNullableInt method */
+    getNullableInt(): Promise<number | null>;
+    /** Invokes the GetNullableIntTaskAsync method */
+    getNullableIntTaskAsync(): Promise<number | null>;
+    /** Invokes the GetNullableIntValueTaskAsync method */
+    getNullableIntValueTaskAsync(): Promise<number | null>;
+    /** Invokes the GetInt method */
+    getInt(): Promise<number>;
+    /** Invokes the GetIntTaskAsync method */
+    getIntTaskAsync(): Promise<number>;
+    /** Invokes the GetIntValueTaskAsync method */
+    getIntValueTaskAsync(): Promise<number>;
+}
+
+export interface TestReturnValueContextPromise extends PromiseLike<TestReturnValueContext> {
+    /** Invokes the GetNullableString method */
+    getNullableString(): Promise<string | null>;
+    /** Invokes the GetNullableStringTaskAsync method */
+    getNullableStringTaskAsync(): Promise<string | null>;
+    /** Invokes the GetNullableStringValueTaskAsync method */
+    getNullableStringValueTaskAsync(): Promise<string | null>;
+    /** Invokes the GetString method */
+    getString(): Promise<string>;
+    /** Invokes the GetStringTaskAsync method */
+    getStringTaskAsync(): Promise<string>;
+    /** Invokes the GetStringValueTaskAsync method */
+    getStringValueTaskAsync(): Promise<string>;
+    /** Invokes the GetNullableInt method */
+    getNullableInt(): Promise<number | null>;
+    /** Invokes the GetNullableIntTaskAsync method */
+    getNullableIntTaskAsync(): Promise<number | null>;
+    /** Invokes the GetNullableIntValueTaskAsync method */
+    getNullableIntValueTaskAsync(): Promise<number | null>;
+    /** Invokes the GetInt method */
+    getInt(): Promise<number>;
+    /** Invokes the GetIntTaskAsync method */
+    getIntTaskAsync(): Promise<number>;
+    /** Invokes the GetIntValueTaskAsync method */
+    getIntValueTaskAsync(): Promise<number>;
+}
+
+// ============================================================================
+// TestReturnValueContextImpl
+// ============================================================================
+
+/** Type class for TestReturnValueContext. */
+class TestReturnValueContextImpl implements TestReturnValueContext {
+    constructor(private _handle: TestReturnValueContextHandle, private _client: AspireClientRpc) {}
+
+    /** Serialize for JSON-RPC transport */
+    toJSON(): MarshalledHandle { return this._handle.toJSON(); }
+
+    /** Invokes the GetNullableString method */
+    async getNullableString(): Promise<string | null> {
+        const rpcArgs: Record<string, unknown> = { context: this._handle };
+        return await this._client.invokeCapability<string | null>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getNullableString',
+            rpcArgs
+        );
+    }
+
+    /** Invokes the GetNullableStringTaskAsync method */
+    async getNullableStringTaskAsync(): Promise<string | null> {
+        const rpcArgs: Record<string, unknown> = { context: this._handle };
+        return await this._client.invokeCapability<string | null>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getNullableStringTaskAsync',
+            rpcArgs
+        );
+    }
+
+    /** Invokes the GetNullableStringValueTaskAsync method */
+    async getNullableStringValueTaskAsync(): Promise<string | null> {
+        const rpcArgs: Record<string, unknown> = { context: this._handle };
+        return await this._client.invokeCapability<string | null>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getNullableStringValueTaskAsync',
+            rpcArgs
+        );
+    }
+
+    /** Invokes the GetString method */
+    async getString(): Promise<string> {
+        const rpcArgs: Record<string, unknown> = { context: this._handle };
+        return await this._client.invokeCapability<string>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getString',
+            rpcArgs
+        );
+    }
+
+    /** Invokes the GetStringTaskAsync method */
+    async getStringTaskAsync(): Promise<string> {
+        const rpcArgs: Record<string, unknown> = { context: this._handle };
+        return await this._client.invokeCapability<string>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getStringTaskAsync',
+            rpcArgs
+        );
+    }
+
+    /** Invokes the GetStringValueTaskAsync method */
+    async getStringValueTaskAsync(): Promise<string> {
+        const rpcArgs: Record<string, unknown> = { context: this._handle };
+        return await this._client.invokeCapability<string>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getStringValueTaskAsync',
+            rpcArgs
+        );
+    }
+
+    /** Invokes the GetNullableInt method */
+    async getNullableInt(): Promise<number | null> {
+        const rpcArgs: Record<string, unknown> = { context: this._handle };
+        return await this._client.invokeCapability<number | null>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getNullableInt',
+            rpcArgs
+        );
+    }
+
+    /** Invokes the GetNullableIntTaskAsync method */
+    async getNullableIntTaskAsync(): Promise<number | null> {
+        const rpcArgs: Record<string, unknown> = { context: this._handle };
+        return await this._client.invokeCapability<number | null>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getNullableIntTaskAsync',
+            rpcArgs
+        );
+    }
+
+    /** Invokes the GetNullableIntValueTaskAsync method */
+    async getNullableIntValueTaskAsync(): Promise<number | null> {
+        const rpcArgs: Record<string, unknown> = { context: this._handle };
+        return await this._client.invokeCapability<number | null>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getNullableIntValueTaskAsync',
+            rpcArgs
+        );
+    }
+
+    /** Invokes the GetInt method */
+    async getInt(): Promise<number> {
+        const rpcArgs: Record<string, unknown> = { context: this._handle };
+        return await this._client.invokeCapability<number>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getInt',
+            rpcArgs
+        );
+    }
+
+    /** Invokes the GetIntTaskAsync method */
+    async getIntTaskAsync(): Promise<number> {
+        const rpcArgs: Record<string, unknown> = { context: this._handle };
+        return await this._client.invokeCapability<number>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getIntTaskAsync',
+            rpcArgs
+        );
+    }
+
+    /** Invokes the GetIntValueTaskAsync method */
+    async getIntValueTaskAsync(): Promise<number> {
+        const rpcArgs: Record<string, unknown> = { context: this._handle };
+        return await this._client.invokeCapability<number>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getIntValueTaskAsync',
+            rpcArgs
+        );
+    }
+
+}
+
+/** @internal */
+const TestReturnValueContextPromiseImpl = $aspireCreateFluentPromiseClass<TestReturnValueContext, TestReturnValueContextPromise>((): $aspireFluentPromiseTransitions => ({
+    ["getNullableString"]: null,
+    ["getNullableStringTaskAsync"]: null,
+    ["getNullableStringValueTaskAsync"]: null,
+    ["getString"]: null,
+    ["getStringTaskAsync"]: null,
+    ["getStringValueTaskAsync"]: null,
+    ["getNullableInt"]: null,
+    ["getNullableIntTaskAsync"]: null,
+    ["getNullableIntValueTaskAsync"]: null,
+    ["getInt"]: null,
+    ["getIntTaskAsync"]: null,
+    ["getIntValueTaskAsync"]: null,
 }));
 
 // ============================================================================
@@ -3718,6 +3917,18 @@ class TestPromiseCollisionResourcePromiseImpl extends ResourceBuilderBase<ITestP
 }
 
 // ============================================================================
+// Entry Point Functions
+// ============================================================================
+
+export async function getStaticNullableStringAsync(client: AspireClientRpc): Promise<string | null> {
+    const rpcArgs: Record<string, unknown> = {  };
+    return await client.invokeCapability<string | null>(
+        'Aspire.Hosting.CodeGeneration.TypeScript.Tests/getStaticNullableStringAsync',
+        rpcArgs
+    );
+}
+
+// ============================================================================
 // Connection Helper
 // ============================================================================
 
@@ -3851,6 +4062,7 @@ registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hos
 registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestEnvironmentContext', (handle, client) => new TestEnvironmentContextImpl(handle as TestEnvironmentContextHandle, client));
 registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestMutableCollectionContext', (handle, client) => new TestMutableCollectionContextImpl(handle as TestMutableCollectionContextHandle, client));
 registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestResourceContext', (handle, client) => new TestResourceContextImpl(handle as TestResourceContextHandle, client));
+registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestReturnValueContext', (handle, client) => new TestReturnValueContextImpl(handle as TestReturnValueContextHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.IDistributedApplicationBuilder', (handle, client) => new DistributedApplicationBuilderImpl(handle as IDistributedApplicationBuilderHandle, client));
 registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestDatabaseResource', (handle, client) => new TestDatabaseResourceImpl(handle as TestDatabaseResourceHandle, client));
 registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestRedisResource', (handle, client) => new TestRedisResourceImpl(handle as TestRedisResourceHandle, client));

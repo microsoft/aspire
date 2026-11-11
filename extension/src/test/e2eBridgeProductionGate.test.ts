@@ -75,14 +75,19 @@ suite('E2E bridge production gate', () => {
     });
 
     test('packages the E2E VSIX with the bridge opt-in and asserts the emitted bundle', () => {
-        const workflow = fs.readFileSync(path.join(extensionRoot, '..', '.github', 'workflows', 'extension-unit-tests.yml'), 'utf8');
+        const workflow = fs.readFileSync(path.join(extensionRoot, '..', '.github', 'workflows', 'extension-e2e-tests.yml'), 'utf8');
+        const assertionStart = workflow.indexOf('- name: Assert E2E VSIX contains bridge');
+        const productionPackageStart = workflow.indexOf('- name: Package production VSIX');
+        assert.ok(assertionStart >= 0 && productionPackageStart > assertionStart);
+        const assertionStep = workflow.slice(assertionStart, productionPackageStart);
 
         assert.ok(
             workflow.includes('ASPIRE_EXTENSION_E2E_INCLUDE_BRIDGE: "true"'),
             'The E2E VSIX package step must opt into bundling the real bridge.');
         assert.ok(
-            workflow.includes('assert-extension-e2e-bridge-vsix.ps1 -VsixPath out/aspire-extension.vsix -Expected Present'),
+            assertionStep.includes('assert-extension-e2e-bridge-vsix.ps1 -VsixPath out/aspire-extension.vsix -Expected Present'),
             'The E2E VSIX package step must assert the emitted VSIX still contains the real bridge.');
+        assert.ok(assertionStep.includes('shell: pwsh'), 'The Ubuntu workflow must run the PowerShell assertion with pwsh.');
     });
 
     test('packages the local E2E VSIX with the bridge opt-in', () => {
@@ -101,14 +106,19 @@ suite('E2E bridge production gate', () => {
      * check in this workflow would stay green while the bridge shipped to the Marketplace.
      */
     test('packages a production VSIX without the bridge opt-in and asserts the bridge is absent', () => {
-         const workflow = fs.readFileSync(path.join(extensionRoot, '..', '.github', 'workflows', 'extension-unit-tests.yml'), 'utf8');
+        const workflow = fs.readFileSync(path.join(extensionRoot, '..', '.github', 'workflows', 'extension-e2e-tests.yml'), 'utf8');
+        const assertionStart = workflow.indexOf('- name: Assert production VSIX excludes bridge');
+        const uploadStart = workflow.indexOf('- name: Upload VSIX');
+        assert.ok(assertionStart >= 0 && uploadStart > assertionStart);
+        const assertionStep = workflow.slice(assertionStart, uploadStart);
 
         assert.ok(
             workflow.includes('corepack yarn run vsce package --pre-release -o out/aspire-extension-production.vsix'),
             'The workflow must package a second VSIX without the bridge include env var to represent the real shipping build.');
         assert.ok(
-            workflow.includes('assert-extension-e2e-bridge-vsix.ps1 -VsixPath out/aspire-extension-production.vsix -Expected Absent'),
+            assertionStep.includes('assert-extension-e2e-bridge-vsix.ps1 -VsixPath out/aspire-extension-production.vsix -Expected Absent'),
             'The E2E VSIX package step must assert the production VSIX excludes the real bridge.');
+        assert.ok(assertionStep.includes('shell: pwsh'), 'The Ubuntu workflow must run the PowerShell assertion with pwsh.');
     });
 
     test('does not accumulate plugins across repeated configuration calls', () => {

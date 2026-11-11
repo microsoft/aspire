@@ -1,14 +1,21 @@
 <Project>
 
   <PropertyGroup>
+    <_AspireAppHostPackageVersion Condition="'$(_AspireAppHostPackageVersion)' == ''">@VERSION@</_AspireAppHostPackageVersion>
+    <!-- The .NET SDK workload check requires a version >= 9 for package-only AppHosts.
+         Do not hide a missing SDK version when the obsolete SDK marker is present. -->
+    <AspireHostingSDKVersion Condition="'$(IsAspireHost)' == 'true' and '$(AspireHostingSDKVersion)' == '' and '$(_UsingAspireAppHostSdk)' != 'true'">$(_AspireAppHostPackageVersion)</AspireHostingSDKVersion>
+  </PropertyGroup>
+
+  <PropertyGroup>
     <!-- Similar to ASP.NET Core and Worker apps, set the default CWD of orchestrator projects to be the project directory. -->
     <RunWorkingDirectory Condition=" '$(RunWorkingDirectory)' == '' and '$(EnableDefaultRunWorkingDirectory)' != 'false' ">$(MSBuildProjectDirectory)</RunWorkingDirectory>
     <AspireGeneratedClassesVisibility Condition="'$(AspireGeneratedClassesVisibility)' == ''">public</AspireGeneratedClassesVisibility>
     <_AspireIntermediatePath>$(IntermediateOutputPath)Aspire\</_AspireIntermediatePath>
     <_GeneratedClassNameFixupRegex>(((?&lt;=\.)|^)(?=\d)|\W)</_GeneratedClassNameFixupRegex>
 
-    <!-- Use net8.0 when running on .NET Core, net472 when running on .NET Framework -->
-    <_AspireTasksTfm Condition="'$(MSBuildRuntimeType)' == 'Core'">net8.0</_AspireTasksTfm>
+    <!-- Use net10.0 when running on .NET Core, net472 when running on .NET Framework -->
+    <_AspireTasksTfm Condition="'$(MSBuildRuntimeType)' == 'Core'">net10.0</_AspireTasksTfm>
     <_AspireTasksTfm Condition="'$(MSBuildRuntimeType)' != 'Core'">net472</_AspireTasksTfm>
     <_AspireTasksAssembly Condition="'$(_AspireTasksAssembly)' == ''">$(MSBuildThisFileDirectory)..\tools\$(_AspireTasksTfm)\Aspire.Hosting.Tasks.dll</_AspireTasksAssembly>
   </PropertyGroup>
@@ -153,10 +160,18 @@ namespace Projects%3B
     <Warning Code="ASPIRE001" Text="The '$(Language)' language isn't fully supported by Aspire - some code generation targets will not run, so will require manual authoring." HelpLink="https://aka.ms/aspire/diagnostics/aspire001" />
   </Target>
 
-  <Target Name="_WarnOnAspireCliBundleDisabled" BeforeTargets="PrepareForBuild" Condition="'$(IsAspireHost)' == 'true' and '$(AspireUseCliBundle)' == 'false'">
+  <!-- Preserve the optional-bundle warning for non-C# AppHosts. C# AppHosts require the bundle
+       and report a separate error instead of changing the meaning of ASPIRE010. -->
+  <Target Name="_WarnOnAspireCliBundleDisabled" BeforeTargets="PrepareForBuild" Condition="'$(IsAspireHost)' == 'true' and '$(Language)' != 'C#' and '$(AspireUseCliBundle)' == 'false'">
     <Warning Code="ASPIRE010"
              Text="$(MSBuildProjectName) is configured with AspireUseCliBundle=false. Some Aspire features require the Aspire CLI bundle. Set AspireUseCliBundle=true to enable those features, or suppress ASPIRE010 to continue without the bundle. See https://aka.ms/aspire/diagnostics/aspire010 for more information."
              HelpLink="https://aka.ms/aspire/diagnostics/aspire010" />
+  </Target>
+
+  <Target Name="_ValidateAspireCliBundleEnabled" BeforeTargets="PrepareForBuild" Condition="'$(IsAspireHost)' == 'true' and '$(Language)' == 'C#' and '$(AspireUseCliBundle)' != 'true'">
+    <Error Code="ASPIRE013"
+           Text="$(MSBuildProjectName) requires the Aspire CLI bundle. Remove AspireUseCliBundle or set it to true, and install the matching Aspire CLI from https://get.aspire.dev. ASPIRE013 cannot be suppressed to disable the bundle. See https://aka.ms/aspire/diagnostics/aspire013 for more information."
+           HelpLink="https://aka.ms/aspire/diagnostics/aspire013" />
   </Target>
 
   <!--
@@ -199,19 +214,22 @@ namespace Projects%3B
   <PropertyGroup>
     <_AspireCliInvocationMode Condition="'$(AspireCliInvocationMode)' == ''">Path</_AspireCliInvocationMode>
     <_AspireCliInvocationMode Condition="'$(AspireCliInvocationMode)' != ''">$(AspireCliInvocationMode)</_AspireCliInvocationMode>
-    <_AspireUseDnxCliRunHook Condition="'$(_AspireCliInvocationMode.ToLowerInvariant())' == 'dnx' or '$(_AspireCliInvocationMode.ToLowerInvariant())' == 'dnxpinned'">true</_AspireUseDnxCliRunHook>
+    <_AspireCliInvocationModeRequestsDnx Condition="'$(_AspireCliInvocationMode.ToLowerInvariant())' == 'dnx' or '$(_AspireCliInvocationMode.ToLowerInvariant())' == 'dnxpinned'">true</_AspireCliInvocationModeRequestsDnx>
     <_AspireCliDnxPackageId>aspire.cli</_AspireCliDnxPackageId>
     <!-- An explicit Dnx mode leaves the package unversioned so DNX can honor an in-scope tool manifest,
          or select the latest package when no manifest applies. Path fallback and DnxPinned use the CLI
-         version paired with the AppHost SDK. Project Resource v2 is expected to remove Aspire.AppHost.Sdk;
-         when that happens, replace AspireHostingSDKVersion as the paired CLI version source.
+         version paired with the AppHost package, independently of any retained obsolete SDK version.
          See https://github.com/microsoft/aspire/issues/16386. -->
     <_AspireCliDnxPackageReference Condition="'$(_AspireCliInvocationMode.ToLowerInvariant())' == 'dnx'">$(_AspireCliDnxPackageId)</_AspireCliDnxPackageReference>
-    <_AspireCliDnxPackageReference Condition="'$(_AspireCliInvocationMode.ToLowerInvariant())' != 'dnx'">$(_AspireCliDnxPackageId)@$(AspireHostingSDKVersion)</_AspireCliDnxPackageReference>
+    <_AspireCliDnxPackageReference Condition="'$(_AspireCliInvocationMode.ToLowerInvariant())' != 'dnx'">$(_AspireCliDnxPackageId)@$(_AspireAppHostPackageVersion)</_AspireCliDnxPackageReference>
   </PropertyGroup>
 
   <Target Name="_ResolveAspireCliInvocation"
           Condition="'$(IsAspireHost)' == 'true' and '$(AspireUseCliBundle)' == 'true'">
+    <Warning Code="ASPIRE014"
+             Condition="'$(_AspireCliInvocationMode.ToLowerInvariant())' != 'path' and '$(_AspireCliInvocationMode.ToLowerInvariant())' != 'dnx' and '$(_AspireCliInvocationMode.ToLowerInvariant())' != 'dnxpinned'"
+             Text="$(MSBuildProjectName) is configured with AspireCliInvocationMode=$(_AspireCliInvocationMode), which is not a supported value. Supported values are Path, Dnx, and DnxPinned. The default Path invocation mode will be used." />
+
     <ResolveAspireCliInvocation AspireCliPath="$(AspireCliPath)"
                                 AspireCliInvocationMode="$(_AspireCliInvocationMode)"
                                 PathEnvironmentVariable="$(Path)">
@@ -228,6 +246,13 @@ namespace Projects%3B
     </PropertyGroup>
 
     <Message Text="Aspire CLI invocation selection: $(_AspireResolvedCliInvocationMode) (aspire: $(_AspireResolvedCliPath), dnx: $(_AspireResolvedDnxPath))" Importance="Low" />
+
+    <!-- An explicit AspireCliPath stays authoritative, but it is often inherited from the environment
+         (for example, the Aspire VS Code extension sets it for its terminals), so make it visible when
+         it overrides an explicitly requested DNX mode. See https://github.com/microsoft/aspire/issues/19713. -->
+    <Warning Code="ASPIRE015"
+             Condition="'$(AspireCliPath)' != '' and '$(_AspireCliInvocationModeRequestsDnx)' == 'true'"
+             Text="$(MSBuildProjectName): AspireCliInvocationMode=$(_AspireCliInvocationMode) is ignored because AspireCliPath is set to '$(AspireCliPath)'. AspireCliPath takes precedence over AspireCliInvocationMode and may be inherited from the environment, for example from the Aspire VS Code extension. To use DNX, clear it in the AppHost project with an empty &lt;AspireCliPath&gt;&lt;/AspireCliPath&gt; property. To keep using AspireCliPath, remove AspireCliInvocationMode or add ASPIRE015 to NoWarn." />
   </Target>
 
   <Target Name="ResolveAspireCliBundlePaths"
@@ -237,6 +262,11 @@ namespace Projects%3B
          cannot supply runtime metadata. DNX layouts are resolved from Aspire home instead. -->
     <PropertyGroup>
       <_AspireCliBundleSelectedCliPath Condition="'$(_AspireResolvedCliInvocationMode)' == 'Aspire'">$(_AspireResolvedCliPath)</_AspireCliBundleSelectedCliPath>
+      <!-- DnxPinned must use the bundle extracted by the exact CLI version paired with the AppHost.
+           Shared Aspire home layouts can come from an older or newer global CLI with a different DCP, so
+           pinned layouts are resolved from, and set up into, a version-specific directory instead.
+           See https://github.com/microsoft/aspire/issues/21463. -->
+      <_AspireCliBundlePinnedVersion Condition="'$(_AspireResolvedCliInvocationMode)' == 'Dnx' and '$(_AspireCliInvocationMode.ToLowerInvariant())' == 'dnxpinned' and $(_AspireCliDnxPackageReference.Contains('@'))">$(_AspireCliDnxPackageReference.Substring($([MSBuild]::Add($(_AspireCliDnxPackageReference.IndexOf('@')), 1))))</_AspireCliBundlePinnedVersion>
       <!-- Suppress the expected invalid-layout warning only when an existing CLI can prepare its
            bundle. Explicit bundle paths and missing explicit CLI paths cannot be recovered. -->
       <_AspireCliBundleWarnOnInvalidPaths>false</_AspireCliBundleWarnOnInvalidPaths>
@@ -245,6 +275,7 @@ namespace Projects%3B
 
     <ResolveAspireCliBundle AspireCliBundlePath="$(AspireCliBundlePath)"
                              AspireCliPath="$(_AspireCliBundleSelectedCliPath)"
+                             PinnedAspireCliVersion="$(_AspireCliBundlePinnedVersion)"
                              SearchPathForAspireCli="false"
                              WarnOnInvalidPaths="$(_AspireCliBundleWarnOnInvalidPaths)">
       <Output TaskParameter="DcpDir" PropertyName="_AspireCliBundleDcpDir" />
@@ -254,6 +285,7 @@ namespace Projects%3B
       <Output TaskParameter="AspireTerminalHostPath" PropertyName="_AspireCliBundleTerminalHostPath" />
       <Output TaskParameter="AspireTerminalHostInvocationArgs" PropertyName="_AspireCliBundleTerminalHostInvocationArgs" />
       <Output TaskParameter="AspireHomeDirectory" PropertyName="_AspireDefaultHomeDirectory" />
+      <Output TaskParameter="AspireCliSetupDirectory" PropertyName="_AspireCliBundleSetupDirectory" />
     </ResolveAspireCliBundle>
 
     <PropertyGroup>
@@ -268,13 +300,15 @@ namespace Projects%3B
     <PropertyGroup Condition="'$(DcpDir)' == '' or ('$(AspireDashboardDir)' == '' and '$(AspireDashboardPath)' == '')">
       <_AspireCliSetupPath Condition="'$(AspireCliPath)' != ''">$(AspireCliPath)</_AspireCliSetupPath>
       <_AspireCliSetupPath Condition="'$(AspireCliPath)' == '' and '$(_AspireResolvedCliInvocationMode)' == 'Aspire'">$(_AspireResolvedCliPath)</_AspireCliSetupPath>
-      <_AspireCliSetupHome Condition="'$(_AspireCliSetupHome)' == ''">$(_AspireDefaultHomeDirectory)</_AspireCliSetupHome>
+      <_AspireCliSetupHome Condition="'$(_AspireCliSetupHome)' == ''">$(_AspireCliBundleSetupDirectory)</_AspireCliSetupHome>
       <_AspireCliBundleSetupTimeout Condition="'$(_AspireCliBundleSetupTimeout)' == ''">120000</_AspireCliBundleSetupTimeout>
 
       <_AspireCliSetupExecutable Condition="'$(AspireCliBundlePath)' == '' and Exists('$(_AspireCliSetupPath)')">$(_AspireCliSetupPath)</_AspireCliSetupExecutable>
       <_AspireCliSetupExecutable Condition="'$(AspireCliBundlePath)' == '' and '$(AspireCliPath)' == '' and '$(_AspireResolvedCliInvocationMode)' == 'Dnx' and Exists('$(_AspireResolvedDnxHostPath)')">$(_AspireResolvedDnxHostPath)</_AspireCliSetupExecutable>
       <_AspireCliSetupDiagnosticCommand Condition="'$(_AspireCliSetupExecutable)' != '' and '$(_AspireCliSetupPath)' != ''">"$(_AspireCliSetupPath)" setup</_AspireCliSetupDiagnosticCommand>
       <_AspireCliSetupDiagnosticCommand Condition="'$(_AspireCliSetupExecutable)' != '' and '$(_AspireCliSetupPath)' == ''">"$(_AspireResolvedDnxHostPath)" $(_AspireResolvedDnxHostArgumentsPrefix)--yes $(_AspireCliDnxPackageReference) -- setup --install-path "$(_AspireCliSetupHome)"</_AspireCliSetupDiagnosticCommand>
+      <!-- Pinned setup only validates its layout when ASPIRE_LAYOUT_PATH points at it, so tell users to set it when rerunning the command. -->
+      <_AspireCliSetupDiagnosticEnvironment Condition="'$(_AspireCliSetupExecutable)' != '' and '$(_AspireCliSetupPath)' == '' and '$(_AspireCliBundlePinnedVersion)' != ''"> with the ASPIRE_LAYOUT_PATH environment variable set to '$(_AspireCliSetupHome)'</_AspireCliSetupDiagnosticEnvironment>
     </PropertyGroup>
 
     <!-- Argument values are metadata so paths containing MSBuild item separators remain one argument. -->
@@ -302,24 +336,33 @@ namespace Projects%3B
       <_AspireCliSetupArgument Include="DnxInstallPath" Condition="'$(_AspireCliSetupExecutable)' != '' and '$(_AspireCliSetupPath)' == ''">
         <Value>$(_AspireCliSetupHome)</Value>
       </_AspireCliSetupArgument>
+      <!-- The CLI validates an extracted bundle through layout discovery, which does not probe custom
+           install paths. Point discovery at the version-specific pinned layout so setup can validate it. -->
+      <_AspireCliSetupEnvironmentVariable Remove="@(_AspireCliSetupEnvironmentVariable)" />
+      <_AspireCliSetupEnvironmentVariable Include="ASPIRE_LAYOUT_PATH" Condition="'$(_AspireCliSetupExecutable)' != '' and '$(_AspireCliSetupPath)' == '' and '$(_AspireCliBundlePinnedVersion)' != ''">
+        <Value>$(_AspireCliSetupHome)</Value>
+      </_AspireCliSetupEnvironmentVariable>
     </ItemGroup>
 
     <!-- Script installs normally extract during installation. This fallback also covers older
          installers and DNX-only machines, and runs during real builds so IDE and command-line
          builds stamp concrete DCP and dashboard assembly metadata. -->
-    <Message Text="Aspire CLI bundle was not found. Running '$(_AspireCliSetupDiagnosticCommand)' to prepare it." Importance="Low"
+    <Message Text="Aspire CLI bundle was not found. Running '$(_AspireCliSetupDiagnosticCommand)'$(_AspireCliSetupDiagnosticEnvironment) to prepare it." Importance="Low"
             Condition="'$(_AspireCliSetupExecutable)' != '' and ('$(DcpDir)' == '' or ('$(AspireDashboardDir)' == '' and '$(AspireDashboardPath)' == ''))" />
     <RunAspireCliCommand FileName="$(_AspireCliSetupExecutable)"
                          Arguments="@(_AspireCliSetupArgument)"
+                         EnvironmentVariables="@(_AspireCliSetupEnvironmentVariable)"
                          TimeoutMilliseconds="$(_AspireCliBundleSetupTimeout)"
                          Condition="'$(_AspireCliSetupExecutable)' != '' and ('$(DcpDir)' == '' or ('$(AspireDashboardDir)' == '' and '$(AspireDashboardPath)' == ''))">
       <Output TaskParameter="ExitCode" PropertyName="_AspireCliSetupExitCode" />
       <Output TaskParameter="TimedOut" PropertyName="_AspireCliSetupTimedOut" />
       <Output TaskParameter="FailureMessage" PropertyName="_AspireCliSetupFailureMessage" />
+      <Output TaskParameter="ConsoleOutput" PropertyName="_AspireCliSetupOutput" />
     </RunAspireCliCommand>
 
     <ResolveAspireCliBundle AspireCliBundlePath="$(AspireCliBundlePath)"
                             AspireCliPath="$(_AspireCliBundleSelectedCliPath)"
+                            PinnedAspireCliVersion="$(_AspireCliBundlePinnedVersion)"
                             SearchPathForAspireCli="false"
                             WarnOnInvalidPaths="false"
                             Condition="'$(_AspireCliSetupExecutable)' != ''">
@@ -379,6 +422,7 @@ namespace Projects%3B
       <Output TaskParameter="ExitCode" PropertyName="_AspireCliFallbackDnxSetupExitCode" />
       <Output TaskParameter="TimedOut" PropertyName="_AspireCliFallbackDnxSetupTimedOut" />
       <Output TaskParameter="FailureMessage" PropertyName="_AspireCliFallbackDnxSetupFailureMessage" />
+      <Output TaskParameter="ConsoleOutput" PropertyName="_AspireCliFallbackDnxSetupOutput" />
     </RunAspireCliCommand>
 
     <ResolveAspireCliBundle AspireCliBundlePath="$(AspireCliBundlePath)"
@@ -414,11 +458,16 @@ namespace Projects%3B
       </_AspireCliBundleNotFoundError>
       <_AspireCliBundleNotFoundError Condition="'$(_AspireCliSetupFailureMessage)' != ''">
         $(_AspireCliBundleNotFoundError)
-        Automatic Aspire CLI bundle setup failed: $(_AspireCliSetupFailureMessage) Run '$(_AspireCliSetupDiagnosticCommand)' to diagnose the failure.
+        Automatic Aspire CLI bundle setup failed: $(_AspireCliSetupFailureMessage) Run '$(_AspireCliSetupDiagnosticCommand)'$(_AspireCliSetupDiagnosticEnvironment) to diagnose the failure.
       </_AspireCliBundleNotFoundError>
       <_AspireCliBundleNotFoundError Condition="'$(_AspireCliSetupFailureMessage)' == '' and '$(_AspireCliSetupExitCode)' != '' and '$(_AspireCliSetupExitCode)' != '0'">
         $(_AspireCliBundleNotFoundError)
-        Automatic Aspire CLI bundle setup failed with exit code $(_AspireCliSetupExitCode). Run '$(_AspireCliSetupDiagnosticCommand)' to diagnose the failure.
+        Automatic Aspire CLI bundle setup failed with exit code $(_AspireCliSetupExitCode). Run '$(_AspireCliSetupDiagnosticCommand)'$(_AspireCliSetupDiagnosticEnvironment) to diagnose the failure.
+      </_AspireCliBundleNotFoundError>
+      <_AspireCliBundleNotFoundError Condition="'$(_AspireCliSetupOutput)' != ''">
+        $(_AspireCliBundleNotFoundError)
+        Output from '$(_AspireCliSetupDiagnosticCommand)':
+        $(_AspireCliSetupOutput)
       </_AspireCliBundleNotFoundError>
       <_AspireCliBundleNotFoundError Condition="'$(_AspireCliFallbackDnxSetupFailureMessage)' != ''">
         $(_AspireCliBundleNotFoundError)
@@ -427,6 +476,11 @@ namespace Projects%3B
       <_AspireCliBundleNotFoundError Condition="'$(_AspireCliFallbackDnxSetupFailureMessage)' == '' and '$(_AspireCliFallbackDnxSetupExitCode)' != '' and '$(_AspireCliFallbackDnxSetupExitCode)' != '0'">
         $(_AspireCliBundleNotFoundError)
         Paired Aspire CLI bundle setup through DNX failed with exit code $(_AspireCliFallbackDnxSetupExitCode). Run '$(_AspireCliFallbackDnxSetupDiagnosticCommand)' to diagnose the failure.
+      </_AspireCliBundleNotFoundError>
+      <_AspireCliBundleNotFoundError Condition="'$(_AspireCliFallbackDnxSetupOutput)' != ''">
+        $(_AspireCliBundleNotFoundError)
+        Output from '$(_AspireCliFallbackDnxSetupDiagnosticCommand)':
+        $(_AspireCliFallbackDnxSetupOutput)
       </_AspireCliBundleNotFoundError>
     </PropertyGroup>
 
@@ -616,7 +670,7 @@ namespace Projects%3B
 
   <Target Name="_ValidateAspireCliDnxInvocationMode"
           DependsOnTargets="_ResolveAspireCliInvocation"
-          Condition="'$(IsAspireHost)' == 'true' and '$(AspireUseCliBundle)' == 'true' and '$(_AspireUseDnxCliRunHook)' == 'true' and '$(AspireCliPath)' == ''">
+          Condition="'$(IsAspireHost)' == 'true' and '$(AspireUseCliBundle)' == 'true' and '$(_AspireCliInvocationModeRequestsDnx)' == 'true' and '$(AspireCliPath)' == ''">
     <Error Code="ASPIRE011"
            Condition="'$(_AspireResolvedDnxPath)' == ''"
            Text="$(MSBuildProjectName) is configured with AspireCliInvocationMode=$(_AspireCliInvocationMode), but the dnx command could not be found on PATH. Install or use the .NET SDK 10.0 or later, set AspireCliInvocationMode=Path to use the global aspire command, or set AspireCliPath to an explicit Aspire CLI executable." />
@@ -678,7 +732,6 @@ namespace Projects%3B
       <_AspireTerminalHostPathInferredFromDir Condition=" '$(AspireTerminalHostPath)' == '' and '$(AspireTerminalHostDir)' != '' ">true</_AspireTerminalHostPathInferredFromDir>
       <AspireTerminalHostPath Condition=" '$(AspireTerminalHostPath)' == '' ">$([MSBuild]::NormalizePath($(AspireTerminalHostDir), 'Aspire.TerminalHost'))</AspireTerminalHostPath>
       <AspireTerminalHostPath Condition=" '$(_AspireTerminalHostPathInferredFromDir)' == 'true' and '$(OS)' == 'Windows_NT' and !$(AspireTerminalHostPath.EndsWith('.exe')) ">$(AspireTerminalHostPath).exe</AspireTerminalHostPath>
-      <AspireTerminalHostPath Condition=" '$(_AspireTerminalHostPathInferredFromDir)' == 'true' and $([MSBuild]::IsOsPlatform('OSX')) and !$(AspireTerminalHostPath.EndsWith('.dll'))">$(AspireTerminalHostPath).dll</AspireTerminalHostPath>
     </PropertyGroup>
 
     <ItemGroup>
@@ -690,6 +743,29 @@ namespace Projects%3B
                          Condition=" '$(AspireTerminalHostInvocationArgs)' != '' ">
         <_Parameter1>aspireterminalhostinvocationargs</_Parameter1>
         <_Parameter2>$(AspireTerminalHostInvocationArgs)</_Parameter2>
+      </AssemblyAttribute>
+    </ItemGroup>
+  </Target>
+
+  <!--
+    The dotnet CLI artifacts path option (or `-p:ArtifactsPath=...`) passes ArtifactsPath as a global property, which flows
+    to the referenced project resources so their output lands under the artifacts directory. The AppHost later launches
+    those projects without rebuilding them, which would otherwise look for the output in the default location.
+    Global properties can't be overridden during evaluation, so assigning a sentinel and checking whether it took effect
+    detects that case without misinterpreting values that come from project files or environment variables.
+  -->
+  <PropertyGroup Condition=" '$(IsAspireHost)' == 'true' and '$(ArtifactsPath)' != '' ">
+    <_AspireOriginalArtifactsPath>$(ArtifactsPath)</_AspireOriginalArtifactsPath>
+    <ArtifactsPath>__AspireGlobalArtifactsPathProbe__</ArtifactsPath>
+    <_AspireGlobalArtifactsPath Condition=" '$(ArtifactsPath)' != '__AspireGlobalArtifactsPathProbe__' ">$(_AspireOriginalArtifactsPath)</_AspireGlobalArtifactsPath>
+    <ArtifactsPath>$(_AspireOriginalArtifactsPath)</ArtifactsPath>
+  </PropertyGroup>
+
+  <Target Name="EmbedAppHostGlobalArtifactsPath" BeforeTargets="GetAssemblyAttributes" Condition=" '$(IsAspireHost)' == 'true' and '$(_AspireGlobalArtifactsPath)' != '' ">
+    <ItemGroup>
+      <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+        <_Parameter1>apphostglobalartifactspath</_Parameter1>
+        <_Parameter2>$(_AspireGlobalArtifactsPath)</_Parameter2>
       </AssemblyAttribute>
     </ItemGroup>
   </Target>
@@ -718,8 +794,9 @@ namespace Projects%3B
     <MakeDir Directories="$(AspireManifestPublishOutputPath)" />
   </Target>
 
+  <!-- Pre-9 SDKs do not set the marker, so retain version-based detection as well. -->
   <Target Name="__ErrorOnMininumSdkVersionMissing" BeforeTargets="PrepareForBuild"
-  Condition="'$(IsAspireHost)' == 'true' and ('$(AspireHostingSDKVersion)' == '' or $([MSBuild]::VersionLessThan('$(AspireHostingSDKVersion)', '9.0.0')))">
+  Condition="'$(IsAspireHost)' == 'true' and (('$(_UsingAspireAppHostSdk)' == 'true' and '$(AspireHostingSDKVersion)' == '') or ('$(AspireHostingSDKVersion)' != '' and $([MSBuild]::VersionLessThan('$(AspireHostingSDKVersion)', '9.0.0'))))">
     <Error Code="ASPIRE007"
       Text="$(MSBuildProjectName) project requires a reference to &quot;Aspire.AppHost.Sdk&quot; with version &quot;9.0.0&quot; or greater to work correctly. Please add the following line after the Project declaration `&lt;Sdk Name=&quot;Aspire.AppHost.Sdk&quot; Version=&quot;9.0.0&quot; /&gt;`."
       File="$(MSBuildProjectFullPath)"

@@ -274,6 +274,7 @@ internal sealed class ReferenceExpressionRef
     /// </summary>
     /// <remarks>
     /// Given "redis://{0}:{1}", returns ["redis://", "{0}", ":", "{1}"].
+    /// Escaped braces stay in the literal parts: given "{0}/events/{{hub}}", returns ["{0}", "/events/{{hub}}"].
     /// </remarks>
     private static string[] SplitFormatString(string format)
     {
@@ -283,6 +284,13 @@ internal sealed class ReferenceExpressionRef
         while (current < format.Length)
         {
             var start = format.IndexOf('{', current);
+
+            // "{{" is an escaped literal brace, not the start of a placeholder.
+            while (start >= 0 && start + 1 < format.Length && format[start + 1] == '{')
+            {
+                start = format.IndexOf('{', start + 2);
+            }
+
             if (start < 0)
             {
                 // No more placeholders - add the rest as a literal

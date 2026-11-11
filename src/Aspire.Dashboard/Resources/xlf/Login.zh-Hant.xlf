@@ -14,12 +14,12 @@
       </trans-unit>
       <trans-unit id="HelpScreenshotAltText">
         <source>Screenshot of example console output showing where to find the dashboard frontend token. A red box highlights the token at the end of a url. The token is the value of a query parameter named 't'.</source>
-        <target state="translated">範例主控台輸出的螢幕擷取畫面，顯示儀表板前端權杖的位置。紅色方塊會醒目提示 URL 結尾的權杖。權杖是名為「t」的查詢參數值。</target>
+        <target state="translated">範例主控台輸出的螢幕擷取畫面，顯示儀表板前端 Token 的位置。紅色方塊會醒目提示 URL 結尾的 Token。Token 是名為「t」的查詢參數值。</target>
         <note />
       </trans-unit>
       <trans-unit id="InvalidTokenErrorMessage">
         <source>Invalid token. Please try again</source>
-        <target state="translated">無效的權杖。請再試一次</target>
+        <target state="translated">無效的 Token。請再試一次</target>
         <note />
       </trans-unit>
       <trans-unit id="LogInButtonText">
@@ -44,17 +44,17 @@
       </trans-unit>
       <trans-unit id="SignOut">
         <source>Sign out</source>
-        <target state="new">Sign out</target>
+        <target state="translated">登出</target>
         <note />
       </trans-unit>
       <trans-unit id="TextFieldPlaceholder">
         <source>Enter token to log in...</source>
-        <target state="translated">輸入權杖以登入...</target>
+        <target state="translated">輸入 Token 以登入...</target>
         <note />
       </trans-unit>
       <trans-unit id="TokenHelpTextLine1">
         <source>Copy the highlighted token from the console to the login page and log in.</source>
-        <target state="translated">將醒目提示的權杖從主控台複製到登入頁面並登入。</target>
+        <target state="translated">將醒目提示的 Token 從主控台複製到登入頁面並登入。</target>
         <note />
       </trans-unit>
       <trans-unit id="TokenHelpTextLine2">
@@ -64,17 +64,17 @@
       </trans-unit>
       <trans-unit id="TokenRequiredErrorMessage">
         <source>Token is required</source>
-        <target state="translated">需要權杖</target>
+        <target state="translated">需要 Token</target>
         <note />
       </trans-unit>
       <trans-unit id="UnexpectedValidationError">
         <source>Unexpected error when validating the token</source>
-        <target state="translated">驗證權杖時發生未預期的錯誤</target>
+        <target state="translated">驗證 Token 時發生未預期的錯誤</target>
         <note />
       </trans-unit>
       <trans-unit id="WhereIsMyTokenLinkText">
         <source>Where do I find the token?</source>
-        <target state="translated">我可以在哪裡可以找到權杖？</target>
+        <target state="translated">哪裡可以找到 Token?</target>
         <note />
       </trans-unit>
     </body>

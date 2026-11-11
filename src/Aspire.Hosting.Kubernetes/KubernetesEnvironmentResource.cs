@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREPIPELINES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIRECOMPUTE002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 using System.Diagnostics.CodeAnalysis;
@@ -32,6 +31,9 @@ namespace Aspire.Hosting.Kubernetes;
 [AspireExport(ExposeProperties = true)]
 public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmentResource, IComputeEnvironmentWithVolumeMounts
 {
+    /// <inheritdoc/>
+    public override string ResourceTypeDisplayName => "Kubernetes Environment";
+
     private const int HttpRouteHostnameLimit = 16;
     private const string HttpRouteSpecDocumentationUrl = "https://gateway-api.sigs.k8s.io/reference/api-spec/main/spec/#httproutespec";
 
@@ -461,6 +463,7 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
         // TypeScript AppHost RPC bridge (which may use a different resource instance)
         // resolve correctly.
         var deploymentTargets = new Dictionary<IResource, KubernetesResource>(new ResourceNameComparer());
+        var pendingResources = new List<(IResource Resource, IComputeEnvironmentResource ComputeEnvironment)>();
 
         foreach (var r in appModel.GetComputeResources())
         {
@@ -503,6 +506,14 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
                 ConfigureOtlp(r, dashboardResource);
             }
 
+            pendingResources.Add((r, computeEnvForAnnotation));
+        }
+
+        // Create the Kubernetes resources only after every resource has its OTLP configuration.
+        // Creating a resource eagerly creates the resources it references, so configuring OTLP
+        // in the same loop would miss resources that are referenced before they are visited.
+        foreach (var (r, computeEnvForAnnotation) in pendingResources)
+        {
             // Create a Kubernetes compute resource for the resource
             var serviceResource = await environmentContext.CreateKubernetesResourceAsync(r, executionContext, cancellationToken).ConfigureAwait(false);
             serviceResource.AddPrintSummaryStep();

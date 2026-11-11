@@ -6,7 +6,7 @@
 {
     var tooltip = _unviewedCount == 1 ? Loc[nameof(Columns.UnreadLogErrorsBadgeOneErrorLog)] : string.Format(Loc[nameof(Columns.UnreadLogErrorsBadgeErrorLogs)], _unviewedCount);
     <a aria-label="@tooltip"
-                  title="@tooltip"
+                  data-tooltip="@tooltip"
                   href="@GetResourceErrorStructuredLogsUrl()"
                   class="unread-logs-errors-link"
                   @onclick:stopPropagation="true"

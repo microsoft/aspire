@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using System.Xml.Linq;
 
 using Aspire.Cli.EndToEnd.Tests.Helpers;
@@ -54,7 +56,7 @@ public sealed class CentralPackageManagementTests(ITestOutputHelper output)
                 <Sdk Name="Aspire.AppHost.Sdk" Version="9.1.0" />
                 <PropertyGroup>
                     <OutputType>Exe</OutputType>
-                    <TargetFramework>net9.0</TargetFramework>
+                    <TargetFramework>net10.0</TargetFramework>
                     <IsAspireHost>true</IsAspireHost>
                 </PropertyGroup>
                 <ItemGroup>
@@ -168,7 +170,7 @@ public sealed class CentralPackageManagementTests(ITestOutputHelper output)
                 <Sdk Name="Aspire.AppHost.Sdk" Version="9.1.0" />
                 <PropertyGroup>
                     <OutputType>Exe</OutputType>
-                    <TargetFramework>net9.0</TargetFramework>
+                    <TargetFramework>net10.0</TargetFramework>
                     <IsAspireHost>true</IsAspireHost>
                 </PropertyGroup>
             </Project>
@@ -288,7 +290,7 @@ public sealed class CentralPackageManagementTests(ITestOutputHelper output)
             <Project Sdk="Aspire.AppHost.Sdk/13.1.2">
                 <PropertyGroup>
                     <OutputType>Exe</OutputType>
-                    <TargetFramework>net9.0</TargetFramework>
+                    <TargetFramework>net10.0</TargetFramework>
                     <IsAspireHost>true</IsAspireHost>
                 </PropertyGroup>
             </Project>
@@ -343,5 +345,83 @@ public sealed class CentralPackageManagementTests(ITestOutputHelper output)
         await auto.TypeAsync($"dotnet restore \"{containerAppHostCsprojPath}\"");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(120));
+    }
+
+    /// <summary>
+    /// Regression test for https://github.com/microsoft/aspire/issues/22073: a file-based
+    /// AppHost under CPM declares <c>#:package Aspire.Hosting.AppHost</c> without a version
+    /// (NuGet rejects an inline version with NU1008), and has no <c>#:sdk</c> directive.
+    /// The CLI must still discover it and be able to start it.
+    /// </summary>
+    [CaptureWorkspaceOnFailure]
+    [Fact]
+    public async Task VersionlessFileBasedAppHostIsDiscoveredAndStarts()
+    {
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
+        var workspace = TemporaryWorkspace.Create(output);
+
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
+        var counter = new SequenceCounter();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
+
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliAsync(strategy, counter);
+
+        // Scaffold with `aspire init` so the package versions, NuGet.config, and channel
+        // match whatever CLI build is under test, rather than hard-coding a version.
+        await auto.RunCommandAsync(
+            "aspire init --file-based --language csharp --non-interactive --suppress-agent-init",
+            counter,
+            TimeSpan.FromMinutes(2));
+
+        var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs");
+        var directoryPackagesPropsPath = Path.Combine(workspace.WorkspaceRoot.FullName, "Directory.Packages.props");
+
+        // Convert the generated AppHost to CPM: move each "#:package <Id>@<Version>" version
+        // into Directory.Packages.props and leave a versionless "#:package <Id>" directive.
+        var originalSource = File.ReadAllText(appHostPath);
+        var packageDirectiveRegex = new Regex(
+            @"^#:package[\t ]+(?<id>[a-zA-Z0-9\._]+)@(?<version>[^\s]+)[\t ]*\r?$",
+            RegexOptions.Multiline);
+        var packageVersions = packageDirectiveRegex.Matches(originalSource)
+            .Select(m => (Id: m.Groups["id"].Value, Version: m.Groups["version"].Value))
+            .ToList();
+        Assert.Contains(packageVersions, p => p.Id == "Aspire.Hosting.AppHost");
+
+        var cpmSource = packageDirectiveRegex.Replace(originalSource, m => $"#:package {m.Groups["id"].Value}");
+        Assert.Matches(@"(?m)^#:package Aspire\.Hosting\.AppHost\r?$", cpmSource);
+        Assert.DoesNotContain("#:sdk", cpmSource);
+        Assert.DoesNotContain("#:package Aspire.Hosting.AppHost@", cpmSource);
+        File.WriteAllText(appHostPath, cpmSource);
+
+        var packageVersionItems = string.Join(
+            Environment.NewLine,
+            packageVersions.Select(p => $"""        <PackageVersion Include="{p.Id}" Version="{p.Version}" />"""));
+        File.WriteAllText(directoryPackagesPropsPath, $"""
+            <Project>
+                <PropertyGroup>
+                    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+                </PropertyGroup>
+                <ItemGroup>
+            {packageVersionItems}
+                </ItemGroup>
+            </Project>
+            """);
+
+        // Discovery: before the fix, `aspire ls` returned [] for a versionless directive.
+        await auto.RunCommandAsync("aspire ls --format json > ls.json", counter, TimeSpan.FromMinutes(1));
+        var lsOutput = File.ReadAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "ls.json"));
+        var candidates = Assert.IsType<JsonArray>(JsonNode.Parse(lsOutput));
+        Assert.Collection(
+            candidates,
+            candidate => Assert.EndsWith("/apphost.cs", candidate?["path"]?.GetValue<string>()));
+
+        // Startup: before the fix, `--apphost apphost.cs` failed with "The --apphost option
+        // specified a project that does not exist." A successful start also proves the
+        // versionless directives restore through Directory.Packages.props.
+        await auto.AspireStartAsync(counter, apphost: "apphost.cs", additionalArgs: "--non-interactive");
+        await auto.AspireStopAsync(counter);
     }
 }

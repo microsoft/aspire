@@ -15,7 +15,7 @@
         <div class="toolbar-end">
             <FluentTextInput TextInputType="TextInputType.Search" Placeholder="@ControlStringsLoc[nameof(ControlsStrings.FilterPlaceholder)]"
                           Immediate="true"
-                          Autofocus="true"
+                          Autofocus="@AutofocusFilter"
                           AutoComplete="off"
                           @bind-Value="_filter">
                 <StartTemplate>
@@ -44,7 +44,7 @@
             <AspirePropertyDetailsAccordionItem Header="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsUrlsHeader)]"
                                                 Count="@FilteredUrls.Count()"
                                                 Expanded="@_isUrlsExpanded">
-                <FluentDataGrid TGridItem="DisplayedUrl"
+                <DisposalSafeFluentDataGrid TGridItem="DisplayedUrl"
                                 ItemKey="@(vm => ((IPropertyGridItem)vm).Key)"
                                 ItemsProvider="@EnumerableGridItemsProvider.Create(() => FilteredUrls)"
                                 HeaderCellAsButtonWithMenu="true"
@@ -76,14 +76,14 @@
                                    EnableHighlighting="@(!string.IsNullOrEmpty(_filter))"
                                    HighlightText="@_filter" />
                     </AspireTemplateColumn>
-                </FluentDataGrid>
+                </DisposalSafeFluentDataGrid>
             </AspirePropertyDetailsAccordionItem>
             @if (Resource.IsContainer())
             {
                 <AspirePropertyDetailsAccordionItem Header="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsVolumesHeader)]"
                                                     Count="@FilteredVolumes.Count()"
                                                     Expanded="@_isVolumesExpanded">
-                    <FluentDataGrid TGridItem="VolumeViewModel"
+                    <DisposalSafeFluentDataGrid TGridItem="VolumeViewModel"
                                     ItemKey="@(vm => ((IPropertyGridItem)vm).Key)"
                                     ItemsProvider="@EnumerableGridItemsProvider.Create(() => FilteredVolumes)"
                                     HeaderCellAsButtonWithMenu="true"
@@ -116,13 +116,13 @@
                                 </ContentBeforeValue>
                             </GridValue>
                         </AspireTemplateColumn>
-                    </FluentDataGrid>
+                    </DisposalSafeFluentDataGrid>
                 </AspirePropertyDetailsAccordionItem>
             }
             <AspirePropertyDetailsAccordionItem Header="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsReferences)]"
                                                 Count="@FilteredRelationships.Count()"
                                                 Expanded="@_isRelationshipsExpanded">
-                <FluentDataGrid
+                <DisposalSafeFluentDataGrid
                                 HeaderCellAsButtonWithMenu="true"
                                 ResizeType="DataGridResizeType.Discrete"
                                 TGridItem="ResourceDetailRelationshipViewModel"
@@ -133,21 +133,21 @@
                                 RowSize="DataGridRowSize.Medium"
                                 GridTemplateColumns="1fr 1fr 0.5fr"
                                 ShowHover="true">
-                    <TemplateColumn Title="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsResourceHeader)]">
+                    <AspireTemplateColumn Title="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsResourceHeader)]">
                         <ResourceNameValue Resource="@context.Resource" Value="@context.ResourceName" FormatName="@FormatName" />
-                    </TemplateColumn>
-                    <TemplateColumn Title="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsTypeHeader)]" TooltipText="@(c => string.Join(", ", c.Types))">
+                    </AspireTemplateColumn>
+                    <AspireTemplateColumn Title="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsTypeHeader)]" TooltipText="@(c => string.Join(", ", c.Types))">
                         @string.Join(", ", context.Types)
-                    </TemplateColumn>
-                    <TemplateColumn Title="@ControlStringsLoc[nameof(ControlsStrings.ViewAction)]" Class="no-ellipsis">
+                    </AspireTemplateColumn>
+                    <AspireTemplateColumn Title="@ControlStringsLoc[nameof(ControlsStrings.ViewAction)]" Class="no-ellipsis">
                         <FluentButton Appearance="ButtonAppearance.Transparent" Class="button-hyperlink-no-icon" OnClick="@(() => OnViewRelationshipAsync(context))">@ControlStringsLoc[nameof(ControlsStrings.ViewAction)]</FluentButton>
-                    </TemplateColumn>
-                </FluentDataGrid>
+                    </AspireTemplateColumn>
+                </DisposalSafeFluentDataGrid>
             </AspirePropertyDetailsAccordionItem>
             <AspirePropertyDetailsAccordionItem Header="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsBackReferences)]"
                                                 Count="@FilteredBackRelationships.Count()"
                                                 Expanded="@_isBackRelationshipsExpanded">
-                <FluentDataGrid
+                <DisposalSafeFluentDataGrid
                                 HeaderCellAsButtonWithMenu="true"
                                 ResizeType="DataGridResizeType.Discrete"
                                 TGridItem="ResourceDetailRelationshipViewModel"
@@ -158,21 +158,21 @@
                                 RowSize="DataGridRowSize.Medium"
                                 GridTemplateColumns="1fr 1fr 0.5fr"
                                 ShowHover="true">
-                    <TemplateColumn Title="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsResourceHeader)]">
+                    <AspireTemplateColumn Title="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsResourceHeader)]">
                         <ResourceNameValue Resource="@context.Resource" Value="@context.ResourceName" FormatName="@FormatName" />
-                    </TemplateColumn>
-                    <TemplateColumn Title="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsTypeHeader)]" TooltipText="@(c => string.Join(", ", c.Types))">
+                    </AspireTemplateColumn>
+                    <AspireTemplateColumn Title="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsTypeHeader)]" TooltipText="@(c => string.Join(", ", c.Types))">
                         @string.Join(", ", context.Types)
-                    </TemplateColumn>
-                    <TemplateColumn Title="@ControlStringsLoc[nameof(ControlsStrings.ViewAction)]" Class="no-ellipsis">
+                    </AspireTemplateColumn>
+                    <AspireTemplateColumn Title="@ControlStringsLoc[nameof(ControlsStrings.ViewAction)]" Class="no-ellipsis">
                         <FluentButton Appearance="ButtonAppearance.Transparent" Class="button-hyperlink-no-icon" OnClick="@(() => OnViewRelationshipAsync(context))">@ControlStringsLoc[nameof(ControlsStrings.ViewAction)]</FluentButton>
-                    </TemplateColumn>
-                </FluentDataGrid>
+                    </AspireTemplateColumn>
+                </DisposalSafeFluentDataGrid>
             </AspirePropertyDetailsAccordionItem>
             <AspirePropertyDetailsAccordionItem Header="@ControlStringsLoc[nameof(ControlsStrings.ResourceHealthChecksHeader)]"
                                                 Count="@FilteredHealthReports.Count()"
                                                 Expanded="@_isHealthChecksExpanded">
-                <FluentDataGrid
+                <DisposalSafeFluentDataGrid
                                 HeaderCellAsButtonWithMenu="true"
                                 ResizeType="DataGridResizeType.Discrete"
                                 ItemsProvider="@EnumerableGridItemsProvider.Create(() => FilteredHealthReports)"
@@ -223,7 +223,7 @@
                             </ContentInButtonArea>
                         </GridValue>
                     </AspireTemplateColumn>
-                </FluentDataGrid>
+                </DisposalSafeFluentDataGrid>
             </AspirePropertyDetailsAccordionItem>
             <AspirePropertyDetailsAccordionItem Header="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsEnvironmentVariablesHeader)]"
                                                 Count="@FilteredEnvironmentVariables.Count()"
@@ -281,9 +281,9 @@
         {
             if (highlighting)
             {
-                return @<a href="@vm.Url" title="@vm.Url" target="_blank"><FluentHighlighter HighlightedText="@filter" Text="@vm.DisplayName" /></a>;
+                return @<a href="@vm.Url" data-tooltip="@vm.Url" target="_blank"><FluentHighlighter HighlightedText="@filter" Text="@vm.DisplayName" /></a>;
             }
-            return @<a href="@vm.Url" title="@vm.Url" target="_blank">@vm.DisplayName</a>;
+            return @<a href="@vm.Url" data-tooltip="@vm.Url" target="_blank">@vm.DisplayName</a>;
         }
     }
 }

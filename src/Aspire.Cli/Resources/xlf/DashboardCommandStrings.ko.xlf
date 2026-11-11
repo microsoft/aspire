@@ -4,132 +4,132 @@
     <body>
       <trans-unit id="AllowAnonymousOptionDescription">
         <source>Allow anonymous access to the dashboard</source>
-        <target state="new">Allow anonymous access to the dashboard</target>
+        <target state="translated">대시보드에 대한 익명 액세스 허용</target>
         <note />
       </trans-unit>
       <trans-unit id="ApplicationNameOptionDescription">
         <source>The application name displayed in the dashboard and used to scope persisted dashboard data</source>
-        <target state="new">The application name displayed in the dashboard and used to scope persisted dashboard data</target>
+        <target state="translated">유지되는 대시보드 데이터의 범위를 지정하고 대시보드에 표시되는 애플리케이션 이름</target>
         <note />
       </trans-unit>
       <trans-unit id="BundleLayoutNotFound">
         <source>The 'aspire dashboard' command requires the CLI bundle, but no bundle layout was found. The bundle provides the dashboard binary and supporting files. Run 'aspire setup --force' to extract the bundle, or reinstall the Aspire CLI.</source>
-        <target state="new">The 'aspire dashboard' command requires the CLI bundle, but no bundle layout was found. The bundle provides the dashboard binary and supporting files. Run 'aspire setup --force' to extract the bundle, or reinstall the Aspire CLI.</target>
+        <target state="translated">'aspire dashboard' 명령에 CLI 번들이 필요하지만 번들 레이아웃을 찾을 수 없습니다. 번들은 대시보드 이진 파일과 지원 파일을 제공합니다. 'aspire setup --force'를 실행하여 번들을 추출하거나, Aspire CLI를 다시 설치하세요.</target>
         <note />
       </trans-unit>
       <trans-unit id="BundleNotAvailable">
         <source>The Aspire dashboard requires the CLI bundle. The bundle was not found.</source>
-        <target state="new">The Aspire dashboard requires the CLI bundle. The bundle was not found.</target>
+        <target state="translated">Aspire 대시보드에 CLI 번들이 필요합니다. 번들을 찾을 수 없습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfigFilePathOptionDescription">
         <source>The path for a JSON configuration file</source>
-        <target state="new">The path for a JSON configuration file</target>
+        <target state="translated">JSON 구성 파일의 경로</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardExitedAddressInUse">
         <source>Dashboard could not start because a configured port is already in use. Use a different port or stop the conflicting process.</source>
-        <target state="new">Dashboard could not start because a configured port is already in use. Use a different port or stop the conflicting process.</target>
+        <target state="translated">구성된 포트가 이미 사용 중이므로 대시보드를 시작할 수 없습니다. 다른 포트를 사용하거나 충돌하는 프로세스를 중지하십시오.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardExitedUnexpectedError">
         <source>Dashboard exited unexpectedly due to an error. See logs for details.</source>
-        <target state="new">Dashboard exited unexpectedly due to an error. See logs for details.</target>
+        <target state="translated">오류로 인해 대시보드가 예기치 않게 종료되었습니다. 자세한 내용은 로그를 참조하세요.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardExitedValidationFailure">
         <source>Dashboard configuration is invalid. Check the provided options and try again.</source>
-        <target state="new">Dashboard configuration is invalid. Check the provided options and try again.</target>
+        <target state="translated">대시보드 구성이 잘못되었습니다. 제공된 옵션을 확인하고 다시 시도하세요.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardExitedWithError">
         <source>Dashboard exited with exit code {0}.</source>
-        <target state="new">Dashboard exited with exit code {0}.</target>
+        <target state="translated">종료 코드 {0}(으)로 대시보드가 종료되었습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFailedToStart">
         <source>Failed to start Aspire dashboard: {0}</source>
-        <target state="new">Failed to start Aspire dashboard: {0}</target>
+        <target state="translated">Aspire 대시보드 시작 실패: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardLabel">
         <source>Dashboard</source>
-        <target state="new">Dashboard</target>
+        <target state="translated">대시보드</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardStartTimedOut">
         <source>Dashboard did not become ready within the expected time.</source>
-        <target state="new">Dashboard did not become ready within the expected time.</target>
+        <target state="translated">대시보드가 예상 시간 내에 준비되지 않았습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardStarted">
         <source>Dashboard started (PID {0}).</source>
-        <target state="new">Dashboard started (PID {0}).</target>
+        <target state="translated">대시보드가 시작되었습니다(PID {0}).</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
         <source>Manage the Aspire dashboard (Preview)</source>
-        <target state="new">Manage the Aspire dashboard (Preview)</target>
+        <target state="translated">Aspire 대시보드 관리(미리 보기)</target>
         <note />
       </trans-unit>
       <trans-unit id="EnsuringDashboardBundle">
         <source>Preparing dashboard bits...</source>
-        <target state="new">Preparing dashboard bits...</target>
+        <target state="translated">대시보드 비트를 준비하는 중...</target>
         <note />
       </trans-unit>
       <trans-unit id="FrontendUrlOptionDescription">
         <source>One or more HTTP endpoints through which the dashboard frontend is served</source>
-        <target state="new">One or more HTTP endpoints through which the dashboard frontend is served</target>
+        <target state="translated">대시보드 프런트 엔드가 제공되는 하나 이상의 HTTP 엔드포인트입니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="LogsLabel">
         <source>Logs</source>
-        <target state="new">Logs</target>
+        <target state="translated">로그</target>
         <note />
       </trans-unit>
       <trans-unit id="ManagedBinaryNotFound">
         <source>The CLI bundle layout was found, but the Dashboard executable is missing. The bundle may be corrupted or incomplete. Run 'aspire setup --force' to re-extract the bundle, or reinstall the Aspire CLI.</source>
-        <target state="new">The CLI bundle layout was found, but the Dashboard executable is missing. The bundle may be corrupted or incomplete. Run 'aspire setup --force' to re-extract the bundle, or reinstall the Aspire CLI.</target>
+        <target state="translated">CLI 번들 레이아웃을 찾았지만 대시보드 실행 파일이 없습니다. 번들이 손상되었거나 불완전할 수 있습니다. 'aspire setup --force'를 실행하여 번들을 다시 추출하거나, Aspire CLI를 다시 설치하세요.</target>
         <note />
       </trans-unit>
       <trans-unit id="OtlpGrpcLabel">
         <source>OTLP/gRPC</source>
-        <target state="new">OTLP/gRPC</target>
+        <target state="translated">OTLP/gRPC</target>
         <note />
       </trans-unit>
       <trans-unit id="OtlpGrpcUrlOptionDescription">
         <source>The OTLP/gRPC endpoint. This endpoint hosts an OTLP service and receives telemetry using gRPC</source>
-        <target state="new">The OTLP/gRPC endpoint. This endpoint hosts an OTLP service and receives telemetry using gRPC</target>
+        <target state="translated">OTLP/gRPC 엔드포인트입니다. 이 엔드포인트는 OTLP 서비스를 호스트하고 gRPC를 사용해 원격 분석 데이터를 수신합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="OtlpHttpLabel">
         <source>OTLP/HTTP</source>
-        <target state="new">OTLP/HTTP</target>
+        <target state="translated">OTLP/HTTP</target>
         <note />
       </trans-unit>
       <trans-unit id="OtlpHttpUrlOptionDescription">
         <source>The OTLP/HTTP endpoint. This endpoint hosts an OTLP service and receives telemetry using Protobuf over HTTP</source>
-        <target state="new">The OTLP/HTTP endpoint. This endpoint hosts an OTLP service and receives telemetry using Protobuf over HTTP</target>
+        <target state="translated">OTLP/HTTP 엔드포인트입니다. 이 엔드포인트는 OTLP 서비스를 호스트하고 HTTP를 통해 Protobuf를 사용하여 원격 분석을 수신합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="PersistenceModeOptionDescription">
         <source>The dashboard data persistence mode: None, Run, or Resume</source>
-        <target state="new">The dashboard data persistence mode: None, Run, or Resume</target>
+        <target state="translated">대시보드 데이터 지속성 모드: 없음, 실행, 다시 시작</target>
         <note />
       </trans-unit>
       <trans-unit id="RunDescription">
         <source>Start the Aspire dashboard (Preview)</source>
-        <target state="new">Start the Aspire dashboard (Preview)</target>
+        <target state="translated">Aspire 대시보드 시작(미리 보기)</target>
         <note />
       </trans-unit>
       <trans-unit id="StartingDashboard">
         <source>Starting dashboard...</source>
-        <target state="new">Starting dashboard...</target>
+        <target state="translated">대시보드 시작 중...</target>
         <note />
       </trans-unit>
       <trans-unit id="StoppingDashboard">
         <source>Stopping dashboard.</source>
-        <target state="new">Stopping dashboard.</target>
+        <target state="translated">대시보드를 중지하는 중입니다.</target>
         <note />
       </trans-unit>
     </body>

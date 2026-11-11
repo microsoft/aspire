@@ -1,14 +1,12 @@
-// Licensed to the .NET Foundation under one or more agreements.
+﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Threading.Channels;
-using Aspire.Dashboard.Components.Pages;
 using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Interaction;
 using Aspire.Dashboard.Telemetry;
-using Aspire.Dashboard.Tests;
 using Aspire.Dashboard.Tests.Shared;
 using Aspire.Dashboard.Utils;
 using Aspire.DashboardService.Proto.V1;
@@ -364,6 +362,172 @@ public partial class InteractionsProviderTests : DashboardTestContext
 
         Assert.Equal(1, update.InteractionId);
         Assert.Equal(WatchInteractionsRequestUpdate.KindOneofCase.InputsDialog, update.KindCase);
+
+        await instance.DisposeAsync().DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task ReceiveData_ParameterInputsShownInlineAndFormRemoved_SendCompletion()
+    {
+        var interactionsChannel = Channel.CreateUnbounded<WatchInteractionsResponseUpdate>();
+        var sendInteractionUpdatesChannel = Channel.CreateUnbounded<WatchInteractionsRequestUpdate>();
+        var dashboardClient = new TestDashboardClient(isEnabled: true,
+            interactionChannelProvider: () => interactionsChannel,
+            sendInteractionUpdateChannel: sendInteractionUpdatesChannel);
+        var dialogService = new TestDialogService(onShowDialog: (data, parameters) => Task.CompletedTask);
+
+        SetupInteractionProviderServices(dashboardClient: dashboardClient, dialogService: dialogService);
+
+        var cut = Render<Components.Interactions.InteractionsProvider>(builder =>
+        {
+            builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
+        });
+        var instance = cut.Instance;
+        var state = Services.GetRequiredService<ParameterInteractionState>();
+
+        ParameterInteractionState.PanelRegistration? panel = null;
+        await cut.InvokeAsync(() =>
+        {
+            panel = state.RegisterPanel();
+            panel.SetParameterNames(["first"]);
+        });
+
+        var inputsDialog = new InteractionInputsDialog();
+        inputsDialog.InputItems.Add(new InteractionInput { Name = "first", InputType = InputType.Text, RelatedResourceName = "first" });
+        await interactionsChannel.Writer.WriteAsync(new WatchInteractionsResponseUpdate
+        {
+            InteractionId = 1,
+            InputsDialog = inputsDialog
+        });
+
+        await AsyncTestHelpers.AssertIsTrueRetryAsync(
+            () => state.Current?.Interaction.InteractionId == 1,
+            "Wait for the prompt to be shown in the parameter form.");
+        Assert.Null(instance._interactionDialogReference);
+
+        // Navigating away removes the form. Leaving is a choice to enter the values later, so the prompt is cancelled
+        // rather than moved to a dialog, and the AppHost shows its notification again.
+        await cut.InvokeAsync(() => panel!.Dispose());
+
+        var update = await sendInteractionUpdatesChannel.Reader.ReadAsync().AsTask().DefaultTimeout();
+        Assert.Equal(1, update.InteractionId);
+        Assert.Equal(WatchInteractionsRequestUpdate.KindOneofCase.Complete, update.KindCase);
+        Assert.Null(instance._interactionDialogReference);
+        Assert.Null(state.Current);
+
+        await instance.DisposeAsync().DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task ReceiveData_ParameterFormReplacedAndPromptShownAgain_DoesNotSendCompletion()
+    {
+        var interactionsChannel = Channel.CreateUnbounded<WatchInteractionsResponseUpdate>();
+        var sendInteractionUpdatesChannel = Channel.CreateUnbounded<WatchInteractionsRequestUpdate>();
+        var dashboardClient = new TestDashboardClient(isEnabled: true,
+            interactionChannelProvider: () => interactionsChannel,
+            sendInteractionUpdateChannel: sendInteractionUpdatesChannel);
+        var dialogService = new TestDialogService(onShowDialog: (data, parameters) => Task.CompletedTask);
+
+        SetupInteractionProviderServices(dashboardClient: dashboardClient, dialogService: dialogService);
+
+        var cut = Render<Components.Interactions.InteractionsProvider>(builder =>
+        {
+            builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
+        });
+        var instance = cut.Instance;
+        var state = Services.GetRequiredService<ParameterInteractionState>();
+
+        ParameterInteractionState.PanelRegistration? panel = null;
+        await cut.InvokeAsync(() =>
+        {
+            panel = state.RegisterPanel();
+            panel.SetParameterNames(["first"]);
+        });
+
+        var inputsDialog = new InteractionInputsDialog();
+        inputsDialog.InputItems.Add(new InteractionInput { Name = "first", InputType = InputType.Text, RelatedResourceName = "first" });
+        await interactionsChannel.Writer.WriteAsync(new WatchInteractionsResponseUpdate
+        {
+            InteractionId = 1,
+            InputsDialog = inputsDialog
+        });
+
+        await AsyncTestHelpers.AssertIsTrueRetryAsync(
+            () => state.Current?.Interaction.InteractionId == 1,
+            "Wait for the prompt to be shown in the parameter form.");
+        var prompt = state.Current!;
+
+        // The form is replaced, and the prompt is shown in the new one before the released form's cancellation runs,
+        // as when an AppHost update or a reconnection replays it. The cancellation runs after this renderer turn.
+        await cut.InvokeAsync(() =>
+        {
+            panel!.Dispose();
+            var replacement = state.RegisterPanel();
+            replacement.SetParameterNames(["first"]);
+            Assert.True(state.TrySetCurrent(prompt));
+        });
+
+        await AsyncTestHelpers.AssertIsTrueRetryAsync(
+            () => instance._releasedInteractionIds.IsEmpty,
+            "Wait for the released form's cancellation to run.");
+        Assert.False(sendInteractionUpdatesChannel.Reader.TryRead(out _));
+        Assert.Equal(1, state.Current?.Interaction.InteractionId);
+
+        await instance.DisposeAsync().DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task ReceiveData_UnresolvedParametersNotification_PrimaryActionOpensParameterForm()
+    {
+        var interactionsChannel = Channel.CreateUnbounded<WatchInteractionsResponseUpdate>();
+        var sendInteractionUpdatesChannel = Channel.CreateUnbounded<WatchInteractionsRequestUpdate>();
+        var dashboardClient = new TestDashboardClient(
+            isEnabled: true,
+            interactionChannelProvider: () => interactionsChannel,
+            sendInteractionUpdateChannel: sendInteractionUpdatesChannel);
+
+        SetupInteractionProviderServices(dashboardClient: dashboardClient);
+
+        var cut = Render<Components.Interactions.InteractionsProvider>(builder =>
+        {
+            builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
+        });
+        var instance = cut.Instance;
+        var state = Services.GetRequiredService<ParameterInteractionState>();
+        var navigationManager = Services.GetRequiredService<Microsoft.AspNetCore.Components.NavigationManager>();
+
+        var notification = new InteractionNotification { Intent = MessageIntent.Warning };
+        notification.RelatedResourceNames.Add(["first", "second"]);
+        await interactionsChannel.Writer.WriteAsync(new WatchInteractionsResponseUpdate
+        {
+            InteractionId = 1,
+            PrimaryButtonText = "Enter values",
+            Notification = notification
+        });
+
+        await AsyncTestHelpers.AssertIsTrueRetryAsync(
+            () => instance.OpenMessageBars.SingleOrDefault()?.InteractionId == 1,
+            "Wait for message created.");
+
+        // The button opens the parameter form without answering the notification.
+        _messageBarProvider!.WaitForElement(".dashboard-message-bar-action").Click();
+
+        Assert.Equal("http://localhost/resources?resource=first&resource=second", navigationManager.Uri);
+        Assert.Equal(1, instance.OpenMessageBars.Single().InteractionId);
+        Assert.False(sendInteractionUpdatesChannel.Reader.TryRead(out _));
+
+        // The form accepts the notification once it shows every parameter.
+        await cut.InvokeAsync(async () =>
+        {
+            using var panel = state.RegisterPanel();
+            panel.SetParameterNames(["first", "second"]);
+            await state.BeginInteractionAsync(panel);
+        });
+
+        var update = await sendInteractionUpdatesChannel.Reader.ReadAsync().AsTask().DefaultTimeout();
+        Assert.Equal(1, update.InteractionId);
+        Assert.Equal(WatchInteractionsRequestUpdate.KindOneofCase.Notification, update.KindCase);
+        Assert.True(update.Notification.Result);
 
         await instance.DisposeAsync().DefaultTimeout();
     }
@@ -737,11 +901,12 @@ public partial class InteractionsProviderTests : DashboardTestContext
         Services.AddSingleton<IDashboardClient>(selectedDashboardClient ?? new TestDashboardClient());
         Services.AddKeyedSingleton<IDashboardClient>(DashboardClient.LiveAppHostServiceKey, dashboardClient ?? new TestDashboardClient());
         Services.AddSingleton<DashboardTelemetryService>();
-        Services.AddSingleton<IDashboardTelemetrySender, TestDashboardTelemetrySender>();
+        Services.AddSingleton(new DashboardTelemetryConfiguration { ReportedTelemetryEnabled = false });
         Services.AddSingleton<ComponentTelemetryContextProvider>();
         Services.AddSingleton<DimensionManager>();
         Services.AddScoped<DashboardDialogService>();
         Services.AddScoped<DashboardMessageBarService>();
+        Services.AddScoped<ParameterInteractionState>();
 
         _messageBarProvider = Render<FluentMessageBarProvider>(builder =>
         {

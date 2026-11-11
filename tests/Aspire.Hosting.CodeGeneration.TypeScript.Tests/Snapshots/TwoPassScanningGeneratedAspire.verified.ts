@@ -93,6 +93,9 @@ type TestRedisResourceHandle = Handle<'Aspire.Hosting.CodeGeneration.TypeScript.
 /** Test context type with exposed instance methods. Verifies [AspireExport(ExposeMethods=true)] generates async methods. */
 type TestResourceContextHandle = Handle<'Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestResourceContext'>;
 
+/** Handle to TestReturnValueContext */
+type TestReturnValueContextHandle = Handle<'Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestReturnValueContext'>;
+
 /** Handle to TestVaultResource */
 type TestVaultResourceHandle = Handle<'Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestVaultResource'>;
 
@@ -323,7 +326,12 @@ type ResourceCommandServiceHandle = Handle<'Aspire.Hosting/Aspire.Hosting.Applic
 /**
  * This event is raised by orchestrators to signal to resources that their endpoints have been allocated.
  *
- * Any resources that customize their URLs via a `ResourceUrlsCallbackAnnotation` will have their callbacks invoked during this event.
+ * Resources that customize their URLs via a `ResourceUrlsCallbackAnnotation` have their callbacks
+ * invoked before event handlers run. Browser URL references contain the finalized values at that point.
+ * Endpoint and URL configuration must be registered before this event is published.
+ * Browser-facing resource allocators should complete allocation through
+ * `PublishResourceEndpointsAllocatedAsync`
+ * so URL customization completes before the notification is dispatched.
  */
 type ResourceEndpointsAllocatedEventHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceEndpointsAllocatedEvent'>;
 
@@ -610,6 +618,10 @@ export enum EndpointProperty {
     HostAndPort = "HostAndPort",
     /** Whether TLS is enabled on the endpoint. Returns `TrueString` or `FalseString`. */
     TlsEnabled = "TlsEnabled",
+    /** Comma-separated browser-facing origins for this endpoint. */
+    BrowserOrigins = "BrowserOrigins",
+    /** The primary browser-facing origin for this endpoint. */
+    PrimaryBrowserOrigin = "PrimaryBrowserOrigin",
 }
 
 /** Enum type for HealthStatus */
@@ -1313,6 +1325,8 @@ export interface ResourceUrlAnnotation {
     displayText?: string | null;
     /** The endpoint associated with this URL. Can be `null` if this URL is not associated with an endpoint. */
     endpoint?: EndpointReference;
+    /** Gets or sets the display order of the URL. Higher values mean sort higher in the list. */
+    displayOrder?: number | null;
     /** Locations where this URL should be shown on the dashboard. Defaults to `SummaryAndDetails`. */
     displayLocation?: UrlDisplayLocation;
 }
@@ -1331,6 +1345,22 @@ export interface RunConfiguration {
      * This is a hint: integrations that cannot watch their resources should start them in normal fashion.
      */
     watchEnabled?: boolean;
+}
+
+/** Options for configuring a terminal session. */
+export interface TerminalOptions {
+    /**
+     * Gets or sets the initial number of columns for the terminal. The value must be greater than zero. Defaults to 132.
+     *
+     * Setting either dimension makes the dashboard's Terminals page adopt the producer's current grid instead of automatically fitting it to the view.
+     */
+    columns?: number;
+    /**
+     * Gets or sets the initial number of rows for the terminal. The value must be greater than zero. Defaults to 50.
+     *
+     * Setting either dimension makes the dashboard's Terminals page adopt the producer's current grid instead of automatically fitting it to the view.
+     */
+    rows?: number;
 }
 
 /** Test DTO to verify [AspireDto] generates TypeScript interfaces. */
@@ -1687,6 +1717,13 @@ export interface SaveStateJsonOptions {
     cancellationToken?: AbortSignal | CancellationToken;
 }
 
+export interface SetValueAsyncOptions {
+    /** The value to use for this parameter. */
+    value?: string;
+    /** The cancellation token to observe while applying the value. */
+    cancellationToken?: AbortSignal | CancellationToken;
+}
+
 export interface UpdateTaskMarkdownOptions {
     cancellationToken?: AbortSignal | CancellationToken;
 }
@@ -1719,6 +1756,11 @@ export interface WaitForStartOptions {
 export interface WithBindMountOptions {
     /** A flag that indicates if this is a read-only mount. */
     isReadOnly?: boolean;
+}
+
+export interface WithCertificateTrustEnvironmentOptions {
+    /** The optional environment variable that receives the certificate directories path. */
+    certificateDirectoriesEnvironmentVariable?: string;
 }
 
 export interface WithCommandOptions {
@@ -1790,6 +1832,13 @@ export interface WithEndpointOptions {
     isExternal?: boolean | null;
     /** Network protocol: TCP or UDP are supported today, others possibly in future. */
     protocol?: ProtocolType | null;
+}
+
+export interface WithExecutableDebugSupportOptions {
+    /** The optional runtime executable to use in the launch configuration. */
+    runtimeExecutable?: string;
+    /** The optional launch method to use in the launch configuration. */
+    launchMethod?: string;
 }
 
 export interface WithHiddenOnCompletionOptions {
@@ -1899,6 +1948,15 @@ export interface WithOtlpExporterOptions {
     protocol?: OtlpProtocol | null;
 }
 
+export interface WithOutputDiffingOptions {
+    /** The step whose completed output is compared. Defaults to `publish`. */
+    targetStep?: string;
+    /** The comparison target name. When null, uses the target name followed by `-and-diff`. */
+    diffStepName?: string;
+    /** An optional description of the comparison target. */
+    description?: string;
+}
+
 export interface WithPersistenceOptions {
     mode?: TestPersistenceMode;
 }
@@ -1928,6 +1986,16 @@ export interface WithRequiredCommandOptions {
 export interface WithRequiredCommandValidationOptions {
     /** An optional help link URL to guide users when the command is missing or fails validation. */
     helpLink?: string;
+}
+
+export interface WithRequiredOptions {
+    /** A value indicating whether the parameter must have a value before it can be resolved. */
+    required?: boolean;
+}
+
+export interface WithTerminalOptions {
+    /** An optional callback to configure the terminal options. */
+    configure?: (obj: TerminalOptions) => Promise<void>;
 }
 
 export interface WithUrlOptions {
@@ -2390,6 +2458,8 @@ const CommandLineArgsCallbackContextPromiseImpl = $aspireCreateFluentPromiseClas
 /** Provides an ATS-first editor for command-line arguments within polyglot callbacks. */
 export interface CommandLineArgsEditor {
     toJSON(): MarshalledHandle;
+    /** Clears all command-line arguments. */
+    clear(): CommandLineArgsEditorPromise;
     /**
      * Adds a command-line argument.
      * @param value The argument to add.
@@ -2398,6 +2468,8 @@ export interface CommandLineArgsEditor {
 }
 
 export interface CommandLineArgsEditorPromise extends PromiseLike<CommandLineArgsEditor> {
+    /** Clears all command-line arguments. */
+    clear(): CommandLineArgsEditorPromise;
     /**
      * Adds a command-line argument.
      * @param value The argument to add.
@@ -2415,6 +2487,21 @@ class CommandLineArgsEditorImpl implements CommandLineArgsEditor {
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
+
+    /** @internal */
+    async _clearInternal(): Promise<CommandLineArgsEditor> {
+        const rpcArgs: Record<string, unknown> = { context: this._handle };
+        await this._client.invokeCapability<void>(
+            'Aspire.Hosting.ApplicationModel/clear',
+            rpcArgs
+        );
+        return this;
+    }
+
+    /** Clears all command-line arguments. */
+    clear(): CommandLineArgsEditorPromise {
+        return new CommandLineArgsEditorPromiseImpl(this._clearInternal(), this._client);
+    }
 
     /** @internal */
     async _addInternal(value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): Promise<CommandLineArgsEditor> {
@@ -2439,6 +2526,7 @@ class CommandLineArgsEditorImpl implements CommandLineArgsEditor {
 
 /** @internal */
 const CommandLineArgsEditorPromiseImpl = $aspireCreateFluentPromiseClass<CommandLineArgsEditor, CommandLineArgsEditorPromise>((): $aspireFluentPromiseTransitions => ({
+    ["clear"]: () => CommandLineArgsEditorPromiseImpl,
     ["add"]: () => CommandLineArgsEditorPromiseImpl,
 }));
 
@@ -3770,48 +3858,24 @@ const DockerfileBuilderPromiseImpl = $aspireCreateFluentPromiseClass<DockerfileB
 /** Provides context information for Dockerfile build callbacks. */
 export interface DockerfileBuilderCallbackContext {
     toJSON(): MarshalledHandle;
-    /**
-     * Gets the resource being built.
-     * @experimental
-     */
+    /** Gets the resource being built. */
     resource(): ResourcePromise;
-    /**
-     * Gets the Dockerfile builder instance.
-     * @experimental
-     */
+    /** Gets the Dockerfile builder instance. */
     builder(): DockerfileBuilderPromise;
-    /**
-     * Gets the service provider for dependency injection.
-     * @experimental
-     */
+    /** Gets the service provider for dependency injection. */
     services(): ServiceProviderPromise;
-    /**
-     * Gets the cancellation token to observe while waiting for the task to complete.
-     * @experimental
-     */
+    /** Gets the cancellation token to observe while waiting for the task to complete. */
     cancellationToken(): Promise<CancellationToken>;
 }
 
 export interface DockerfileBuilderCallbackContextPromise extends PromiseLike<DockerfileBuilderCallbackContext> {
-    /**
-     * Gets the resource being built.
-     * @experimental
-     */
+    /** Gets the resource being built. */
     resource(): ResourcePromise;
-    /**
-     * Gets the Dockerfile builder instance.
-     * @experimental
-     */
+    /** Gets the Dockerfile builder instance. */
     builder(): DockerfileBuilderPromise;
-    /**
-     * Gets the service provider for dependency injection.
-     * @experimental
-     */
+    /** Gets the service provider for dependency injection. */
     services(): ServiceProviderPromise;
-    /**
-     * Gets the cancellation token to observe while waiting for the task to complete.
-     * @experimental
-     */
+    /** Gets the cancellation token to observe while waiting for the task to complete. */
     cancellationToken(): Promise<CancellationToken>;
 }
 
@@ -4288,6 +4352,24 @@ export interface EndpointReference {
     resource(): ResourceWithEndpointsPromise;
     /** Gets the name of the endpoint associated with the endpoint reference. */
     endpointName(): Promise<string>;
+    /**
+     * Gets a deferred comma-separated list of browser-facing origins associated with this endpoint.
+     *
+     * Origins use finalized URL customization and are independent of this reference's service-discovery
+     * network context. Origins are distinct and ordered by display preference. The allocated
+     * HTTP(S) endpoint origin is included after display origins, even if its display links are removed.
+     * An endpoint without HTTP(S) origins resolves to an empty string.
+     */
+    browserOrigins(): EndpointReferenceExpressionPromise;
+    /**
+     * Gets the deferred primary browser-facing origin associated with this endpoint.
+     *
+     * Returns the first origin in `BrowserOrigins`, following finalized URL display ordering.
+     * The allocated HTTP(S) endpoint origin is used when no display origins remain.
+     * An endpoint without HTTP(S) origins resolves to an empty string. This value is independent
+     * of this reference's service-discovery network context.
+     */
+    primaryBrowserOrigin(): EndpointReferenceExpressionPromise;
     /** Gets or sets a custom error message to be thrown when the endpoint annotation is not found. */
     errorMessage(): Promise<string | null>;
     /** Gets a value indicating whether the endpoint is allocated. */
@@ -4329,7 +4411,7 @@ export interface EndpointReference {
      * @param options Additional options.
      * @returns The URL of the endpoint.
      */
-    getValueAsync(options?: GetValueAsyncOptions): Promise<string>;
+    getValueAsync(options?: GetValueAsyncOptions): Promise<string | null>;
     /**
      * Gets the specified property expression of the endpoint.
      * @param property The `EndpointProperty` enum value to use in the reference.
@@ -4355,6 +4437,24 @@ export interface EndpointReferencePromise extends PromiseLike<EndpointReference>
     resource(): ResourceWithEndpointsPromise;
     /** Gets the name of the endpoint associated with the endpoint reference. */
     endpointName(): Promise<string>;
+    /**
+     * Gets a deferred comma-separated list of browser-facing origins associated with this endpoint.
+     *
+     * Origins use finalized URL customization and are independent of this reference's service-discovery
+     * network context. Origins are distinct and ordered by display preference. The allocated
+     * HTTP(S) endpoint origin is included after display origins, even if its display links are removed.
+     * An endpoint without HTTP(S) origins resolves to an empty string.
+     */
+    browserOrigins(): EndpointReferenceExpressionPromise;
+    /**
+     * Gets the deferred primary browser-facing origin associated with this endpoint.
+     *
+     * Returns the first origin in `BrowserOrigins`, following finalized URL display ordering.
+     * The allocated HTTP(S) endpoint origin is used when no display origins remain.
+     * An endpoint without HTTP(S) origins resolves to an empty string. This value is independent
+     * of this reference's service-discovery network context.
+     */
+    primaryBrowserOrigin(): EndpointReferenceExpressionPromise;
     /** Gets or sets a custom error message to be thrown when the endpoint annotation is not found. */
     errorMessage(): Promise<string | null>;
     /** Gets a value indicating whether the endpoint is allocated. */
@@ -4396,7 +4496,7 @@ export interface EndpointReferencePromise extends PromiseLike<EndpointReference>
      * @param options Additional options.
      * @returns The URL of the endpoint.
      */
-    getValueAsync(options?: GetValueAsyncOptions): Promise<string>;
+    getValueAsync(options?: GetValueAsyncOptions): Promise<string | null>;
     /**
      * Gets the specified property expression of the endpoint.
      * @param property The `EndpointProperty` enum value to use in the reference.
@@ -4444,6 +4544,28 @@ class EndpointReferenceImpl implements EndpointReference {
             'Aspire.Hosting.ApplicationModel/EndpointReference.endpointName',
             { context: this._handle }
         );
+    }
+
+    browserOrigins(): EndpointReferenceExpressionPromise {
+        const promise = (async () => {
+            const handle = await this._client.invokeCapability<EndpointReferenceExpressionHandle>(
+                'Aspire.Hosting.ApplicationModel/EndpointReference.browserOrigins',
+                { context: this._handle }
+            );
+            return new EndpointReferenceExpressionImpl(handle, this._client);
+        })();
+        return new EndpointReferenceExpressionPromiseImpl(promise, this._client, false);
+    }
+
+    primaryBrowserOrigin(): EndpointReferenceExpressionPromise {
+        const promise = (async () => {
+            const handle = await this._client.invokeCapability<EndpointReferenceExpressionHandle>(
+                'Aspire.Hosting.ApplicationModel/EndpointReference.primaryBrowserOrigin',
+                { context: this._handle }
+            );
+            return new EndpointReferenceExpressionImpl(handle, this._client);
+        })();
+        return new EndpointReferenceExpressionPromiseImpl(promise, this._client, false);
     }
 
     async errorMessage(): Promise<string | null> {
@@ -4542,11 +4664,11 @@ class EndpointReferenceImpl implements EndpointReference {
      * @param options Additional options.
      * @returns The URL of the endpoint.
      */
-    async getValueAsync(options?: GetValueAsyncOptions): Promise<string> {
+    async getValueAsync(options?: GetValueAsyncOptions): Promise<string | null> {
         const cancellationToken = options?.cancellationToken;
         const rpcArgs: Record<string, unknown> = { context: this._handle };
         if (cancellationToken !== undefined) rpcArgs.cancellationToken = CancellationToken.fromValue(cancellationToken);
-        return await this._client.invokeCapability<string>(
+        return await this._client.invokeCapability<string | null>(
             'Aspire.Hosting.ApplicationModel/EndpointReference.getValueAsync',
             rpcArgs
         );
@@ -4596,6 +4718,8 @@ class EndpointReferenceImpl implements EndpointReference {
 const EndpointReferencePromiseImpl = $aspireCreateFluentPromiseClass<EndpointReference, EndpointReferencePromise>((): $aspireFluentPromiseTransitions => ({
     ["resource"]: [() => ResourceWithEndpointsPromiseImpl, false] as const,
     ["endpointName"]: null,
+    ["browserOrigins"]: [() => EndpointReferenceExpressionPromiseImpl, false] as const,
+    ["primaryBrowserOrigin"]: [() => EndpointReferenceExpressionPromiseImpl, false] as const,
     ["errorMessage"]: null,
     ["isAllocated"]: null,
     ["exists"]: null,
@@ -6629,41 +6753,27 @@ const LogFacadePromiseImpl = $aspireCreateFluentPromiseClass<LogFacade, LogFacad
 /** Provides contextual information for pipeline configuration callbacks. */
 export interface PipelineConfigurationContext {
     toJSON(): MarshalledHandle;
-    /**
-     * Gets the pipeline editor used by polyglot callbacks.
-     * @experimental
-     */
+    /** Gets the pipeline editor used by polyglot callbacks. */
     pipeline(): PipelineEditorPromise;
-    /**
-     * Gets the logger facade used by polyglot callbacks.
-     * @experimental
-     */
+    /** Gets the logger facade used by polyglot callbacks. */
     log(): LogFacadePromise;
     /**
      * Gets all pipeline steps with the specified tag.
      * @param tag The tag to search for.
      * @returns A collection of steps that have the specified tag.
-     * @experimental
      */
     getSteps(tag: string): Promise<PipelineStep[]>;
 }
 
 export interface PipelineConfigurationContextPromise extends PromiseLike<PipelineConfigurationContext> {
-    /**
-     * Gets the pipeline editor used by polyglot callbacks.
-     * @experimental
-     */
+    /** Gets the pipeline editor used by polyglot callbacks. */
     pipeline(): PipelineEditorPromise;
-    /**
-     * Gets the logger facade used by polyglot callbacks.
-     * @experimental
-     */
+    /** Gets the logger facade used by polyglot callbacks. */
     log(): LogFacadePromise;
     /**
      * Gets all pipeline steps with the specified tag.
      * @param tag The tag to search for.
      * @returns A collection of steps that have the specified tag.
-     * @experimental
      */
     getSteps(tag: string): Promise<PipelineStep[]>;
 }
@@ -6705,7 +6815,6 @@ class PipelineConfigurationContextImpl implements PipelineConfigurationContext {
      * Gets all pipeline steps with the specified tag.
      * @param tag The tag to search for.
      * @returns A collection of steps that have the specified tag.
-     * @experimental
      */
     async getSteps(tag: string): Promise<PipelineStep[]> {
         const rpcArgs: Record<string, unknown> = { context: this._handle, tag };
@@ -6731,30 +6840,15 @@ const PipelineConfigurationContextPromiseImpl = $aspireCreateFluentPromiseClass<
 /** Provides contextual information and services for the pipeline execution process of a distributed application. */
 export interface PipelineContext {
     toJSON(): MarshalledHandle;
-    /**
-     * Gets the distributed application model to be deployed.
-     * @experimental
-     */
+    /** Gets the distributed application model to be deployed. */
     model(): DistributedApplicationModelPromise;
-    /**
-     * Gets the execution context for the distributed application.
-     * @experimental
-     */
+    /** Gets the execution context for the distributed application. */
     executionContext(): DistributedApplicationExecutionContextPromise;
-    /**
-     * Gets the service provider for dependency resolution.
-     * @experimental
-     */
+    /** Gets the service provider for dependency resolution. */
     services(): ServiceProviderPromise;
-    /**
-     * Gets the logger for pipeline operations.
-     * @experimental
-     */
+    /** Gets the logger for pipeline operations. */
     logger(): LoggerPromise;
-    /**
-     * Gets the cancellation token for the pipeline operation.
-     * @experimental
-     */
+    /** Gets the cancellation token for the pipeline operation. */
     cancellationToken: {
         get: () => Promise<CancellationToken>;
         set: (value: AbortSignal | CancellationToken) => Promise<void>;
@@ -6764,38 +6858,24 @@ export interface PipelineContext {
      *
      * Pipeline steps can add key-value pairs to the summary to provide useful information
      * about the pipeline execution, such as deployment targets, resource names, URLs, etc.
-     * @experimental
      */
     summary(): PipelineSummaryPromise;
 }
 
 export interface PipelineContextPromise extends PromiseLike<PipelineContext> {
-    /**
-     * Gets the distributed application model to be deployed.
-     * @experimental
-     */
+    /** Gets the distributed application model to be deployed. */
     model(): DistributedApplicationModelPromise;
-    /**
-     * Gets the execution context for the distributed application.
-     * @experimental
-     */
+    /** Gets the execution context for the distributed application. */
     executionContext(): DistributedApplicationExecutionContextPromise;
-    /**
-     * Gets the service provider for dependency resolution.
-     * @experimental
-     */
+    /** Gets the service provider for dependency resolution. */
     services(): ServiceProviderPromise;
-    /**
-     * Gets the logger for pipeline operations.
-     * @experimental
-     */
+    /** Gets the logger for pipeline operations. */
     logger(): LoggerPromise;
     /**
      * Gets the pipeline summary that steps can add information to. The summary will be displayed to users after pipeline execution completes.
      *
      * Pipeline steps can add key-value pairs to the summary to provide useful information
      * about the pipeline execution, such as deployment targets, resource names, URLs, etc.
-     * @experimental
      */
     summary(): PipelineSummaryPromise;
 }
@@ -6903,14 +6983,12 @@ export interface PipelineEditor {
     /**
      * Gets all configured pipeline steps.
      * @returns The configured pipeline steps.
-     * @experimental
      */
     steps(): Promise<PipelineStep[]>;
     /**
      * Gets all pipeline steps that have the specified tag.
      * @param tag The tag to search for.
      * @returns The matching pipeline steps.
-     * @experimental
      */
     stepsByTag(tag: string): Promise<PipelineStep[]>;
 }
@@ -6919,14 +6997,12 @@ export interface PipelineEditorPromise extends PromiseLike<PipelineEditor> {
     /**
      * Gets all configured pipeline steps.
      * @returns The configured pipeline steps.
-     * @experimental
      */
     steps(): Promise<PipelineStep[]>;
     /**
      * Gets all pipeline steps that have the specified tag.
      * @param tag The tag to search for.
      * @returns The matching pipeline steps.
-     * @experimental
      */
     stepsByTag(tag: string): Promise<PipelineStep[]>;
 }
@@ -6945,7 +7021,6 @@ class PipelineEditorImpl implements PipelineEditor {
     /**
      * Gets all configured pipeline steps.
      * @returns The configured pipeline steps.
-     * @experimental
      */
     async steps(): Promise<PipelineStep[]> {
         const rpcArgs: Record<string, unknown> = { context: this._handle };
@@ -6959,7 +7034,6 @@ class PipelineEditorImpl implements PipelineEditor {
      * Gets all pipeline steps that have the specified tag.
      * @param tag The tag to search for.
      * @returns The matching pipeline steps.
-     * @experimental
      */
     async stepsByTag(tag: string): Promise<PipelineStep[]> {
         const rpcArgs: Record<string, unknown> = { context: this._handle, tag };
@@ -6984,99 +7058,67 @@ const PipelineEditorPromiseImpl = $aspireCreateFluentPromiseClass<PipelineEditor
 /** Represents a step in the deployment pipeline. */
 export interface PipelineStep {
     toJSON(): MarshalledHandle;
-    /**
-     * Gets or initializes the unique name of the step.
-     * @experimental
-     */
+    /** Gets or initializes the unique name of the step. */
     name(): Promise<string>;
     /**
      * Gets or initializes the description of the step.
      *
      * The description provides human-readable context about what the step does,
      * helping users and tools understand the purpose of the step.
-     * @experimental
      */
     description(): Promise<string | null>;
-    /**
-     * Gets or initializes the list of step names that this step depends on.
-     * @experimental
-     */
+    /** Gets or initializes the list of step names that this step depends on. */
     dependsOnSteps(): Promise<AspireList<string>>;
-    /**
-     * Gets or initializes the list of step names that require this step to complete before they can finish. This is used internally during pipeline construction and is converted to DependsOn relationships.
-     * @experimental
-     */
+    /** Gets or initializes the list of step names that require this step to complete before they can finish. This is used internally during pipeline construction and is converted to DependsOn relationships. */
     requiredBySteps(): Promise<AspireList<string>>;
-    /**
-     * Gets or initializes the list of tags that categorize this step.
-     * @experimental
-     */
+    /** Gets or initializes the list of tags that categorize this step. */
     tags(): Promise<AspireList<string>>;
     /**
      * Adds a dependency on another step.
      * @param stepName The name of the step to depend on.
-     * @experimental
      */
     dependsOn(stepName: string): PipelineStepPromise;
     /**
      * Specifies that this step is required by another step. This creates the inverse relationship where the other step will depend on this step.
      * @param stepName The name of the step that requires this step.
-     * @experimental
      */
     requiredBy(stepName: string): PipelineStepPromise;
     /**
      * Adds a tag to the step.
      * @param tag The tag to add.
-     * @experimental
      */
     addTag(tag: string): PipelineStepPromise;
 }
 
 export interface PipelineStepPromise extends PromiseLike<PipelineStep> {
-    /**
-     * Gets or initializes the unique name of the step.
-     * @experimental
-     */
+    /** Gets or initializes the unique name of the step. */
     name(): Promise<string>;
     /**
      * Gets or initializes the description of the step.
      *
      * The description provides human-readable context about what the step does,
      * helping users and tools understand the purpose of the step.
-     * @experimental
      */
     description(): Promise<string | null>;
-    /**
-     * Gets or initializes the list of step names that this step depends on.
-     * @experimental
-     */
+    /** Gets or initializes the list of step names that this step depends on. */
     dependsOnSteps(): Promise<AspireList<string>>;
-    /**
-     * Gets or initializes the list of step names that require this step to complete before they can finish. This is used internally during pipeline construction and is converted to DependsOn relationships.
-     * @experimental
-     */
+    /** Gets or initializes the list of step names that require this step to complete before they can finish. This is used internally during pipeline construction and is converted to DependsOn relationships. */
     requiredBySteps(): Promise<AspireList<string>>;
-    /**
-     * Gets or initializes the list of tags that categorize this step.
-     * @experimental
-     */
+    /** Gets or initializes the list of tags that categorize this step. */
     tags(): Promise<AspireList<string>>;
     /**
      * Adds a dependency on another step.
      * @param stepName The name of the step to depend on.
-     * @experimental
      */
     dependsOn(stepName: string): PipelineStepPromise;
     /**
      * Specifies that this step is required by another step. This creates the inverse relationship where the other step will depend on this step.
      * @param stepName The name of the step that requires this step.
-     * @experimental
      */
     requiredBy(stepName: string): PipelineStepPromise;
     /**
      * Adds a tag to the step.
      * @param tag The tag to add.
-     * @experimental
      */
     addTag(tag: string): PipelineStepPromise;
 }
@@ -7158,7 +7200,6 @@ class PipelineStepImpl implements PipelineStep {
     /**
      * Adds a dependency on another step.
      * @param stepName The name of the step to depend on.
-     * @experimental
      */
     dependsOn(stepName: string): PipelineStepPromise {
         return new PipelineStepPromiseImpl(this._dependsOnInternal(stepName), this._client);
@@ -7177,7 +7218,6 @@ class PipelineStepImpl implements PipelineStep {
     /**
      * Specifies that this step is required by another step. This creates the inverse relationship where the other step will depend on this step.
      * @param stepName The name of the step that requires this step.
-     * @experimental
      */
     requiredBy(stepName: string): PipelineStepPromise {
         return new PipelineStepPromiseImpl(this._requiredByInternal(stepName), this._client);
@@ -7196,7 +7236,6 @@ class PipelineStepImpl implements PipelineStep {
     /**
      * Adds a tag to the step.
      * @param tag The tag to add.
-     * @experimental
      */
     addTag(tag: string): PipelineStepPromise {
         return new PipelineStepPromiseImpl(this._addTagInternal(tag), this._client);
@@ -7228,93 +7267,49 @@ const PipelineStepPromiseImpl = $aspireCreateFluentPromiseClass<PipelineStep, Pi
  */
 export interface PipelineStepContext {
     toJSON(): MarshalledHandle;
-    /**
-     * Gets the pipeline context shared across all steps.
-     * @experimental
-     */
+    /** Gets the pipeline context shared across all steps. */
     pipelineContext(): PipelineContextPromise;
-    /**
-     * Gets the publishing step associated with this specific step execution.
-     * @experimental
-     */
+    /** Gets the publishing step associated with this specific step execution. */
     reportingStep(): ReportingStepPromise;
-    /**
-     * Gets the distributed application model to be deployed.
-     * @experimental
-     */
+    /** Gets the distributed application model to be deployed. */
     model(): DistributedApplicationModelPromise;
-    /**
-     * Gets the execution context for the distributed application.
-     * @experimental
-     */
+    /** Gets the execution context for the distributed application. */
     executionContext(): DistributedApplicationExecutionContextPromise;
-    /**
-     * Gets the service provider for dependency resolution.
-     * @experimental
-     */
+    /** Gets the service provider for dependency resolution. */
     services(): ServiceProviderPromise;
-    /**
-     * Gets the logger for pipeline operations that writes to both the pipeline logger and the step logger.
-     * @experimental
-     */
+    /** Gets the logger for pipeline operations that writes to both the pipeline logger and the step logger. */
     logger(): LoggerPromise;
-    /**
-     * Gets the cancellation token for the pipeline operation.
-     * @experimental
-     */
+    /** Gets the cancellation token for the pipeline operation. */
     cancellationToken(): Promise<CancellationToken>;
     /**
      * Gets the pipeline summary that steps can add information to. The summary will be displayed to users after pipeline execution completes.
      *
      * Pipeline steps can add key-value pairs to the summary to provide useful information
      * about the pipeline execution, such as deployment targets, resource names, URLs, etc.
-     * @experimental
      */
     summary(): PipelineSummaryPromise;
 }
 
 export interface PipelineStepContextPromise extends PromiseLike<PipelineStepContext> {
-    /**
-     * Gets the pipeline context shared across all steps.
-     * @experimental
-     */
+    /** Gets the pipeline context shared across all steps. */
     pipelineContext(): PipelineContextPromise;
-    /**
-     * Gets the publishing step associated with this specific step execution.
-     * @experimental
-     */
+    /** Gets the publishing step associated with this specific step execution. */
     reportingStep(): ReportingStepPromise;
-    /**
-     * Gets the distributed application model to be deployed.
-     * @experimental
-     */
+    /** Gets the distributed application model to be deployed. */
     model(): DistributedApplicationModelPromise;
-    /**
-     * Gets the execution context for the distributed application.
-     * @experimental
-     */
+    /** Gets the execution context for the distributed application. */
     executionContext(): DistributedApplicationExecutionContextPromise;
-    /**
-     * Gets the service provider for dependency resolution.
-     * @experimental
-     */
+    /** Gets the service provider for dependency resolution. */
     services(): ServiceProviderPromise;
-    /**
-     * Gets the logger for pipeline operations that writes to both the pipeline logger and the step logger.
-     * @experimental
-     */
+    /** Gets the logger for pipeline operations that writes to both the pipeline logger and the step logger. */
     logger(): LoggerPromise;
-    /**
-     * Gets the cancellation token for the pipeline operation.
-     * @experimental
-     */
+    /** Gets the cancellation token for the pipeline operation. */
     cancellationToken(): Promise<CancellationToken>;
     /**
      * Gets the pipeline summary that steps can add information to. The summary will be displayed to users after pipeline execution completes.
      *
      * Pipeline steps can add key-value pairs to the summary to provide useful information
      * about the pipeline execution, such as deployment targets, resource names, URLs, etc.
-     * @experimental
      */
     summary(): PipelineSummaryPromise;
 }
@@ -7441,28 +7436,16 @@ const PipelineStepContextPromiseImpl = $aspireCreateFluentPromiseClass<PipelineS
 /** Provides contextual information for creating pipeline steps from a {@link PipelineStepAnnotation}. */
 export interface PipelineStepFactoryContext {
     toJSON(): MarshalledHandle;
-    /**
-     * Gets the pipeline context that has the model and other properties.
-     * @experimental
-     */
+    /** Gets the pipeline context that has the model and other properties. */
     pipelineContext(): PipelineContextPromise;
-    /**
-     * Gets the resource that this factory is associated with.
-     * @experimental
-     */
+    /** Gets the resource that this factory is associated with. */
     resource(): ResourcePromise;
 }
 
 export interface PipelineStepFactoryContextPromise extends PromiseLike<PipelineStepFactoryContext> {
-    /**
-     * Gets the pipeline context that has the model and other properties.
-     * @experimental
-     */
+    /** Gets the pipeline context that has the model and other properties. */
     pipelineContext(): PipelineContextPromise;
-    /**
-     * Gets the resource that this factory is associated with.
-     * @experimental
-     */
+    /** Gets the resource that this factory is associated with. */
     resource(): ResourcePromise;
 }
 
@@ -7529,7 +7512,6 @@ export interface PipelineSummary {
      * Adds a key-value pair to the pipeline summary with a plain-text value.
      * @param key The key or label for the item (e.g., "Namespace", "URL").
      * @param value The plain-text value for the item.
-     * @experimental
      */
     add(key: string, value: string): PipelineSummaryPromise;
     /**
@@ -7545,7 +7527,6 @@ export interface PipelineSummaryPromise extends PromiseLike<PipelineSummary> {
      * Adds a key-value pair to the pipeline summary with a plain-text value.
      * @param key The key or label for the item (e.g., "Namespace", "URL").
      * @param value The plain-text value for the item.
-     * @experimental
      */
     add(key: string, value: string): PipelineSummaryPromise;
     /**
@@ -7592,7 +7573,6 @@ class PipelineSummaryImpl implements PipelineSummary {
      * Adds a key-value pair to the pipeline summary with a plain-text value.
      * @param key The key or label for the item (e.g., "Namespace", "URL").
      * @param value The plain-text value for the item.
-     * @experimental
      */
     add(key: string, value: string): PipelineSummaryPromise {
         return new PipelineSummaryPromiseImpl(this._addInternal(key, value), this._client);
@@ -8200,7 +8180,12 @@ const ResourceCommandServicePromiseImpl = $aspireCreateFluentPromiseClass<Resour
 /**
  * This event is raised by orchestrators to signal to resources that their endpoints have been allocated.
  *
- * Any resources that customize their URLs via a `ResourceUrlsCallbackAnnotation` will have their callbacks invoked during this event.
+ * Resources that customize their URLs via a `ResourceUrlsCallbackAnnotation` have their callbacks
+ * invoked before event handlers run. Browser URL references contain the finalized values at that point.
+ * Endpoint and URL configuration must be registered before this event is published.
+ * Browser-facing resource allocators should complete allocation through
+ * `PublishResourceEndpointsAllocatedAsync`
+ * so URL customization completes before the notification is dispatched.
  */
 export interface ResourceEndpointsAllocatedEvent {
     toJSON(): MarshalledHandle;
@@ -8224,7 +8209,12 @@ export interface ResourceEndpointsAllocatedEventPromise extends PromiseLike<Reso
 /**
  * This event is raised by orchestrators to signal to resources that their endpoints have been allocated.
  *
- * Any resources that customize their URLs via a `ResourceUrlsCallbackAnnotation` will have their callbacks invoked during this event.
+ * Resources that customize their URLs via a `ResourceUrlsCallbackAnnotation` have their callbacks
+ * invoked before event handlers run. Browser URL references contain the finalized values at that point.
+ * Endpoint and URL configuration must be registered before this event is published.
+ * Browser-facing resource allocators should complete allocation through
+ * `PublishResourceEndpointsAllocatedAsync`
+ * so URL customization completes before the notification is dispatched.
  */
 class ResourceEndpointsAllocatedEventImpl implements ResourceEndpointsAllocatedEvent {
     constructor(private _handle: ResourceEndpointsAllocatedEventHandle, private _client: AspireClientRpc) {}
@@ -9265,6 +9255,202 @@ const TestResourceContextPromiseImpl = $aspireCreateFluentPromiseClass<TestResou
 }));
 
 // ============================================================================
+// TestReturnValueContext
+// ============================================================================
+
+export interface TestReturnValueContext {
+    toJSON(): MarshalledHandle;
+    /** Invokes the GetNullableString method */
+    getNullableString(): Promise<string | null>;
+    /** Invokes the GetNullableStringTaskAsync method */
+    getNullableStringTaskAsync(): Promise<string | null>;
+    /** Invokes the GetNullableStringValueTaskAsync method */
+    getNullableStringValueTaskAsync(): Promise<string | null>;
+    /** Invokes the GetString method */
+    getString(): Promise<string>;
+    /** Invokes the GetStringTaskAsync method */
+    getStringTaskAsync(): Promise<string>;
+    /** Invokes the GetStringValueTaskAsync method */
+    getStringValueTaskAsync(): Promise<string>;
+    /** Invokes the GetNullableInt method */
+    getNullableInt(): Promise<number | null>;
+    /** Invokes the GetNullableIntTaskAsync method */
+    getNullableIntTaskAsync(): Promise<number | null>;
+    /** Invokes the GetNullableIntValueTaskAsync method */
+    getNullableIntValueTaskAsync(): Promise<number | null>;
+    /** Invokes the GetInt method */
+    getInt(): Promise<number>;
+    /** Invokes the GetIntTaskAsync method */
+    getIntTaskAsync(): Promise<number>;
+    /** Invokes the GetIntValueTaskAsync method */
+    getIntValueTaskAsync(): Promise<number>;
+}
+
+export interface TestReturnValueContextPromise extends PromiseLike<TestReturnValueContext> {
+    /** Invokes the GetNullableString method */
+    getNullableString(): Promise<string | null>;
+    /** Invokes the GetNullableStringTaskAsync method */
+    getNullableStringTaskAsync(): Promise<string | null>;
+    /** Invokes the GetNullableStringValueTaskAsync method */
+    getNullableStringValueTaskAsync(): Promise<string | null>;
+    /** Invokes the GetString method */
+    getString(): Promise<string>;
+    /** Invokes the GetStringTaskAsync method */
+    getStringTaskAsync(): Promise<string>;
+    /** Invokes the GetStringValueTaskAsync method */
+    getStringValueTaskAsync(): Promise<string>;
+    /** Invokes the GetNullableInt method */
+    getNullableInt(): Promise<number | null>;
+    /** Invokes the GetNullableIntTaskAsync method */
+    getNullableIntTaskAsync(): Promise<number | null>;
+    /** Invokes the GetNullableIntValueTaskAsync method */
+    getNullableIntValueTaskAsync(): Promise<number | null>;
+    /** Invokes the GetInt method */
+    getInt(): Promise<number>;
+    /** Invokes the GetIntTaskAsync method */
+    getIntTaskAsync(): Promise<number>;
+    /** Invokes the GetIntValueTaskAsync method */
+    getIntValueTaskAsync(): Promise<number>;
+}
+
+// ============================================================================
+// TestReturnValueContextImpl
+// ============================================================================
+
+/** Type class for TestReturnValueContext. */
+class TestReturnValueContextImpl implements TestReturnValueContext {
+    constructor(private _handle: TestReturnValueContextHandle, private _client: AspireClientRpc) {}
+
+    /** Serialize for JSON-RPC transport */
+    toJSON(): MarshalledHandle { return this._handle.toJSON(); }
+
+    /** Invokes the GetNullableString method */
+    async getNullableString(): Promise<string | null> {
+        const rpcArgs: Record<string, unknown> = { context: this._handle };
+        return await this._client.invokeCapability<string | null>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getNullableString',
+            rpcArgs
+        );
+    }
+
+    /** Invokes the GetNullableStringTaskAsync method */
+    async getNullableStringTaskAsync(): Promise<string | null> {
+        const rpcArgs: Record<string, unknown> = { context: this._handle };
+        return await this._client.invokeCapability<string | null>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getNullableStringTaskAsync',
+            rpcArgs
+        );
+    }
+
+    /** Invokes the GetNullableStringValueTaskAsync method */
+    async getNullableStringValueTaskAsync(): Promise<string | null> {
+        const rpcArgs: Record<string, unknown> = { context: this._handle };
+        return await this._client.invokeCapability<string | null>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getNullableStringValueTaskAsync',
+            rpcArgs
+        );
+    }
+
+    /** Invokes the GetString method */
+    async getString(): Promise<string> {
+        const rpcArgs: Record<string, unknown> = { context: this._handle };
+        return await this._client.invokeCapability<string>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getString',
+            rpcArgs
+        );
+    }
+
+    /** Invokes the GetStringTaskAsync method */
+    async getStringTaskAsync(): Promise<string> {
+        const rpcArgs: Record<string, unknown> = { context: this._handle };
+        return await this._client.invokeCapability<string>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getStringTaskAsync',
+            rpcArgs
+        );
+    }
+
+    /** Invokes the GetStringValueTaskAsync method */
+    async getStringValueTaskAsync(): Promise<string> {
+        const rpcArgs: Record<string, unknown> = { context: this._handle };
+        return await this._client.invokeCapability<string>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getStringValueTaskAsync',
+            rpcArgs
+        );
+    }
+
+    /** Invokes the GetNullableInt method */
+    async getNullableInt(): Promise<number | null> {
+        const rpcArgs: Record<string, unknown> = { context: this._handle };
+        return await this._client.invokeCapability<number | null>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getNullableInt',
+            rpcArgs
+        );
+    }
+
+    /** Invokes the GetNullableIntTaskAsync method */
+    async getNullableIntTaskAsync(): Promise<number | null> {
+        const rpcArgs: Record<string, unknown> = { context: this._handle };
+        return await this._client.invokeCapability<number | null>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getNullableIntTaskAsync',
+            rpcArgs
+        );
+    }
+
+    /** Invokes the GetNullableIntValueTaskAsync method */
+    async getNullableIntValueTaskAsync(): Promise<number | null> {
+        const rpcArgs: Record<string, unknown> = { context: this._handle };
+        return await this._client.invokeCapability<number | null>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getNullableIntValueTaskAsync',
+            rpcArgs
+        );
+    }
+
+    /** Invokes the GetInt method */
+    async getInt(): Promise<number> {
+        const rpcArgs: Record<string, unknown> = { context: this._handle };
+        return await this._client.invokeCapability<number>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getInt',
+            rpcArgs
+        );
+    }
+
+    /** Invokes the GetIntTaskAsync method */
+    async getIntTaskAsync(): Promise<number> {
+        const rpcArgs: Record<string, unknown> = { context: this._handle };
+        return await this._client.invokeCapability<number>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getIntTaskAsync',
+            rpcArgs
+        );
+    }
+
+    /** Invokes the GetIntValueTaskAsync method */
+    async getIntValueTaskAsync(): Promise<number> {
+        const rpcArgs: Record<string, unknown> = { context: this._handle };
+        return await this._client.invokeCapability<number>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getIntValueTaskAsync',
+            rpcArgs
+        );
+    }
+
+}
+
+/** @internal */
+const TestReturnValueContextPromiseImpl = $aspireCreateFluentPromiseClass<TestReturnValueContext, TestReturnValueContextPromise>((): $aspireFluentPromiseTransitions => ({
+    ["getNullableString"]: null,
+    ["getNullableStringTaskAsync"]: null,
+    ["getNullableStringValueTaskAsync"]: null,
+    ["getString"]: null,
+    ["getStringTaskAsync"]: null,
+    ["getStringValueTaskAsync"]: null,
+    ["getNullableInt"]: null,
+    ["getNullableIntTaskAsync"]: null,
+    ["getNullableIntValueTaskAsync"]: null,
+    ["getInt"]: null,
+    ["getIntTaskAsync"]: null,
+    ["getIntValueTaskAsync"]: null,
+}));
+
+// ============================================================================
 // UpdateCommandStateContext
 // ============================================================================
 
@@ -9414,13 +9600,13 @@ export interface Configuration {
      * @param key The configuration key (e.g., "ConnectionStrings:Default").
      * @returns The configuration value, or null if not found.
      */
-    getConfigValue(key: string): Promise<string>;
+    getConfigValue(key: string): Promise<string | null>;
     /**
      * Gets a connection string by name.
      * @param name The connection string name.
      * @returns The connection string value, or null if not found.
      */
-    getConnectionString(name: string): Promise<string>;
+    getConnectionString(name: string): Promise<string | null>;
     /**
      * Gets a configuration section by key.
      * @param key The configuration key.
@@ -9446,13 +9632,13 @@ export interface ConfigurationPromise extends PromiseLike<Configuration> {
      * @param key The configuration key (e.g., "ConnectionStrings:Default").
      * @returns The configuration value, or null if not found.
      */
-    getConfigValue(key: string): Promise<string>;
+    getConfigValue(key: string): Promise<string | null>;
     /**
      * Gets a connection string by name.
      * @param name The connection string name.
      * @returns The connection string value, or null if not found.
      */
-    getConnectionString(name: string): Promise<string>;
+    getConnectionString(name: string): Promise<string | null>;
     /**
      * Gets a configuration section by key.
      * @param key The configuration key.
@@ -9488,9 +9674,9 @@ class ConfigurationImpl implements Configuration {
      * @param key The configuration key (e.g., "ConnectionStrings:Default").
      * @returns The configuration value, or null if not found.
      */
-    async getConfigValue(key: string): Promise<string> {
+    async getConfigValue(key: string): Promise<string | null> {
         const rpcArgs: Record<string, unknown> = { configuration: this._handle, key };
-        return await this._client.invokeCapability<string>(
+        return await this._client.invokeCapability<string | null>(
             'Aspire.Hosting/getConfigValue',
             rpcArgs
         );
@@ -9501,9 +9687,9 @@ class ConfigurationImpl implements Configuration {
      * @param name The connection string name.
      * @returns The connection string value, or null if not found.
      */
-    async getConnectionString(name: string): Promise<string> {
+    async getConnectionString(name: string): Promise<string | null> {
         const rpcArgs: Record<string, unknown> = { configuration: this._handle, name };
-        return await this._client.invokeCapability<string>(
+        return await this._client.invokeCapability<string | null>(
             'Aspire.Hosting/getConnectionString',
             rpcArgs
         );
@@ -9661,7 +9847,6 @@ export interface DistributedApplicationBuilder {
      *
      * The pipeline allows adding custom deployment steps that execute during the deploy process.
      * Steps can declare dependencies on other steps to control execution order.
-     * @experimental
      */
     pipeline(): DistributedApplicationPipelinePromise;
     /**
@@ -9669,7 +9854,6 @@ export interface DistributedApplicationBuilder {
      *
      * The `UserSecretsManager` provides a centralized way to manage user secrets
      * used by Aspire, enabling testability and consistent secret management.
-     * @experimental
      */
     userSecretsManager(): UserSecretsManagerPromise;
     /**
@@ -9720,28 +9904,13 @@ export interface DistributedApplicationBuilder {
     /**
      * Adds a container resource built from a programmatically generated Dockerfile
      *
-     * This method provides a programmatic way to build Dockerfiles using the `DockerfileBuilder` API
-     * instead of string manipulation.
-     * The `contextPath` is relative to the AppHost directory unless it is fully qualified.
-     * Creates a container with a programmatically built Dockerfile:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddDockerfileBuilder("mycontainer", "path/to/context", context =>
-     * {
-     * context.Builder.From("alpine:latest")
-     * .WorkDir("/app")
-     * .Copy(".", ".")
-     * .Cmd(["./myapp"]);
-     * return Task.CompletedTask;
-     * });
-     * builder.Build().Run();
-     * ```
+     * Use the callback's Dockerfile builder to define the image's stages and instructions.
+     * The build context path is relative to the AppHost directory unless it is fully qualified.
      * @param name The name of the resource.
      * @param contextPath Path to be used as the context for the container image build.
      * @param callback A callback that uses the `DockerfileBuilder` API to construct the Dockerfile.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     addDockerfileBuilder(name: string, contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, options?: AddDockerfileBuilderOptions): ContainerResourcePromise;
     /**
@@ -9791,14 +9960,22 @@ export interface DistributedApplicationBuilder {
      */
     addConnectionString(name: string, options?: AddConnectionStringOptions): ResourceWithConnectionStringPromise;
     /**
+     * Adds an opt-in target that checks for stale generated pipeline output.
+     * @param options Additional options.
+     * @returns The `IDistributedApplicationBuilder` for chaining.
+     * @experimental
+     */
+    withOutputDiffing(options?: WithOutputDiffingOptions): DistributedApplicationBuilderPromise;
+    /**
      * Adds a .NET project resource
      * @param options Additional options.
+     * @deprecated Use addDotnetProject from the Aspire.Hosting.Dotnet package instead.
      */
     addProject(name: string, projectPath: string, options?: AddProjectOptions): ProjectResourcePromise;
     /**
      * Adds a C# application resource
      * @param options Additional options.
-     * @experimental
+     * @deprecated Use addDotnetProject from the Aspire.Hosting.Dotnet package instead.
      */
     addCSharpApp(name: string, path: string, options?: AddCSharpAppOptions): CSharpAppResourcePromise;
     /**
@@ -9894,7 +10071,6 @@ export interface DistributedApplicationBuilderPromise extends PromiseLike<Distri
      *
      * The pipeline allows adding custom deployment steps that execute during the deploy process.
      * Steps can declare dependencies on other steps to control execution order.
-     * @experimental
      */
     pipeline(): DistributedApplicationPipelinePromise;
     /**
@@ -9902,7 +10078,6 @@ export interface DistributedApplicationBuilderPromise extends PromiseLike<Distri
      *
      * The `UserSecretsManager` provides a centralized way to manage user secrets
      * used by Aspire, enabling testability and consistent secret management.
-     * @experimental
      */
     userSecretsManager(): UserSecretsManagerPromise;
     /**
@@ -9953,28 +10128,13 @@ export interface DistributedApplicationBuilderPromise extends PromiseLike<Distri
     /**
      * Adds a container resource built from a programmatically generated Dockerfile
      *
-     * This method provides a programmatic way to build Dockerfiles using the `DockerfileBuilder` API
-     * instead of string manipulation.
-     * The `contextPath` is relative to the AppHost directory unless it is fully qualified.
-     * Creates a container with a programmatically built Dockerfile:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddDockerfileBuilder("mycontainer", "path/to/context", context =>
-     * {
-     * context.Builder.From("alpine:latest")
-     * .WorkDir("/app")
-     * .Copy(".", ".")
-     * .Cmd(["./myapp"]);
-     * return Task.CompletedTask;
-     * });
-     * builder.Build().Run();
-     * ```
+     * Use the callback's Dockerfile builder to define the image's stages and instructions.
+     * The build context path is relative to the AppHost directory unless it is fully qualified.
      * @param name The name of the resource.
      * @param contextPath Path to be used as the context for the container image build.
      * @param callback A callback that uses the `DockerfileBuilder` API to construct the Dockerfile.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     addDockerfileBuilder(name: string, contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, options?: AddDockerfileBuilderOptions): ContainerResourcePromise;
     /**
@@ -10024,14 +10184,22 @@ export interface DistributedApplicationBuilderPromise extends PromiseLike<Distri
      */
     addConnectionString(name: string, options?: AddConnectionStringOptions): ResourceWithConnectionStringPromise;
     /**
+     * Adds an opt-in target that checks for stale generated pipeline output.
+     * @param options Additional options.
+     * @returns The `IDistributedApplicationBuilder` for chaining.
+     * @experimental
+     */
+    withOutputDiffing(options?: WithOutputDiffingOptions): DistributedApplicationBuilderPromise;
+    /**
      * Adds a .NET project resource
      * @param options Additional options.
+     * @deprecated Use addDotnetProject from the Aspire.Hosting.Dotnet package instead.
      */
     addProject(name: string, projectPath: string, options?: AddProjectOptions): ProjectResourcePromise;
     /**
      * Adds a C# application resource
      * @param options Additional options.
-     * @experimental
+     * @deprecated Use addDotnetProject from the Aspire.Hosting.Dotnet package instead.
      */
     addCSharpApp(name: string, path: string, options?: AddCSharpAppOptions): CSharpAppResourcePromise;
     /**
@@ -10326,28 +10494,13 @@ class DistributedApplicationBuilderImpl implements DistributedApplicationBuilder
     /**
      * Adds a container resource built from a programmatically generated Dockerfile
      *
-     * This method provides a programmatic way to build Dockerfiles using the `DockerfileBuilder` API
-     * instead of string manipulation.
-     * The `contextPath` is relative to the AppHost directory unless it is fully qualified.
-     * Creates a container with a programmatically built Dockerfile:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddDockerfileBuilder("mycontainer", "path/to/context", context =>
-     * {
-     * context.Builder.From("alpine:latest")
-     * .WorkDir("/app")
-     * .Copy(".", ".")
-     * .Cmd(["./myapp"]);
-     * return Task.CompletedTask;
-     * });
-     * builder.Build().Run();
-     * ```
+     * Use the callback's Dockerfile builder to define the image's stages and instructions.
+     * The build context path is relative to the AppHost directory unless it is fully qualified.
      * @param name The name of the resource.
      * @param contextPath Path to be used as the context for the container image build.
      * @param callback A callback that uses the `DockerfileBuilder` API to construct the Dockerfile.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     addDockerfileBuilder(name: string, contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, options?: AddDockerfileBuilderOptions): ContainerResourcePromise {
         const stage = options?.stage;
@@ -10507,6 +10660,32 @@ class DistributedApplicationBuilderImpl implements DistributedApplicationBuilder
     }
 
     /** @internal */
+    async _withOutputDiffingInternal(targetStep?: string, diffStepName?: string, description?: string): Promise<DistributedApplicationBuilder> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        if (targetStep !== undefined) rpcArgs.targetStep = targetStep;
+        if (diffStepName !== undefined) rpcArgs.diffStepName = diffStepName;
+        if (description !== undefined) rpcArgs.description = description;
+        const result = await this._client.invokeCapability<IDistributedApplicationBuilderHandle>(
+            'Aspire.Hosting/withOutputDiffing',
+            rpcArgs
+        );
+        return new DistributedApplicationBuilderImpl(result, this._client);
+    }
+
+    /**
+     * Adds an opt-in target that checks for stale generated pipeline output.
+     * @param options Additional options.
+     * @returns The `IDistributedApplicationBuilder` for chaining.
+     * @experimental
+     */
+    withOutputDiffing(options?: WithOutputDiffingOptions): DistributedApplicationBuilderPromise {
+        const targetStep = options?.targetStep;
+        const diffStepName = options?.diffStepName;
+        const description = options?.description;
+        return new DistributedApplicationBuilderPromiseImpl(this._withOutputDiffingInternal(targetStep, diffStepName, description), this._client);
+    }
+
+    /** @internal */
     async _addProjectInternal(name: string, projectPath: string, launchProfileOrOptions?: string | ProjectResourceOptions | Awaitable<ProjectResourceOptions>): Promise<ProjectResource> {
         launchProfileOrOptions = isPromiseLike(launchProfileOrOptions) ? await launchProfileOrOptions : launchProfileOrOptions;
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, projectPath };
@@ -10521,6 +10700,7 @@ class DistributedApplicationBuilderImpl implements DistributedApplicationBuilder
     /**
      * Adds a .NET project resource
      * @param options Additional options.
+     * @deprecated Use addDotnetProject from the Aspire.Hosting.Dotnet package instead.
      */
     addProject(name: string, projectPath: string, options?: AddProjectOptions): ProjectResourcePromise {
         let launchProfileOrOptions = options?.launchProfileOrOptions;
@@ -10542,7 +10722,7 @@ class DistributedApplicationBuilderImpl implements DistributedApplicationBuilder
     /**
      * Adds a C# application resource
      * @param optionsBag Additional options.
-     * @experimental
+     * @deprecated Use addDotnetProject from the Aspire.Hosting.Dotnet package instead.
      */
     addCSharpApp(name: string, path: string, optionsBag?: AddCSharpAppOptions): CSharpAppResourcePromise {
         let options = optionsBag?.options;
@@ -10798,6 +10978,7 @@ const DistributedApplicationBuilderPromiseImpl = $aspireCreateFluentPromiseClass
     ["addParameterFromConfiguration"]: () => ParameterResourcePromiseImpl,
     ["addParameterWithGeneratedValue"]: () => ParameterResourcePromiseImpl,
     ["addConnectionString"]: () => ResourceWithConnectionStringPromiseImpl,
+    ["withOutputDiffing"]: () => DistributedApplicationBuilderPromiseImpl,
     ["addProject"]: () => ProjectResourcePromiseImpl,
     ["addCSharpApp"]: () => CSharpAppResourcePromiseImpl,
     ["getConfiguration"]: () => ConfigurationPromiseImpl,
@@ -10885,7 +11066,6 @@ export interface DistributedApplicationPipeline {
      * for a particular app. Prefer wiring build-only containers through `PublishWithContainerFiles` or
      * `PublishWithStaticFiles` when possible.
      * @returns The distributed application pipeline for chaining.
-     * @experimental
      */
     disableBuildOnlyContainerValidation(): DistributedApplicationPipelinePromise;
     /**
@@ -10910,7 +11090,6 @@ export interface DistributedApplicationPipelinePromise extends PromiseLike<Distr
      * for a particular app. Prefer wiring build-only containers through `PublishWithContainerFiles` or
      * `PublishWithStaticFiles` when possible.
      * @returns The distributed application pipeline for chaining.
-     * @experimental
      */
     disableBuildOnlyContainerValidation(): DistributedApplicationPipelinePromise;
     /**
@@ -10955,7 +11134,6 @@ class DistributedApplicationPipelineImpl implements DistributedApplicationPipeli
      * for a particular app. Prefer wiring build-only containers through `PublishWithContainerFiles` or
      * `PublishWithStaticFiles` when possible.
      * @returns The distributed application pipeline for chaining.
-     * @experimental
      */
     disableBuildOnlyContainerValidation(): DistributedApplicationPipelinePromise {
         return new DistributedApplicationPipelinePromiseImpl(this._disableBuildOnlyContainerValidationInternal(), this._client);
@@ -12762,20 +12940,15 @@ export interface UserSecretsManager {
      * Gets a value indicating whether user secrets are available.
      *
      * Returns `true` if the project has a user secrets ID configured; otherwise, `false`.
-     * @experimental
      */
     isAvailable(): Promise<boolean>;
-    /**
-     * Gets the path to the user secrets file.
-     * @experimental
-     */
+    /** Gets the path to the user secrets file. */
     filePath(): Promise<string>;
     /**
      * Attempts to set a user secret value synchronously.
      * @param name The name of the secret.
      * @param value The value of the secret.
      * @returns True if the secret was set successfully; otherwise, false.
-     * @experimental
      */
     trySetSecret(name: string, value: string): Promise<boolean>;
     /**
@@ -12784,7 +12957,6 @@ export interface UserSecretsManager {
      * The default implementation returns `false` so existing implementations remain compatible.
      * @param name The name of the secret.
      * @returns True if the secret was deleted successfully; otherwise, false.
-     * @experimental
      */
     tryDeleteSecret(name: string): Promise<boolean>;
     /**
@@ -12807,20 +12979,15 @@ export interface UserSecretsManagerPromise extends PromiseLike<UserSecretsManage
      * Gets a value indicating whether user secrets are available.
      *
      * Returns `true` if the project has a user secrets ID configured; otherwise, `false`.
-     * @experimental
      */
     isAvailable(): Promise<boolean>;
-    /**
-     * Gets the path to the user secrets file.
-     * @experimental
-     */
+    /** Gets the path to the user secrets file. */
     filePath(): Promise<string>;
     /**
      * Attempts to set a user secret value synchronously.
      * @param name The name of the secret.
      * @param value The value of the secret.
      * @returns True if the secret was set successfully; otherwise, false.
-     * @experimental
      */
     trySetSecret(name: string, value: string): Promise<boolean>;
     /**
@@ -12829,7 +12996,6 @@ export interface UserSecretsManagerPromise extends PromiseLike<UserSecretsManage
      * The default implementation returns `false` so existing implementations remain compatible.
      * @param name The name of the secret.
      * @returns True if the secret was deleted successfully; otherwise, false.
-     * @experimental
      */
     tryDeleteSecret(name: string): Promise<boolean>;
     /**
@@ -12877,7 +13043,6 @@ class UserSecretsManagerImpl implements UserSecretsManager {
      * @param name The name of the secret.
      * @param value The value of the secret.
      * @returns True if the secret was set successfully; otherwise, false.
-     * @experimental
      */
     async trySetSecret(name: string, value: string): Promise<boolean> {
         const rpcArgs: Record<string, unknown> = { context: this._handle, name, value };
@@ -12893,7 +13058,6 @@ class UserSecretsManagerImpl implements UserSecretsManager {
      * The default implementation returns `false` so existing implementations remain compatible.
      * @param name The name of the secret.
      * @returns True if the secret was deleted successfully; otherwise, false.
-     * @experimental
      */
     async tryDeleteSecret(name: string): Promise<boolean> {
         const rpcArgs: Record<string, unknown> = { context: this._handle, name };
@@ -12976,20 +13140,10 @@ export interface ContainerRegistryResource {
     /**
      * Configures custom base images for generated Dockerfiles.
      *
-     * This extension method allows customization of the base images used in generated Dockerfiles.
-     * For multi-stage Dockerfiles (e.g., Python with UV), you can specify separate build and runtime images.
-     * Specify custom base images for a Python application:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddPythonApp("myapp", "path/to/app", "main.py")
-     * .WithDockerfileBaseImage(
-     * buildImage: "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
-     * runtimeImage: "python:3.12-slim-bookworm");
-     * builder.Build().Run();
-     * ```
+     * For multi-stage Dockerfiles, specify separate build and runtime base images.
+     * Images that are not specified use the integration's defaults. At least one base image must be specified.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ContainerRegistryResourcePromise;
     /**
@@ -13047,6 +13201,25 @@ export interface ContainerRegistryResource {
      * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): ContainerRegistryResourcePromise;
+    /**
+     * Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+     * @param annotationId The stable annotation identifier.
+     * @param json The serialized JSON payload.
+     * @returns The resource.
+     */
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise;
+    /**
+     * Gets a serialized ATS annotation payload from a resource.
+     * @param annotationId The stable annotation identifier.
+     * @returns The serialized JSON payload.
+     */
+    getSerializedAnnotation(annotationId: string): Promise<string>;
+    /**
+     * Determines whether a resource has a serialized ATS annotation with the specified ID.
+     * @param annotationId The stable annotation identifier.
+     * @returns `true` if the annotation exists; otherwise, `false`.
+     */
+    hasSerializedAnnotation(annotationId: string): Promise<boolean>;
     /**
      * Registers a callback to customize the URLs displayed for the resource.
      * @param callback The callback that will customize URLs for the resource.
@@ -13144,6 +13317,16 @@ export interface ContainerRegistryResource {
      */
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ContainerRegistryResourcePromise;
     /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): ContainerRegistryResourcePromise;
+    /**
      * Specifies the icon to use when displaying the resource in the dashboard.
      * @param iconName The name of the FluentUI icon to use. See https://aka.ms/fluentui-system-icons for available icons.
      * @param options Additional options.
@@ -13173,22 +13356,43 @@ export interface ContainerRegistryResource {
      * @returns The resource builder.
      */
     withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ContainerRegistryResourcePromise;
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    withTerminal(): ContainerRegistryResourcePromise;
+    /**
+     * Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+     * @param name The case-sensitive trait name.
+     * @param value The trait value. Do not include secrets.
+     * @returns The resource builder.
+     */
+    withTrait(name: string, value: string): ContainerRegistryResourcePromise;
+    /**
+     * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+     * @param tags The tags, each up to 50 characters with single spaces between words.
+     * @returns The resource builder.
+     */
+    withTags(tags: string[]): ContainerRegistryResourcePromise;
+    /**
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
+     * @returns The resource builder.
+     */
+    withDisplayOrder(order: number): ContainerRegistryResourcePromise;
+    /**
+     * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
+     */
+    withTerminal(options?: WithTerminalOptions): ContainerRegistryResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ContainerRegistryResourcePromise;
     /**
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ContainerRegistryResourcePromise;
     /**
@@ -13308,20 +13512,10 @@ export interface ContainerRegistryResourcePromise extends PromiseLike<ContainerR
     /**
      * Configures custom base images for generated Dockerfiles.
      *
-     * This extension method allows customization of the base images used in generated Dockerfiles.
-     * For multi-stage Dockerfiles (e.g., Python with UV), you can specify separate build and runtime images.
-     * Specify custom base images for a Python application:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddPythonApp("myapp", "path/to/app", "main.py")
-     * .WithDockerfileBaseImage(
-     * buildImage: "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
-     * runtimeImage: "python:3.12-slim-bookworm");
-     * builder.Build().Run();
-     * ```
+     * For multi-stage Dockerfiles, specify separate build and runtime base images.
+     * Images that are not specified use the integration's defaults. At least one base image must be specified.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ContainerRegistryResourcePromise;
     /**
@@ -13379,6 +13573,25 @@ export interface ContainerRegistryResourcePromise extends PromiseLike<ContainerR
      * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): ContainerRegistryResourcePromise;
+    /**
+     * Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+     * @param annotationId The stable annotation identifier.
+     * @param json The serialized JSON payload.
+     * @returns The resource.
+     */
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise;
+    /**
+     * Gets a serialized ATS annotation payload from a resource.
+     * @param annotationId The stable annotation identifier.
+     * @returns The serialized JSON payload.
+     */
+    getSerializedAnnotation(annotationId: string): Promise<string>;
+    /**
+     * Determines whether a resource has a serialized ATS annotation with the specified ID.
+     * @param annotationId The stable annotation identifier.
+     * @returns `true` if the annotation exists; otherwise, `false`.
+     */
+    hasSerializedAnnotation(annotationId: string): Promise<boolean>;
     /**
      * Registers a callback to customize the URLs displayed for the resource.
      * @param callback The callback that will customize URLs for the resource.
@@ -13476,6 +13689,16 @@ export interface ContainerRegistryResourcePromise extends PromiseLike<ContainerR
      */
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ContainerRegistryResourcePromise;
     /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): ContainerRegistryResourcePromise;
+    /**
      * Specifies the icon to use when displaying the resource in the dashboard.
      * @param iconName The name of the FluentUI icon to use. See https://aka.ms/fluentui-system-icons for available icons.
      * @param options Additional options.
@@ -13505,22 +13728,43 @@ export interface ContainerRegistryResourcePromise extends PromiseLike<ContainerR
      * @returns The resource builder.
      */
     withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ContainerRegistryResourcePromise;
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    withTerminal(): ContainerRegistryResourcePromise;
+    /**
+     * Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+     * @param name The case-sensitive trait name.
+     * @param value The trait value. Do not include secrets.
+     * @returns The resource builder.
+     */
+    withTrait(name: string, value: string): ContainerRegistryResourcePromise;
+    /**
+     * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+     * @param tags The tags, each up to 50 characters with single spaces between words.
+     * @returns The resource builder.
+     */
+    withTags(tags: string[]): ContainerRegistryResourcePromise;
+    /**
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
+     * @returns The resource builder.
+     */
+    withDisplayOrder(order: number): ContainerRegistryResourcePromise;
+    /**
+     * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
+     */
+    withTerminal(options?: WithTerminalOptions): ContainerRegistryResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ContainerRegistryResourcePromise;
     /**
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ContainerRegistryResourcePromise;
     /**
@@ -13674,20 +13918,10 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
     /**
      * Configures custom base images for generated Dockerfiles.
      *
-     * This extension method allows customization of the base images used in generated Dockerfiles.
-     * For multi-stage Dockerfiles (e.g., Python with UV), you can specify separate build and runtime images.
-     * Specify custom base images for a Python application:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddPythonApp("myapp", "path/to/app", "main.py")
-     * .WithDockerfileBaseImage(
-     * buildImage: "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
-     * runtimeImage: "python:3.12-slim-bookworm");
-     * builder.Build().Run();
-     * ```
+     * For multi-stage Dockerfiles, specify separate build and runtime base images.
+     * Images that are not specified use the integration's defaults. At least one base image must be specified.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ContainerRegistryResourcePromise {
         const buildImage = options?.buildImage;
@@ -13836,6 +14070,50 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
      */
     withParentProcessLifetime(parentProcessId: number): ContainerRegistryResourcePromise {
         return new ContainerRegistryResourcePromiseImpl(this._withParentProcessLifetimeInternal(parentProcessId), this._client);
+    }
+
+    /**
+     * Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+     * @param annotationId The stable annotation identifier.
+     * @param json The serialized JSON payload.
+     * @returns The resource.
+     */
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise {
+        const promise = (async () => {
+            const rpcArgs: Record<string, unknown> = { resource: this._handle, annotationId, json };
+            const handle = await this._client.invokeCapability<IResourceHandle>(
+                'Aspire.Hosting/withSerializedAnnotation',
+                rpcArgs
+            );
+            return new ResourceImpl(handle, this._client);
+        })();
+        return new ResourcePromiseImpl(promise, this._client);
+    }
+
+    /**
+     * Gets a serialized ATS annotation payload from a resource.
+     * @param annotationId The stable annotation identifier.
+     * @returns The serialized JSON payload.
+     */
+    async getSerializedAnnotation(annotationId: string): Promise<string> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle, annotationId };
+        return await this._client.invokeCapability<string>(
+            'Aspire.Hosting/getSerializedAnnotation',
+            rpcArgs
+        );
+    }
+
+    /**
+     * Determines whether a resource has a serialized ATS annotation with the specified ID.
+     * @param annotationId The stable annotation identifier.
+     * @returns `true` if the annotation exists; otherwise, `false`.
+     */
+    async hasSerializedAnnotation(annotationId: string): Promise<boolean> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle, annotationId };
+        return await this._client.invokeCapability<boolean>(
+            'Aspire.Hosting/hasSerializedAnnotation',
+            rpcArgs
+        );
     }
 
     /** @internal */
@@ -14223,6 +14501,29 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
     }
 
     /** @internal */
+    private async _withResourceTypeDisplayNameInternal(resourceTypeDisplayName: string): Promise<ContainerRegistryResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, resourceTypeDisplayName };
+        const result = await this._client.invokeCapability<ContainerRegistryResourceHandle>(
+            'Aspire.Hosting/withResourceTypeDisplayName',
+            rpcArgs
+        );
+        return new ContainerRegistryResourceImpl(result, this._client);
+    }
+
+    /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): ContainerRegistryResourcePromise {
+        return new ContainerRegistryResourcePromiseImpl(this._withResourceTypeDisplayNameInternal(resourceTypeDisplayName), this._client);
+    }
+
+    /** @internal */
     private async _withIconNameInternal(iconName: string, iconVariant?: IconVariant): Promise<ContainerRegistryResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, iconName };
         if (iconVariant !== undefined) rpcArgs.iconVariant = iconVariant;
@@ -14311,8 +14612,71 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
     }
 
     /** @internal */
-    private async _withTerminalInternal(): Promise<ContainerRegistryResource> {
+    private async _withTraitInternal(name: string, value: string): Promise<ContainerRegistryResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
+        const result = await this._client.invokeCapability<ContainerRegistryResourceHandle>(
+            'Aspire.Hosting/withTrait',
+            rpcArgs
+        );
+        return new ContainerRegistryResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+     * @param name The case-sensitive trait name.
+     * @param value The trait value. Do not include secrets.
+     * @returns The resource builder.
+     */
+    withTrait(name: string, value: string): ContainerRegistryResourcePromise {
+        return new ContainerRegistryResourcePromiseImpl(this._withTraitInternal(name, value), this._client);
+    }
+
+    /** @internal */
+    private async _withTagsInternal(tags: string[]): Promise<ContainerRegistryResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, tags };
+        const result = await this._client.invokeCapability<ContainerRegistryResourceHandle>(
+            'Aspire.Hosting/withTags',
+            rpcArgs
+        );
+        return new ContainerRegistryResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+     * @param tags The tags, each up to 50 characters with single spaces between words.
+     * @returns The resource builder.
+     */
+    withTags(tags: string[]): ContainerRegistryResourcePromise {
+        return new ContainerRegistryResourcePromiseImpl(this._withTagsInternal(tags), this._client);
+    }
+
+    /** @internal */
+    private async _withDisplayOrderInternal(order: number): Promise<ContainerRegistryResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, order };
+        const result = await this._client.invokeCapability<ContainerRegistryResourceHandle>(
+            'Aspire.Hosting/withDisplayOrder',
+            rpcArgs
+        );
+        return new ContainerRegistryResourceImpl(result, this._client);
+    }
+
+    /**
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
+     * @returns The resource builder.
+     */
+    withDisplayOrder(order: number): ContainerRegistryResourcePromise {
+        return new ContainerRegistryResourcePromiseImpl(this._withDisplayOrderInternal(order), this._client);
+    }
+
+    /** @internal */
+    private async _withTerminalInternal(configure?: (obj: TerminalOptions) => Promise<void>): Promise<ContainerRegistryResource> {
+        const configureId = configure ? registerCallback(async (objData: unknown) => {
+            const obj = wrapIfHandle(objData) as TerminalOptions;
+            await configure(obj);
+        }) : undefined;
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        if (configure !== undefined) rpcArgs.configure = configureId;
         const result = await this._client.invokeCapability<ContainerRegistryResourceHandle>(
             'Aspire.Hosting/withTerminal',
             rpcArgs
@@ -14320,9 +14684,14 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
         return new ContainerRegistryResourceImpl(result, this._client);
     }
 
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    withTerminal(): ContainerRegistryResourcePromise {
-        return new ContainerRegistryResourcePromiseImpl(this._withTerminalInternal(), this._client);
+    /**
+     * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
+     */
+    withTerminal(options?: WithTerminalOptions): ContainerRegistryResourcePromise {
+        const configure = options?.configure;
+        return new ContainerRegistryResourcePromiseImpl(this._withTerminalInternal(configure), this._client);
     }
 
     /** @internal */
@@ -14350,7 +14719,6 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ContainerRegistryResourcePromise {
         const dependsOn = options?.dependsOn;
@@ -14379,7 +14747,6 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ContainerRegistryResourcePromise {
         return new ContainerRegistryResourcePromiseImpl(this._withPipelineConfigurationInternal(callback), this._client);
@@ -14923,6 +15290,9 @@ const ContainerRegistryResourcePromiseImpl = $aspireCreateFluentPromiseClass<Con
     ["withPersistentLifetime"]: () => ContainerRegistryResourcePromiseImpl,
     ["withLifetimeOf"]: () => ContainerRegistryResourcePromiseImpl,
     ["withParentProcessLifetime"]: () => ContainerRegistryResourcePromiseImpl,
+    ["withSerializedAnnotation"]: () => ResourcePromiseImpl,
+    ["getSerializedAnnotation"]: null,
+    ["hasSerializedAnnotation"]: null,
     ["withUrls"]: () => ContainerRegistryResourcePromiseImpl,
     ["withUrl"]: () => ContainerRegistryResourcePromiseImpl,
     ["withUrlForEndpoint"]: () => ContainerRegistryResourcePromiseImpl,
@@ -14936,10 +15306,14 @@ const ContainerRegistryResourcePromiseImpl = $aspireCreateFluentPromiseClass<Con
     ["withRelationship"]: () => ContainerRegistryResourcePromiseImpl,
     ["withParentRelationship"]: () => ContainerRegistryResourcePromiseImpl,
     ["withChildRelationship"]: () => ContainerRegistryResourcePromiseImpl,
+    ["withResourceTypeDisplayName"]: () => ContainerRegistryResourcePromiseImpl,
     ["withIconName"]: () => ContainerRegistryResourcePromiseImpl,
     ["excludeFromMcp"]: () => ContainerRegistryResourcePromiseImpl,
     ["withHidden"]: () => ContainerRegistryResourcePromiseImpl,
     ["withHiddenOnCompletion"]: () => ContainerRegistryResourcePromiseImpl,
+    ["withTrait"]: () => ContainerRegistryResourcePromiseImpl,
+    ["withTags"]: () => ContainerRegistryResourcePromiseImpl,
+    ["withDisplayOrder"]: () => ContainerRegistryResourcePromiseImpl,
     ["withTerminal"]: () => ContainerRegistryResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => ContainerRegistryResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => ContainerRegistryResourcePromiseImpl,
@@ -15151,49 +15525,22 @@ export interface ContainerResource {
     /**
      * Configures the resource to use a programmatically generated Dockerfile
      *
-     * This method provides a programmatic way to build Dockerfiles using the `DockerfileBuilder` API
-     * instead of string manipulation. Callbacks can be composed by calling this method multiple times - each callback will be invoked
-     * in order to build up the final Dockerfile.
-     * The `contextPath` is relative to the AppHost directory unless it is fully qualified.
-     * Creates a container with a programmatically built Dockerfile using fluent API:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddContainer("mycontainer", "myimage")
-     * .WithDockerfileBuilder("path/to/context", context =>
-     * {
-     * context.Builder.From("alpine:latest")
-     * .WorkDir("/app")
-     * .Run("apk add curl")
-     * .Copy(".", ".")
-     * .Cmd(["./myapp"]);
-     * return Task.CompletedTask;
-     * });
-     * builder.Build().Run();
-     * ```
+     * Calling this method multiple times composes callbacks, which are invoked in registration order
+     * to build the final Dockerfile.
+     * The build context path is relative to the AppHost directory unless it is fully qualified.
      * @param contextPath Path to be used as the context for the container image build.
      * @param callback A callback that uses the `DockerfileBuilder` API to construct the Dockerfile.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBuilder(contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, options?: WithDockerfileBuilderOptions): ContainerResourcePromise;
     /**
      * Configures custom base images for generated Dockerfiles.
      *
-     * This extension method allows customization of the base images used in generated Dockerfiles.
-     * For multi-stage Dockerfiles (e.g., Python with UV), you can specify separate build and runtime images.
-     * Specify custom base images for a Python application:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddPythonApp("myapp", "path/to/app", "main.py")
-     * .WithDockerfileBaseImage(
-     * buildImage: "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
-     * runtimeImage: "python:3.12-slim-bookworm");
-     * builder.Build().Run();
-     * ```
+     * For multi-stage Dockerfiles, specify separate build and runtime base images.
+     * Images that are not specified use the integration's defaults. At least one base image must be specified.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ContainerResourcePromise;
     /**
@@ -15299,6 +15646,31 @@ export interface ContainerResource {
      * @returns The resource builder.
      */
     withArgs(args: string[]): ContainerResourcePromise;
+    /**
+     * Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+     * @param annotationId The stable annotation identifier.
+     * @param json The serialized JSON payload.
+     * @returns The resource.
+     */
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise;
+    /**
+     * Gets a serialized ATS annotation payload from a resource.
+     * @param annotationId The stable annotation identifier.
+     * @returns The serialized JSON payload.
+     */
+    getSerializedAnnotation(annotationId: string): Promise<string>;
+    /**
+     * Determines whether a resource has a serialized ATS annotation with the specified ID.
+     * @param annotationId The stable annotation identifier.
+     * @returns `true` if the annotation exists; otherwise, `false`.
+     */
+    hasSerializedAnnotation(annotationId: string): Promise<boolean>;
+    /**
+     * Replaces the arguments to be passed to a resource that supports arguments when it is launched.
+     * @param args The arguments to be passed to the resource when it is started.
+     * @returns The resource builder.
+     */
+    withArgsReplace(args: string[]): ContainerResourcePromise;
     /**
      * Adds a callback to be executed with a list of command-line arguments when a resource is started.
      * @param callback A callback that allows for deferred execution for computing arguments. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.
@@ -15484,7 +15856,7 @@ export interface ContainerResource {
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddProject<MyService>("my-service")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -15513,6 +15885,13 @@ export interface ContainerResource {
      * @returns The resource builder.
      */
     withCertificateTrustScope(scope: CertificateTrustScope): ContainerResourcePromise;
+    /**
+     * Configures environment variables that point to Aspire-managed certificate trust paths.
+     * @param certificateBundleEnvironmentVariable The environment variable that receives the certificate bundle path.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withCertificateTrustEnvironment(certificateBundleEnvironmentVariable: string, options?: WithCertificateTrustEnvironmentOptions): ContainerResourcePromise;
     /**
      * Indicates that a resource should use the developer certificate key pair for HTTPS endpoints at run time. Currently this indicates use of the ASP.NET Core developer certificate. The developer certificate will only be used when running in local development scenarios; in publish mode resources will use their default certificate configuration.
      *
@@ -15594,6 +15973,16 @@ export interface ContainerResource {
      */
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ContainerResourcePromise;
     /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): ContainerResourcePromise;
+    /**
      * Specifies the icon to use when displaying the resource in the dashboard.
      * @param iconName The name of the FluentUI icon to use. See https://aka.ms/fluentui-system-icons for available icons.
      * @param options Additional options.
@@ -15611,7 +16000,6 @@ export interface ContainerResource {
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): ContainerResourcePromise;
     /**
@@ -15668,22 +16056,43 @@ export interface ContainerResource {
      * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): ContainerResourcePromise;
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    withTerminal(): ContainerResourcePromise;
+    /**
+     * Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+     * @param name The case-sensitive trait name.
+     * @param value The trait value. Do not include secrets.
+     * @returns The resource builder.
+     */
+    withTrait(name: string, value: string): ContainerResourcePromise;
+    /**
+     * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+     * @param tags The tags, each up to 50 characters with single spaces between words.
+     * @returns The resource builder.
+     */
+    withTags(tags: string[]): ContainerResourcePromise;
+    /**
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
+     * @returns The resource builder.
+     */
+    withDisplayOrder(order: number): ContainerResourcePromise;
+    /**
+     * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
+     */
+    withTerminal(options?: WithTerminalOptions): ContainerResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ContainerResourcePromise;
     /**
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ContainerResourcePromise;
     /**
@@ -15984,49 +16393,22 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
     /**
      * Configures the resource to use a programmatically generated Dockerfile
      *
-     * This method provides a programmatic way to build Dockerfiles using the `DockerfileBuilder` API
-     * instead of string manipulation. Callbacks can be composed by calling this method multiple times - each callback will be invoked
-     * in order to build up the final Dockerfile.
-     * The `contextPath` is relative to the AppHost directory unless it is fully qualified.
-     * Creates a container with a programmatically built Dockerfile using fluent API:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddContainer("mycontainer", "myimage")
-     * .WithDockerfileBuilder("path/to/context", context =>
-     * {
-     * context.Builder.From("alpine:latest")
-     * .WorkDir("/app")
-     * .Run("apk add curl")
-     * .Copy(".", ".")
-     * .Cmd(["./myapp"]);
-     * return Task.CompletedTask;
-     * });
-     * builder.Build().Run();
-     * ```
+     * Calling this method multiple times composes callbacks, which are invoked in registration order
+     * to build the final Dockerfile.
+     * The build context path is relative to the AppHost directory unless it is fully qualified.
      * @param contextPath Path to be used as the context for the container image build.
      * @param callback A callback that uses the `DockerfileBuilder` API to construct the Dockerfile.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBuilder(contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, options?: WithDockerfileBuilderOptions): ContainerResourcePromise;
     /**
      * Configures custom base images for generated Dockerfiles.
      *
-     * This extension method allows customization of the base images used in generated Dockerfiles.
-     * For multi-stage Dockerfiles (e.g., Python with UV), you can specify separate build and runtime images.
-     * Specify custom base images for a Python application:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddPythonApp("myapp", "path/to/app", "main.py")
-     * .WithDockerfileBaseImage(
-     * buildImage: "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
-     * runtimeImage: "python:3.12-slim-bookworm");
-     * builder.Build().Run();
-     * ```
+     * For multi-stage Dockerfiles, specify separate build and runtime base images.
+     * Images that are not specified use the integration's defaults. At least one base image must be specified.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ContainerResourcePromise;
     /**
@@ -16132,6 +16514,31 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      * @returns The resource builder.
      */
     withArgs(args: string[]): ContainerResourcePromise;
+    /**
+     * Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+     * @param annotationId The stable annotation identifier.
+     * @param json The serialized JSON payload.
+     * @returns The resource.
+     */
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise;
+    /**
+     * Gets a serialized ATS annotation payload from a resource.
+     * @param annotationId The stable annotation identifier.
+     * @returns The serialized JSON payload.
+     */
+    getSerializedAnnotation(annotationId: string): Promise<string>;
+    /**
+     * Determines whether a resource has a serialized ATS annotation with the specified ID.
+     * @param annotationId The stable annotation identifier.
+     * @returns `true` if the annotation exists; otherwise, `false`.
+     */
+    hasSerializedAnnotation(annotationId: string): Promise<boolean>;
+    /**
+     * Replaces the arguments to be passed to a resource that supports arguments when it is launched.
+     * @param args The arguments to be passed to the resource when it is started.
+     * @returns The resource builder.
+     */
+    withArgsReplace(args: string[]): ContainerResourcePromise;
     /**
      * Adds a callback to be executed with a list of command-line arguments when a resource is started.
      * @param callback A callback that allows for deferred execution for computing arguments. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.
@@ -16317,7 +16724,7 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddProject<MyService>("my-service")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -16346,6 +16753,13 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      * @returns The resource builder.
      */
     withCertificateTrustScope(scope: CertificateTrustScope): ContainerResourcePromise;
+    /**
+     * Configures environment variables that point to Aspire-managed certificate trust paths.
+     * @param certificateBundleEnvironmentVariable The environment variable that receives the certificate bundle path.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withCertificateTrustEnvironment(certificateBundleEnvironmentVariable: string, options?: WithCertificateTrustEnvironmentOptions): ContainerResourcePromise;
     /**
      * Indicates that a resource should use the developer certificate key pair for HTTPS endpoints at run time. Currently this indicates use of the ASP.NET Core developer certificate. The developer certificate will only be used when running in local development scenarios; in publish mode resources will use their default certificate configuration.
      *
@@ -16427,6 +16841,16 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      */
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ContainerResourcePromise;
     /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): ContainerResourcePromise;
+    /**
      * Specifies the icon to use when displaying the resource in the dashboard.
      * @param iconName The name of the FluentUI icon to use. See https://aka.ms/fluentui-system-icons for available icons.
      * @param options Additional options.
@@ -16444,7 +16868,6 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): ContainerResourcePromise;
     /**
@@ -16501,22 +16924,43 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): ContainerResourcePromise;
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    withTerminal(): ContainerResourcePromise;
+    /**
+     * Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+     * @param name The case-sensitive trait name.
+     * @param value The trait value. Do not include secrets.
+     * @returns The resource builder.
+     */
+    withTrait(name: string, value: string): ContainerResourcePromise;
+    /**
+     * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+     * @param tags The tags, each up to 50 characters with single spaces between words.
+     * @returns The resource builder.
+     */
+    withTags(tags: string[]): ContainerResourcePromise;
+    /**
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
+     * @returns The resource builder.
+     */
+    withDisplayOrder(order: number): ContainerResourcePromise;
+    /**
+     * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
+     */
+    withTerminal(options?: WithTerminalOptions): ContainerResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ContainerResourcePromise;
     /**
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ContainerResourcePromise;
     /**
@@ -17121,30 +17565,13 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     /**
      * Configures the resource to use a programmatically generated Dockerfile
      *
-     * This method provides a programmatic way to build Dockerfiles using the `DockerfileBuilder` API
-     * instead of string manipulation. Callbacks can be composed by calling this method multiple times - each callback will be invoked
-     * in order to build up the final Dockerfile.
-     * The `contextPath` is relative to the AppHost directory unless it is fully qualified.
-     * Creates a container with a programmatically built Dockerfile using fluent API:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddContainer("mycontainer", "myimage")
-     * .WithDockerfileBuilder("path/to/context", context =>
-     * {
-     * context.Builder.From("alpine:latest")
-     * .WorkDir("/app")
-     * .Run("apk add curl")
-     * .Copy(".", ".")
-     * .Cmd(["./myapp"]);
-     * return Task.CompletedTask;
-     * });
-     * builder.Build().Run();
-     * ```
+     * Calling this method multiple times composes callbacks, which are invoked in registration order
+     * to build the final Dockerfile.
+     * The build context path is relative to the AppHost directory unless it is fully qualified.
      * @param contextPath Path to be used as the context for the container image build.
      * @param callback A callback that uses the `DockerfileBuilder` API to construct the Dockerfile.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBuilder(contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, options?: WithDockerfileBuilderOptions): ContainerResourcePromise {
         const stage = options?.stage;
@@ -17166,20 +17593,10 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     /**
      * Configures custom base images for generated Dockerfiles.
      *
-     * This extension method allows customization of the base images used in generated Dockerfiles.
-     * For multi-stage Dockerfiles (e.g., Python with UV), you can specify separate build and runtime images.
-     * Specify custom base images for a Python application:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddPythonApp("myapp", "path/to/app", "main.py")
-     * .WithDockerfileBaseImage(
-     * buildImage: "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
-     * runtimeImage: "python:3.12-slim-bookworm");
-     * builder.Build().Run();
-     * ```
+     * For multi-stage Dockerfiles, specify separate build and runtime base images.
+     * Images that are not specified use the integration's defaults. At least one base image must be specified.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ContainerResourcePromise {
         const buildImage = options?.buildImage;
@@ -17479,6 +17896,69 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
      */
     withArgs(args: string[]): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._withArgsInternal(args), this._client);
+    }
+
+    /**
+     * Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+     * @param annotationId The stable annotation identifier.
+     * @param json The serialized JSON payload.
+     * @returns The resource.
+     */
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise {
+        const promise = (async () => {
+            const rpcArgs: Record<string, unknown> = { resource: this._handle, annotationId, json };
+            const handle = await this._client.invokeCapability<IResourceHandle>(
+                'Aspire.Hosting/withSerializedAnnotation',
+                rpcArgs
+            );
+            return new ResourceImpl(handle, this._client);
+        })();
+        return new ResourcePromiseImpl(promise, this._client);
+    }
+
+    /**
+     * Gets a serialized ATS annotation payload from a resource.
+     * @param annotationId The stable annotation identifier.
+     * @returns The serialized JSON payload.
+     */
+    async getSerializedAnnotation(annotationId: string): Promise<string> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle, annotationId };
+        return await this._client.invokeCapability<string>(
+            'Aspire.Hosting/getSerializedAnnotation',
+            rpcArgs
+        );
+    }
+
+    /**
+     * Determines whether a resource has a serialized ATS annotation with the specified ID.
+     * @param annotationId The stable annotation identifier.
+     * @returns `true` if the annotation exists; otherwise, `false`.
+     */
+    async hasSerializedAnnotation(annotationId: string): Promise<boolean> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle, annotationId };
+        return await this._client.invokeCapability<boolean>(
+            'Aspire.Hosting/hasSerializedAnnotation',
+            rpcArgs
+        );
+    }
+
+    /** @internal */
+    private async _withArgsReplaceInternal(args: string[]): Promise<ContainerResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, args };
+        const result = await this._client.invokeCapability<ContainerResourceHandle>(
+            'Aspire.Hosting/withArgsReplace',
+            rpcArgs
+        );
+        return new ContainerResourceImpl(result, this._client);
+    }
+
+    /**
+     * Replaces the arguments to be passed to a resource that supports arguments when it is launched.
+     * @param args The arguments to be passed to the resource when it is started.
+     * @returns The resource builder.
+     */
+    withArgsReplace(args: string[]): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._withArgsReplaceInternal(args), this._client);
     }
 
     /** @internal */
@@ -18262,7 +18742,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddProject<MyService>("my-service")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -18305,6 +18785,28 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
      */
     withCertificateTrustScope(scope: CertificateTrustScope): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._withCertificateTrustScopeInternal(scope), this._client);
+    }
+
+    /** @internal */
+    private async _withCertificateTrustEnvironmentInternal(certificateBundleEnvironmentVariable: string, certificateDirectoriesEnvironmentVariable?: string): Promise<ContainerResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, certificateBundleEnvironmentVariable };
+        if (certificateDirectoriesEnvironmentVariable !== undefined) rpcArgs.certificateDirectoriesEnvironmentVariable = certificateDirectoriesEnvironmentVariable;
+        const result = await this._client.invokeCapability<ContainerResourceHandle>(
+            'Aspire.Hosting/withCertificateTrustEnvironment',
+            rpcArgs
+        );
+        return new ContainerResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures environment variables that point to Aspire-managed certificate trust paths.
+     * @param certificateBundleEnvironmentVariable The environment variable that receives the certificate bundle path.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withCertificateTrustEnvironment(certificateBundleEnvironmentVariable: string, options?: WithCertificateTrustEnvironmentOptions): ContainerResourcePromise {
+        const certificateDirectoriesEnvironmentVariable = options?.certificateDirectoriesEnvironmentVariable;
+        return new ContainerResourcePromiseImpl(this._withCertificateTrustEnvironmentInternal(certificateBundleEnvironmentVariable, certificateDirectoriesEnvironmentVariable), this._client);
     }
 
     /** @internal */
@@ -18495,6 +18997,29 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     }
 
     /** @internal */
+    private async _withResourceTypeDisplayNameInternal(resourceTypeDisplayName: string): Promise<ContainerResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, resourceTypeDisplayName };
+        const result = await this._client.invokeCapability<ContainerResourceHandle>(
+            'Aspire.Hosting/withResourceTypeDisplayName',
+            rpcArgs
+        );
+        return new ContainerResourceImpl(result, this._client);
+    }
+
+    /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._withResourceTypeDisplayNameInternal(resourceTypeDisplayName), this._client);
+    }
+
+    /** @internal */
     private async _withIconNameInternal(iconName: string, iconVariant?: IconVariant): Promise<ContainerResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, iconName };
         if (iconVariant !== undefined) rpcArgs.iconVariant = iconVariant;
@@ -18558,7 +19083,6 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): ContainerResourcePromise {
         const path = options?.path;
@@ -18713,8 +19237,71 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     }
 
     /** @internal */
-    private async _withTerminalInternal(): Promise<ContainerResource> {
+    private async _withTraitInternal(name: string, value: string): Promise<ContainerResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
+        const result = await this._client.invokeCapability<ContainerResourceHandle>(
+            'Aspire.Hosting/withTrait',
+            rpcArgs
+        );
+        return new ContainerResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+     * @param name The case-sensitive trait name.
+     * @param value The trait value. Do not include secrets.
+     * @returns The resource builder.
+     */
+    withTrait(name: string, value: string): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._withTraitInternal(name, value), this._client);
+    }
+
+    /** @internal */
+    private async _withTagsInternal(tags: string[]): Promise<ContainerResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, tags };
+        const result = await this._client.invokeCapability<ContainerResourceHandle>(
+            'Aspire.Hosting/withTags',
+            rpcArgs
+        );
+        return new ContainerResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+     * @param tags The tags, each up to 50 characters with single spaces between words.
+     * @returns The resource builder.
+     */
+    withTags(tags: string[]): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._withTagsInternal(tags), this._client);
+    }
+
+    /** @internal */
+    private async _withDisplayOrderInternal(order: number): Promise<ContainerResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, order };
+        const result = await this._client.invokeCapability<ContainerResourceHandle>(
+            'Aspire.Hosting/withDisplayOrder',
+            rpcArgs
+        );
+        return new ContainerResourceImpl(result, this._client);
+    }
+
+    /**
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
+     * @returns The resource builder.
+     */
+    withDisplayOrder(order: number): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._withDisplayOrderInternal(order), this._client);
+    }
+
+    /** @internal */
+    private async _withTerminalInternal(configure?: (obj: TerminalOptions) => Promise<void>): Promise<ContainerResource> {
+        const configureId = configure ? registerCallback(async (objData: unknown) => {
+            const obj = wrapIfHandle(objData) as TerminalOptions;
+            await configure(obj);
+        }) : undefined;
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        if (configure !== undefined) rpcArgs.configure = configureId;
         const result = await this._client.invokeCapability<ContainerResourceHandle>(
             'Aspire.Hosting/withTerminal',
             rpcArgs
@@ -18722,9 +19309,14 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
         return new ContainerResourceImpl(result, this._client);
     }
 
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    withTerminal(): ContainerResourcePromise {
-        return new ContainerResourcePromiseImpl(this._withTerminalInternal(), this._client);
+    /**
+     * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
+     */
+    withTerminal(options?: WithTerminalOptions): ContainerResourcePromise {
+        const configure = options?.configure;
+        return new ContainerResourcePromiseImpl(this._withTerminalInternal(configure), this._client);
     }
 
     /** @internal */
@@ -18752,7 +19344,6 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ContainerResourcePromise {
         const dependsOn = options?.dependsOn;
@@ -18781,7 +19372,6 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._withPipelineConfigurationInternal(callback), this._client);
@@ -19441,6 +20031,10 @@ const ContainerResourcePromiseImpl = $aspireCreateFluentPromiseClass<ContainerRe
     ["withEnvironment"]: () => ContainerResourcePromiseImpl,
     ["withEnvironmentCallback"]: () => ContainerResourcePromiseImpl,
     ["withArgs"]: () => ContainerResourcePromiseImpl,
+    ["withSerializedAnnotation"]: () => ResourcePromiseImpl,
+    ["getSerializedAnnotation"]: null,
+    ["hasSerializedAnnotation"]: null,
+    ["withArgsReplace"]: () => ContainerResourcePromiseImpl,
     ["withArgsCallback"]: () => ContainerResourcePromiseImpl,
     ["withReferenceEnvironment"]: () => ContainerResourcePromiseImpl,
     ["withReference"]: () => ContainerResourcePromiseImpl,
@@ -19470,6 +20064,7 @@ const ContainerResourcePromiseImpl = $aspireCreateFluentPromiseClass<ContainerRe
     ["withHttpCommand"]: () => ContainerResourcePromiseImpl,
     ["withDeveloperCertificateTrust"]: () => ContainerResourcePromiseImpl,
     ["withCertificateTrustScope"]: () => ContainerResourcePromiseImpl,
+    ["withCertificateTrustEnvironment"]: () => ContainerResourcePromiseImpl,
     ["withHttpsDeveloperCertificate"]: () => ContainerResourcePromiseImpl,
     ["withoutHttpsCertificate"]: () => ContainerResourcePromiseImpl,
     ["withHttpsCertificateConfiguration"]: () => ContainerResourcePromiseImpl,
@@ -19477,6 +20072,7 @@ const ContainerResourcePromiseImpl = $aspireCreateFluentPromiseClass<ContainerRe
     ["withRelationship"]: () => ContainerResourcePromiseImpl,
     ["withParentRelationship"]: () => ContainerResourcePromiseImpl,
     ["withChildRelationship"]: () => ContainerResourcePromiseImpl,
+    ["withResourceTypeDisplayName"]: () => ContainerResourcePromiseImpl,
     ["withIconName"]: () => ContainerResourcePromiseImpl,
     ["withComputeEnvironment"]: () => ContainerResourcePromiseImpl,
     ["withHttpProbe"]: () => ContainerResourcePromiseImpl,
@@ -19486,6 +20082,9 @@ const ContainerResourcePromiseImpl = $aspireCreateFluentPromiseClass<ContainerRe
     ["withImagePushOptions"]: () => ContainerResourcePromiseImpl,
     ["withRemoteImageName"]: () => ContainerResourcePromiseImpl,
     ["withRemoteImageTag"]: () => ContainerResourcePromiseImpl,
+    ["withTrait"]: () => ContainerResourcePromiseImpl,
+    ["withTags"]: () => ContainerResourcePromiseImpl,
+    ["withDisplayOrder"]: () => ContainerResourcePromiseImpl,
     ["withTerminal"]: () => ContainerResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => ContainerResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => ContainerResourcePromiseImpl,
@@ -19543,20 +20142,10 @@ export interface CSharpAppResource {
     /**
      * Configures custom base images for generated Dockerfiles.
      *
-     * This extension method allows customization of the base images used in generated Dockerfiles.
-     * For multi-stage Dockerfiles (e.g., Python with UV), you can specify separate build and runtime images.
-     * Specify custom base images for a Python application:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddPythonApp("myapp", "path/to/app", "main.py")
-     * .WithDockerfileBaseImage(
-     * buildImage: "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
-     * runtimeImage: "python:3.12-slim-bookworm");
-     * builder.Build().Run();
-     * ```
+     * For multi-stage Dockerfiles, specify separate build and runtime base images.
+     * Images that are not specified use the integration's defaults. At least one base image must be specified.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): CSharpAppResourcePromise;
     /**
@@ -19664,6 +20253,31 @@ export interface CSharpAppResource {
      * @returns The resource builder.
      */
     withArgs(args: string[]): CSharpAppResourcePromise;
+    /**
+     * Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+     * @param annotationId The stable annotation identifier.
+     * @param json The serialized JSON payload.
+     * @returns The resource.
+     */
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise;
+    /**
+     * Gets a serialized ATS annotation payload from a resource.
+     * @param annotationId The stable annotation identifier.
+     * @returns The serialized JSON payload.
+     */
+    getSerializedAnnotation(annotationId: string): Promise<string>;
+    /**
+     * Determines whether a resource has a serialized ATS annotation with the specified ID.
+     * @param annotationId The stable annotation identifier.
+     * @returns `true` if the annotation exists; otherwise, `false`.
+     */
+    hasSerializedAnnotation(annotationId: string): Promise<boolean>;
+    /**
+     * Replaces the arguments to be passed to a resource that supports arguments when it is launched.
+     * @param args The arguments to be passed to the resource when it is started.
+     * @returns The resource builder.
+     */
+    withArgsReplace(args: string[]): CSharpAppResourcePromise;
     /**
      * Adds a callback to be executed with a list of command-line arguments when a resource is started.
      * @param callback A callback that allows for deferred execution for computing arguments. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.
@@ -19855,7 +20469,7 @@ export interface CSharpAppResource {
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddProject<MyService>("my-service")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -19884,6 +20498,13 @@ export interface CSharpAppResource {
      * @returns The resource builder.
      */
     withCertificateTrustScope(scope: CertificateTrustScope): CSharpAppResourcePromise;
+    /**
+     * Configures environment variables that point to Aspire-managed certificate trust paths.
+     * @param certificateBundleEnvironmentVariable The environment variable that receives the certificate bundle path.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withCertificateTrustEnvironment(certificateBundleEnvironmentVariable: string, options?: WithCertificateTrustEnvironmentOptions): CSharpAppResourcePromise;
     /**
      * Indicates that a resource should use the developer certificate key pair for HTTPS endpoints at run time. Currently this indicates use of the ASP.NET Core developer certificate. The developer certificate will only be used when running in local development scenarios; in publish mode resources will use their default certificate configuration.
      *
@@ -19965,6 +20586,16 @@ export interface CSharpAppResource {
      */
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): CSharpAppResourcePromise;
     /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): CSharpAppResourcePromise;
+    /**
      * Specifies the icon to use when displaying the resource in the dashboard.
      * @param iconName The name of the FluentUI icon to use. See https://aka.ms/fluentui-system-icons for available icons.
      * @param options Additional options.
@@ -19982,7 +20613,6 @@ export interface CSharpAppResource {
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): CSharpAppResourcePromise;
     /**
@@ -20039,22 +20669,43 @@ export interface CSharpAppResource {
      * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): CSharpAppResourcePromise;
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    withTerminal(): CSharpAppResourcePromise;
+    /**
+     * Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+     * @param name The case-sensitive trait name.
+     * @param value The trait value. Do not include secrets.
+     * @returns The resource builder.
+     */
+    withTrait(name: string, value: string): CSharpAppResourcePromise;
+    /**
+     * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+     * @param tags The tags, each up to 50 characters with single spaces between words.
+     * @returns The resource builder.
+     */
+    withTags(tags: string[]): CSharpAppResourcePromise;
+    /**
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
+     * @returns The resource builder.
+     */
+    withDisplayOrder(order: number): CSharpAppResourcePromise;
+    /**
+     * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
+     */
+    withTerminal(options?: WithTerminalOptions): CSharpAppResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): CSharpAppResourcePromise;
     /**
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): CSharpAppResourcePromise;
     /**
@@ -20199,20 +20850,10 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
     /**
      * Configures custom base images for generated Dockerfiles.
      *
-     * This extension method allows customization of the base images used in generated Dockerfiles.
-     * For multi-stage Dockerfiles (e.g., Python with UV), you can specify separate build and runtime images.
-     * Specify custom base images for a Python application:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddPythonApp("myapp", "path/to/app", "main.py")
-     * .WithDockerfileBaseImage(
-     * buildImage: "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
-     * runtimeImage: "python:3.12-slim-bookworm");
-     * builder.Build().Run();
-     * ```
+     * For multi-stage Dockerfiles, specify separate build and runtime base images.
+     * Images that are not specified use the integration's defaults. At least one base image must be specified.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): CSharpAppResourcePromise;
     /**
@@ -20320,6 +20961,31 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      * @returns The resource builder.
      */
     withArgs(args: string[]): CSharpAppResourcePromise;
+    /**
+     * Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+     * @param annotationId The stable annotation identifier.
+     * @param json The serialized JSON payload.
+     * @returns The resource.
+     */
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise;
+    /**
+     * Gets a serialized ATS annotation payload from a resource.
+     * @param annotationId The stable annotation identifier.
+     * @returns The serialized JSON payload.
+     */
+    getSerializedAnnotation(annotationId: string): Promise<string>;
+    /**
+     * Determines whether a resource has a serialized ATS annotation with the specified ID.
+     * @param annotationId The stable annotation identifier.
+     * @returns `true` if the annotation exists; otherwise, `false`.
+     */
+    hasSerializedAnnotation(annotationId: string): Promise<boolean>;
+    /**
+     * Replaces the arguments to be passed to a resource that supports arguments when it is launched.
+     * @param args The arguments to be passed to the resource when it is started.
+     * @returns The resource builder.
+     */
+    withArgsReplace(args: string[]): CSharpAppResourcePromise;
     /**
      * Adds a callback to be executed with a list of command-line arguments when a resource is started.
      * @param callback A callback that allows for deferred execution for computing arguments. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.
@@ -20511,7 +21177,7 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddProject<MyService>("my-service")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -20540,6 +21206,13 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      * @returns The resource builder.
      */
     withCertificateTrustScope(scope: CertificateTrustScope): CSharpAppResourcePromise;
+    /**
+     * Configures environment variables that point to Aspire-managed certificate trust paths.
+     * @param certificateBundleEnvironmentVariable The environment variable that receives the certificate bundle path.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withCertificateTrustEnvironment(certificateBundleEnvironmentVariable: string, options?: WithCertificateTrustEnvironmentOptions): CSharpAppResourcePromise;
     /**
      * Indicates that a resource should use the developer certificate key pair for HTTPS endpoints at run time. Currently this indicates use of the ASP.NET Core developer certificate. The developer certificate will only be used when running in local development scenarios; in publish mode resources will use their default certificate configuration.
      *
@@ -20621,6 +21294,16 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      */
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): CSharpAppResourcePromise;
     /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): CSharpAppResourcePromise;
+    /**
      * Specifies the icon to use when displaying the resource in the dashboard.
      * @param iconName The name of the FluentUI icon to use. See https://aka.ms/fluentui-system-icons for available icons.
      * @param options Additional options.
@@ -20638,7 +21321,6 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): CSharpAppResourcePromise;
     /**
@@ -20695,22 +21377,43 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): CSharpAppResourcePromise;
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    withTerminal(): CSharpAppResourcePromise;
+    /**
+     * Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+     * @param name The case-sensitive trait name.
+     * @param value The trait value. Do not include secrets.
+     * @returns The resource builder.
+     */
+    withTrait(name: string, value: string): CSharpAppResourcePromise;
+    /**
+     * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+     * @param tags The tags, each up to 50 characters with single spaces between words.
+     * @returns The resource builder.
+     */
+    withTags(tags: string[]): CSharpAppResourcePromise;
+    /**
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
+     * @returns The resource builder.
+     */
+    withDisplayOrder(order: number): CSharpAppResourcePromise;
+    /**
+     * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
+     */
+    withTerminal(options?: WithTerminalOptions): CSharpAppResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): CSharpAppResourcePromise;
     /**
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): CSharpAppResourcePromise;
     /**
@@ -20889,20 +21592,10 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     /**
      * Configures custom base images for generated Dockerfiles.
      *
-     * This extension method allows customization of the base images used in generated Dockerfiles.
-     * For multi-stage Dockerfiles (e.g., Python with UV), you can specify separate build and runtime images.
-     * Specify custom base images for a Python application:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddPythonApp("myapp", "path/to/app", "main.py")
-     * .WithDockerfileBaseImage(
-     * buildImage: "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
-     * runtimeImage: "python:3.12-slim-bookworm");
-     * builder.Build().Run();
-     * ```
+     * For multi-stage Dockerfiles, specify separate build and runtime base images.
+     * Images that are not specified use the integration's defaults. At least one base image must be specified.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): CSharpAppResourcePromise {
         const buildImage = options?.buildImage;
@@ -21224,6 +21917,69 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
      */
     withArgs(args: string[]): CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._withArgsInternal(args), this._client);
+    }
+
+    /**
+     * Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+     * @param annotationId The stable annotation identifier.
+     * @param json The serialized JSON payload.
+     * @returns The resource.
+     */
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise {
+        const promise = (async () => {
+            const rpcArgs: Record<string, unknown> = { resource: this._handle, annotationId, json };
+            const handle = await this._client.invokeCapability<IResourceHandle>(
+                'Aspire.Hosting/withSerializedAnnotation',
+                rpcArgs
+            );
+            return new ResourceImpl(handle, this._client);
+        })();
+        return new ResourcePromiseImpl(promise, this._client);
+    }
+
+    /**
+     * Gets a serialized ATS annotation payload from a resource.
+     * @param annotationId The stable annotation identifier.
+     * @returns The serialized JSON payload.
+     */
+    async getSerializedAnnotation(annotationId: string): Promise<string> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle, annotationId };
+        return await this._client.invokeCapability<string>(
+            'Aspire.Hosting/getSerializedAnnotation',
+            rpcArgs
+        );
+    }
+
+    /**
+     * Determines whether a resource has a serialized ATS annotation with the specified ID.
+     * @param annotationId The stable annotation identifier.
+     * @returns `true` if the annotation exists; otherwise, `false`.
+     */
+    async hasSerializedAnnotation(annotationId: string): Promise<boolean> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle, annotationId };
+        return await this._client.invokeCapability<boolean>(
+            'Aspire.Hosting/hasSerializedAnnotation',
+            rpcArgs
+        );
+    }
+
+    /** @internal */
+    private async _withArgsReplaceInternal(args: string[]): Promise<CSharpAppResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, args };
+        const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
+            'Aspire.Hosting/withArgsReplace',
+            rpcArgs
+        );
+        return new CSharpAppResourceImpl(result, this._client);
+    }
+
+    /**
+     * Replaces the arguments to be passed to a resource that supports arguments when it is launched.
+     * @param args The arguments to be passed to the resource when it is started.
+     * @returns The resource builder.
+     */
+    withArgsReplace(args: string[]): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromiseImpl(this._withArgsReplaceInternal(args), this._client);
     }
 
     /** @internal */
@@ -22027,7 +22783,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddProject<MyService>("my-service")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -22070,6 +22826,28 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
      */
     withCertificateTrustScope(scope: CertificateTrustScope): CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._withCertificateTrustScopeInternal(scope), this._client);
+    }
+
+    /** @internal */
+    private async _withCertificateTrustEnvironmentInternal(certificateBundleEnvironmentVariable: string, certificateDirectoriesEnvironmentVariable?: string): Promise<CSharpAppResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, certificateBundleEnvironmentVariable };
+        if (certificateDirectoriesEnvironmentVariable !== undefined) rpcArgs.certificateDirectoriesEnvironmentVariable = certificateDirectoriesEnvironmentVariable;
+        const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
+            'Aspire.Hosting/withCertificateTrustEnvironment',
+            rpcArgs
+        );
+        return new CSharpAppResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures environment variables that point to Aspire-managed certificate trust paths.
+     * @param certificateBundleEnvironmentVariable The environment variable that receives the certificate bundle path.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withCertificateTrustEnvironment(certificateBundleEnvironmentVariable: string, options?: WithCertificateTrustEnvironmentOptions): CSharpAppResourcePromise {
+        const certificateDirectoriesEnvironmentVariable = options?.certificateDirectoriesEnvironmentVariable;
+        return new CSharpAppResourcePromiseImpl(this._withCertificateTrustEnvironmentInternal(certificateBundleEnvironmentVariable, certificateDirectoriesEnvironmentVariable), this._client);
     }
 
     /** @internal */
@@ -22260,6 +23038,29 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     }
 
     /** @internal */
+    private async _withResourceTypeDisplayNameInternal(resourceTypeDisplayName: string): Promise<CSharpAppResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, resourceTypeDisplayName };
+        const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
+            'Aspire.Hosting/withResourceTypeDisplayName',
+            rpcArgs
+        );
+        return new CSharpAppResourceImpl(result, this._client);
+    }
+
+    /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromiseImpl(this._withResourceTypeDisplayNameInternal(resourceTypeDisplayName), this._client);
+    }
+
+    /** @internal */
     private async _withIconNameInternal(iconName: string, iconVariant?: IconVariant): Promise<CSharpAppResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, iconName };
         if (iconVariant !== undefined) rpcArgs.iconVariant = iconVariant;
@@ -22323,7 +23124,6 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): CSharpAppResourcePromise {
         const path = options?.path;
@@ -22478,8 +23278,71 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     }
 
     /** @internal */
-    private async _withTerminalInternal(): Promise<CSharpAppResource> {
+    private async _withTraitInternal(name: string, value: string): Promise<CSharpAppResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
+        const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
+            'Aspire.Hosting/withTrait',
+            rpcArgs
+        );
+        return new CSharpAppResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+     * @param name The case-sensitive trait name.
+     * @param value The trait value. Do not include secrets.
+     * @returns The resource builder.
+     */
+    withTrait(name: string, value: string): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromiseImpl(this._withTraitInternal(name, value), this._client);
+    }
+
+    /** @internal */
+    private async _withTagsInternal(tags: string[]): Promise<CSharpAppResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, tags };
+        const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
+            'Aspire.Hosting/withTags',
+            rpcArgs
+        );
+        return new CSharpAppResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+     * @param tags The tags, each up to 50 characters with single spaces between words.
+     * @returns The resource builder.
+     */
+    withTags(tags: string[]): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromiseImpl(this._withTagsInternal(tags), this._client);
+    }
+
+    /** @internal */
+    private async _withDisplayOrderInternal(order: number): Promise<CSharpAppResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, order };
+        const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
+            'Aspire.Hosting/withDisplayOrder',
+            rpcArgs
+        );
+        return new CSharpAppResourceImpl(result, this._client);
+    }
+
+    /**
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
+     * @returns The resource builder.
+     */
+    withDisplayOrder(order: number): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromiseImpl(this._withDisplayOrderInternal(order), this._client);
+    }
+
+    /** @internal */
+    private async _withTerminalInternal(configure?: (obj: TerminalOptions) => Promise<void>): Promise<CSharpAppResource> {
+        const configureId = configure ? registerCallback(async (objData: unknown) => {
+            const obj = wrapIfHandle(objData) as TerminalOptions;
+            await configure(obj);
+        }) : undefined;
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        if (configure !== undefined) rpcArgs.configure = configureId;
         const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
             'Aspire.Hosting/withTerminal',
             rpcArgs
@@ -22487,9 +23350,14 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
         return new CSharpAppResourceImpl(result, this._client);
     }
 
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    withTerminal(): CSharpAppResourcePromise {
-        return new CSharpAppResourcePromiseImpl(this._withTerminalInternal(), this._client);
+    /**
+     * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
+     */
+    withTerminal(options?: WithTerminalOptions): CSharpAppResourcePromise {
+        const configure = options?.configure;
+        return new CSharpAppResourcePromiseImpl(this._withTerminalInternal(configure), this._client);
     }
 
     /** @internal */
@@ -22517,7 +23385,6 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): CSharpAppResourcePromise {
         const dependsOn = options?.dependsOn;
@@ -22546,7 +23413,6 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._withPipelineConfigurationInternal(callback), this._client);
@@ -23200,6 +24066,10 @@ const CSharpAppResourcePromiseImpl = $aspireCreateFluentPromiseClass<CSharpAppRe
     ["withEnvironment"]: () => CSharpAppResourcePromiseImpl,
     ["withEnvironmentCallback"]: () => CSharpAppResourcePromiseImpl,
     ["withArgs"]: () => CSharpAppResourcePromiseImpl,
+    ["withSerializedAnnotation"]: () => ResourcePromiseImpl,
+    ["getSerializedAnnotation"]: null,
+    ["hasSerializedAnnotation"]: null,
+    ["withArgsReplace"]: () => CSharpAppResourcePromiseImpl,
     ["withArgsCallback"]: () => CSharpAppResourcePromiseImpl,
     ["withReferenceEnvironment"]: () => CSharpAppResourcePromiseImpl,
     ["withReference"]: () => CSharpAppResourcePromiseImpl,
@@ -23230,6 +24100,7 @@ const CSharpAppResourcePromiseImpl = $aspireCreateFluentPromiseClass<CSharpAppRe
     ["withHttpCommand"]: () => CSharpAppResourcePromiseImpl,
     ["withDeveloperCertificateTrust"]: () => CSharpAppResourcePromiseImpl,
     ["withCertificateTrustScope"]: () => CSharpAppResourcePromiseImpl,
+    ["withCertificateTrustEnvironment"]: () => CSharpAppResourcePromiseImpl,
     ["withHttpsDeveloperCertificate"]: () => CSharpAppResourcePromiseImpl,
     ["withoutHttpsCertificate"]: () => CSharpAppResourcePromiseImpl,
     ["withHttpsCertificateConfiguration"]: () => CSharpAppResourcePromiseImpl,
@@ -23237,6 +24108,7 @@ const CSharpAppResourcePromiseImpl = $aspireCreateFluentPromiseClass<CSharpAppRe
     ["withRelationship"]: () => CSharpAppResourcePromiseImpl,
     ["withParentRelationship"]: () => CSharpAppResourcePromiseImpl,
     ["withChildRelationship"]: () => CSharpAppResourcePromiseImpl,
+    ["withResourceTypeDisplayName"]: () => CSharpAppResourcePromiseImpl,
     ["withIconName"]: () => CSharpAppResourcePromiseImpl,
     ["withComputeEnvironment"]: () => CSharpAppResourcePromiseImpl,
     ["withHttpProbe"]: () => CSharpAppResourcePromiseImpl,
@@ -23246,6 +24118,9 @@ const CSharpAppResourcePromiseImpl = $aspireCreateFluentPromiseClass<CSharpAppRe
     ["withImagePushOptions"]: () => CSharpAppResourcePromiseImpl,
     ["withRemoteImageName"]: () => CSharpAppResourcePromiseImpl,
     ["withRemoteImageTag"]: () => CSharpAppResourcePromiseImpl,
+    ["withTrait"]: () => CSharpAppResourcePromiseImpl,
+    ["withTags"]: () => CSharpAppResourcePromiseImpl,
+    ["withDisplayOrder"]: () => CSharpAppResourcePromiseImpl,
     ["withTerminal"]: () => CSharpAppResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => CSharpAppResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => CSharpAppResourcePromiseImpl,
@@ -23304,20 +24179,10 @@ export interface DotnetToolResource {
     /**
      * Configures custom base images for generated Dockerfiles.
      *
-     * This extension method allows customization of the base images used in generated Dockerfiles.
-     * For multi-stage Dockerfiles (e.g., Python with UV), you can specify separate build and runtime images.
-     * Specify custom base images for a Python application:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddPythonApp("myapp", "path/to/app", "main.py")
-     * .WithDockerfileBaseImage(
-     * buildImage: "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
-     * runtimeImage: "python:3.12-slim-bookworm");
-     * builder.Build().Run();
-     * ```
+     * For multi-stage Dockerfiles, specify separate build and runtime base images.
+     * Images that are not specified use the integration's defaults. At least one base image must be specified.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): DotnetToolResourcePromise;
     /**
@@ -23465,6 +24330,31 @@ export interface DotnetToolResource {
      * @returns The resource builder.
      */
     withArgs(args: string[]): DotnetToolResourcePromise;
+    /**
+     * Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+     * @param annotationId The stable annotation identifier.
+     * @param json The serialized JSON payload.
+     * @returns The resource.
+     */
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise;
+    /**
+     * Gets a serialized ATS annotation payload from a resource.
+     * @param annotationId The stable annotation identifier.
+     * @returns The serialized JSON payload.
+     */
+    getSerializedAnnotation(annotationId: string): Promise<string>;
+    /**
+     * Determines whether a resource has a serialized ATS annotation with the specified ID.
+     * @param annotationId The stable annotation identifier.
+     * @returns `true` if the annotation exists; otherwise, `false`.
+     */
+    hasSerializedAnnotation(annotationId: string): Promise<boolean>;
+    /**
+     * Replaces the arguments to be passed to a resource that supports arguments when it is launched.
+     * @param args The arguments to be passed to the resource when it is started.
+     * @returns The resource builder.
+     */
+    withArgsReplace(args: string[]): DotnetToolResourcePromise;
     /**
      * Adds a callback to be executed with a list of command-line arguments when a resource is started.
      * @param callback A callback that allows for deferred execution for computing arguments. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.
@@ -23650,7 +24540,7 @@ export interface DotnetToolResource {
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddProject<MyService>("my-service")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -23679,6 +24569,13 @@ export interface DotnetToolResource {
      * @returns The resource builder.
      */
     withCertificateTrustScope(scope: CertificateTrustScope): DotnetToolResourcePromise;
+    /**
+     * Configures environment variables that point to Aspire-managed certificate trust paths.
+     * @param certificateBundleEnvironmentVariable The environment variable that receives the certificate bundle path.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withCertificateTrustEnvironment(certificateBundleEnvironmentVariable: string, options?: WithCertificateTrustEnvironmentOptions): DotnetToolResourcePromise;
     /**
      * Indicates that a resource should use the developer certificate key pair for HTTPS endpoints at run time. Currently this indicates use of the ASP.NET Core developer certificate. The developer certificate will only be used when running in local development scenarios; in publish mode resources will use their default certificate configuration.
      *
@@ -23760,6 +24657,16 @@ export interface DotnetToolResource {
      */
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): DotnetToolResourcePromise;
     /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): DotnetToolResourcePromise;
+    /**
      * Specifies the icon to use when displaying the resource in the dashboard.
      * @param iconName The name of the FluentUI icon to use. See https://aka.ms/fluentui-system-icons for available icons.
      * @param options Additional options.
@@ -23775,9 +24682,16 @@ export interface DotnetToolResource {
      */
     withComputeEnvironment(computeEnvironmentResource: Awaitable<ComputeEnvironmentResource>): DotnetToolResourcePromise;
     /**
+     * Adds VS Code-compatible debug metadata for an executable resource.
+     * @param launchConfigurationType The launch configuration type understood by the extension.
+     * @param scriptPath The script path, relative to the executable working directory when not rooted.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withExecutableDebugSupport(launchConfigurationType: string, scriptPath: string, options?: WithExecutableDebugSupportOptions): DotnetToolResourcePromise;
+    /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): DotnetToolResourcePromise;
     /**
@@ -23834,22 +24748,43 @@ export interface DotnetToolResource {
      * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): DotnetToolResourcePromise;
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    withTerminal(): DotnetToolResourcePromise;
+    /**
+     * Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+     * @param name The case-sensitive trait name.
+     * @param value The trait value. Do not include secrets.
+     * @returns The resource builder.
+     */
+    withTrait(name: string, value: string): DotnetToolResourcePromise;
+    /**
+     * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+     * @param tags The tags, each up to 50 characters with single spaces between words.
+     * @returns The resource builder.
+     */
+    withTags(tags: string[]): DotnetToolResourcePromise;
+    /**
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
+     * @returns The resource builder.
+     */
+    withDisplayOrder(order: number): DotnetToolResourcePromise;
+    /**
+     * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
+     */
+    withTerminal(options?: WithTerminalOptions): DotnetToolResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): DotnetToolResourcePromise;
     /**
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): DotnetToolResourcePromise;
     /**
@@ -23988,20 +24923,10 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
     /**
      * Configures custom base images for generated Dockerfiles.
      *
-     * This extension method allows customization of the base images used in generated Dockerfiles.
-     * For multi-stage Dockerfiles (e.g., Python with UV), you can specify separate build and runtime images.
-     * Specify custom base images for a Python application:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddPythonApp("myapp", "path/to/app", "main.py")
-     * .WithDockerfileBaseImage(
-     * buildImage: "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
-     * runtimeImage: "python:3.12-slim-bookworm");
-     * builder.Build().Run();
-     * ```
+     * For multi-stage Dockerfiles, specify separate build and runtime base images.
+     * Images that are not specified use the integration's defaults. At least one base image must be specified.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): DotnetToolResourcePromise;
     /**
@@ -24149,6 +25074,31 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      * @returns The resource builder.
      */
     withArgs(args: string[]): DotnetToolResourcePromise;
+    /**
+     * Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+     * @param annotationId The stable annotation identifier.
+     * @param json The serialized JSON payload.
+     * @returns The resource.
+     */
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise;
+    /**
+     * Gets a serialized ATS annotation payload from a resource.
+     * @param annotationId The stable annotation identifier.
+     * @returns The serialized JSON payload.
+     */
+    getSerializedAnnotation(annotationId: string): Promise<string>;
+    /**
+     * Determines whether a resource has a serialized ATS annotation with the specified ID.
+     * @param annotationId The stable annotation identifier.
+     * @returns `true` if the annotation exists; otherwise, `false`.
+     */
+    hasSerializedAnnotation(annotationId: string): Promise<boolean>;
+    /**
+     * Replaces the arguments to be passed to a resource that supports arguments when it is launched.
+     * @param args The arguments to be passed to the resource when it is started.
+     * @returns The resource builder.
+     */
+    withArgsReplace(args: string[]): DotnetToolResourcePromise;
     /**
      * Adds a callback to be executed with a list of command-line arguments when a resource is started.
      * @param callback A callback that allows for deferred execution for computing arguments. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.
@@ -24334,7 +25284,7 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddProject<MyService>("my-service")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -24363,6 +25313,13 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      * @returns The resource builder.
      */
     withCertificateTrustScope(scope: CertificateTrustScope): DotnetToolResourcePromise;
+    /**
+     * Configures environment variables that point to Aspire-managed certificate trust paths.
+     * @param certificateBundleEnvironmentVariable The environment variable that receives the certificate bundle path.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withCertificateTrustEnvironment(certificateBundleEnvironmentVariable: string, options?: WithCertificateTrustEnvironmentOptions): DotnetToolResourcePromise;
     /**
      * Indicates that a resource should use the developer certificate key pair for HTTPS endpoints at run time. Currently this indicates use of the ASP.NET Core developer certificate. The developer certificate will only be used when running in local development scenarios; in publish mode resources will use their default certificate configuration.
      *
@@ -24444,6 +25401,16 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      */
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): DotnetToolResourcePromise;
     /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): DotnetToolResourcePromise;
+    /**
      * Specifies the icon to use when displaying the resource in the dashboard.
      * @param iconName The name of the FluentUI icon to use. See https://aka.ms/fluentui-system-icons for available icons.
      * @param options Additional options.
@@ -24459,9 +25426,16 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      */
     withComputeEnvironment(computeEnvironmentResource: Awaitable<ComputeEnvironmentResource>): DotnetToolResourcePromise;
     /**
+     * Adds VS Code-compatible debug metadata for an executable resource.
+     * @param launchConfigurationType The launch configuration type understood by the extension.
+     * @param scriptPath The script path, relative to the executable working directory when not rooted.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withExecutableDebugSupport(launchConfigurationType: string, scriptPath: string, options?: WithExecutableDebugSupportOptions): DotnetToolResourcePromise;
+    /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): DotnetToolResourcePromise;
     /**
@@ -24518,22 +25492,43 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): DotnetToolResourcePromise;
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    withTerminal(): DotnetToolResourcePromise;
+    /**
+     * Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+     * @param name The case-sensitive trait name.
+     * @param value The trait value. Do not include secrets.
+     * @returns The resource builder.
+     */
+    withTrait(name: string, value: string): DotnetToolResourcePromise;
+    /**
+     * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+     * @param tags The tags, each up to 50 characters with single spaces between words.
+     * @returns The resource builder.
+     */
+    withTags(tags: string[]): DotnetToolResourcePromise;
+    /**
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
+     * @returns The resource builder.
+     */
+    withDisplayOrder(order: number): DotnetToolResourcePromise;
+    /**
+     * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
+     */
+    withTerminal(options?: WithTerminalOptions): DotnetToolResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): DotnetToolResourcePromise;
     /**
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): DotnetToolResourcePromise;
     /**
@@ -24706,20 +25701,10 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     /**
      * Configures custom base images for generated Dockerfiles.
      *
-     * This extension method allows customization of the base images used in generated Dockerfiles.
-     * For multi-stage Dockerfiles (e.g., Python with UV), you can specify separate build and runtime images.
-     * Specify custom base images for a Python application:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddPythonApp("myapp", "path/to/app", "main.py")
-     * .WithDockerfileBaseImage(
-     * buildImage: "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
-     * runtimeImage: "python:3.12-slim-bookworm");
-     * builder.Build().Run();
-     * ```
+     * For multi-stage Dockerfiles, specify separate build and runtime base images.
+     * Images that are not specified use the integration's defaults. At least one base image must be specified.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): DotnetToolResourcePromise {
         const buildImage = options?.buildImage;
@@ -25157,6 +26142,69 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
      */
     withArgs(args: string[]): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._withArgsInternal(args), this._client);
+    }
+
+    /**
+     * Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+     * @param annotationId The stable annotation identifier.
+     * @param json The serialized JSON payload.
+     * @returns The resource.
+     */
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise {
+        const promise = (async () => {
+            const rpcArgs: Record<string, unknown> = { resource: this._handle, annotationId, json };
+            const handle = await this._client.invokeCapability<IResourceHandle>(
+                'Aspire.Hosting/withSerializedAnnotation',
+                rpcArgs
+            );
+            return new ResourceImpl(handle, this._client);
+        })();
+        return new ResourcePromiseImpl(promise, this._client);
+    }
+
+    /**
+     * Gets a serialized ATS annotation payload from a resource.
+     * @param annotationId The stable annotation identifier.
+     * @returns The serialized JSON payload.
+     */
+    async getSerializedAnnotation(annotationId: string): Promise<string> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle, annotationId };
+        return await this._client.invokeCapability<string>(
+            'Aspire.Hosting/getSerializedAnnotation',
+            rpcArgs
+        );
+    }
+
+    /**
+     * Determines whether a resource has a serialized ATS annotation with the specified ID.
+     * @param annotationId The stable annotation identifier.
+     * @returns `true` if the annotation exists; otherwise, `false`.
+     */
+    async hasSerializedAnnotation(annotationId: string): Promise<boolean> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle, annotationId };
+        return await this._client.invokeCapability<boolean>(
+            'Aspire.Hosting/hasSerializedAnnotation',
+            rpcArgs
+        );
+    }
+
+    /** @internal */
+    private async _withArgsReplaceInternal(args: string[]): Promise<DotnetToolResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, args };
+        const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
+            'Aspire.Hosting/withArgsReplace',
+            rpcArgs
+        );
+        return new DotnetToolResourceImpl(result, this._client);
+    }
+
+    /**
+     * Replaces the arguments to be passed to a resource that supports arguments when it is launched.
+     * @param args The arguments to be passed to the resource when it is started.
+     * @returns The resource builder.
+     */
+    withArgsReplace(args: string[]): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromiseImpl(this._withArgsReplaceInternal(args), this._client);
     }
 
     /** @internal */
@@ -25940,7 +26988,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddProject<MyService>("my-service")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -25983,6 +27031,28 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
      */
     withCertificateTrustScope(scope: CertificateTrustScope): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._withCertificateTrustScopeInternal(scope), this._client);
+    }
+
+    /** @internal */
+    private async _withCertificateTrustEnvironmentInternal(certificateBundleEnvironmentVariable: string, certificateDirectoriesEnvironmentVariable?: string): Promise<DotnetToolResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, certificateBundleEnvironmentVariable };
+        if (certificateDirectoriesEnvironmentVariable !== undefined) rpcArgs.certificateDirectoriesEnvironmentVariable = certificateDirectoriesEnvironmentVariable;
+        const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
+            'Aspire.Hosting/withCertificateTrustEnvironment',
+            rpcArgs
+        );
+        return new DotnetToolResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures environment variables that point to Aspire-managed certificate trust paths.
+     * @param certificateBundleEnvironmentVariable The environment variable that receives the certificate bundle path.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withCertificateTrustEnvironment(certificateBundleEnvironmentVariable: string, options?: WithCertificateTrustEnvironmentOptions): DotnetToolResourcePromise {
+        const certificateDirectoriesEnvironmentVariable = options?.certificateDirectoriesEnvironmentVariable;
+        return new DotnetToolResourcePromiseImpl(this._withCertificateTrustEnvironmentInternal(certificateBundleEnvironmentVariable, certificateDirectoriesEnvironmentVariable), this._client);
     }
 
     /** @internal */
@@ -26173,6 +27243,29 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     }
 
     /** @internal */
+    private async _withResourceTypeDisplayNameInternal(resourceTypeDisplayName: string): Promise<DotnetToolResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, resourceTypeDisplayName };
+        const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
+            'Aspire.Hosting/withResourceTypeDisplayName',
+            rpcArgs
+        );
+        return new DotnetToolResourceImpl(result, this._client);
+    }
+
+    /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromiseImpl(this._withResourceTypeDisplayNameInternal(resourceTypeDisplayName), this._client);
+    }
+
+    /** @internal */
     private async _withIconNameInternal(iconName: string, iconVariant?: IconVariant): Promise<DotnetToolResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, iconName };
         if (iconVariant !== undefined) rpcArgs.iconVariant = iconVariant;
@@ -26217,6 +27310,31 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     }
 
     /** @internal */
+    private async _withExecutableDebugSupportInternal(launchConfigurationType: string, scriptPath: string, runtimeExecutable?: string, launchMethod?: string): Promise<DotnetToolResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, launchConfigurationType, scriptPath };
+        if (runtimeExecutable !== undefined) rpcArgs.runtimeExecutable = runtimeExecutable;
+        if (launchMethod !== undefined) rpcArgs.launchMethod = launchMethod;
+        const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
+            'Aspire.Hosting/withExecutableDebugSupport',
+            rpcArgs
+        );
+        return new DotnetToolResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds VS Code-compatible debug metadata for an executable resource.
+     * @param launchConfigurationType The launch configuration type understood by the extension.
+     * @param scriptPath The script path, relative to the executable working directory when not rooted.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withExecutableDebugSupport(launchConfigurationType: string, scriptPath: string, options?: WithExecutableDebugSupportOptions): DotnetToolResourcePromise {
+        const runtimeExecutable = options?.runtimeExecutable;
+        const launchMethod = options?.launchMethod;
+        return new DotnetToolResourcePromiseImpl(this._withExecutableDebugSupportInternal(launchConfigurationType, scriptPath, runtimeExecutable, launchMethod), this._client);
+    }
+
+    /** @internal */
     private async _withHttpProbeInternal(probeType: ProbeType, path?: string, initialDelaySeconds?: number | null, periodSeconds?: number | null, timeoutSeconds?: number | null, failureThreshold?: number | null, successThreshold?: number | null, endpointName?: string): Promise<DotnetToolResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, probeType };
         if (path !== undefined) rpcArgs.path = path;
@@ -26236,7 +27354,6 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): DotnetToolResourcePromise {
         const path = options?.path;
@@ -26391,8 +27508,71 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     }
 
     /** @internal */
-    private async _withTerminalInternal(): Promise<DotnetToolResource> {
+    private async _withTraitInternal(name: string, value: string): Promise<DotnetToolResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
+        const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
+            'Aspire.Hosting/withTrait',
+            rpcArgs
+        );
+        return new DotnetToolResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+     * @param name The case-sensitive trait name.
+     * @param value The trait value. Do not include secrets.
+     * @returns The resource builder.
+     */
+    withTrait(name: string, value: string): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromiseImpl(this._withTraitInternal(name, value), this._client);
+    }
+
+    /** @internal */
+    private async _withTagsInternal(tags: string[]): Promise<DotnetToolResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, tags };
+        const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
+            'Aspire.Hosting/withTags',
+            rpcArgs
+        );
+        return new DotnetToolResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+     * @param tags The tags, each up to 50 characters with single spaces between words.
+     * @returns The resource builder.
+     */
+    withTags(tags: string[]): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromiseImpl(this._withTagsInternal(tags), this._client);
+    }
+
+    /** @internal */
+    private async _withDisplayOrderInternal(order: number): Promise<DotnetToolResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, order };
+        const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
+            'Aspire.Hosting/withDisplayOrder',
+            rpcArgs
+        );
+        return new DotnetToolResourceImpl(result, this._client);
+    }
+
+    /**
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
+     * @returns The resource builder.
+     */
+    withDisplayOrder(order: number): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromiseImpl(this._withDisplayOrderInternal(order), this._client);
+    }
+
+    /** @internal */
+    private async _withTerminalInternal(configure?: (obj: TerminalOptions) => Promise<void>): Promise<DotnetToolResource> {
+        const configureId = configure ? registerCallback(async (objData: unknown) => {
+            const obj = wrapIfHandle(objData) as TerminalOptions;
+            await configure(obj);
+        }) : undefined;
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        if (configure !== undefined) rpcArgs.configure = configureId;
         const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
             'Aspire.Hosting/withTerminal',
             rpcArgs
@@ -26400,9 +27580,14 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
         return new DotnetToolResourceImpl(result, this._client);
     }
 
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    withTerminal(): DotnetToolResourcePromise {
-        return new DotnetToolResourcePromiseImpl(this._withTerminalInternal(), this._client);
+    /**
+     * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
+     */
+    withTerminal(options?: WithTerminalOptions): DotnetToolResourcePromise {
+        const configure = options?.configure;
+        return new DotnetToolResourcePromiseImpl(this._withTerminalInternal(configure), this._client);
     }
 
     /** @internal */
@@ -26430,7 +27615,6 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): DotnetToolResourcePromise {
         const dependsOn = options?.dependsOn;
@@ -26459,7 +27643,6 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._withPipelineConfigurationInternal(callback), this._client);
@@ -27100,6 +28283,10 @@ const DotnetToolResourcePromiseImpl = $aspireCreateFluentPromiseClass<DotnetTool
     ["withEnvironment"]: () => DotnetToolResourcePromiseImpl,
     ["withEnvironmentCallback"]: () => DotnetToolResourcePromiseImpl,
     ["withArgs"]: () => DotnetToolResourcePromiseImpl,
+    ["withSerializedAnnotation"]: () => ResourcePromiseImpl,
+    ["getSerializedAnnotation"]: null,
+    ["hasSerializedAnnotation"]: null,
+    ["withArgsReplace"]: () => DotnetToolResourcePromiseImpl,
     ["withArgsCallback"]: () => DotnetToolResourcePromiseImpl,
     ["withReferenceEnvironment"]: () => DotnetToolResourcePromiseImpl,
     ["withReference"]: () => DotnetToolResourcePromiseImpl,
@@ -27129,6 +28316,7 @@ const DotnetToolResourcePromiseImpl = $aspireCreateFluentPromiseClass<DotnetTool
     ["withHttpCommand"]: () => DotnetToolResourcePromiseImpl,
     ["withDeveloperCertificateTrust"]: () => DotnetToolResourcePromiseImpl,
     ["withCertificateTrustScope"]: () => DotnetToolResourcePromiseImpl,
+    ["withCertificateTrustEnvironment"]: () => DotnetToolResourcePromiseImpl,
     ["withHttpsDeveloperCertificate"]: () => DotnetToolResourcePromiseImpl,
     ["withoutHttpsCertificate"]: () => DotnetToolResourcePromiseImpl,
     ["withHttpsCertificateConfiguration"]: () => DotnetToolResourcePromiseImpl,
@@ -27136,8 +28324,10 @@ const DotnetToolResourcePromiseImpl = $aspireCreateFluentPromiseClass<DotnetTool
     ["withRelationship"]: () => DotnetToolResourcePromiseImpl,
     ["withParentRelationship"]: () => DotnetToolResourcePromiseImpl,
     ["withChildRelationship"]: () => DotnetToolResourcePromiseImpl,
+    ["withResourceTypeDisplayName"]: () => DotnetToolResourcePromiseImpl,
     ["withIconName"]: () => DotnetToolResourcePromiseImpl,
     ["withComputeEnvironment"]: () => DotnetToolResourcePromiseImpl,
+    ["withExecutableDebugSupport"]: () => DotnetToolResourcePromiseImpl,
     ["withHttpProbe"]: () => DotnetToolResourcePromiseImpl,
     ["excludeFromMcp"]: () => DotnetToolResourcePromiseImpl,
     ["withHidden"]: () => DotnetToolResourcePromiseImpl,
@@ -27145,6 +28335,9 @@ const DotnetToolResourcePromiseImpl = $aspireCreateFluentPromiseClass<DotnetTool
     ["withImagePushOptions"]: () => DotnetToolResourcePromiseImpl,
     ["withRemoteImageName"]: () => DotnetToolResourcePromiseImpl,
     ["withRemoteImageTag"]: () => DotnetToolResourcePromiseImpl,
+    ["withTrait"]: () => DotnetToolResourcePromiseImpl,
+    ["withTags"]: () => DotnetToolResourcePromiseImpl,
+    ["withDisplayOrder"]: () => DotnetToolResourcePromiseImpl,
     ["withTerminal"]: () => DotnetToolResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => DotnetToolResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => DotnetToolResourcePromiseImpl,
@@ -27209,20 +28402,10 @@ export interface ExecutableResource {
     /**
      * Configures custom base images for generated Dockerfiles.
      *
-     * This extension method allows customization of the base images used in generated Dockerfiles.
-     * For multi-stage Dockerfiles (e.g., Python with UV), you can specify separate build and runtime images.
-     * Specify custom base images for a Python application:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddPythonApp("myapp", "path/to/app", "main.py")
-     * .WithDockerfileBaseImage(
-     * buildImage: "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
-     * runtimeImage: "python:3.12-slim-bookworm");
-     * builder.Build().Run();
-     * ```
+     * For multi-stage Dockerfiles, specify separate build and runtime base images.
+     * Images that are not specified use the integration's defaults. At least one base image must be specified.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ExecutableResourcePromise;
     /**
@@ -27331,6 +28514,31 @@ export interface ExecutableResource {
      * @returns The resource builder.
      */
     withArgs(args: string[]): ExecutableResourcePromise;
+    /**
+     * Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+     * @param annotationId The stable annotation identifier.
+     * @param json The serialized JSON payload.
+     * @returns The resource.
+     */
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise;
+    /**
+     * Gets a serialized ATS annotation payload from a resource.
+     * @param annotationId The stable annotation identifier.
+     * @returns The serialized JSON payload.
+     */
+    getSerializedAnnotation(annotationId: string): Promise<string>;
+    /**
+     * Determines whether a resource has a serialized ATS annotation with the specified ID.
+     * @param annotationId The stable annotation identifier.
+     * @returns `true` if the annotation exists; otherwise, `false`.
+     */
+    hasSerializedAnnotation(annotationId: string): Promise<boolean>;
+    /**
+     * Replaces the arguments to be passed to a resource that supports arguments when it is launched.
+     * @param args The arguments to be passed to the resource when it is started.
+     * @returns The resource builder.
+     */
+    withArgsReplace(args: string[]): ExecutableResourcePromise;
     /**
      * Adds a callback to be executed with a list of command-line arguments when a resource is started.
      * @param callback A callback that allows for deferred execution for computing arguments. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.
@@ -27516,7 +28724,7 @@ export interface ExecutableResource {
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddProject<MyService>("my-service")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -27545,6 +28753,13 @@ export interface ExecutableResource {
      * @returns The resource builder.
      */
     withCertificateTrustScope(scope: CertificateTrustScope): ExecutableResourcePromise;
+    /**
+     * Configures environment variables that point to Aspire-managed certificate trust paths.
+     * @param certificateBundleEnvironmentVariable The environment variable that receives the certificate bundle path.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withCertificateTrustEnvironment(certificateBundleEnvironmentVariable: string, options?: WithCertificateTrustEnvironmentOptions): ExecutableResourcePromise;
     /**
      * Indicates that a resource should use the developer certificate key pair for HTTPS endpoints at run time. Currently this indicates use of the ASP.NET Core developer certificate. The developer certificate will only be used when running in local development scenarios; in publish mode resources will use their default certificate configuration.
      *
@@ -27626,6 +28841,16 @@ export interface ExecutableResource {
      */
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ExecutableResourcePromise;
     /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): ExecutableResourcePromise;
+    /**
      * Specifies the icon to use when displaying the resource in the dashboard.
      * @param iconName The name of the FluentUI icon to use. See https://aka.ms/fluentui-system-icons for available icons.
      * @param options Additional options.
@@ -27641,9 +28866,16 @@ export interface ExecutableResource {
      */
     withComputeEnvironment(computeEnvironmentResource: Awaitable<ComputeEnvironmentResource>): ExecutableResourcePromise;
     /**
+     * Adds VS Code-compatible debug metadata for an executable resource.
+     * @param launchConfigurationType The launch configuration type understood by the extension.
+     * @param scriptPath The script path, relative to the executable working directory when not rooted.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withExecutableDebugSupport(launchConfigurationType: string, scriptPath: string, options?: WithExecutableDebugSupportOptions): ExecutableResourcePromise;
+    /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): ExecutableResourcePromise;
     /**
@@ -27700,22 +28932,43 @@ export interface ExecutableResource {
      * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): ExecutableResourcePromise;
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    withTerminal(): ExecutableResourcePromise;
+    /**
+     * Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+     * @param name The case-sensitive trait name.
+     * @param value The trait value. Do not include secrets.
+     * @returns The resource builder.
+     */
+    withTrait(name: string, value: string): ExecutableResourcePromise;
+    /**
+     * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+     * @param tags The tags, each up to 50 characters with single spaces between words.
+     * @returns The resource builder.
+     */
+    withTags(tags: string[]): ExecutableResourcePromise;
+    /**
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
+     * @returns The resource builder.
+     */
+    withDisplayOrder(order: number): ExecutableResourcePromise;
+    /**
+     * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
+     */
+    withTerminal(options?: WithTerminalOptions): ExecutableResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ExecutableResourcePromise;
     /**
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ExecutableResourcePromise;
     /**
@@ -27854,20 +29107,10 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
     /**
      * Configures custom base images for generated Dockerfiles.
      *
-     * This extension method allows customization of the base images used in generated Dockerfiles.
-     * For multi-stage Dockerfiles (e.g., Python with UV), you can specify separate build and runtime images.
-     * Specify custom base images for a Python application:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddPythonApp("myapp", "path/to/app", "main.py")
-     * .WithDockerfileBaseImage(
-     * buildImage: "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
-     * runtimeImage: "python:3.12-slim-bookworm");
-     * builder.Build().Run();
-     * ```
+     * For multi-stage Dockerfiles, specify separate build and runtime base images.
+     * Images that are not specified use the integration's defaults. At least one base image must be specified.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ExecutableResourcePromise;
     /**
@@ -27976,6 +29219,31 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      * @returns The resource builder.
      */
     withArgs(args: string[]): ExecutableResourcePromise;
+    /**
+     * Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+     * @param annotationId The stable annotation identifier.
+     * @param json The serialized JSON payload.
+     * @returns The resource.
+     */
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise;
+    /**
+     * Gets a serialized ATS annotation payload from a resource.
+     * @param annotationId The stable annotation identifier.
+     * @returns The serialized JSON payload.
+     */
+    getSerializedAnnotation(annotationId: string): Promise<string>;
+    /**
+     * Determines whether a resource has a serialized ATS annotation with the specified ID.
+     * @param annotationId The stable annotation identifier.
+     * @returns `true` if the annotation exists; otherwise, `false`.
+     */
+    hasSerializedAnnotation(annotationId: string): Promise<boolean>;
+    /**
+     * Replaces the arguments to be passed to a resource that supports arguments when it is launched.
+     * @param args The arguments to be passed to the resource when it is started.
+     * @returns The resource builder.
+     */
+    withArgsReplace(args: string[]): ExecutableResourcePromise;
     /**
      * Adds a callback to be executed with a list of command-line arguments when a resource is started.
      * @param callback A callback that allows for deferred execution for computing arguments. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.
@@ -28161,7 +29429,7 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddProject<MyService>("my-service")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -28190,6 +29458,13 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      * @returns The resource builder.
      */
     withCertificateTrustScope(scope: CertificateTrustScope): ExecutableResourcePromise;
+    /**
+     * Configures environment variables that point to Aspire-managed certificate trust paths.
+     * @param certificateBundleEnvironmentVariable The environment variable that receives the certificate bundle path.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withCertificateTrustEnvironment(certificateBundleEnvironmentVariable: string, options?: WithCertificateTrustEnvironmentOptions): ExecutableResourcePromise;
     /**
      * Indicates that a resource should use the developer certificate key pair for HTTPS endpoints at run time. Currently this indicates use of the ASP.NET Core developer certificate. The developer certificate will only be used when running in local development scenarios; in publish mode resources will use their default certificate configuration.
      *
@@ -28271,6 +29546,16 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      */
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ExecutableResourcePromise;
     /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): ExecutableResourcePromise;
+    /**
      * Specifies the icon to use when displaying the resource in the dashboard.
      * @param iconName The name of the FluentUI icon to use. See https://aka.ms/fluentui-system-icons for available icons.
      * @param options Additional options.
@@ -28286,9 +29571,16 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      */
     withComputeEnvironment(computeEnvironmentResource: Awaitable<ComputeEnvironmentResource>): ExecutableResourcePromise;
     /**
+     * Adds VS Code-compatible debug metadata for an executable resource.
+     * @param launchConfigurationType The launch configuration type understood by the extension.
+     * @param scriptPath The script path, relative to the executable working directory when not rooted.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withExecutableDebugSupport(launchConfigurationType: string, scriptPath: string, options?: WithExecutableDebugSupportOptions): ExecutableResourcePromise;
+    /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): ExecutableResourcePromise;
     /**
@@ -28345,22 +29637,43 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): ExecutableResourcePromise;
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    withTerminal(): ExecutableResourcePromise;
+    /**
+     * Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+     * @param name The case-sensitive trait name.
+     * @param value The trait value. Do not include secrets.
+     * @returns The resource builder.
+     */
+    withTrait(name: string, value: string): ExecutableResourcePromise;
+    /**
+     * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+     * @param tags The tags, each up to 50 characters with single spaces between words.
+     * @returns The resource builder.
+     */
+    withTags(tags: string[]): ExecutableResourcePromise;
+    /**
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
+     * @returns The resource builder.
+     */
+    withDisplayOrder(order: number): ExecutableResourcePromise;
+    /**
+     * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
+     */
+    withTerminal(options?: WithTerminalOptions): ExecutableResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ExecutableResourcePromise;
     /**
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ExecutableResourcePromise;
     /**
@@ -28540,20 +29853,10 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     /**
      * Configures custom base images for generated Dockerfiles.
      *
-     * This extension method allows customization of the base images used in generated Dockerfiles.
-     * For multi-stage Dockerfiles (e.g., Python with UV), you can specify separate build and runtime images.
-     * Specify custom base images for a Python application:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddPythonApp("myapp", "path/to/app", "main.py")
-     * .WithDockerfileBaseImage(
-     * buildImage: "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
-     * runtimeImage: "python:3.12-slim-bookworm");
-     * builder.Build().Run();
-     * ```
+     * For multi-stage Dockerfiles, specify separate build and runtime base images.
+     * Images that are not specified use the integration's defaults. At least one base image must be specified.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ExecutableResourcePromise {
         const buildImage = options?.buildImage;
@@ -28874,6 +30177,69 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
      */
     withArgs(args: string[]): ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._withArgsInternal(args), this._client);
+    }
+
+    /**
+     * Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+     * @param annotationId The stable annotation identifier.
+     * @param json The serialized JSON payload.
+     * @returns The resource.
+     */
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise {
+        const promise = (async () => {
+            const rpcArgs: Record<string, unknown> = { resource: this._handle, annotationId, json };
+            const handle = await this._client.invokeCapability<IResourceHandle>(
+                'Aspire.Hosting/withSerializedAnnotation',
+                rpcArgs
+            );
+            return new ResourceImpl(handle, this._client);
+        })();
+        return new ResourcePromiseImpl(promise, this._client);
+    }
+
+    /**
+     * Gets a serialized ATS annotation payload from a resource.
+     * @param annotationId The stable annotation identifier.
+     * @returns The serialized JSON payload.
+     */
+    async getSerializedAnnotation(annotationId: string): Promise<string> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle, annotationId };
+        return await this._client.invokeCapability<string>(
+            'Aspire.Hosting/getSerializedAnnotation',
+            rpcArgs
+        );
+    }
+
+    /**
+     * Determines whether a resource has a serialized ATS annotation with the specified ID.
+     * @param annotationId The stable annotation identifier.
+     * @returns `true` if the annotation exists; otherwise, `false`.
+     */
+    async hasSerializedAnnotation(annotationId: string): Promise<boolean> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle, annotationId };
+        return await this._client.invokeCapability<boolean>(
+            'Aspire.Hosting/hasSerializedAnnotation',
+            rpcArgs
+        );
+    }
+
+    /** @internal */
+    private async _withArgsReplaceInternal(args: string[]): Promise<ExecutableResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, args };
+        const result = await this._client.invokeCapability<ExecutableResourceHandle>(
+            'Aspire.Hosting/withArgsReplace',
+            rpcArgs
+        );
+        return new ExecutableResourceImpl(result, this._client);
+    }
+
+    /**
+     * Replaces the arguments to be passed to a resource that supports arguments when it is launched.
+     * @param args The arguments to be passed to the resource when it is started.
+     * @returns The resource builder.
+     */
+    withArgsReplace(args: string[]): ExecutableResourcePromise {
+        return new ExecutableResourcePromiseImpl(this._withArgsReplaceInternal(args), this._client);
     }
 
     /** @internal */
@@ -29657,7 +31023,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddProject<MyService>("my-service")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -29700,6 +31066,28 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
      */
     withCertificateTrustScope(scope: CertificateTrustScope): ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._withCertificateTrustScopeInternal(scope), this._client);
+    }
+
+    /** @internal */
+    private async _withCertificateTrustEnvironmentInternal(certificateBundleEnvironmentVariable: string, certificateDirectoriesEnvironmentVariable?: string): Promise<ExecutableResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, certificateBundleEnvironmentVariable };
+        if (certificateDirectoriesEnvironmentVariable !== undefined) rpcArgs.certificateDirectoriesEnvironmentVariable = certificateDirectoriesEnvironmentVariable;
+        const result = await this._client.invokeCapability<ExecutableResourceHandle>(
+            'Aspire.Hosting/withCertificateTrustEnvironment',
+            rpcArgs
+        );
+        return new ExecutableResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures environment variables that point to Aspire-managed certificate trust paths.
+     * @param certificateBundleEnvironmentVariable The environment variable that receives the certificate bundle path.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withCertificateTrustEnvironment(certificateBundleEnvironmentVariable: string, options?: WithCertificateTrustEnvironmentOptions): ExecutableResourcePromise {
+        const certificateDirectoriesEnvironmentVariable = options?.certificateDirectoriesEnvironmentVariable;
+        return new ExecutableResourcePromiseImpl(this._withCertificateTrustEnvironmentInternal(certificateBundleEnvironmentVariable, certificateDirectoriesEnvironmentVariable), this._client);
     }
 
     /** @internal */
@@ -29890,6 +31278,29 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     }
 
     /** @internal */
+    private async _withResourceTypeDisplayNameInternal(resourceTypeDisplayName: string): Promise<ExecutableResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, resourceTypeDisplayName };
+        const result = await this._client.invokeCapability<ExecutableResourceHandle>(
+            'Aspire.Hosting/withResourceTypeDisplayName',
+            rpcArgs
+        );
+        return new ExecutableResourceImpl(result, this._client);
+    }
+
+    /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): ExecutableResourcePromise {
+        return new ExecutableResourcePromiseImpl(this._withResourceTypeDisplayNameInternal(resourceTypeDisplayName), this._client);
+    }
+
+    /** @internal */
     private async _withIconNameInternal(iconName: string, iconVariant?: IconVariant): Promise<ExecutableResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, iconName };
         if (iconVariant !== undefined) rpcArgs.iconVariant = iconVariant;
@@ -29934,6 +31345,31 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     }
 
     /** @internal */
+    private async _withExecutableDebugSupportInternal(launchConfigurationType: string, scriptPath: string, runtimeExecutable?: string, launchMethod?: string): Promise<ExecutableResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, launchConfigurationType, scriptPath };
+        if (runtimeExecutable !== undefined) rpcArgs.runtimeExecutable = runtimeExecutable;
+        if (launchMethod !== undefined) rpcArgs.launchMethod = launchMethod;
+        const result = await this._client.invokeCapability<ExecutableResourceHandle>(
+            'Aspire.Hosting/withExecutableDebugSupport',
+            rpcArgs
+        );
+        return new ExecutableResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds VS Code-compatible debug metadata for an executable resource.
+     * @param launchConfigurationType The launch configuration type understood by the extension.
+     * @param scriptPath The script path, relative to the executable working directory when not rooted.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withExecutableDebugSupport(launchConfigurationType: string, scriptPath: string, options?: WithExecutableDebugSupportOptions): ExecutableResourcePromise {
+        const runtimeExecutable = options?.runtimeExecutable;
+        const launchMethod = options?.launchMethod;
+        return new ExecutableResourcePromiseImpl(this._withExecutableDebugSupportInternal(launchConfigurationType, scriptPath, runtimeExecutable, launchMethod), this._client);
+    }
+
+    /** @internal */
     private async _withHttpProbeInternal(probeType: ProbeType, path?: string, initialDelaySeconds?: number | null, periodSeconds?: number | null, timeoutSeconds?: number | null, failureThreshold?: number | null, successThreshold?: number | null, endpointName?: string): Promise<ExecutableResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, probeType };
         if (path !== undefined) rpcArgs.path = path;
@@ -29953,7 +31389,6 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): ExecutableResourcePromise {
         const path = options?.path;
@@ -30108,8 +31543,71 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     }
 
     /** @internal */
-    private async _withTerminalInternal(): Promise<ExecutableResource> {
+    private async _withTraitInternal(name: string, value: string): Promise<ExecutableResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
+        const result = await this._client.invokeCapability<ExecutableResourceHandle>(
+            'Aspire.Hosting/withTrait',
+            rpcArgs
+        );
+        return new ExecutableResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+     * @param name The case-sensitive trait name.
+     * @param value The trait value. Do not include secrets.
+     * @returns The resource builder.
+     */
+    withTrait(name: string, value: string): ExecutableResourcePromise {
+        return new ExecutableResourcePromiseImpl(this._withTraitInternal(name, value), this._client);
+    }
+
+    /** @internal */
+    private async _withTagsInternal(tags: string[]): Promise<ExecutableResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, tags };
+        const result = await this._client.invokeCapability<ExecutableResourceHandle>(
+            'Aspire.Hosting/withTags',
+            rpcArgs
+        );
+        return new ExecutableResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+     * @param tags The tags, each up to 50 characters with single spaces between words.
+     * @returns The resource builder.
+     */
+    withTags(tags: string[]): ExecutableResourcePromise {
+        return new ExecutableResourcePromiseImpl(this._withTagsInternal(tags), this._client);
+    }
+
+    /** @internal */
+    private async _withDisplayOrderInternal(order: number): Promise<ExecutableResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, order };
+        const result = await this._client.invokeCapability<ExecutableResourceHandle>(
+            'Aspire.Hosting/withDisplayOrder',
+            rpcArgs
+        );
+        return new ExecutableResourceImpl(result, this._client);
+    }
+
+    /**
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
+     * @returns The resource builder.
+     */
+    withDisplayOrder(order: number): ExecutableResourcePromise {
+        return new ExecutableResourcePromiseImpl(this._withDisplayOrderInternal(order), this._client);
+    }
+
+    /** @internal */
+    private async _withTerminalInternal(configure?: (obj: TerminalOptions) => Promise<void>): Promise<ExecutableResource> {
+        const configureId = configure ? registerCallback(async (objData: unknown) => {
+            const obj = wrapIfHandle(objData) as TerminalOptions;
+            await configure(obj);
+        }) : undefined;
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        if (configure !== undefined) rpcArgs.configure = configureId;
         const result = await this._client.invokeCapability<ExecutableResourceHandle>(
             'Aspire.Hosting/withTerminal',
             rpcArgs
@@ -30117,9 +31615,14 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
         return new ExecutableResourceImpl(result, this._client);
     }
 
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    withTerminal(): ExecutableResourcePromise {
-        return new ExecutableResourcePromiseImpl(this._withTerminalInternal(), this._client);
+    /**
+     * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
+     */
+    withTerminal(options?: WithTerminalOptions): ExecutableResourcePromise {
+        const configure = options?.configure;
+        return new ExecutableResourcePromiseImpl(this._withTerminalInternal(configure), this._client);
     }
 
     /** @internal */
@@ -30147,7 +31650,6 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ExecutableResourcePromise {
         const dependsOn = options?.dependsOn;
@@ -30176,7 +31678,6 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._withPipelineConfigurationInternal(callback), this._client);
@@ -30811,6 +32312,10 @@ const ExecutableResourcePromiseImpl = $aspireCreateFluentPromiseClass<Executable
     ["withEnvironment"]: () => ExecutableResourcePromiseImpl,
     ["withEnvironmentCallback"]: () => ExecutableResourcePromiseImpl,
     ["withArgs"]: () => ExecutableResourcePromiseImpl,
+    ["withSerializedAnnotation"]: () => ResourcePromiseImpl,
+    ["getSerializedAnnotation"]: null,
+    ["hasSerializedAnnotation"]: null,
+    ["withArgsReplace"]: () => ExecutableResourcePromiseImpl,
     ["withArgsCallback"]: () => ExecutableResourcePromiseImpl,
     ["withReferenceEnvironment"]: () => ExecutableResourcePromiseImpl,
     ["withReference"]: () => ExecutableResourcePromiseImpl,
@@ -30840,6 +32345,7 @@ const ExecutableResourcePromiseImpl = $aspireCreateFluentPromiseClass<Executable
     ["withHttpCommand"]: () => ExecutableResourcePromiseImpl,
     ["withDeveloperCertificateTrust"]: () => ExecutableResourcePromiseImpl,
     ["withCertificateTrustScope"]: () => ExecutableResourcePromiseImpl,
+    ["withCertificateTrustEnvironment"]: () => ExecutableResourcePromiseImpl,
     ["withHttpsDeveloperCertificate"]: () => ExecutableResourcePromiseImpl,
     ["withoutHttpsCertificate"]: () => ExecutableResourcePromiseImpl,
     ["withHttpsCertificateConfiguration"]: () => ExecutableResourcePromiseImpl,
@@ -30847,8 +32353,10 @@ const ExecutableResourcePromiseImpl = $aspireCreateFluentPromiseClass<Executable
     ["withRelationship"]: () => ExecutableResourcePromiseImpl,
     ["withParentRelationship"]: () => ExecutableResourcePromiseImpl,
     ["withChildRelationship"]: () => ExecutableResourcePromiseImpl,
+    ["withResourceTypeDisplayName"]: () => ExecutableResourcePromiseImpl,
     ["withIconName"]: () => ExecutableResourcePromiseImpl,
     ["withComputeEnvironment"]: () => ExecutableResourcePromiseImpl,
+    ["withExecutableDebugSupport"]: () => ExecutableResourcePromiseImpl,
     ["withHttpProbe"]: () => ExecutableResourcePromiseImpl,
     ["excludeFromMcp"]: () => ExecutableResourcePromiseImpl,
     ["withHidden"]: () => ExecutableResourcePromiseImpl,
@@ -30856,6 +32364,9 @@ const ExecutableResourcePromiseImpl = $aspireCreateFluentPromiseClass<Executable
     ["withImagePushOptions"]: () => ExecutableResourcePromiseImpl,
     ["withRemoteImageName"]: () => ExecutableResourcePromiseImpl,
     ["withRemoteImageTag"]: () => ExecutableResourcePromiseImpl,
+    ["withTrait"]: () => ExecutableResourcePromiseImpl,
+    ["withTags"]: () => ExecutableResourcePromiseImpl,
+    ["withDisplayOrder"]: () => ExecutableResourcePromiseImpl,
     ["withTerminal"]: () => ExecutableResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => ExecutableResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => ExecutableResourcePromiseImpl,
@@ -30913,20 +32424,10 @@ export interface ExternalServiceResource {
     /**
      * Configures custom base images for generated Dockerfiles.
      *
-     * This extension method allows customization of the base images used in generated Dockerfiles.
-     * For multi-stage Dockerfiles (e.g., Python with UV), you can specify separate build and runtime images.
-     * Specify custom base images for a Python application:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddPythonApp("myapp", "path/to/app", "main.py")
-     * .WithDockerfileBaseImage(
-     * buildImage: "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
-     * runtimeImage: "python:3.12-slim-bookworm");
-     * builder.Build().Run();
-     * ```
+     * For multi-stage Dockerfiles, specify separate build and runtime base images.
+     * Images that are not specified use the integration's defaults. At least one base image must be specified.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ExternalServiceResourcePromise;
     /**
@@ -30989,6 +32490,25 @@ export interface ExternalServiceResource {
      * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): ExternalServiceResourcePromise;
+    /**
+     * Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+     * @param annotationId The stable annotation identifier.
+     * @param json The serialized JSON payload.
+     * @returns The resource.
+     */
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise;
+    /**
+     * Gets a serialized ATS annotation payload from a resource.
+     * @param annotationId The stable annotation identifier.
+     * @returns The serialized JSON payload.
+     */
+    getSerializedAnnotation(annotationId: string): Promise<string>;
+    /**
+     * Determines whether a resource has a serialized ATS annotation with the specified ID.
+     * @param annotationId The stable annotation identifier.
+     * @returns `true` if the annotation exists; otherwise, `false`.
+     */
+    hasSerializedAnnotation(annotationId: string): Promise<boolean>;
     /**
      * Registers a callback to customize the URLs displayed for the resource.
      * @param callback The callback that will customize URLs for the resource.
@@ -31086,6 +32606,16 @@ export interface ExternalServiceResource {
      */
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ExternalServiceResourcePromise;
     /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): ExternalServiceResourcePromise;
+    /**
      * Specifies the icon to use when displaying the resource in the dashboard.
      * @param iconName The name of the FluentUI icon to use. See https://aka.ms/fluentui-system-icons for available icons.
      * @param options Additional options.
@@ -31115,22 +32645,43 @@ export interface ExternalServiceResource {
      * @returns The resource builder.
      */
     withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ExternalServiceResourcePromise;
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    withTerminal(): ExternalServiceResourcePromise;
+    /**
+     * Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+     * @param name The case-sensitive trait name.
+     * @param value The trait value. Do not include secrets.
+     * @returns The resource builder.
+     */
+    withTrait(name: string, value: string): ExternalServiceResourcePromise;
+    /**
+     * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+     * @param tags The tags, each up to 50 characters with single spaces between words.
+     * @returns The resource builder.
+     */
+    withTags(tags: string[]): ExternalServiceResourcePromise;
+    /**
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
+     * @returns The resource builder.
+     */
+    withDisplayOrder(order: number): ExternalServiceResourcePromise;
+    /**
+     * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
+     */
+    withTerminal(options?: WithTerminalOptions): ExternalServiceResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ExternalServiceResourcePromise;
     /**
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ExternalServiceResourcePromise;
     /**
@@ -31250,20 +32801,10 @@ export interface ExternalServiceResourcePromise extends PromiseLike<ExternalServ
     /**
      * Configures custom base images for generated Dockerfiles.
      *
-     * This extension method allows customization of the base images used in generated Dockerfiles.
-     * For multi-stage Dockerfiles (e.g., Python with UV), you can specify separate build and runtime images.
-     * Specify custom base images for a Python application:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddPythonApp("myapp", "path/to/app", "main.py")
-     * .WithDockerfileBaseImage(
-     * buildImage: "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
-     * runtimeImage: "python:3.12-slim-bookworm");
-     * builder.Build().Run();
-     * ```
+     * For multi-stage Dockerfiles, specify separate build and runtime base images.
+     * Images that are not specified use the integration's defaults. At least one base image must be specified.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ExternalServiceResourcePromise;
     /**
@@ -31326,6 +32867,25 @@ export interface ExternalServiceResourcePromise extends PromiseLike<ExternalServ
      * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): ExternalServiceResourcePromise;
+    /**
+     * Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+     * @param annotationId The stable annotation identifier.
+     * @param json The serialized JSON payload.
+     * @returns The resource.
+     */
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise;
+    /**
+     * Gets a serialized ATS annotation payload from a resource.
+     * @param annotationId The stable annotation identifier.
+     * @returns The serialized JSON payload.
+     */
+    getSerializedAnnotation(annotationId: string): Promise<string>;
+    /**
+     * Determines whether a resource has a serialized ATS annotation with the specified ID.
+     * @param annotationId The stable annotation identifier.
+     * @returns `true` if the annotation exists; otherwise, `false`.
+     */
+    hasSerializedAnnotation(annotationId: string): Promise<boolean>;
     /**
      * Registers a callback to customize the URLs displayed for the resource.
      * @param callback The callback that will customize URLs for the resource.
@@ -31423,6 +32983,16 @@ export interface ExternalServiceResourcePromise extends PromiseLike<ExternalServ
      */
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ExternalServiceResourcePromise;
     /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): ExternalServiceResourcePromise;
+    /**
      * Specifies the icon to use when displaying the resource in the dashboard.
      * @param iconName The name of the FluentUI icon to use. See https://aka.ms/fluentui-system-icons for available icons.
      * @param options Additional options.
@@ -31452,22 +33022,43 @@ export interface ExternalServiceResourcePromise extends PromiseLike<ExternalServ
      * @returns The resource builder.
      */
     withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ExternalServiceResourcePromise;
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    withTerminal(): ExternalServiceResourcePromise;
+    /**
+     * Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+     * @param name The case-sensitive trait name.
+     * @param value The trait value. Do not include secrets.
+     * @returns The resource builder.
+     */
+    withTrait(name: string, value: string): ExternalServiceResourcePromise;
+    /**
+     * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+     * @param tags The tags, each up to 50 characters with single spaces between words.
+     * @returns The resource builder.
+     */
+    withTags(tags: string[]): ExternalServiceResourcePromise;
+    /**
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
+     * @returns The resource builder.
+     */
+    withDisplayOrder(order: number): ExternalServiceResourcePromise;
+    /**
+     * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
+     */
+    withTerminal(options?: WithTerminalOptions): ExternalServiceResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ExternalServiceResourcePromise;
     /**
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ExternalServiceResourcePromise;
     /**
@@ -31621,20 +33212,10 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
     /**
      * Configures custom base images for generated Dockerfiles.
      *
-     * This extension method allows customization of the base images used in generated Dockerfiles.
-     * For multi-stage Dockerfiles (e.g., Python with UV), you can specify separate build and runtime images.
-     * Specify custom base images for a Python application:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddPythonApp("myapp", "path/to/app", "main.py")
-     * .WithDockerfileBaseImage(
-     * buildImage: "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
-     * runtimeImage: "python:3.12-slim-bookworm");
-     * builder.Build().Run();
-     * ```
+     * For multi-stage Dockerfiles, specify separate build and runtime base images.
+     * Images that are not specified use the integration's defaults. At least one base image must be specified.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ExternalServiceResourcePromise {
         const buildImage = options?.buildImage;
@@ -31807,6 +33388,50 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
      */
     withParentProcessLifetime(parentProcessId: number): ExternalServiceResourcePromise {
         return new ExternalServiceResourcePromiseImpl(this._withParentProcessLifetimeInternal(parentProcessId), this._client);
+    }
+
+    /**
+     * Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+     * @param annotationId The stable annotation identifier.
+     * @param json The serialized JSON payload.
+     * @returns The resource.
+     */
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise {
+        const promise = (async () => {
+            const rpcArgs: Record<string, unknown> = { resource: this._handle, annotationId, json };
+            const handle = await this._client.invokeCapability<IResourceHandle>(
+                'Aspire.Hosting/withSerializedAnnotation',
+                rpcArgs
+            );
+            return new ResourceImpl(handle, this._client);
+        })();
+        return new ResourcePromiseImpl(promise, this._client);
+    }
+
+    /**
+     * Gets a serialized ATS annotation payload from a resource.
+     * @param annotationId The stable annotation identifier.
+     * @returns The serialized JSON payload.
+     */
+    async getSerializedAnnotation(annotationId: string): Promise<string> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle, annotationId };
+        return await this._client.invokeCapability<string>(
+            'Aspire.Hosting/getSerializedAnnotation',
+            rpcArgs
+        );
+    }
+
+    /**
+     * Determines whether a resource has a serialized ATS annotation with the specified ID.
+     * @param annotationId The stable annotation identifier.
+     * @returns `true` if the annotation exists; otherwise, `false`.
+     */
+    async hasSerializedAnnotation(annotationId: string): Promise<boolean> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle, annotationId };
+        return await this._client.invokeCapability<boolean>(
+            'Aspire.Hosting/hasSerializedAnnotation',
+            rpcArgs
+        );
     }
 
     /** @internal */
@@ -32194,6 +33819,29 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
     }
 
     /** @internal */
+    private async _withResourceTypeDisplayNameInternal(resourceTypeDisplayName: string): Promise<ExternalServiceResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, resourceTypeDisplayName };
+        const result = await this._client.invokeCapability<ExternalServiceResourceHandle>(
+            'Aspire.Hosting/withResourceTypeDisplayName',
+            rpcArgs
+        );
+        return new ExternalServiceResourceImpl(result, this._client);
+    }
+
+    /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): ExternalServiceResourcePromise {
+        return new ExternalServiceResourcePromiseImpl(this._withResourceTypeDisplayNameInternal(resourceTypeDisplayName), this._client);
+    }
+
+    /** @internal */
     private async _withIconNameInternal(iconName: string, iconVariant?: IconVariant): Promise<ExternalServiceResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, iconName };
         if (iconVariant !== undefined) rpcArgs.iconVariant = iconVariant;
@@ -32282,8 +33930,71 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
     }
 
     /** @internal */
-    private async _withTerminalInternal(): Promise<ExternalServiceResource> {
+    private async _withTraitInternal(name: string, value: string): Promise<ExternalServiceResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
+        const result = await this._client.invokeCapability<ExternalServiceResourceHandle>(
+            'Aspire.Hosting/withTrait',
+            rpcArgs
+        );
+        return new ExternalServiceResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+     * @param name The case-sensitive trait name.
+     * @param value The trait value. Do not include secrets.
+     * @returns The resource builder.
+     */
+    withTrait(name: string, value: string): ExternalServiceResourcePromise {
+        return new ExternalServiceResourcePromiseImpl(this._withTraitInternal(name, value), this._client);
+    }
+
+    /** @internal */
+    private async _withTagsInternal(tags: string[]): Promise<ExternalServiceResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, tags };
+        const result = await this._client.invokeCapability<ExternalServiceResourceHandle>(
+            'Aspire.Hosting/withTags',
+            rpcArgs
+        );
+        return new ExternalServiceResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+     * @param tags The tags, each up to 50 characters with single spaces between words.
+     * @returns The resource builder.
+     */
+    withTags(tags: string[]): ExternalServiceResourcePromise {
+        return new ExternalServiceResourcePromiseImpl(this._withTagsInternal(tags), this._client);
+    }
+
+    /** @internal */
+    private async _withDisplayOrderInternal(order: number): Promise<ExternalServiceResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, order };
+        const result = await this._client.invokeCapability<ExternalServiceResourceHandle>(
+            'Aspire.Hosting/withDisplayOrder',
+            rpcArgs
+        );
+        return new ExternalServiceResourceImpl(result, this._client);
+    }
+
+    /**
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
+     * @returns The resource builder.
+     */
+    withDisplayOrder(order: number): ExternalServiceResourcePromise {
+        return new ExternalServiceResourcePromiseImpl(this._withDisplayOrderInternal(order), this._client);
+    }
+
+    /** @internal */
+    private async _withTerminalInternal(configure?: (obj: TerminalOptions) => Promise<void>): Promise<ExternalServiceResource> {
+        const configureId = configure ? registerCallback(async (objData: unknown) => {
+            const obj = wrapIfHandle(objData) as TerminalOptions;
+            await configure(obj);
+        }) : undefined;
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        if (configure !== undefined) rpcArgs.configure = configureId;
         const result = await this._client.invokeCapability<ExternalServiceResourceHandle>(
             'Aspire.Hosting/withTerminal',
             rpcArgs
@@ -32291,9 +34002,14 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
         return new ExternalServiceResourceImpl(result, this._client);
     }
 
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    withTerminal(): ExternalServiceResourcePromise {
-        return new ExternalServiceResourcePromiseImpl(this._withTerminalInternal(), this._client);
+    /**
+     * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
+     */
+    withTerminal(options?: WithTerminalOptions): ExternalServiceResourcePromise {
+        const configure = options?.configure;
+        return new ExternalServiceResourcePromiseImpl(this._withTerminalInternal(configure), this._client);
     }
 
     /** @internal */
@@ -32321,7 +34037,6 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ExternalServiceResourcePromise {
         const dependsOn = options?.dependsOn;
@@ -32350,7 +34065,6 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ExternalServiceResourcePromise {
         return new ExternalServiceResourcePromiseImpl(this._withPipelineConfigurationInternal(callback), this._client);
@@ -32895,6 +34609,9 @@ const ExternalServiceResourcePromiseImpl = $aspireCreateFluentPromiseClass<Exter
     ["withPersistentLifetime"]: () => ExternalServiceResourcePromiseImpl,
     ["withLifetimeOf"]: () => ExternalServiceResourcePromiseImpl,
     ["withParentProcessLifetime"]: () => ExternalServiceResourcePromiseImpl,
+    ["withSerializedAnnotation"]: () => ResourcePromiseImpl,
+    ["getSerializedAnnotation"]: null,
+    ["hasSerializedAnnotation"]: null,
     ["withUrls"]: () => ExternalServiceResourcePromiseImpl,
     ["withUrl"]: () => ExternalServiceResourcePromiseImpl,
     ["withUrlForEndpoint"]: () => ExternalServiceResourcePromiseImpl,
@@ -32908,10 +34625,14 @@ const ExternalServiceResourcePromiseImpl = $aspireCreateFluentPromiseClass<Exter
     ["withRelationship"]: () => ExternalServiceResourcePromiseImpl,
     ["withParentRelationship"]: () => ExternalServiceResourcePromiseImpl,
     ["withChildRelationship"]: () => ExternalServiceResourcePromiseImpl,
+    ["withResourceTypeDisplayName"]: () => ExternalServiceResourcePromiseImpl,
     ["withIconName"]: () => ExternalServiceResourcePromiseImpl,
     ["excludeFromMcp"]: () => ExternalServiceResourcePromiseImpl,
     ["withHidden"]: () => ExternalServiceResourcePromiseImpl,
     ["withHiddenOnCompletion"]: () => ExternalServiceResourcePromiseImpl,
+    ["withTrait"]: () => ExternalServiceResourcePromiseImpl,
+    ["withTags"]: () => ExternalServiceResourcePromiseImpl,
+    ["withDisplayOrder"]: () => ExternalServiceResourcePromiseImpl,
     ["withTerminal"]: () => ExternalServiceResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => ExternalServiceResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => ExternalServiceResourcePromiseImpl,
@@ -32966,20 +34687,10 @@ export interface ParameterResource {
     /**
      * Configures custom base images for generated Dockerfiles.
      *
-     * This extension method allows customization of the base images used in generated Dockerfiles.
-     * For multi-stage Dockerfiles (e.g., Python with UV), you can specify separate build and runtime images.
-     * Specify custom base images for a Python application:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddPythonApp("myapp", "path/to/app", "main.py")
-     * .WithDockerfileBaseImage(
-     * buildImage: "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
-     * runtimeImage: "python:3.12-slim-bookworm");
-     * builder.Build().Run();
-     * ```
+     * For multi-stage Dockerfiles, specify separate build and runtime base images.
+     * Images that are not specified use the integration's defaults. At least one base image must be specified.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ParameterResourcePromise;
     /**
@@ -32989,6 +34700,21 @@ export interface ParameterResource {
      * @returns Resource builder for the parameter.
      */
     withDescription(description: string, options?: WithDescriptionOptions): ParameterResourcePromise;
+    /**
+     * Marks the parameter resource as optional.
+     *
+     * Optional parameters that do not have values are not prompted for during run or publish operations.
+     * When referenced as environment variables or other value providers, unset optional parameters resolve to `null`.
+     * The manifest publisher does not currently support optional parameters and throws a `DistributedApplicationException`.
+     * @returns The configured resource builder.
+     */
+    withOptional(): ParameterResourcePromise;
+    /**
+     * Sets whether the parameter resource requires a value.
+     * @param options Additional options.
+     * @returns The configured resource builder.
+     */
+    withRequired(options?: WithRequiredOptions): ParameterResourcePromise;
     /**
      * Sets a custom input for the parameter resource from a polyglot app host.
      * @param options Options used to customize the input for the parameter.
@@ -33050,6 +34776,25 @@ export interface ParameterResource {
      * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): ParameterResourcePromise;
+    /**
+     * Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+     * @param annotationId The stable annotation identifier.
+     * @param json The serialized JSON payload.
+     * @returns The resource.
+     */
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise;
+    /**
+     * Gets a serialized ATS annotation payload from a resource.
+     * @param annotationId The stable annotation identifier.
+     * @returns The serialized JSON payload.
+     */
+    getSerializedAnnotation(annotationId: string): Promise<string>;
+    /**
+     * Determines whether a resource has a serialized ATS annotation with the specified ID.
+     * @param annotationId The stable annotation identifier.
+     * @returns `true` if the annotation exists; otherwise, `false`.
+     */
+    hasSerializedAnnotation(annotationId: string): Promise<boolean>;
     /**
      * Registers a callback to customize the URLs displayed for the resource.
      * @param callback The callback that will customize URLs for the resource.
@@ -33147,6 +34892,16 @@ export interface ParameterResource {
      */
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ParameterResourcePromise;
     /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): ParameterResourcePromise;
+    /**
      * Specifies the icon to use when displaying the resource in the dashboard.
      * @param iconName The name of the FluentUI icon to use. See https://aka.ms/fluentui-system-icons for available icons.
      * @param options Additional options.
@@ -33176,22 +34931,43 @@ export interface ParameterResource {
      * @returns The resource builder.
      */
     withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ParameterResourcePromise;
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    withTerminal(): ParameterResourcePromise;
+    /**
+     * Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+     * @param name The case-sensitive trait name.
+     * @param value The trait value. Do not include secrets.
+     * @returns The resource builder.
+     */
+    withTrait(name: string, value: string): ParameterResourcePromise;
+    /**
+     * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+     * @param tags The tags, each up to 50 characters with single spaces between words.
+     * @returns The resource builder.
+     */
+    withTags(tags: string[]): ParameterResourcePromise;
+    /**
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
+     * @returns The resource builder.
+     */
+    withDisplayOrder(order: number): ParameterResourcePromise;
+    /**
+     * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
+     */
+    withTerminal(options?: WithTerminalOptions): ParameterResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ParameterResourcePromise;
     /**
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ParameterResourcePromise;
     /**
@@ -33232,6 +35008,25 @@ export interface ParameterResource {
      * @returns The execution configuration builder.
      */
     createExecutionConfiguration(): ExecutionConfigurationBuilderPromise;
+    /**
+     * Gets the current value for this parameter without waiting for unresolved input.
+     *
+     * This method returns `null` for unresolved parameters, parameters with initialization errors, and optional
+     * parameters that resolved without a value.
+     * @returns The current parameter value, or `null` if the parameter does not currently have a non-empty value.
+     */
+    tryGetCurrentValue(): Promise<string | null>;
+    /**
+     * Sets or replaces the value for this parameter.
+     *
+     * Setting a value directly on the resource updates dashboard state after the resource has been observed by the host.
+     * It does not save the value to deployment state. Required parameters set to `null` or an empty string
+     * are faulted with `MissingParameterValueException`, while optional parameters can be cleared to `null`.
+     * Cancellation is checked before assignment. After assignment, cancellation does not roll back the value or
+     * prevent the host from synchronizing dashboard and parameter-resolution state, even if another observer reports cancellation.
+     * @param options Additional options.
+     */
+    setValueAsync(options?: SetValueAsyncOptions): Promise<void>;
     /**
      * Configures container build options for a compute resource using an async callback.
      * @param callback An async callback to configure container build options.
@@ -33311,20 +35106,10 @@ export interface ParameterResourcePromise extends PromiseLike<ParameterResource>
     /**
      * Configures custom base images for generated Dockerfiles.
      *
-     * This extension method allows customization of the base images used in generated Dockerfiles.
-     * For multi-stage Dockerfiles (e.g., Python with UV), you can specify separate build and runtime images.
-     * Specify custom base images for a Python application:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddPythonApp("myapp", "path/to/app", "main.py")
-     * .WithDockerfileBaseImage(
-     * buildImage: "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
-     * runtimeImage: "python:3.12-slim-bookworm");
-     * builder.Build().Run();
-     * ```
+     * For multi-stage Dockerfiles, specify separate build and runtime base images.
+     * Images that are not specified use the integration's defaults. At least one base image must be specified.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ParameterResourcePromise;
     /**
@@ -33334,6 +35119,21 @@ export interface ParameterResourcePromise extends PromiseLike<ParameterResource>
      * @returns Resource builder for the parameter.
      */
     withDescription(description: string, options?: WithDescriptionOptions): ParameterResourcePromise;
+    /**
+     * Marks the parameter resource as optional.
+     *
+     * Optional parameters that do not have values are not prompted for during run or publish operations.
+     * When referenced as environment variables or other value providers, unset optional parameters resolve to `null`.
+     * The manifest publisher does not currently support optional parameters and throws a `DistributedApplicationException`.
+     * @returns The configured resource builder.
+     */
+    withOptional(): ParameterResourcePromise;
+    /**
+     * Sets whether the parameter resource requires a value.
+     * @param options Additional options.
+     * @returns The configured resource builder.
+     */
+    withRequired(options?: WithRequiredOptions): ParameterResourcePromise;
     /**
      * Sets a custom input for the parameter resource from a polyglot app host.
      * @param options Options used to customize the input for the parameter.
@@ -33395,6 +35195,25 @@ export interface ParameterResourcePromise extends PromiseLike<ParameterResource>
      * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): ParameterResourcePromise;
+    /**
+     * Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+     * @param annotationId The stable annotation identifier.
+     * @param json The serialized JSON payload.
+     * @returns The resource.
+     */
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise;
+    /**
+     * Gets a serialized ATS annotation payload from a resource.
+     * @param annotationId The stable annotation identifier.
+     * @returns The serialized JSON payload.
+     */
+    getSerializedAnnotation(annotationId: string): Promise<string>;
+    /**
+     * Determines whether a resource has a serialized ATS annotation with the specified ID.
+     * @param annotationId The stable annotation identifier.
+     * @returns `true` if the annotation exists; otherwise, `false`.
+     */
+    hasSerializedAnnotation(annotationId: string): Promise<boolean>;
     /**
      * Registers a callback to customize the URLs displayed for the resource.
      * @param callback The callback that will customize URLs for the resource.
@@ -33492,6 +35311,16 @@ export interface ParameterResourcePromise extends PromiseLike<ParameterResource>
      */
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ParameterResourcePromise;
     /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): ParameterResourcePromise;
+    /**
      * Specifies the icon to use when displaying the resource in the dashboard.
      * @param iconName The name of the FluentUI icon to use. See https://aka.ms/fluentui-system-icons for available icons.
      * @param options Additional options.
@@ -33521,22 +35350,43 @@ export interface ParameterResourcePromise extends PromiseLike<ParameterResource>
      * @returns The resource builder.
      */
     withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ParameterResourcePromise;
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    withTerminal(): ParameterResourcePromise;
+    /**
+     * Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+     * @param name The case-sensitive trait name.
+     * @param value The trait value. Do not include secrets.
+     * @returns The resource builder.
+     */
+    withTrait(name: string, value: string): ParameterResourcePromise;
+    /**
+     * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+     * @param tags The tags, each up to 50 characters with single spaces between words.
+     * @returns The resource builder.
+     */
+    withTags(tags: string[]): ParameterResourcePromise;
+    /**
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
+     * @returns The resource builder.
+     */
+    withDisplayOrder(order: number): ParameterResourcePromise;
+    /**
+     * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
+     */
+    withTerminal(options?: WithTerminalOptions): ParameterResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ParameterResourcePromise;
     /**
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ParameterResourcePromise;
     /**
@@ -33577,6 +35427,25 @@ export interface ParameterResourcePromise extends PromiseLike<ParameterResource>
      * @returns The execution configuration builder.
      */
     createExecutionConfiguration(): ExecutionConfigurationBuilderPromise;
+    /**
+     * Gets the current value for this parameter without waiting for unresolved input.
+     *
+     * This method returns `null` for unresolved parameters, parameters with initialization errors, and optional
+     * parameters that resolved without a value.
+     * @returns The current parameter value, or `null` if the parameter does not currently have a non-empty value.
+     */
+    tryGetCurrentValue(): Promise<string | null>;
+    /**
+     * Sets or replaces the value for this parameter.
+     *
+     * Setting a value directly on the resource updates dashboard state after the resource has been observed by the host.
+     * It does not save the value to deployment state. Required parameters set to `null` or an empty string
+     * are faulted with `MissingParameterValueException`, while optional parameters can be cleared to `null`.
+     * Cancellation is checked before assignment. After assignment, cancellation does not roll back the value or
+     * prevent the host from synchronizing dashboard and parameter-resolution state, even if another observer reports cancellation.
+     * @param options Additional options.
+     */
+    setValueAsync(options?: SetValueAsyncOptions): Promise<void>;
     /**
      * Configures container build options for a compute resource using an async callback.
      * @param callback An async callback to configure container build options.
@@ -33691,20 +35560,10 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
     /**
      * Configures custom base images for generated Dockerfiles.
      *
-     * This extension method allows customization of the base images used in generated Dockerfiles.
-     * For multi-stage Dockerfiles (e.g., Python with UV), you can specify separate build and runtime images.
-     * Specify custom base images for a Python application:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddPythonApp("myapp", "path/to/app", "main.py")
-     * .WithDockerfileBaseImage(
-     * buildImage: "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
-     * runtimeImage: "python:3.12-slim-bookworm");
-     * builder.Build().Run();
-     * ```
+     * For multi-stage Dockerfiles, specify separate build and runtime base images.
+     * Images that are not specified use the integration's defaults. At least one base image must be specified.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ParameterResourcePromise {
         const buildImage = options?.buildImage;
@@ -33732,6 +35591,49 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
     withDescription(description: string, options?: WithDescriptionOptions): ParameterResourcePromise {
         const enableMarkdown = options?.enableMarkdown;
         return new ParameterResourcePromiseImpl(this._withDescriptionInternal(description, enableMarkdown), this._client);
+    }
+
+    /** @internal */
+    private async _withOptionalInternal(): Promise<ParameterResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        const result = await this._client.invokeCapability<ParameterResourceHandle>(
+            'Aspire.Hosting/withOptional',
+            rpcArgs
+        );
+        return new ParameterResourceImpl(result, this._client);
+    }
+
+    /**
+     * Marks the parameter resource as optional.
+     *
+     * Optional parameters that do not have values are not prompted for during run or publish operations.
+     * When referenced as environment variables or other value providers, unset optional parameters resolve to `null`.
+     * The manifest publisher does not currently support optional parameters and throws a `DistributedApplicationException`.
+     * @returns The configured resource builder.
+     */
+    withOptional(): ParameterResourcePromise {
+        return new ParameterResourcePromiseImpl(this._withOptionalInternal(), this._client);
+    }
+
+    /** @internal */
+    private async _withRequiredInternal(required?: boolean): Promise<ParameterResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        if (required !== undefined) rpcArgs.required = required;
+        const result = await this._client.invokeCapability<ParameterResourceHandle>(
+            'Aspire.Hosting/withRequired',
+            rpcArgs
+        );
+        return new ParameterResourceImpl(result, this._client);
+    }
+
+    /**
+     * Sets whether the parameter resource requires a value.
+     * @param options Additional options.
+     * @returns The configured resource builder.
+     */
+    withRequired(options?: WithRequiredOptions): ParameterResourcePromise {
+        const required = options?.required;
+        return new ParameterResourcePromiseImpl(this._withRequiredInternal(required), this._client);
     }
 
     /** @internal */
@@ -33894,6 +35796,50 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
      */
     withParentProcessLifetime(parentProcessId: number): ParameterResourcePromise {
         return new ParameterResourcePromiseImpl(this._withParentProcessLifetimeInternal(parentProcessId), this._client);
+    }
+
+    /**
+     * Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+     * @param annotationId The stable annotation identifier.
+     * @param json The serialized JSON payload.
+     * @returns The resource.
+     */
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise {
+        const promise = (async () => {
+            const rpcArgs: Record<string, unknown> = { resource: this._handle, annotationId, json };
+            const handle = await this._client.invokeCapability<IResourceHandle>(
+                'Aspire.Hosting/withSerializedAnnotation',
+                rpcArgs
+            );
+            return new ResourceImpl(handle, this._client);
+        })();
+        return new ResourcePromiseImpl(promise, this._client);
+    }
+
+    /**
+     * Gets a serialized ATS annotation payload from a resource.
+     * @param annotationId The stable annotation identifier.
+     * @returns The serialized JSON payload.
+     */
+    async getSerializedAnnotation(annotationId: string): Promise<string> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle, annotationId };
+        return await this._client.invokeCapability<string>(
+            'Aspire.Hosting/getSerializedAnnotation',
+            rpcArgs
+        );
+    }
+
+    /**
+     * Determines whether a resource has a serialized ATS annotation with the specified ID.
+     * @param annotationId The stable annotation identifier.
+     * @returns `true` if the annotation exists; otherwise, `false`.
+     */
+    async hasSerializedAnnotation(annotationId: string): Promise<boolean> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle, annotationId };
+        return await this._client.invokeCapability<boolean>(
+            'Aspire.Hosting/hasSerializedAnnotation',
+            rpcArgs
+        );
     }
 
     /** @internal */
@@ -34281,6 +36227,29 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
     }
 
     /** @internal */
+    private async _withResourceTypeDisplayNameInternal(resourceTypeDisplayName: string): Promise<ParameterResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, resourceTypeDisplayName };
+        const result = await this._client.invokeCapability<ParameterResourceHandle>(
+            'Aspire.Hosting/withResourceTypeDisplayName',
+            rpcArgs
+        );
+        return new ParameterResourceImpl(result, this._client);
+    }
+
+    /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): ParameterResourcePromise {
+        return new ParameterResourcePromiseImpl(this._withResourceTypeDisplayNameInternal(resourceTypeDisplayName), this._client);
+    }
+
+    /** @internal */
     private async _withIconNameInternal(iconName: string, iconVariant?: IconVariant): Promise<ParameterResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, iconName };
         if (iconVariant !== undefined) rpcArgs.iconVariant = iconVariant;
@@ -34369,8 +36338,71 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
     }
 
     /** @internal */
-    private async _withTerminalInternal(): Promise<ParameterResource> {
+    private async _withTraitInternal(name: string, value: string): Promise<ParameterResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
+        const result = await this._client.invokeCapability<ParameterResourceHandle>(
+            'Aspire.Hosting/withTrait',
+            rpcArgs
+        );
+        return new ParameterResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+     * @param name The case-sensitive trait name.
+     * @param value The trait value. Do not include secrets.
+     * @returns The resource builder.
+     */
+    withTrait(name: string, value: string): ParameterResourcePromise {
+        return new ParameterResourcePromiseImpl(this._withTraitInternal(name, value), this._client);
+    }
+
+    /** @internal */
+    private async _withTagsInternal(tags: string[]): Promise<ParameterResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, tags };
+        const result = await this._client.invokeCapability<ParameterResourceHandle>(
+            'Aspire.Hosting/withTags',
+            rpcArgs
+        );
+        return new ParameterResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+     * @param tags The tags, each up to 50 characters with single spaces between words.
+     * @returns The resource builder.
+     */
+    withTags(tags: string[]): ParameterResourcePromise {
+        return new ParameterResourcePromiseImpl(this._withTagsInternal(tags), this._client);
+    }
+
+    /** @internal */
+    private async _withDisplayOrderInternal(order: number): Promise<ParameterResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, order };
+        const result = await this._client.invokeCapability<ParameterResourceHandle>(
+            'Aspire.Hosting/withDisplayOrder',
+            rpcArgs
+        );
+        return new ParameterResourceImpl(result, this._client);
+    }
+
+    /**
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
+     * @returns The resource builder.
+     */
+    withDisplayOrder(order: number): ParameterResourcePromise {
+        return new ParameterResourcePromiseImpl(this._withDisplayOrderInternal(order), this._client);
+    }
+
+    /** @internal */
+    private async _withTerminalInternal(configure?: (obj: TerminalOptions) => Promise<void>): Promise<ParameterResource> {
+        const configureId = configure ? registerCallback(async (objData: unknown) => {
+            const obj = wrapIfHandle(objData) as TerminalOptions;
+            await configure(obj);
+        }) : undefined;
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        if (configure !== undefined) rpcArgs.configure = configureId;
         const result = await this._client.invokeCapability<ParameterResourceHandle>(
             'Aspire.Hosting/withTerminal',
             rpcArgs
@@ -34378,9 +36410,14 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
         return new ParameterResourceImpl(result, this._client);
     }
 
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    withTerminal(): ParameterResourcePromise {
-        return new ParameterResourcePromiseImpl(this._withTerminalInternal(), this._client);
+    /**
+     * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
+     */
+    withTerminal(options?: WithTerminalOptions): ParameterResourcePromise {
+        const configure = options?.configure;
+        return new ParameterResourcePromiseImpl(this._withTerminalInternal(configure), this._client);
     }
 
     /** @internal */
@@ -34408,7 +36445,6 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ParameterResourcePromise {
         const dependsOn = options?.dependsOn;
@@ -34437,7 +36473,6 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ParameterResourcePromise {
         return new ParameterResourcePromiseImpl(this._withPipelineConfigurationInternal(callback), this._client);
@@ -34569,6 +36604,43 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
             return new ExecutionConfigurationBuilderImpl(handle, this._client);
         })();
         return new ExecutionConfigurationBuilderPromiseImpl(promise, this._client);
+    }
+
+    /**
+     * Gets the current value for this parameter without waiting for unresolved input.
+     *
+     * This method returns `null` for unresolved parameters, parameters with initialization errors, and optional
+     * parameters that resolved without a value.
+     * @returns The current parameter value, or `null` if the parameter does not currently have a non-empty value.
+     */
+    async tryGetCurrentValue(): Promise<string | null> {
+        const rpcArgs: Record<string, unknown> = { context: this._handle };
+        return await this._client.invokeCapability<string | null>(
+            'Aspire.Hosting.ApplicationModel/ParameterResource.tryGetCurrentValue',
+            rpcArgs
+        );
+    }
+
+    /**
+     * Sets or replaces the value for this parameter.
+     *
+     * Setting a value directly on the resource updates dashboard state after the resource has been observed by the host.
+     * It does not save the value to deployment state. Required parameters set to `null` or an empty string
+     * are faulted with `MissingParameterValueException`, while optional parameters can be cleared to `null`.
+     * Cancellation is checked before assignment. After assignment, cancellation does not roll back the value or
+     * prevent the host from synchronizing dashboard and parameter-resolution state, even if another observer reports cancellation.
+     * @param options Additional options.
+     */
+    async setValueAsync(options?: SetValueAsyncOptions): Promise<void> {
+        const value = options?.value;
+        const cancellationToken = options?.cancellationToken;
+        const rpcArgs: Record<string, unknown> = { context: this._handle };
+        if (value !== undefined) rpcArgs.value = value;
+        if (cancellationToken !== undefined) rpcArgs.cancellationToken = CancellationToken.fromValue(cancellationToken);
+        return await this._client.invokeCapability<void>(
+            'Aspire.Hosting.ApplicationModel/ParameterResource.setValueAsync',
+            rpcArgs
+        );
     }
 
     /** @internal */
@@ -34976,6 +37048,8 @@ const ParameterResourcePromiseImpl = $aspireCreateFluentPromiseClass<ParameterRe
     ["withContainerRegistry"]: () => ParameterResourcePromiseImpl,
     ["withDockerfileBaseImage"]: () => ParameterResourcePromiseImpl,
     ["withDescription"]: () => ParameterResourcePromiseImpl,
+    ["withOptional"]: () => ParameterResourcePromiseImpl,
+    ["withRequired"]: () => ParameterResourcePromiseImpl,
     ["withCustomInput"]: () => ParameterResourcePromiseImpl,
     ["withRequiredCommand"]: () => ParameterResourcePromiseImpl,
     ["withRequiredCommandValidation"]: () => ParameterResourcePromiseImpl,
@@ -34983,6 +37057,9 @@ const ParameterResourcePromiseImpl = $aspireCreateFluentPromiseClass<ParameterRe
     ["withPersistentLifetime"]: () => ParameterResourcePromiseImpl,
     ["withLifetimeOf"]: () => ParameterResourcePromiseImpl,
     ["withParentProcessLifetime"]: () => ParameterResourcePromiseImpl,
+    ["withSerializedAnnotation"]: () => ResourcePromiseImpl,
+    ["getSerializedAnnotation"]: null,
+    ["hasSerializedAnnotation"]: null,
     ["withUrls"]: () => ParameterResourcePromiseImpl,
     ["withUrl"]: () => ParameterResourcePromiseImpl,
     ["withUrlForEndpoint"]: () => ParameterResourcePromiseImpl,
@@ -34996,10 +37073,14 @@ const ParameterResourcePromiseImpl = $aspireCreateFluentPromiseClass<ParameterRe
     ["withRelationship"]: () => ParameterResourcePromiseImpl,
     ["withParentRelationship"]: () => ParameterResourcePromiseImpl,
     ["withChildRelationship"]: () => ParameterResourcePromiseImpl,
+    ["withResourceTypeDisplayName"]: () => ParameterResourcePromiseImpl,
     ["withIconName"]: () => ParameterResourcePromiseImpl,
     ["excludeFromMcp"]: () => ParameterResourcePromiseImpl,
     ["withHidden"]: () => ParameterResourcePromiseImpl,
     ["withHiddenOnCompletion"]: () => ParameterResourcePromiseImpl,
+    ["withTrait"]: () => ParameterResourcePromiseImpl,
+    ["withTags"]: () => ParameterResourcePromiseImpl,
+    ["withDisplayOrder"]: () => ParameterResourcePromiseImpl,
     ["withTerminal"]: () => ParameterResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => ParameterResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => ParameterResourcePromiseImpl,
@@ -35009,6 +37090,8 @@ const ParameterResourcePromiseImpl = $aspireCreateFluentPromiseClass<ParameterRe
     ["onInitializeResource"]: () => ParameterResourcePromiseImpl,
     ["onResourceReady"]: () => ParameterResourcePromiseImpl,
     ["createExecutionConfiguration"]: () => ExecutionConfigurationBuilderPromiseImpl,
+    ["tryGetCurrentValue"]: null,
+    ["setValueAsync"]: null,
     ["withContainerBuildOptions"]: () => ParameterResourcePromiseImpl,
     ["withOptionalString"]: () => ParameterResourcePromiseImpl,
     ["withConfig"]: () => ParameterResourcePromiseImpl,
@@ -35054,20 +37137,10 @@ export interface ProjectResource {
     /**
      * Configures custom base images for generated Dockerfiles.
      *
-     * This extension method allows customization of the base images used in generated Dockerfiles.
-     * For multi-stage Dockerfiles (e.g., Python with UV), you can specify separate build and runtime images.
-     * Specify custom base images for a Python application:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddPythonApp("myapp", "path/to/app", "main.py")
-     * .WithDockerfileBaseImage(
-     * buildImage: "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
-     * runtimeImage: "python:3.12-slim-bookworm");
-     * builder.Build().Run();
-     * ```
+     * For multi-stage Dockerfiles, specify separate build and runtime base images.
+     * Images that are not specified use the integration's defaults. At least one base image must be specified.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ProjectResourcePromise;
     /**
@@ -35175,6 +37248,31 @@ export interface ProjectResource {
      * @returns The resource builder.
      */
     withArgs(args: string[]): ProjectResourcePromise;
+    /**
+     * Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+     * @param annotationId The stable annotation identifier.
+     * @param json The serialized JSON payload.
+     * @returns The resource.
+     */
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise;
+    /**
+     * Gets a serialized ATS annotation payload from a resource.
+     * @param annotationId The stable annotation identifier.
+     * @returns The serialized JSON payload.
+     */
+    getSerializedAnnotation(annotationId: string): Promise<string>;
+    /**
+     * Determines whether a resource has a serialized ATS annotation with the specified ID.
+     * @param annotationId The stable annotation identifier.
+     * @returns `true` if the annotation exists; otherwise, `false`.
+     */
+    hasSerializedAnnotation(annotationId: string): Promise<boolean>;
+    /**
+     * Replaces the arguments to be passed to a resource that supports arguments when it is launched.
+     * @param args The arguments to be passed to the resource when it is started.
+     * @returns The resource builder.
+     */
+    withArgsReplace(args: string[]): ProjectResourcePromise;
     /**
      * Adds a callback to be executed with a list of command-line arguments when a resource is started.
      * @param callback A callback that allows for deferred execution for computing arguments. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.
@@ -35366,7 +37464,7 @@ export interface ProjectResource {
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddProject<MyService>("my-service")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -35395,6 +37493,13 @@ export interface ProjectResource {
      * @returns The resource builder.
      */
     withCertificateTrustScope(scope: CertificateTrustScope): ProjectResourcePromise;
+    /**
+     * Configures environment variables that point to Aspire-managed certificate trust paths.
+     * @param certificateBundleEnvironmentVariable The environment variable that receives the certificate bundle path.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withCertificateTrustEnvironment(certificateBundleEnvironmentVariable: string, options?: WithCertificateTrustEnvironmentOptions): ProjectResourcePromise;
     /**
      * Indicates that a resource should use the developer certificate key pair for HTTPS endpoints at run time. Currently this indicates use of the ASP.NET Core developer certificate. The developer certificate will only be used when running in local development scenarios; in publish mode resources will use their default certificate configuration.
      *
@@ -35476,6 +37581,16 @@ export interface ProjectResource {
      */
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ProjectResourcePromise;
     /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): ProjectResourcePromise;
+    /**
      * Specifies the icon to use when displaying the resource in the dashboard.
      * @param iconName The name of the FluentUI icon to use. See https://aka.ms/fluentui-system-icons for available icons.
      * @param options Additional options.
@@ -35493,7 +37608,6 @@ export interface ProjectResource {
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): ProjectResourcePromise;
     /**
@@ -35550,22 +37664,43 @@ export interface ProjectResource {
      * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): ProjectResourcePromise;
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    withTerminal(): ProjectResourcePromise;
+    /**
+     * Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+     * @param name The case-sensitive trait name.
+     * @param value The trait value. Do not include secrets.
+     * @returns The resource builder.
+     */
+    withTrait(name: string, value: string): ProjectResourcePromise;
+    /**
+     * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+     * @param tags The tags, each up to 50 characters with single spaces between words.
+     * @returns The resource builder.
+     */
+    withTags(tags: string[]): ProjectResourcePromise;
+    /**
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
+     * @returns The resource builder.
+     */
+    withDisplayOrder(order: number): ProjectResourcePromise;
+    /**
+     * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
+     */
+    withTerminal(options?: WithTerminalOptions): ProjectResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ProjectResourcePromise;
     /**
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ProjectResourcePromise;
     /**
@@ -35710,20 +37845,10 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
     /**
      * Configures custom base images for generated Dockerfiles.
      *
-     * This extension method allows customization of the base images used in generated Dockerfiles.
-     * For multi-stage Dockerfiles (e.g., Python with UV), you can specify separate build and runtime images.
-     * Specify custom base images for a Python application:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddPythonApp("myapp", "path/to/app", "main.py")
-     * .WithDockerfileBaseImage(
-     * buildImage: "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
-     * runtimeImage: "python:3.12-slim-bookworm");
-     * builder.Build().Run();
-     * ```
+     * For multi-stage Dockerfiles, specify separate build and runtime base images.
+     * Images that are not specified use the integration's defaults. At least one base image must be specified.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ProjectResourcePromise;
     /**
@@ -35831,6 +37956,31 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      * @returns The resource builder.
      */
     withArgs(args: string[]): ProjectResourcePromise;
+    /**
+     * Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+     * @param annotationId The stable annotation identifier.
+     * @param json The serialized JSON payload.
+     * @returns The resource.
+     */
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise;
+    /**
+     * Gets a serialized ATS annotation payload from a resource.
+     * @param annotationId The stable annotation identifier.
+     * @returns The serialized JSON payload.
+     */
+    getSerializedAnnotation(annotationId: string): Promise<string>;
+    /**
+     * Determines whether a resource has a serialized ATS annotation with the specified ID.
+     * @param annotationId The stable annotation identifier.
+     * @returns `true` if the annotation exists; otherwise, `false`.
+     */
+    hasSerializedAnnotation(annotationId: string): Promise<boolean>;
+    /**
+     * Replaces the arguments to be passed to a resource that supports arguments when it is launched.
+     * @param args The arguments to be passed to the resource when it is started.
+     * @returns The resource builder.
+     */
+    withArgsReplace(args: string[]): ProjectResourcePromise;
     /**
      * Adds a callback to be executed with a list of command-line arguments when a resource is started.
      * @param callback A callback that allows for deferred execution for computing arguments. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.
@@ -36022,7 +38172,7 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddProject<MyService>("my-service")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -36051,6 +38201,13 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      * @returns The resource builder.
      */
     withCertificateTrustScope(scope: CertificateTrustScope): ProjectResourcePromise;
+    /**
+     * Configures environment variables that point to Aspire-managed certificate trust paths.
+     * @param certificateBundleEnvironmentVariable The environment variable that receives the certificate bundle path.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withCertificateTrustEnvironment(certificateBundleEnvironmentVariable: string, options?: WithCertificateTrustEnvironmentOptions): ProjectResourcePromise;
     /**
      * Indicates that a resource should use the developer certificate key pair for HTTPS endpoints at run time. Currently this indicates use of the ASP.NET Core developer certificate. The developer certificate will only be used when running in local development scenarios; in publish mode resources will use their default certificate configuration.
      *
@@ -36132,6 +38289,16 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      */
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ProjectResourcePromise;
     /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): ProjectResourcePromise;
+    /**
      * Specifies the icon to use when displaying the resource in the dashboard.
      * @param iconName The name of the FluentUI icon to use. See https://aka.ms/fluentui-system-icons for available icons.
      * @param options Additional options.
@@ -36149,7 +38316,6 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): ProjectResourcePromise;
     /**
@@ -36206,22 +38372,43 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): ProjectResourcePromise;
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    withTerminal(): ProjectResourcePromise;
+    /**
+     * Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+     * @param name The case-sensitive trait name.
+     * @param value The trait value. Do not include secrets.
+     * @returns The resource builder.
+     */
+    withTrait(name: string, value: string): ProjectResourcePromise;
+    /**
+     * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+     * @param tags The tags, each up to 50 characters with single spaces between words.
+     * @returns The resource builder.
+     */
+    withTags(tags: string[]): ProjectResourcePromise;
+    /**
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
+     * @returns The resource builder.
+     */
+    withDisplayOrder(order: number): ProjectResourcePromise;
+    /**
+     * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
+     */
+    withTerminal(options?: WithTerminalOptions): ProjectResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ProjectResourcePromise;
     /**
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ProjectResourcePromise;
     /**
@@ -36401,20 +38588,10 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     /**
      * Configures custom base images for generated Dockerfiles.
      *
-     * This extension method allows customization of the base images used in generated Dockerfiles.
-     * For multi-stage Dockerfiles (e.g., Python with UV), you can specify separate build and runtime images.
-     * Specify custom base images for a Python application:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddPythonApp("myapp", "path/to/app", "main.py")
-     * .WithDockerfileBaseImage(
-     * buildImage: "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
-     * runtimeImage: "python:3.12-slim-bookworm");
-     * builder.Build().Run();
-     * ```
+     * For multi-stage Dockerfiles, specify separate build and runtime base images.
+     * Images that are not specified use the integration's defaults. At least one base image must be specified.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ProjectResourcePromise {
         const buildImage = options?.buildImage;
@@ -36736,6 +38913,69 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
      */
     withArgs(args: string[]): ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._withArgsInternal(args), this._client);
+    }
+
+    /**
+     * Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+     * @param annotationId The stable annotation identifier.
+     * @param json The serialized JSON payload.
+     * @returns The resource.
+     */
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise {
+        const promise = (async () => {
+            const rpcArgs: Record<string, unknown> = { resource: this._handle, annotationId, json };
+            const handle = await this._client.invokeCapability<IResourceHandle>(
+                'Aspire.Hosting/withSerializedAnnotation',
+                rpcArgs
+            );
+            return new ResourceImpl(handle, this._client);
+        })();
+        return new ResourcePromiseImpl(promise, this._client);
+    }
+
+    /**
+     * Gets a serialized ATS annotation payload from a resource.
+     * @param annotationId The stable annotation identifier.
+     * @returns The serialized JSON payload.
+     */
+    async getSerializedAnnotation(annotationId: string): Promise<string> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle, annotationId };
+        return await this._client.invokeCapability<string>(
+            'Aspire.Hosting/getSerializedAnnotation',
+            rpcArgs
+        );
+    }
+
+    /**
+     * Determines whether a resource has a serialized ATS annotation with the specified ID.
+     * @param annotationId The stable annotation identifier.
+     * @returns `true` if the annotation exists; otherwise, `false`.
+     */
+    async hasSerializedAnnotation(annotationId: string): Promise<boolean> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle, annotationId };
+        return await this._client.invokeCapability<boolean>(
+            'Aspire.Hosting/hasSerializedAnnotation',
+            rpcArgs
+        );
+    }
+
+    /** @internal */
+    private async _withArgsReplaceInternal(args: string[]): Promise<ProjectResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, args };
+        const result = await this._client.invokeCapability<ProjectResourceHandle>(
+            'Aspire.Hosting/withArgsReplace',
+            rpcArgs
+        );
+        return new ProjectResourceImpl(result, this._client);
+    }
+
+    /**
+     * Replaces the arguments to be passed to a resource that supports arguments when it is launched.
+     * @param args The arguments to be passed to the resource when it is started.
+     * @returns The resource builder.
+     */
+    withArgsReplace(args: string[]): ProjectResourcePromise {
+        return new ProjectResourcePromiseImpl(this._withArgsReplaceInternal(args), this._client);
     }
 
     /** @internal */
@@ -37539,7 +39779,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddProject<MyService>("my-service")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -37582,6 +39822,28 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
      */
     withCertificateTrustScope(scope: CertificateTrustScope): ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._withCertificateTrustScopeInternal(scope), this._client);
+    }
+
+    /** @internal */
+    private async _withCertificateTrustEnvironmentInternal(certificateBundleEnvironmentVariable: string, certificateDirectoriesEnvironmentVariable?: string): Promise<ProjectResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, certificateBundleEnvironmentVariable };
+        if (certificateDirectoriesEnvironmentVariable !== undefined) rpcArgs.certificateDirectoriesEnvironmentVariable = certificateDirectoriesEnvironmentVariable;
+        const result = await this._client.invokeCapability<ProjectResourceHandle>(
+            'Aspire.Hosting/withCertificateTrustEnvironment',
+            rpcArgs
+        );
+        return new ProjectResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures environment variables that point to Aspire-managed certificate trust paths.
+     * @param certificateBundleEnvironmentVariable The environment variable that receives the certificate bundle path.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withCertificateTrustEnvironment(certificateBundleEnvironmentVariable: string, options?: WithCertificateTrustEnvironmentOptions): ProjectResourcePromise {
+        const certificateDirectoriesEnvironmentVariable = options?.certificateDirectoriesEnvironmentVariable;
+        return new ProjectResourcePromiseImpl(this._withCertificateTrustEnvironmentInternal(certificateBundleEnvironmentVariable, certificateDirectoriesEnvironmentVariable), this._client);
     }
 
     /** @internal */
@@ -37772,6 +40034,29 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     }
 
     /** @internal */
+    private async _withResourceTypeDisplayNameInternal(resourceTypeDisplayName: string): Promise<ProjectResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, resourceTypeDisplayName };
+        const result = await this._client.invokeCapability<ProjectResourceHandle>(
+            'Aspire.Hosting/withResourceTypeDisplayName',
+            rpcArgs
+        );
+        return new ProjectResourceImpl(result, this._client);
+    }
+
+    /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): ProjectResourcePromise {
+        return new ProjectResourcePromiseImpl(this._withResourceTypeDisplayNameInternal(resourceTypeDisplayName), this._client);
+    }
+
+    /** @internal */
     private async _withIconNameInternal(iconName: string, iconVariant?: IconVariant): Promise<ProjectResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, iconName };
         if (iconVariant !== undefined) rpcArgs.iconVariant = iconVariant;
@@ -37835,7 +40120,6 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): ProjectResourcePromise {
         const path = options?.path;
@@ -37990,8 +40274,71 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     }
 
     /** @internal */
-    private async _withTerminalInternal(): Promise<ProjectResource> {
+    private async _withTraitInternal(name: string, value: string): Promise<ProjectResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
+        const result = await this._client.invokeCapability<ProjectResourceHandle>(
+            'Aspire.Hosting/withTrait',
+            rpcArgs
+        );
+        return new ProjectResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+     * @param name The case-sensitive trait name.
+     * @param value The trait value. Do not include secrets.
+     * @returns The resource builder.
+     */
+    withTrait(name: string, value: string): ProjectResourcePromise {
+        return new ProjectResourcePromiseImpl(this._withTraitInternal(name, value), this._client);
+    }
+
+    /** @internal */
+    private async _withTagsInternal(tags: string[]): Promise<ProjectResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, tags };
+        const result = await this._client.invokeCapability<ProjectResourceHandle>(
+            'Aspire.Hosting/withTags',
+            rpcArgs
+        );
+        return new ProjectResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+     * @param tags The tags, each up to 50 characters with single spaces between words.
+     * @returns The resource builder.
+     */
+    withTags(tags: string[]): ProjectResourcePromise {
+        return new ProjectResourcePromiseImpl(this._withTagsInternal(tags), this._client);
+    }
+
+    /** @internal */
+    private async _withDisplayOrderInternal(order: number): Promise<ProjectResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, order };
+        const result = await this._client.invokeCapability<ProjectResourceHandle>(
+            'Aspire.Hosting/withDisplayOrder',
+            rpcArgs
+        );
+        return new ProjectResourceImpl(result, this._client);
+    }
+
+    /**
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
+     * @returns The resource builder.
+     */
+    withDisplayOrder(order: number): ProjectResourcePromise {
+        return new ProjectResourcePromiseImpl(this._withDisplayOrderInternal(order), this._client);
+    }
+
+    /** @internal */
+    private async _withTerminalInternal(configure?: (obj: TerminalOptions) => Promise<void>): Promise<ProjectResource> {
+        const configureId = configure ? registerCallback(async (objData: unknown) => {
+            const obj = wrapIfHandle(objData) as TerminalOptions;
+            await configure(obj);
+        }) : undefined;
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        if (configure !== undefined) rpcArgs.configure = configureId;
         const result = await this._client.invokeCapability<ProjectResourceHandle>(
             'Aspire.Hosting/withTerminal',
             rpcArgs
@@ -37999,9 +40346,14 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
         return new ProjectResourceImpl(result, this._client);
     }
 
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    withTerminal(): ProjectResourcePromise {
-        return new ProjectResourcePromiseImpl(this._withTerminalInternal(), this._client);
+    /**
+     * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
+     */
+    withTerminal(options?: WithTerminalOptions): ProjectResourcePromise {
+        const configure = options?.configure;
+        return new ProjectResourcePromiseImpl(this._withTerminalInternal(configure), this._client);
     }
 
     /** @internal */
@@ -38029,7 +40381,6 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ProjectResourcePromise {
         const dependsOn = options?.dependsOn;
@@ -38058,7 +40409,6 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._withPipelineConfigurationInternal(callback), this._client);
@@ -38712,6 +41062,10 @@ const ProjectResourcePromiseImpl = $aspireCreateFluentPromiseClass<ProjectResour
     ["withEnvironment"]: () => ProjectResourcePromiseImpl,
     ["withEnvironmentCallback"]: () => ProjectResourcePromiseImpl,
     ["withArgs"]: () => ProjectResourcePromiseImpl,
+    ["withSerializedAnnotation"]: () => ResourcePromiseImpl,
+    ["getSerializedAnnotation"]: null,
+    ["hasSerializedAnnotation"]: null,
+    ["withArgsReplace"]: () => ProjectResourcePromiseImpl,
     ["withArgsCallback"]: () => ProjectResourcePromiseImpl,
     ["withReferenceEnvironment"]: () => ProjectResourcePromiseImpl,
     ["withReference"]: () => ProjectResourcePromiseImpl,
@@ -38742,6 +41096,7 @@ const ProjectResourcePromiseImpl = $aspireCreateFluentPromiseClass<ProjectResour
     ["withHttpCommand"]: () => ProjectResourcePromiseImpl,
     ["withDeveloperCertificateTrust"]: () => ProjectResourcePromiseImpl,
     ["withCertificateTrustScope"]: () => ProjectResourcePromiseImpl,
+    ["withCertificateTrustEnvironment"]: () => ProjectResourcePromiseImpl,
     ["withHttpsDeveloperCertificate"]: () => ProjectResourcePromiseImpl,
     ["withoutHttpsCertificate"]: () => ProjectResourcePromiseImpl,
     ["withHttpsCertificateConfiguration"]: () => ProjectResourcePromiseImpl,
@@ -38749,6 +41104,7 @@ const ProjectResourcePromiseImpl = $aspireCreateFluentPromiseClass<ProjectResour
     ["withRelationship"]: () => ProjectResourcePromiseImpl,
     ["withParentRelationship"]: () => ProjectResourcePromiseImpl,
     ["withChildRelationship"]: () => ProjectResourcePromiseImpl,
+    ["withResourceTypeDisplayName"]: () => ProjectResourcePromiseImpl,
     ["withIconName"]: () => ProjectResourcePromiseImpl,
     ["withComputeEnvironment"]: () => ProjectResourcePromiseImpl,
     ["withHttpProbe"]: () => ProjectResourcePromiseImpl,
@@ -38758,6 +41114,9 @@ const ProjectResourcePromiseImpl = $aspireCreateFluentPromiseClass<ProjectResour
     ["withImagePushOptions"]: () => ProjectResourcePromiseImpl,
     ["withRemoteImageName"]: () => ProjectResourcePromiseImpl,
     ["withRemoteImageTag"]: () => ProjectResourcePromiseImpl,
+    ["withTrait"]: () => ProjectResourcePromiseImpl,
+    ["withTags"]: () => ProjectResourcePromiseImpl,
+    ["withDisplayOrder"]: () => ProjectResourcePromiseImpl,
     ["withTerminal"]: () => ProjectResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => ProjectResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => ProjectResourcePromiseImpl,
@@ -38973,49 +41332,22 @@ export interface TestDatabaseResource {
     /**
      * Configures the resource to use a programmatically generated Dockerfile
      *
-     * This method provides a programmatic way to build Dockerfiles using the `DockerfileBuilder` API
-     * instead of string manipulation. Callbacks can be composed by calling this method multiple times - each callback will be invoked
-     * in order to build up the final Dockerfile.
-     * The `contextPath` is relative to the AppHost directory unless it is fully qualified.
-     * Creates a container with a programmatically built Dockerfile using fluent API:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddContainer("mycontainer", "myimage")
-     * .WithDockerfileBuilder("path/to/context", context =>
-     * {
-     * context.Builder.From("alpine:latest")
-     * .WorkDir("/app")
-     * .Run("apk add curl")
-     * .Copy(".", ".")
-     * .Cmd(["./myapp"]);
-     * return Task.CompletedTask;
-     * });
-     * builder.Build().Run();
-     * ```
+     * Calling this method multiple times composes callbacks, which are invoked in registration order
+     * to build the final Dockerfile.
+     * The build context path is relative to the AppHost directory unless it is fully qualified.
      * @param contextPath Path to be used as the context for the container image build.
      * @param callback A callback that uses the `DockerfileBuilder` API to construct the Dockerfile.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBuilder(contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, options?: WithDockerfileBuilderOptions): TestDatabaseResourcePromise;
     /**
      * Configures custom base images for generated Dockerfiles.
      *
-     * This extension method allows customization of the base images used in generated Dockerfiles.
-     * For multi-stage Dockerfiles (e.g., Python with UV), you can specify separate build and runtime images.
-     * Specify custom base images for a Python application:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddPythonApp("myapp", "path/to/app", "main.py")
-     * .WithDockerfileBaseImage(
-     * buildImage: "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
-     * runtimeImage: "python:3.12-slim-bookworm");
-     * builder.Build().Run();
-     * ```
+     * For multi-stage Dockerfiles, specify separate build and runtime base images.
+     * Images that are not specified use the integration's defaults. At least one base image must be specified.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): TestDatabaseResourcePromise;
     /**
@@ -39121,6 +41453,31 @@ export interface TestDatabaseResource {
      * @returns The resource builder.
      */
     withArgs(args: string[]): TestDatabaseResourcePromise;
+    /**
+     * Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+     * @param annotationId The stable annotation identifier.
+     * @param json The serialized JSON payload.
+     * @returns The resource.
+     */
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise;
+    /**
+     * Gets a serialized ATS annotation payload from a resource.
+     * @param annotationId The stable annotation identifier.
+     * @returns The serialized JSON payload.
+     */
+    getSerializedAnnotation(annotationId: string): Promise<string>;
+    /**
+     * Determines whether a resource has a serialized ATS annotation with the specified ID.
+     * @param annotationId The stable annotation identifier.
+     * @returns `true` if the annotation exists; otherwise, `false`.
+     */
+    hasSerializedAnnotation(annotationId: string): Promise<boolean>;
+    /**
+     * Replaces the arguments to be passed to a resource that supports arguments when it is launched.
+     * @param args The arguments to be passed to the resource when it is started.
+     * @returns The resource builder.
+     */
+    withArgsReplace(args: string[]): TestDatabaseResourcePromise;
     /**
      * Adds a callback to be executed with a list of command-line arguments when a resource is started.
      * @param callback A callback that allows for deferred execution for computing arguments. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.
@@ -39306,7 +41663,7 @@ export interface TestDatabaseResource {
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddProject<MyService>("my-service")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -39335,6 +41692,13 @@ export interface TestDatabaseResource {
      * @returns The resource builder.
      */
     withCertificateTrustScope(scope: CertificateTrustScope): TestDatabaseResourcePromise;
+    /**
+     * Configures environment variables that point to Aspire-managed certificate trust paths.
+     * @param certificateBundleEnvironmentVariable The environment variable that receives the certificate bundle path.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withCertificateTrustEnvironment(certificateBundleEnvironmentVariable: string, options?: WithCertificateTrustEnvironmentOptions): TestDatabaseResourcePromise;
     /**
      * Indicates that a resource should use the developer certificate key pair for HTTPS endpoints at run time. Currently this indicates use of the ASP.NET Core developer certificate. The developer certificate will only be used when running in local development scenarios; in publish mode resources will use their default certificate configuration.
      *
@@ -39416,6 +41780,16 @@ export interface TestDatabaseResource {
      */
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestDatabaseResourcePromise;
     /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): TestDatabaseResourcePromise;
+    /**
      * Specifies the icon to use when displaying the resource in the dashboard.
      * @param iconName The name of the FluentUI icon to use. See https://aka.ms/fluentui-system-icons for available icons.
      * @param options Additional options.
@@ -39433,7 +41807,6 @@ export interface TestDatabaseResource {
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): TestDatabaseResourcePromise;
     /**
@@ -39490,22 +41863,43 @@ export interface TestDatabaseResource {
      * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): TestDatabaseResourcePromise;
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    withTerminal(): TestDatabaseResourcePromise;
+    /**
+     * Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+     * @param name The case-sensitive trait name.
+     * @param value The trait value. Do not include secrets.
+     * @returns The resource builder.
+     */
+    withTrait(name: string, value: string): TestDatabaseResourcePromise;
+    /**
+     * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+     * @param tags The tags, each up to 50 characters with single spaces between words.
+     * @returns The resource builder.
+     */
+    withTags(tags: string[]): TestDatabaseResourcePromise;
+    /**
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
+     * @returns The resource builder.
+     */
+    withDisplayOrder(order: number): TestDatabaseResourcePromise;
+    /**
+     * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
+     */
+    withTerminal(options?: WithTerminalOptions): TestDatabaseResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): TestDatabaseResourcePromise;
     /**
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): TestDatabaseResourcePromise;
     /**
@@ -39806,49 +42200,22 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
     /**
      * Configures the resource to use a programmatically generated Dockerfile
      *
-     * This method provides a programmatic way to build Dockerfiles using the `DockerfileBuilder` API
-     * instead of string manipulation. Callbacks can be composed by calling this method multiple times - each callback will be invoked
-     * in order to build up the final Dockerfile.
-     * The `contextPath` is relative to the AppHost directory unless it is fully qualified.
-     * Creates a container with a programmatically built Dockerfile using fluent API:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddContainer("mycontainer", "myimage")
-     * .WithDockerfileBuilder("path/to/context", context =>
-     * {
-     * context.Builder.From("alpine:latest")
-     * .WorkDir("/app")
-     * .Run("apk add curl")
-     * .Copy(".", ".")
-     * .Cmd(["./myapp"]);
-     * return Task.CompletedTask;
-     * });
-     * builder.Build().Run();
-     * ```
+     * Calling this method multiple times composes callbacks, which are invoked in registration order
+     * to build the final Dockerfile.
+     * The build context path is relative to the AppHost directory unless it is fully qualified.
      * @param contextPath Path to be used as the context for the container image build.
      * @param callback A callback that uses the `DockerfileBuilder` API to construct the Dockerfile.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBuilder(contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, options?: WithDockerfileBuilderOptions): TestDatabaseResourcePromise;
     /**
      * Configures custom base images for generated Dockerfiles.
      *
-     * This extension method allows customization of the base images used in generated Dockerfiles.
-     * For multi-stage Dockerfiles (e.g., Python with UV), you can specify separate build and runtime images.
-     * Specify custom base images for a Python application:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddPythonApp("myapp", "path/to/app", "main.py")
-     * .WithDockerfileBaseImage(
-     * buildImage: "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
-     * runtimeImage: "python:3.12-slim-bookworm");
-     * builder.Build().Run();
-     * ```
+     * For multi-stage Dockerfiles, specify separate build and runtime base images.
+     * Images that are not specified use the integration's defaults. At least one base image must be specified.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): TestDatabaseResourcePromise;
     /**
@@ -39954,6 +42321,31 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      * @returns The resource builder.
      */
     withArgs(args: string[]): TestDatabaseResourcePromise;
+    /**
+     * Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+     * @param annotationId The stable annotation identifier.
+     * @param json The serialized JSON payload.
+     * @returns The resource.
+     */
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise;
+    /**
+     * Gets a serialized ATS annotation payload from a resource.
+     * @param annotationId The stable annotation identifier.
+     * @returns The serialized JSON payload.
+     */
+    getSerializedAnnotation(annotationId: string): Promise<string>;
+    /**
+     * Determines whether a resource has a serialized ATS annotation with the specified ID.
+     * @param annotationId The stable annotation identifier.
+     * @returns `true` if the annotation exists; otherwise, `false`.
+     */
+    hasSerializedAnnotation(annotationId: string): Promise<boolean>;
+    /**
+     * Replaces the arguments to be passed to a resource that supports arguments when it is launched.
+     * @param args The arguments to be passed to the resource when it is started.
+     * @returns The resource builder.
+     */
+    withArgsReplace(args: string[]): TestDatabaseResourcePromise;
     /**
      * Adds a callback to be executed with a list of command-line arguments when a resource is started.
      * @param callback A callback that allows for deferred execution for computing arguments. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.
@@ -40139,7 +42531,7 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddProject<MyService>("my-service")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -40168,6 +42560,13 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      * @returns The resource builder.
      */
     withCertificateTrustScope(scope: CertificateTrustScope): TestDatabaseResourcePromise;
+    /**
+     * Configures environment variables that point to Aspire-managed certificate trust paths.
+     * @param certificateBundleEnvironmentVariable The environment variable that receives the certificate bundle path.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withCertificateTrustEnvironment(certificateBundleEnvironmentVariable: string, options?: WithCertificateTrustEnvironmentOptions): TestDatabaseResourcePromise;
     /**
      * Indicates that a resource should use the developer certificate key pair for HTTPS endpoints at run time. Currently this indicates use of the ASP.NET Core developer certificate. The developer certificate will only be used when running in local development scenarios; in publish mode resources will use their default certificate configuration.
      *
@@ -40249,6 +42648,16 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      */
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestDatabaseResourcePromise;
     /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): TestDatabaseResourcePromise;
+    /**
      * Specifies the icon to use when displaying the resource in the dashboard.
      * @param iconName The name of the FluentUI icon to use. See https://aka.ms/fluentui-system-icons for available icons.
      * @param options Additional options.
@@ -40266,7 +42675,6 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): TestDatabaseResourcePromise;
     /**
@@ -40323,22 +42731,43 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): TestDatabaseResourcePromise;
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    withTerminal(): TestDatabaseResourcePromise;
+    /**
+     * Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+     * @param name The case-sensitive trait name.
+     * @param value The trait value. Do not include secrets.
+     * @returns The resource builder.
+     */
+    withTrait(name: string, value: string): TestDatabaseResourcePromise;
+    /**
+     * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+     * @param tags The tags, each up to 50 characters with single spaces between words.
+     * @returns The resource builder.
+     */
+    withTags(tags: string[]): TestDatabaseResourcePromise;
+    /**
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
+     * @returns The resource builder.
+     */
+    withDisplayOrder(order: number): TestDatabaseResourcePromise;
+    /**
+     * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
+     */
+    withTerminal(options?: WithTerminalOptions): TestDatabaseResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): TestDatabaseResourcePromise;
     /**
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): TestDatabaseResourcePromise;
     /**
@@ -40942,30 +43371,13 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     /**
      * Configures the resource to use a programmatically generated Dockerfile
      *
-     * This method provides a programmatic way to build Dockerfiles using the `DockerfileBuilder` API
-     * instead of string manipulation. Callbacks can be composed by calling this method multiple times - each callback will be invoked
-     * in order to build up the final Dockerfile.
-     * The `contextPath` is relative to the AppHost directory unless it is fully qualified.
-     * Creates a container with a programmatically built Dockerfile using fluent API:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddContainer("mycontainer", "myimage")
-     * .WithDockerfileBuilder("path/to/context", context =>
-     * {
-     * context.Builder.From("alpine:latest")
-     * .WorkDir("/app")
-     * .Run("apk add curl")
-     * .Copy(".", ".")
-     * .Cmd(["./myapp"]);
-     * return Task.CompletedTask;
-     * });
-     * builder.Build().Run();
-     * ```
+     * Calling this method multiple times composes callbacks, which are invoked in registration order
+     * to build the final Dockerfile.
+     * The build context path is relative to the AppHost directory unless it is fully qualified.
      * @param contextPath Path to be used as the context for the container image build.
      * @param callback A callback that uses the `DockerfileBuilder` API to construct the Dockerfile.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBuilder(contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, options?: WithDockerfileBuilderOptions): TestDatabaseResourcePromise {
         const stage = options?.stage;
@@ -40987,20 +43399,10 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     /**
      * Configures custom base images for generated Dockerfiles.
      *
-     * This extension method allows customization of the base images used in generated Dockerfiles.
-     * For multi-stage Dockerfiles (e.g., Python with UV), you can specify separate build and runtime images.
-     * Specify custom base images for a Python application:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddPythonApp("myapp", "path/to/app", "main.py")
-     * .WithDockerfileBaseImage(
-     * buildImage: "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
-     * runtimeImage: "python:3.12-slim-bookworm");
-     * builder.Build().Run();
-     * ```
+     * For multi-stage Dockerfiles, specify separate build and runtime base images.
+     * Images that are not specified use the integration's defaults. At least one base image must be specified.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): TestDatabaseResourcePromise {
         const buildImage = options?.buildImage;
@@ -41300,6 +43702,69 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
      */
     withArgs(args: string[]): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._withArgsInternal(args), this._client);
+    }
+
+    /**
+     * Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+     * @param annotationId The stable annotation identifier.
+     * @param json The serialized JSON payload.
+     * @returns The resource.
+     */
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise {
+        const promise = (async () => {
+            const rpcArgs: Record<string, unknown> = { resource: this._handle, annotationId, json };
+            const handle = await this._client.invokeCapability<IResourceHandle>(
+                'Aspire.Hosting/withSerializedAnnotation',
+                rpcArgs
+            );
+            return new ResourceImpl(handle, this._client);
+        })();
+        return new ResourcePromiseImpl(promise, this._client);
+    }
+
+    /**
+     * Gets a serialized ATS annotation payload from a resource.
+     * @param annotationId The stable annotation identifier.
+     * @returns The serialized JSON payload.
+     */
+    async getSerializedAnnotation(annotationId: string): Promise<string> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle, annotationId };
+        return await this._client.invokeCapability<string>(
+            'Aspire.Hosting/getSerializedAnnotation',
+            rpcArgs
+        );
+    }
+
+    /**
+     * Determines whether a resource has a serialized ATS annotation with the specified ID.
+     * @param annotationId The stable annotation identifier.
+     * @returns `true` if the annotation exists; otherwise, `false`.
+     */
+    async hasSerializedAnnotation(annotationId: string): Promise<boolean> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle, annotationId };
+        return await this._client.invokeCapability<boolean>(
+            'Aspire.Hosting/hasSerializedAnnotation',
+            rpcArgs
+        );
+    }
+
+    /** @internal */
+    private async _withArgsReplaceInternal(args: string[]): Promise<TestDatabaseResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, args };
+        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
+            'Aspire.Hosting/withArgsReplace',
+            rpcArgs
+        );
+        return new TestDatabaseResourceImpl(result, this._client);
+    }
+
+    /**
+     * Replaces the arguments to be passed to a resource that supports arguments when it is launched.
+     * @param args The arguments to be passed to the resource when it is started.
+     * @returns The resource builder.
+     */
+    withArgsReplace(args: string[]): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromiseImpl(this._withArgsReplaceInternal(args), this._client);
     }
 
     /** @internal */
@@ -42083,7 +44548,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddProject<MyService>("my-service")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -42126,6 +44591,28 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
      */
     withCertificateTrustScope(scope: CertificateTrustScope): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._withCertificateTrustScopeInternal(scope), this._client);
+    }
+
+    /** @internal */
+    private async _withCertificateTrustEnvironmentInternal(certificateBundleEnvironmentVariable: string, certificateDirectoriesEnvironmentVariable?: string): Promise<TestDatabaseResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, certificateBundleEnvironmentVariable };
+        if (certificateDirectoriesEnvironmentVariable !== undefined) rpcArgs.certificateDirectoriesEnvironmentVariable = certificateDirectoriesEnvironmentVariable;
+        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
+            'Aspire.Hosting/withCertificateTrustEnvironment',
+            rpcArgs
+        );
+        return new TestDatabaseResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures environment variables that point to Aspire-managed certificate trust paths.
+     * @param certificateBundleEnvironmentVariable The environment variable that receives the certificate bundle path.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withCertificateTrustEnvironment(certificateBundleEnvironmentVariable: string, options?: WithCertificateTrustEnvironmentOptions): TestDatabaseResourcePromise {
+        const certificateDirectoriesEnvironmentVariable = options?.certificateDirectoriesEnvironmentVariable;
+        return new TestDatabaseResourcePromiseImpl(this._withCertificateTrustEnvironmentInternal(certificateBundleEnvironmentVariable, certificateDirectoriesEnvironmentVariable), this._client);
     }
 
     /** @internal */
@@ -42316,6 +44803,29 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /** @internal */
+    private async _withResourceTypeDisplayNameInternal(resourceTypeDisplayName: string): Promise<TestDatabaseResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, resourceTypeDisplayName };
+        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
+            'Aspire.Hosting/withResourceTypeDisplayName',
+            rpcArgs
+        );
+        return new TestDatabaseResourceImpl(result, this._client);
+    }
+
+    /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromiseImpl(this._withResourceTypeDisplayNameInternal(resourceTypeDisplayName), this._client);
+    }
+
+    /** @internal */
     private async _withIconNameInternal(iconName: string, iconVariant?: IconVariant): Promise<TestDatabaseResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, iconName };
         if (iconVariant !== undefined) rpcArgs.iconVariant = iconVariant;
@@ -42379,7 +44889,6 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): TestDatabaseResourcePromise {
         const path = options?.path;
@@ -42534,8 +45043,71 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /** @internal */
-    private async _withTerminalInternal(): Promise<TestDatabaseResource> {
+    private async _withTraitInternal(name: string, value: string): Promise<TestDatabaseResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
+        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
+            'Aspire.Hosting/withTrait',
+            rpcArgs
+        );
+        return new TestDatabaseResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+     * @param name The case-sensitive trait name.
+     * @param value The trait value. Do not include secrets.
+     * @returns The resource builder.
+     */
+    withTrait(name: string, value: string): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromiseImpl(this._withTraitInternal(name, value), this._client);
+    }
+
+    /** @internal */
+    private async _withTagsInternal(tags: string[]): Promise<TestDatabaseResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, tags };
+        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
+            'Aspire.Hosting/withTags',
+            rpcArgs
+        );
+        return new TestDatabaseResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+     * @param tags The tags, each up to 50 characters with single spaces between words.
+     * @returns The resource builder.
+     */
+    withTags(tags: string[]): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromiseImpl(this._withTagsInternal(tags), this._client);
+    }
+
+    /** @internal */
+    private async _withDisplayOrderInternal(order: number): Promise<TestDatabaseResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, order };
+        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
+            'Aspire.Hosting/withDisplayOrder',
+            rpcArgs
+        );
+        return new TestDatabaseResourceImpl(result, this._client);
+    }
+
+    /**
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
+     * @returns The resource builder.
+     */
+    withDisplayOrder(order: number): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromiseImpl(this._withDisplayOrderInternal(order), this._client);
+    }
+
+    /** @internal */
+    private async _withTerminalInternal(configure?: (obj: TerminalOptions) => Promise<void>): Promise<TestDatabaseResource> {
+        const configureId = configure ? registerCallback(async (objData: unknown) => {
+            const obj = wrapIfHandle(objData) as TerminalOptions;
+            await configure(obj);
+        }) : undefined;
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        if (configure !== undefined) rpcArgs.configure = configureId;
         const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
             'Aspire.Hosting/withTerminal',
             rpcArgs
@@ -42543,9 +45115,14 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
         return new TestDatabaseResourceImpl(result, this._client);
     }
 
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    withTerminal(): TestDatabaseResourcePromise {
-        return new TestDatabaseResourcePromiseImpl(this._withTerminalInternal(), this._client);
+    /**
+     * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
+     */
+    withTerminal(options?: WithTerminalOptions): TestDatabaseResourcePromise {
+        const configure = options?.configure;
+        return new TestDatabaseResourcePromiseImpl(this._withTerminalInternal(configure), this._client);
     }
 
     /** @internal */
@@ -42573,7 +45150,6 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): TestDatabaseResourcePromise {
         const dependsOn = options?.dependsOn;
@@ -42602,7 +45178,6 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._withPipelineConfigurationInternal(callback), this._client);
@@ -43262,6 +45837,10 @@ const TestDatabaseResourcePromiseImpl = $aspireCreateFluentPromiseClass<TestData
     ["withEnvironment"]: () => TestDatabaseResourcePromiseImpl,
     ["withEnvironmentCallback"]: () => TestDatabaseResourcePromiseImpl,
     ["withArgs"]: () => TestDatabaseResourcePromiseImpl,
+    ["withSerializedAnnotation"]: () => ResourcePromiseImpl,
+    ["getSerializedAnnotation"]: null,
+    ["hasSerializedAnnotation"]: null,
+    ["withArgsReplace"]: () => TestDatabaseResourcePromiseImpl,
     ["withArgsCallback"]: () => TestDatabaseResourcePromiseImpl,
     ["withReferenceEnvironment"]: () => TestDatabaseResourcePromiseImpl,
     ["withReference"]: () => TestDatabaseResourcePromiseImpl,
@@ -43291,6 +45870,7 @@ const TestDatabaseResourcePromiseImpl = $aspireCreateFluentPromiseClass<TestData
     ["withHttpCommand"]: () => TestDatabaseResourcePromiseImpl,
     ["withDeveloperCertificateTrust"]: () => TestDatabaseResourcePromiseImpl,
     ["withCertificateTrustScope"]: () => TestDatabaseResourcePromiseImpl,
+    ["withCertificateTrustEnvironment"]: () => TestDatabaseResourcePromiseImpl,
     ["withHttpsDeveloperCertificate"]: () => TestDatabaseResourcePromiseImpl,
     ["withoutHttpsCertificate"]: () => TestDatabaseResourcePromiseImpl,
     ["withHttpsCertificateConfiguration"]: () => TestDatabaseResourcePromiseImpl,
@@ -43298,6 +45878,7 @@ const TestDatabaseResourcePromiseImpl = $aspireCreateFluentPromiseClass<TestData
     ["withRelationship"]: () => TestDatabaseResourcePromiseImpl,
     ["withParentRelationship"]: () => TestDatabaseResourcePromiseImpl,
     ["withChildRelationship"]: () => TestDatabaseResourcePromiseImpl,
+    ["withResourceTypeDisplayName"]: () => TestDatabaseResourcePromiseImpl,
     ["withIconName"]: () => TestDatabaseResourcePromiseImpl,
     ["withComputeEnvironment"]: () => TestDatabaseResourcePromiseImpl,
     ["withHttpProbe"]: () => TestDatabaseResourcePromiseImpl,
@@ -43307,6 +45888,9 @@ const TestDatabaseResourcePromiseImpl = $aspireCreateFluentPromiseClass<TestData
     ["withImagePushOptions"]: () => TestDatabaseResourcePromiseImpl,
     ["withRemoteImageName"]: () => TestDatabaseResourcePromiseImpl,
     ["withRemoteImageTag"]: () => TestDatabaseResourcePromiseImpl,
+    ["withTrait"]: () => TestDatabaseResourcePromiseImpl,
+    ["withTags"]: () => TestDatabaseResourcePromiseImpl,
+    ["withDisplayOrder"]: () => TestDatabaseResourcePromiseImpl,
     ["withTerminal"]: () => TestDatabaseResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => TestDatabaseResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => TestDatabaseResourcePromiseImpl,
@@ -43521,49 +46105,22 @@ export interface TestRedisResource {
     /**
      * Configures the resource to use a programmatically generated Dockerfile
      *
-     * This method provides a programmatic way to build Dockerfiles using the `DockerfileBuilder` API
-     * instead of string manipulation. Callbacks can be composed by calling this method multiple times - each callback will be invoked
-     * in order to build up the final Dockerfile.
-     * The `contextPath` is relative to the AppHost directory unless it is fully qualified.
-     * Creates a container with a programmatically built Dockerfile using fluent API:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddContainer("mycontainer", "myimage")
-     * .WithDockerfileBuilder("path/to/context", context =>
-     * {
-     * context.Builder.From("alpine:latest")
-     * .WorkDir("/app")
-     * .Run("apk add curl")
-     * .Copy(".", ".")
-     * .Cmd(["./myapp"]);
-     * return Task.CompletedTask;
-     * });
-     * builder.Build().Run();
-     * ```
+     * Calling this method multiple times composes callbacks, which are invoked in registration order
+     * to build the final Dockerfile.
+     * The build context path is relative to the AppHost directory unless it is fully qualified.
      * @param contextPath Path to be used as the context for the container image build.
      * @param callback A callback that uses the `DockerfileBuilder` API to construct the Dockerfile.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBuilder(contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, options?: WithDockerfileBuilderOptions): TestRedisResourcePromise;
     /**
      * Configures custom base images for generated Dockerfiles.
      *
-     * This extension method allows customization of the base images used in generated Dockerfiles.
-     * For multi-stage Dockerfiles (e.g., Python with UV), you can specify separate build and runtime images.
-     * Specify custom base images for a Python application:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddPythonApp("myapp", "path/to/app", "main.py")
-     * .WithDockerfileBaseImage(
-     * buildImage: "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
-     * runtimeImage: "python:3.12-slim-bookworm");
-     * builder.Build().Run();
-     * ```
+     * For multi-stage Dockerfiles, specify separate build and runtime base images.
+     * Images that are not specified use the integration's defaults. At least one base image must be specified.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): TestRedisResourcePromise;
     /**
@@ -43676,6 +46233,31 @@ export interface TestRedisResource {
      * @returns The resource builder.
      */
     withArgs(args: string[]): TestRedisResourcePromise;
+    /**
+     * Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+     * @param annotationId The stable annotation identifier.
+     * @param json The serialized JSON payload.
+     * @returns The resource.
+     */
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise;
+    /**
+     * Gets a serialized ATS annotation payload from a resource.
+     * @param annotationId The stable annotation identifier.
+     * @returns The serialized JSON payload.
+     */
+    getSerializedAnnotation(annotationId: string): Promise<string>;
+    /**
+     * Determines whether a resource has a serialized ATS annotation with the specified ID.
+     * @param annotationId The stable annotation identifier.
+     * @returns `true` if the annotation exists; otherwise, `false`.
+     */
+    hasSerializedAnnotation(annotationId: string): Promise<boolean>;
+    /**
+     * Replaces the arguments to be passed to a resource that supports arguments when it is launched.
+     * @param args The arguments to be passed to the resource when it is started.
+     * @returns The resource builder.
+     */
+    withArgsReplace(args: string[]): TestRedisResourcePromise;
     /**
      * Adds a callback to be executed with a list of command-line arguments when a resource is started.
      * @param callback A callback that allows for deferred execution for computing arguments. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.
@@ -43870,7 +46452,7 @@ export interface TestRedisResource {
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddProject<MyService>("my-service")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -43899,6 +46481,13 @@ export interface TestRedisResource {
      * @returns The resource builder.
      */
     withCertificateTrustScope(scope: CertificateTrustScope): TestRedisResourcePromise;
+    /**
+     * Configures environment variables that point to Aspire-managed certificate trust paths.
+     * @param certificateBundleEnvironmentVariable The environment variable that receives the certificate bundle path.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withCertificateTrustEnvironment(certificateBundleEnvironmentVariable: string, options?: WithCertificateTrustEnvironmentOptions): TestRedisResourcePromise;
     /**
      * Indicates that a resource should use the developer certificate key pair for HTTPS endpoints at run time. Currently this indicates use of the ASP.NET Core developer certificate. The developer certificate will only be used when running in local development scenarios; in publish mode resources will use their default certificate configuration.
      *
@@ -43980,6 +46569,16 @@ export interface TestRedisResource {
      */
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestRedisResourcePromise;
     /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): TestRedisResourcePromise;
+    /**
      * Specifies the icon to use when displaying the resource in the dashboard.
      * @param iconName The name of the FluentUI icon to use. See https://aka.ms/fluentui-system-icons for available icons.
      * @param options Additional options.
@@ -43997,7 +46596,6 @@ export interface TestRedisResource {
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): TestRedisResourcePromise;
     /**
@@ -44054,22 +46652,43 @@ export interface TestRedisResource {
      * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): TestRedisResourcePromise;
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    withTerminal(): TestRedisResourcePromise;
+    /**
+     * Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+     * @param name The case-sensitive trait name.
+     * @param value The trait value. Do not include secrets.
+     * @returns The resource builder.
+     */
+    withTrait(name: string, value: string): TestRedisResourcePromise;
+    /**
+     * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+     * @param tags The tags, each up to 50 characters with single spaces between words.
+     * @returns The resource builder.
+     */
+    withTags(tags: string[]): TestRedisResourcePromise;
+    /**
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
+     * @returns The resource builder.
+     */
+    withDisplayOrder(order: number): TestRedisResourcePromise;
+    /**
+     * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
+     */
+    withTerminal(options?: WithTerminalOptions): TestRedisResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): TestRedisResourcePromise;
     /**
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): TestRedisResourcePromise;
     /**
@@ -44438,49 +47057,22 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
     /**
      * Configures the resource to use a programmatically generated Dockerfile
      *
-     * This method provides a programmatic way to build Dockerfiles using the `DockerfileBuilder` API
-     * instead of string manipulation. Callbacks can be composed by calling this method multiple times - each callback will be invoked
-     * in order to build up the final Dockerfile.
-     * The `contextPath` is relative to the AppHost directory unless it is fully qualified.
-     * Creates a container with a programmatically built Dockerfile using fluent API:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddContainer("mycontainer", "myimage")
-     * .WithDockerfileBuilder("path/to/context", context =>
-     * {
-     * context.Builder.From("alpine:latest")
-     * .WorkDir("/app")
-     * .Run("apk add curl")
-     * .Copy(".", ".")
-     * .Cmd(["./myapp"]);
-     * return Task.CompletedTask;
-     * });
-     * builder.Build().Run();
-     * ```
+     * Calling this method multiple times composes callbacks, which are invoked in registration order
+     * to build the final Dockerfile.
+     * The build context path is relative to the AppHost directory unless it is fully qualified.
      * @param contextPath Path to be used as the context for the container image build.
      * @param callback A callback that uses the `DockerfileBuilder` API to construct the Dockerfile.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBuilder(contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, options?: WithDockerfileBuilderOptions): TestRedisResourcePromise;
     /**
      * Configures custom base images for generated Dockerfiles.
      *
-     * This extension method allows customization of the base images used in generated Dockerfiles.
-     * For multi-stage Dockerfiles (e.g., Python with UV), you can specify separate build and runtime images.
-     * Specify custom base images for a Python application:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddPythonApp("myapp", "path/to/app", "main.py")
-     * .WithDockerfileBaseImage(
-     * buildImage: "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
-     * runtimeImage: "python:3.12-slim-bookworm");
-     * builder.Build().Run();
-     * ```
+     * For multi-stage Dockerfiles, specify separate build and runtime base images.
+     * Images that are not specified use the integration's defaults. At least one base image must be specified.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): TestRedisResourcePromise;
     /**
@@ -44593,6 +47185,31 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      * @returns The resource builder.
      */
     withArgs(args: string[]): TestRedisResourcePromise;
+    /**
+     * Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+     * @param annotationId The stable annotation identifier.
+     * @param json The serialized JSON payload.
+     * @returns The resource.
+     */
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise;
+    /**
+     * Gets a serialized ATS annotation payload from a resource.
+     * @param annotationId The stable annotation identifier.
+     * @returns The serialized JSON payload.
+     */
+    getSerializedAnnotation(annotationId: string): Promise<string>;
+    /**
+     * Determines whether a resource has a serialized ATS annotation with the specified ID.
+     * @param annotationId The stable annotation identifier.
+     * @returns `true` if the annotation exists; otherwise, `false`.
+     */
+    hasSerializedAnnotation(annotationId: string): Promise<boolean>;
+    /**
+     * Replaces the arguments to be passed to a resource that supports arguments when it is launched.
+     * @param args The arguments to be passed to the resource when it is started.
+     * @returns The resource builder.
+     */
+    withArgsReplace(args: string[]): TestRedisResourcePromise;
     /**
      * Adds a callback to be executed with a list of command-line arguments when a resource is started.
      * @param callback A callback that allows for deferred execution for computing arguments. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.
@@ -44787,7 +47404,7 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddProject<MyService>("my-service")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -44816,6 +47433,13 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      * @returns The resource builder.
      */
     withCertificateTrustScope(scope: CertificateTrustScope): TestRedisResourcePromise;
+    /**
+     * Configures environment variables that point to Aspire-managed certificate trust paths.
+     * @param certificateBundleEnvironmentVariable The environment variable that receives the certificate bundle path.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withCertificateTrustEnvironment(certificateBundleEnvironmentVariable: string, options?: WithCertificateTrustEnvironmentOptions): TestRedisResourcePromise;
     /**
      * Indicates that a resource should use the developer certificate key pair for HTTPS endpoints at run time. Currently this indicates use of the ASP.NET Core developer certificate. The developer certificate will only be used when running in local development scenarios; in publish mode resources will use their default certificate configuration.
      *
@@ -44897,6 +47521,16 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      */
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestRedisResourcePromise;
     /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): TestRedisResourcePromise;
+    /**
      * Specifies the icon to use when displaying the resource in the dashboard.
      * @param iconName The name of the FluentUI icon to use. See https://aka.ms/fluentui-system-icons for available icons.
      * @param options Additional options.
@@ -44914,7 +47548,6 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): TestRedisResourcePromise;
     /**
@@ -44971,22 +47604,43 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): TestRedisResourcePromise;
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    withTerminal(): TestRedisResourcePromise;
+    /**
+     * Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+     * @param name The case-sensitive trait name.
+     * @param value The trait value. Do not include secrets.
+     * @returns The resource builder.
+     */
+    withTrait(name: string, value: string): TestRedisResourcePromise;
+    /**
+     * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+     * @param tags The tags, each up to 50 characters with single spaces between words.
+     * @returns The resource builder.
+     */
+    withTags(tags: string[]): TestRedisResourcePromise;
+    /**
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
+     * @returns The resource builder.
+     */
+    withDisplayOrder(order: number): TestRedisResourcePromise;
+    /**
+     * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
+     */
+    withTerminal(options?: WithTerminalOptions): TestRedisResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): TestRedisResourcePromise;
     /**
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): TestRedisResourcePromise;
     /**
@@ -45658,30 +48312,13 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     /**
      * Configures the resource to use a programmatically generated Dockerfile
      *
-     * This method provides a programmatic way to build Dockerfiles using the `DockerfileBuilder` API
-     * instead of string manipulation. Callbacks can be composed by calling this method multiple times - each callback will be invoked
-     * in order to build up the final Dockerfile.
-     * The `contextPath` is relative to the AppHost directory unless it is fully qualified.
-     * Creates a container with a programmatically built Dockerfile using fluent API:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddContainer("mycontainer", "myimage")
-     * .WithDockerfileBuilder("path/to/context", context =>
-     * {
-     * context.Builder.From("alpine:latest")
-     * .WorkDir("/app")
-     * .Run("apk add curl")
-     * .Copy(".", ".")
-     * .Cmd(["./myapp"]);
-     * return Task.CompletedTask;
-     * });
-     * builder.Build().Run();
-     * ```
+     * Calling this method multiple times composes callbacks, which are invoked in registration order
+     * to build the final Dockerfile.
+     * The build context path is relative to the AppHost directory unless it is fully qualified.
      * @param contextPath Path to be used as the context for the container image build.
      * @param callback A callback that uses the `DockerfileBuilder` API to construct the Dockerfile.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBuilder(contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, options?: WithDockerfileBuilderOptions): TestRedisResourcePromise {
         const stage = options?.stage;
@@ -45703,20 +48340,10 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     /**
      * Configures custom base images for generated Dockerfiles.
      *
-     * This extension method allows customization of the base images used in generated Dockerfiles.
-     * For multi-stage Dockerfiles (e.g., Python with UV), you can specify separate build and runtime images.
-     * Specify custom base images for a Python application:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddPythonApp("myapp", "path/to/app", "main.py")
-     * .WithDockerfileBaseImage(
-     * buildImage: "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
-     * runtimeImage: "python:3.12-slim-bookworm");
-     * builder.Build().Run();
-     * ```
+     * For multi-stage Dockerfiles, specify separate build and runtime base images.
+     * Images that are not specified use the integration's defaults. At least one base image must be specified.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): TestRedisResourcePromise {
         const buildImage = options?.buildImage;
@@ -46036,6 +48663,69 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
      */
     withArgs(args: string[]): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._withArgsInternal(args), this._client);
+    }
+
+    /**
+     * Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+     * @param annotationId The stable annotation identifier.
+     * @param json The serialized JSON payload.
+     * @returns The resource.
+     */
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise {
+        const promise = (async () => {
+            const rpcArgs: Record<string, unknown> = { resource: this._handle, annotationId, json };
+            const handle = await this._client.invokeCapability<IResourceHandle>(
+                'Aspire.Hosting/withSerializedAnnotation',
+                rpcArgs
+            );
+            return new ResourceImpl(handle, this._client);
+        })();
+        return new ResourcePromiseImpl(promise, this._client);
+    }
+
+    /**
+     * Gets a serialized ATS annotation payload from a resource.
+     * @param annotationId The stable annotation identifier.
+     * @returns The serialized JSON payload.
+     */
+    async getSerializedAnnotation(annotationId: string): Promise<string> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle, annotationId };
+        return await this._client.invokeCapability<string>(
+            'Aspire.Hosting/getSerializedAnnotation',
+            rpcArgs
+        );
+    }
+
+    /**
+     * Determines whether a resource has a serialized ATS annotation with the specified ID.
+     * @param annotationId The stable annotation identifier.
+     * @returns `true` if the annotation exists; otherwise, `false`.
+     */
+    async hasSerializedAnnotation(annotationId: string): Promise<boolean> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle, annotationId };
+        return await this._client.invokeCapability<boolean>(
+            'Aspire.Hosting/hasSerializedAnnotation',
+            rpcArgs
+        );
+    }
+
+    /** @internal */
+    private async _withArgsReplaceInternal(args: string[]): Promise<TestRedisResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, args };
+        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
+            'Aspire.Hosting/withArgsReplace',
+            rpcArgs
+        );
+        return new TestRedisResourceImpl(result, this._client);
+    }
+
+    /**
+     * Replaces the arguments to be passed to a resource that supports arguments when it is launched.
+     * @param args The arguments to be passed to the resource when it is started.
+     * @returns The resource builder.
+     */
+    withArgsReplace(args: string[]): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._withArgsReplaceInternal(args), this._client);
     }
 
     /** @internal */
@@ -46835,7 +49525,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddProject<MyService>("my-service")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -46878,6 +49568,28 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
      */
     withCertificateTrustScope(scope: CertificateTrustScope): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._withCertificateTrustScopeInternal(scope), this._client);
+    }
+
+    /** @internal */
+    private async _withCertificateTrustEnvironmentInternal(certificateBundleEnvironmentVariable: string, certificateDirectoriesEnvironmentVariable?: string): Promise<TestRedisResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, certificateBundleEnvironmentVariable };
+        if (certificateDirectoriesEnvironmentVariable !== undefined) rpcArgs.certificateDirectoriesEnvironmentVariable = certificateDirectoriesEnvironmentVariable;
+        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
+            'Aspire.Hosting/withCertificateTrustEnvironment',
+            rpcArgs
+        );
+        return new TestRedisResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures environment variables that point to Aspire-managed certificate trust paths.
+     * @param certificateBundleEnvironmentVariable The environment variable that receives the certificate bundle path.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withCertificateTrustEnvironment(certificateBundleEnvironmentVariable: string, options?: WithCertificateTrustEnvironmentOptions): TestRedisResourcePromise {
+        const certificateDirectoriesEnvironmentVariable = options?.certificateDirectoriesEnvironmentVariable;
+        return new TestRedisResourcePromiseImpl(this._withCertificateTrustEnvironmentInternal(certificateBundleEnvironmentVariable, certificateDirectoriesEnvironmentVariable), this._client);
     }
 
     /** @internal */
@@ -47068,6 +49780,29 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** @internal */
+    private async _withResourceTypeDisplayNameInternal(resourceTypeDisplayName: string): Promise<TestRedisResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, resourceTypeDisplayName };
+        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
+            'Aspire.Hosting/withResourceTypeDisplayName',
+            rpcArgs
+        );
+        return new TestRedisResourceImpl(result, this._client);
+    }
+
+    /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._withResourceTypeDisplayNameInternal(resourceTypeDisplayName), this._client);
+    }
+
+    /** @internal */
     private async _withIconNameInternal(iconName: string, iconVariant?: IconVariant): Promise<TestRedisResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, iconName };
         if (iconVariant !== undefined) rpcArgs.iconVariant = iconVariant;
@@ -47131,7 +49866,6 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): TestRedisResourcePromise {
         const path = options?.path;
@@ -47286,8 +50020,71 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** @internal */
-    private async _withTerminalInternal(): Promise<TestRedisResource> {
+    private async _withTraitInternal(name: string, value: string): Promise<TestRedisResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
+        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
+            'Aspire.Hosting/withTrait',
+            rpcArgs
+        );
+        return new TestRedisResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+     * @param name The case-sensitive trait name.
+     * @param value The trait value. Do not include secrets.
+     * @returns The resource builder.
+     */
+    withTrait(name: string, value: string): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._withTraitInternal(name, value), this._client);
+    }
+
+    /** @internal */
+    private async _withTagsInternal(tags: string[]): Promise<TestRedisResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, tags };
+        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
+            'Aspire.Hosting/withTags',
+            rpcArgs
+        );
+        return new TestRedisResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+     * @param tags The tags, each up to 50 characters with single spaces between words.
+     * @returns The resource builder.
+     */
+    withTags(tags: string[]): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._withTagsInternal(tags), this._client);
+    }
+
+    /** @internal */
+    private async _withDisplayOrderInternal(order: number): Promise<TestRedisResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, order };
+        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
+            'Aspire.Hosting/withDisplayOrder',
+            rpcArgs
+        );
+        return new TestRedisResourceImpl(result, this._client);
+    }
+
+    /**
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
+     * @returns The resource builder.
+     */
+    withDisplayOrder(order: number): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._withDisplayOrderInternal(order), this._client);
+    }
+
+    /** @internal */
+    private async _withTerminalInternal(configure?: (obj: TerminalOptions) => Promise<void>): Promise<TestRedisResource> {
+        const configureId = configure ? registerCallback(async (objData: unknown) => {
+            const obj = wrapIfHandle(objData) as TerminalOptions;
+            await configure(obj);
+        }) : undefined;
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        if (configure !== undefined) rpcArgs.configure = configureId;
         const result = await this._client.invokeCapability<TestRedisResourceHandle>(
             'Aspire.Hosting/withTerminal',
             rpcArgs
@@ -47295,9 +50092,14 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
         return new TestRedisResourceImpl(result, this._client);
     }
 
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    withTerminal(): TestRedisResourcePromise {
-        return new TestRedisResourcePromiseImpl(this._withTerminalInternal(), this._client);
+    /**
+     * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
+     */
+    withTerminal(options?: WithTerminalOptions): TestRedisResourcePromise {
+        const configure = options?.configure;
+        return new TestRedisResourcePromiseImpl(this._withTerminalInternal(configure), this._client);
     }
 
     /** @internal */
@@ -47325,7 +50127,6 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): TestRedisResourcePromise {
         const dependsOn = options?.dependsOn;
@@ -47354,7 +50155,6 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._withPipelineConfigurationInternal(callback), this._client);
@@ -48290,6 +51090,10 @@ const TestRedisResourcePromiseImpl = $aspireCreateFluentPromiseClass<TestRedisRe
     ["withEnvironmentCallback"]: () => TestRedisResourcePromiseImpl,
     ["withConnectionProperty"]: () => TestRedisResourcePromiseImpl,
     ["withArgs"]: () => TestRedisResourcePromiseImpl,
+    ["withSerializedAnnotation"]: () => ResourcePromiseImpl,
+    ["getSerializedAnnotation"]: null,
+    ["hasSerializedAnnotation"]: null,
+    ["withArgsReplace"]: () => TestRedisResourcePromiseImpl,
     ["withArgsCallback"]: () => TestRedisResourcePromiseImpl,
     ["withReferenceEnvironment"]: () => TestRedisResourcePromiseImpl,
     ["withReference"]: () => TestRedisResourcePromiseImpl,
@@ -48320,6 +51124,7 @@ const TestRedisResourcePromiseImpl = $aspireCreateFluentPromiseClass<TestRedisRe
     ["withHttpCommand"]: () => TestRedisResourcePromiseImpl,
     ["withDeveloperCertificateTrust"]: () => TestRedisResourcePromiseImpl,
     ["withCertificateTrustScope"]: () => TestRedisResourcePromiseImpl,
+    ["withCertificateTrustEnvironment"]: () => TestRedisResourcePromiseImpl,
     ["withHttpsDeveloperCertificate"]: () => TestRedisResourcePromiseImpl,
     ["withoutHttpsCertificate"]: () => TestRedisResourcePromiseImpl,
     ["withHttpsCertificateConfiguration"]: () => TestRedisResourcePromiseImpl,
@@ -48327,6 +51132,7 @@ const TestRedisResourcePromiseImpl = $aspireCreateFluentPromiseClass<TestRedisRe
     ["withRelationship"]: () => TestRedisResourcePromiseImpl,
     ["withParentRelationship"]: () => TestRedisResourcePromiseImpl,
     ["withChildRelationship"]: () => TestRedisResourcePromiseImpl,
+    ["withResourceTypeDisplayName"]: () => TestRedisResourcePromiseImpl,
     ["withIconName"]: () => TestRedisResourcePromiseImpl,
     ["withComputeEnvironment"]: () => TestRedisResourcePromiseImpl,
     ["withHttpProbe"]: () => TestRedisResourcePromiseImpl,
@@ -48336,6 +51142,9 @@ const TestRedisResourcePromiseImpl = $aspireCreateFluentPromiseClass<TestRedisRe
     ["withImagePushOptions"]: () => TestRedisResourcePromiseImpl,
     ["withRemoteImageName"]: () => TestRedisResourcePromiseImpl,
     ["withRemoteImageTag"]: () => TestRedisResourcePromiseImpl,
+    ["withTrait"]: () => TestRedisResourcePromiseImpl,
+    ["withTags"]: () => TestRedisResourcePromiseImpl,
+    ["withDisplayOrder"]: () => TestRedisResourcePromiseImpl,
     ["withTerminal"]: () => TestRedisResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => TestRedisResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => TestRedisResourcePromiseImpl,
@@ -48566,49 +51375,22 @@ export interface TestVaultResource {
     /**
      * Configures the resource to use a programmatically generated Dockerfile
      *
-     * This method provides a programmatic way to build Dockerfiles using the `DockerfileBuilder` API
-     * instead of string manipulation. Callbacks can be composed by calling this method multiple times - each callback will be invoked
-     * in order to build up the final Dockerfile.
-     * The `contextPath` is relative to the AppHost directory unless it is fully qualified.
-     * Creates a container with a programmatically built Dockerfile using fluent API:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddContainer("mycontainer", "myimage")
-     * .WithDockerfileBuilder("path/to/context", context =>
-     * {
-     * context.Builder.From("alpine:latest")
-     * .WorkDir("/app")
-     * .Run("apk add curl")
-     * .Copy(".", ".")
-     * .Cmd(["./myapp"]);
-     * return Task.CompletedTask;
-     * });
-     * builder.Build().Run();
-     * ```
+     * Calling this method multiple times composes callbacks, which are invoked in registration order
+     * to build the final Dockerfile.
+     * The build context path is relative to the AppHost directory unless it is fully qualified.
      * @param contextPath Path to be used as the context for the container image build.
      * @param callback A callback that uses the `DockerfileBuilder` API to construct the Dockerfile.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBuilder(contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, options?: WithDockerfileBuilderOptions): TestVaultResourcePromise;
     /**
      * Configures custom base images for generated Dockerfiles.
      *
-     * This extension method allows customization of the base images used in generated Dockerfiles.
-     * For multi-stage Dockerfiles (e.g., Python with UV), you can specify separate build and runtime images.
-     * Specify custom base images for a Python application:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddPythonApp("myapp", "path/to/app", "main.py")
-     * .WithDockerfileBaseImage(
-     * buildImage: "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
-     * runtimeImage: "python:3.12-slim-bookworm");
-     * builder.Build().Run();
-     * ```
+     * For multi-stage Dockerfiles, specify separate build and runtime base images.
+     * Images that are not specified use the integration's defaults. At least one base image must be specified.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): TestVaultResourcePromise;
     /**
@@ -48714,6 +51496,31 @@ export interface TestVaultResource {
      * @returns The resource builder.
      */
     withArgs(args: string[]): TestVaultResourcePromise;
+    /**
+     * Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+     * @param annotationId The stable annotation identifier.
+     * @param json The serialized JSON payload.
+     * @returns The resource.
+     */
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise;
+    /**
+     * Gets a serialized ATS annotation payload from a resource.
+     * @param annotationId The stable annotation identifier.
+     * @returns The serialized JSON payload.
+     */
+    getSerializedAnnotation(annotationId: string): Promise<string>;
+    /**
+     * Determines whether a resource has a serialized ATS annotation with the specified ID.
+     * @param annotationId The stable annotation identifier.
+     * @returns `true` if the annotation exists; otherwise, `false`.
+     */
+    hasSerializedAnnotation(annotationId: string): Promise<boolean>;
+    /**
+     * Replaces the arguments to be passed to a resource that supports arguments when it is launched.
+     * @param args The arguments to be passed to the resource when it is started.
+     * @returns The resource builder.
+     */
+    withArgsReplace(args: string[]): TestVaultResourcePromise;
     /**
      * Adds a callback to be executed with a list of command-line arguments when a resource is started.
      * @param callback A callback that allows for deferred execution for computing arguments. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.
@@ -48899,7 +51706,7 @@ export interface TestVaultResource {
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddProject<MyService>("my-service")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -48928,6 +51735,13 @@ export interface TestVaultResource {
      * @returns The resource builder.
      */
     withCertificateTrustScope(scope: CertificateTrustScope): TestVaultResourcePromise;
+    /**
+     * Configures environment variables that point to Aspire-managed certificate trust paths.
+     * @param certificateBundleEnvironmentVariable The environment variable that receives the certificate bundle path.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withCertificateTrustEnvironment(certificateBundleEnvironmentVariable: string, options?: WithCertificateTrustEnvironmentOptions): TestVaultResourcePromise;
     /**
      * Indicates that a resource should use the developer certificate key pair for HTTPS endpoints at run time. Currently this indicates use of the ASP.NET Core developer certificate. The developer certificate will only be used when running in local development scenarios; in publish mode resources will use their default certificate configuration.
      *
@@ -49009,6 +51823,16 @@ export interface TestVaultResource {
      */
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestVaultResourcePromise;
     /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): TestVaultResourcePromise;
+    /**
      * Specifies the icon to use when displaying the resource in the dashboard.
      * @param iconName The name of the FluentUI icon to use. See https://aka.ms/fluentui-system-icons for available icons.
      * @param options Additional options.
@@ -49026,7 +51850,6 @@ export interface TestVaultResource {
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): TestVaultResourcePromise;
     /**
@@ -49083,22 +51906,43 @@ export interface TestVaultResource {
      * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): TestVaultResourcePromise;
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    withTerminal(): TestVaultResourcePromise;
+    /**
+     * Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+     * @param name The case-sensitive trait name.
+     * @param value The trait value. Do not include secrets.
+     * @returns The resource builder.
+     */
+    withTrait(name: string, value: string): TestVaultResourcePromise;
+    /**
+     * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+     * @param tags The tags, each up to 50 characters with single spaces between words.
+     * @returns The resource builder.
+     */
+    withTags(tags: string[]): TestVaultResourcePromise;
+    /**
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
+     * @returns The resource builder.
+     */
+    withDisplayOrder(order: number): TestVaultResourcePromise;
+    /**
+     * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
+     */
+    withTerminal(options?: WithTerminalOptions): TestVaultResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): TestVaultResourcePromise;
     /**
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): TestVaultResourcePromise;
     /**
@@ -49401,49 +52245,22 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
     /**
      * Configures the resource to use a programmatically generated Dockerfile
      *
-     * This method provides a programmatic way to build Dockerfiles using the `DockerfileBuilder` API
-     * instead of string manipulation. Callbacks can be composed by calling this method multiple times - each callback will be invoked
-     * in order to build up the final Dockerfile.
-     * The `contextPath` is relative to the AppHost directory unless it is fully qualified.
-     * Creates a container with a programmatically built Dockerfile using fluent API:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddContainer("mycontainer", "myimage")
-     * .WithDockerfileBuilder("path/to/context", context =>
-     * {
-     * context.Builder.From("alpine:latest")
-     * .WorkDir("/app")
-     * .Run("apk add curl")
-     * .Copy(".", ".")
-     * .Cmd(["./myapp"]);
-     * return Task.CompletedTask;
-     * });
-     * builder.Build().Run();
-     * ```
+     * Calling this method multiple times composes callbacks, which are invoked in registration order
+     * to build the final Dockerfile.
+     * The build context path is relative to the AppHost directory unless it is fully qualified.
      * @param contextPath Path to be used as the context for the container image build.
      * @param callback A callback that uses the `DockerfileBuilder` API to construct the Dockerfile.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBuilder(contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, options?: WithDockerfileBuilderOptions): TestVaultResourcePromise;
     /**
      * Configures custom base images for generated Dockerfiles.
      *
-     * This extension method allows customization of the base images used in generated Dockerfiles.
-     * For multi-stage Dockerfiles (e.g., Python with UV), you can specify separate build and runtime images.
-     * Specify custom base images for a Python application:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddPythonApp("myapp", "path/to/app", "main.py")
-     * .WithDockerfileBaseImage(
-     * buildImage: "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
-     * runtimeImage: "python:3.12-slim-bookworm");
-     * builder.Build().Run();
-     * ```
+     * For multi-stage Dockerfiles, specify separate build and runtime base images.
+     * Images that are not specified use the integration's defaults. At least one base image must be specified.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): TestVaultResourcePromise;
     /**
@@ -49549,6 +52366,31 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      * @returns The resource builder.
      */
     withArgs(args: string[]): TestVaultResourcePromise;
+    /**
+     * Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+     * @param annotationId The stable annotation identifier.
+     * @param json The serialized JSON payload.
+     * @returns The resource.
+     */
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise;
+    /**
+     * Gets a serialized ATS annotation payload from a resource.
+     * @param annotationId The stable annotation identifier.
+     * @returns The serialized JSON payload.
+     */
+    getSerializedAnnotation(annotationId: string): Promise<string>;
+    /**
+     * Determines whether a resource has a serialized ATS annotation with the specified ID.
+     * @param annotationId The stable annotation identifier.
+     * @returns `true` if the annotation exists; otherwise, `false`.
+     */
+    hasSerializedAnnotation(annotationId: string): Promise<boolean>;
+    /**
+     * Replaces the arguments to be passed to a resource that supports arguments when it is launched.
+     * @param args The arguments to be passed to the resource when it is started.
+     * @returns The resource builder.
+     */
+    withArgsReplace(args: string[]): TestVaultResourcePromise;
     /**
      * Adds a callback to be executed with a list of command-line arguments when a resource is started.
      * @param callback A callback that allows for deferred execution for computing arguments. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.
@@ -49734,7 +52576,7 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddProject<MyService>("my-service")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -49763,6 +52605,13 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      * @returns The resource builder.
      */
     withCertificateTrustScope(scope: CertificateTrustScope): TestVaultResourcePromise;
+    /**
+     * Configures environment variables that point to Aspire-managed certificate trust paths.
+     * @param certificateBundleEnvironmentVariable The environment variable that receives the certificate bundle path.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withCertificateTrustEnvironment(certificateBundleEnvironmentVariable: string, options?: WithCertificateTrustEnvironmentOptions): TestVaultResourcePromise;
     /**
      * Indicates that a resource should use the developer certificate key pair for HTTPS endpoints at run time. Currently this indicates use of the ASP.NET Core developer certificate. The developer certificate will only be used when running in local development scenarios; in publish mode resources will use their default certificate configuration.
      *
@@ -49844,6 +52693,16 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      */
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestVaultResourcePromise;
     /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): TestVaultResourcePromise;
+    /**
      * Specifies the icon to use when displaying the resource in the dashboard.
      * @param iconName The name of the FluentUI icon to use. See https://aka.ms/fluentui-system-icons for available icons.
      * @param options Additional options.
@@ -49861,7 +52720,6 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): TestVaultResourcePromise;
     /**
@@ -49918,22 +52776,43 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): TestVaultResourcePromise;
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    withTerminal(): TestVaultResourcePromise;
+    /**
+     * Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+     * @param name The case-sensitive trait name.
+     * @param value The trait value. Do not include secrets.
+     * @returns The resource builder.
+     */
+    withTrait(name: string, value: string): TestVaultResourcePromise;
+    /**
+     * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+     * @param tags The tags, each up to 50 characters with single spaces between words.
+     * @returns The resource builder.
+     */
+    withTags(tags: string[]): TestVaultResourcePromise;
+    /**
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
+     * @returns The resource builder.
+     */
+    withDisplayOrder(order: number): TestVaultResourcePromise;
+    /**
+     * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
+     */
+    withTerminal(options?: WithTerminalOptions): TestVaultResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): TestVaultResourcePromise;
     /**
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): TestVaultResourcePromise;
     /**
@@ -50539,30 +53418,13 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     /**
      * Configures the resource to use a programmatically generated Dockerfile
      *
-     * This method provides a programmatic way to build Dockerfiles using the `DockerfileBuilder` API
-     * instead of string manipulation. Callbacks can be composed by calling this method multiple times - each callback will be invoked
-     * in order to build up the final Dockerfile.
-     * The `contextPath` is relative to the AppHost directory unless it is fully qualified.
-     * Creates a container with a programmatically built Dockerfile using fluent API:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddContainer("mycontainer", "myimage")
-     * .WithDockerfileBuilder("path/to/context", context =>
-     * {
-     * context.Builder.From("alpine:latest")
-     * .WorkDir("/app")
-     * .Run("apk add curl")
-     * .Copy(".", ".")
-     * .Cmd(["./myapp"]);
-     * return Task.CompletedTask;
-     * });
-     * builder.Build().Run();
-     * ```
+     * Calling this method multiple times composes callbacks, which are invoked in registration order
+     * to build the final Dockerfile.
+     * The build context path is relative to the AppHost directory unless it is fully qualified.
      * @param contextPath Path to be used as the context for the container image build.
      * @param callback A callback that uses the `DockerfileBuilder` API to construct the Dockerfile.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBuilder(contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, options?: WithDockerfileBuilderOptions): TestVaultResourcePromise {
         const stage = options?.stage;
@@ -50584,20 +53446,10 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     /**
      * Configures custom base images for generated Dockerfiles.
      *
-     * This extension method allows customization of the base images used in generated Dockerfiles.
-     * For multi-stage Dockerfiles (e.g., Python with UV), you can specify separate build and runtime images.
-     * Specify custom base images for a Python application:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddPythonApp("myapp", "path/to/app", "main.py")
-     * .WithDockerfileBaseImage(
-     * buildImage: "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
-     * runtimeImage: "python:3.12-slim-bookworm");
-     * builder.Build().Run();
-     * ```
+     * For multi-stage Dockerfiles, specify separate build and runtime base images.
+     * Images that are not specified use the integration's defaults. At least one base image must be specified.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): TestVaultResourcePromise {
         const buildImage = options?.buildImage;
@@ -50897,6 +53749,69 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
      */
     withArgs(args: string[]): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._withArgsInternal(args), this._client);
+    }
+
+    /**
+     * Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+     * @param annotationId The stable annotation identifier.
+     * @param json The serialized JSON payload.
+     * @returns The resource.
+     */
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise {
+        const promise = (async () => {
+            const rpcArgs: Record<string, unknown> = { resource: this._handle, annotationId, json };
+            const handle = await this._client.invokeCapability<IResourceHandle>(
+                'Aspire.Hosting/withSerializedAnnotation',
+                rpcArgs
+            );
+            return new ResourceImpl(handle, this._client);
+        })();
+        return new ResourcePromiseImpl(promise, this._client);
+    }
+
+    /**
+     * Gets a serialized ATS annotation payload from a resource.
+     * @param annotationId The stable annotation identifier.
+     * @returns The serialized JSON payload.
+     */
+    async getSerializedAnnotation(annotationId: string): Promise<string> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle, annotationId };
+        return await this._client.invokeCapability<string>(
+            'Aspire.Hosting/getSerializedAnnotation',
+            rpcArgs
+        );
+    }
+
+    /**
+     * Determines whether a resource has a serialized ATS annotation with the specified ID.
+     * @param annotationId The stable annotation identifier.
+     * @returns `true` if the annotation exists; otherwise, `false`.
+     */
+    async hasSerializedAnnotation(annotationId: string): Promise<boolean> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle, annotationId };
+        return await this._client.invokeCapability<boolean>(
+            'Aspire.Hosting/hasSerializedAnnotation',
+            rpcArgs
+        );
+    }
+
+    /** @internal */
+    private async _withArgsReplaceInternal(args: string[]): Promise<TestVaultResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, args };
+        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
+            'Aspire.Hosting/withArgsReplace',
+            rpcArgs
+        );
+        return new TestVaultResourceImpl(result, this._client);
+    }
+
+    /**
+     * Replaces the arguments to be passed to a resource that supports arguments when it is launched.
+     * @param args The arguments to be passed to the resource when it is started.
+     * @returns The resource builder.
+     */
+    withArgsReplace(args: string[]): TestVaultResourcePromise {
+        return new TestVaultResourcePromiseImpl(this._withArgsReplaceInternal(args), this._client);
     }
 
     /** @internal */
@@ -51680,7 +54595,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddProject<MyService>("my-service")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -51723,6 +54638,28 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
      */
     withCertificateTrustScope(scope: CertificateTrustScope): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._withCertificateTrustScopeInternal(scope), this._client);
+    }
+
+    /** @internal */
+    private async _withCertificateTrustEnvironmentInternal(certificateBundleEnvironmentVariable: string, certificateDirectoriesEnvironmentVariable?: string): Promise<TestVaultResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, certificateBundleEnvironmentVariable };
+        if (certificateDirectoriesEnvironmentVariable !== undefined) rpcArgs.certificateDirectoriesEnvironmentVariable = certificateDirectoriesEnvironmentVariable;
+        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
+            'Aspire.Hosting/withCertificateTrustEnvironment',
+            rpcArgs
+        );
+        return new TestVaultResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures environment variables that point to Aspire-managed certificate trust paths.
+     * @param certificateBundleEnvironmentVariable The environment variable that receives the certificate bundle path.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withCertificateTrustEnvironment(certificateBundleEnvironmentVariable: string, options?: WithCertificateTrustEnvironmentOptions): TestVaultResourcePromise {
+        const certificateDirectoriesEnvironmentVariable = options?.certificateDirectoriesEnvironmentVariable;
+        return new TestVaultResourcePromiseImpl(this._withCertificateTrustEnvironmentInternal(certificateBundleEnvironmentVariable, certificateDirectoriesEnvironmentVariable), this._client);
     }
 
     /** @internal */
@@ -51913,6 +54850,29 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /** @internal */
+    private async _withResourceTypeDisplayNameInternal(resourceTypeDisplayName: string): Promise<TestVaultResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, resourceTypeDisplayName };
+        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
+            'Aspire.Hosting/withResourceTypeDisplayName',
+            rpcArgs
+        );
+        return new TestVaultResourceImpl(result, this._client);
+    }
+
+    /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): TestVaultResourcePromise {
+        return new TestVaultResourcePromiseImpl(this._withResourceTypeDisplayNameInternal(resourceTypeDisplayName), this._client);
+    }
+
+    /** @internal */
     private async _withIconNameInternal(iconName: string, iconVariant?: IconVariant): Promise<TestVaultResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, iconName };
         if (iconVariant !== undefined) rpcArgs.iconVariant = iconVariant;
@@ -51976,7 +54936,6 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): TestVaultResourcePromise {
         const path = options?.path;
@@ -52131,8 +55090,71 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /** @internal */
-    private async _withTerminalInternal(): Promise<TestVaultResource> {
+    private async _withTraitInternal(name: string, value: string): Promise<TestVaultResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
+        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
+            'Aspire.Hosting/withTrait',
+            rpcArgs
+        );
+        return new TestVaultResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+     * @param name The case-sensitive trait name.
+     * @param value The trait value. Do not include secrets.
+     * @returns The resource builder.
+     */
+    withTrait(name: string, value: string): TestVaultResourcePromise {
+        return new TestVaultResourcePromiseImpl(this._withTraitInternal(name, value), this._client);
+    }
+
+    /** @internal */
+    private async _withTagsInternal(tags: string[]): Promise<TestVaultResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, tags };
+        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
+            'Aspire.Hosting/withTags',
+            rpcArgs
+        );
+        return new TestVaultResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+     * @param tags The tags, each up to 50 characters with single spaces between words.
+     * @returns The resource builder.
+     */
+    withTags(tags: string[]): TestVaultResourcePromise {
+        return new TestVaultResourcePromiseImpl(this._withTagsInternal(tags), this._client);
+    }
+
+    /** @internal */
+    private async _withDisplayOrderInternal(order: number): Promise<TestVaultResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, order };
+        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
+            'Aspire.Hosting/withDisplayOrder',
+            rpcArgs
+        );
+        return new TestVaultResourceImpl(result, this._client);
+    }
+
+    /**
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
+     * @returns The resource builder.
+     */
+    withDisplayOrder(order: number): TestVaultResourcePromise {
+        return new TestVaultResourcePromiseImpl(this._withDisplayOrderInternal(order), this._client);
+    }
+
+    /** @internal */
+    private async _withTerminalInternal(configure?: (obj: TerminalOptions) => Promise<void>): Promise<TestVaultResource> {
+        const configureId = configure ? registerCallback(async (objData: unknown) => {
+            const obj = wrapIfHandle(objData) as TerminalOptions;
+            await configure(obj);
+        }) : undefined;
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        if (configure !== undefined) rpcArgs.configure = configureId;
         const result = await this._client.invokeCapability<TestVaultResourceHandle>(
             'Aspire.Hosting/withTerminal',
             rpcArgs
@@ -52140,9 +55162,14 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
         return new TestVaultResourceImpl(result, this._client);
     }
 
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    withTerminal(): TestVaultResourcePromise {
-        return new TestVaultResourcePromiseImpl(this._withTerminalInternal(), this._client);
+    /**
+     * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
+     */
+    withTerminal(options?: WithTerminalOptions): TestVaultResourcePromise {
+        const configure = options?.configure;
+        return new TestVaultResourcePromiseImpl(this._withTerminalInternal(configure), this._client);
     }
 
     /** @internal */
@@ -52170,7 +55197,6 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): TestVaultResourcePromise {
         const dependsOn = options?.dependsOn;
@@ -52199,7 +55225,6 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._withPipelineConfigurationInternal(callback), this._client);
@@ -52874,6 +55899,10 @@ const TestVaultResourcePromiseImpl = $aspireCreateFluentPromiseClass<TestVaultRe
     ["withEnvironment"]: () => TestVaultResourcePromiseImpl,
     ["withEnvironmentCallback"]: () => TestVaultResourcePromiseImpl,
     ["withArgs"]: () => TestVaultResourcePromiseImpl,
+    ["withSerializedAnnotation"]: () => ResourcePromiseImpl,
+    ["getSerializedAnnotation"]: null,
+    ["hasSerializedAnnotation"]: null,
+    ["withArgsReplace"]: () => TestVaultResourcePromiseImpl,
     ["withArgsCallback"]: () => TestVaultResourcePromiseImpl,
     ["withReferenceEnvironment"]: () => TestVaultResourcePromiseImpl,
     ["withReference"]: () => TestVaultResourcePromiseImpl,
@@ -52903,6 +55932,7 @@ const TestVaultResourcePromiseImpl = $aspireCreateFluentPromiseClass<TestVaultRe
     ["withHttpCommand"]: () => TestVaultResourcePromiseImpl,
     ["withDeveloperCertificateTrust"]: () => TestVaultResourcePromiseImpl,
     ["withCertificateTrustScope"]: () => TestVaultResourcePromiseImpl,
+    ["withCertificateTrustEnvironment"]: () => TestVaultResourcePromiseImpl,
     ["withHttpsDeveloperCertificate"]: () => TestVaultResourcePromiseImpl,
     ["withoutHttpsCertificate"]: () => TestVaultResourcePromiseImpl,
     ["withHttpsCertificateConfiguration"]: () => TestVaultResourcePromiseImpl,
@@ -52910,6 +55940,7 @@ const TestVaultResourcePromiseImpl = $aspireCreateFluentPromiseClass<TestVaultRe
     ["withRelationship"]: () => TestVaultResourcePromiseImpl,
     ["withParentRelationship"]: () => TestVaultResourcePromiseImpl,
     ["withChildRelationship"]: () => TestVaultResourcePromiseImpl,
+    ["withResourceTypeDisplayName"]: () => TestVaultResourcePromiseImpl,
     ["withIconName"]: () => TestVaultResourcePromiseImpl,
     ["withComputeEnvironment"]: () => TestVaultResourcePromiseImpl,
     ["withHttpProbe"]: () => TestVaultResourcePromiseImpl,
@@ -52919,6 +55950,9 @@ const TestVaultResourcePromiseImpl = $aspireCreateFluentPromiseClass<TestVaultRe
     ["withImagePushOptions"]: () => TestVaultResourcePromiseImpl,
     ["withRemoteImageName"]: () => TestVaultResourcePromiseImpl,
     ["withRemoteImageTag"]: () => TestVaultResourcePromiseImpl,
+    ["withTrait"]: () => TestVaultResourcePromiseImpl,
+    ["withTags"]: () => TestVaultResourcePromiseImpl,
+    ["withDisplayOrder"]: () => TestVaultResourcePromiseImpl,
     ["withTerminal"]: () => TestVaultResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => TestVaultResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => TestVaultResourcePromiseImpl,
@@ -53261,20 +56295,10 @@ export interface Resource {
     /**
      * Configures custom base images for generated Dockerfiles.
      *
-     * This extension method allows customization of the base images used in generated Dockerfiles.
-     * For multi-stage Dockerfiles (e.g., Python with UV), you can specify separate build and runtime images.
-     * Specify custom base images for a Python application:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddPythonApp("myapp", "path/to/app", "main.py")
-     * .WithDockerfileBaseImage(
-     * buildImage: "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
-     * runtimeImage: "python:3.12-slim-bookworm");
-     * builder.Build().Run();
-     * ```
+     * For multi-stage Dockerfiles, specify separate build and runtime base images.
+     * Images that are not specified use the integration's defaults. At least one base image must be specified.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ResourcePromise;
     /**
@@ -53332,6 +56356,25 @@ export interface Resource {
      * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): ResourcePromise;
+    /**
+     * Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+     * @param annotationId The stable annotation identifier.
+     * @param json The serialized JSON payload.
+     * @returns The resource.
+     */
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise;
+    /**
+     * Gets a serialized ATS annotation payload from a resource.
+     * @param annotationId The stable annotation identifier.
+     * @returns The serialized JSON payload.
+     */
+    getSerializedAnnotation(annotationId: string): Promise<string>;
+    /**
+     * Determines whether a resource has a serialized ATS annotation with the specified ID.
+     * @param annotationId The stable annotation identifier.
+     * @returns `true` if the annotation exists; otherwise, `false`.
+     */
+    hasSerializedAnnotation(annotationId: string): Promise<boolean>;
     /**
      * Registers a callback to customize the URLs displayed for the resource.
      * @param callback The callback that will customize URLs for the resource.
@@ -53429,6 +56472,16 @@ export interface Resource {
      */
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ResourcePromise;
     /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): ResourcePromise;
+    /**
      * Specifies the icon to use when displaying the resource in the dashboard.
      * @param iconName The name of the FluentUI icon to use. See https://aka.ms/fluentui-system-icons for available icons.
      * @param options Additional options.
@@ -53458,22 +56511,43 @@ export interface Resource {
      * @returns The resource builder.
      */
     withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ResourcePromise;
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    withTerminal(): ResourcePromise;
+    /**
+     * Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+     * @param name The case-sensitive trait name.
+     * @param value The trait value. Do not include secrets.
+     * @returns The resource builder.
+     */
+    withTrait(name: string, value: string): ResourcePromise;
+    /**
+     * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+     * @param tags The tags, each up to 50 characters with single spaces between words.
+     * @returns The resource builder.
+     */
+    withTags(tags: string[]): ResourcePromise;
+    /**
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
+     * @returns The resource builder.
+     */
+    withDisplayOrder(order: number): ResourcePromise;
+    /**
+     * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
+     */
+    withTerminal(options?: WithTerminalOptions): ResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ResourcePromise;
     /**
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ResourcePromise;
     /**
@@ -53593,20 +56667,10 @@ export interface ResourcePromise extends PromiseLike<Resource> {
     /**
      * Configures custom base images for generated Dockerfiles.
      *
-     * This extension method allows customization of the base images used in generated Dockerfiles.
-     * For multi-stage Dockerfiles (e.g., Python with UV), you can specify separate build and runtime images.
-     * Specify custom base images for a Python application:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddPythonApp("myapp", "path/to/app", "main.py")
-     * .WithDockerfileBaseImage(
-     * buildImage: "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
-     * runtimeImage: "python:3.12-slim-bookworm");
-     * builder.Build().Run();
-     * ```
+     * For multi-stage Dockerfiles, specify separate build and runtime base images.
+     * Images that are not specified use the integration's defaults. At least one base image must be specified.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ResourcePromise;
     /**
@@ -53664,6 +56728,25 @@ export interface ResourcePromise extends PromiseLike<Resource> {
      * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): ResourcePromise;
+    /**
+     * Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+     * @param annotationId The stable annotation identifier.
+     * @param json The serialized JSON payload.
+     * @returns The resource.
+     */
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise;
+    /**
+     * Gets a serialized ATS annotation payload from a resource.
+     * @param annotationId The stable annotation identifier.
+     * @returns The serialized JSON payload.
+     */
+    getSerializedAnnotation(annotationId: string): Promise<string>;
+    /**
+     * Determines whether a resource has a serialized ATS annotation with the specified ID.
+     * @param annotationId The stable annotation identifier.
+     * @returns `true` if the annotation exists; otherwise, `false`.
+     */
+    hasSerializedAnnotation(annotationId: string): Promise<boolean>;
     /**
      * Registers a callback to customize the URLs displayed for the resource.
      * @param callback The callback that will customize URLs for the resource.
@@ -53761,6 +56844,16 @@ export interface ResourcePromise extends PromiseLike<Resource> {
      */
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ResourcePromise;
     /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): ResourcePromise;
+    /**
      * Specifies the icon to use when displaying the resource in the dashboard.
      * @param iconName The name of the FluentUI icon to use. See https://aka.ms/fluentui-system-icons for available icons.
      * @param options Additional options.
@@ -53790,22 +56883,43 @@ export interface ResourcePromise extends PromiseLike<Resource> {
      * @returns The resource builder.
      */
     withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ResourcePromise;
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    withTerminal(): ResourcePromise;
+    /**
+     * Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+     * @param name The case-sensitive trait name.
+     * @param value The trait value. Do not include secrets.
+     * @returns The resource builder.
+     */
+    withTrait(name: string, value: string): ResourcePromise;
+    /**
+     * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+     * @param tags The tags, each up to 50 characters with single spaces between words.
+     * @returns The resource builder.
+     */
+    withTags(tags: string[]): ResourcePromise;
+    /**
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
+     * @returns The resource builder.
+     */
+    withDisplayOrder(order: number): ResourcePromise;
+    /**
+     * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
+     */
+    withTerminal(options?: WithTerminalOptions): ResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ResourcePromise;
     /**
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ResourcePromise;
     /**
@@ -53960,20 +57074,10 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
     /**
      * Configures custom base images for generated Dockerfiles.
      *
-     * This extension method allows customization of the base images used in generated Dockerfiles.
-     * For multi-stage Dockerfiles (e.g., Python with UV), you can specify separate build and runtime images.
-     * Specify custom base images for a Python application:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddPythonApp("myapp", "path/to/app", "main.py")
-     * .WithDockerfileBaseImage(
-     * buildImage: "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
-     * runtimeImage: "python:3.12-slim-bookworm");
-     * builder.Build().Run();
-     * ```
+     * For multi-stage Dockerfiles, specify separate build and runtime base images.
+     * Images that are not specified use the integration's defaults. At least one base image must be specified.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ResourcePromise {
         const buildImage = options?.buildImage;
@@ -54122,6 +57226,50 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
      */
     withParentProcessLifetime(parentProcessId: number): ResourcePromise {
         return new ResourcePromiseImpl(this._withParentProcessLifetimeInternal(parentProcessId), this._client);
+    }
+
+    /**
+     * Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+     * @param annotationId The stable annotation identifier.
+     * @param json The serialized JSON payload.
+     * @returns The resource.
+     */
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise {
+        const promise = (async () => {
+            const rpcArgs: Record<string, unknown> = { resource: this._handle, annotationId, json };
+            const handle = await this._client.invokeCapability<IResourceHandle>(
+                'Aspire.Hosting/withSerializedAnnotation',
+                rpcArgs
+            );
+            return new ResourceImpl(handle, this._client);
+        })();
+        return new ResourcePromiseImpl(promise, this._client);
+    }
+
+    /**
+     * Gets a serialized ATS annotation payload from a resource.
+     * @param annotationId The stable annotation identifier.
+     * @returns The serialized JSON payload.
+     */
+    async getSerializedAnnotation(annotationId: string): Promise<string> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle, annotationId };
+        return await this._client.invokeCapability<string>(
+            'Aspire.Hosting/getSerializedAnnotation',
+            rpcArgs
+        );
+    }
+
+    /**
+     * Determines whether a resource has a serialized ATS annotation with the specified ID.
+     * @param annotationId The stable annotation identifier.
+     * @returns `true` if the annotation exists; otherwise, `false`.
+     */
+    async hasSerializedAnnotation(annotationId: string): Promise<boolean> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle, annotationId };
+        return await this._client.invokeCapability<boolean>(
+            'Aspire.Hosting/hasSerializedAnnotation',
+            rpcArgs
+        );
     }
 
     /** @internal */
@@ -54509,6 +57657,29 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
     }
 
     /** @internal */
+    private async _withResourceTypeDisplayNameInternal(resourceTypeDisplayName: string): Promise<Resource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, resourceTypeDisplayName };
+        const result = await this._client.invokeCapability<IResourceHandle>(
+            'Aspire.Hosting/withResourceTypeDisplayName',
+            rpcArgs
+        );
+        return new ResourceImpl(result, this._client);
+    }
+
+    /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): ResourcePromise {
+        return new ResourcePromiseImpl(this._withResourceTypeDisplayNameInternal(resourceTypeDisplayName), this._client);
+    }
+
+    /** @internal */
     private async _withIconNameInternal(iconName: string, iconVariant?: IconVariant): Promise<Resource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, iconName };
         if (iconVariant !== undefined) rpcArgs.iconVariant = iconVariant;
@@ -54597,8 +57768,71 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
     }
 
     /** @internal */
-    private async _withTerminalInternal(): Promise<Resource> {
+    private async _withTraitInternal(name: string, value: string): Promise<Resource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
+        const result = await this._client.invokeCapability<IResourceHandle>(
+            'Aspire.Hosting/withTrait',
+            rpcArgs
+        );
+        return new ResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+     * @param name The case-sensitive trait name.
+     * @param value The trait value. Do not include secrets.
+     * @returns The resource builder.
+     */
+    withTrait(name: string, value: string): ResourcePromise {
+        return new ResourcePromiseImpl(this._withTraitInternal(name, value), this._client);
+    }
+
+    /** @internal */
+    private async _withTagsInternal(tags: string[]): Promise<Resource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, tags };
+        const result = await this._client.invokeCapability<IResourceHandle>(
+            'Aspire.Hosting/withTags',
+            rpcArgs
+        );
+        return new ResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+     * @param tags The tags, each up to 50 characters with single spaces between words.
+     * @returns The resource builder.
+     */
+    withTags(tags: string[]): ResourcePromise {
+        return new ResourcePromiseImpl(this._withTagsInternal(tags), this._client);
+    }
+
+    /** @internal */
+    private async _withDisplayOrderInternal(order: number): Promise<Resource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, order };
+        const result = await this._client.invokeCapability<IResourceHandle>(
+            'Aspire.Hosting/withDisplayOrder',
+            rpcArgs
+        );
+        return new ResourceImpl(result, this._client);
+    }
+
+    /**
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
+     * @returns The resource builder.
+     */
+    withDisplayOrder(order: number): ResourcePromise {
+        return new ResourcePromiseImpl(this._withDisplayOrderInternal(order), this._client);
+    }
+
+    /** @internal */
+    private async _withTerminalInternal(configure?: (obj: TerminalOptions) => Promise<void>): Promise<Resource> {
+        const configureId = configure ? registerCallback(async (objData: unknown) => {
+            const obj = wrapIfHandle(objData) as TerminalOptions;
+            await configure(obj);
+        }) : undefined;
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        if (configure !== undefined) rpcArgs.configure = configureId;
         const result = await this._client.invokeCapability<IResourceHandle>(
             'Aspire.Hosting/withTerminal',
             rpcArgs
@@ -54606,9 +57840,14 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
         return new ResourceImpl(result, this._client);
     }
 
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    withTerminal(): ResourcePromise {
-        return new ResourcePromiseImpl(this._withTerminalInternal(), this._client);
+    /**
+     * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
+     */
+    withTerminal(options?: WithTerminalOptions): ResourcePromise {
+        const configure = options?.configure;
+        return new ResourcePromiseImpl(this._withTerminalInternal(configure), this._client);
     }
 
     /** @internal */
@@ -54636,7 +57875,6 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ResourcePromise {
         const dependsOn = options?.dependsOn;
@@ -54665,7 +57903,6 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ResourcePromise {
         return new ResourcePromiseImpl(this._withPipelineConfigurationInternal(callback), this._client);
@@ -55209,6 +58446,9 @@ const ResourcePromiseImpl = $aspireCreateFluentPromiseClass<Resource, ResourcePr
     ["withPersistentLifetime"]: () => ResourcePromiseImpl,
     ["withLifetimeOf"]: () => ResourcePromiseImpl,
     ["withParentProcessLifetime"]: () => ResourcePromiseImpl,
+    ["withSerializedAnnotation"]: () => ResourcePromiseImpl,
+    ["getSerializedAnnotation"]: null,
+    ["hasSerializedAnnotation"]: null,
     ["withUrls"]: () => ResourcePromiseImpl,
     ["withUrl"]: () => ResourcePromiseImpl,
     ["withUrlForEndpoint"]: () => ResourcePromiseImpl,
@@ -55222,10 +58462,14 @@ const ResourcePromiseImpl = $aspireCreateFluentPromiseClass<Resource, ResourcePr
     ["withRelationship"]: () => ResourcePromiseImpl,
     ["withParentRelationship"]: () => ResourcePromiseImpl,
     ["withChildRelationship"]: () => ResourcePromiseImpl,
+    ["withResourceTypeDisplayName"]: () => ResourcePromiseImpl,
     ["withIconName"]: () => ResourcePromiseImpl,
     ["excludeFromMcp"]: () => ResourcePromiseImpl,
     ["withHidden"]: () => ResourcePromiseImpl,
     ["withHiddenOnCompletion"]: () => ResourcePromiseImpl,
+    ["withTrait"]: () => ResourcePromiseImpl,
+    ["withTags"]: () => ResourcePromiseImpl,
+    ["withDisplayOrder"]: () => ResourcePromiseImpl,
     ["withTerminal"]: () => ResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => ResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => ResourcePromiseImpl,
@@ -55274,11 +58518,24 @@ export interface ResourceWithArgs {
      */
     withArgs(args: string[]): ResourceWithArgsPromise;
     /**
+     * Replaces the arguments to be passed to a resource that supports arguments when it is launched.
+     * @param args The arguments to be passed to the resource when it is started.
+     * @returns The resource builder.
+     */
+    withArgsReplace(args: string[]): ResourceWithArgsPromise;
+    /**
      * Adds a callback to be executed with a list of command-line arguments when a resource is started.
      * @param callback A callback that allows for deferred execution for computing arguments. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.
      * @returns The resource builder.
      */
     withArgsCallback(callback: (obj: CommandLineArgsCallbackContext) => Promise<void>): ResourceWithArgsPromise;
+    /**
+     * Configures environment variables that point to Aspire-managed certificate trust paths.
+     * @param certificateBundleEnvironmentVariable The environment variable that receives the certificate bundle path.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withCertificateTrustEnvironment(certificateBundleEnvironmentVariable: string, options?: WithCertificateTrustEnvironmentOptions): ResourceWithArgsPromise;
 }
 
 export interface ResourceWithArgsPromise extends PromiseLike<ResourceWithArgs> {
@@ -55289,11 +58546,24 @@ export interface ResourceWithArgsPromise extends PromiseLike<ResourceWithArgs> {
      */
     withArgs(args: string[]): ResourceWithArgsPromise;
     /**
+     * Replaces the arguments to be passed to a resource that supports arguments when it is launched.
+     * @param args The arguments to be passed to the resource when it is started.
+     * @returns The resource builder.
+     */
+    withArgsReplace(args: string[]): ResourceWithArgsPromise;
+    /**
      * Adds a callback to be executed with a list of command-line arguments when a resource is started.
      * @param callback A callback that allows for deferred execution for computing arguments. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.
      * @returns The resource builder.
      */
     withArgsCallback(callback: (obj: CommandLineArgsCallbackContext) => Promise<void>): ResourceWithArgsPromise;
+    /**
+     * Configures environment variables that point to Aspire-managed certificate trust paths.
+     * @param certificateBundleEnvironmentVariable The environment variable that receives the certificate bundle path.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withCertificateTrustEnvironment(certificateBundleEnvironmentVariable: string, options?: WithCertificateTrustEnvironmentOptions): ResourceWithArgsPromise;
 }
 
 // ============================================================================
@@ -55326,6 +58596,25 @@ class ResourceWithArgsImpl extends ResourceBuilderBase<IResourceWithArgsHandle> 
     }
 
     /** @internal */
+    private async _withArgsReplaceInternal(args: string[]): Promise<ResourceWithArgs> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, args };
+        const result = await this._client.invokeCapability<IResourceWithArgsHandle>(
+            'Aspire.Hosting/withArgsReplace',
+            rpcArgs
+        );
+        return new ResourceWithArgsImpl(result, this._client);
+    }
+
+    /**
+     * Replaces the arguments to be passed to a resource that supports arguments when it is launched.
+     * @param args The arguments to be passed to the resource when it is started.
+     * @returns The resource builder.
+     */
+    withArgsReplace(args: string[]): ResourceWithArgsPromise {
+        return new ResourceWithArgsPromiseImpl(this._withArgsReplaceInternal(args), this._client);
+    }
+
+    /** @internal */
     private async _withArgsCallbackInternal(callback: (obj: CommandLineArgsCallbackContext) => Promise<void>): Promise<ResourceWithArgs> {
         const callbackId = registerCallback(async (objData: unknown) => {
             const objHandle = wrapIfHandle(objData) as CommandLineArgsCallbackContextHandle;
@@ -55349,12 +58638,36 @@ class ResourceWithArgsImpl extends ResourceBuilderBase<IResourceWithArgsHandle> 
         return new ResourceWithArgsPromiseImpl(this._withArgsCallbackInternal(callback), this._client);
     }
 
+    /** @internal */
+    private async _withCertificateTrustEnvironmentInternal(certificateBundleEnvironmentVariable: string, certificateDirectoriesEnvironmentVariable?: string): Promise<ResourceWithArgs> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, certificateBundleEnvironmentVariable };
+        if (certificateDirectoriesEnvironmentVariable !== undefined) rpcArgs.certificateDirectoriesEnvironmentVariable = certificateDirectoriesEnvironmentVariable;
+        const result = await this._client.invokeCapability<IResourceWithArgsHandle>(
+            'Aspire.Hosting/withCertificateTrustEnvironment',
+            rpcArgs
+        );
+        return new ResourceWithArgsImpl(result, this._client);
+    }
+
+    /**
+     * Configures environment variables that point to Aspire-managed certificate trust paths.
+     * @param certificateBundleEnvironmentVariable The environment variable that receives the certificate bundle path.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withCertificateTrustEnvironment(certificateBundleEnvironmentVariable: string, options?: WithCertificateTrustEnvironmentOptions): ResourceWithArgsPromise {
+        const certificateDirectoriesEnvironmentVariable = options?.certificateDirectoriesEnvironmentVariable;
+        return new ResourceWithArgsPromiseImpl(this._withCertificateTrustEnvironmentInternal(certificateBundleEnvironmentVariable, certificateDirectoriesEnvironmentVariable), this._client);
+    }
+
 }
 
 /** @internal */
 const ResourceWithArgsPromiseImpl = $aspireCreateFluentPromiseClass<ResourceWithArgs, ResourceWithArgsPromise>((): $aspireFluentPromiseTransitions => ({
     ["withArgs"]: () => ResourceWithArgsPromiseImpl,
+    ["withArgsReplace"]: () => ResourceWithArgsPromiseImpl,
     ["withArgsCallback"]: () => ResourceWithArgsPromiseImpl,
+    ["withCertificateTrustEnvironment"]: () => ResourceWithArgsPromiseImpl,
 }));
 
 // ============================================================================
@@ -55716,7 +59029,6 @@ export interface ResourceWithEndpoints {
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): ResourceWithEndpointsPromise;
     /**
@@ -55818,7 +59130,6 @@ export interface ResourceWithEndpointsPromise extends PromiseLike<ResourceWithEn
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): ResourceWithEndpointsPromise;
     /**
@@ -56222,7 +59533,6 @@ class ResourceWithEndpointsImpl extends ResourceBuilderBase<IResourceWithEndpoin
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): ResourceWithEndpointsPromise {
         const path = options?.path;
@@ -56326,7 +59636,7 @@ export interface ResourceWithEnvironment {
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddProject<MyService>("my-service")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -56444,7 +59754,7 @@ export interface ResourceWithEnvironmentPromise extends PromiseLike<ResourceWith
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddProject<MyService>("my-service")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -56661,7 +59971,7 @@ class ResourceWithEnvironmentImpl extends ResourceBuilderBase<IResourceWithEnvir
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddProject<MyService>("my-service")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -57104,6 +60414,18 @@ class TestPromiseCollisionResourcePromiseImpl extends ResourceBuilderBase<ITestP
 }
 
 // ============================================================================
+// Entry Point Functions
+// ============================================================================
+
+export async function getStaticNullableStringAsync(client: AspireClientRpc): Promise<string | null> {
+    const rpcArgs: Record<string, unknown> = {  };
+    return await client.invokeCapability<string | null>(
+        'Aspire.Hosting.CodeGeneration.TypeScript.Tests/getStaticNullableStringAsync',
+        rpcArgs
+    );
+}
+
+// ============================================================================
 // Connection Helper
 // ============================================================================
 
@@ -57296,6 +60618,7 @@ registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hos
 registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestEnvironmentContext', (handle, client) => new TestEnvironmentContextImpl(handle as TestEnvironmentContextHandle, client));
 registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestMutableCollectionContext', (handle, client) => new TestMutableCollectionContextImpl(handle as TestMutableCollectionContextHandle, client));
 registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestResourceContext', (handle, client) => new TestResourceContextImpl(handle as TestResourceContextHandle, client));
+registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestReturnValueContext', (handle, client) => new TestReturnValueContextImpl(handle as TestReturnValueContextHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.UpdateCommandStateContext', (handle, client) => new UpdateCommandStateContextImpl(handle as UpdateCommandStateContextHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.IAspireStore', (handle, client) => new AspireStoreImpl(handle as IAspireStoreHandle, client));
 registerHandleWrapper('Microsoft.Extensions.Configuration.Abstractions/Microsoft.Extensions.Configuration.IConfiguration', (handle, client) => new ConfigurationImpl(handle as IConfigurationHandle, client));

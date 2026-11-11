@@ -1,0 +1,42 @@
+.metric-sparkline {
+    /* Same series color as the first line of the full chart, stepped for light and dark surfaces. */
+    --sparkline-color: #2a78d6;
+    display: block;
+    width: 100%;
+    height: 40px;
+    overflow: visible;
+}
+
+[data-theme="dark"] .metric-sparkline {
+    --sparkline-color: #3987e5;
+}
+
+.metric-sparkline-line {
+    fill: none;
+    stroke: var(--sparkline-color);
+    stroke-width: 1.75px;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    vector-effect: non-scaling-stroke;
+}
+
+.metric-sparkline-baseline {
+    stroke: var(--colorNeutralStroke2);
+    stroke-width: 1px;
+    vector-effect: non-scaling-stroke;
+}
+
+.metric-sparkline-bars {
+    fill: var(--sparkline-color);
+    opacity: 0.85;
+}
+
+.metric-sparkline-stop-top {
+    stop-color: var(--sparkline-color);
+    stop-opacity: 0.28;
+}
+
+.metric-sparkline-stop-bottom {
+    stop-color: var(--sparkline-color);
+    stop-opacity: 0;
+}

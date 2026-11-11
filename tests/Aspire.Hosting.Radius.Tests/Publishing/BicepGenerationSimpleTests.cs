@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIREPROJECTS001
 
 using Aspire.Hosting.ApplicationModel;
@@ -162,7 +161,9 @@ public class BicepGenerationSimpleTests
         // naming the missing prereq.
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var env = builder.AddRadiusEnvironment("myenv");
+#pragma warning disable CS0618 // Retain legacy ProjectResource image and metadata interoperability with Radius.
         builder.AddProject<TestProjectMetadata>("webapp");
+#pragma warning restore CS0618
 
         using var app = builder.Build();
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();

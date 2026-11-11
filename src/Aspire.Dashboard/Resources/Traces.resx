@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <root>
   <!-- 
     Microsoft ResX Schema 
@@ -133,23 +133,6 @@
   <data name="TracesSpansColumnHeader" xml:space="preserve">
     <value>Spans</value>
   </data>
-  <data name="TracesResourceSpans" xml:space="preserve">
-    <value>{0} spans</value>
-    <comment>{0} is a resource name</comment>
-  </data>
-  <data name="TracesTotalTraces" xml:space="preserve">
-    <value>Total: {0}</value>
-  </data>
-  <data name="TracesTotalErroredTraces" xml:space="preserve">
-    <value>Errored: {0}</value>
-    <comment>{0} is a number</comment>
-  </data>
-  <data name="TracesFullName" xml:space="preserve">
-    <value>Name: {0}</value>
-  </data>
-  <data name="TracesTraceId" xml:space="preserve">
-    <value>Trace Id: {0}</value>
-  </data>
   <data name="MessageExceededLimitTitle" xml:space="preserve">
     <value>Exceeded trace limit</value>
   </data>
@@ -177,5 +160,22 @@
   </data>
   <data name="SpanTypeSelectSpanType" xml:space="preserve">
     <value>Select span type</value>
+  </data>
+  <data name="TracesResourceSpans" xml:space="preserve">
+    <value>{0} spans</value>
+    <comment>{0} is a resource name</comment>
+  </data>
+  <data name="TracesTotalTraces" xml:space="preserve">
+    <value>Total: {0}</value>
+  </data>
+  <data name="TracesTotalErroredTraces" xml:space="preserve">
+    <value>Errored: {0}</value>
+    <comment>{0} is a number</comment>
+  </data>
+  <data name="TracesFullName" xml:space="preserve">
+    <value>Name: {0}</value>
+  </data>
+  <data name="TracesTraceId" xml:space="preserve">
+    <value>Trace Id: {0}</value>
   </data>
 </root>

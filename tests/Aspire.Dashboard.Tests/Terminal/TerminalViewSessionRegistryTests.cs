@@ -30,7 +30,7 @@ public sealed class TerminalViewSessionRegistryTests
     public void DisposalUnregistersViewAndDisablesExistingConnections()
     {
         var registry = new TerminalViewSessionRegistry();
-        const string endpoint = "/api/terminal?resource=redis&replica=0";
+        const string endpoint = "/api/terminal?resource=redis";
         var session = registry.Create(endpoint, readOnly: false);
         Assert.True(registry.TryGet(session.Id, endpoint, out var connection));
 
@@ -64,17 +64,17 @@ public sealed class TerminalViewSessionRegistryTests
     }
 
     [Theory]
-    [InlineData("/dashboard/api/terminal?resource=a%20b&replica=0", true)]
-    [InlineData("/dashboard/api/terminal?viewId=viewer&replica=0&resource=a+b", true)]
-    [InlineData("/dashboard/api/terminal?resource=a%20b&replica=1", false)]
-    [InlineData("/api/terminal?resource=a%20b&replica=0", false)]
-    [InlineData("/dashboard/api/terminal?resource=other&replica=0", false)]
-    [InlineData("/dashboard/api/terminal?resource=a%20b&replica=0&replica=1", false)]
+    [InlineData("/dashboard/api/terminal?resource=a%20b", true)]
+    [InlineData("/dashboard/api/terminal?viewId=viewer&resource=a+b", true)]
+    [InlineData("/dashboard/api/terminal?resource=a%20b-other", false)]
+    [InlineData("/api/terminal?resource=a%20b", false)]
+    [InlineData("/dashboard/api/terminal?resource=other", false)]
+    [InlineData("/dashboard/api/terminal?resource=a%20b&resource=other", false)]
     [InlineData("/dashboard/api/apphost-terminal?terminalId=a%20b", false)]
     public void RegistrationOnlyMatchesItsEndpoint(string requestedEndpoint, bool matches)
     {
         var registry = new TerminalViewSessionRegistry();
-        using var session = registry.Create("/dashboard/api/terminal?resource=a%20b&replica=0", readOnly: true);
+        using var session = registry.Create("/dashboard/api/terminal?resource=a%20b", readOnly: true);
 
         Assert.Equal(matches, registry.TryGet(session.Id, requestedEndpoint, out _));
         Assert.False(registry.TryGet("unknown", requestedEndpoint, out _));

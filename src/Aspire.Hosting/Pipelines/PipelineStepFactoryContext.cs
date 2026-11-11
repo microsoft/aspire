@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
 
 namespace Aspire.Hosting.Pipelines;
@@ -10,7 +9,6 @@ namespace Aspire.Hosting.Pipelines;
 /// Provides contextual information for creating pipeline steps from a <see cref="PipelineStepAnnotation"/>.
 /// </summary>
 /// <ats-summary>Provides contextual information for creating pipeline steps from a <ats-see cref="!:type:PipelineStepAnnotation" />.</ats-summary>
-[Experimental("ASPIREPIPELINES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 [AspireExport(ExposeProperties = true)]
 public class PipelineStepFactoryContext
 {

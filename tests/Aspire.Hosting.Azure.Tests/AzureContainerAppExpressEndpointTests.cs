@@ -2,9 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREACAEXPRESS001
-#pragma warning disable ASPIREAZURE001
 #pragma warning disable ASPIRECOMPUTE002
-#pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIREPIPELINES003
 
 using Aspire.Hosting.ApplicationModel;
@@ -27,10 +25,14 @@ public class AzureContainerAppExpressEndpointTests(ITestOutputHelper outputHelpe
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
         var environment = builder.AddAzureContainerAppEnvironment("env").AsExpress();
         var enabled = builder.AddParameter("enabled");
+#pragma warning disable CS0618 // Retain legacy ProjectResource Azure publishing/provisioning contracts with synthetic metadata.
         var api = builder.AddProject("api", "api.csproj", options => options.ExcludeLaunchProfile = true)
+#pragma warning restore CS0618
             .WithHttpEndpoint(targetPort: 8080)
             .WithExternalHttpEndpoints();
+#pragma warning disable CS0618 // Retain legacy ProjectResource Azure publishing/provisioning contracts with synthetic metadata.
         var web = builder.AddProject("web", "web.csproj", options => options.ExcludeLaunchProfile = true)
+#pragma warning restore CS0618
             .WithHttpEndpoint()
             .WithReference(api);
         var endpoint = api.GetEndpoint("http");
@@ -98,6 +100,8 @@ public class AzureContainerAppExpressEndpointTests(ITestOutputHelper outputHelpe
         var expectedValues = new Dictionary<EndpointProperty, string>
         {
             [EndpointProperty.Url] = "https://api.salmonisland-e9e6a567.westus3.azurecontainerapps.io",
+            [EndpointProperty.BrowserOrigins] = "https://api.salmonisland-e9e6a567.westus3.azurecontainerapps.io",
+            [EndpointProperty.PrimaryBrowserOrigin] = "https://api.salmonisland-e9e6a567.westus3.azurecontainerapps.io",
             [EndpointProperty.Host] = "api.salmonisland-e9e6a567.westus3.azurecontainerapps.io",
             [EndpointProperty.IPV4Host] = "api.salmonisland-e9e6a567.westus3.azurecontainerapps.io",
             [EndpointProperty.HostAndPort] = "api.salmonisland-e9e6a567.westus3.azurecontainerapps.io:443",
@@ -144,6 +148,8 @@ public class AzureContainerAppExpressEndpointTests(ITestOutputHelper outputHelpe
     [InlineData(EndpointProperty.TargetPort)]
     [InlineData(EndpointProperty.Scheme)]
     [InlineData(EndpointProperty.TlsEnabled)]
+    [InlineData(EndpointProperty.BrowserOrigins)]
+    [InlineData(EndpointProperty.PrimaryBrowserOrigin)]
     public void InternalEndpointReferencesRequireExplicitPublicIngress(EndpointProperty property)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
@@ -191,6 +197,30 @@ public class AzureContainerAppExpressEndpointTests(ITestOutputHelper outputHelpe
             "Use WithExternalHttpEndpoints() to explicitly enable public HTTPS ingress, or use a standard Azure Container Apps environment.",
             exception.Message);
         Assert.False(api.GetEndpoint("http").EndpointAnnotation.IsExternal);
+    }
+
+    [Theory]
+    [InlineData(EndpointProperty.BrowserOrigins)]
+    [InlineData(EndpointProperty.PrimaryBrowserOrigin)]
+    public async Task BrowserOriginPropertiesUseTheNormalLocalVisibilityValidation(EndpointProperty property)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
+        builder.AddAzureContainerAppEnvironment("env").AsExpress();
+        var api = builder.AddContainer("api", "image").WithHttpEndpoint(targetPort: 8080);
+        var web = builder.AddContainer("web", "image").WithHttpEndpoint(targetPort: 8080).WithExternalHttpEndpoints()
+            .WithEnvironment("ORIGIN", api.GetEndpoint("http").Property(property));
+        using var app = builder.Build();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        {
+            await ExecuteBeforeStartHooksAsync(app, default);
+            _ = GetTarget(web.Resource).GetBicepTemplateString();
+        });
+
+        Assert.Equal(
+            "Azure Container Apps Express environment 'env' cannot reference internal endpoint 'http' on resource 'api'. " +
+            "Use WithExternalHttpEndpoints() to explicitly enable public HTTPS ingress, or use a standard Azure Container Apps environment.",
+            exception.GetBaseException().Message);
     }
 
     [Theory]

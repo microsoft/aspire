@@ -9,19 +9,19 @@ import (
 func main() {
 	builder, err := aspire.CreateBuilder()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	sqlServer := builder.AddSqlServer("sql")
 
 	sqlServer.AddDatabase("mydb")
 	if err = sqlServer.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	builder.AddSqlServer("sql-volume").WithDataVolume()
 
-	builder.AddSqlServer("sql-port").WithHostPort(aspire.Float64Ptr(11433))
+	builder.AddSqlServer("sql-port").WithHostPort(aspire.IntPtr(11433))
 
 	customPassword := builder.AddParameter("sql-password", &aspire.AddParameterOptions{Secret: aspire.BoolPtr(true)})
 	builder.AddSqlServer("sql-custom-pass", &aspire.AddSqlServerOptions{Password: &customPassword})
@@ -29,12 +29,12 @@ func main() {
 	sqlChained := builder.AddSqlServer("sql-chained")
 	sqlChained.WithPersistentLifetime()
 	sqlChained.WithDataVolume(&aspire.WithDataVolumeOptions{Name: aspire.StringPtr("sql-chained-data")})
-	sqlChained.WithHostPort(aspire.Float64Ptr(12433))
+	sqlChained.WithHostPort(aspire.IntPtr(12433))
 
 	sqlChained.AddDatabase("db1")
 	sqlChained.AddDatabase("db2", &aspire.AddDatabaseOptions{DatabaseName: aspire.StringPtr("customdb2")})
 	if err = sqlChained.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	_ = sqlServer.PrimaryEndpoint()
@@ -48,9 +48,9 @@ func main() {
 
 	app, err := builder.Build()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 	if err := app.Run(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 }

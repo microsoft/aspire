@@ -12,36 +12,31 @@ namespace Aspire.Hosting.RemoteHost.Tests;
 public class HandleRegistryTests
 {
     [Fact]
-    public void Register_ReturnsNumericHandleId()
+    public void Register_ReturnsOpaqueRandomHandleId()
     {
         var registry = new HandleRegistry();
         var obj = new object();
 
         var handleId = registry.Register(obj, "aspire/TestType");
 
-        // Handle ID is now just a numeric instance ID
-        Assert.True(long.TryParse(handleId, out var instanceId));
-        Assert.True(instanceId > 0);
-        // Type ID is retrieved separately
+        Assert.Matches("^[0-9a-f]{32}$", handleId);
         Assert.Equal("aspire/TestType", registry.GetTypeId(handleId));
     }
 
     [Fact]
-    public void Register_IncrementsInstanceIdForEachRegistration()
+    public void Register_UsesIndependentIdentifiersAcrossRegistries()
     {
         var registry = new HandleRegistry();
+        var otherRegistry = new HandleRegistry();
 
         var handle1 = registry.Register(new object(), "aspire/Test");
         var handle2 = registry.Register(new object(), "aspire/Test");
-        var handle3 = registry.Register(new object(), "aspire/Test");
+        var handle3 = otherRegistry.Register(new object(), "aspire/Test");
 
-        // Parse as simple integers
-        var id1 = long.Parse(handle1);
-        var id2 = long.Parse(handle2);
-        var id3 = long.Parse(handle3);
-
-        Assert.Equal(id1 + 1, id2);
-        Assert.Equal(id2 + 1, id3);
+        Assert.Equal(3, new[] { handle1, handle2, handle3 }.Distinct(StringComparer.Ordinal).Count());
+        Assert.False(registry.Contains("1"));
+        Assert.False(registry.Contains(handle3));
+        Assert.False(otherRegistry.Contains(handle1));
     }
 
     [Fact]

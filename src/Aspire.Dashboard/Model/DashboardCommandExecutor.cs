@@ -1,7 +1,9 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
 using System.Globalization;
+using System.Net;
 using Aspire.Dashboard.Components.Dialogs;
 using Aspire.Dashboard.Telemetry;
 using Aspire.Dashboard.Utils;
@@ -22,6 +24,8 @@ public sealed class DashboardCommandExecutor(
     DashboardTelemetryService telemetryService,
     INotificationService notificationService)
 {
+    private const int MaxToastMessageLength = 250;
+
     private readonly HashSet<(string ResourceName, string CommandName)> _executingCommands = [];
     private readonly object _lock = new object();
 
@@ -33,7 +37,45 @@ public sealed class DashboardCommandExecutor(
         }
     }
 
-    public async Task ExecuteAsync(ResourceViewModel resource, CommandViewModel command, Func<ResourceViewModel, string> getResourceName)
+    /// <summary>
+    /// Stops or starts a resource for the Aspire Outage game's hard core mode, when that command is available right now.
+    /// </summary>
+    /// <returns>
+    /// Null when the command isn't available, so the caller can try again later. Otherwise whether the command succeeded:
+    /// false is final for this attempt, and has been reported to the user like any other command's failure or cancellation.
+    /// </returns>
+    public async Task<bool?> ExecuteGraphGameCommandAsync(
+        ResourceViewModel resource,
+        string commandName,
+        Func<ResourceViewModel, string> getResourceName)
+    {
+        // The name comes from the browser: the game only ever gets to run these two commands. A read-only client, such as
+        // one showing a historical run, still lists commands as enabled but can't run them.
+        if (dashboardClient.IsReadOnly || commandName is not (CommandViewModel.StopCommand or CommandViewModel.StartCommand))
+        {
+            return null;
+        }
+
+        // A command that asks for confirmation is treated as unavailable: its author wants the user to agree to it, and a
+        // dialog per destroyed enemy wouldn't be that, in the middle of a game.
+        var command = resource.Commands.FirstOrDefault(c => string.Equals(c.Name, commandName, StringComparisons.CommandName));
+        if (command is not { State: CommandViewModelState.Enabled } ||
+            !string.IsNullOrWhiteSpace(command.ConfirmationMessage) ||
+            IsExecuting(resource.Name, command.Name))
+        {
+            return null;
+        }
+
+        return await ExecuteAsync(resource, command, getResourceName).ConfigureAwait(false);
+    }
+
+    /// <summary>Executes a resource command with confirmation and result notifications.</summary>
+    /// <returns>True only when the command completes successfully.</returns>
+    public async Task<bool> ExecuteAsync(
+        ResourceViewModel resource,
+        CommandViewModel command,
+        Func<ResourceViewModel, string> getResourceName,
+        ExecuteResourceCommandOptions? options = null)
     {
         var executingCommandKey = (resource.Name, command.Name);
         lock (_lock)
@@ -41,30 +83,28 @@ public sealed class DashboardCommandExecutor(
             _executingCommands.Add(executingCommandKey);
         }
 
-        var startEvent = telemetryService.StartOperation(TelemetryEventKeys.ExecuteCommand,
-            new Dictionary<string, AspireTelemetryProperty>
-            {
-                { TelemetryPropertyKeys.ResourceType, new AspireTelemetryProperty(TelemetryPropertyValues.GetResourceTypeTelemetryValue(resource.ResourceType, resource.SupportsDetailedTelemetry)) },
-                { TelemetryPropertyKeys.CommandName, new AspireTelemetryProperty(TelemetryPropertyValues.GetCommandNameTelemetryValue(command.Name)) },
-            });
-
-        var operationId = startEvent.Properties.FirstOrDefault();
-
         try
         {
-            await ExecuteAsyncCore(resource, command, getResourceName).ConfigureAwait(false);
+            // End command telemetry before the UI's recovery delay in the finally block.
+            using var activity = telemetryService.StartOperation(TelemetryEventKeys.ExecuteCommand,
+                new Dictionary<string, AspireTelemetryProperty>
+                {
+                    { TelemetryPropertyKeys.ResourceType, new AspireTelemetryProperty(TelemetryPropertyValues.GetResourceTypeTelemetryValue(resource.ResourceType, resource.SupportsDetailedTelemetry)) },
+                    { TelemetryPropertyKeys.CommandName, new AspireTelemetryProperty(TelemetryPropertyValues.GetCommandNameTelemetryValue(command.Name)) },
+                });
 
-            if (operationId is not null)
+            try
             {
-                telemetryService.EndOperation(operationId, TelemetryResult.Success);
+                var succeeded = await ExecuteAsyncCore(resource, command, getResourceName, options).ConfigureAwait(false);
+                telemetryService.SetOperationStatus(activity, ActivityStatusCode.Ok);
+                return succeeded;
             }
-        }
-        catch (Exception ex)
-        {
-            if (operationId is not null)
+            catch (Exception)
             {
-                telemetryService.EndOperation(operationId, TelemetryResult.Failure, ex.Message);
+                telemetryService.SetOperationStatus(activity, ActivityStatusCode.Error);
             }
+
+            return false;
         }
         finally
         {
@@ -85,14 +125,18 @@ public sealed class DashboardCommandExecutor(
         }
     }
 
-    public async Task ExecuteAsyncCore(ResourceViewModel resource, CommandViewModel command, Func<ResourceViewModel, string> getResourceName)
+    public async Task<bool> ExecuteAsyncCore(
+        ResourceViewModel resource,
+        CommandViewModel command,
+        Func<ResourceViewModel, string> getResourceName,
+        ExecuteResourceCommandOptions? commandOptions = null)
     {
         if (!string.IsNullOrWhiteSpace(command.ConfirmationMessage))
         {
             var result = await dialogService.ShowConfirmationAsync(command.ConfirmationMessage).ConfigureAwait(false);
             if (result.Cancelled)
             {
-                return;
+                return false;
             }
         }
 
@@ -141,7 +185,7 @@ public sealed class DashboardCommandExecutor(
                 resource.Name,
                 resource.ResourceType,
                 command,
-                new ExecuteResourceCommandOptions(),
+                commandOptions ?? new ExecuteResourceCommandOptions(),
                 executeCommandCts.Token).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (executeCommandCts.IsCancellationRequested)
@@ -195,7 +239,7 @@ public sealed class DashboardCommandExecutor(
                 Body = response.Message,
                 Intent = FluentMessageIntent.Info,
             });
-            return;
+            return false;
         }
         else
         {
@@ -209,7 +253,10 @@ public sealed class DashboardCommandExecutor(
                 navigationManager.NavigateTo(DashboardUrls.ConsoleLogsUrl(resource: getResourceName(resource)));
                 return Task.CompletedTask;
             };
-            toastOptions.Message = response.Message;
+            // Truncate plain-text command output before encoding it for Fluent's HTML-rendering toast,
+            // so the limit applies to displayed text rather than HTML entities.
+            var toastMessage = response.Message is null ? null : FormatHelpers.TruncateText(response.Message, MaxToastMessageLength);
+            toastOptions.Message = WebUtility.HtmlEncode(toastMessage);
 
             if (response.Result is not null)
             {
@@ -301,6 +348,8 @@ public sealed class DashboardCommandExecutor(
         {
             return progressNotificationId ?? throw new InvalidOperationException("The progress notification has not been created.");
         }
+
+        return response.Kind == ResourceCommandResponseKind.Succeeded;
     }
 
     // Copied from FluentUI.

@@ -24,6 +24,11 @@ var db = sql.AddDatabase("db");
 var insertionrows = builder.AddParameter("insertionrows")
     .WithDescription("The number of rows to insert into the database.");
 
+// Lets dashboard development exercise the "Show hidden resources" path in the Parameters view.
+builder.AddParameter("hiddenParameter")
+    .WithDescription("A hidden parameter used to exercise dashboard visibility indicators.")
+    .WithHidden();
+
 var cs = builder.AddConnectionString("cs", ReferenceExpression.Create($"sql={db.Resource.Parent.PrimaryEndpoint};rows={insertionrows}"));
 var parameterFromConnectionStringConfig = builder.AddConnectionString("parameterFromConnectionStringConfig");
 
@@ -53,7 +58,7 @@ var parameterWithCustomInput = builder.AddParameter("customInput")
         Description = p.Description,
     });
 
-builder.AddProject<Projects.ParameterEndToEnd_ApiService>("api")
+builder.AddDotnetProject("api", "../ParameterEndToEnd.ApiService/ParameterEndToEnd.ApiService.csproj")
        .WithExternalHttpEndpoints()
        .WithEnvironment("InsertionRows", insertionrows)
        .WithReference(cs)
@@ -66,7 +71,7 @@ builder.AddProject<Projects.ParameterEndToEnd_ApiService>("api")
 // dashboard launch experience, Refer to Directory.Build.props for the path to
 // the dashboard binary (defaults to the Aspire.Dashboard bin output in the
 // artifacts dir).
-builder.AddProject<Projects.Aspire_Dashboard>(KnownResourceNames.AspireDashboard);
+builder.AddDotnetProject(KnownResourceNames.AspireDashboard, "../../../src/Aspire.Dashboard/Aspire.Dashboard.csproj");
 #endif
 
 builder.Build().Run();

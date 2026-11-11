@@ -7,6 +7,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Exercise both runtimes without lifting the net10-only provider to EF Core 11. -->
+    <PackageVersion Update="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="$(MicrosoftExtensionsDiagnosticsHealthChecksEntityFrameworkCoreNet10Version)" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Compile Include="$(RepoRoot)src\Aspire.Hosting.MongoDB\MongoDBContainerImageTags.cs" />
     <Compile Include="..\Aspire.MongoDB.Driver.Tests\MongoDbContainerFixture.cs" />
     <None Include="$(RepoRoot)src\Components\Aspire.MongoDB.EntityFrameworkCore\ConfigurationSchema.json" CopyToOutputDirectory="PreserveNewest" />
