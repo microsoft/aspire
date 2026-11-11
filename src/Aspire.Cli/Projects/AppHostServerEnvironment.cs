@@ -7,6 +7,10 @@ internal static class AppHostServerEnvironment
 {
     internal const string LaunchGroupVariableName = "Aspire__LaunchGroup";
 
+    internal static bool IsLaunchGroupVariable(string name) =>
+        name.Equals(LaunchGroupVariableName, StringComparison.OrdinalIgnoreCase) ||
+        name.Equals("Aspire:LaunchGroup", StringComparison.OrdinalIgnoreCase);
+
     internal static void Apply(
         IDictionary<string, string?> environment,
         IReadOnlyDictionary<string, string>? overrides)
@@ -18,13 +22,13 @@ internal static class AppHostServerEnvironment
 
         foreach (var (key, value) in overrides)
         {
-            if (key.Equals(LaunchGroupVariableName, StringComparison.OrdinalIgnoreCase))
+            if (IsLaunchGroupVariable(key))
             {
-                // Unix permits ASPIRE__LAUNCHGROUP and Aspire__LaunchGroup to coexist, but .NET
-                // configuration folds them into one key. Remove inherited spellings from the
-                // actual child environment before setting the profile or CLI selection.
+                // Environment names can differ by case or use ':' instead of '__', but .NET
+                // configuration folds them into one key. Remove inherited spellings before
+                // setting the profile or CLI selection.
                 foreach (var inheritedKey in environment.Keys
-                    .Where(name => name.Equals(LaunchGroupVariableName, StringComparison.OrdinalIgnoreCase))
+                    .Where(IsLaunchGroupVariable)
                     .ToArray())
                 {
                     environment.Remove(inheritedKey);

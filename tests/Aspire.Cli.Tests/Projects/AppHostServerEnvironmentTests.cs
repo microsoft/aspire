@@ -20,6 +20,9 @@ public class AppHostServerEnvironmentTests(ITestOutputHelper outputHelper)
     [InlineData("Aspire__LaunchGroup")]
     [InlineData("ASPIRE__LAUNCHGROUP")]
     [InlineData("aspire__launchgroup")]
+    [InlineData("Aspire:LaunchGroup")]
+    [InlineData("ASPIRE:LAUNCHGROUP")]
+    [InlineData("aspire:launchgroup")]
     public void Apply_RemovesInheritedLaunchGroupSpellings(string inheritedName)
     {
         // Model Unix's case-sensitive environment even when this test runs on Windows.
@@ -29,7 +32,8 @@ public class AppHostServerEnvironmentTests(ITestOutputHelper outputHelper)
             ["Aspire__LaunchGroup"] = "another-group",
             ["UNRELATED"] = "upper",
             ["unrelated"] = "lower",
-            ["Aspire__LaunchGroupOther"] = "preserved"
+            ["Aspire__LaunchGroupOther"] = "preserved",
+            ["Aspire:LaunchGroupOther"] = "also-preserved"
         };
 
         AppHostServerEnvironment.Apply(environment, new Dictionary<string, string>
@@ -43,6 +47,7 @@ public class AppHostServerEnvironmentTests(ITestOutputHelper outputHelper)
                 ["UNRELATED"] = "upper",
                 ["unrelated"] = "lower",
                 ["Aspire__LaunchGroupOther"] = "preserved",
+                ["Aspire:LaunchGroupOther"] = "also-preserved",
                 ["Aspire__LaunchGroup"] = "catalog"
             },
             environment);
@@ -73,6 +78,9 @@ public class AppHostServerEnvironmentTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData("Aspire__LaunchGroup", "ASPIRE__LAUNCHGROUP")]
     [InlineData("ASPIRE__LAUNCHGROUP", "Aspire__LaunchGroup")]
+    [InlineData("Aspire__LaunchGroup", "ASPIRE:LAUNCHGROUP")]
+    [InlineData("Aspire:LaunchGroup", "ASPIRE__LAUNCHGROUP")]
+    [InlineData("ASPIRE:LAUNCHGROUP", "Aspire:LaunchGroup")]
     public void Apply_ProfileSelectionOverridesInheritedSelection(string profileName, string inheritedName)
     {
         var environment = new Dictionary<string, string?>(StringComparer.Ordinal)
@@ -86,13 +94,19 @@ public class AppHostServerEnvironmentTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData("development", false)]
-    [InlineData("development", true)]
-    [InlineData("prebuilt", false)]
-    [InlineData("prebuilt", true)]
-    [InlineData("native", false)]
-    [InlineData("native", true)]
-    public async Task ServerSession_ChildProcessReceivesOnlyOneLaunchGroupSelection(string serverKind, bool isolateConsole)
+    [InlineData("development", false, "ASPIRE__LAUNCHGROUP")]
+    [InlineData("development", true, "ASPIRE__LAUNCHGROUP")]
+    [InlineData("prebuilt", false, "ASPIRE__LAUNCHGROUP")]
+    [InlineData("prebuilt", true, "ASPIRE__LAUNCHGROUP")]
+    [InlineData("native", false, "ASPIRE__LAUNCHGROUP")]
+    [InlineData("native", true, "ASPIRE__LAUNCHGROUP")]
+    [InlineData("development", false, "ASPIRE:LAUNCHGROUP")]
+    [InlineData("development", true, "ASPIRE:LAUNCHGROUP")]
+    [InlineData("prebuilt", false, "ASPIRE:LAUNCHGROUP")]
+    [InlineData("prebuilt", true, "ASPIRE:LAUNCHGROUP")]
+    [InlineData("native", false, "ASPIRE:LAUNCHGROUP")]
+    [InlineData("native", true, "ASPIRE:LAUNCHGROUP")]
+    public async Task ServerSession_ChildProcessReceivesOnlyOneLaunchGroupSelection(string serverKind, bool isolateConsole, string inheritedName)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var layout = new LayoutConfiguration
@@ -115,7 +129,7 @@ public class AppHostServerEnvironmentTests(ITestOutputHelper outputHelper)
                 if (OperatingSystem.IsWindows())
                 {
                     startInfo.FileName = Environment.GetEnvironmentVariable("ComSpec") ?? "cmd.exe";
-                    foreach (var argument in new[] { "/D", "/C", "set Aspire__LaunchGroup" })
+                    foreach (var argument in new[] { "/D", "/C", "set Aspire__LaunchGroup & set Aspire:LaunchGroup 2>nul & exit /b 0" })
                     {
                         startInfo.ArgumentList.Add(argument);
                     }
@@ -124,7 +138,7 @@ public class AppHostServerEnvironmentTests(ITestOutputHelper outputHelper)
                 {
                     startInfo.FileName = "/bin/sh";
                     startInfo.ArgumentList.Add("-c");
-                    startInfo.ArgumentList.Add("env | grep -i '^Aspire__LaunchGroup='");
+                    startInfo.ArgumentList.Add("env | grep -Ei '^Aspire(__|:)LaunchGroup='");
                 }
 
                 return realProcesses.CreateExecution(startInfo, options);
@@ -149,7 +163,7 @@ public class AppHostServerEnvironmentTests(ITestOutputHelper outputHelper)
             project,
             new Dictionary<string, string>(StringComparer.Ordinal)
             {
-                ["ASPIRE__LAUNCHGROUP"] = "basket",
+                [inheritedName] = "basket",
                 ["Aspire__LaunchGroup"] = "catalog"
             },
             debug: false, environment, NullLogger.Instance, profilingTelemetry: null,
@@ -159,8 +173,11 @@ public class AppHostServerEnvironmentTests(ITestOutputHelper outputHelper)
         await session.StartAsync();
         Assert.Equal(0, await session.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(30)));
         Assert.NotNull(session.Output);
+        var launchGroupLines = session.Output.GetLines()
+            .Where(line => line.Line.StartsWith("Aspire__LaunchGroup=", StringComparison.OrdinalIgnoreCase)
+                || line.Line.StartsWith("Aspire:LaunchGroup=", StringComparison.OrdinalIgnoreCase));
         Assert.Equal(
             [(OutputLineStream.StdOut, "Aspire__LaunchGroup=catalog")],
-            session.Output.GetLines());
+            launchGroupLines);
     }
 }

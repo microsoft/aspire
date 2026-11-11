@@ -633,7 +633,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             if (context.LaunchGroup is { } launchGroup)
             {
                 foreach (var key in launchSettingsEnvVars.Keys
-                    .Where(name => name.Equals(AppHostServerEnvironment.LaunchGroupVariableName, StringComparison.OrdinalIgnoreCase))
+                    .Where(AppHostServerEnvironment.IsLaunchGroupVariable)
                     .ToArray())
                 {
                     launchSettingsEnvVars.Remove(key);

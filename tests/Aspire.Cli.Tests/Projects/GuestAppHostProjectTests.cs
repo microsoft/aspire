@@ -2052,6 +2052,10 @@ public class GuestAppHostProjectTests : IDisposable
     [InlineData("catalog", "Aspire__LaunchGroup")]
     [InlineData(null, "ASPIRE__LAUNCHGROUP")]
     [InlineData("catalog", "ASPIRE__LAUNCHGROUP")]
+    [InlineData(null, "Aspire:LaunchGroup")]
+    [InlineData("catalog", "Aspire:LaunchGroup")]
+    [InlineData(null, "ASPIRE:LAUNCHGROUP")]
+    [InlineData("catalog", "ASPIRE:LAUNCHGROUP")]
     public async Task RunAsync_PassesWorkloadIdAndLaunchGroupToAppHostServerEnvironment(string? launchGroup, string? profileVariableName)
     {
         const string image = "example.com/aspire-tunnel:configured";
@@ -2119,7 +2123,7 @@ public class GuestAppHostProjectTests : IDisposable
         Assert.Equal(expectedWorkloadId, sessionFactory.CapturedEnvironmentVariables[KnownConfigNames.DcpWorkloadId]);
         Assert.Equal(image, sessionFactory.CapturedEnvironmentVariables[KnownConfigNames.ContainerTunnelBaseImage]);
         var launchGroupVariables = sessionFactory.CapturedEnvironmentVariables
-            .Where(kvp => kvp.Key.Equals("Aspire__LaunchGroup", StringComparison.OrdinalIgnoreCase))
+            .Where(kvp => kvp.Key.Replace("__", ":", StringComparison.Ordinal).Equals("Aspire:LaunchGroup", StringComparison.OrdinalIgnoreCase))
             .ToArray();
         var expectedLaunchGroup = launchGroup ?? (profileVariableName is not null ? "basket" : null);
         if (expectedLaunchGroup is null)
