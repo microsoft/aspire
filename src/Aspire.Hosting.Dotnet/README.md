@@ -66,18 +66,13 @@ rebuild and restart the resource.
 
 Legacy project-only IDE sessions keep the existing file-app launch path. File apps wait for the final
 coordinated project prebuild, preventing overlap with that prebuild, but separate file apps are not mutually
-serialized and can still race when sharing `#:project` outputs. Chain only the affected file apps in the
-AppHost, with each app waiting for the previous one:
-
-```csharp
-var first = builder.AddDotnetProject("first", "../first/first.cs");
-var second = builder.AddDotnetProject("second", "../second/second.cs")
-    .WaitForStart(first, WaitBehavior.StopOnResourceUnavailable);
-```
-
-Prefer `WaitForStart` to health-based `WaitFor` because the dependency orders startup/build activity rather
-than application readiness. `WaitForCompletion` is inappropriate for long-running services. This startup
-ordering and failure coupling are intentional. A manual force-start can bypass the wait when appropriate.
+serialized and can still race when sharing `#:project` outputs. In capability-less Visual Studio sessions,
+`WaitForStart` only waits for the `dotnet run` process to start, not for its implicit build to finish.
+To avoid shared-output races, run outside the legacy IDE session (for example, with `aspire run`) or use an
+external-build-capable IDE so Aspire coordinates file-app builds. Within a legacy session, configure an
+application-readiness health check on the preceding app and use `WaitFor` on the next app; the check must
+only pass after the preceding app has finished building. Without such a check, `WaitFor` does not provide
+a build-completion barrier either.
 
 Endpoints, environment variables, and service discovery are configured from the project's
 `launchSettings.json` and Kestrel configuration. V2 VB services prefer
