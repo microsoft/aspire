@@ -170,6 +170,24 @@ public class LocalAspireSkillsTests(ITestOutputHelper output) : IDisposable
     }
 
     [Fact]
+    public async Task Find_InvalidNestedOpenCodeSettingsDoNotHideAncestorSkills()
+    {
+        var working = _context.Project.CreateSubdirectory("apps").CreateSubdirectory("nested");
+        var config = Path.Combine(working.FullName, "opencode.json");
+        await AgentConfigurationTestContext.WriteAsync(config, "{broken");
+        var skill = Path.Combine(_context.Project.FullName, ".opencode", "skills", "aspire", "SKILL.md");
+        await AgentConfigurationTestContext.WriteAsync(skill, "local");
+
+        var result = LocalAspireSkills.Find(working, _context.Project, [_context.OpenCode],
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(Path.GetDirectoryName(skill), Assert.Single(result.Directories));
+        Assert.Contains("OpenCode", Assert.Single(result.Errors));
+        Assert.False(result.HasFileErrors);
+        Assert.Equal("{broken", await File.ReadAllTextAsync(config));
+    }
+
+    [Fact]
     public async Task Find_DoesNotReadPluginCachesOrNestedUnrelatedProjects()
     {
         await AgentConfigurationTestContext.WriteAsync(Path.Combine(_context.CopilotDirectory, "installed-plugins", "aspire", "skills", "aspire", "SKILL.md"), "installed");

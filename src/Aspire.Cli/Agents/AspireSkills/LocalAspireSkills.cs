@@ -42,28 +42,31 @@ internal static class LocalAspireSkills
             foreach (var scope in new[] { AgentConfigurationScope.Project, AgentConfigurationScope.Global })
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                // Clients yield their standard skill roots before parsing settings that add more.
-                // Collect as they are yielded so a settings failure still probes the standard roots.
                 List<string> directories = [];
-                try
+                DirectoryInfo[] roots = scope is AgentConfigurationScope.Project ? projectDirectories : [workspaceRoot];
+                foreach (var root in roots)
                 {
-                    var discovered = scope is AgentConfigurationScope.Project
-                        ? projectDirectories.SelectMany(directory => agent.GetLocalSkillDirectories(scope, directory))
-                        : agent.GetLocalSkillDirectories(scope, workspaceRoot);
-                    foreach (var directory in discovered)
+                    // Clients yield their standard skill roots before parsing settings that add more.
+                    // Collect as they are yielded so a settings failure still probes the standard roots,
+                    // and isolate each project directory so invalid settings in a nested directory
+                    // do not hide skills in its ancestors.
+                    try
                     {
-                        directories.Add(directory);
+                        foreach (var directory in agent.GetLocalSkillDirectories(scope, root))
+                        {
+                            directories.Add(directory);
+                        }
                     }
-                }
-                catch (Exception ex) when (ex is JsonException or InvalidOperationException or ArgumentNullException)
-                {
-                    // Invalid skill settings block plugin setup, not independently selected MCP.
-                    errors.Add(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.LocalSkills_ReadFailed, agent.DisplayName, ex.Message));
-                }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
-                {
-                    hasFileErrors = true;
-                    errors.Add(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.LocalSkills_ReadFailed, agent.DisplayName, ex.Message));
+                    catch (Exception ex) when (ex is JsonException or InvalidOperationException or ArgumentNullException)
+                    {
+                        // Invalid skill settings block plugin setup, not independently selected MCP.
+                        errors.Add(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.LocalSkills_ReadFailed, agent.DisplayName, ex.Message));
+                    }
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+                    {
+                        hasFileErrors = true;
+                        errors.Add(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.LocalSkills_ReadFailed, agent.DisplayName, ex.Message));
+                    }
                 }
 
                 foreach (var directory in directories)
