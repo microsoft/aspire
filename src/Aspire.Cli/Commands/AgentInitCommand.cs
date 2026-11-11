@@ -758,7 +758,14 @@ internal sealed class AgentInitCommand : BaseCommand
             {
                 return true;
             }
+        }
+        catch (Exception ex) when (IsUnreadableConfig(ex))
+        {
+            // Invalid plugin settings must not hide a valid MCP registration, so fall through.
+        }
 
+        try
+        {
             foreach (var (path, configureServer) in client.GetMcpConfigPaths(scope, workspaceRoot).Where(static target => target.ConfigureServer))
             {
                 // Probe a discarded in-memory copy with the client's own update logic, so each client's
@@ -771,13 +778,16 @@ internal sealed class AgentInitCommand : BaseCommand
                 }
             }
         }
-        catch (Exception ex) when (ex is InvalidOperationException or IOException or UnauthorizedAccessException or ArgumentException)
+        catch (Exception ex) when (IsUnreadableConfig(ex))
         {
-            // Unreadable config is not evidence of Aspire setup, and hook installation is best effort.
-            // The plugin registration parser rejects JSON nulls with ArgumentNullException.
         }
 
         return false;
+
+        // Unreadable config is not evidence of Aspire setup, and hook installation is best effort.
+        // The plugin registration parser rejects JSON nulls with ArgumentNullException.
+        static bool IsUnreadableConfig(Exception ex) =>
+            ex is InvalidOperationException or IOException or UnauthorizedAccessException or ArgumentException;
     }
 
     private async Task ConfigureTelemetryHooksAsync(
