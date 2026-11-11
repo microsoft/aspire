@@ -126,8 +126,8 @@ Before starting a release:
    | Parameter | Description | Default |
    |-----------|-------------|---------|
    | `SkipNuGetPublish` | Set `true` if re-running after NuGet success. | `false` |
-   | `SkipNpmRidPublish` | Set `true` if npm RID packages published but the pointer package did not. | `false` |
-   | `SkipNpmPointerPublish` | Set `true` if the pointer package published but a later validation or promotion step failed. Registry validation still runs. | `false` |
+   | `SkipNpmRidPublish` | Set `true` to skip an already-completed npm RID package submission. | `false` |
+   | `SkipNpmPointerPublish` | Set `true` to skip an already-published pointer package, including when retrying after `latest` has advanced. | `false` |
    | `SkipChannelPromotion` | Set `true` if re-running after darc success. | `false` |
    | `SkipWinGetPublish` | Set `true` if re-running a stable release after WinGet success. Prerelease releases skip WinGet automatically. | `false` |
    | `SkipGitHubTasks` | Set `true` to skip dispatching the GH workflow. | `false` |
@@ -166,9 +166,9 @@ To publish only the VS Code extension after merging an extension release PR, run
 
 For a full Aspire release that should also publish the extension, keep the normal NuGet/channel/GitHub task settings and set `SkipVSCodeExtensionPublish` to `false`. `IsPrerelease` also controls whether extension publishing passes `--pre-release` to `vsce`; for a pre-release extension, the selected source build must also have been queued with `Package VS Code Extension as Pre-Release=true`.
 
-The npm release path validates Windows, Linux, and macOS install summaries, publishes the seven RID packages first, waits for ESRP completion, waits for the configured propagation delay, verifies that every RID dependency is visible on npm, and then publishes the top-level `@microsoft/aspire-cli` pointer package. ESRP handles already-published versions and publish completion; the pipeline does not reject duplicates or run a post-publish registry install. The RID dependency check prevents publishing a pointer package whose optional native dependencies are not visible yet. Re-runs can keep both npm publishing steps enabled; the skip flags are optional controls for deliberately omitting a submission, not prerequisites for retrying it.
+The npm release path validates Windows, Linux, and macOS install summaries, publishes the seven RID packages first, waits for ESRP completion, waits for the configured propagation delay, verifies that every RID dependency is visible on npm, and then publishes the top-level `@microsoft/aspire-cli` pointer package. The pipeline delegates already-published versions and publish completion to ESRP; it does not reject duplicates or run a post-publish registry install. The RID dependency check prevents publishing a pointer package whose optional native dependencies are not visible yet. Re-runs can normally keep both npm publishing steps enabled, subject to the `latest` check below.
 
-> **npm `latest` safety:** npm moves the `latest` dist-tag to whatever version is published, and the MicroBuild npm publish template has no dist-tag input. Before any npm submission, the pipeline compares the release version with `@microsoft/aspire-cli@latest`. A lower version fails the run (a warning in dry runs) so an older servicing release cannot replace `latest`; set `SkipNpmRidPublish=true` and `SkipNpmPointerPublish=true` for those releases. An equal version passes, so re-running an already-published release works. For prereleases, set both npm skip flags to `true` unless the npm publishing path has gained explicit non-`latest` dist-tag support.
+> **npm `latest` safety:** npm moves the `latest` dist-tag to the version published, and the MicroBuild npm publish template has no dist-tag input. When the pointer package is scheduled, the pipeline compares its release version with `@microsoft/aspire-cli@latest`; a lower version fails the run (a warning in dry runs), even if that version was already published. To retry an older release after its pointer package was published, set `SkipNpmPointerPublish=true`; also set `SkipNpmRidPublish=true` if the RID packages are complete. Publishing older RID packages may move their own `latest` tags, but not the pointer package's tag. An older pointer package that has not been published cannot be submitted safely until publishing supports a non-`latest` tag. Avoid overlapping npm release runs: this comparison is not atomic with the later ESRP publication. For prereleases, set both npm skip flags to `true` unless the npm publishing path has gained explicit non-`latest` dist-tag support.
 
 `commit_sha` and `release_branch` for the GitHub workflow are derived automatically from the source build resource, so there is no need to copy them by hand.
 
@@ -266,9 +266,9 @@ These automations are designed to be idempotent and safe to re-run.
 | Prepare/List/Verify NuGet Packages | Check that the selected source build produced `PackageArtifacts`. |
 | Prepare/List npm Packages | Check that the selected source build produced all eight `microsoft-aspire-cli*.tgz` tarballs and matching `.tgz.sig` sidecars in `BlobArtifacts`. |
 | Push Packages to NuGet.org | Check NuGet.org for partial success, then re-run with already-completed steps skipped as needed. |
-| Verify npm latest Dist-Tag Is Not Moved Backward | The release version is older than npm `latest`. For a servicing release, re-run with `SkipNpmRidPublish: true` and `SkipNpmPointerPublish: true`. |
-| MicroBuild npm Publish | Check the ESRP release result, then re-run with completed non-npm steps skipped. Leave both npm publish steps enabled so ESRP handles existing versions and submits any remaining packages. |
-| Verify npm RID Packages Present Before Pointer Publish | Confirm all RID dependencies for the pointer package version are visible on npm, then re-run after propagation. It is not necessary to skip already-published npm packages. |
+| Verify npm latest Dist-Tag Is Not Moved Backward | The release version is older than npm `latest`. If its pointer package is already published, re-run with `SkipNpmPointerPublish: true` and skip the RID packages too if they are complete. An unpublished older pointer requires non-`latest` tag support. |
+| MicroBuild npm Publish | Check the ESRP release result, then re-run with completed non-npm steps skipped. Follow the `latest` guidance above when deciding which npm submissions to skip. |
+| Verify npm RID Packages Present Before Pointer Publish | Confirm all RID dependencies for the pointer package version are visible on npm, then re-run after propagation, subject to the `latest` guidance above. |
 | Promote Build to Channel | Re-run with completed publish steps skipped. |
 | WinGet publishing | Re-run with the corresponding skip flag for completed work. |
 | Publish VS Code Extension to Marketplace | Check that `aspire-vscode-extension` contains one `.vsix`, `.manifest`, and `.signature.p7s`; verify the `AspireSecurePublishPipelineMarketplaceConnectionWithManagedIdentity` service connection identity is a Contributor on the Visual Studio Marketplace `microsoft-aspire` publisher; re-run with the already-completed `Skip*` flags set to `true`. |
@@ -365,9 +365,9 @@ If ESRP published the RID packages but failed before publishing `@microsoft/aspi
 
 1. Verify the RID packages are visible on npm.
 2. Re-run the release pipeline with completed non-npm steps skipped.
-3. Keep `SkipNpmRidPublish: false` and `SkipNpmPointerPublish: false`. ESRP handles existing versions, so a partially published RID batch does not require per-package filtering.
+3. If the pointer version is not older than `latest`, keep `SkipNpmRidPublish: false` and `SkipNpmPointerPublish: false`. The pipeline relies on ESRP to handle versions from a partially published RID batch. If `latest` has advanced, wait for non-`latest` tag support before publishing the older pointer.
 
-If ESRP completed publishing both RID and pointer packages but a later release step failed, the npm submissions can be repeated. Setting both npm skip flags to `true` is optional if you want to avoid waiting for those submissions again. The `latest` check passes for the same version, so it does not block the re-run.
+If ESRP completed publishing both RID and pointer packages but a later release step failed, the npm submissions can be repeated while the release version is still `latest`. If `latest` has advanced, set both npm skip flags to `true` to avoid retrying the older pointer package.
 
 ### Tag already exists but points to different commit
 

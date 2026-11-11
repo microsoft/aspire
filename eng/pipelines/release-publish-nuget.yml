@@ -60,12 +60,12 @@ parameters:
     default: false
 
   - name: SkipNpmRidPublish
-    displayName: '[Advanced] Skip npm RID Package Publishing (optional; ESRP handles already-published versions)'
+    displayName: '[Advanced] Skip npm RID Package Publishing (re-run after success)'
     type: boolean
     default: false
 
   - name: SkipNpmPointerPublish
-    displayName: '[Advanced] Skip npm Pointer Package Publishing (optional; ESRP handles already-published versions)'
+    displayName: '[Advanced] Skip npm Pointer Package Publishing (re-run after success)'
     type: boolean
     default: false
 
@@ -1375,11 +1375,9 @@ extends:
                     Write-Host "All staged npm tarballs match validated version '$validatedVersion'."
                   displayName: 'Verify Staged npm Package Versions'
 
-                # npm publish moves the `latest` dist-tag to the published version, and the
-                # MicroBuild npm publish template has no dist-tag input. Publishing an older
-                # servicing version would make `npm install @microsoft/aspire-cli` resolve
-                # to it. Equal versions are allowed so a re-run of an already-published
-                # release proceeds; ESRP treats existing versions as already published.
+                # npm publish can move the pointer package's `latest` dist-tag backward.
+                # MicroBuild exposes no dist-tag input, so check it only when the pointer
+                # is scheduled. RID-only retries do not change the pointer's tag.
                 - pwsh: |
                     $ErrorActionPreference = 'Stop'
                     $isDryRun = "${{ parameters.DryRun }}" -eq "true"
@@ -1405,15 +1403,18 @@ extends:
                       exit 1
                     }
 
+                    # npm can emit warning lines alongside the bare version, such as
+                    # "npm warn ..."; only interpret a version-shaped line.
+                    $semverRegex = '^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$'
                     $latest = $null
-                    $latestVersion = ($latestOutput | ForEach-Object { "$_".Trim() } | Where-Object { $_ } | Select-Object -Last 1)
+                    $latestVersion = ($latestOutput | ForEach-Object { "$_".Trim() } | Where-Object { $_ -match $semverRegex } | Select-Object -First 1)
                     if (-not [System.Management.Automation.SemanticVersion]::TryParse($latestVersion, [ref] $latest)) {
                       Write-Error "Unable to parse @microsoft/aspire-cli@latest as SemVer. Output: $latestText"
                       exit 1
                     }
 
                     if ($candidate -lt $latest) {
-                      $message = "Publishing @microsoft/aspire-cli@$validatedVersion would move the npm latest dist-tag backward from $latestVersion. For an older servicing release, set SkipNpmRidPublish=true and SkipNpmPointerPublish=true."
+                      $message = "Publishing @microsoft/aspire-cli@$validatedVersion could move the npm latest dist-tag backward from $latestVersion. If the pointer version is already published, set SkipNpmPointerPublish=true for the retry."
                       if ($isDryRun) {
                         Write-Host "##vso[task.logissue type=warning]$message"
                         exit 0
@@ -1423,8 +1424,9 @@ extends:
                       exit 1
                     }
 
-                    Write-Host "npm latest is $latestVersion; publishing $validatedVersion will not move it backward."
+                    Write-Host "Observed npm latest $latestVersion; release version $validatedVersion is not older."
                   displayName: 'Verify npm latest Dist-Tag Is Not Moved Backward'
+                  condition: and(succeeded(), eq('${{ parameters.SkipNpmPointerPublish }}', 'false'))
 
               - ${{ if and(eq(parameters.DryRun, true), or(eq(parameters.SkipNpmRidPublish, false), eq(parameters.SkipNpmPointerPublish, false))) }}:
                 - powershell: |
@@ -1509,7 +1511,7 @@ extends:
                   displayName: 'Dry Run - Validate npm Registry Reachability'
 
               - ${{ if and(eq(parameters.DryRun, false), or(eq(parameters.SkipNpmRidPublish, false), eq(parameters.SkipNpmPointerPublish, false)), eq(parameters.IsPrerelease, false)) }}:
-                # ESRP owns duplicate-version checks and publish completion.
+                # Delegate existing-version handling and publish completion to ESRP.
                 - ${{ if eq(parameters.SkipNpmRidPublish, false) }}:
                   - template: MicroBuild.Publish.yml@MicroBuildTemplate
                     parameters:
