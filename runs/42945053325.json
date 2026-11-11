@@ -1,0 +1,63 @@
+{
+  "run_id": 42945053325,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/42945053325",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-11T03:15:18Z",
+  "verdict": "transient-infra",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 21442,
+    "title": "Release native socket listener slot before closing the connection",
+    "author": "davidfowl",
+    "state": "closed",
+    "head_branch": "agent/fix-socket-listener-slot-release",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/21442",
+    "merged_at": "2026-11-11T02:17:54Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "a2567195ddfdc2eabff91a6a44bb13145ccba8cc",
+    "failed_sha": "12d490bae78a59012700a69711214773f53bba48",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "ec6206117c22b12ce677e09941199b196bea5bde",
+        "message": "Fix CLI telemetry persistence tests racing the exporter's eager storage drain (#21499) ## Description Fixes an intermittent Windows failure in the CLI telemetry persistence tests. The tests wait for an upload that the exporter can legitimately defer for two minutes. ### Failures (attempt 1, `ci.yml`) | Run | Job | Test | Failure | | --- | --- | --- | --- | | [41108564540](https://github.com/microsoft/aspire/actions/runs/41108564540/job/124246022014) | Cli (windows-latest) | `AgentTelemetryPersis",
+        "html_url": "https://github.com/microsoft/aspire/commit/ec6206117c22b12ce677e09941199b196bea5bde",
+        "pull_request": {
+          "number": 21499,
+          "title": "Fix CLI telemetry persistence tests racing the exporter's eager storage drain",
+          "url": "https://github.com/microsoft/aspire/pull/21499",
+          "merged_at": "2026-11-11T01:15:29Z"
+        }
+      },
+      {
+        "sha": "12d490bae78a59012700a69711214773f53bba48",
+        "message": "Release native socket listener slot before closing the connection (#21442) ## Description Fixes an intermittent connection-slot race in `SocketConnectionListener`. It caused `NativeCliProtocolTests.SilentAndPartialFramesExpireWithoutBlockingOtherCliClients(frame: \"\")` to fail on Ubuntu. **Failure:** main run [40802338563](https://github.com/microsoft/aspire/actions/runs/40802338563), job 123215117869 (2026-10-29, `84881cc54`). The test threw `OperationCanceledException` after 20 s at `NativeCliP",
+        "html_url": "https://github.com/microsoft/aspire/commit/12d490bae78a59012700a69711214773f53bba48",
+        "pull_request": {
+          "number": 21442,
+          "title": "Release native socket listener slot before closing the connection",
+          "url": "https://github.com/microsoft/aspire/pull/21442",
+          "merged_at": "2026-11-11T02:17:54Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (windows-latest)",
+      "id": 130276453631,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/42945053325/job/130276453631",
+      "classification": "transient-infra",
+      "reason": "Hosted runner lost communication with the server; no test results captured.",
+      "failed_steps": []
+    }
+  ],
+  "failed_tests": [],
+  "causes": [
+    "hosted-runner-lost-communication-windows-template-tests"
+  ]
+}
