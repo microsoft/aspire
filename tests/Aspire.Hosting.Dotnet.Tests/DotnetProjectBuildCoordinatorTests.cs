@@ -6599,6 +6599,193 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         await retry;
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task BuildCompletionCapabilityObservesPreflightFailureAndRetry(bool materializeBeforeFailure)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path, outputHelper);
+        builder.Configuration["Aspire:LaunchGroup"] = materializeBeforeFailure ? "selected" : "missing";
+        var projectPath = CreateProject(workspace.Path, "Api", "Api.csproj");
+        var project = builder.AddDotnetProject("api", projectPath, options => options.ExcludeLaunchProfile = true)
+            .WithLaunchGroup("selected");
+        var completion = Assert.Single(project.Resource.Annotations.OfType<DotnetProgramBuildCompletionAnnotation>());
+        using var waitCancellation = new CancellationTokenSource();
+        var waits = new List<Task>();
+        builder.Eventing.Subscribe<BeforeStartEvent>((@event, _) =>
+        {
+            waits.Add(completion.Callback(@event.Services, waitCancellation.Token));
+            return Task.CompletedTask;
+        });
+
+        var failFirstAttempt = true;
+        if (materializeBeforeFailure)
+        {
+            builder.Pipeline.WithFinalAction(
+                WellKnownPipelineSteps.BeforeStart,
+                async context =>
+                {
+                    if (failFirstAttempt)
+                    {
+                        context.Services.GetRequiredService<LaunchGroupService>().Configure(context.Model);
+                        var coordinator = context.Services.GetRequiredService<DotnetProjectBuildCoordinator.CoordinatorState>();
+                        await coordinator.MaterializeBuildPlan(context.Model, context.Services);
+                        var materializedWait = completion.Callback(context.Services, waitCancellation.Token);
+                        Assert.False(materializedWait.IsCompleted);
+                        waits.Add(materializedWait);
+                        builder.Configuration["Aspire:LaunchGroup"] = "missing";
+                    }
+                });
+        }
+
+        await using var app = builder.Build();
+        try
+        {
+            var failure = await Assert.ThrowsAsync<DistributedApplicationException>(
+                () => app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken));
+            Assert.Equal(materializeBeforeFailure ? 2 : 1, waits.Count);
+            foreach (var wait in waits)
+            {
+                var observedFailure = await Assert.ThrowsAsync<DistributedApplicationException>(
+                    () => wait.WaitAsync(TestConstants.DefaultTimeoutTimeSpan));
+                Assert.Same(failure, observedFailure);
+            }
+            var lateWait = completion.Callback(app.Services, waitCancellation.Token);
+            waits.Add(lateWait);
+            var lateFailure = await Assert.ThrowsAsync<DistributedApplicationException>(
+                () => lateWait.WaitAsync(TestConstants.DefaultTimeoutTimeSpan));
+            Assert.Same(failure, lateFailure);
+
+            failFirstAttempt = false;
+            builder.Configuration["Aspire:LaunchGroup"] = "selected";
+            await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
+            Assert.Equal(materializeBeforeFailure ? 4 : 3, waits.Count);
+            var retry = waits[^1];
+            Assert.False(retry.IsCompleted);
+
+            var build = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
+            await app.ResourceNotifications.PublishUpdateAsync(build, snapshot => snapshot with
+            {
+                State = KnownResourceStates.Finished,
+                ExitCode = 0
+            });
+            await retry.WaitAsync(TestConstants.DefaultTimeoutTimeSpan);
+        }
+        finally
+        {
+            await waitCancellation.CancelAsync();
+            await Task.WhenAll(waits).WaitAsync(TestConstants.DefaultTimeoutTimeSpan).ConfigureAwait(
+                ConfigureAwaitOptions.SuppressThrowing | ConfigureAwaitOptions.ContinueOnCapturedContext);
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task BeforeStartFailureCompletesConcurrentBuildWaiters(bool canceledStartup)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path, outputHelper);
+        var projectPath = CreateProject(workspace.Path, "Api", "Api.csproj");
+        var project = builder.AddDotnetProject("api", projectPath, options => options.ExcludeLaunchProfile = true);
+        var completion = Assert.Single(project.Resource.Annotations.OfType<DotnetProgramBuildCompletionAnnotation>());
+        using var waitCancellation = new CancellationTokenSource();
+        using var canceledWait = new CancellationTokenSource();
+        using var startupCancellation = new CancellationTokenSource();
+        startupCancellation.Cancel();
+        Exception expected = canceledStartup
+            ? new OperationCanceledException(startupCancellation.Token)
+            : new InvalidOperationException("Before-start failed.");
+        var waits = new List<Task>();
+        builder.Eventing.Subscribe<BeforeStartEvent>((@event, _) =>
+        {
+            waits.Add(completion.Callback(@event.Services, waitCancellation.Token));
+            waits.Add(completion.Callback(@event.Services, waitCancellation.Token));
+            waits.Add(completion.Callback(@event.Services, canceledWait.Token));
+            canceledWait.Cancel();
+            return Task.FromException(expected);
+        });
+
+        await using var app = builder.Build();
+        try
+        {
+            var failure = await Record.ExceptionAsync(
+                () => app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken));
+            Assert.Same(expected, failure);
+            Assert.Equal(3, waits.Count);
+            var canceled = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => waits[2]);
+            Assert.Equal(canceledWait.Token, canceled.CancellationToken);
+            foreach (var wait in waits.Take(2))
+            {
+                var observedFailure = await Record.ExceptionAsync(() => wait.WaitAsync(TestConstants.DefaultTimeoutTimeSpan));
+                Assert.Same(failure, observedFailure);
+            }
+        }
+        finally
+        {
+            await waitCancellation.CancelAsync();
+            await Task.WhenAll(waits).WaitAsync(TestConstants.DefaultTimeoutTimeSpan).ConfigureAwait(
+                ConfigureAwaitOptions.SuppressThrowing | ConfigureAwaitOptions.ContinueOnCapturedContext);
+        }
+    }
+
+    [Fact]
+    public async Task BeforeStartRetryDoesNotAffectWaitersFromSuccessfulAttempt()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path, outputHelper);
+        builder.Configuration["Aspire:LaunchGroup"] = "selected";
+        var projectPath = CreateProject(workspace.Path, "Api", "Api.csproj");
+        var project = builder.AddDotnetProject("api", projectPath, options => options.ExcludeLaunchProfile = true)
+            .WithLaunchGroup("selected");
+        var completion = Assert.Single(project.Resource.Annotations.OfType<DotnetProgramBuildCompletionAnnotation>());
+        using var waitCancellation = new CancellationTokenSource();
+        var waits = new List<Task>();
+        builder.Eventing.Subscribe<BeforeStartEvent>((@event, _) =>
+        {
+            waits.Add(completion.Callback(@event.Services, waitCancellation.Token));
+            return Task.CompletedTask;
+        });
+
+        await using var app = builder.Build();
+        try
+        {
+            await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
+            Assert.False(Assert.Single(waits).IsCompleted);
+
+            builder.Configuration["Aspire:LaunchGroup"] = "missing";
+            var failure = await Assert.ThrowsAsync<DistributedApplicationException>(
+                () => app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken));
+            Assert.Equal(2, waits.Count);
+            var observedFailure = await Assert.ThrowsAsync<DistributedApplicationException>(
+                () => waits[1].WaitAsync(TestConstants.DefaultTimeoutTimeSpan));
+            Assert.Same(failure, observedFailure);
+            Assert.False(waits[0].IsCompleted);
+
+            builder.Configuration["Aspire:LaunchGroup"] = "selected";
+            await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
+            Assert.Equal(3, waits.Count);
+            Assert.False(waits[2].IsCompleted);
+            var build = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
+            await app.ResourceNotifications.PublishUpdateAsync(build, snapshot => snapshot with
+            {
+                State = KnownResourceStates.Finished,
+                ExitCode = 0
+            });
+            await Task.WhenAll(waits[0], waits[2]).WaitAsync(TestConstants.DefaultTimeoutTimeSpan);
+        }
+        finally
+        {
+            await waitCancellation.CancelAsync();
+            await Task.WhenAll(waits).WaitAsync(TestConstants.DefaultTimeoutTimeSpan).ConfigureAwait(
+                ConfigureAwaitOptions.SuppressThrowing | ConfigureAwaitOptions.ContinueOnCapturedContext);
+        }
+    }
+
     [Fact]
     public async Task RunPropertyResolutionWaitsForFinalCoordinatedBuild()
     {

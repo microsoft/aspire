@@ -620,9 +620,12 @@ public class DistributedApplication : IHost, IAsyncDisposable
     {
         var configuration = _host.Services.GetRequiredService<IConfiguration>();
         using var beforeStartActivity = ProfilingTelemetry.StartAppHostBeforeStart(configuration);
+        Action<Exception?>? completeBuildStartup = null;
 
         try
         {
+            completeBuildStartup = _host.Services.GetKeyedService<Func<Action<Exception?>>>(
+                LaunchGroupMetadataService.BuildPlanStartupKey)?.Invoke();
             var eventSubscribers = _host.Services.GetServices<IDistributedApplicationEventingSubscriber>().ToArray();
             var eventing = _host.Services.GetRequiredService<IDistributedApplicationEventing>();
             var execContext = _host.Services.GetRequiredService<DistributedApplicationExecutionContext>();
@@ -748,9 +751,12 @@ public class DistributedApplication : IHost, IAsyncDisposable
 
                 _host.Services.GetRequiredService<LaunchGroupMetadataService>().FinalizeModel(appModel);
             }
+
+            completeBuildStartup?.Invoke(null);
         }
         catch (Exception ex)
         {
+            completeBuildStartup?.Invoke(ex);
             beforeStartActivity.SetError(ex);
             throw;
         }

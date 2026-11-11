@@ -19,6 +19,7 @@ internal sealed class LaunchGroupMetadataService(ILogger<LaunchGroupMetadataServ
     // Arguments are resource, initial status (null while pending), persistence, and generated-helper status.
     internal const string BuildPlanReporterKey = "Aspire.Hosting.LaunchGroups.BuildPlanReporter";
     internal const string BuildPlanFinalizerKey = "Aspire.Hosting.LaunchGroups.BuildPlanFinalizer";
+    internal const string BuildPlanStartupKey = "Aspire.Hosting.LaunchGroups.BuildPlanStartup";
 
     private readonly Dictionary<IResource, ResourceSelection> _selection = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<IResource, LaunchGroupBuildDisposition> _builds = new(ReferenceEqualityComparer.Instance);

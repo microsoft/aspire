@@ -7,6 +7,7 @@
 
 using System.Globalization;
 using System.Runtime.CompilerServices;
+using System.Runtime.ExceptionServices;
 using System.Text.RegularExpressions;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
@@ -41,6 +42,7 @@ internal static partial class DotnetProjectBuildCoordinator
     // Matches the Hosting-internal keyed delegate used to report finalized build decisions.
     private const string BuildPlanReporterKey = "Aspire.Hosting.LaunchGroups.BuildPlanReporter";
     private const string BuildPlanFinalizerKey = "Aspire.Hosting.LaunchGroups.BuildPlanFinalizer";
+    private const string BuildPlanStartupKey = "Aspire.Hosting.LaunchGroups.BuildPlanStartup";
     private const string BeginBuildReportingKey = "Aspire.Hosting.DeferredBuildReporting.Begin";
     private const string RegisterBuildWriterKey = "Aspire.Hosting.BuildOutputCapture.Register";
     private const string SubscribeBuildOutputKey = "Aspire.Hosting.BuildOutputCapture.Subscribe";
@@ -480,6 +482,7 @@ internal static partial class DotnetProjectBuildCoordinator
         private bool _materializationInProgress;
         private bool _disposed;
         private TaskCompletionSource _materializationCompletion = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private TaskCompletionSource<Exception?> _startupCompletion = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public CoordinatorState(IDistributedApplicationBuilder builder)
         {
@@ -489,6 +492,9 @@ internal static partial class DotnetProjectBuildCoordinator
                 BuildPlanFinalizerKey,
                 (services, _) => model => services.GetRequiredService<CoordinatorState>()
                     .MaterializeBuildPlan(model, services));
+            builder.Services.AddKeyedSingleton<Func<Action<Exception?>>>(
+                BuildPlanStartupKey,
+                (services, _) => services.GetRequiredService<CoordinatorState>().BeginStartupAttempt);
             builder.Pipeline.WithFinalAction(
                 WellKnownPipelineSteps.BeforeStart,
                 stepContext =>
@@ -531,7 +537,73 @@ internal static partial class DotnetProjectBuildCoordinator
             _registrations.Add(new ResourceRegistration(resource));
         }
 
+        private Action<Exception?> BeginStartupAttempt()
+        {
+            TaskCompletionSource<Exception?> completion;
+            lock (_materializationLock)
+            {
+                ObjectDisposedException.ThrowIf(_disposed, this);
+                if (_startupCompletion.Task.IsCompleted)
+                {
+                    _startupCompletion = new(TaskCreationOptions.RunContinuationsAsynchronously);
+                }
+
+                completion = _startupCompletion;
+            }
+
+            // Retain a failure until the next attempt so late consumers do not wait
+            // for a build that cannot start.
+            return exception => completion.TrySetResult(exception);
+        }
+
         public async Task WaitForBuildCompletionAsync(
+            DotnetProjectResource resource,
+            IServiceProvider services,
+            BeforeResourceStartedEvent? startEvent,
+            CancellationToken cancellationToken)
+        {
+            Task<Exception?> startupTask;
+            lock (_materializationLock)
+            {
+                ObjectDisposedException.ThrowIf(_disposed, this);
+                startupTask = _startupCompletion.Task;
+            }
+
+            if (startupTask.IsCompletedSuccessfully)
+            {
+                if (startupTask.Result is { } startupFailure)
+                {
+                    ExceptionDispatchInfo.Capture(startupFailure).Throw();
+                }
+
+                await WaitForBuildCompletionCoreAsync(resource, services, startEvent, cancellationToken).ConfigureAwait(false);
+                return;
+            }
+
+            using var waitCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            var buildTask = WaitForBuildCompletionCoreAsync(resource, services, startEvent, waitCancellation.Token);
+            try
+            {
+                // Preflight can fail after the plan is materialized, when consumers are already waiting
+                // on a build resource that will never start. Cancel only this wait, not the shared build.
+                if (await Task.WhenAny(buildTask, startupTask).ConfigureAwait(false) == startupTask &&
+                    await startupTask.ConfigureAwait(false) is { } startupFailure)
+                {
+                    await waitCancellation.CancelAsync().ConfigureAwait(false);
+                    await buildTask.ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
+                    ExceptionDispatchInfo.Capture(startupFailure).Throw();
+                }
+
+                await buildTask.ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                throw;
+            }
+        }
+
+        private async Task WaitForBuildCompletionCoreAsync(
             DotnetProjectResource resource,
             IServiceProvider services,
             BeforeResourceStartedEvent? startEvent,
@@ -854,6 +926,7 @@ internal static partial class DotnetProjectBuildCoordinator
 
                 _disposed = true;
                 _materializationCompletion.TrySetCanceled();
+                _startupCompletion.TrySetResult(new OperationCanceledException());
             }
 
             RemoveEagerBuildDependencies(_registrations.Select(registration => registration.Resource));
