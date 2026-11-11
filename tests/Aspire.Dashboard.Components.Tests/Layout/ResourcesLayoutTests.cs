@@ -1451,6 +1451,33 @@ public class ResourcesLayoutTests : DashboardTestContext
     }
 
     [Fact]
+    public void RowActions_DoNotRecolorSharedCommandIcons()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var command = new CommandViewModel("resource-stop", CommandViewModelState.Enabled, "Stop", "Stop resource", confirmationMessage: "", argumentInputs: [], isHighlighted: true, iconName: "Stop", iconVariant: IconVariant.Filled);
+        var resource = ModelTestHelpers.CreateResource("api", state: KnownResourceState.Running, commands: [command]);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [resource],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ConsoleLogsUrl("api"));
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".resource-row-highlighted")));
+
+        var icon = Services.GetRequiredService<IconResolver>().ResolveHighlightedCommandIcon(command.IconName, command.IconVariant);
+        var preview = Render<FluentIcon<Icon>>(builder => builder.Add(component => component.Value, icon));
+        var originalStyle = preview.Find("svg").GetAttribute("style");
+
+        using var overview = Render<FluentStack>(builder => builder.AddChildContent(
+            cut.Instance.RenderResourceActions(resource, showLabels: true, row: null)));
+        preview.Render();
+        Assert.Equal(originalStyle, preview.Find("svg").GetAttribute("style"));
+
+        cut.Render();
+        preview.Render();
+        Assert.Equal(originalStyle, preview.Find("svg").GetAttribute("style"));
+    }
+
+    [Fact]
     public async Task RowActions_RunHighlightedCommandsAndOfferTheResourceMenu()
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);

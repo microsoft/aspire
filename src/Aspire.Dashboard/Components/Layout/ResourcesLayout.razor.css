@@ -2350,8 +2350,7 @@
     color: var(--colorNeutralForeground1);
 }
 
-/* Row actions are neutral so brand color is reserved for selection, primary actions and links.
-   The resource's own URL stays brand-colored: opening it is the row's main job. */
+/* Keep the primary endpoint link brand-colored, like the resource's other URLs. */
 .resource-row-actions > a.resource-row-primary-endpoint {
     color: var(--colorBrandForeground1);
 }
