@@ -1,0 +1,15 @@
+{
+  "id": "extension-cli-test-pidless-child-signal-assertion-windows",
+  "type": "main-repository-breakage",
+  "title": "VS Code extension cli.test.js 'rejects when signaling a PID-less child throws' fails on Windows",
+  "error_pattern": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n2 !== 0\nat Context.<anonymous> (extension\\out\\test\\cli.test.js:125:16)",
+  "occurrences": [
+    {
+      "run_id": 42937622671,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/42937622671",
+      "job": "Tests / Run VS Code extension unit tests (Windows) / Run VS Code extension unit tests (Windows)",
+      "observed_at": "2026-11-11T01:50:48Z",
+      "pr_number": 0
+    }
+  ]
+}

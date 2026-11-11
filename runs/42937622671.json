@@ -1,0 +1,107 @@
+{
+  "run_id": 42937622671,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/42937622671",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-11T01:50:48Z",
+  "verdict": "mixed",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 21499,
+    "title": "Fix CLI telemetry persistence tests racing the exporter's eager storage drain",
+    "author": "davidfowl",
+    "state": "closed",
+    "head_branch": "aspireagent/fix-agent-telemetry-eager-drain-race",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/21499",
+    "merged_at": "2026-11-11T01:15:29Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "a2567195ddfdc2eabff91a6a44bb13145ccba8cc",
+    "failed_sha": "ec6206117c22b12ce677e09941199b196bea5bde",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "ec6206117c22b12ce677e09941199b196bea5bde",
+        "message": "Fix CLI telemetry persistence tests racing the exporter's eager storage drain (#21499) ## Description Fixes an intermittent Windows failure in the CLI telemetry persistence tests. The tests wait for an upload that the exporter can legitimately defer for two minutes. ### Failures (attempt 1, `ci.yml`) | Run | Job | Test | Failure | | --- | --- | --- | --- | | [41108564540](https://github.com/microsoft/aspire/actions/runs/41108564540/job/124246022014) | Cli (windows-latest) | `AgentTelemetryPersis",
+        "html_url": "https://github.com/microsoft/aspire/commit/ec6206117c22b12ce677e09941199b196bea5bde",
+        "pull_request": {
+          "number": 21499,
+          "title": "Fix CLI telemetry persistence tests racing the exporter's eager storage drain",
+          "url": "https://github.com/microsoft/aspire/pull/21499",
+          "merged_at": "2026-11-11T01:15:29Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Run VS Code extension unit tests (Windows) / Run VS Code extension unit tests (Windows)",
+      "id": 130252348899,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/42937622671/job/130252348899",
+      "classification": "main-repository-breakage",
+      "reason": "VS Code extension unit test on Windows failed a deterministic assertion (cli.test.js:125, 2 !== 0); no transient evidence.",
+      "failed_steps": [
+        "Run tests"
+      ]
+    },
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Hosting.Native.Core.Tests, Hosting.Native.Core, Hosting.Native.... / Hosting.Native.Core (ubuntu-latest)",
+      "id": 130252356250,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/42937622671/job/130252356250",
+      "classification": "flaky-test",
+      "reason": "Native CLI protocol test canceled by timeout, matching recorded intermittent timeout.",
+      "failed_steps": [
+        "Run tests (Linux/macOS)"
+      ]
+    },
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Hosting.MongoDB.Tests, Hosting.MongoDB, Hosting.MongoDB, tests/... / Hosting.MongoDB (ubuntu-latest)",
+      "id": 130252357132,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/42937622671/job/130252357132",
+      "classification": "flaky-test",
+      "reason": "MongoDB single-member replica set test hit transient not-primary error, matching recorded mechanism.",
+      "failed_steps": [
+        "Run tests (Linux/macOS)"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Hosting.MongoDB.Tests.SingleMemberReplicaSetFunctionalTests.TransactionsAndChangeStreamsWorkWithTls",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.MongoDB.Tests, Hosting.MongoDB, Hosting.MongoDB, tests/... / Hosting.MongoDB (ubuntu-latest)",
+      "error": "MongoDB.Driver.MongoNotPrimaryException : Server returned not primary error.",
+      "stack_trace": "   at MongoDB.Driver.Core.Operations.RetryableWriteOperationExecutor.ExecuteAsync[TResult](OperationContext operationContext, IRetryableWriteOperation`1 operation, RetryableWriteContext context)\n   at MongoDB.Driver.Core.Operations.RetryableWriteOperationExecutor.ExecuteAsync[TResult](OperationContext operationContext, IRetryableWriteOperation`1 operation, IWriteBinding binding, Boolean retryRequested, Int32 maxAdaptiveRetries, Boolean enableOverloadRetargeting, IMayUseSecondaryCriteria mayUseSecondary)\n   at MongoDB.Driver.OperationExecutor.ExecuteWriteOperationAsync[TResult](OperationContext operationContext, IClientSessionHandle session, IWriteOperation`1 operation, Boolean allowChannelPinning)\n   at MongoDB.Driver.MongoDatabase.ExecuteWriteOperationAsync[TResult](IClientSessionHandle session, IWriteOperation`1 operation, Nullable`1 timeout, String collectionName, CancellationToken cancellationToken)\n   at MongoDB.Driver.MongoDatabase.CreateCollectionAsync(IClientSessionHandle session, String name, CreateCollectionOptions options, CancellationToken cancellationToken)\n   at MongoDB.Driver.MongoDatabase.CreateCollectionAsync(String name, CreateCollectionOptions options, CancellationToken cancellationToken)\n   at Aspire.Hosting.MongoDB.Tests.SingleMemberReplicaSetFunctionalTests.VerifyTransactionsAndChangeStreamsAsync(IMongoDatabase database, CancellationToken cancellationToken) in /home/runner/work/aspire/aspire/tests/Aspire.Hosting.MongoDB.Tests/SingleMemberReplicaSetFunctionalTests.cs:line 251\n   at Aspire.Hosting.MongoDB.Tests.SingleMemberReplicaSetFunctionalTests.VerifyFeaturesAsync(Boolean useTls) in /home/runner/work/aspire/aspire/tests/Aspire.Hosting.MongoDB.Tests/SingleMemberReplicaSetFunctionalTests.cs:line 57\n--- End of stack trace from previous location ---",
+      "standard_output": "| [2026-11-11T01:20:24] Aspire.Hosting.DistributedApplication Information: Aspire AppHost version: 17.1.0-ci\n| [2026-11-11T01:20:24] Aspire.Hosting.DistributedApplication Information: Distributed application starting.\n| [2026-11-11T01:20:24] Aspire.Hosting.DistributedApplication Information: Application host directory is: /home/runner/work/aspire/aspire/tests/Aspire.Hosting.TestUtilities\n| [2026-11-11T01:20:24] Aspire.Hosting.DeveloperCertificateService Debug: Developer certificate HTTPS/TLS termination support: True\n| [2026-11-11T01:20:24] Aspire.Hosting.Cli.CliOrphanDetector Debug: No CLI process ID configured. Orphan detection disabled.\n| [2026-11-11T01:20:24] Aspire.Hosting.Cli.BackchannelService Debug: Backchannel socket path was not specified.\n| [2026-11-11T01:20:24] Aspire.Hosting.Devcontainers.Codespaces.CodespacesResourceUrlRewriterService Trace: Not running in Codespaces, skipping URL rewriting.\n| [2026-11-11T01:20:24] Aspire.Hosting.Backchannel.AuxiliaryBackchannelService Debug: Starting auxiliary backchannel service on socket path: /home/runner/.aspire/cli/bch/KfshLkY6TmIVghcp5ek.4147\n| [2026-11-11T01:20:24] Aspire.Hosting.Backchannel.AuxiliaryBackchannelService Debug: Auxiliary backchannel listening on /home/runner/.aspire/cli/bch/KfshLkY6TmIVghcp5ek.4147\n| [2026-11-11T01:20:24] Aspire.Hosting.Dcp.DcpHost Debug: Prepared DCP TLS certificate files for thumbprint EB55DBD2745DC99C394514030F366F297E66CEF1.\n| [2026-11-11T01:20:24] Aspire.Hosting.FileSystemService Debug: Allocated temporary directory: /tmp/aspire-dcpWupUE8\n| [2026-11-11T01:20:24] Aspire.Hosting.Dcp.DcpHost Information: Starting DCP with arguments: start-apiserver --monitor 4147 --detach --kubeconfig \"/tmp/aspire-dcpWupUE8/kubeconfig\" --tls-cert-thumbprint \"EB55DBD2745DC99C394514030F366F297E66CEF1\" --tls-cert-file \"/home/runner/.aspire/dev-certs/https/818272AE0FEC10FDF70B03AB413BA2ED155E35BD201797A669C2C776799B59B6.crt\" --tls-key-file \"/home/runner/.aspire/dev-certs/https/818272AE0FEC10FDF70B03AB413BA2ED155E35BD201797A669C2C776799B59B6.key\"\n| [2026-11-11T01:20:24] Aspire.Hosting.Dcp.DcpExecutor Debug: Preparing services. Ports randomized: True\n| [2026-11-11T01:20:24] Aspire.Hosting.ApplicationModel.ResourceNotificationService Trace: Version: 1 Resource mongo/mongo-ydmyrzgd update published: ResourceType = Container, CreationTimeStamp = (null), State = { Text = (null), Style = (null) }, IsHidden = False, HeathStatus = (null), ResourceReady = False, ExitCode = (null), Urls = {  }, EnvironmentVariables = {  }, Properties = {  }, HealthReports = { mongo_check = (null) }, Commands = { start (Start) = Disabled stop (Stop) = Hidden restart (Restart) = Disabled }\n| [2026-11-11T01:20:24] Aspire.Hosting.ApplicationModel.ResourceNotificationService Trace: Version: 1 Resource orders/orders update published: ResourceType = MongoDBDatabaseResource, CreationTimeStamp = (null), State = { Text = (null), Style = (null) }, IsHidden = False, HeathStatus = (null), ResourceReady = False, ExitCode = (null), Urls = {  }, EnvironmentVariables = {  }, Properties = { resource.parentName = mongo-ydmyrzgd }, HealthReports = { orders_check = (null) mongo_check = (null) }, Commands = {  }\n| [2026-11-11T01:20:24] Aspire.Hosting.Dcp.DcpExecutor Debug: Watching over DCP Endpoint resources.\n| [2026-11-11T01:20:24] Aspire.Hosting.Dcp.DcpExecutor Debug: Watching over DCP Service resources.\n| [2026-11-11T01:20:24] Aspire.Hosting.Dcp.DcpExecutor Debug: Watching over DCP ContainerExec resources.\n| [2026-11-11T01:20:24] Aspire.Hosting.Dcp.DcpExecutor Debug: Watching over DCP Container resources.\n| [2026-11-11T01:20:24] Aspire.Hosting.Dcp.DcpExecutor Debug: Watching over DCP Executable resources.\n| [2026-11-11T01:20:24] Aspire.Hosting.Dcp.dcp.start-apiserver.monitor Debug: Started monitoring process\t{\"PID\": 4147}\n| [2026-11-11T01:20:24] Aspire.Hosting.Dcp.dcp.start-apiserver.monitor Debug: Started monitoring process\t{\"PID\": 4147}\n| [2026-11-11T01:20:24] Aspire.Hosting.Dcp.dcp.start-apiserver.api",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Server returned not primary error during replica set election window.",
+      "job_id": 130252357132,
+      "execution_id": "300ac8e7-f9e9-4fbf-8019-c4fe9f77714b",
+      "result_file": "00001.trx",
+      "result_format": "trx"
+    },
+    {
+      "name": "Aspire.Hosting.Native.Core.Tests.NativeCliProtocolTests.SilentAndPartialFramesExpireWithoutBlockingOtherCliClients(frame: \"Content-Length: 100\\r\\n\\r\\n{\")",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.Native.Core.Tests, Hosting.Native.Core, Hosting.Native.... / Hosting.Native.Core (ubuntu-latest)",
+      "error": "System.OperationCanceledException : The operation was canceled.",
+      "stack_trace": "   at System.Threading.Channels.AsyncOperation`2.GetResult(Int16 token)\n   at System.Threading.Tasks.ValueTask`1.ValueTaskSourceAsTask.<>c.<.cctor>b__4_0(Object state)\n--- End of stack trace from previous location ---\n   at Aspire.Hosting.Native.Core.Tests.NativeCliProtocolTests.SilentAndPartialFramesExpireWithoutBlockingOtherCliClients(String frame) in /home/runner/work/aspire/aspire/tests/Aspire.Hosting.Native.Core.Tests/NativeCliProtocolTests.cs:line 120\n   at Aspire.Hosting.Native.Core.Tests.NativeCliProtocolTests.SilentAndPartialFramesExpireWithoutBlockingOtherCliClients(String frame) in /home/runner/work/aspire/aspire/tests/Aspire.Hosting.Native.Core.Tests/NativeCliProtocolTests.cs:line 121\n--- End of stack trace from previous location ---",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "OperationCanceledException from timeout matches recorded intermittent mechanism.",
+      "job_id": 130252356250,
+      "execution_id": "bb8a1ea4-709c-4d5a-98c4-2e8a458e61f5",
+      "result_file": "00001.trx",
+      "result_format": "trx"
+    }
+  ],
+  "causes": [
+    "mongodb-singlemember-replicaset-not-primary-flaky",
+    "native-core-cliprotocol-silent-partial-frames-timeout",
+    "extension-cli-test-pidless-child-signal-assertion-windows"
+  ]
+}
