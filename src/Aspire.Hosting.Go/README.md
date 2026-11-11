@@ -52,6 +52,92 @@ await builder.build().run();
 The method executes the package as `go run .` from the directory containing `go.mod`.
 Pass runtime arguments via `.WithAppArgs(...)` and pre-start module commands via `.WithModTidy()`, `.WithModVendor()`, `.WithModDownload()`, or `.WithVetTool()`.
 
+### Go tests (experimental)
+
+`AddGoTest` runs standard Go tests as a finite resource. Suppress `ASPIRETESTING001`
+in your AppHost while using these experimental APIs.
+
+```csharp
+#pragma warning disable ASPIRETESTING001
+
+var api = builder.AddGoApp("api", "../go-api").WithHttpEndpoint(env: "PORT");
+builder.AddGoTest("api-tests", "../go-api")
+    .WithArgs("-tags=integration", "-run=TestAPI", "-timeout=60s")
+    .WithEnvironment("API_URL", api.GetEndpoint("http"))
+    .WithReference(api)
+    .WaitFor(api);
+```
+
+The preview CLI command is disabled by default. Enable it for the invocation
+without changing saved configuration:
+
+```bash
+features__testCommandEnabled=true aspire test
+```
+
+During testing the command is `go test -json -count=1 ./...`;
+ordinary `aspire run` invokes `go test ./...` without result collection. Set
+`packagePatterns` for specific packages or workspace modules; `./...` does not traverse
+nested modules automatically. Add build/test flags with `WithArgs`, and put any
+custom test-binary arguments after `-args`. Go owns module downloads, `go.work`,
+`GOWORK`, and build/module caches. Test-result caching is disabled, not build caching.
+
+**TypeScript**
+
+```typescript
+await builder.addGoTest("api-tests", "../go-api")
+    .withReference(api)
+    .waitFor(api);
+```
+
+Aspire counts **top-level named invocations**, not packages or every nested subtest.
+Full subtest names/outcomes stay in parent messages and the raw JSON. Repeated
+invocations (for example from `-cpu=1,2`) retain separate ordinals. Parent failures,
+package/build failures, malformed or incomplete JSON, missing streams, and nonzero
+process exits cannot become passing runs. A valid package with no tests, or a filter
+matching none, contributes zero tests. Partial named results remain when later
+collection fails. Messages are limited to 64 KiB with an explicit truncation notice;
+raw artifacts are not backlog-limited or truncated.
+
+The collector awaits process completion and then drains DCP's separate raw streams
+through EOF. `stdout.log` contains the original JSON, `stderr.log` contains the Go
+command's stderr, and `output.complete` is created only after both files close.
+Test-binary stderr is already embedded in Go JSON `Output`, not in the command's
+stderr file. These Aspire-owned files use 0600 modes on Unix inside the CLI-owned
+0700 resource directory; unlike framework-generated reports, the framework does not
+choose their modes. Partial files remain on cancellation/errors without a completion
+marker. Windows uses the run directory's inherited access controls.
+
+The collector is a runtime-only `WithTesting(async context => ...)` callback;
+runner arguments and environment are configured separately before launch. Capture
+writes directly into `<run>/go-tests` (or the chosen logical resource name), without
+temporary framework reports or GUID subdirectories. Replacing the collector with
+`WithTesting(callback)`, or clearing it with `WithTesting()`, preserves the output
+destination and runner configuration. The replacement is responsible for harvesting
+results if desired.
+The callback's `ResourceTestingContext.TestingContext` is the shared `TestingContext`.
+Its `OutputPath` is the run root; the resource-specific `context.OutputPath`
+remains the raw capture destination.
+
+Go's named `pass`, `fail`, and `skip` events map only to `Passed`, `Failed`, and
+`Skipped`. The common API also supports `Inconclusive`, `Error`, `TimedOut`, and
+`Cancelled`; only `Passed` and `Skipped` are non-failing. Go package/build failures,
+panics, and timeouts with no named terminal event fail resource execution/collection
+without inventing a named test outcome. A published failing outcome returns CLI
+exit `23`; command deadlines and interruption remain distinct command outcomes.
+
+Only one native, non-terminal invocation per resource is supported: no replicas,
+restarts, execution wrappers, retry runners, benchmarks, or sustained fuzzing.
+Reporting/cache/execution flags are reserved, including overrides in effective
+`GOFLAGS` and the `-args` tail. Keep the executable and standard JSON output intact.
+Use `WithEnvironment` and references for credentials and service addresses; tests
+must read those values explicitly. Telemetry requires explicit Go instrumentation.
+The test resource is excluded from publishing and does not inherit Go app debugging
+or application-specific module setup helpers.
+
+See [Go test flags and caching](https://pkg.go.dev/cmd/go#hdr-Test_packages) and
+[the JSON event contract](https://pkg.go.dev/cmd/test2json#hdr-Output_Format).
+
 ### Certificate trust
 
 On macOS and Windows, Go apps default to `CertificateTrustScope.System`, so the certificate bundle Aspire generates contains the system root certificates as well as the development certificate and any custom certificate authorities. Since [Go 1.27](https://go.dev/doc/go1.27), Go on those platforms uses only the certificates from `SSL_CERT_FILE` and `SSL_CERT_DIR` when either is set, instead of adding them to the system roots. On Linux, the default stays `CertificateTrustScope.Append`. Use `.WithCertificateTrustScope(...)` to choose a different scope.

@@ -30,6 +30,47 @@ Aspire's approach ensures flexibility, strong tooling support, and clear separat
 
 For the full details and specification, see the [App Model document](https://github.com/microsoft/aspire/blob/main/docs/specs/appmodel.md).
 
+## Experimental test output collection
+
+Framework integrations register runtime collectors with `WithTesting(async context => ...)`.
+The callback runs alongside execution only during `aspire test`, never during model construction.
+Configure runner arguments and environment separately before launch.
+During testing, `ResourceTestingContext.CaptureOutputAsync()`
+waits for authoritative native executable completion, then replays DCP's separate raw
+stdout/stderr through EOF into `stdout.log` and `stderr.log` under `context.OutputPath`.
+It writes `output.complete` only after both files close. Repeated/concurrent calls share
+one capture, including failures. The helper does not scrape dashboard logs, merge streams,
+add timestamps, or impose the dashboard backlog limit.
+The output directory is `<run>/<logical-resource-name>`. Replacing or clearing the
+collector preserves this path and run context. `WaitForCompletionAsync(token)` also
+supports caller-local cancellation without cancelling shared completion or capture;
+run cancellation always applies.
+`ResourceTestingContext.TestingContext` exposes the containing `TestingContext`;
+`context.TestingContext.OutputPath` is the run root, while `context.OutputPath`
+is the logical resource's private directory.
+
+```csharp
+#pragma warning disable ASPIRETESTING001
+
+resource.WithTesting(async context =>
+{
+    await context.CaptureOutputAsync();
+    // Translate stdout.log into framework-neutral TestResult publications.
+});
+```
+
+Only one native, non-terminal executable invocation is supported. Framework integrations
+must prevent replicas, restarts, and retries before launch. Failed execution still permits
+capture; cancellation and stream/file errors fail collection. Partial files are retained
+without the completion marker. Artifacts are exclusively created with Unix 0600 permissions
+inside the run's private directory; they cannot overwrite existing files. Ordinary runs
+do not activate collectors or create test output paths.
+
+`TestOutcome` supports `Failed`, `Passed`, `Skipped`, `Inconclusive`, `Error`,
+`TimedOut`, and `Cancelled`. Only `Passed` and `Skipped` are non-failing. Test results,
+resource execution, and collector errors contribute independently to the run verdict;
+framework bridges must not fabricate named cases for process-only failures.
+
 ## Feedback & contributing
 
 https://github.com/microsoft/aspire
