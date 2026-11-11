@@ -209,7 +209,7 @@ internal sealed class ConfigSourceTestContext
     public async Task CreateProjectWithGitAuthenticationAsync()
     {
         await ConfigureGitAuthenticationAsync();
-        await _auto.TypeAsync($"{NewCommand} --use-config-source");
+        await _auto.TypeAsync($"{NewCommand} --use-config-source --log-file \"$ASPIRE_E2E_WORKSPACE/git-auth-cli.log\"");
         await _auto.EnterAsync();
         var authenticationPrompt = new CellPatternSearcher().Find("Configuration source Git authentication code:");
         await _auto.WaitUntilAsync(snapshot => authenticationPrompt.Search(snapshot).Count > 0,
@@ -222,6 +222,16 @@ internal sealed class ConfigSourceTestContext
         await _auto.WaitForSuccessPromptAsync(_counter, timeout: TimeSpan.FromMinutes(3));
         Assert.Equal("accepted", await File.ReadAllTextAsync(Path.Combine(_root, "git-authenticated.txt"), _cancellationToken));
         await ConfigureProjectAsync();
+    }
+
+    public async Task AssertGitOutputLoggedAsync()
+    {
+        // Export the owner-only CLI log through the container before reading it on the host.
+        await _auto.RunCommandAsync(
+            "cat \"$ASPIRE_E2E_WORKSPACE/git-auth-cli.log\" > \"$ASPIRE_E2E_WORKSPACE/actual-git-auth-cli.log\"", _counter);
+        var log = await File.ReadAllTextAsync(Path.Combine(_root, "actual-git-auth-cli.log"), _cancellationToken);
+        Assert.Contains("[DBUG] [GitCommandRunner] Git stdout: ", log);
+        Assert.Contains("[DBUG] [GitCommandRunner] Git stderr: ", log);
     }
 
     public async Task<JsonObject> AssertSourceAppliedAsync(string version)
