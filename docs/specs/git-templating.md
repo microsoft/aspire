@@ -280,11 +280,6 @@ output before cancellation. Arguments and exception details remain excluded from
 process diagnostics. Git output can contain private repository information,
 configuration-file contents, or credentials emitted by Git or its helpers; review
 logs before sharing them. Output is not copied into exception messages or telemetry.
-Git child processes set `GCM_TRACE=1` and `GCM_TRACE_SECRETS=0`, overriding inherited
-values to capture Git Credential Manager diagnostics on stderr while disabling
-secret tracing. This retains GCM's masking of explicitly marked secrets, not
-general-purpose redaction of all sensitive output. The parent environment and Git
-configuration are unchanged.
 The runner classifies failures and exposes localized messages through `GitFailure`;
 callers translate them into command errors.
 
