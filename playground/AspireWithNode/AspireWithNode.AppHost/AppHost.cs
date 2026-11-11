@@ -14,7 +14,6 @@ var cache = builder
 
 var weatherapi = builder.AddDotnetProject("weatherapi", "../AspireWithNode.AspNetCoreApi/AspireWithNode.AspNetCoreApi.csproj");
 
-#pragma warning disable ASPIREJAVASCRIPT001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 var frontend = builder.AddJavaScriptApp("frontend", "../NodeFrontend", "watch")
     .WithPnpm()
     .WithReference(weatherapi)
@@ -24,7 +23,6 @@ var frontend = builder.AddJavaScriptApp("frontend", "../NodeFrontend", "watch")
     .WithHttpEndpoint(env: "PORT")
     .WithExternalHttpEndpoints()
     .PublishAsPackageScript("start");
-#pragma warning restore ASPIREJAVASCRIPT001
 
 var launchProfile = builder.Configuration["DOTNET_LAUNCH_PROFILE"];
 
