@@ -44,7 +44,7 @@ During `aspire new`, `aspire init`, or adoption by `aspire update`, resolve a ca
 | `ASPIRE_INIT_SOURCE_URL` | Git repository address or absolute local repository path, not a raw JSON URL | Microsoft repository for detected employees; otherwise none |
 | `ASPIRE_INIT_SOURCE_PATH` | Repository-relative configuration file path; only applies when `ASPIRE_INIT_SOURCE_URL` is explicitly set | `aspire.config.json` at the repository root |
 | `ASPIRE_INIT_SOURCE_REF` | Branch name or full commit SHA; only applies when `ASPIRE_INIT_SOURCE_URL` is explicitly set | The repository's current default branch |
-| `ASPIRE_INIT_SOURCE_README_URL` | Absolute HTTP or HTTPS URL explaining the proposed configuration source | `https://msft.ghe.com/coreai/aspire-1p-init/blob/HEAD/README.md` for the Microsoft source; otherwise none |
+| `ASPIRE_INIT_SOURCE_README_URL` | Absolute HTTP or HTTPS URL explaining the proposed configuration source | `https://msft.ghe.com/coreai/aspire-1p-init` for the Microsoft source; otherwise none |
 
 When `ASPIRE_INIT_SOURCE_URL` is unset, ignore `ASPIRE_INIT_SOURCE_PATH` and `ASPIRE_INIT_SOURCE_REF`, including when employee detection selects the Microsoft repository. Do not validate ignored overrides. The inferred Microsoft source always uses the root `aspire.config.json` and the repository's current default branch. To customize its path or ref, explicitly set `ASPIRE_INIT_SOURCE_URL` to the Microsoft repository URL.
 
