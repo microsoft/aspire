@@ -1,3 +1,3 @@
 ﻿A configuration source was detected on your machine. It lets an organization share Aspire settings to customize your development experience.
-[link=https://msft.ghe.com/coreai/aspire-1p-init/blob/HEAD/README.md]Read more about this configuration source[/]
+[link=https://msft.ghe.com/coreai/aspire-1p-init]Read more about this configuration source[/]
 [yellow]Only use sources you trust. Content from these sources can run code on your machine.[/]
