@@ -5,8 +5,6 @@ using Aspire.Hosting.Dcp.Process;
 
 namespace Aspire.Hosting.Tests.Utils;
 
-#pragma warning disable ASPIREPROCESSCOMMAND001 // Process command APIs are experimental.
-
 internal static class DotnetFileAppProcess
 {
     public static string ExecutablePath { get; } = Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") ?? "dotnet";
@@ -19,7 +17,6 @@ internal static class DotnetFileAppProcess
 
         return appPath;
     }
-
     public static ProcessCommandSpec CreateProcessCommandSpec(
         string appPath,
         IReadOnlyList<string>? arguments = null,
@@ -87,5 +84,3 @@ internal static class DotnetFileAppProcess
             : ["run", "--file", appPath, "-p:PublishAot=false", "--", .. arguments];
     }
 }
-
-#pragma warning restore ASPIREPROCESSCOMMAND001

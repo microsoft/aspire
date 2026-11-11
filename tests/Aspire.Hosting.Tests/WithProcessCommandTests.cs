@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.IO.Pipes;
 using System.Text.Json;
 using Aspire.Hosting.Dcp.Process;
 using Aspire.Hosting.Diagnostics;
@@ -16,7 +17,6 @@ using ExecuteResourceCommandRequest = Aspire.Hosting.Backchannel.ExecuteResource
 
 namespace Aspire.Hosting.Tests;
 
-#pragma warning disable ASPIREPROCESSCOMMAND001 // Process command APIs are experimental.
 #pragma warning disable CS0618 // Tests intentionally cover the deprecated TypeScript withProcessCommandFactory export.
 
 [Trait("Partition", "6")]
@@ -199,6 +199,7 @@ public class WithProcessCommandTests(ITestOutputHelper testOutputHelper)
         Assert.Equal(["--message", "hello-from-options-callback"], processSpec.ArgumentList);
     }
 
+#pragma warning disable ASPIREPROCESSCOMMAND001 // Retain coverage of the deprecated experimental factory export.
     [Fact]
     public async Task WithProcessCommandFactoryExport_ProcessFactoryReceivesExecutionContextAndArguments()
     {
@@ -337,6 +338,8 @@ public class WithProcessCommandTests(ITestOutputHelper testOutputHelper)
         Assert.Contains("factory returned null", result.Message);
         Assert.Empty(processRunner.ProcessSpecs);
     }
+
+#pragma warning restore ASPIREPROCESSCOMMAND001
 
     [Fact]
     public async Task WithProcessCommand_ProcessFactoryReceivesExecutionContextAndArguments()
@@ -1482,7 +1485,58 @@ public class WithProcessCommandTests(ITestOutputHelper testOutputHelper)
         Assert.Equal(1, disposable.DisposeCallCount);
     }
 
-    private IDistributedApplicationTestingBuilder CreateTestDistributedApplicationBuilder(TestProcessRunner? processRunner = null)
+    [Fact]
+    public async Task WithProcessCommand_Cancellation_StopsRealProcessWithBlockedStandardInput()
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var pipeName = Guid.NewGuid().ToString("N");
+        await using var pipe = new NamedPipeServerStream(pipeName, PipeDirection.InOut, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
+        var appPath = DotnetFileAppProcess.WriteApp(workspace.Path, "blocked-input.cs", """
+            #:sdk Microsoft.NET.Sdk
+            using System.IO.Pipes;
+            using var pipe = new NamedPipeClientStream(".", args[0], PipeDirection.InOut, PipeOptions.Asynchronous);
+            await pipe.ConnectAsync();
+            using var writer = new StreamWriter(pipe, leaveOpen: true) { AutoFlush = true };
+            await writer.WriteLineAsync(Environment.ProcessId.ToString());
+            await pipe.ReadExactlyAsync(new byte[1]);
+            """);
+        using var builder = CreateTestDistributedApplicationBuilder(new DefaultProcessRunner());
+        var resource = builder.AddResource(new CustomResource("resource"))
+            .WithProcessCommand("wait", "Wait", _ => new ProcessCommandSpec(DotnetFileAppProcess.ResolvedExecutablePath)
+            {
+                Arguments = DotnetFileAppProcess.CreateArguments(appPath, [pipeName]),
+                StandardInputContent = new string('x', 2_000_000)
+            });
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        cancellation.CancelAfter(TestConstants.LongTimeoutDuration);
+        // Run on a separate thread so the regression fails with a timeout instead of blocking the test itself.
+        var commandTask = Task.Run(() => app.ResourceCommands.ExecuteCommandAsync(resource.Resource, "wait", cancellation.Token));
+        await pipe.WaitForConnectionAsync(cancellation.Token);
+        using var reader = new StreamReader(pipe, leaveOpen: true);
+        using var process = System.Diagnostics.Process.GetProcessById(int.Parse((await reader.ReadLineAsync(cancellation.Token))!));
+        try
+        {
+            Assert.False(commandTask.IsCompleted);
+            await cancellation.CancelAsync();
+            var result = await commandTask.TimeoutAfter(TimeSpan.FromMilliseconds(TestConstants.LongTimeoutDuration));
+
+            Assert.True(result.Canceled);
+            Assert.False(result.Success);
+            Assert.True(process.HasExited);
+        }
+        finally
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+                await process.WaitForExitAsync().DefaultTimeout();
+            }
+        }
+    }
+
+    private IDistributedApplicationTestingBuilder CreateTestDistributedApplicationBuilder(IProcessRunner? processRunner = null)
     {
         var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         builder.Services.AddSingleton<IProcessRunner>(processRunner ?? new TestProcessRunner());
@@ -1518,5 +1572,3 @@ public class WithProcessCommandTests(ITestOutputHelper testOutputHelper)
     {
     }
 }
-
-#pragma warning restore ASPIREPROCESSCOMMAND001

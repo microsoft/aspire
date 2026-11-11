@@ -131,22 +131,17 @@ internal static partial class ProcessUtil
             process.BeginOutputReadLine();
             process.BeginErrorReadLine();
 
-            // Write standard input after output reads are active so processes can write before reading input.
-            if (processSpec.StandardInputContent != null)
-            {
-                var writer = process.StandardInput;
-                writer.WriteLine(processSpec.StandardInputContent);
-                writer.Flush();
-                writer.Close();
-            }
-
             _ = Task.Run(async () =>
             {
                 startupComplete.Wait();
 
                 try
                 {
+                    // Return process ownership before writing input: a child may never read stdin,
+                    // so a full pipe must not prevent the caller from disposing/killing the process.
+                    var inputTask = WriteStandardInputAsync();
                     await process.WaitForExitAsync().ConfigureAwait(false);
+                    await inputTask.ConfigureAwait(false);
                     await Task.WhenAll(stdoutComplete.Task, stderrComplete.Task).ConfigureAwait(false);
 
                     processSpec.OnStop?.Invoke(process.ExitCode);
@@ -179,6 +174,17 @@ internal static partial class ProcessUtil
         }
 
         return (processLifetimeTcs.Task, new ProcessDisposable(process, processLifetimeTcs.Task, processSpec.KillEntireProcessTree));
+
+        async Task WriteStandardInputAsync()
+        {
+            if (processSpec.StandardInputContent is not null)
+            {
+                var writer = process.StandardInput;
+                await writer.WriteLineAsync(processSpec.StandardInputContent).ConfigureAwait(false);
+                await writer.FlushAsync().ConfigureAwait(false);
+                writer.Close();
+            }
+        }
     }
 
     private static string FormatProcessArgumentsForDisplay(ProcessSpec processSpec)
@@ -275,6 +281,11 @@ internal static partial class ProcessUtil
             {
                 await _processLifetimeTask.WaitAsync(s_processExitTimeout).ConfigureAwait(false);
             }
+            catch (IOException) when (_process.HasExited)
+            {
+                // Stopping a child that is not reading stdin breaks its pending input write.
+                // The lifetime task still reports the error to callers awaiting execution.
+            }
             catch (TimeoutException)
             {
                 if (!_process.HasExited)
@@ -285,6 +296,10 @@ internal static partial class ProcessUtil
                 try
                 {
                     await _processLifetimeTask.WaitAsync(s_processExitTimeout).ConfigureAwait(false);
+                }
+                catch (IOException) when (_process.HasExited)
+                {
+                    // Killing the child can break a pending stdin write as well.
                 }
                 catch (TimeoutException)
                 {
