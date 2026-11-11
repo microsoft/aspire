@@ -165,13 +165,15 @@ public sealed class TestTriggerMapTests
     }
 
     [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public void GoHostingChangesSelectExtensionE2e(bool hasAffectedProject)
+    [InlineData(true, "Aspire.Hosting.Go", "GoHostingExtensions.cs")]
+    [InlineData(false, "Aspire.Hosting.Go", "GoHostingExtensions.cs")]
+    [InlineData(true, "Aspire.Hosting.CodeGeneration.Go", "GoLanguageSupport.cs")]
+    [InlineData(false, "Aspire.Hosting.CodeGeneration.Go", "GoLanguageSupport.cs")]
+    public void GoRuntimeChangesSelectExtensionE2e(bool hasAffectedProject, string project, string fileName)
     {
-        const string path = "src/Aspire.Hosting.Go/GoHostingExtensions.cs";
+        var path = $"src/{project}/{fileName}";
         var result = hasAffectedProject
-            ? SelectWithRealMap(path, "Aspire.Hosting.Go")
+            ? SelectWithRealMap(path, project)
             : SelectWithRealMap(path);
 
         Assert.False(result.SelectsAll);
