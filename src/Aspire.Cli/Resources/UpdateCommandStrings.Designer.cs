@@ -169,7 +169,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Cannot apply channel &apos;{0}&apos; for &apos;{1}&apos; because MSBuild overrides NuGet configuration: {2}. Remove these overrides to enable explicit channel updates. Updates without an explicit channel remain supported..
+        ///   Looks up a localized string similar to Cannot apply channel &apos;{0}&apos; for &apos;{1}&apos; because MSBuild overrides NuGet configuration: {2}. Remove these overrides to enable channel updates. Updates without a command-line or configured channel remain supported..
         /// </summary>
         internal static string ChannelUpdateRequiresAmbientNuGetConfigurationFormat {
             get {
@@ -201,6 +201,15 @@ namespace Aspire.Cli.Resources {
         internal static string ConditionalSdkExplicitEditRequiredFormat {
             get {
                 return ResourceManager.GetString("ConditionalSdkExplicitEditRequiredFormat", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Cannot use channel &apos;{0}&apos; from Aspire configuration. {1}.
+        /// </summary>
+        internal static string ConfiguredChannelNotFoundFormat {
+            get {
+                return ResourceManager.GetString("ConfiguredChannelNotFoundFormat", resourceCulture);
             }
         }
 
@@ -840,6 +849,15 @@ namespace Aspire.Cli.Resources {
         internal static string UpdateSuccessfulMessage {
             get {
                 return ResourceManager.GetString("UpdateSuccessfulMessage", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Using channel &apos;{0}&apos; from Aspire configuration. Pass --channel to override..
+        /// </summary>
+        internal static string UsingConfiguredChannelFormat {
+            get {
+                return ResourceManager.GetString("UsingConfiguredChannelFormat", resourceCulture);
             }
         }
 
