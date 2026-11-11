@@ -505,7 +505,15 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         expectedClaudeGlobalSettings["hooks"] = JsonNode.Parse($$"""
             {
               "PostToolUse": [{
-                "matcher": "^(?:Skill|aspire-.+|mcp__aspire__.+|mcp_aspire_.+)$",
+                "matcher": "^Skill$",
+                "hooks": [{
+                  "type": "command",
+                  "command": {{hookExecutable}},
+                  "args": ["agent", "telemetry", "--hook"],
+                  "timeout": 30
+                }]
+              }, {
+                "matcher": "^(?:aspire-.+|mcp__aspire__.+|mcp_aspire_.+)$",
                 "hooks": [{
                   "type": "command",
                   "command": {{hookExecutable}},
