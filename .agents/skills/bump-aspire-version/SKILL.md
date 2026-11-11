@@ -86,8 +86,8 @@ bumps or any bump that does not follow a newly created release branch.
    PR unless asked.
 
 Precedent: #22172 retargeted both workflows from `release/13.6` to `release/17.0`.
-These edits are manual because the bundled script handles only version and
-milestone metadata. Include them in the bump PR, or in a separate PR when the bump
+Make these edits by hand: `BumpVersion.cs` updates only `eng/Versions.props` and
+the milestone policy. Include them in the bump PR, or in a separate PR when the bump
 has already merged.
 
 ## Validate
