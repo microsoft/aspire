@@ -141,7 +141,7 @@ internal sealed class CopilotAgentClient(
             var (command, args) = AgentTelemetryHook.GetCommand(
                 AgentTelemetryProtocol.HookOptionName,
                 AgentTelemetryProtocol.SourceOptionName, ClientId,
-                AgentTelemetryProtocol.ScopeOptionName, scope is AgentConfigurationScope.Project ? AgentTelemetryProtocol.ProjectScope : AgentTelemetryProtocol.UserScope);
+                AgentTelemetryProtocol.ScopeOptionName, scope.ToString().ToLowerInvariant());
             var config = new JsonObject
             {
                 ["version"] = 1,

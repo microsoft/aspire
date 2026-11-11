@@ -147,7 +147,7 @@ internal sealed class AgentTelemetryHook(IEnvironment environment, CliExecutionC
     /// skip, so a hook only skips when another hook is known to record the call.
     /// </para>
     /// </remarks>
-    internal bool ShouldRecord(string? source, string? scope)
+    internal bool ShouldRecord(string? source, AgentConfigurationScope? scope)
     {
         if (source is null || scope is null)
         {
@@ -159,7 +159,7 @@ internal sealed class AgentTelemetryHook(IEnvironment environment, CliExecutionC
             return false;
         }
 
-        if (scope != AgentTelemetryProtocol.ProjectScope)
+        if (scope is not AgentConfigurationScope.Project)
         {
             return true;
         }
@@ -206,7 +206,12 @@ internal sealed class AgentTelemetryHook(IEnvironment environment, CliExecutionC
     // Hook args end with: ... --source claude --scope project
     private static bool IsProjectScoped(JsonNode? argsNode)
         => argsNode is JsonArray args
-            && args.Select(GetString).SkipWhile(arg => arg != AgentTelemetryProtocol.ScopeOptionName).Skip(1).FirstOrDefault() == AgentTelemetryProtocol.ProjectScope;
+            && ParseScope(args.Select(GetString).SkipWhile(arg => arg != AgentTelemetryProtocol.ScopeOptionName).Skip(1).FirstOrDefault())
+                is AgentConfigurationScope.Project;
+
+    // Unknown values return null instead of failing so a hook with an unexpected --scope still records.
+    internal static AgentConfigurationScope? ParseScope(string? value)
+        => Enum.TryParse<AgentConfigurationScope>(value, ignoreCase: true, out var scope) && Enum.IsDefined(scope) ? scope : null;
 
     private static string? GetString(JsonNode? node)
         => node is JsonValue value && value.TryGetValue<string>(out var text) ? text : null;

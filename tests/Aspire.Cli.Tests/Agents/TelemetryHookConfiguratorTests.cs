@@ -36,7 +36,7 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
         Assert.Equal("command", (string)entry["type"]!);
         Assert.Equal(CopilotAgentClient.TelemetryHookMatcher, (string)entry["matcher"]!);
         Assert.Equal(30, (int)entry["timeoutSec"]!);
-        var (command, args) = AgentTelemetryHook.GetCommand("--hook", "--source", "copilot", "--scope", "user");
+        var (command, args) = AgentTelemetryHook.GetCommand("--hook", "--source", "copilot", "--scope", "global");
         Assert.Equal(command, (string)entry["exec"]!);
         Assert.Equal(args, entry["args"]!.AsArray().Select(arg => (string)arg!));
         Assert.False(entry.ContainsKey("bash"));
@@ -346,7 +346,7 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
         var hooks = groups.SelectMany(group => group!["hooks"]!.AsArray()).ToArray();
         Assert.Equal(shouldReplace ? 3 : 4, hooks.Length);
         Assert.Equal(!shouldReplace, hooks.Any(hook => JsonNode.DeepEquals(hook, existingHook)));
-        var (command, args) = AgentTelemetryHook.GetCommand("--hook", "--source", "claude", "--scope", "user");
+        var (command, args) = AgentTelemetryHook.GetCommand("--hook", "--source", "claude", "--scope", "global");
         Assert.Equal(3, hooks.Count(hook => (string?)hook!["command"] == command
             && hook["args"]!.AsArray().Select(arg => (string)arg!).SequenceEqual(args)));
     }
@@ -433,7 +433,7 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
         Assert.Equal(matcher, (string?)group!["matcher"]);
         var hook = Assert.Single(group["hooks"]!.AsArray())!.AsObject();
         var (command, args) = AgentTelemetryHook.GetCommand(
-            "--hook", "--source", "claude", "--scope", scope is AgentConfigurationScope.Project ? "project" : "user");
+            "--hook", "--source", "claude", "--scope", scope.ToString().ToLowerInvariant());
         Assert.Equal("command", (string?)hook["type"]);
         Assert.Equal(command, (string?)hook["command"]);
         Assert.Equal(args, hook["args"]!.AsArray().Select(arg => (string)arg!));

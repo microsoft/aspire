@@ -130,7 +130,7 @@ internal sealed class AgentTelemetryCommand : BaseCommand
                 await _hook.RunAsync(_console.Input, _console.Out.Profile.Out.Writer, _console.Error.Profile.Out.Writer, async args =>
                 {
                     // Check after classification so tool calls that record nothing never read user settings.
-                    if (!_hook.ShouldRecord(parseResult.GetValue(_sourceOption), parseResult.GetValue(_scopeOption)))
+                    if (!_hook.ShouldRecord(parseResult.GetValue(_sourceOption), AgentTelemetryHook.ParseScope(parseResult.GetValue(_scopeOption))))
                     {
                         return CliExitCodes.Success;
                     }

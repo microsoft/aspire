@@ -219,7 +219,7 @@ internal sealed class ClaudeCodeAgentClient(
         var (command, args) = AgentTelemetryHook.GetCommand(
             AgentTelemetryProtocol.HookOptionName,
             AgentTelemetryProtocol.SourceOptionName, ClientId,
-            AgentTelemetryProtocol.ScopeOptionName, scope is AgentConfigurationScope.Project ? AgentTelemetryProtocol.ProjectScope : AgentTelemetryProtocol.UserScope);
+            AgentTelemetryProtocol.ScopeOptionName, scope.ToString().ToLowerInvariant());
         var hook = new JsonObject
         {
             ["type"] = "command",

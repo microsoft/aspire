@@ -351,24 +351,36 @@ public class AgentTelemetryHookTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData(null, null)]
     [InlineData("copilot", null)]
-    [InlineData(null, "project")]
-    [InlineData("copilot", "user")]
-    [InlineData("claude", "user")]
-    [InlineData("copilot", "project")]
-    [InlineData("claude", "project")]
+    [InlineData(null, nameof(AgentConfigurationScope.Project))]
+    [InlineData("copilot", nameof(AgentConfigurationScope.Global))]
+    [InlineData("claude", nameof(AgentConfigurationScope.Global))]
+    [InlineData("copilot", nameof(AgentConfigurationScope.Project))]
+    [InlineData("claude", nameof(AgentConfigurationScope.Project))]
     public void ShouldRecord_RecordsWhenNoOtherHookCoversTheCall(string? source, string? scope)
     {
         using var context = new AgentConfigurationTestContext(outputHelper);
 
-        Assert.True(new AgentTelemetryHook(context.Environment, context.ExecutionContext).ShouldRecord(source, scope));
+        Assert.True(new AgentTelemetryHook(context.Environment, context.ExecutionContext).ShouldRecord(source, scope is null ? null : Enum.Parse<AgentConfigurationScope>(scope)));
     }
 
     [Theory]
-    [InlineData("COPILOT_CLI", "1", "user")]
-    [InlineData("COPILOT_CLI", "1", "project")]
-    [InlineData("AI_AGENT", "github_copilot_app_agent", "project")]
-    public void ShouldRecord_SkipsClaudeHookInsideCopilot(string variable, string value, string scope)
+    [InlineData("project", nameof(AgentConfigurationScope.Project))]
+    [InlineData("Global", nameof(AgentConfigurationScope.Global))]
+    [InlineData("user", null)]
+    [InlineData("42", null)]
+    [InlineData(null, null)]
+    public void ParseScope_ReturnsNullForUnknownValues(string? value, string? expected)
     {
+        Assert.Equal(expected, AgentTelemetryHook.ParseScope(value)?.ToString());
+    }
+
+    [Theory]
+    [InlineData("COPILOT_CLI", "1", nameof(AgentConfigurationScope.Global))]
+    [InlineData("COPILOT_CLI", "1", nameof(AgentConfigurationScope.Project))]
+    [InlineData("AI_AGENT", "github_copilot_app_agent", nameof(AgentConfigurationScope.Project))]
+    public void ShouldRecord_SkipsClaudeHookInsideCopilot(string variable, string value, string scopeName)
+    {
+        var scope = Enum.Parse<AgentConfigurationScope>(scopeName);
         using var context = new AgentConfigurationTestContext(outputHelper);
         context.SetVariable(variable, value);
         var hook = new AgentTelemetryHook(context.Environment, context.ExecutionContext);
@@ -389,9 +401,9 @@ public class AgentTelemetryHookTests(ITestOutputHelper outputHelper)
             await client.ConfigureTelemetryHookAsync(AgentConfigurationScope.Global, context.Project, CancellationToken.None));
         var hook = new AgentTelemetryHook(context.Environment, context.ExecutionContext);
 
-        Assert.False(hook.ShouldRecord(clientId, AgentTelemetryProtocol.ProjectScope));
-        Assert.True(hook.ShouldRecord(clientId, AgentTelemetryProtocol.UserScope));
-        Assert.True(hook.ShouldRecord(other, AgentTelemetryProtocol.ProjectScope));
+        Assert.False(hook.ShouldRecord(clientId, AgentConfigurationScope.Project));
+        Assert.True(hook.ShouldRecord(clientId, AgentConfigurationScope.Global));
+        Assert.True(hook.ShouldRecord(other, AgentConfigurationScope.Project));
     }
 
     [Fact]
@@ -401,7 +413,7 @@ public class AgentTelemetryHookTests(ITestOutputHelper outputHelper)
         await AgentConfigurationTestContext.WriteAsync(Path.Combine(context.ClaudeDirectory, "settings.json"), "{ malformed");
 
         Assert.True(new AgentTelemetryHook(context.Environment, context.ExecutionContext)
-            .ShouldRecord(ClaudeCodeAgentClient.ClientId, AgentTelemetryProtocol.ProjectScope));
+            .ShouldRecord(ClaudeCodeAgentClient.ClientId, AgentConfigurationScope.Project));
     }
 
     [Fact]
@@ -428,7 +440,7 @@ public class AgentTelemetryHookTests(ITestOutputHelper outputHelper)
         await AgentConfigurationTestContext.WriteAsync(Path.Combine(context.ClaudeDirectory, "settings.json"), settings.ToJsonString());
 
         Assert.True(new AgentTelemetryHook(context.Environment, context.ExecutionContext)
-            .ShouldRecord(ClaudeCodeAgentClient.ClientId, AgentTelemetryProtocol.ProjectScope));
+            .ShouldRecord(ClaudeCodeAgentClient.ClientId, AgentConfigurationScope.Project));
     }
 
     private static AgentTelemetryHook CreateHook(IEnvironment environment)
