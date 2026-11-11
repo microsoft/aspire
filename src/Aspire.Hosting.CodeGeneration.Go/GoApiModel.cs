@@ -288,16 +288,6 @@ internal sealed record GoApiMember
     public string? JsonName { get; init; }
 
     /// <summary>
-    /// Gets the Go type of a field or constant.
-    /// </summary>
-    public string? DeclaredType { get; init; }
-
-    /// <summary>
-    /// Gets whether a field may be omitted, from ATS metadata rather than its JSON tag.
-    /// </summary>
-    public bool IsOptional { get; init; }
-
-    /// <summary>
     /// Gets the value of a constant, or the Go literal of an exported value.
     /// </summary>
     public string? Value { get; init; }

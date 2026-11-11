@@ -151,7 +151,7 @@ func newEscapedResourceFromHandle(h *handle, c *client) EscapedResource {
 
 // Add_Child_X adds a child.
 func (s *escapedResource) Add_Child_X() Child_Quote {
-	if err := s.Err(); err != nil { return &child_Quote{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
+	if s.err != nil { return &child_Quote{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -170,7 +170,7 @@ func (s *escapedResource) Add_Child_X() Child_Quote {
 
 // AddFoo adds Foo. func init() {} //
 func (s *escapedResource) AddFoo() EscapedResource {
-	if s.Err() != nil { return s }
+	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -180,7 +180,7 @@ func (s *escapedResource) AddFoo() EscapedResource {
 }
 
 func (s *escapedResource) GetBackslash() (string, error) {
-	if err := s.Err(); err != nil { var zero string; return zero, err }
+	if s.err != nil { var zero string; return zero, s.err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -195,7 +195,7 @@ func (s *escapedResource) GetBackslash() (string, error) {
 
 // GetExpression gets an expression.
 func (s *escapedResource) GetExpression() *ReferenceExpression {
-	if s.Err() != nil { return nil }
+	if s.err != nil { return nil }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -211,7 +211,7 @@ func (s *escapedResource) GetExpression() *ReferenceExpression {
 }
 
 func (s *escapedResource) Reset(cal_lback func(con_text string)) error {
-	if err := s.Err(); err != nil { return err }
+	if s.err != nil { return s.err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"tar\"get": s.handle.ToJSON(),
@@ -230,8 +230,6 @@ func (s *escapedResource) Reset(cal_lback func(con_text string)) error {
 
 // Tags gets the tags.
 func (s *escapedResource) Tags() *List[string] {
-	s.collectionMu.Lock()
-	defer s.collectionMu.Unlock()
 	if s.tags == nil {
 		s.tags = newListWithGetter[string](s.handleWrapperBase, "Tests/tags\"List")
 	}
@@ -240,7 +238,7 @@ func (s *escapedResource) Tags() *List[string] {
 
 // Allowed types for parameter un_ion: string, float64 (float64 accepts any built-in Go numeric type).
 func (s *escapedResource) With_Quote(na_me string, un_ion any, options ...*With_QuoteOptions) EscapedResource {
-	if s.Err() != nil { return s }
+	if s.err != nil { return s }
 	switch un_ion.(type) {
 	case string, float64, int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, float32:
 	default:
@@ -265,7 +263,7 @@ func (s *escapedResource) With_Quote(na_me string, un_ion any, options ...*With_
 }
 
 func (s *escapedResource) WithCancel(options ...*WithCancelOptions) EscapedResource {
-	if s.Err() != nil { return s }
+	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -289,7 +287,7 @@ func (s *escapedResource) WithCancel(options ...*WithCancelOptions) EscapedResou
 
 // WithHostileDocumentation adds Foo. func init() {} //
 func (s *escapedResource) WithHostileDocumentation(value string) EscapedResource {
-	if s.Err() != nil { return s }
+	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
