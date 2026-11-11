@@ -156,10 +156,6 @@ if (-not $toolName) { $toolName = $data.tool_name }
 $sessionId = $data.sessionId
 if (-not $sessionId) { $sessionId = $data.session_id }
 
-# VS Code can run both the Copilot and Claude hooks for one tool call. The CLI uses the session
-# and tool call IDs to record only the first delivery.
-$toolUseId = [string]$data.tool_use_id
-
 $toolInput = $data.toolArgs
 if (-not $toolInput) { $toolInput = $data.tool_input }
 if ($toolInput -is [string]) {
@@ -184,6 +180,7 @@ if ($env:AI_AGENT -eq 'github_copilot_app_agent') {
 } elseif ($env:COPILOT_CLI -eq '1') {
     $clientName = 'copilot-cli'
 } elseif ($hasHookEventName) {
+    $toolUseId = [string]$data.tool_use_id
     $transcriptPath = ([string]$data.transcript_path) -replace '\\', '/'
     if ($toolUseId -match '__vscode' -or $transcriptPath -match '/Code( - Insiders)?/') {
         $clientName = 'vscode'
@@ -215,11 +212,6 @@ function Test-AspireSkill([string] $candidate) {
 function Test-SessionId([string] $candidate) {
     return $candidate.Length -eq 36 -and
         $candidate -match '^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$'
-}
-
-function Test-ToolUseId([string] $candidate) {
-    return $candidate.Length -ge 1 -and $candidate.Length -le 128 -and
-        $candidate -cmatch '^[A-Za-z0-9._-]+\z'
 }
 
 function Get-AspireSkillPath([string] $path) {
@@ -317,10 +309,7 @@ if ($env:ASPIRE_HOOK_TIMEOUT_SECONDS -match '^(?:[1-9]|10)$') {
 
 # Build the argument vector explicitly so untrusted hook values are passed as discrete args.
 $cmdArgs = @('agent', 'telemetry', '--event-type', $eventType, '--client-name', $clientName, '--timestamp', $timestamp)
-if ($sessionId -and (Test-SessionId ([string]$sessionId))) {
-    $cmdArgs += @('--session-id', [string]$sessionId)
-    if (Test-ToolUseId $toolUseId) { $cmdArgs += @('--tool-use-id', $toolUseId) }
-}
+if ($sessionId -and (Test-SessionId ([string]$sessionId))) { $cmdArgs += @('--session-id', [string]$sessionId) }
 if ($skillName) { $cmdArgs += @('--skill-name', $skillName) }
 if ($mcpToolName) { $cmdArgs += @('--tool-name', $mcpToolName) }
 if ($fileReference) { $cmdArgs += @('--file-reference', $fileReference) }

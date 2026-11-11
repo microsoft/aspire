@@ -204,8 +204,6 @@ Client attribution checks `AI_AGENT=github_copilot_app_agent` first and reports 
 
 An eligible invocation initializes providers before metadata enrichment and records `aspire/cli/agent_telemetry` as a reported span. Agent telemetry invocations suppress the generic `aspire/cli/main` span and the first-run notice, and disable the reported internal-Microsoft detector diagnostic. This avoids counting a background hook as an ordinary CLI invocation.
 
-VS Code reads both Copilot and Claude hook files, so one tool call can reach two installed hooks. When the payload has a GUID session ID and a tool-use ID (1 to 128 ASCII letters, digits, `.`, `_`, or `-`), the classifier forwards the tool-use ID as `--tool-use-id`. [AgentTelemetryDeduplicator](../../src/Aspire.Cli/Telemetry/AgentTelemetryDeduplicator.cs) atomically creates a marker file named by an XxHash3 of the session and tool-use IDs, next to the CLI telemetry storage, and drops any later delivery that finds the marker. Markers expire after one hour. The tool-use ID is never recorded. If markers cannot be written, the event is recorded rather than lost. Deliveries without both IDs are always recorded.
-
 The hook emits its continuation response and the command returns success even when telemetry processing fails. Caught processing failures are reported through local diagnostics without including the raw payload.
 
 ### Durable delivery

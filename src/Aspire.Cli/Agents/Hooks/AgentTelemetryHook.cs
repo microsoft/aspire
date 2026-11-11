@@ -197,15 +197,6 @@ internal sealed class AgentTelemetryHook(IEnvironment environment)
             if (Guid.TryParseExact(session, "D", out _))
             {
                 args.AddRange([AgentTelemetryProtocol.SessionIdOptionName, session]);
-
-                // VS Code can deliver one tool call to both the Copilot and Claude hook files. Forward
-                // its tool-use ID so the command can drop the second delivery. The ID is only a
-                // deduplication key, is scoped to the session, and is never recorded.
-                var toolUseId = Text(data, "tool_use_id");
-                if (toolUseId is not null && IsToolUseId(toolUseId))
-                {
-                    args.AddRange([AgentTelemetryProtocol.ToolUseIdOptionName, toolUseId]);
-                }
             }
             return [.. args];
         }
@@ -225,9 +216,6 @@ internal sealed class AgentTelemetryHook(IEnvironment environment)
             _ when Property(data, "toolArgs") is not null => "copilot-cli",
             _ => "unknown"
         };
-
-    internal static bool IsToolUseId(string value)
-        => value.Length is > 0 and <= 128 && value.All(static c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_' or '.');
 
     private static bool IsVsCode(JsonElement data)
     {
