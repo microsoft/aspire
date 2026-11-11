@@ -8,7 +8,6 @@ using Aspire.Dashboard.Model;
 using Aspire.Hosting.Testing;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Lifecycle;
-using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Utils;
 using Aspire.Shared;
 using Aspire.Shared.TerminalHost;
@@ -35,25 +34,21 @@ public class WithTerminalTests : IAsyncLifetime
         var selected = builder.AddExecutable("selected", shell, ".")
             .WithTerminal().WithAnnotation(new ReplicaAnnotation(replicas)).WithLaunchGroup("catalog");
         var excluded = builder.AddExecutable("excluded", shell, ".").WithTerminal();
-        builder.Pipeline.WithFinalAction(WellKnownPipelineSteps.BeforeStart, context =>
-        {
-            var hosts = context.Model.Resources.OfType<TerminalHostResource>().ToArray();
-            Assert.Equal(replicas + 1, hosts.Length);
-            Assert.All(hosts, host =>
-            {
-                Assert.False(host.HasAnnotationOfType<ExplicitStartupAnnotation>());
-                Assert.True(host.HasAnnotationOfType<ExcludeFromLaunchGroupSelectionAnnotation>());
-            });
-            Assert.False(selected.Resource.HasAnnotationOfType<ExplicitStartupAnnotation>());
-            Assert.True(excluded.Resource.HasAnnotationOfType<ExplicitStartupAnnotation>());
-            return Task.CompletedTask;
-        });
         await using var app = builder.Build();
 
         using (var startup = new CancellationTokenSource(TestConstants.DefaultOrchestratorTestLongTimeout))
         {
             await app.StartAsync(startup.Token);
         }
+        var hosts = builder.Resources.OfType<TerminalHostResource>().ToArray();
+        Assert.Equal(replicas + 1, hosts.Length);
+        Assert.All(hosts, host =>
+        {
+            Assert.False(host.HasAnnotationOfType<ExplicitStartupAnnotation>());
+            Assert.True(host.HasAnnotationOfType<ExcludeFromLaunchGroupSelectionAnnotation>());
+        });
+        Assert.False(selected.Resource.HasAnnotationOfType<ExplicitStartupAnnotation>());
+        Assert.True(excluded.Resource.HasAnnotationOfType<ExplicitStartupAnnotation>());
         using (var readiness = new CancellationTokenSource(TestConstants.DefaultOrchestratorTestLongTimeout))
         {
             await Task.WhenAll(selected.Resource.GetResolvedResourceNames().Select(resourceId =>

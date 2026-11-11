@@ -8,6 +8,7 @@ using Aspire.Hosting.Ats;
 using Aspire.Hosting.Diagnostics;
 using Aspire.Hosting.Eventing;
 using Aspire.Hosting.Lifecycle;
+using Aspire.Hosting.Orchestrator;
 using Aspire.Hosting.Pipelines;
 using Aspire.Shared;
 using Microsoft.Extensions.Configuration;
@@ -731,6 +732,21 @@ public class DistributedApplication : IHost, IAsyncDisposable
                     pipelineActivity.SetError(ex);
                     throw;
                 }
+            }
+
+            if (execContext.IsRunMode)
+            {
+                // Final actions can still add resources and relationships, so select only after the
+                // complete pipeline and materialize group-aware builds from that same model.
+                _host.Services.GetRequiredService<LaunchGroupService>().Configure(appModel);
+                var finalizeBuildPlan = _host.Services.GetKeyedService<Func<DistributedApplicationModel, Task>>(
+                    LaunchGroupMetadataService.BuildPlanFinalizerKey);
+                if (finalizeBuildPlan is not null)
+                {
+                    await finalizeBuildPlan(appModel).ConfigureAwait(false);
+                }
+
+                _host.Services.GetRequiredService<LaunchGroupMetadataService>().FinalizeModel(appModel);
             }
         }
         catch (Exception ex)

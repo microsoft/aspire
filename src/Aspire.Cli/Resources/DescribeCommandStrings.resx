@@ -123,6 +123,21 @@
   <data name="FollowOptionDescription" xml:space="preserve">
     <value>Continuously stream resource state changes</value>
   </data>
+  <data name="LaunchGroupsOptionDescription" xml:space="preserve">
+    <value>Describe launch groups and resource startup decisions</value>
+  </data>
+  <data name="LaunchGroupsOptionsNotSupported" xml:space="preserve">
+    <value>--launch-groups cannot be combined with a resource name, --follow, Mermaid output, --include-hidden, or --include-disabled-commands.</value>
+  </data>
+  <data name="LaunchGroupsNotSupported" xml:space="preserve">
+    <value>The running AppHost does not support launch-group inspection. Update the AppHost's Aspire.Hosting.AppHost package and restart it.</value>
+  </data>
+  <data name="SelectedLaunchGroupLabel" xml:space="preserve">
+    <value>Selected launch group:</value>
+  </data>
+  <data name="LaunchGroupsLabel" xml:space="preserve">
+    <value>Launch groups:</value>
+  </data>
   <data name="JsonOptionDescription" xml:space="preserve">
     <value>Output format (Table, Json, or Mermaid)</value>
   </data>
@@ -158,5 +173,50 @@
   </data>
   <data name="HeaderURLs" xml:space="preserve">
     <value>URLs</value>
+  </data>
+  <data name="HeaderLaunchGroupResource" xml:space="preserve">
+    <value>Resource</value>
+  </data>
+  <data name="HeaderLaunchGroups" xml:space="preserve">
+    <value>Groups</value>
+  </data>
+  <data name="HeaderInheritedFrom" xml:space="preserve">
+    <value>Inherited from</value>
+  </data>
+  <data name="HeaderStartup" xml:space="preserve">
+    <value>Startup</value>
+  </data>
+  <data name="HeaderBuild" xml:space="preserve">
+    <value>Build</value>
+  </data>
+  <data name="StartupAutomatic" xml:space="preserve">
+    <value>Default startup</value>
+  </data>
+  <data name="StartupExplicitStart" xml:space="preserve">
+    <value>Explicit start</value>
+  </data>
+  <data name="StartupExcludedBySelectedGroup" xml:space="preserve">
+    <value>Excluded by selected group</value>
+  </data>
+  <data name="StartupExcludedFromSelection" xml:space="preserve">
+    <value>Excluded from selection</value>
+  </data>
+  <data name="BuildNotCoordinated" xml:space="preserve">
+    <value>Not coordinated</value>
+  </data>
+  <data name="BuildPending" xml:space="preserve">
+    <value>Pending</value>
+  </data>
+  <data name="BuildInitial" xml:space="preserve">
+    <value>Initial</value>
+  </data>
+  <data name="BuildInitialPersistent" xml:space="preserve">
+    <value>Initial persistent</value>
+  </data>
+  <data name="BuildInitialShared" xml:space="preserve">
+    <value>Initial shared</value>
+  </data>
+  <data name="BuildDeferred" xml:space="preserve">
+    <value>Deferred</value>
   </data>
 </root>

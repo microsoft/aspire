@@ -287,6 +287,8 @@ internal sealed class DashboardClient : IDashboardClient
 
     public DashboardConnectionState ConnectionState => _connectionState;
 
+    public LaunchGroupInformationViewModel? LaunchGroups { get; private set; }
+
     public event Action<DashboardConnectionState>? ConnectionStateChanged;
 
     public Task ReconnectAsync()
@@ -459,6 +461,7 @@ internal sealed class DashboardClient : IDashboardClient
 
                 _applicationName = response.ApplicationName;
                 _minRequiredVersion = string.IsNullOrEmpty(response.MinDashboardVersion) ? null : response.MinDashboardVersion;
+                UpdateLaunchGroups(response);
 
                 // MinDashboardVersion is empty when the server predates this field or hasn't set it,
                 // which means the dashboard is always considered supported.
@@ -611,6 +614,18 @@ internal sealed class DashboardClient : IDashboardClient
             using var activity = _activitySource.StartActivity("Process resource update", ActivityKind.Consumer);
             activity?.SetTag("aspire.dashboard.resource_update.type", response.KindCase.ToString());
 
+            if (response.KindCase == WatchResourcesUpdate.KindOneofCase.InitialData && LaunchGroups is null)
+            {
+                // The dashboard endpoint can accept connections before the AppHost's before-start pipeline has
+                // finalized launch metadata. The initial resource snapshot is sent after that pipeline, so refresh
+                // the one-shot application information before binding metadata to the resource view models.
+                var applicationInformation = await _client!.GetApplicationInformationAsync(
+                    new ApplicationInformationRequest(),
+                    headers: _headers,
+                    cancellationToken: cancellationToken).ConfigureAwait(false);
+                UpdateLaunchGroups(applicationInformation);
+            }
+
             List<ResourceViewModelChange>? changes = null;
             ImmutableHashSet<Channel<IReadOnlyList<ResourceViewModelChange>>> resourceChannels = [];
             var shouldUpdateConnectionState = false;
@@ -640,7 +655,7 @@ internal sealed class DashboardClient : IDashboardClient
                     foreach (var resource in response.InitialData.Resources)
                     {
                         // Add to map.
-                        var viewModel = resource.ToViewModel(CalculateReplicaIndex(resource.DisplayName), _knownPropertyLookup, _logger);
+                        var viewModel = CreateResourceViewModel(resource);
                         viewModel.ConsoleLogsLoaded = resourcesWithLoadedConsoleLogs.Contains(resource.Name);
                         _resourceByName[resource.Name] = viewModel;
 
@@ -660,7 +675,7 @@ internal sealed class DashboardClient : IDashboardClient
                         if (change.KindCase == WatchResourcesChange.KindOneofCase.Upsert)
                         {
                             // Upsert (i.e. add or replace)
-                            var viewModel = change.Upsert.ToViewModel(CalculateReplicaIndex(change.Upsert.DisplayName), _knownPropertyLookup, _logger);
+                            var viewModel = CreateResourceViewModel(change.Upsert);
                             if (_resourceByName.TryGetValue(change.Upsert.Name, out var existingResource))
                             {
                                 viewModel.ConsoleLogsLoaded = existingResource.ConsoleLogsLoaded;
@@ -1339,6 +1354,12 @@ internal sealed class DashboardClient : IDashboardClient
     internal void SetConnectionStateForTesting(DashboardConnectionState state) => SetConnectionState(state);
 
     // Internal for testing.
+    internal void SetLaunchGroupsForTesting(LaunchGroupInformation? launchGroups)
+    {
+        LaunchGroups = launchGroups is null ? null : LaunchGroupInformationViewModel.Create(launchGroups);
+    }
+
+    // Internal for testing.
     // TODO: Improve this in the future by making the client injected with DI and have it return data.
     internal void SetInitialDataReceived(IList<Resource>? initialData = null)
     {
@@ -1348,12 +1369,24 @@ internal sealed class DashboardClient : IDashboardClient
             {
                 foreach (var data in initialData)
                 {
-                    _resourceByName[data.Name] = data.ToViewModel(CalculateReplicaIndex(data.DisplayName), _knownPropertyLookup, _logger);
+                    _resourceByName[data.Name] = CreateResourceViewModel(data);
                 }
             }
         }
 
         _initialDataReceivedTcs.TrySetResult();
+    }
+
+    private ResourceViewModel CreateResourceViewModel(Resource resource)
+    {
+        var viewModel = resource.ToViewModel(CalculateReplicaIndex(resource.DisplayName), _knownPropertyLookup, _logger);
+        LaunchGroups?.ApplyToResource(viewModel);
+        return viewModel;
+    }
+
+    private void UpdateLaunchGroups(ApplicationInformationResponse response)
+    {
+        LaunchGroups = response.LaunchGroups is null ? null : LaunchGroupInformationViewModel.Create(response.LaunchGroups);
     }
 
     private class InteractionCollection : KeyedCollection<int, WatchInteractionsResponseUpdate>

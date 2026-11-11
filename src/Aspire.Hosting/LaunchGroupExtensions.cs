@@ -5,10 +5,6 @@
 
 using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
-using Aspire.Hosting.Orchestrator;
-using Aspire.Hosting.Pipelines;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Aspire.Hosting;
 
@@ -29,7 +25,9 @@ public static class LaunchGroupExtensions
     /// Membership is additive. Select one group with the <c>Aspire:LaunchGroup</c> configuration setting.
     /// Selecting a group marks resources without that membership for explicit start, including ungrouped resources,
     /// unless they have an <see cref="ExcludeFromLaunchGroupSelectionAnnotation"/>.
-    /// Dependencies and children must be assigned membership explicitly; selection does not change lifecycle commands.
+    /// Structural children without their own memberships inherit their parent's memberships. Their own memberships
+    /// override that default. Display relationships and references do not inherit membership or select dependencies.
+    /// Selection does not change lifecycle commands.
     /// Valid group names are inferred from membership unless explicitly defined in <c>Aspire:LaunchGroups</c>.
     /// Use the <c>Aspire__LaunchGroup</c> environment variable or <c>dotnet run -- Aspire:LaunchGroup=catalog</c>
     /// to select a group. No selection preserves normal startup, and publishing is unaffected.
@@ -81,7 +79,6 @@ public static class LaunchGroupExtensions
         }
 
         var annotations = launchGroupNames.Select(name => new LaunchGroupAnnotation(name)).ToArray();
-        EnsureSupport(builder.ApplicationBuilder);
         foreach (var annotation in annotations)
         {
             if (!builder.Resource.Annotations.OfType<LaunchGroupAnnotation>()
@@ -127,29 +124,5 @@ public static class LaunchGroupExtensions
 
         builder.WithReferenceRelationship(dependency.Resource);
         return builder.WithAnnotation(new OptionalLaunchGroupDependencyAnnotation(dependency.Resource));
-    }
-
-    /// <summary>
-    /// Registers services and the pre-start step for launch groups.
-    /// </summary>
-    internal static void EnsureSupport(IDistributedApplicationBuilder builder)
-    {
-        if (builder.Services.Any(descriptor => descriptor.ServiceType == typeof(LaunchGroupService)))
-        {
-            return;
-        }
-
-        builder.Services.TryAddSingleton<LaunchGroupService>();
-        builder.Pipeline.AddStep(new PipelineStep
-        {
-            Name = "configure-launch-groups",
-            Description = "Selects the resources that start in the active launch group.",
-            RequiredBySteps = [WellKnownPipelineSteps.BeforeStart],
-            Action = context =>
-            {
-                context.Services.GetRequiredService<LaunchGroupService>().Configure(context.Model);
-                return Task.CompletedTask;
-            }
-        });
     }
 }

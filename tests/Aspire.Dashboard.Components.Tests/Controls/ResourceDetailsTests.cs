@@ -18,6 +18,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Xunit;
+using LaunchGroupBuildDisposition = Aspire.DashboardService.Proto.V1.LaunchGroupBuildDisposition;
 
 namespace Aspire.Dashboard.Components.Tests.Controls;
 
@@ -448,6 +449,45 @@ public class ResourceDetailsTests : DashboardTestContext
         var resourcePropertyGrid = cut.FindAll(".property-grid")[0];
         Assert.Contains(ControlsStrings.ResourceDetailsStateDescriptionHeader, resourcePropertyGrid.TextContent);
         Assert.Contains(Columns.StateColumnResourceNotStarted, resourcePropertyGrid.TextContent);
+    }
+
+    [Fact]
+    public void Render_LaunchGroupMetadataShowsDistinctReadOnlyProperties()
+    {
+        ResourceSetupHelpers.SetupResourceDetails(this);
+        var resource = ModelTestHelpers.CreateResource("app1", state: KnownResourceState.NotStarted);
+        var information = LaunchGroupTestHelpers.CreateInformation(
+            selectedGroup: "Web",
+            groups: ["Web", "Shared"],
+            resources:
+            [
+                LaunchGroupTestHelpers.CreateResource(
+                    "app1",
+                    groups: ["Web", "Shared"],
+                    inheritedFrom: "parent",
+                    explicitStart: true,
+                    excludedByGroup: true,
+                    buildDisposition: LaunchGroupBuildDisposition.InitialShared)
+            ]);
+        LaunchGroupInformationViewModel.Create(information).ApplyToResource(resource);
+
+        var cut = Render<ResourceDetails>(builder =>
+        {
+            builder.Add(component => component.Resource, resource);
+            builder.Add(component => component.ResourceByName, new ConcurrentDictionary<string, ResourceViewModel>(
+                [new KeyValuePair<string, ResourceViewModel>(resource.Name, resource)]));
+        });
+
+        var properties = cut.Instance.FilteredResourceProperties.ToDictionary(
+            property => property.DisplayName,
+            property => property.Value.StringValue);
+        Assert.Equal("Web", properties["Selected group"]);
+        Assert.Equal("Web, Shared", properties["Effective membership"]);
+        Assert.Equal("parent", properties["Inherited from"]);
+        Assert.Equal("Yes", properties["Explicit start"]);
+        Assert.Equal("Yes", properties["Excluded by selected group"]);
+        Assert.Equal("No", properties["Excluded from selection"]);
+        Assert.Equal("Initial (shared)", properties["Build disposition"]);
     }
 
     [Fact]

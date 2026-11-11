@@ -7,16 +7,18 @@ using System.Globalization;
 using Aspire.Dashboard.Model;
 using Aspire.Hosting.ApplicationModel;
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Orchestrator;
 
 internal sealed class LaunchGroupService(
     IConfiguration configuration,
     DistributedApplicationExecutionContext executionContext,
-    ILogger<LaunchGroupService> logger)
+    LaunchGroupMetadataService metadata)
 {
     internal const string ConfigurationSectionName = "Aspire:LaunchGroups";
+
+    private readonly Dictionary<IResource, ExplicitStartupAnnotation> _selectionAnnotations =
+        new(ReferenceEqualityComparer.Instance);
 
     public void Configure(DistributedApplicationModel model)
     {
@@ -51,7 +53,8 @@ internal sealed class LaunchGroupService(
         }
 
         var memberships = model.Resources.SelectMany(resource => resource.Annotations.OfType<LaunchGroupAnnotation>()).ToArray();
-        if (declaredGroups.Count > 0)
+        var hasConfiguredGroups = declaredGroups.Count > 0;
+        if (hasConfiguredGroups)
         {
             foreach (var resource in model.Resources)
             {
@@ -78,8 +81,27 @@ internal sealed class LaunchGroupService(
         }
 
         var selectedGroup = selection.Value;
+        foreach (var resource in model.Resources)
+        {
+            foreach (var membership in GetEffectiveLaunchGroups(resource))
+            {
+                if (hasConfiguredGroups && !declaredGroups.Contains(membership.LaunchGroupName))
+                {
+                    throw new DistributedApplicationException($"Resource '{resource.Name}' belongs to undefined launch group '{membership.LaunchGroupName}'.");
+                }
+
+                if (!hasConfiguredGroups)
+                {
+                    declaredGroups.Add(membership.LaunchGroupName);
+                }
+            }
+        }
+
         if (string.IsNullOrEmpty(selectedGroup))
         {
+            metadata.ValidateBuildSelection(selectedGroup: null, HasUserExplicitStart);
+            ClearSelectionAnnotations();
+            metadata.CaptureSelection(model.Resources, selectedGroup: null, declaredGroups);
             return;
         }
 
@@ -92,99 +114,315 @@ internal sealed class LaunchGroupService(
                 $"Launch group '{selectedGroup}' is invalid. {validGroupsDescription}");
         }
 
+        metadata.ValidateBuildSelection(selectedGroup, HasUserExplicitStart);
         ValidateSelectedGroupDependencies(model.Resources, selectedGroup);
+        ClearSelectionAnnotations();
+        // Keep user-requested explicit start distinct from the annotation applied by selection.
+        metadata.CaptureSelection(model.Resources, selectedGroup, declaredGroups);
 
         foreach (var resource in model.Resources)
         {
             if (!resource.HasAnnotationOfType<ExcludeFromLaunchGroupSelectionAnnotation>() &&
                 !resource.HasAnnotationOfType<ExplicitStartupAnnotation>() &&
-                !resource.Annotations.OfType<LaunchGroupAnnotation>()
-                    .Any(annotation => StringComparer.OrdinalIgnoreCase.Equals(annotation.LaunchGroupName, selectedGroup)))
+                !BelongsToLaunchGroup(resource, selectedGroup))
             {
-                resource.Annotations.Add(new ExplicitStartupAnnotation());
+                var annotation = new ExplicitStartupAnnotation();
+                resource.Annotations.Add(annotation);
+                _selectionAnnotations.Add(resource, annotation);
             }
         }
-
-        logger.LogInformation(
-            "Launch group '{LaunchGroup}' is selected. Other resources are marked for explicit start unless excluded from selection.",
-            selectedGroup);
     }
 
-    private static void ValidateSelectedGroupDependencies(IEnumerable<IResource> resources, string selectedGroup)
+    private void ClearSelectionAnnotations()
+    {
+        foreach (var (resource, annotation) in _selectionAnnotations)
+        {
+            resource.Annotations.Remove(annotation);
+        }
+
+        _selectionAnnotations.Clear();
+    }
+
+    private bool HasUserExplicitStart(IResource resource)
+    {
+        _selectionAnnotations.TryGetValue(resource, out var selectionAnnotation);
+        return resource.Annotations.OfType<ExplicitStartupAnnotation>()
+            .Any(annotation => !ReferenceEquals(annotation, selectionAnnotation));
+    }
+
+    private void ValidateSelectedGroupDependencies(IEnumerable<IResource> resources, string selectedGroup)
     {
         var resourceList = resources.ToArray();
         var automaticStartResources = new HashSet<IResource>(
             resourceList.Where(resource => !WillStartExplicitly(resource, selectedGroup)),
             ReferenceEqualityComparer.Instance);
+        var roots = resourceList
+            .Where(automaticStartResources.Contains)
+            .Where(IsLocalExecutionResource)
+            .Where(resource => resource is not IResourceWithParent || ApplicationOrchestrator.ResourceHasOwnLifetime(resource))
+            .ToArray();
+        var rootSet = new HashSet<IResource>(roots, ReferenceEqualityComparer.Instance);
+        var referencedRoots = new HashSet<IResource>(ReferenceEqualityComparer.Instance);
+        var scanned = new HashSet<IResource>(ReferenceEqualityComparer.Instance);
+        var pending = new Stack<IResource>(roots);
 
-        foreach (var resource in automaticStartResources)
+        // Prefer entry points over resources they depend on so diagnostics retain
+        // the complete path even when an intermediate resource was registered first.
+        while (pending.TryPop(out var current))
         {
-            if (!IsLocalExecutionResource(resource))
+            if (!scanned.Add(current))
             {
                 continue;
             }
 
+            foreach (var edge in GetDependencies(current))
+            {
+                if (rootSet.Contains(edge.Target) && !ReferenceEquals(current, edge.Target))
+                {
+                    referencedRoots.Add(edge.Target);
+                }
+
+                pending.Push(edge.Target);
+            }
+        }
+
+        foreach (var resource in roots.OrderBy(referencedRoots.Contains))
+        {
             ValidateDependencies(
                 resource,
                 resource,
                 selectedGroup,
                 automaticStartResources,
-                new HashSet<IResource>(ReferenceEqualityComparer.Instance));
+                new HashSet<IResource>(ReferenceEqualityComparer.Instance),
+                []);
         }
     }
 
-    private static void ValidateDependencies(
+    private void ValidateDependencies(
         IResource root,
         IResource current,
         string selectedGroup,
         HashSet<IResource> automaticStartResources,
-        HashSet<IResource> visited)
+        HashSet<IResource> visited,
+        List<DependencyEdge> path)
     {
         if (!visited.Add(current))
         {
             return;
         }
 
+        foreach (var edge in GetDependencies(current))
+        {
+            var dependency = edge.Target;
+            var lifetimeChain = GetLifetimeChain(dependency);
+            var lifetimeOwner = lifetimeChain[^1];
+            path.Add(edge);
+            if (IsLocalExecutionResource(lifetimeOwner) &&
+                !automaticStartResources.Contains(lifetimeOwner))
+            {
+                for (var index = 1; index < lifetimeChain.Count; index++)
+                {
+                    path.Add(new DependencyEdge(lifetimeChain[index - 1], lifetimeChain[index], DependencyKind.LifetimeOwner));
+                }
+
+                var explicitStart = HasUserExplicitStart(lifetimeOwner);
+                var reason = explicitStart
+                    ? "is marked for explicit start"
+                    : $"is not included in launch group '{selectedGroup}'";
+                var dependencyDescription = ReferenceEquals(dependency, lifetimeOwner)
+                    ? $"local resource '{lifetimeOwner.Name}'"
+                    : $"local resource '{lifetimeOwner.Name}' (the lifetime owner of '{dependency.Name}')";
+                var remedy = explicitStart
+                    ? $"Remove explicit start from '{lifetimeOwner.Name}' and ensure it is included in launch group '{selectedGroup}'."
+                    : $"Add '{lifetimeOwner.Name}' to launch group '{selectedGroup}'.";
+
+                // WaitFor on a passive child can target its server. Making the child reference
+                // optional does not remove a wait or redirection to that same lifetime owner.
+                var waitDependency = current.Annotations.OfType<WaitAnnotation>()
+                    .Where(annotation => annotation.Resource is not IResourceWithoutLifetime)
+                    .Select(annotation => annotation.Resource)
+                    .FirstOrDefault(resource => ReferenceEquals(GetLifetimeOwner(resource), lifetimeOwner));
+                var redirectDependency = current.Annotations.OfType<ConnectionStringRedirectAnnotation>()
+                    .Select(annotation => annotation.Resource)
+                    .FirstOrDefault(resource => ReferenceEquals(GetLifetimeOwner(resource), lifetimeOwner));
+                if (waitDependency is not null)
+                {
+                    remedy += $" The wait from '{current.Name}' to '{waitDependency.Name}' requires automatic startup.";
+                }
+                if (redirectDependency is not null)
+                {
+                    remedy += $" The connection string redirection from '{current.Name}' to '{redirectDependency.Name}' requires automatic startup.";
+                }
+                if (waitDependency is null && redirectDependency is null && edge.Kind.HasFlag(DependencyKind.Reference))
+                {
+                    remedy += $" If the reference from '{current.Name}' to '{dependency.Name}' is optional, mark it with " +
+                        $"{nameof(LaunchGroupExtensions.WithOptionalLaunchGroupDependency)}.";
+                }
+
+                var names = string.Join(" -> ", path.Select(item => item.Source.Name).Append(path[^1].Target.Name));
+                var edges = string.Join("; ", path.Select(item => $"{item.Source.Name} --{DescribeDependencyKind(item.Kind)}--> {item.Target.Name}"));
+                throw new DistributedApplicationException(
+                    $"Resource '{root.Name}' requires {dependencyDescription}, which {reason}. " +
+                    $"Dependency path: {names}. Edges: {edges}. {remedy}");
+            }
+
+            ValidateDependencies(root, dependency, selectedGroup, automaticStartResources, visited, path);
+            path.RemoveAt(path.Count - 1);
+        }
+    }
+
+    private static List<DependencyEdge> GetDependencies(IResource current)
+    {
         var optionalReferences = current.Annotations
             .OfType<OptionalLaunchGroupDependencyAnnotation>()
             .Select(annotation => annotation.Resource)
             .ToHashSet<IResource>(ReferenceEqualityComparer.Instance);
-        var dependencies = current.Annotations
-            .OfType<ResourceRelationshipAnnotation>()
-            .Where(annotation => annotation.Type == KnownRelationshipTypes.Reference &&
-                !optionalReferences.Contains(annotation.Resource))
-            .Select(annotation => annotation.Resource)
-            .Concat(current.Annotations.OfType<WaitAnnotation>().Select(annotation => annotation.Resource))
-            .Concat(current.Annotations.OfType<ConnectionStringRedirectAnnotation>().Select(annotation => annotation.Resource))
-            .Distinct<IResource>(ReferenceEqualityComparer.Instance);
+        var dependencies = new List<DependencyEdge>();
 
-        foreach (var dependency in dependencies)
+        void Add(IResource target, DependencyKind kind)
         {
-            if (IsLocalExecutionResource(dependency) &&
-                !automaticStartResources.Contains(dependency))
+            var index = dependencies.FindIndex(edge => ReferenceEquals(edge.Target, target));
+            if (index < 0)
             {
-                var reason = dependency.HasAnnotationOfType<ExplicitStartupAnnotation>()
-                    ? "is marked for explicit start"
-                    : $"is not included in launch group '{selectedGroup}'";
+                dependencies.Add(new DependencyEdge(current, target, kind));
+            }
+            else
+            {
+                dependencies[index] = dependencies[index] with { Kind = dependencies[index].Kind | kind };
+            }
+        }
+
+        foreach (var annotation in current.Annotations.OfType<ResourceRelationshipAnnotation>())
+        {
+            if (annotation.Type == KnownRelationshipTypes.Reference && !optionalReferences.Contains(annotation.Resource))
+            {
+                Add(annotation.Resource, DependencyKind.Reference);
+            }
+        }
+
+        // ResourceNotificationService ignores waits on resources without a lifetime.
+        // WaitFor and WaitForStart can also record a separate wait on the parent.
+        foreach (var annotation in current.Annotations.OfType<WaitAnnotation>())
+        {
+            if (annotation.Resource is not IResourceWithoutLifetime)
+            {
+                Add(annotation.Resource, DependencyKind.Wait);
+            }
+        }
+
+        foreach (var annotation in current.Annotations.OfType<ConnectionStringRedirectAnnotation>())
+        {
+            Add(annotation.Resource, DependencyKind.Redirect);
+        }
+
+        if (!ApplicationOrchestrator.ResourceHasOwnLifetime(current) && current is IResourceWithParent child)
+        {
+            Add(child.Parent, DependencyKind.LifetimeOwner);
+        }
+
+        return dependencies;
+    }
+
+    private static string DescribeDependencyKind(DependencyKind kind)
+    {
+        var parts = new List<string>();
+        if (kind.HasFlag(DependencyKind.Reference))
+        {
+            parts.Add("reference");
+        }
+        if (kind.HasFlag(DependencyKind.Wait))
+        {
+            parts.Add("wait");
+        }
+        if (kind.HasFlag(DependencyKind.Redirect))
+        {
+            parts.Add("redirect");
+        }
+        if (kind.HasFlag(DependencyKind.LifetimeOwner))
+        {
+            parts.Add("lifetime owner");
+        }
+
+        return string.Join("/", parts);
+    }
+
+    private static IResource GetLifetimeOwner(IResource resource) => GetLifetimeChain(resource)[^1];
+
+    private static List<IResource> GetLifetimeChain(IResource resource)
+    {
+        // Only passive children share their parent's lifetime. Executable children have
+        // their own lifetime even when they inherit group membership.
+        var chain = new List<IResource> { resource };
+        var visited = new HashSet<IResource>(ReferenceEqualityComparer.Instance) { resource };
+        while (!ApplicationOrchestrator.ResourceHasOwnLifetime(resource) &&
+            resource is IResourceWithParent child)
+        {
+            resource = child.Parent;
+            if (!visited.Add(resource))
+            {
                 throw new DistributedApplicationException(
-                    $"Resource '{root.Name}' requires local resource '{dependency.Name}', which {reason}. " +
-                    $"Add the dependency to the selected launch group or mark it optional with " +
-                    $"{nameof(LaunchGroupExtensions.WithOptionalLaunchGroupDependency)}.");
+                    $"A circular structural parent chain prevents determining the lifetime owner of resource '{chain[0].Name}'.");
             }
 
-            ValidateDependencies(root, dependency, selectedGroup, automaticStartResources, visited);
+            chain.Add(resource);
+        }
+
+        return chain;
+    }
+
+    // Custom and cloud resources can initialize independently of DCP, so group
+    // exclusion does not necessarily prevent them from becoming available.
+    internal static bool IsLocalExecutionResource(IResource resource) =>
+        resource is not IResourceWithoutLifetime &&
+        (resource.IsContainer() || resource is ProjectResource or ExecutableResource or ContainerExecutableResource);
+
+    private bool WillStartExplicitly(IResource resource, string selectedGroup) =>
+        HasUserExplicitStart(resource) ||
+        (!resource.HasAnnotationOfType<ExcludeFromLaunchGroupSelectionAnnotation>() &&
+            !BelongsToLaunchGroup(resource, selectedGroup));
+
+    internal static bool BelongsToLaunchGroup(IResource resource, string selectedGroup) =>
+        GetEffectiveLaunchGroups(resource)
+            .Any(annotation => StringComparer.OrdinalIgnoreCase.Equals(annotation.LaunchGroupName, selectedGroup));
+
+    private static IEnumerable<LaunchGroupAnnotation> GetEffectiveLaunchGroups(IResource resource) =>
+        GetEffectiveLaunchGroupSource(resource)?.Annotations.OfType<LaunchGroupAnnotation>() ?? [];
+
+    internal static IResource? GetEffectiveLaunchGroupSource(IResource resource)
+    {
+        var current = resource;
+        HashSet<IResource>? visited = null;
+        while (true)
+        {
+            if (current.HasAnnotationOfType<LaunchGroupAnnotation>())
+            {
+                return current;
+            }
+
+            if (current is not IResourceWithParent child)
+            {
+                return null;
+            }
+
+            visited ??= new HashSet<IResource>(ReferenceEqualityComparer.Instance);
+            if (!visited.Add(current))
+            {
+                throw new DistributedApplicationException(
+                    $"A circular structural parent chain prevents determining launch-group membership for resource '{resource.Name}'.");
+            }
+
+            current = child.Parent;
         }
     }
 
-    private static bool IsLocalExecutionResource(IResource resource) =>
-        resource is not IResourceWithoutLifetime and
-            not ParameterResource and
-            not ConnectionStringResource and
-            not ExternalServiceResource;
+    [Flags]
+    private enum DependencyKind
+    {
+        Reference = 1,
+        Wait = 2,
+        Redirect = 4,
+        LifetimeOwner = 8
+    }
 
-    private static bool WillStartExplicitly(IResource resource, string selectedGroup) =>
-        resource.HasAnnotationOfType<ExplicitStartupAnnotation>() ||
-        (!resource.HasAnnotationOfType<ExcludeFromLaunchGroupSelectionAnnotation>() &&
-            !resource.Annotations.OfType<LaunchGroupAnnotation>()
-                .Any(annotation => StringComparer.OrdinalIgnoreCase.Equals(annotation.LaunchGroupName, selectedGroup)));
+    private readonly record struct DependencyEdge(IResource Source, IResource Target, DependencyKind Kind);
 }

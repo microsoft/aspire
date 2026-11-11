@@ -66,6 +66,11 @@ internal static class AuxiliaryBackchannelCapabilities
     /// Resource snapshot version capability: snapshots include monotonic versions that can be used for ordering.
     /// </summary>
     public const string ResourceSnapshotVersions_V1 = "resource-snapshot-versions.v1";
+
+    /// <summary>
+    /// The AppHost exposes its effective launch-group selection.
+    /// </summary>
+    public const string LaunchGroups_V1 = "launch-groups.v1";
 }
 
 /// <summary>
@@ -280,6 +285,52 @@ internal sealed class GetResourcesResponse
     /// Gets the resource snapshots.
     /// </summary>
     public required ResourceSnapshot[] Resources { get; init; }
+}
+
+/// <summary>
+/// Requests the running AppHost's launch-group metadata.
+/// </summary>
+internal sealed class GetLaunchGroupsRequest : BackchannelRequest
+{
+    /// <inheritdoc />
+    public override GetLaunchGroupsRequest WithTraceContext(BackchannelTraceContext traceContext) => new() { TraceContext = traceContext };
+}
+
+/// <summary>
+/// Describes the effective launch groups and startup decisions.
+/// </summary>
+internal sealed class GetLaunchGroupsResponse
+{
+    public string? SelectedGroup { get; init; }
+    public required string[] Groups { get; init; }
+    public required LaunchGroupResourceInfo[] Resources { get; init; }
+}
+
+/// <summary>
+/// Describes a resource's launch-group membership and startup decisions.
+/// </summary>
+internal sealed class LaunchGroupResourceInfo
+{
+    public required string Name { get; init; }
+    public required string[] Groups { get; init; }
+    public string? InheritedFrom { get; init; }
+    public bool ExplicitStart { get; init; }
+    public bool ExcludedByGroup { get; init; }
+    public bool ExcludedFromSelection { get; init; }
+    public LaunchGroupBuildDisposition BuildDisposition { get; init; }
+}
+
+/// <summary>
+/// Describes how a coordinated project build participates in initial startup.
+/// </summary>
+internal enum LaunchGroupBuildDisposition
+{
+    NotCoordinated,
+    Pending,
+    Initial,
+    InitialPersistent,
+    InitialShared,
+    Deferred
 }
 
 /// <summary>

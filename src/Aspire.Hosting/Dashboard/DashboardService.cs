@@ -5,6 +5,7 @@ using System.Text.RegularExpressions;
 using System.Globalization;
 using System.Runtime.ExceptionServices;
 using Aspire.DashboardService.Proto.V1;
+using Aspire.Hosting.Orchestrator;
 using Google.Protobuf.Collections;
 using Google.Protobuf.WellKnownTypes;
 using Grpc.Core;
@@ -40,7 +41,7 @@ namespace Aspire.Hosting.Dashboard;
 /// counterparts, and importing both namespaces would make every bare use ambiguous.
 /// </remarks>
 [Authorize(Policy = ResourceServiceApiKeyAuthorization.PolicyName)]
-internal sealed partial class DashboardService(DashboardServiceData serviceData, IHostEnvironment hostEnvironment, IHostApplicationLifetime hostApplicationLifetime, IConfiguration configuration, ILogger<DashboardService> logger, IInteractionFileUploadStore fileUploadStore, TerminalService terminalService)
+internal sealed partial class DashboardService(DashboardServiceData serviceData, IHostEnvironment hostEnvironment, IHostApplicationLifetime hostApplicationLifetime, IConfiguration configuration, ILogger<DashboardService> logger, IInteractionFileUploadStore fileUploadStore, TerminalService terminalService, LaunchGroupMetadataService launchGroupMetadata)
     : Aspire.DashboardService.Proto.V1.DashboardService.DashboardServiceBase
 {
     // gRPC has a maximum receive size of 4MB. Force logs into batches to avoid exceeding receive size.
@@ -68,12 +69,44 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
     {
         // Read the application name from configuration if available, otherwise fall back to the environment
         var applicationName = configuration["AppHost:DashboardApplicationName"] ?? hostEnvironment.ApplicationName;
-
-        return Task.FromResult(new ApplicationInformationResponse
+        var response = new ApplicationInformationResponse
         {
             ApplicationName = GetDashboardApplicationName(applicationName),
             MinDashboardVersion = MinRequiredDashboardVersion
-        });
+        };
+
+        // Inspect mode does not produce a startup plan because it skips before-start hooks.
+        if (launchGroupMetadata.GetInformationOrDefault() is not { } metadata)
+        {
+            return Task.FromResult(response);
+        }
+
+        var launchGroups = new LaunchGroupInformation();
+        if (metadata.SelectedGroup is not null)
+        {
+            launchGroups.SelectedGroup = metadata.SelectedGroup;
+        }
+        launchGroups.Groups.AddRange(metadata.Groups);
+        foreach (var resource in metadata.Resources)
+        {
+            var item = new LaunchGroupResourceInfo
+            {
+                Name = resource.Name,
+                ExplicitStart = resource.ExplicitStart,
+                ExcludedByGroup = resource.ExcludedByGroup,
+                ExcludedFromSelection = resource.ExcludedFromSelection,
+                BuildDisposition = (LaunchGroupBuildDisposition)resource.BuildDisposition
+            };
+            if (resource.InheritedFrom is not null)
+            {
+                item.InheritedFrom = resource.InheritedFrom;
+            }
+            item.Groups.AddRange(resource.Groups);
+            launchGroups.Resources.Add(item);
+        }
+
+        response.LaunchGroups = launchGroups;
+        return Task.FromResult(response);
     }
 
     internal static string GetDashboardApplicationName(string applicationName)

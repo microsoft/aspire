@@ -37,6 +37,10 @@ internal static partial class DotnetProjectBuildCoordinator
     private const string AspireStorePathConfigurationKey = "Aspire:Store:Path";
     private const string RestoreProjectsIndividuallyConfigurationKey = "Aspire:Dotnet:RestoreProjectsIndividually";
     private const string ResourceStarterServiceKey = "Aspire.Hosting.ResourceStarter";
+    private const string TerminatedBuildState = "Terminated";
+    // Matches the Hosting-internal keyed delegate used to report finalized build decisions.
+    private const string BuildPlanReporterKey = "Aspire.Hosting.LaunchGroups.BuildPlanReporter";
+    private const string BuildPlanFinalizerKey = "Aspire.Hosting.LaunchGroups.BuildPlanFinalizer";
 
     internal sealed record CoordinatedBuildDependencyAnnotation(IResource Resource) : IResourceAnnotation;
 
@@ -142,7 +146,8 @@ internal static partial class DotnetProjectBuildCoordinator
     private static Action? AddBuildDependency(
         IDistributedApplicationBuilder builder,
         DotnetProjectResource resource,
-        DotnetProjectBuildResource buildResource)
+        DotnetProjectBuildResource buildResource,
+        CoordinatorState state)
     {
         if (resource.Annotations.OfType<WaitAnnotation>().Any(
             annotation => annotation.WaitType is WaitType.WaitForCompletion &&
@@ -160,7 +165,7 @@ internal static partial class DotnetProjectBuildCoordinator
         var subscription = builder.Eventing.Subscribe<BeforeResourceStartedEvent>(
             resource,
             (@event, cancellationToken) =>
-                WaitForSuccessfulBuildAsync(@event.Services, buildResource, cancellationToken));
+                state.WaitForBuildCompletionAsync(resource, @event.Services, cancellationToken));
 
         return () =>
         {
@@ -208,11 +213,8 @@ internal static partial class DotnetProjectBuildCoordinator
         resource.Annotations.Add(annotation);
         var subscription = builder.Eventing.Subscribe<BeforeResourceStartedEvent>(
             resource,
-            async (@event, cancellationToken) =>
-            {
-                await state.EnsureBuildStartedAsync(buildResource, @event.Services, cancellationToken).ConfigureAwait(false);
-                await WaitForSuccessfulBuildAsync(@event.Services, buildResource, cancellationToken).ConfigureAwait(false);
-            });
+            (@event, cancellationToken) =>
+                state.WaitForBuildCompletionAsync(resource, @event.Services, cancellationToken));
 
         return () =>
         {
@@ -236,8 +238,7 @@ internal static partial class DotnetProjectBuildCoordinator
                 resourceEvent => IsSettledBuildSnapshot(resourceEvent.Snapshot),
                 cancellationToken).ConfigureAwait(false);
 
-            if (buildEvent.Snapshot.State?.Text != KnownResourceStates.FailedToStart &&
-                buildEvent.Snapshot.ExitCode is 0)
+            if (IsSuccessfulBuildSnapshot(buildEvent.Snapshot))
             {
                 if (failureState.IsCurrentAttempt(attempt))
                 {
@@ -303,7 +304,8 @@ internal static partial class DotnetProjectBuildCoordinator
         CustomResourceSnapshot snapshot)
     {
         var exitCode = snapshot.ExitCode?.ToString(CultureInfo.InvariantCulture) ?? "unavailable";
-        var message = $"The coordinated .NET build failed with exit code {exitCode}. See resource '{buildResource.Name}' for build output.";
+        var termination = snapshot.State?.Text == TerminatedBuildState ? " The build process was terminated." : "";
+        var message = $"The coordinated .NET build failed with exit code {exitCode}.{termination} See resource '{buildResource.Name}' for build output.";
         var buildOutput = await GetBuildFailureOutputAsync(services, buildResource).ConfigureAwait(false);
         if (buildOutput.Count > 0)
         {
@@ -400,14 +402,21 @@ internal static partial class DotnetProjectBuildCoordinator
     [GeneratedRegex(@"(^|\s|:)error(\s+[A-Za-z]+\d+)?\s*:", RegexOptions.CultureInvariant)]
     private static partial Regex MsBuildErrorRegex();
 
+    // DCP publishes a completed executable's state and exit code together; the exit code can be
+    // unavailable. Termination and completion both settle the writer, but Unknown can still be running.
+    // https://github.com/microsoft/dcp/blob/v0.27.4/controllers/executable_controller.go#L772-L825
     internal static bool IsSettledBuildSnapshot(CustomResourceSnapshot snapshot) =>
-        snapshot.State?.Text == KnownResourceStates.FailedToStart ||
-        (KnownResourceStates.TerminalStates.Contains(snapshot.State?.Text) &&
-         snapshot.ExitCode is not null);
+        KnownResourceStates.TerminalStates.Contains(snapshot.State?.Text) ||
+        snapshot.State?.Text == TerminatedBuildState;
+
+    private static bool IsSuccessfulBuildSnapshot(CustomResourceSnapshot snapshot) =>
+        IsSettledBuildSnapshot(snapshot) &&
+        snapshot.State?.Text != KnownResourceStates.FailedToStart &&
+        snapshot.State?.Text != TerminatedBuildState &&
+        snapshot.ExitCode is 0;
 
     private static bool IsFailedBuildSnapshot(CustomResourceSnapshot snapshot) =>
-        IsSettledBuildSnapshot(snapshot) &&
-        (snapshot.State?.Text == KnownResourceStates.FailedToStart || snapshot.ExitCode is not 0);
+        IsSettledBuildSnapshot(snapshot) && !IsSuccessfulBuildSnapshot(snapshot);
 
     private static bool IsProjectFile(string path) =>
         ProjectPathResolver.IsSupportedDotnetProjectFile(path);
@@ -455,6 +464,9 @@ internal static partial class DotnetProjectBuildCoordinator
         private readonly List<SharedBuildEnvironment> _sharedBuildEnvironments = [];
         private readonly Dictionary<DotnetProjectBuildResource, Task> _buildStarts =
             new(ReferenceEqualityComparer.Instance);
+        private readonly object _outputWriterLock = new();
+        private readonly Dictionary<(string Path, string? Configuration), OutputWriter> _latestOutputWriters = [];
+        private long _outputWriterVersion;
         // Intentionally not disposed: settle watchers can release after coordinator disposal during shutdown, and
         // SemaphoreSlim only owns an unmanaged handle when AvailableWaitHandle is read, which this gate never does.
         private readonly SemaphoreSlim _outputWriterGate = new(1, 1);
@@ -469,11 +481,26 @@ internal static partial class DotnetProjectBuildCoordinator
         {
             _builder = builder;
             builder.Services.AddSingleton(_ => this);
+            builder.Services.AddKeyedSingleton<Func<DistributedApplicationModel, Task>>(
+                BuildPlanFinalizerKey,
+                (services, _) => model => services.GetRequiredService<CoordinatorState>()
+                    .MaterializeBuildPlan(model, services));
             builder.Pipeline.WithFinalAction(
                 WellKnownPipelineSteps.BeforeStart,
-                stepContext => stepContext.Services
-                    .GetRequiredService<CoordinatorState>()
-                    .MaterializeBuildPlan(stepContext.Model, stepContext.Services));
+                stepContext =>
+                {
+                    // Group membership and dependencies can change in later final actions.
+                    // Keep the existing timing for AppHosts that do not use launch groups.
+                    if (builder.Configuration.GetSection("Aspire:LaunchGroup").Exists() ||
+                        builder.Configuration.GetSection("Aspire:LaunchGroups").Exists() ||
+                        stepContext.Model.Resources.Any(resource => resource.HasAnnotationOfType<LaunchGroupAnnotation>()))
+                    {
+                        return Task.CompletedTask;
+                    }
+
+                    return stepContext.Services.GetRequiredService<CoordinatorState>()
+                        .MaterializeBuildPlan(stepContext.Model, stepContext.Services);
+                });
         }
 
         public IReadOnlyList<DotnetProjectResource> Resources =>
@@ -520,30 +547,94 @@ internal static partial class DotnetProjectBuildCoordinator
                 registration => ReferenceEquals(registration.Resource, resource));
             if (registration.FinalBuildResource is { } finalBuildResource)
             {
-                if (registration.BuildIsDeferred)
-                {
-                    await EnsureBuildStartedAsync(finalBuildResource, services, cancellationToken).ConfigureAwait(false);
-                }
-
-                // Do not cache this wait: another command can arrive during a later build attempt.
-                await WaitForSuccessfulBuildAsync(services, finalBuildResource, cancellationToken).ConfigureAwait(false);
-
-                // The initial build barrier stays finished when the project's separate rebuilder runs.
-                // Once that resource has been used, its latest attempt must also succeed before consumers
-                // can use the output. Do not wait on a dormant, explicitly started rebuilder.
                 var model = services.GetRequiredService<DistributedApplicationModel>();
                 var notifications = services.GetRequiredService<ResourceNotificationService>();
-                if (FindRebuilder(model, resource) is { } rebuilder &&
+                var rebuilders = registration.BuildIdentity is { } buildIdentity
+                    ? _registrations
+                        .Where(candidate => candidate.BuildIdentity == buildIdentity)
+                        .Select(candidate => FindRebuilder(model, candidate.Resource))
+                        .OfType<IResource>()
+                        .ToArray()
+                    : [];
+                IResource? FindActiveRebuilder() => rebuilders.FirstOrDefault(rebuilder =>
                     notifications.TryGetCurrentState(rebuilder.Name, out var rebuildEvent) &&
                     rebuildEvent.Snapshot.State?.Text is { } state &&
                     (state == KnownResourceStates.Starting ||
                      state == KnownResourceStates.Running ||
                      state == KnownResourceStates.Waiting ||
                      state == KnownResourceStates.Building ||
-                     state == KnownResourceStates.Stopping ||
-                     KnownResourceStates.TerminalStates.Contains(state)))
+                     state == KnownResourceStates.Stopping));
+
+                var waitForFinalBuild = true;
+                if (registration.BuildIsDeferred)
                 {
-                    await WaitForSuccessfulBuildAsync(services, rebuilder, cancellationToken).ConfigureAwait(false);
+                    // A compatible Rebuild may already be producing these outputs. Join it instead of
+                    // starting a second build, but let a later demand retry after a failed attempt.
+                    if (FindActiveRebuilder() is { } activeRebuilder)
+                    {
+                        await WaitForSuccessfulBuildAsync(services, activeRebuilder, cancellationToken).ConfigureAwait(false);
+                        waitForFinalBuild = false;
+                    }
+                    else if (registration.BuildIdentity is { } deferredIdentity)
+                    {
+                        OutputWriter? latest;
+                        lock (_outputWriterLock)
+                        {
+                            latest = _latestOutputWriters.GetValueOrDefault(deferredIdentity);
+                        }
+
+                        if (latest is not null &&
+                            rebuilders.Any(rebuilder => ReferenceEquals(rebuilder, latest.Resource)) &&
+                            notifications.TryGetCurrentState(latest.Resource.Name, out var latestEvent) &&
+                            IsSuccessfulBuildSnapshot(latestEvent.Snapshot))
+                        {
+                            waitForFinalBuild = false;
+                        }
+                    }
+
+                    if (waitForFinalBuild)
+                    {
+                        await EnsureBuildStartedAsync(finalBuildResource, services, cancellationToken).ConfigureAwait(false);
+                    }
+                }
+
+                if (waitForFinalBuild)
+                {
+                    // Do not cache this wait: another command can arrive during a later build attempt.
+                    await WaitForSuccessfulBuildAsync(services, finalBuildResource, cancellationToken).ConfigureAwait(false);
+                }
+
+                if (registration.BuildIdentity is { } identity)
+                {
+                    while (true)
+                    {
+                        // DCP publishes Starting before the rebuilder's event callback records the writer.
+                        // Check every compatible registration so a sibling cannot launch an old shared output.
+                        if (FindActiveRebuilder() is { } activeRebuilder)
+                        {
+                            await WaitForSuccessfulBuildAsync(services, activeRebuilder, cancellationToken).ConfigureAwait(false);
+                            continue;
+                        }
+
+                        OutputWriter? latest;
+                        lock (_outputWriterLock)
+                        {
+                            latest = _latestOutputWriters.GetValueOrDefault(identity);
+                        }
+
+                        if (latest is not null)
+                        {
+                            await WaitForSuccessfulBuildAsync(services, latest.Resource, cancellationToken).ConfigureAwait(false);
+                        }
+
+                        lock (_outputWriterLock)
+                        {
+                            if (_latestOutputWriters.GetValueOrDefault(identity) == latest)
+                            {
+                                return;
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -612,19 +703,25 @@ internal static partial class DotnetProjectBuildCoordinator
         /// output writers. The gate is held from start until the writer settles, whether it succeeds or fails, so one
         /// failed build never blocks later work.
         /// </remarks>
-        private Action SerializeOutputWriter(IResource writer)
+        private Action SerializeOutputWriter(
+            IResource writer,
+            (string Path, string? Configuration)[] identities)
         {
             var subscription = _builder.Eventing.Subscribe<BeforeResourceStartedEvent>(
                 writer,
                 async (@event, cancellationToken) =>
                 {
                     var notifications = @event.Services.GetRequiredService<ResourceNotificationService>();
+                    // Track queued intent first, then actual writer order after acquiring the gate. A later
+                    // successful writer must supersede an earlier failed attempt for the same project.
+                    RecordOutputWriter();
 
                     // Builder-time subscriptions run before the orchestrator's WaitFor handler. Wait for declared
                     // dependencies first (the later WaitFor check then completes immediately) so a chained build
                     // never holds the gate while waiting for an earlier build that needs it.
                     await notifications.WaitForDependenciesAsync(@event.Resource, cancellationToken).ConfigureAwait(false);
                     await _outputWriterGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+                    RecordOutputWriter();
 
                     var applicationStopping = @event.Services.GetService<IHostApplicationLifetime>()?.ApplicationStopping
                         ?? CancellationToken.None;
@@ -632,6 +729,18 @@ internal static partial class DotnetProjectBuildCoordinator
                 });
 
             return () => _builder.Eventing.Unsubscribe(subscription);
+
+            void RecordOutputWriter()
+            {
+                lock (_outputWriterLock)
+                {
+                    var attempt = new OutputWriter(++_outputWriterVersion, writer);
+                    foreach (var identity in identities)
+                    {
+                        _latestOutputWriters[identity] = attempt;
+                    }
+                }
+            }
         }
 
         private async Task ReleaseOutputWriterWhenSettledAsync(
@@ -645,8 +754,7 @@ internal static partial class DotnetProjectBuildCoordinator
                 // belongs to this attempt. Any terminal state settles the writer, including a stop without an exit code.
                 await notifications.WaitForResourceAsync(
                     resourceName,
-                    resourceEvent => resourceEvent.Snapshot.State?.Text is { } state &&
-                            KnownResourceStates.TerminalStates.Contains(state),
+                    resourceEvent => IsSettledBuildSnapshot(resourceEvent.Snapshot),
                     applicationStopping).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
@@ -676,7 +784,7 @@ internal static partial class DotnetProjectBuildCoordinator
                     continue;
                 }
 
-                if (AddBuildDependency(_builder, resource, primaryBuildResource) is { } rollback)
+                if (AddBuildDependency(_builder, resource, primaryBuildResource, this) is { } rollback)
                 {
                     _eagerDependencyRollbacks.Add(resource, rollback);
                 }
@@ -823,6 +931,7 @@ internal static partial class DotnetProjectBuildCoordinator
 
             var restoreProjectsIndividually = _builder.Configuration.GetValue<bool>(RestoreProjectsIndividuallyConfigurationKey);
             var applicationLifetime = services.GetRequiredService<IHostApplicationLifetime>();
+            var reportBuild = services.GetRequiredKeyedService<Action<IResource, bool?, bool, bool>>(BuildPlanReporterKey);
             var primaryBuildResource = PrimaryBuildResource!;
             var originalPrimaryProjectPaths = primaryBuildResource.ProjectPaths;
             var originalPrimaryWorkingDirectory = primaryBuildResource.WorkingDirectory;
@@ -885,7 +994,7 @@ internal static partial class DotnetProjectBuildCoordinator
                     }
                     else
                     {
-                        var entry = step.Projects.Single();
+                        var entry = step.Projects[0];
                         buildResource.ConfigureDirectBuild(
                             entry.Metadata.ProjectPath,
                             step.WorkingDirectory,
@@ -910,22 +1019,27 @@ internal static partial class DotnetProjectBuildCoordinator
                         rollbackActions.Push(ValidateMaterializedBuildCallbacks(buildResource, step.Projects));
                         rollbackActions.Push(ApplyBuildEnvironment(buildResource, sharedBuildEnvironment));
                         rollbackActions.Push(ApplyBuildProperties(buildResource, sharedBuildEnvironment));
-                        rollbackActions.Push(EnsureBuildEnvironmentBeforeResourceLaunch(
-                            entry.Registration.Resource,
-                            sharedBuildEnvironment));
-                        if (FindRebuilder(model, entry.Registration.Resource) is { } rebuilder)
+                        foreach (var directEntry in step.Projects)
                         {
-                            rollbackActions.Push(BeginBuildEnvironmentAttemptOnResourceStart(
-                                _builder,
-                                rebuilder,
+                            rollbackActions.Push(EnsureBuildEnvironmentBeforeResourceLaunch(
+                                directEntry.Registration.Resource,
                                 sharedBuildEnvironment));
-                            rollbackActions.Push(ValidateMaterializedBuildCallbacks(rebuilder, step.Projects));
-                            rollbackActions.Push(ApplyBuildEnvironment(rebuilder, sharedBuildEnvironment));
-                            rollbackActions.Push(ApplyBuildProperties(rebuilder, sharedBuildEnvironment));
+                            if (FindRebuilder(model, directEntry.Registration.Resource) is { } rebuilder)
+                            {
+                                rollbackActions.Push(BeginBuildEnvironmentAttemptOnResourceStart(
+                                    _builder,
+                                    rebuilder,
+                                    sharedBuildEnvironment));
+                                rollbackActions.Push(ValidateMaterializedBuildCallbacks(rebuilder, step.Projects));
+                                rollbackActions.Push(ApplyBuildEnvironment(rebuilder, sharedBuildEnvironment));
+                                rollbackActions.Push(ApplyBuildProperties(rebuilder, sharedBuildEnvironment));
+                            }
                         }
                     }
 
-                    rollbackActions.Push(SerializeOutputWriter(buildResource));
+                    rollbackActions.Push(SerializeOutputWriter(
+                        buildResource,
+                        step.Projects.Select(GetBuildIdentity).Distinct().ToArray()));
 
                     if (index >= initialBuildSteps.Count &&
                             !buildResource.HasAnnotationOfType<ExplicitStartupAnnotation>())
@@ -940,7 +1054,7 @@ internal static partial class DotnetProjectBuildCoordinator
                         if (FindRebuilder(model, entry.Registration.Resource) is { } rebuilder)
                         {
                             rollbackActions.Push(BeginBuildAttemptOnResourceStart(_builder, rebuilder));
-                            rollbackActions.Push(SerializeOutputWriter(rebuilder));
+                            rollbackActions.Push(SerializeOutputWriter(rebuilder, [GetBuildIdentity(entry)]));
                         }
 
                         var originalBuildWorkingDirectory = entry.Metadata.BuildWorkingDirectory;
@@ -983,14 +1097,17 @@ internal static partial class DotnetProjectBuildCoordinator
                     {
                         var originalFinalBuildResource = registration.FinalBuildResource;
                         var originalBuildIsDeferred = registration.BuildIsDeferred;
+                        var originalBuildIdentity = registration.BuildIdentity;
                         registration.FinalBuildResource = initialBuildRegistrations.Contains(registration)
                             ? initialFinalBuildResource
                             : buildResourceByRegistration[registration];
                         registration.BuildIsDeferred = !initialBuildRegistrations.Contains(registration);
+                        registration.BuildIdentity = GetBuildIdentity(new ProjectEntry(registration, metadata));
                         rollbackActions.Push(() =>
                         {
                             registration.FinalBuildResource = originalFinalBuildResource;
                             registration.BuildIsDeferred = originalBuildIsDeferred;
+                            registration.BuildIdentity = originalBuildIdentity;
                         });
 
                         if (registration.FinalBuildResource is { } finalBuildResource)
@@ -1000,7 +1117,7 @@ internal static partial class DotnetProjectBuildCoordinator
                                 RemoveEagerBuildDependencies([resource]);
                                 rollbackActions.Push(AddDeferredBuildDependency(_builder, resource, finalBuildResource, this));
                             }
-                            else if (AddBuildDependency(_builder, resource, finalBuildResource) is { } rollback)
+                            else if (AddBuildDependency(_builder, resource, finalBuildResource, this) is { } rollback)
                             {
                                 rollbackActions.Push(rollback);
                             }
@@ -1017,6 +1134,17 @@ internal static partial class DotnetProjectBuildCoordinator
 
                 RemoveEagerBuildDependencies(inactiveResources);
                 RemoveEagerBuildDependencies(missingBuildEntries.Select(entry => entry.Registration.Resource));
+                foreach (var entry in buildEntries)
+                {
+                    var resource = entry.Registration.Resource;
+                    var isInitial = initialBuildRegistrations.Contains(entry.Registration);
+                    reportBuild(resource, isInitial, isInitial && hasSelectedLaunchGroup && HasPersistentLifetime(resource), false);
+                }
+
+                for (var index = 0; index < buildResources.Count; index++)
+                {
+                    reportBuild(buildResources[index], index < initialBuildSteps.Count, false, true);
+                }
                 _materialized = true;
             }
             catch (Exception materializationException)
@@ -1100,6 +1228,7 @@ internal static partial class DotnetProjectBuildCoordinator
             var entryList = entries.ToArray();
             var steps = new List<BuildStep>();
             var traversalSteps = new Dictionary<BuildContext, BuildStep>();
+            var fileBuildSteps = new Dictionary<(string Path, string? Configuration), BuildStep>();
 
             foreach (var entry in entryList)
             {
@@ -1110,7 +1239,18 @@ internal static partial class DotnetProjectBuildCoordinator
                 {
                     // File-based app artifacts are isolated, but their #:project references can share bin/obj
                     // directories. Direct build steps are serialized so those references never build concurrently.
-                    steps.Add(BuildStep.CreateDirect(entry, projectDirectory));
+                    var identity = GetBuildIdentity(entry);
+                    if (fileBuildSteps.TryGetValue(identity, out var existingFileStep))
+                    {
+                        existingFileStep.Projects.Add(entry);
+                    }
+                    else
+                    {
+                        var fileStep = BuildStep.CreateDirect(entry, projectDirectory);
+                        fileBuildSteps.Add(identity, fileStep);
+                        steps.Add(fileStep);
+                    }
+
                     continue;
                 }
 
@@ -1170,12 +1310,11 @@ internal static partial class DotnetProjectBuildCoordinator
                 .Where(entry =>
                     !entry.Registration.Resource.HasAnnotationOfType<ExplicitStartupAnnotation>() ||
                     HasPersistentLifetime(entry.Registration.Resource))
-                .Select(entry => PathNormalizer.ResolveToFilesystemPath(entry.Metadata.ProjectPath))
-                .ToHashSet(StringComparer.Ordinal);
+                .Select(GetBuildIdentity)
+                .ToHashSet();
 
             return entries
-                .Where(entry => initialProjectIdentities.Contains(
-                    PathNormalizer.ResolveToFilesystemPath(entry.Metadata.ProjectPath)))
+                .Where(entry => initialProjectIdentities.Contains(GetBuildIdentity(entry)))
                 .ToArray();
         }
 
@@ -1224,35 +1363,51 @@ internal static partial class DotnetProjectBuildCoordinator
         private static List<BuildStep> CreateDeferredBuildSteps(IEnumerable<ProjectEntry> entries)
         {
             var steps = new List<BuildStep>();
-            // Compatible registrations of the same physical project share one deferred build so concurrent
-            // cold starts of either resource join a single attempt instead of rebuilding the same outputs.
-            var traversalSteps = new Dictionary<(string ProjectPath, string? Configuration), BuildStep>();
+            // Compatible registrations share one deferred build so concurrent cold starts join the same attempt.
+            var sharedSteps = new Dictionary<(string Path, string? Configuration), BuildStep>();
             foreach (var entry in entries)
             {
                 var projectDirectory = Path.GetDirectoryName(entry.Metadata.ProjectPath)!;
-                if (!IsProjectFile(entry.Metadata.ProjectPath) || RequiresContextSpecificBuild(entry))
+                if (RequiresContextSpecificBuild(entry))
                 {
                     steps.Add(BuildStep.CreateDirect(entry, projectDirectory));
                     continue;
                 }
 
-                var key = (PathNormalizer.ResolveToFilesystemPath(entry.Metadata.ProjectPath), entry.Metadata.BuildConfiguration);
-                if (traversalSteps.TryGetValue(key, out var existingStep))
+                var identity = GetBuildIdentity(entry);
+                if (sharedSteps.TryGetValue(identity, out var existingStep))
                 {
                     existingStep.Projects.Add(entry);
                     continue;
                 }
 
-                var globalJsonPath = FindNearestGlobalJson(projectDirectory);
-                var workingDirectory = globalJsonPath is null
-                    ? projectDirectory
-                    : Path.GetDirectoryName(globalJsonPath)!;
-                var step = BuildStep.CreateTraversal(entry, workingDirectory);
-                traversalSteps.Add(key, step);
+                BuildStep step;
+                if (IsProjectFile(entry.Metadata.ProjectPath))
+                {
+                    var globalJsonPath = FindNearestGlobalJson(projectDirectory);
+                    var workingDirectory = globalJsonPath is null
+                        ? projectDirectory
+                        : Path.GetDirectoryName(globalJsonPath)!;
+                    step = BuildStep.CreateTraversal(entry, workingDirectory);
+                }
+                else
+                {
+                    step = BuildStep.CreateDirect(entry, projectDirectory);
+                }
+
+                sharedSteps.Add(identity, step);
                 steps.Add(step);
             }
 
             return steps;
+        }
+
+        private static (string Path, string? Configuration) GetBuildIdentity(ProjectEntry entry)
+        {
+            var path = entry.Metadata.ProjectPath;
+            // File-app outputs use the SDK cache key for the path spelling, including symlink aliases.
+            // Project files instead share the same output through their physical filesystem identity.
+            return (IsProjectFile(path) ? PathNormalizer.ResolveToFilesystemPath(path) : path, entry.Metadata.BuildConfiguration);
         }
 
         private static void ConfigureMissingPathFallback(ProjectEntry entry)
@@ -1802,8 +1957,7 @@ internal static partial class DotnetProjectBuildCoordinator
                         resource.Name,
                         resourceEvent =>
                             !ReferenceEquals(resourceEvent.Snapshot, initialSnapshot) &&
-                            (resourceEvent.Snapshot.State?.Text == KnownResourceStates.FailedToStart ||
-                             KnownResourceStates.TerminalStates.Contains(resourceEvent.Snapshot.State?.Text)),
+                            IsSettledBuildSnapshot(resourceEvent.Snapshot),
                         _applicationStopping).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException) when (_applicationStopping.IsCancellationRequested)
@@ -1869,6 +2023,8 @@ internal static partial class DotnetProjectBuildCoordinator
             ResourceRegistration Registration,
             DotnetProjectMetadata Metadata);
 
+        private sealed record OutputWriter(long Version, IResource Resource);
+
         private sealed record BuildCallbackSnapshot(
             ProjectEntry Entry,
             DotnetProjectBuildEnvironmentCallbackAnnotation[] Callbacks);
@@ -1880,6 +2036,8 @@ internal static partial class DotnetProjectBuildCoordinator
             public DotnetProjectBuildResource? FinalBuildResource { get; set; }
 
             public bool BuildIsDeferred { get; set; }
+
+            public (string Path, string? Configuration)? BuildIdentity { get; set; }
         }
 
         private sealed class BuildStep

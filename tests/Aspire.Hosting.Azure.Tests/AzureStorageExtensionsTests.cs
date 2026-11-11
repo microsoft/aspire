@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIRELAUNCHGROUPS001 // Tests the experimental launch-group APIs.
+
 using System.Net.Sockets;
 using System.Reflection;
 using Aspire.Hosting.ApplicationModel;
@@ -14,6 +16,44 @@ namespace Aspire.Hosting.Azure.Tests;
 
 public class AzureStorageExtensionsTests(ITestOutputHelper output)
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task LaunchGroupRequiresStorageOnlyWhenItRunsLocally(bool useEmulator)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(output);
+        builder.Configuration["Aspire:LaunchGroup"] = "frontend";
+        var storage = builder.AddAzureStorage("storage");
+        if (useEmulator)
+        {
+            storage.RunAsEmulator();
+        }
+
+        var blobs = storage.AddBlobs("blobs");
+        var frontend = builder.AddExecutable("frontend", "unused", ".")
+            .WithLaunchGroup("frontend")
+            .WithReference(blobs);
+        await using var app = builder.Build();
+
+        if (useEmulator)
+        {
+            var exception = await Assert.ThrowsAsync<DistributedApplicationException>(
+                () => ExecuteBeforeStartHooksAsync(app, TestContext.Current.CancellationToken));
+            Assert.Equal(
+                "Resource 'frontend' requires local resource 'storage' (the lifetime owner of 'blobs'), " +
+                "which is not included in launch group 'frontend'. Dependency path: frontend -> blobs -> storage. " +
+                "Edges: frontend --reference--> blobs; blobs --lifetime owner--> storage. " +
+                "Add 'storage' to launch group 'frontend'. " +
+                "If the reference from 'frontend' to 'blobs' is optional, mark it with WithOptionalLaunchGroupDependency.",
+                exception.Message);
+        }
+        else
+        {
+            await ExecuteBeforeStartHooksAsync(app, TestContext.Current.CancellationToken);
+            Assert.False(frontend.Resource.HasAnnotationOfType<ExplicitStartupAnnotation>());
+        }
+    }
+
     [Theory]
     [InlineData(null)]
     [InlineData(true)]

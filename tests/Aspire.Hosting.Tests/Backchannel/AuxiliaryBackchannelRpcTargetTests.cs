@@ -6,6 +6,7 @@ using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Hosting.Diagnostics;
+using Aspire.Hosting.Orchestrator;
 using Aspire.Hosting.Utils;
 using Aspire.Tests;
 using Microsoft.AspNetCore.InternalTesting;
@@ -19,6 +20,30 @@ namespace Aspire.Hosting.Backchannel;
 [Trait("Partition", "4")]
 public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
 {
+    [Fact]
+    public async Task GetCapabilities_AdvertisesLaunchGroupsOnlyAfterPlanIsFinalized()
+    {
+        var configuration = new ConfigurationBuilder().Build();
+        var metadata = new LaunchGroupMetadataService(NullLogger<LaunchGroupMetadataService>.Instance);
+        using var services = new ServiceCollection()
+            .AddSingleton(metadata)
+            .BuildServiceProvider();
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            configuration,
+            new ProfilingTelemetry(configuration),
+            services);
+
+        var before = await target.GetCapabilitiesAsync().DefaultTimeout();
+        Assert.False(before.Capabilities.Contains(AuxiliaryBackchannelCapabilities.LaunchGroups_V1));
+
+        metadata.FinalizeModel(new DistributedApplicationModel(new ResourceCollection()));
+        var after = await target.GetCapabilitiesAsync().DefaultTimeout();
+        Assert.Contains(AuxiliaryBackchannelCapabilities.LaunchGroups_V1, after.Capabilities);
+        var information = await target.GetLaunchGroupsAsync().DefaultTimeout();
+        Assert.Empty(information.Groups);
+    }
+
     [Fact]
     public async Task GetAppHostInfoAsync_ReturnsAssemblyDisplayVersion()
     {

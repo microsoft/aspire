@@ -225,6 +225,45 @@ public class BackchannelJsonSerializerContextTests
     }
 
     [Fact]
+    public void LaunchGroupResponse_RoundTripsThroughSerializer()
+    {
+        var options = BackchannelJsonSerializerContext.CreateJsonSerializerOptions();
+        var response = new GetLaunchGroupsResponse
+        {
+            SelectedGroup = "catalog",
+            Groups = ["catalog", "empty"],
+            Resources =
+            [
+                new LaunchGroupResourceInfo
+                {
+                    Name = "api",
+                    Groups = ["shared", "catalog"],
+                    InheritedFrom = "parent",
+                    ExplicitStart = true,
+                    ExcludedByGroup = true,
+                    ExcludedFromSelection = true,
+                    BuildDisposition = LaunchGroupBuildDisposition.InitialShared
+                }
+            ]
+        };
+
+        var json = JsonSerializer.Serialize(response, options);
+        var roundTripped = JsonSerializer.Deserialize<GetLaunchGroupsResponse>(json, options);
+
+        Assert.NotNull(roundTripped);
+        Assert.Equal("catalog", roundTripped.SelectedGroup);
+        Assert.Equal(["catalog", "empty"], roundTripped.Groups);
+        var resource = Assert.Single(roundTripped.Resources);
+        Assert.Equal("api", resource.Name);
+        Assert.Equal(["shared", "catalog"], resource.Groups);
+        Assert.Equal("parent", resource.InheritedFrom);
+        Assert.True(resource.ExplicitStart);
+        Assert.True(resource.ExcludedByGroup);
+        Assert.True(resource.ExcludedFromSelection);
+        Assert.Equal(LaunchGroupBuildDisposition.InitialShared, resource.BuildDisposition);
+    }
+
+    [Fact]
     public void TerminalReplicaInfo_OldPayloadWithoutNewFields_DeserializesWithNulls()
     {
         // Back-compat: an older AppHost (pre-terminals.v1) that only knows about the original

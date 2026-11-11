@@ -497,6 +497,96 @@
         <target state="new">Sound: on</target>
         <note>Text of the button that toggles the sound of the Aspire Outage game, when the sound is on.</note>
       </trans-unit>
+      <trans-unit id="ResourceLaunchGroupsBuildDeferred">
+        <source>Deferred</source>
+        <target state="new">Deferred</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceLaunchGroupsBuildDisposition">
+        <source>Build disposition</source>
+        <target state="new">Build disposition</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceLaunchGroupsBuildInitial">
+        <source>Initial</source>
+        <target state="new">Initial</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceLaunchGroupsBuildInitialPersistent">
+        <source>Initial (persistent)</source>
+        <target state="new">Initial (persistent)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceLaunchGroupsBuildInitialShared">
+        <source>Initial (shared)</source>
+        <target state="new">Initial (shared)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceLaunchGroupsBuildNotCoordinated">
+        <source>Not coordinated</source>
+        <target state="new">Not coordinated</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceLaunchGroupsBuildPending">
+        <source>Pending</source>
+        <target state="new">Pending</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceLaunchGroupsEffectiveMembership">
+        <source>Effective membership</source>
+        <target state="new">Effective membership</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceLaunchGroupsExcludedByGroup">
+        <source>Excluded by selected group</source>
+        <target state="new">Excluded by selected group</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceLaunchGroupsExcludedFromSelection">
+        <source>Excluded from selection</source>
+        <target state="new">Excluded from selection</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceLaunchGroupsExplicitStart">
+        <source>Explicit start</source>
+        <target state="new">Explicit start</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceLaunchGroupsHeader">
+        <source>Launch groups</source>
+        <target state="new">Launch groups</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceLaunchGroupsInheritedFrom">
+        <source>Inherited from</source>
+        <target state="new">Inherited from</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceLaunchGroupsNo">
+        <source>No</source>
+        <target state="new">No</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceLaunchGroupsNone">
+        <source>None</source>
+        <target state="new">None</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceLaunchGroupsSelectedGroup">
+        <source>Selected group</source>
+        <target state="new">Selected group</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceLaunchGroupsUngrouped">
+        <source>Ungrouped</source>
+        <target state="new">Ungrouped</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceLaunchGroupsYes">
+        <source>Yes</source>
+        <target state="new">Yes</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ResourceOverviewBrowseMeters">
         <source>Browse meters</source>
         <target state="new">Browse meters</target>

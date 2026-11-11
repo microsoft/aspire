@@ -36,7 +36,15 @@ internal sealed class OrchestratorHostService : IHostedLifecycleService, IAsyncD
             return;
         }
 
-        await _dcpHost.StartAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await _dcpHost.StartAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _appOrchestrator.FailResourcePreparation(ex);
+            throw;
+        }
 
         await _appOrchestrator.RunApplicationAsync(cancellationToken).ConfigureAwait(false);
     }

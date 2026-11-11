@@ -1,0 +1,70 @@
+﻿{
+  "selectedGroup": "catalog",
+  "groups": [
+    "catalog",
+    "empty",
+    "shared"
+  ],
+  "resources": [
+    {
+      "name": "api",
+      "groups": [
+        "catalog",
+        "shared"
+      ],
+      "inheritedFrom": "frontend",
+      "explicitStart": false,
+      "excludedByGroup": false,
+      "excludedFromSelection": false,
+      "buildDisposition": "Initial"
+    },
+    {
+      "name": "cache",
+      "groups": [
+        "catalog"
+      ],
+      "explicitStart": true,
+      "excludedByGroup": true,
+      "excludedFromSelection": false,
+      "buildDisposition": "InitialPersistent"
+    },
+    {
+      "name": "database",
+      "groups": [
+        "shared"
+      ],
+      "explicitStart": false,
+      "excludedByGroup": true,
+      "excludedFromSelection": false,
+      "buildDisposition": "InitialShared"
+    },
+    {
+      "name": "helper",
+      "groups": [],
+      "explicitStart": false,
+      "excludedByGroup": false,
+      "excludedFromSelection": true,
+      "buildDisposition": "NotCoordinated"
+    },
+    {
+      "name": "migration",
+      "groups": [
+        "catalog"
+      ],
+      "explicitStart": true,
+      "excludedByGroup": false,
+      "excludedFromSelection": true,
+      "buildDisposition": "Pending"
+    },
+    {
+      "name": "worker",
+      "groups": [
+        "shared"
+      ],
+      "explicitStart": false,
+      "excludedByGroup": false,
+      "excludedFromSelection": false,
+      "buildDisposition": "Deferred"
+    }
+  ]
+}

@@ -941,6 +941,168 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ResourceGraphGameSoundOn", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Deferred.
+        /// </summary>
+        public static string ResourceLaunchGroupsBuildDeferred {
+            get {
+                return ResourceManager.GetString("ResourceLaunchGroupsBuildDeferred", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Build disposition.
+        /// </summary>
+        public static string ResourceLaunchGroupsBuildDisposition {
+            get {
+                return ResourceManager.GetString("ResourceLaunchGroupsBuildDisposition", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Initial.
+        /// </summary>
+        public static string ResourceLaunchGroupsBuildInitial {
+            get {
+                return ResourceManager.GetString("ResourceLaunchGroupsBuildInitial", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Initial (persistent).
+        /// </summary>
+        public static string ResourceLaunchGroupsBuildInitialPersistent {
+            get {
+                return ResourceManager.GetString("ResourceLaunchGroupsBuildInitialPersistent", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Initial (shared).
+        /// </summary>
+        public static string ResourceLaunchGroupsBuildInitialShared {
+            get {
+                return ResourceManager.GetString("ResourceLaunchGroupsBuildInitialShared", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Not coordinated.
+        /// </summary>
+        public static string ResourceLaunchGroupsBuildNotCoordinated {
+            get {
+                return ResourceManager.GetString("ResourceLaunchGroupsBuildNotCoordinated", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Pending.
+        /// </summary>
+        public static string ResourceLaunchGroupsBuildPending {
+            get {
+                return ResourceManager.GetString("ResourceLaunchGroupsBuildPending", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Effective membership.
+        /// </summary>
+        public static string ResourceLaunchGroupsEffectiveMembership {
+            get {
+                return ResourceManager.GetString("ResourceLaunchGroupsEffectiveMembership", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Excluded by selected group.
+        /// </summary>
+        public static string ResourceLaunchGroupsExcludedByGroup {
+            get {
+                return ResourceManager.GetString("ResourceLaunchGroupsExcludedByGroup", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Excluded from selection.
+        /// </summary>
+        public static string ResourceLaunchGroupsExcludedFromSelection {
+            get {
+                return ResourceManager.GetString("ResourceLaunchGroupsExcludedFromSelection", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Explicit start.
+        /// </summary>
+        public static string ResourceLaunchGroupsExplicitStart {
+            get {
+                return ResourceManager.GetString("ResourceLaunchGroupsExplicitStart", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Launch groups.
+        /// </summary>
+        public static string ResourceLaunchGroupsHeader {
+            get {
+                return ResourceManager.GetString("ResourceLaunchGroupsHeader", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Inherited from.
+        /// </summary>
+        public static string ResourceLaunchGroupsInheritedFrom {
+            get {
+                return ResourceManager.GetString("ResourceLaunchGroupsInheritedFrom", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to No.
+        /// </summary>
+        public static string ResourceLaunchGroupsNo {
+            get {
+                return ResourceManager.GetString("ResourceLaunchGroupsNo", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to None.
+        /// </summary>
+        public static string ResourceLaunchGroupsNone {
+            get {
+                return ResourceManager.GetString("ResourceLaunchGroupsNone", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Selected group.
+        /// </summary>
+        public static string ResourceLaunchGroupsSelectedGroup {
+            get {
+                return ResourceManager.GetString("ResourceLaunchGroupsSelectedGroup", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Ungrouped.
+        /// </summary>
+        public static string ResourceLaunchGroupsUngrouped {
+            get {
+                return ResourceManager.GetString("ResourceLaunchGroupsUngrouped", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Yes.
+        /// </summary>
+        public static string ResourceLaunchGroupsYes {
+            get {
+                return ResourceManager.GetString("ResourceLaunchGroupsYes", resourceCulture);
+            }
+        }
         
         /// <summary>
         ///   Looks up a localized string similar to Browse meters.

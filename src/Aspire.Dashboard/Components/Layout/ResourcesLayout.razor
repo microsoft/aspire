@@ -51,7 +51,7 @@
                                         Groups="@GetFilterGroups"
                                         Resources="@GetFilterCountResources"
                                         @* The popover stays open when a value changes. Handling the callback re-renders the pane. *@
-                                        OnChanged="@(() => Task.CompletedTask)" />
+                                        OnChanged="@OnPaneFiltersChangedAsync" />
                     <AspireMenuButton MenuButtonId="@GroupingButtonId"
                                       ButtonClass="resource-pane-button"
                                       ButtonAppearance="@(_grouping == ResourcePaneGrouping.None ? ButtonAppearance.Default : ButtonAppearance.Primary)"

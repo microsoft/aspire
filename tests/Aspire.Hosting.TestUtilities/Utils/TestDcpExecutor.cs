@@ -11,6 +11,8 @@ internal sealed class TestDcpExecutor : IDcpExecutor
     private readonly Dictionary<string, IResourceReference> _resources = new(StringComparers.ResourceName);
     private readonly ConcurrentQueue<string> _startedResources = new();
 
+    public Task RunApplicationTask { get; set; } = Task.CompletedTask;
+
     /// <summary>
     /// DCP resource names passed to <see cref="StartResourceAsync"/>, in the order they were requested.
     /// </summary>
@@ -48,7 +50,7 @@ internal sealed class TestDcpExecutor : IDcpExecutor
                 $"Expected one DCP resource for model resource '{modelResource.Name}', found {matches.Length}.");
     }
 
-    public Task RunApplicationAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+    public Task RunApplicationAsync(CancellationToken cancellationToken) => RunApplicationTask;
 
     public Task StartResourceAsync(IResourceReference resourceReference, CancellationToken cancellationToken)
     {

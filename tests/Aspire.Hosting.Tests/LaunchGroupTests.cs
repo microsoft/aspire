@@ -5,11 +5,13 @@
 
 using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using Aspire.Dashboard.Model;
 using Aspire.Hosting.Orchestrator;
+using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -96,6 +98,251 @@ public class LaunchGroupTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task BeforeStartMembershipsAreIncludedInSelectionAndMetadata()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        builder.Configuration["Aspire:LaunchGroup"] = "frontend";
+        var frontend = builder.AddExecutable("frontend", "unused", ".").WithLaunchGroup("frontend");
+        var early = builder.AddExecutable("early", "unused", ".");
+        var other = builder.AddExecutable("other", "unused", ".");
+        builder.OnBeforeStart((_, _) =>
+        {
+            frontend.WithLaunchGroup("late-group");
+            early.WithLaunchGroup("frontend");
+            other.WithLaunchGroup("late-group");
+            return Task.CompletedTask;
+        });
+        await using var app = builder.Build();
+
+        await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
+
+        var info = app.Services.GetRequiredService<LaunchGroupMetadataService>().GetInformation();
+        var frontendInfo = Assert.Single(info.Resources, resource => resource.Name == "frontend");
+        var earlyInfo = Assert.Single(info.Resources, resource => resource.Name == "early");
+        var otherInfo = Assert.Single(info.Resources, resource => resource.Name == "other");
+        Assert.Multiple(
+            () => Assert.Equal(["frontend", "late-group"], info.Groups),
+            () => Assert.Equal(["frontend", "late-group"], frontendInfo.Groups),
+            () => Assert.Equal(["frontend"], earlyInfo.Groups),
+            () => Assert.False(earlyInfo.ExcludedByGroup),
+            () => Assert.False(early.Resource.HasAnnotationOfType<ExplicitStartupAnnotation>()),
+            () => Assert.Equal(["late-group"], otherInfo.Groups),
+            () => Assert.True(otherInfo.ExcludedByGroup),
+            () => Assert.True(other.Resource.HasAnnotationOfType<ExplicitStartupAnnotation>()));
+    }
+
+    [Fact]
+    public async Task LateRegistrationsKeepSelectionAndMetadataConsistent()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        builder.Configuration["Aspire:LaunchGroup"] = "frontend";
+        var frontend = builder.AddExecutable("frontend", "unused", ".").WithLaunchGroup("frontend");
+        var early = builder.AddExecutable("early", "unused", ".");
+        var late = new ExecutableResource("late", "unused", ".");
+        late.Annotations.Add(new LaunchGroupAnnotation("late-group"));
+        builder.Pipeline.WithFinalAction(WellKnownPipelineSteps.BeforeStart, context =>
+        {
+            frontend.WithLaunchGroup("late-group");
+            early.WithLaunchGroup("frontend");
+            context.Model.Resources.Add(late);
+            return Task.CompletedTask;
+        });
+        await using var app = builder.Build();
+
+        await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
+
+        var info = app.Services.GetRequiredService<LaunchGroupMetadataService>().GetInformation();
+        var frontendInfo = Assert.Single(info.Resources, resource => resource.Name == "frontend");
+        var earlyInfo = Assert.Single(info.Resources, resource => resource.Name == "early");
+        var lateInfo = Assert.Single(info.Resources, resource => resource.Name == "late");
+        Assert.Multiple(
+            () => Assert.Equal(["frontend", "late-group"], info.Groups),
+            () => Assert.Equal(["frontend", "late-group"], frontendInfo.Groups),
+            () => Assert.Equal(["frontend"], earlyInfo.Groups),
+            () => Assert.False(earlyInfo.ExcludedByGroup),
+            () => Assert.False(early.Resource.HasAnnotationOfType<ExplicitStartupAnnotation>()),
+            () => Assert.Equal(["late-group"], lateInfo.Groups),
+            () => Assert.True(lateInfo.ExcludedByGroup),
+            () => Assert.True(late.HasAnnotationOfType<ExplicitStartupAnnotation>()));
+    }
+
+    [Fact]
+    public async Task SelectedGroupCanBeInferredFromFinalActionMembership()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        builder.Configuration["Aspire:LaunchGroup"] = "frontend";
+        var frontend = builder.AddExecutable("frontend", "unused", ".");
+        var other = builder.AddExecutable("other", "unused", ".");
+        builder.Pipeline.WithFinalAction(WellKnownPipelineSteps.BeforeStart, _ =>
+        {
+            frontend.WithLaunchGroup("frontend");
+            return Task.CompletedTask;
+        });
+        await using var app = builder.Build();
+
+        await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
+
+        var info = app.Services.GetRequiredService<LaunchGroupMetadataService>().GetInformation();
+        var frontendInfo = Assert.Single(info.Resources, resource => resource.Name == "frontend");
+        var otherInfo = Assert.Single(info.Resources, resource => resource.Name == "other");
+        Assert.Multiple(
+            () => Assert.Equal("frontend", info.SelectedGroup),
+            () => Assert.Equal(["frontend"], info.Groups),
+            () => Assert.Equal(["frontend"], frontendInfo.Groups),
+            () => Assert.False(frontendInfo.ExcludedByGroup),
+            () => Assert.False(frontend.Resource.HasAnnotationOfType<ExplicitStartupAnnotation>()),
+            () => Assert.True(otherInfo.ExcludedByGroup),
+            () => Assert.True(other.Resource.HasAnnotationOfType<ExplicitStartupAnnotation>()));
+    }
+
+    [Fact]
+    public async Task FinalActionRequiredDependencyFailsPreflightWithoutEvaluatingCallbacks()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        builder.Configuration["Aspire:LaunchGroup"] = "frontend";
+        var frontend = builder.AddExecutable("frontend", "unused", ".").WithLaunchGroup("frontend");
+        var backend = builder.AddExecutable("backend", "unused", ".").WithLaunchGroup("backend");
+        var argumentCallbacks = 0;
+        var environmentCallbacks = 0;
+        var finalActionRan = false;
+        frontend.WithArgs(_ => Interlocked.Increment(ref argumentCallbacks))
+            .WithEnvironment(_ => Interlocked.Increment(ref environmentCallbacks));
+        builder.Pipeline.WithFinalAction(WellKnownPipelineSteps.BeforeStart, _ =>
+        {
+            finalActionRan = true;
+            frontend.WithReferenceRelationship(backend);
+            return Task.CompletedTask;
+        });
+        await using var app = builder.Build();
+
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(
+            () => app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken));
+
+        Assert.Multiple(
+            () => Assert.True(finalActionRan),
+            () => Assert.Equal(
+                "Resource 'frontend' requires local resource 'backend', which is not included in launch group 'frontend'. " +
+                "Dependency path: frontend -> backend. Edges: frontend --reference--> backend. " +
+                "Add 'backend' to launch group 'frontend'. " +
+                "If the reference from 'frontend' to 'backend' is optional, mark it with WithOptionalLaunchGroupDependency.",
+                exception.Message),
+            () => Assert.Equal(0, argumentCallbacks),
+            () => Assert.Equal(0, environmentCallbacks));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task FinalActionExplicitStartIsPreservedForPreviouslyExcludedResource(bool becomesSelected)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        builder.Configuration["Aspire:LaunchGroup"] = "frontend";
+        builder.AddExecutable("frontend", "unused", ".").WithLaunchGroup("frontend");
+        var backend = builder.AddExecutable("backend", "unused", ".").WithLaunchGroup("backend");
+        var explicitStart = new ExplicitStartupAnnotation();
+        builder.Pipeline.WithFinalAction(WellKnownPipelineSteps.BeforeStart, _ =>
+        {
+            backend.WithAnnotation(explicitStart);
+            if (becomesSelected)
+            {
+                backend.WithLaunchGroup("frontend");
+            }
+            return Task.CompletedTask;
+        });
+        await using var app = builder.Build();
+
+        await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
+
+        var info = app.Services.GetRequiredService<LaunchGroupMetadataService>().GetInformation();
+        var backendInfo = Assert.Single(info.Resources, resource => resource.Name == "backend");
+        Assert.Multiple(
+            () => Assert.Equal(becomesSelected ? new[] { "backend", "frontend" } : ["backend"], backendInfo.Groups),
+            () => Assert.Equal(!becomesSelected, backendInfo.ExcludedByGroup),
+            () => Assert.True(backendInfo.ExplicitStart),
+            () => Assert.Contains(explicitStart, backend.Resource.Annotations));
+    }
+
+    [Fact]
+    public async Task RepeatedBeforeStartRefreshesSelectionAndPreservesUserExplicitStart()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        builder.Configuration["Aspire:LaunchGroup"] = "frontend";
+        builder.AddExecutable("frontend", "unused", ".").WithLaunchGroup("frontend");
+        var promoted = builder.AddExecutable("promoted", "unused", ".").WithLaunchGroup("backend");
+        var manual = builder.AddExecutable("manual", "unused", ".").WithLaunchGroup("backend");
+        await using var app = builder.Build();
+
+        await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
+        var explicitStart = new ExplicitStartupAnnotation();
+        promoted.WithLaunchGroup("frontend");
+        manual.WithLaunchGroup("frontend").WithAnnotation(explicitStart);
+        await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
+
+        var information = app.Services.GetRequiredService<LaunchGroupMetadataService>().GetInformation();
+        var promotedInfo = Assert.Single(information.Resources, resource => resource.Name == "promoted");
+        var manualInfo = Assert.Single(information.Resources, resource => resource.Name == "manual");
+        Assert.Multiple(
+            () => Assert.False(promoted.Resource.HasAnnotationOfType<ExplicitStartupAnnotation>()),
+            () => Assert.False(promotedInfo.ExcludedByGroup),
+            () => Assert.False(promotedInfo.ExplicitStart),
+            () => Assert.Same(explicitStart, Assert.Single(manual.Resource.Annotations.OfType<ExplicitStartupAnnotation>())),
+            () => Assert.False(manualInfo.ExcludedByGroup),
+            () => Assert.True(manualInfo.ExplicitStart));
+    }
+
+    [Fact]
+    public async Task FailedRepeatedBeforeStartPreservesSelectionAndMetadata()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        builder.Configuration["Aspire:LaunchGroup"] = "frontend";
+        var frontend = builder.AddExecutable("frontend", "unused", ".").WithLaunchGroup("frontend");
+        var backend = builder.AddExecutable("backend", "unused", ".").WithLaunchGroup("backend");
+        await using var app = builder.Build();
+
+        await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
+        var metadata = app.Services.GetRequiredService<LaunchGroupMetadataService>();
+        var originalInformation = metadata.GetInformation();
+        var originalAnnotation = Assert.Single(backend.Resource.Annotations.OfType<ExplicitStartupAnnotation>());
+        frontend.WithReferenceRelationship(backend);
+
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(
+            () => app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken));
+
+        Assert.Contains("frontend -> backend", exception.Message);
+        Assert.Same(originalInformation, metadata.GetInformation());
+        Assert.Same(originalAnnotation, Assert.Single(backend.Resource.Annotations.OfType<ExplicitStartupAnnotation>()));
+        Assert.False(frontend.Resource.HasAnnotationOfType<ExplicitStartupAnnotation>());
+    }
+
+    [Fact]
+    public async Task ClearingSelectionRemovesOnlySyntheticExplicitStart()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        builder.Configuration["Aspire:LaunchGroup"] = "frontend";
+        builder.AddExecutable("frontend", "unused", ".").WithLaunchGroup("frontend");
+        var automatic = builder.AddExecutable("automatic", "unused", ".").WithLaunchGroup("backend");
+        var manual = builder.AddExecutable("manual", "unused", ".").WithLaunchGroup("backend");
+        var explicitStart = new ExplicitStartupAnnotation();
+        manual.WithAnnotation(explicitStart);
+        await using var app = builder.Build();
+
+        await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
+        builder.Configuration["Aspire:LaunchGroup"] = null;
+        await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
+
+        var information = app.Services.GetRequiredService<LaunchGroupMetadataService>().GetInformation();
+        var automaticInfo = Assert.Single(information.Resources, resource => resource.Name == "automatic");
+        var manualInfo = Assert.Single(information.Resources, resource => resource.Name == "manual");
+        Assert.Multiple(
+            () => Assert.Null(information.SelectedGroup),
+            () => Assert.False(automatic.Resource.HasAnnotationOfType<ExplicitStartupAnnotation>()),
+            () => Assert.False(automaticInfo.ExcludedByGroup),
+            () => Assert.False(automaticInfo.ExplicitStart),
+            () => Assert.Same(explicitStart, Assert.Single(manual.Resource.Annotations.OfType<ExplicitStartupAnnotation>())),
+            () => Assert.True(manualInfo.ExplicitStart));
+    }
+
+    [Fact]
     public async Task ConfigurationOnlyInvalidSelectionFailsBeforeStarting()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
@@ -142,7 +389,9 @@ public class LaunchGroupTests(ITestOutputHelper outputHelper)
 
         await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
 
-        Assert.Null(app.Services.GetService<LaunchGroupService>());
+        var information = app.Services.GetRequiredService<LaunchGroupMetadataService>().GetInformation();
+        Assert.Null(information.SelectedGroup);
+        Assert.Empty(information.Groups);
         Assert.False(resource.Resource.HasAnnotationOfType<ExplicitStartupAnnotation>());
     }
 
@@ -196,7 +445,7 @@ public class LaunchGroupTests(ITestOutputHelper outputHelper)
 
         await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
 
-        Assert.Equal(useMembershipApi, app.Services.GetService<LaunchGroupService>() is not null);
+        Assert.Null(app.Services.GetRequiredService<LaunchGroupMetadataService>().GetInformationOrDefault());
         Assert.False(resource.Resource.HasAnnotationOfType<ExplicitStartupAnnotation>());
     }
 
@@ -233,7 +482,7 @@ public class LaunchGroupTests(ITestOutputHelper outputHelper)
 
         await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
 
-        Assert.Null(app.Services.GetService<LaunchGroupService>());
+        Assert.Null(app.Services.GetRequiredService<LaunchGroupMetadataService>().GetInformationOrDefault());
         Assert.False(resource.Resource.HasAnnotationOfType<ExplicitStartupAnnotation>());
     }
 
@@ -252,7 +501,6 @@ public class LaunchGroupTests(ITestOutputHelper outputHelper)
         object argument = expression ? ReferenceExpression.Create($"--server={endpoint}") : endpoint;
         var frontend = builder.AddExecutable("frontend", "unused", ".", new object[] { argument }).WithLaunchGroup("frontend");
         var callbacks = 0;
-        frontend.WithReferenceRelationship(dependency.Resource);
         frontend.WithArgs(context => { Interlocked.Increment(ref callbacks); });
         await using var app = builder.Build();
 
@@ -266,45 +514,80 @@ public class LaunchGroupTests(ITestOutputHelper outputHelper)
         Assert.Equal(0, callbacks);
     }
 
-    [Fact]
-    public async Task CallbackOnlyReferencesCanBeDeclaredWithoutEvaluatingCallbacks()
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task CallbackOnlyReferencesCanBeDeclaredWithoutEvaluatingCallbacks(bool argumentCallback, bool declareRelationship)
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.Configuration["Aspire:LaunchGroup"] = "frontend";
-        var backend = builder.AddExecutable("backend", "unused", ".").WithLaunchGroup("backend");
+        var backend = builder.AddExecutable("backend", "unused", ".")
+            .WithHttpEndpoint().WithLaunchGroup("backend");
         var frontend = builder.AddExecutable("frontend", "unused", ".").WithLaunchGroup("frontend");
         var callbacks = 0;
-        frontend.WithEnvironment(context =>
+        if (argumentCallback)
         {
-            Interlocked.Increment(ref callbacks);
-            context.EnvironmentVariables["BACKEND"] = backend.GetEndpoint("http");
-        });
-        frontend.WithReferenceRelationship(backend);
+            frontend.WithArgs(context =>
+            {
+                Interlocked.Increment(ref callbacks);
+                context.Args.Add(backend.GetEndpoint("http"));
+            });
+        }
+        else
+        {
+            frontend.WithEnvironment(context =>
+            {
+                Interlocked.Increment(ref callbacks);
+                context.EnvironmentVariables["BACKEND"] = backend.GetEndpoint("http");
+            });
+        }
+        if (declareRelationship)
+        {
+            frontend.WithReferenceRelationship(backend);
+        }
         await using var app = builder.Build();
 
-        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(
-            () => app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken));
-
-        Assert.Contains("frontend", exception.Message);
-        Assert.Contains("backend", exception.Message);
+        if (declareRelationship)
+        {
+            var exception = await Assert.ThrowsAsync<DistributedApplicationException>(
+                () => app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken));
+            Assert.Contains("frontend", exception.Message);
+            Assert.Contains("backend", exception.Message);
+        }
+        else
+        {
+            await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
+            Assert.False(frontend.Resource.HasAnnotationOfType<ExplicitStartupAnnotation>());
+            Assert.True(backend.Resource.HasAnnotationOfType<ExplicitStartupAnnotation>());
+        }
         Assert.Equal(0, callbacks);
     }
 
-    [Fact]
-    public async Task SelectedReferencesDoNotAddReadinessWaits()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task SelectedReferencesDoNotAddReadinessWaits(bool expression)
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.Configuration["Aspire:LaunchGroup"] = "frontend";
-        var backend = builder.AddExecutable("backend", "unused", ".").WithLaunchGroup("frontend");
-        var frontend = builder.AddExecutable("frontend", "unused", ".")
-            .WithLaunchGroup("frontend").WithReferenceRelationship(backend);
+        var backend = builder.AddExecutable("backend", "unused", ".")
+            .WithHttpEndpoint().WithLaunchGroup("frontend");
+        var endpoint = backend.GetEndpoint("http");
+        object argument = expression ? ReferenceExpression.Create($"--server={endpoint}") : endpoint;
+        var frontend = builder.AddExecutable("frontend", "unused", ".", new object[] { argument }).WithLaunchGroup("frontend");
         var callbacks = 0;
         frontend.WithArgs(context => Interlocked.Increment(ref callbacks));
         await using var app = builder.Build();
 
         await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
 
+        var relationship = Assert.Single(frontend.Resource.Annotations.OfType<ResourceRelationshipAnnotation>());
+        Assert.Same(backend.Resource, relationship.Resource);
+        Assert.Equal(KnownRelationshipTypes.Reference, relationship.Type);
         Assert.Empty(frontend.Resource.Annotations.OfType<WaitAnnotation>());
+        Assert.False(frontend.Resource.HasAnnotationOfType<ExplicitStartupAnnotation>());
         Assert.False(backend.Resource.HasAnnotationOfType<ExplicitStartupAnnotation>());
         Assert.Equal(0, callbacks);
     }
@@ -472,6 +755,38 @@ public class LaunchGroupTests(ITestOutputHelper outputHelper)
         Assert.False(resource.Resource.HasAnnotationOfType<ExplicitStartupAnnotation>());
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task GroupNamesUseOrdinalIgnoreCaseUnderTurkishCulture(bool declared)
+    {
+        var originalCulture = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("tr-TR");
+            using var builder = TestDistributedApplicationBuilder.Create();
+            builder.Configuration["Aspire:LaunchGroup"] = "FILE";
+            if (declared)
+            {
+                builder.Configuration["Aspire:LaunchGroups:0"] = "file";
+                builder.Configuration["Aspire:LaunchGroups:1"] = "fıle";
+            }
+            var selected = builder.AddExecutable("selected", "unused", ".").WithLaunchGroups("file", "FILE");
+            var other = builder.AddExecutable("other", "unused", ".").WithLaunchGroup("fıle");
+            await using var app = builder.Build();
+
+            await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
+
+            Assert.False(selected.Resource.HasAnnotationOfType<ExplicitStartupAnnotation>());
+            Assert.True(other.Resource.HasAnnotationOfType<ExplicitStartupAnnotation>());
+            Assert.Equal(["file"], selected.Resource.Annotations.OfType<LaunchGroupAnnotation>().Select(annotation => annotation.LaunchGroupName));
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = originalCulture;
+        }
+    }
+
     [Fact]
     public async Task SelectionRejectsMissingWaitReferenceOrConnectionStringDependencies()
     {
@@ -504,7 +819,7 @@ public class LaunchGroupTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData("catalog")]
     [InlineData("basket")]
-    public async Task ChildrenRequireTheirOwnMembershipAndDoNotSelectTheirParents(string parentGroup)
+    public async Task DisplayAndReferenceRelationshipsDoNotInheritMembershipOrSelectParents(string parentGroup)
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.Configuration["Aspire:LaunchGroup"] = "catalog";
@@ -512,11 +827,13 @@ public class LaunchGroupTests(ITestOutputHelper outputHelper)
         var child = builder.AddExecutable("admin", "unused", ".").WithParentRelationship(parent);
         var overrideChild = builder.AddExecutable("other-admin", "unused", ".")
             .WithParentRelationship(parent).WithLaunchGroup("catalog");
+        var reference = builder.AddExecutable("reference", "unused", ".").WithReferenceRelationship(parent);
         await using var app = builder.Build();
 
         await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
 
         Assert.True(child.Resource.HasAnnotationOfType<ExplicitStartupAnnotation>());
+        Assert.True(reference.Resource.HasAnnotationOfType<ExplicitStartupAnnotation>());
         Assert.False(overrideChild.Resource.HasAnnotationOfType<ExplicitStartupAnnotation>());
         Assert.Equal(parentGroup != "catalog", parent.Resource.HasAnnotationOfType<ExplicitStartupAnnotation>());
     }

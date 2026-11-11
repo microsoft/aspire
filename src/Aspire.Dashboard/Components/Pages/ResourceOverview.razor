@@ -188,6 +188,23 @@
                         <dt>@Loc[nameof(Dashboard.Resources.Resources.ResourcesSourceColumnHeader)]</dt>
                         <dd class="overview-mono" data-tooltip="@source.Tooltip">@source.Value</dd>
                     }
+                    @if (resource.LaunchGroup is { } launchGroup)
+                    {
+                        <dt>@Loc[nameof(Dashboard.Resources.Resources.ResourceLaunchGroupsSelectedGroup)]</dt>
+                        <dd>@LaunchGroupDisplayHelpers.GetSelectedGroupText(launchGroup, Loc)</dd>
+                        <dt>@Loc[nameof(Dashboard.Resources.Resources.ResourceLaunchGroupsEffectiveMembership)]</dt>
+                        <dd>@LaunchGroupDisplayHelpers.GetGroupsText(launchGroup, Loc)</dd>
+                        <dt>@Loc[nameof(Dashboard.Resources.Resources.ResourceLaunchGroupsInheritedFrom)]</dt>
+                        <dd>@LaunchGroupDisplayHelpers.GetInheritedFromText(launchGroup, Loc)</dd>
+                        <dt>@Loc[nameof(Dashboard.Resources.Resources.ResourceLaunchGroupsExplicitStart)]</dt>
+                        <dd>@LaunchGroupDisplayHelpers.GetBooleanText(launchGroup.ExplicitStart, Loc)</dd>
+                        <dt>@Loc[nameof(Dashboard.Resources.Resources.ResourceLaunchGroupsExcludedByGroup)]</dt>
+                        <dd>@LaunchGroupDisplayHelpers.GetBooleanText(launchGroup.ExcludedByGroup, Loc)</dd>
+                        <dt>@Loc[nameof(Dashboard.Resources.Resources.ResourceLaunchGroupsExcludedFromSelection)]</dt>
+                        <dd>@LaunchGroupDisplayHelpers.GetBooleanText(launchGroup.ExcludedFromSelection, Loc)</dd>
+                        <dt>@Loc[nameof(Dashboard.Resources.Resources.ResourceLaunchGroupsBuildDisposition)]</dt>
+                        <dd>@LaunchGroupDisplayHelpers.GetBuildDispositionText(launchGroup.BuildDisposition, Loc)</dd>
+                    }
                 </dl>
             </section>
 

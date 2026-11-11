@@ -36,6 +36,7 @@ internal sealed class ApplicationOrchestrator
     private readonly DistributedApplicationExecutionContext _executionContext;
     private readonly ParameterProcessor _parameterProcessor;
     private readonly CancellationTokenSource _shutdownCancellation = new();
+    private readonly TaskCompletionSource _resourcesPrepared = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private IConfiguration? Configuration => _serviceProvider.GetService<IConfiguration>();
 
     public ApplicationOrchestrator(DistributedApplicationModel model,
@@ -305,7 +306,16 @@ internal sealed class ApplicationOrchestrator
 
     private async Task OnResourcesPrepared(OnResourcesPreparedContext context)
     {
-        await PublishResourcesInitialStateAsync(context.CancellationToken).ConfigureAwait(false);
+        try
+        {
+            await PublishResourcesInitialStateAsync(context.CancellationToken).ConfigureAwait(false);
+            _resourcesPrepared.TrySetResult();
+        }
+        catch (Exception ex)
+        {
+            FailResourcePreparation(ex);
+            throw;
+        }
     }
 
     private async Task OnConnectionStringAvailable(OnConnectionStringAvailableContext context)
@@ -690,20 +700,31 @@ internal sealed class ApplicationOrchestrator
 
     public async Task RunApplicationAsync(CancellationToken cancellationToken = default)
     {
-        await _dcpExecutor.RunApplicationAsync(cancellationToken).ConfigureAwait(false);
-
-        var afterResourcesCreatedEvent = new AfterResourcesCreatedEvent(_serviceProvider, _model);
-        await _eventing.PublishAsync(afterResourcesCreatedEvent, cancellationToken).ConfigureAwait(false);
-
-        foreach (var lifecycleHook in _lifecycleHooks)
+        try
         {
-            await lifecycleHook.AfterResourcesCreatedAsync(_model, cancellationToken).ConfigureAwait(false);
+            await _dcpExecutor.RunApplicationAsync(cancellationToken).ConfigureAwait(false);
+
+            var afterResourcesCreatedEvent = new AfterResourcesCreatedEvent(_serviceProvider, _model);
+            await _eventing.PublishAsync(afterResourcesCreatedEvent, cancellationToken).ConfigureAwait(false);
+
+            foreach (var lifecycleHook in _lifecycleHooks)
+            {
+                await lifecycleHook.AfterResourcesCreatedAsync(_model, cancellationToken).ConfigureAwait(false);
+            }
+        }
+        catch (Exception ex)
+        {
+            FailResourcePreparation(ex);
+            throw;
         }
     }
+
+    internal void FailResourcePreparation(Exception exception) => _resourcesPrepared.TrySetException(exception);
 
     public async Task StopAsync(CancellationToken cancellationToken)
     {
         _shutdownCancellation.Cancel();
+        _resourcesPrepared.TrySetCanceled(_shutdownCancellation.Token);
 
         await _dcpExecutor.StopAsync(cancellationToken).ConfigureAwait(false);
     }
@@ -716,6 +737,8 @@ internal sealed class ApplicationOrchestrator
 
     internal async Task StartResourceAsync(IResource resource, CancellationToken cancellationToken)
     {
+        // Build consumers can request a deferred resource before DCP has created its resource references.
+        await _resourcesPrepared.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
         var resourceReference = _dcpExecutor.GetResource(resource);
         await StartResourceAsync(resourceReference, cancellationToken).ConfigureAwait(false);
     }
@@ -869,7 +892,7 @@ internal sealed class ApplicationOrchestrator
     // TODO: We need to introduce a formal way to resources to opt into propagating state and events to children.
     // This fixes the immediate problem of not propagating to top-level resources, but there are other
     // resources that may want to have their own lifetime, that this code will be unaware of.
-    private static bool ResourceHasOwnLifetime(IResource resource) =>
+    internal static bool ResourceHasOwnLifetime(IResource resource) =>
         resource.IsContainer() ||
         resource is ProjectResource ||
         resource is ExecutableResource ||

@@ -13152,7 +13152,9 @@ export interface ContainerRegistryResource {
      * Membership is additive. Select one group with the `Aspire:LaunchGroup` configuration setting.
      * Selecting a group marks resources without that membership for explicit start, including ungrouped resources,
      * unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
-     * Dependencies and children must be assigned membership explicitly; selection does not change lifecycle commands.
+     * Structural children without their own memberships inherit their parent's memberships. Their own memberships
+     * override that default. Display relationships and references do not inherit membership or select dependencies.
+     * Selection does not change lifecycle commands.
      * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
      * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
      * to select a group. No selection preserves normal startup, and publishing is unaffected.
@@ -13549,7 +13551,9 @@ export interface ContainerRegistryResourcePromise extends PromiseLike<ContainerR
      * Membership is additive. Select one group with the `Aspire:LaunchGroup` configuration setting.
      * Selecting a group marks resources without that membership for explicit start, including ungrouped resources,
      * unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
-     * Dependencies and children must be assigned membership explicitly; selection does not change lifecycle commands.
+     * Structural children without their own memberships inherit their parent's memberships. Their own memberships
+     * override that default. Display relationships and references do not inherit membership or select dependencies.
+     * Selection does not change lifecycle commands.
      * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
      * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
      * to select a group. No selection preserves normal startup, and publishing is unaffected.
@@ -13995,7 +13999,9 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
      * Membership is additive. Select one group with the `Aspire:LaunchGroup` configuration setting.
      * Selecting a group marks resources without that membership for explicit start, including ungrouped resources,
      * unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
-     * Dependencies and children must be assigned membership explicitly; selection does not change lifecycle commands.
+     * Structural children without their own memberships inherit their parent's memberships. Their own memberships
+     * override that default. Display relationships and references do not inherit membership or select dependencies.
+     * Selection does not change lifecycle commands.
      * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
      * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
      * to select a group. No selection preserves normal startup, and publishing is unaffected.
@@ -15663,7 +15669,9 @@ export interface ContainerResource {
      * Membership is additive. Select one group with the `Aspire:LaunchGroup` configuration setting.
      * Selecting a group marks resources without that membership for explicit start, including ungrouped resources,
      * unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
-     * Dependencies and children must be assigned membership explicitly; selection does not change lifecycle commands.
+     * Structural children without their own memberships inherit their parent's memberships. Their own memberships
+     * override that default. Display relationships and references do not inherit membership or select dependencies.
+     * Selection does not change lifecycle commands.
      * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
      * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
      * to select a group. No selection preserves normal startup, and publishing is unaffected.
@@ -16556,7 +16564,9 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      * Membership is additive. Select one group with the `Aspire:LaunchGroup` configuration setting.
      * Selecting a group marks resources without that membership for explicit start, including ungrouped resources,
      * unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
-     * Dependencies and children must be assigned membership explicitly; selection does not change lifecycle commands.
+     * Structural children without their own memberships inherit their parent's memberships. Their own memberships
+     * override that default. Display relationships and references do not inherit membership or select dependencies.
+     * Selection does not change lifecycle commands.
      * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
      * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
      * to select a group. No selection preserves normal startup, and publishing is unaffected.
@@ -17797,7 +17807,9 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
      * Membership is additive. Select one group with the `Aspire:LaunchGroup` configuration setting.
      * Selecting a group marks resources without that membership for explicit start, including ungrouped resources,
      * unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
-     * Dependencies and children must be assigned membership explicitly; selection does not change lifecycle commands.
+     * Structural children without their own memberships inherit their parent's memberships. Their own memberships
+     * override that default. Display relationships and references do not inherit membership or select dependencies.
+     * Selection does not change lifecycle commands.
      * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
      * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
      * to select a group. No selection preserves normal startup, and publishing is unaffected.
@@ -20360,7 +20372,9 @@ export interface CSharpAppResource {
      * Membership is additive. Select one group with the `Aspire:LaunchGroup` configuration setting.
      * Selecting a group marks resources without that membership for explicit start, including ungrouped resources,
      * unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
-     * Dependencies and children must be assigned membership explicitly; selection does not change lifecycle commands.
+     * Structural children without their own memberships inherit their parent's memberships. Their own memberships
+     * override that default. Display relationships and references do not inherit membership or select dependencies.
+     * Selection does not change lifecycle commands.
      * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
      * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
      * to select a group. No selection preserves normal startup, and publishing is unaffected.
@@ -21093,7 +21107,9 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      * Membership is additive. Select one group with the `Aspire:LaunchGroup` configuration setting.
      * Selecting a group marks resources without that membership for explicit start, including ungrouped resources,
      * unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
-     * Dependencies and children must be assigned membership explicitly; selection does not change lifecycle commands.
+     * Structural children without their own memberships inherit their parent's memberships. Their own memberships
+     * override that default. Display relationships and references do not inherit membership or select dependencies.
+     * Selection does not change lifecycle commands.
      * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
      * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
      * to select a group. No selection preserves normal startup, and publishing is unaffected.
@@ -21875,7 +21891,9 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
      * Membership is additive. Select one group with the `Aspire:LaunchGroup` configuration setting.
      * Selecting a group marks resources without that membership for explicit start, including ungrouped resources,
      * unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
-     * Dependencies and children must be assigned membership explicitly; selection does not change lifecycle commands.
+     * Structural children without their own memberships inherit their parent's memberships. Their own memberships
+     * override that default. Display relationships and references do not inherit membership or select dependencies.
+     * Selection does not change lifecycle commands.
      * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
      * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
      * to select a group. No selection preserves normal startup, and publishing is unaffected.
@@ -24561,7 +24579,9 @@ export interface DotnetToolResource {
      * Membership is additive. Select one group with the `Aspire:LaunchGroup` configuration setting.
      * Selecting a group marks resources without that membership for explicit start, including ungrouped resources,
      * unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
-     * Dependencies and children must be assigned membership explicitly; selection does not change lifecycle commands.
+     * Structural children without their own memberships inherit their parent's memberships. Their own memberships
+     * override that default. Display relationships and references do not inherit membership or select dependencies.
+     * Selection does not change lifecycle commands.
      * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
      * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
      * to select a group. No selection preserves normal startup, and publishing is unaffected.
@@ -25330,7 +25350,9 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      * Membership is additive. Select one group with the `Aspire:LaunchGroup` configuration setting.
      * Selecting a group marks resources without that membership for explicit start, including ungrouped resources,
      * unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
-     * Dependencies and children must be assigned membership explicitly; selection does not change lifecycle commands.
+     * Structural children without their own memberships inherit their parent's memberships. Their own memberships
+     * override that default. Display relationships and references do not inherit membership or select dependencies.
+     * Selection does not change lifecycle commands.
      * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
      * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
      * to select a group. No selection preserves normal startup, and publishing is unaffected.
@@ -26270,7 +26292,9 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
      * Membership is additive. Select one group with the `Aspire:LaunchGroup` configuration setting.
      * Selecting a group marks resources without that membership for explicit start, including ungrouped resources,
      * unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
-     * Dependencies and children must be assigned membership explicitly; selection does not change lifecycle commands.
+     * Structural children without their own memberships inherit their parent's memberships. Their own memberships
+     * override that default. Display relationships and references do not inherit membership or select dependencies.
+     * Selection does not change lifecycle commands.
      * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
      * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
      * to select a group. No selection preserves normal startup, and publishing is unaffected.
@@ -28848,7 +28872,9 @@ export interface ExecutableResource {
      * Membership is additive. Select one group with the `Aspire:LaunchGroup` configuration setting.
      * Selecting a group marks resources without that membership for explicit start, including ungrouped resources,
      * unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
-     * Dependencies and children must be assigned membership explicitly; selection does not change lifecycle commands.
+     * Structural children without their own memberships inherit their parent's memberships. Their own memberships
+     * override that default. Display relationships and references do not inherit membership or select dependencies.
+     * Selection does not change lifecycle commands.
      * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
      * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
      * to select a group. No selection preserves normal startup, and publishing is unaffected.
@@ -29578,7 +29604,9 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      * Membership is additive. Select one group with the `Aspire:LaunchGroup` configuration setting.
      * Selecting a group marks resources without that membership for explicit start, including ungrouped resources,
      * unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
-     * Dependencies and children must be assigned membership explicitly; selection does not change lifecycle commands.
+     * Structural children without their own memberships inherit their parent's memberships. Their own memberships
+     * override that default. Display relationships and references do not inherit membership or select dependencies.
+     * Selection does not change lifecycle commands.
      * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
      * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
      * to select a group. No selection preserves normal startup, and publishing is unaffected.
@@ -30408,7 +30436,9 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
      * Membership is additive. Select one group with the `Aspire:LaunchGroup` configuration setting.
      * Selecting a group marks resources without that membership for explicit start, including ungrouped resources,
      * unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
-     * Dependencies and children must be assigned membership explicitly; selection does not change lifecycle commands.
+     * Structural children without their own memberships inherit their parent's memberships. Their own memberships
+     * override that default. Display relationships and references do not inherit membership or select dependencies.
+     * Selection does not change lifecycle commands.
      * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
      * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
      * to select a group. No selection preserves normal startup, and publishing is unaffected.
@@ -32956,7 +32986,9 @@ export interface ExternalServiceResource {
      * Membership is additive. Select one group with the `Aspire:LaunchGroup` configuration setting.
      * Selecting a group marks resources without that membership for explicit start, including ungrouped resources,
      * unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
-     * Dependencies and children must be assigned membership explicitly; selection does not change lifecycle commands.
+     * Structural children without their own memberships inherit their parent's memberships. Their own memberships
+     * override that default. Display relationships and references do not inherit membership or select dependencies.
+     * Selection does not change lifecycle commands.
      * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
      * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
      * to select a group. No selection preserves normal startup, and publishing is unaffected.
@@ -33358,7 +33390,9 @@ export interface ExternalServiceResourcePromise extends PromiseLike<ExternalServ
      * Membership is additive. Select one group with the `Aspire:LaunchGroup` configuration setting.
      * Selecting a group marks resources without that membership for explicit start, including ungrouped resources,
      * unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
-     * Dependencies and children must be assigned membership explicitly; selection does not change lifecycle commands.
+     * Structural children without their own memberships inherit their parent's memberships. Their own memberships
+     * override that default. Display relationships and references do not inherit membership or select dependencies.
+     * Selection does not change lifecycle commands.
      * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
      * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
      * to select a group. No selection preserves normal startup, and publishing is unaffected.
@@ -33828,7 +33862,9 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
      * Membership is additive. Select one group with the `Aspire:LaunchGroup` configuration setting.
      * Selecting a group marks resources without that membership for explicit start, including ungrouped resources,
      * unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
-     * Dependencies and children must be assigned membership explicitly; selection does not change lifecycle commands.
+     * Structural children without their own memberships inherit their parent's memberships. Their own memberships
+     * override that default. Display relationships and references do not inherit membership or select dependencies.
+     * Selection does not change lifecycle commands.
      * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
      * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
      * to select a group. No selection preserves normal startup, and publishing is unaffected.
@@ -35317,7 +35353,9 @@ export interface ParameterResource {
      * Membership is additive. Select one group with the `Aspire:LaunchGroup` configuration setting.
      * Selecting a group marks resources without that membership for explicit start, including ungrouped resources,
      * unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
-     * Dependencies and children must be assigned membership explicitly; selection does not change lifecycle commands.
+     * Structural children without their own memberships inherit their parent's memberships. Their own memberships
+     * override that default. Display relationships and references do not inherit membership or select dependencies.
+     * Selection does not change lifecycle commands.
      * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
      * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
      * to select a group. No selection preserves normal startup, and publishing is unaffected.
@@ -35761,7 +35799,9 @@ export interface ParameterResourcePromise extends PromiseLike<ParameterResource>
      * Membership is additive. Select one group with the `Aspire:LaunchGroup` configuration setting.
      * Selecting a group marks resources without that membership for explicit start, including ungrouped resources,
      * unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
-     * Dependencies and children must be assigned membership explicitly; selection does not change lifecycle commands.
+     * Structural children without their own memberships inherit their parent's memberships. Their own memberships
+     * override that default. Display relationships and references do not inherit membership or select dependencies.
+     * Selection does not change lifecycle commands.
      * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
      * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
      * to select a group. No selection preserves normal startup, and publishing is unaffected.
@@ -36255,7 +36295,9 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
      * Membership is additive. Select one group with the `Aspire:LaunchGroup` configuration setting.
      * Selecting a group marks resources without that membership for explicit start, including ungrouped resources,
      * unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
-     * Dependencies and children must be assigned membership explicitly; selection does not change lifecycle commands.
+     * Structural children without their own memberships inherit their parent's memberships. Their own memberships
+     * override that default. Display relationships and references do not inherit membership or select dependencies.
+     * Selection does not change lifecycle commands.
      * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
      * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
      * to select a group. No selection preserves normal startup, and publishing is unaffected.
@@ -37870,7 +37912,9 @@ export interface ProjectResource {
      * Membership is additive. Select one group with the `Aspire:LaunchGroup` configuration setting.
      * Selecting a group marks resources without that membership for explicit start, including ungrouped resources,
      * unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
-     * Dependencies and children must be assigned membership explicitly; selection does not change lifecycle commands.
+     * Structural children without their own memberships inherit their parent's memberships. Their own memberships
+     * override that default. Display relationships and references do not inherit membership or select dependencies.
+     * Selection does not change lifecycle commands.
      * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
      * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
      * to select a group. No selection preserves normal startup, and publishing is unaffected.
@@ -38603,7 +38647,9 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      * Membership is additive. Select one group with the `Aspire:LaunchGroup` configuration setting.
      * Selecting a group marks resources without that membership for explicit start, including ungrouped resources,
      * unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
-     * Dependencies and children must be assigned membership explicitly; selection does not change lifecycle commands.
+     * Structural children without their own memberships inherit their parent's memberships. Their own memberships
+     * override that default. Display relationships and references do not inherit membership or select dependencies.
+     * Selection does not change lifecycle commands.
      * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
      * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
      * to select a group. No selection preserves normal startup, and publishing is unaffected.
@@ -39386,7 +39432,9 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
      * Membership is additive. Select one group with the `Aspire:LaunchGroup` configuration setting.
      * Selecting a group marks resources without that membership for explicit start, including ungrouped resources,
      * unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
-     * Dependencies and children must be assigned membership explicitly; selection does not change lifecycle commands.
+     * Structural children without their own memberships inherit their parent's memberships. Their own memberships
+     * override that default. Display relationships and references do not inherit membership or select dependencies.
+     * Selection does not change lifecycle commands.
      * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
      * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
      * to select a group. No selection preserves normal startup, and publishing is unaffected.
@@ -42191,7 +42239,9 @@ export interface TestDatabaseResource {
      * Membership is additive. Select one group with the `Aspire:LaunchGroup` configuration setting.
      * Selecting a group marks resources without that membership for explicit start, including ungrouped resources,
      * unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
-     * Dependencies and children must be assigned membership explicitly; selection does not change lifecycle commands.
+     * Structural children without their own memberships inherit their parent's memberships. Their own memberships
+     * override that default. Display relationships and references do not inherit membership or select dependencies.
+     * Selection does not change lifecycle commands.
      * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
      * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
      * to select a group. No selection preserves normal startup, and publishing is unaffected.
@@ -43084,7 +43134,9 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      * Membership is additive. Select one group with the `Aspire:LaunchGroup` configuration setting.
      * Selecting a group marks resources without that membership for explicit start, including ungrouped resources,
      * unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
-     * Dependencies and children must be assigned membership explicitly; selection does not change lifecycle commands.
+     * Structural children without their own memberships inherit their parent's memberships. Their own memberships
+     * override that default. Display relationships and references do not inherit membership or select dependencies.
+     * Selection does not change lifecycle commands.
      * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
      * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
      * to select a group. No selection preserves normal startup, and publishing is unaffected.
@@ -44324,7 +44376,9 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
      * Membership is additive. Select one group with the `Aspire:LaunchGroup` configuration setting.
      * Selecting a group marks resources without that membership for explicit start, including ungrouped resources,
      * unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
-     * Dependencies and children must be assigned membership explicitly; selection does not change lifecycle commands.
+     * Structural children without their own memberships inherit their parent's memberships. Their own memberships
+     * override that default. Display relationships and references do not inherit membership or select dependencies.
+     * Selection does not change lifecycle commands.
      * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
      * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
      * to select a group. No selection preserves normal startup, and publishing is unaffected.
@@ -47067,7 +47121,9 @@ export interface TestRedisResource {
      * Membership is additive. Select one group with the `Aspire:LaunchGroup` configuration setting.
      * Selecting a group marks resources without that membership for explicit start, including ungrouped resources,
      * unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
-     * Dependencies and children must be assigned membership explicitly; selection does not change lifecycle commands.
+     * Structural children without their own memberships inherit their parent's memberships. Their own memberships
+     * override that default. Display relationships and references do not inherit membership or select dependencies.
+     * Selection does not change lifecycle commands.
      * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
      * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
      * to select a group. No selection preserves normal startup, and publishing is unaffected.
@@ -48044,7 +48100,9 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      * Membership is additive. Select one group with the `Aspire:LaunchGroup` configuration setting.
      * Selecting a group marks resources without that membership for explicit start, including ungrouped resources,
      * unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
-     * Dependencies and children must be assigned membership explicitly; selection does not change lifecycle commands.
+     * Structural children without their own memberships inherit their parent's memberships. Their own memberships
+     * override that default. Display relationships and references do not inherit membership or select dependencies.
+     * Selection does not change lifecycle commands.
      * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
      * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
      * to select a group. No selection preserves normal startup, and publishing is unaffected.
@@ -49368,7 +49426,9 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
      * Membership is additive. Select one group with the `Aspire:LaunchGroup` configuration setting.
      * Selecting a group marks resources without that membership for explicit start, including ungrouped resources,
      * unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
-     * Dependencies and children must be assigned membership explicitly; selection does not change lifecycle commands.
+     * Structural children without their own memberships inherit their parent's memberships. Their own memberships
+     * override that default. Display relationships and references do not inherit membership or select dependencies.
+     * Selection does not change lifecycle commands.
      * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
      * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
      * to select a group. No selection preserves normal startup, and publishing is unaffected.
@@ -52440,7 +52500,9 @@ export interface TestVaultResource {
      * Membership is additive. Select one group with the `Aspire:LaunchGroup` configuration setting.
      * Selecting a group marks resources without that membership for explicit start, including ungrouped resources,
      * unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
-     * Dependencies and children must be assigned membership explicitly; selection does not change lifecycle commands.
+     * Structural children without their own memberships inherit their parent's memberships. Their own memberships
+     * override that default. Display relationships and references do not inherit membership or select dependencies.
+     * Selection does not change lifecycle commands.
      * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
      * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
      * to select a group. No selection preserves normal startup, and publishing is unaffected.
@@ -53335,7 +53397,9 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      * Membership is additive. Select one group with the `Aspire:LaunchGroup` configuration setting.
      * Selecting a group marks resources without that membership for explicit start, including ungrouped resources,
      * unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
-     * Dependencies and children must be assigned membership explicitly; selection does not change lifecycle commands.
+     * Structural children without their own memberships inherit their parent's memberships. Their own memberships
+     * override that default. Display relationships and references do not inherit membership or select dependencies.
+     * Selection does not change lifecycle commands.
      * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
      * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
      * to select a group. No selection preserves normal startup, and publishing is unaffected.
@@ -54577,7 +54641,9 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
      * Membership is additive. Select one group with the `Aspire:LaunchGroup` configuration setting.
      * Selecting a group marks resources without that membership for explicit start, including ungrouped resources,
      * unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
-     * Dependencies and children must be assigned membership explicitly; selection does not change lifecycle commands.
+     * Structural children without their own memberships inherit their parent's memberships. Their own memberships
+     * override that default. Display relationships and references do not inherit membership or select dependencies.
+     * Selection does not change lifecycle commands.
      * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
      * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
      * to select a group. No selection preserves normal startup, and publishing is unaffected.
@@ -57440,7 +57506,9 @@ export interface Resource {
      * Membership is additive. Select one group with the `Aspire:LaunchGroup` configuration setting.
      * Selecting a group marks resources without that membership for explicit start, including ungrouped resources,
      * unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
-     * Dependencies and children must be assigned membership explicitly; selection does not change lifecycle commands.
+     * Structural children without their own memberships inherit their parent's memberships. Their own memberships
+     * override that default. Display relationships and references do not inherit membership or select dependencies.
+     * Selection does not change lifecycle commands.
      * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
      * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
      * to select a group. No selection preserves normal startup, and publishing is unaffected.
@@ -57837,7 +57905,9 @@ export interface ResourcePromise extends PromiseLike<Resource> {
      * Membership is additive. Select one group with the `Aspire:LaunchGroup` configuration setting.
      * Selecting a group marks resources without that membership for explicit start, including ungrouped resources,
      * unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
-     * Dependencies and children must be assigned membership explicitly; selection does not change lifecycle commands.
+     * Structural children without their own memberships inherit their parent's memberships. Their own memberships
+     * override that default. Display relationships and references do not inherit membership or select dependencies.
+     * Selection does not change lifecycle commands.
      * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
      * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
      * to select a group. No selection preserves normal startup, and publishing is unaffected.
@@ -58284,7 +58354,9 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
      * Membership is additive. Select one group with the `Aspire:LaunchGroup` configuration setting.
      * Selecting a group marks resources without that membership for explicit start, including ungrouped resources,
      * unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
-     * Dependencies and children must be assigned membership explicitly; selection does not change lifecycle commands.
+     * Structural children without their own memberships inherit their parent's memberships. Their own memberships
+     * override that default. Display relationships and references do not inherit membership or select dependencies.
+     * Selection does not change lifecycle commands.
      * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
      * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
      * to select a group. No selection preserves normal startup, and publishing is unaffected.

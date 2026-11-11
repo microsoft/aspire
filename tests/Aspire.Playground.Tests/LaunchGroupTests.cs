@@ -3,44 +3,187 @@
 
 #pragma warning disable ASPIRELAUNCHGROUPS001 // Tests TestShop launch-group scenarios.
 
+using System.Runtime.CompilerServices;
+using Aspire.Hosting;
 using Aspire.Hosting.ApplicationModel;
-using Aspire.TestUtilities;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using SamplesIntegrationTests;
 using Xunit;
 
 namespace Aspire.Playground.Tests;
 
-[RequiresFeature(TestFeature.ContainerRuntime)]
 public class LaunchGroupTests(ITestOutputHelper output)
 {
     [Fact]
-    public async Task TestShopAdminResourcesUseTheirServiceLaunchGroups()
+    public async Task TestShopStructuralAndRelationshipResourcesUseExpectedLaunchGroups()
     {
         var builder = await DistributedApplicationTestFactory.CreateAsync(typeof(Projects.TestShop_AppHost), output);
+        var postgres = Assert.Single(builder.Resources, resource => resource.Name == "postgres");
+        AssertLaunchGroups(postgres, "catalog", "frontend");
+
+        var database = Assert.Single(builder.Resources, resource => resource.Name == "catalogdb");
+        Assert.Empty(database.Annotations.OfType<LaunchGroupAnnotation>());
+        Assert.Same(postgres, Assert.IsAssignableFrom<IResourceWithParent>(database).Parent);
+
         var pgAdmin = Assert.Single(builder.Resources, resource => resource.Name == "pgadmin");
-        Assert.Equal("catalog", Assert.Single(pgAdmin.Annotations.OfType<LaunchGroupAnnotation>()).LaunchGroupName);
-        foreach (var admin in builder.Resources.Where(resource => resource.Name is "rediscommander" or "redisinsight"))
-        {
-            Assert.Equal("basket", Assert.Single(admin.Annotations.OfType<LaunchGroupAnnotation>()).LaunchGroupName);
-        }
+        AssertLaunchGroups(pgAdmin, "catalog");
+        Assert.IsNotAssignableFrom<IResourceWithParent>(pgAdmin);
+
+        AssertLaunchGroups(GetResource(builder, "rediscommander"), "basket");
+        AssertLaunchGroups(GetResource(builder, "redisinsight"), "basket");
+
         await using var app = await builder.BuildAsync();
     }
 
     [Fact]
-    public async Task TestShopFrontendDependenciesHaveExplicitMembership()
+    public async Task TestShopSharedResourcesDeclareExpectedLaunchGroups()
     {
         var builder = await DistributedApplicationTestFactory.CreateAsync(typeof(Projects.TestShop_AppHost), output);
-        foreach (var name in new[]
-        {
-            "postgres", "catalogdb", "catalogdbapp", "catalogservice", "basketcache",
-            "basketservice", "messaging", "frontend", "apigateway",
-            "storefront-promotion", "low-stock-threshold", "checkout-signing-key"
-        })
-        {
-            var resource = Assert.Single(builder.Resources, resource => resource.Name == name);
-            Assert.Contains(resource.Annotations.OfType<LaunchGroupAnnotation>(),
-                annotation => annotation.LaunchGroupName == "frontend");
-        }
+        AssertLaunchGroups(GetResource(builder, "catalogdbapp"), "catalog", "frontend");
+        AssertLaunchGroups(GetResource(builder, "catalogservice"), "catalog", "frontend");
+        AssertLaunchGroups(GetResource(builder, "basketcache"), "basket", "frontend");
+        AssertLaunchGroups(GetResource(builder, "basketservice"), "basket", "frontend");
+        AssertLaunchGroups(GetResource(builder, "messaging"), "basket", "orders", "frontend");
+        AssertLaunchGroups(GetResource(builder, "frontend"), "frontend");
+        AssertLaunchGroups(GetResource(builder, "apigateway"), "frontend");
+        AssertLaunchGroups(GetResource(builder, "orderprocessor"), "orders");
+        AssertLaunchGroups(GetResource(builder, "storefront-promotion"), "frontend");
+        AssertLaunchGroups(GetResource(builder, "low-stock-threshold"), "catalog", "frontend");
+        AssertLaunchGroups(GetResource(builder, "checkout-signing-key"), "basket", "frontend");
+
         await using var app = await builder.BuildAsync();
+    }
+
+    [Fact]
+    public async Task TestShopExplicitStartResourceKeepsItsLaunchGroupMembership()
+    {
+        var builder = await DistributedApplicationTestFactory.CreateAsync(typeof(Projects.TestShop_AppHost), output);
+        var activityGenerator = GetResource(builder, "activity-generator");
+
+        AssertLaunchGroups(activityGenerator, "frontend");
+        Assert.True(activityGenerator.HasAnnotationOfType<ExplicitStartupAnnotation>());
+
+        await using var app = await builder.BuildAsync();
+    }
+
+    [Fact]
+    public async Task TestShopLaunchGroupsCompletePreflightAndApplyExpectedDecisions()
+    {
+        await AssertLaunchGroupSelectionAsync(
+            "catalog",
+            ["catalogdb", "catalogservice"],
+            ["basketservice", "orderprocessor"]);
+        await AssertLaunchGroupSelectionAsync(
+            "basket",
+            ["rediscommander", "basketservice", "messaging"],
+            ["catalogservice", "orderprocessor"]);
+        await AssertLaunchGroupSelectionAsync(
+            "frontend",
+            ["catalogdb", "basketservice", "frontend"],
+            ["pgadmin", "orderprocessor"]);
+        await AssertLaunchGroupSelectionAsync(
+            "orders",
+            ["messaging", "orderprocessor"],
+            ["catalogservice", "frontend"]);
+    }
+
+    private static async Task AssertLaunchGroupSelectionAsync(
+        string launchGroup,
+        string[] selectedResourceNames,
+        string[] excludedResourceNames)
+    {
+        await using var factory = new PreflightOnlyDistributedApplicationFactory(
+            typeof(Projects.TestShop_AppHost),
+            launchGroup);
+        var startTask = factory.StartAsync(TestContext.Current.CancellationToken);
+        var applicationTask = factory.Application;
+        var completedTask = await Task.WhenAny(applicationTask, startTask)
+            .WaitAsync(TestContext.Current.CancellationToken);
+        if (ReferenceEquals(completedTask, startTask))
+        {
+            await startTask;
+            throw new InvalidOperationException("The TestShop AppHost started before its application could be inspected.");
+        }
+
+        var app = await applicationTask;
+        await ExecuteBeforeStartHooksAsync(app, TestContext.Current.CancellationToken);
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        Assert.Multiple(
+            () => Assert.All(selectedResourceNames, name =>
+                Assert.False(
+                    GetResource(model, name).HasAnnotationOfType<ExplicitStartupAnnotation>(),
+                    $"Resource '{name}' should be selected by launch group '{launchGroup}'.")),
+            () => Assert.All(excludedResourceNames, name =>
+                Assert.True(
+                    GetResource(model, name).HasAnnotationOfType<ExplicitStartupAnnotation>(),
+                    $"Resource '{name}' should be excluded by launch group '{launchGroup}'.")));
+    }
+
+    private static IResource GetResource(IDistributedApplicationTestingBuilder builder, string name) =>
+        Assert.Single(builder.Resources, resource => resource.Name == name);
+
+    private static IResource GetResource(DistributedApplicationModel model, string name) =>
+        Assert.Single(model.Resources, resource => resource.Name == name);
+
+    private static void AssertLaunchGroups(IResource resource, params string[] expected)
+    {
+        var actual = resource.Annotations
+            .OfType<LaunchGroupAnnotation>()
+            .Select(annotation => annotation.LaunchGroupName)
+            .Order(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        Assert.Equal(expected.Order(StringComparer.OrdinalIgnoreCase).ToArray(), actual);
+    }
+
+    [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "ExecuteBeforeStartHooksAsync")]
+    private static extern Task ExecuteBeforeStartHooksAsync(DistributedApplication app, CancellationToken cancellationToken);
+
+    private sealed class PreflightOnlyDistributedApplicationFactory(Type entryPoint, string launchGroup)
+        : DistributedApplicationFactory(entryPoint)
+    {
+        private readonly TaskCompletionSource<DistributedApplication> _application =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly ManualResetEventSlim _continueAfterBuild = new();
+        private ConfigurationManager? _configuration;
+
+        public Task<DistributedApplication> Application => _application.Task;
+
+        protected override void OnBuilderCreated(DistributedApplicationBuilder applicationBuilder)
+        {
+            base.OnBuilderCreated(applicationBuilder);
+            _configuration = applicationBuilder.Configuration;
+            _configuration["Aspire:LaunchGroup"] = launchGroup;
+        }
+
+        protected override void OnBuilt(DistributedApplication application)
+        {
+            base.OnBuilt(application);
+            _application.TrySetResult(application);
+            _continueAfterBuild.Wait();
+        }
+
+        public override async ValueTask DisposeAsync()
+        {
+            // The test invokes the before-start hooks directly while the entry point is paused after Build().
+            // Switch to inspect mode before releasing it so the entry point does not run the hooks again.
+            _configuration?["AppHost:Operation"] = "inspect";
+
+            var disposeTask = default(ValueTask);
+            try
+            {
+                // Base disposal cancels host startup before the entry point is allowed to continue to Run().
+                disposeTask = base.DisposeAsync();
+            }
+            finally
+            {
+                _continueAfterBuild.Set();
+            }
+
+            await disposeTask.ConfigureAwait(false);
+            _continueAfterBuild.Dispose();
+        }
     }
 }

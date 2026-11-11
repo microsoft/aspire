@@ -90,16 +90,18 @@ builder.AddParameter("storefront-certificate")
            FileFilter = ".pem,.pfx,.crt"
        });
 
-var catalogDb = builder.AddPostgres("postgres")
-                       .WithLaunchGroups("catalog", "frontend")
-                       .WithDataVolume()
-                       .WithPgAdmin(resource =>
-                       {
-                           resource.WithLaunchGroup("catalog");
-                           resource.WithUrlForEndpoint("http", u => u.DisplayText = "PG Admin");
-                       })
-                       .AddDatabase("catalogdb")
-                       .WithLaunchGroups("catalog", "frontend");
+var postgres = builder.AddPostgres("postgres")
+                      .WithLaunchGroups("catalog", "frontend")
+                      .WithDataVolume()
+                      .WithPgAdmin(resource =>
+                      {
+                          // Management relationships don't inherit launch groups, so pgAdmin opts into catalog directly.
+                          resource.WithLaunchGroup("catalog");
+                          resource.WithUrlForEndpoint("http", u => u.DisplayText = "PG Admin");
+                      });
+
+// Database resources are structural children, so catalogdb inherits both launch groups from postgres.
+var catalogDb = postgres.AddDatabase("catalogdb");
 
 var basketCache = builder.AddRedis("basketcache")
                          .WithLaunchGroups("basket", "frontend")
@@ -256,7 +258,9 @@ yarp.WithConfiguration(builder =>
 });
 #endif
 
+// Membership describes where this resource belongs, while explicit start remains authoritative.
 builder.AddDotnetProject("activity-generator", "../ActivityGenerator/ActivityGenerator.csproj")
+    .WithLaunchGroup("frontend")
     .WithReference(frontend)
     .WaitFor(frontend)
     .WithReference(yarp)

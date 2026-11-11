@@ -77,6 +77,7 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
     private readonly List<DisplayedResourcePropertyViewModel> _displayedResourcePropertyViewModels = new();
     private readonly HashSet<string> _unmaskedItemNames = new();
     private const string StateDescriptionPropertyKey = "resource-state-description";
+    private const string LaunchGroupPropertyKeyPrefix = "resource-launch-group-";
 
         internal IEnumerable<EnvironmentVariableViewModel> FilteredEnvironmentVariables =>
         Resource.Environment
@@ -168,6 +169,7 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
                 _displayedResourcePropertyViewModels.Add(new DisplayedResourcePropertyViewModel(displayedProperty, Loc, TimeProvider));
             }
             AddStateDescriptionProperty(_resource);
+            AddLaunchGroupProperties(_resource);
 
             // Collapse details sections when they have no data.
             _isUrlsExpanded = GetUrls().Count > 0;
@@ -389,6 +391,67 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
                 // The description explains the current state, so keep it in the same generic
                 // sort group as State rather than treating it as producer-defined metadata.
                 sortOrder: KnownResourcePropertySortOrder.State,
+                displayName: null,
+                isHighlighted: false),
+            Loc,
+            TimeProvider));
+    }
+
+    private void AddLaunchGroupProperties(ResourceViewModel resource)
+    {
+        if (resource.LaunchGroup is not { } launchGroup)
+        {
+            return;
+        }
+
+        var sortOrder = int.MaxValue - 7;
+        AddLaunchGroupProperty(
+            "selected-group",
+            nameof(Dashboard.Resources.Resources.ResourceLaunchGroupsSelectedGroup),
+            LaunchGroupDisplayHelpers.GetSelectedGroupText(launchGroup, Loc),
+            sortOrder++);
+        AddLaunchGroupProperty(
+            "effective-membership",
+            nameof(Dashboard.Resources.Resources.ResourceLaunchGroupsEffectiveMembership),
+            LaunchGroupDisplayHelpers.GetGroupsText(launchGroup, Loc),
+            sortOrder++);
+        AddLaunchGroupProperty(
+            "inherited-from",
+            nameof(Dashboard.Resources.Resources.ResourceLaunchGroupsInheritedFrom),
+            LaunchGroupDisplayHelpers.GetInheritedFromText(launchGroup, Loc),
+            sortOrder++);
+        AddLaunchGroupProperty(
+            "explicit-start",
+            nameof(Dashboard.Resources.Resources.ResourceLaunchGroupsExplicitStart),
+            LaunchGroupDisplayHelpers.GetBooleanText(launchGroup.ExplicitStart, Loc),
+            sortOrder++);
+        AddLaunchGroupProperty(
+            "excluded-by-group",
+            nameof(Dashboard.Resources.Resources.ResourceLaunchGroupsExcludedByGroup),
+            LaunchGroupDisplayHelpers.GetBooleanText(launchGroup.ExcludedByGroup, Loc),
+            sortOrder++);
+        AddLaunchGroupProperty(
+            "excluded-from-selection",
+            nameof(Dashboard.Resources.Resources.ResourceLaunchGroupsExcludedFromSelection),
+            LaunchGroupDisplayHelpers.GetBooleanText(launchGroup.ExcludedFromSelection, Loc),
+            sortOrder++);
+        AddLaunchGroupProperty(
+            "build-disposition",
+            nameof(Dashboard.Resources.Resources.ResourceLaunchGroupsBuildDisposition),
+            LaunchGroupDisplayHelpers.GetBuildDispositionText(launchGroup.BuildDisposition, Loc),
+            sortOrder);
+    }
+
+    private void AddLaunchGroupProperty(string name, string displayNameResourceName, string value, int sortOrder)
+    {
+        var key = LaunchGroupPropertyKeyPrefix + name;
+        _displayedResourcePropertyViewModels.Add(new DisplayedResourcePropertyViewModel(
+            new ResourcePropertyViewModel(
+                name: key,
+                value: Value.ForString(value),
+                isValueSensitive: false,
+                knownProperty: new KnownProperty(key, _ => Loc[displayNameResourceName]),
+                sortOrder: sortOrder,
                 displayName: null,
                 isHighlighted: false),
             Loc,

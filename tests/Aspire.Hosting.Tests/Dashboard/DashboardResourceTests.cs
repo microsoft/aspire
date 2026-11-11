@@ -5,7 +5,6 @@ using System.Collections.Concurrent;
 using System.Text.Json;
 using Aspire.Hosting.Dashboard;
 using Aspire.Hosting.Dcp;
-using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Testing;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
@@ -36,21 +35,17 @@ public class DashboardResourceTests(ITestOutputHelper testOutputHelper)
         builder.Configuration[KnownConfigNames.DashboardOtlpGrpcEndpointUrl] = "http://127.0.0.1:0";
         var excluded = builder.AddExecutable("excluded", "unused", ".")
             .WithAnnotation(new HiddenAnnotation(HiddenBehavior.Always));
-        builder.Pipeline.WithFinalAction(WellKnownPipelineSteps.BeforeStart, context =>
-        {
-            var dashboard = Assert.Single(context.Model.Resources, resource => resource.Name == KnownResourceNames.AspireDashboard);
-            Assert.False(dashboard.HasAnnotationOfType<ExplicitStartupAnnotation>());
-            Assert.True(dashboard.HasAnnotationOfType<ExcludeFromLaunchGroupSelectionAnnotation>());
-            Assert.True(excluded.Resource.HasAnnotationOfType<ExplicitStartupAnnotation>());
-            Assert.False(excluded.Resource.HasAnnotationOfType<ExcludeFromLaunchGroupSelectionAnnotation>());
-            return Task.CompletedTask;
-        });
         await using var app = builder.Build();
 
         using (var startup = new CancellationTokenSource(TestConstants.DefaultOrchestratorTestLongTimeout))
         {
             await app.StartAsync(startup.Token);
         }
+        var dashboard = Assert.Single(builder.Resources, resource => resource.Name == KnownResourceNames.AspireDashboard);
+        Assert.False(dashboard.HasAnnotationOfType<ExplicitStartupAnnotation>());
+        Assert.True(dashboard.HasAnnotationOfType<ExcludeFromLaunchGroupSelectionAnnotation>());
+        Assert.True(excluded.Resource.HasAnnotationOfType<ExplicitStartupAnnotation>());
+        Assert.False(excluded.Resource.HasAnnotationOfType<ExcludeFromLaunchGroupSelectionAnnotation>());
         using (var readiness = new CancellationTokenSource(TestConstants.DefaultOrchestratorTestLongTimeout))
         {
             await app.ResourceNotifications.WaitForResourceHealthyAsync(KnownResourceNames.AspireDashboard, readiness.Token);

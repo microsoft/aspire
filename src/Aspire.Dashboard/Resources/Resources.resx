@@ -139,6 +139,60 @@
   <data name="ResourceFilterOptionEmpty" xml:space="preserve">
     <value>(Unset)</value>
   </data>
+  <data name="ResourceLaunchGroupsHeader" xml:space="preserve">
+    <value>Launch groups</value>
+  </data>
+  <data name="ResourceLaunchGroupsSelectedGroup" xml:space="preserve">
+    <value>Selected group</value>
+  </data>
+  <data name="ResourceLaunchGroupsEffectiveMembership" xml:space="preserve">
+    <value>Effective membership</value>
+  </data>
+  <data name="ResourceLaunchGroupsInheritedFrom" xml:space="preserve">
+    <value>Inherited from</value>
+  </data>
+  <data name="ResourceLaunchGroupsExplicitStart" xml:space="preserve">
+    <value>Explicit start</value>
+  </data>
+  <data name="ResourceLaunchGroupsExcludedByGroup" xml:space="preserve">
+    <value>Excluded by selected group</value>
+  </data>
+  <data name="ResourceLaunchGroupsExcludedFromSelection" xml:space="preserve">
+    <value>Excluded from selection</value>
+  </data>
+  <data name="ResourceLaunchGroupsBuildDisposition" xml:space="preserve">
+    <value>Build disposition</value>
+  </data>
+  <data name="ResourceLaunchGroupsBuildNotCoordinated" xml:space="preserve">
+    <value>Not coordinated</value>
+  </data>
+  <data name="ResourceLaunchGroupsBuildPending" xml:space="preserve">
+    <value>Pending</value>
+  </data>
+  <data name="ResourceLaunchGroupsBuildInitial" xml:space="preserve">
+    <value>Initial</value>
+  </data>
+  <data name="ResourceLaunchGroupsBuildInitialPersistent" xml:space="preserve">
+    <value>Initial (persistent)</value>
+  </data>
+  <data name="ResourceLaunchGroupsBuildInitialShared" xml:space="preserve">
+    <value>Initial (shared)</value>
+  </data>
+  <data name="ResourceLaunchGroupsBuildDeferred" xml:space="preserve">
+    <value>Deferred</value>
+  </data>
+  <data name="ResourceLaunchGroupsNone" xml:space="preserve">
+    <value>None</value>
+  </data>
+  <data name="ResourceLaunchGroupsUngrouped" xml:space="preserve">
+    <value>Ungrouped</value>
+  </data>
+  <data name="ResourceLaunchGroupsYes" xml:space="preserve">
+    <value>Yes</value>
+  </data>
+  <data name="ResourceLaunchGroupsNo" xml:space="preserve">
+    <value>No</value>
+  </data>
   <data name="ResourcesStateColumnHeader" xml:space="preserve">
     <value>State</value>
   </data>
