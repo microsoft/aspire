@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIRECERTIFICATES001
-#pragma warning disable ASPIRECONTAINERSHELLEXECUTION001
 
 using System.Collections.Immutable;
 using System.Net.Sockets;
