@@ -113,7 +113,8 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
 
         var postToolUse = await ReadClaudePostToolUseAsync(home).DefaultTimeout();
         Assert.Collection(postToolUse,
-            group => AssertClaudeGroup(group, ClaudeCodeAgentClient.TelemetryHookToolMatcher, condition: null),
+            group => AssertClaudeGroup(group, ClaudeCodeAgentClient.TelemetryHookSkillMatcher, ClaudeCodeAgentClient.TelemetryHookSkillIf),
+            group => AssertClaudeGroup(group, ClaudeCodeAgentClient.TelemetryHookMcpMatcher, condition: null),
             group => AssertClaudeGroup(group, ClaudeCodeAgentClient.TelemetryHookReadMatcher, ClaudeCodeAgentClient.TelemetryHookReadIf));
     }
 
@@ -128,7 +129,7 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
         await configurator.ConfigureAsync([ClaudeCodeAgentClient.ClientId], CancellationToken.None).DefaultTimeout();
 
         var postToolUse = await ReadClaudePostToolUseAsync(home).DefaultTimeout();
-        Assert.Equal(2, CountAspireGroups(postToolUse));
+        Assert.Equal(3, CountAspireGroups(postToolUse));
     }
 
     [Fact]
@@ -167,7 +168,7 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
 
         var postToolUse = root["hooks"]!["PostToolUse"]!.AsArray();
         Assert.Contains(postToolUse, group => GroupContainsCommand(group, "echo existing"));
-        Assert.Equal(2, CountAspireGroups(postToolUse));
+        Assert.Equal(3, CountAspireGroups(postToolUse));
     }
 
     [Fact]
@@ -186,7 +187,8 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
         var groups = await ReadClaudePostToolUseAsync(home);
         Assert.Collection(groups,
             group => Assert.True(GroupContainsCommand(group, "echo keep") && (string?)group!["matcher"] == "*"),
-            group => AssertClaudeGroup(group, ClaudeCodeAgentClient.TelemetryHookToolMatcher, condition: null),
+            group => AssertClaudeGroup(group, ClaudeCodeAgentClient.TelemetryHookSkillMatcher, ClaudeCodeAgentClient.TelemetryHookSkillIf),
+            group => AssertClaudeGroup(group, ClaudeCodeAgentClient.TelemetryHookMcpMatcher, condition: null),
             group => AssertClaudeGroup(group, ClaudeCodeAgentClient.TelemetryHookReadMatcher, ClaudeCodeAgentClient.TelemetryHookReadIf));
     }
 
@@ -217,7 +219,8 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
 
         var groups = await ReadClaudePostToolUseAsync(home).DefaultTimeout();
         Assert.Collection(groups,
-            group => AssertClaudeGroup(group, ClaudeCodeAgentClient.TelemetryHookToolMatcher, condition: null),
+            group => AssertClaudeGroup(group, ClaudeCodeAgentClient.TelemetryHookSkillMatcher, ClaudeCodeAgentClient.TelemetryHookSkillIf),
+            group => AssertClaudeGroup(group, ClaudeCodeAgentClient.TelemetryHookMcpMatcher, condition: null),
             group => AssertClaudeGroup(group, ClaudeCodeAgentClient.TelemetryHookReadMatcher, ClaudeCodeAgentClient.TelemetryHookReadIf));
     }
 
@@ -286,10 +289,10 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
 
         var groups = await ReadClaudePostToolUseAsync(home);
         var hooks = groups.SelectMany(group => group!["hooks"]!.AsArray()).ToArray();
-        Assert.Equal(shouldReplace ? 2 : 3, hooks.Length);
+        Assert.Equal(shouldReplace ? 3 : 4, hooks.Length);
         Assert.Equal(!shouldReplace, hooks.Any(hook => JsonNode.DeepEquals(hook, existingHook)));
         var (command, args) = AgentTelemetryHook.GetCommand("--hook");
-        Assert.Equal(2, hooks.Count(hook => (string?)hook!["command"] == command
+        Assert.Equal(3, hooks.Count(hook => (string?)hook!["command"] == command
             && hook["args"]!.AsArray().Select(arg => (string)arg!).SequenceEqual(args)));
     }
 
