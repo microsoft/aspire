@@ -66,8 +66,8 @@ empty value, a non-HTTP(S) URL, or a value containing control characters is an e
 when a candidate is available. Without a candidate, the override is ignored.
 
 If acquisition fails and a valid README URL is available, retain the existing
-error message and then display a separate error linking to the README for help
-accessing the source. This also applies when explicitly refreshing a saved source
+error message and append README access help on a new line in that same error.
+Display only one error message. This also applies when explicitly refreshing a saved source
 with `aspire update --config-source`. Invalid README overrides do not replace an
 acquisition error. Background advisory checks retain their existing warning behavior.
 

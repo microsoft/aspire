@@ -13,6 +13,7 @@ using Aspire.Cli.Secrets;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
+using Spectre.Console;
 
 namespace Aspire.Cli.Commands;
 
@@ -138,7 +139,6 @@ internal abstract class BaseCommand : Command
         }
 
         CommandResult result;
-        string? configSourceReadmeUrl = null;
         var stoppingMessageShown = false;
         try
         {
@@ -195,8 +195,14 @@ internal abstract class BaseCommand : Command
         catch (ConfigSourceException ex)
         {
             ConfigSourceService.DisplayGitOutput(InteractionService, ex.GitOutput);
-            configSourceReadmeUrl = ex.ReadmeUrl;
-            result = CommandResult.Failure(CliExitCodes.InvalidCommand, ex.Message);
+            var errorMessage = ex.Message;
+            if (ex.ReadmeUrl is { } readmeUrl)
+            {
+                errorMessage = ex.Message.EscapeMarkup() + Environment.NewLine
+                    + string.Format(CultureInfo.CurrentCulture, ConfigSourceStrings.AccessHelp,
+                        MarkupHelpers.SafeLink(InteractionService, readmeUrl));
+            }
+            result = CommandResult.Failure(CliExitCodes.InvalidCommand, errorMessage, errorMessageHasMarkup: ex.ReadmeUrl is not null);
         }
         catch (NonInteractiveException)
         {
@@ -228,19 +234,12 @@ internal abstract class BaseCommand : Command
                 result.ErrorMessage,
                 _executionContext.LogFilePath,
                 ExecutionContext.AppHostCliLogFilePath,
+                result.ErrorMessageHasMarkup,
                 CancellationToken.None).ConfigureAwait(false);
 
         if (!displayedActionableFailure && result.ErrorMessage is not null)
         {
-            InteractionService.DisplayError(result.ErrorMessage);
-        }
-
-        if (configSourceReadmeUrl is not null)
-        {
-            InteractionService.DisplayError(
-                string.Format(CultureInfo.CurrentCulture, ConfigSourceStrings.AccessHelp,
-                    MarkupHelpers.SafeLink(InteractionService, configSourceReadmeUrl)),
-                allowMarkup: true);
+            InteractionService.DisplayError(result.ErrorMessage, allowMarkup: result.ErrorMessageHasMarkup);
         }
 
         if (result.ShouldDisplayHelp)
