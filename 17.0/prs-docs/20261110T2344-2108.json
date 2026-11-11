@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Automated integration data update; not related to a changelog entry",
+  "mergedAt": "2026-11-10T23:44:22Z",
+  "number": 2108,
+  "runDate": "2026-11-11T00:10:00Z",
+  "status": "excluded",
+  "title": "chore: Update integration data and GitHub stats (11/10/26)"
+}

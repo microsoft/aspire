@@ -8,7 +8,9 @@
     "@MattKotsenas"
   ],
   "description": "Pipeline output can now be regenerated from current source and checked against selected artifacts, failing when committed generated assets have drifted.",
-  "docsPrs": [],
+  "docsPrs": [
+    2082
+  ],
   "docsRequired": true,
   "emoji": "🧬",
   "firstMergedAt": "2026-11-03T17:22:56Z",

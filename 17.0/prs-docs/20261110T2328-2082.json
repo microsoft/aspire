@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Documents opt-in drift detection for generated pipeline output (#21681)",
+  "mergedAt": "2026-11-10T23:28:25Z",
+  "number": 2082,
+  "runDate": "2026-11-11T00:10:00Z",
+  "status": "included",
+  "title": "[docs] Document pipeline output drift detection for Aspire 17.0"
+}
