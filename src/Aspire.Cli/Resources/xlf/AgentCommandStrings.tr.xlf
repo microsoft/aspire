@@ -190,11 +190,11 @@
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_LocalSkillsConflict">
-        <source>{0} Run 'aspire update --migrate' to replace them.
-{1}</source>
-        <target state="new">{0} Run 'aspire update --migrate' to replace them.
-{1}</target>
-        <note>{0} explains that configured skill sources supersede copied Aspire skills. {1} lists the copied skill directories, one per line.</note>
+        <source>Copied Aspire skills are not recommended; configured skill sources supersede them
+{0}</source>
+        <target state="new">Copied Aspire skills are not recommended; configured skill sources supersede them
+{0}</target>
+        <note>{0} lists the local skill entry-point paths, one per line.</note>
       </trans-unit>
       <trans-unit id="InitCommand_LocationWithAgents">
         <source>{0} ({1})</source>
@@ -231,6 +231,26 @@
         <target state="needs-review-translation">Proje (Çalışma alanınızın kök dizinine yükleyin; projenizle birlikte kaydedilir)</target>
         <note />
       </trans-unit>
+      <trans-unit id="InitCommand_RemoveSkillCopiesOptionDescription">
+        <source>Remove copied Aspire skills after configuring skill sources. Defaults to true; pass '--remove-skill-copies=false' to keep them</source>
+        <target state="new">Remove copied Aspire skills after configuring skill sources. Defaults to true; pass '--remove-skill-copies=false' to keep them</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_RemoveSkillCopiesPrompt">
+        <source>Remove the copied Aspire skills listed above after configuring skill sources?</source>
+        <target state="new">Remove the copied Aspire skills listed above after configuring skill sources?</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_RemoveSkillCopyFailed">
+        <source>Could not remove copied Aspire skill '{0}': {1}</source>
+        <target state="new">Could not remove copied Aspire skill '{0}': {1}</target>
+        <note>{0} is the skill directory path, and {1} is the failure reason.</note>
+      </trans-unit>
+      <trans-unit id="InitCommand_RemovedSkillCopy">
+        <source>Removed copied Aspire skill '{0}'</source>
+        <target state="new">Removed copied Aspire skill '{0}'</target>
+        <note>{0} is the removed skill directory path.</note>
+      </trans-unit>
       <trans-unit id="InitCommand_ScopeOptionDescription">
         <source>Configuration and skill scope: project or global (default: project)</source>
         <target state="translated">Yapılandırma ve beceri kapsamı: proje veya genel (varsayılan: proje)</target>
@@ -255,6 +275,11 @@
         <source>Shared files may be discovered by agents that aren't selected.</source>
         <target state="translated">Paylaşılan dosyalar, seçili olmayan aracılar tarafından keşfedilebilir.</target>
         <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_SkillCopyBehindLink">
+        <source>It is reached through a linked folder that may be shared. Remove it manually if it is no longer needed.</source>
+        <target state="new">It is reached through a linked folder that may be shared. Remove it manually if it is no longer needed.</target>
+        <note>Failure reason shown after InitCommand_RemoveSkillCopyFailed.</note>
       </trans-unit>
       <trans-unit id="InitCommand_SkillSources">
         <source>Skill sources:

@@ -27,6 +27,16 @@
         <target state="translated">Aspire</target>
         <note />
       </trans-unit>
+      <trans-unit id="AspireSkillsFix">
+        <source>Run 'aspire agent init --skills aspire' to configure skill sources and remove these copies.</source>
+        <target state="new">Run 'aspire agent init --skills aspire' to configure skill sources and remove these copies.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="AspireSkillsInspectionFailedMessage">
+        <source>Could not inspect local Aspire skills</source>
+        <target state="new">Could not inspect local Aspire skills</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ChannelSuffixFormat">
         <source> (channel: {0})</source>
         <target state="translated"> (канал: {0})</target>

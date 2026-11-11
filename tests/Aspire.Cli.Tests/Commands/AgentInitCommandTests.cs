@@ -488,6 +488,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             PromptBinding.CreateDefault<string?>("copilot"),
             PromptBinding.CreateDefault<string?>(CommonAgentApplicators.AspireSkillName),
             PromptBinding.CreateDefault(AgentConfigurationScope.Project),
+            PromptBinding.CreateDefault(true),
             CancellationToken.None).DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, result.ExitCode);
@@ -526,6 +527,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             PromptBinding.CreateDefault<string?>("copilot"),
             PromptBinding.CreateDefault<string?>(CommonAgentApplicators.AspireSkillName),
             PromptBinding.CreateDefault(AgentConfigurationScope.Project),
+            PromptBinding.CreateDefault(true),
             CancellationToken.None).DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, result.ExitCode);
@@ -953,16 +955,16 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task Remote_WarnsForConfiguredOpenCodeSkillRootsAndPreservesTheCopy(bool array)
+    public async Task Remote_WarnsForConfiguredOpenCodeSkillRootsAndRemovesTheCopy(bool array)
     {
         using var context = new AgentConfigurationTestContext(outputHelper);
         var configPath = Path.Combine(context.Project.FullName, ".opencode", "opencode.jsonc");
-        var skillPath = Path.Combine(context.Project.FullName, "team-skills", "aspire", "SKILL.md");
+        var skillDirectory = Path.Combine(context.Project.FullName, "team-skills", "aspire");
         await AgentConfigurationTestContext.WriteAsync(configPath, array
             ? """{"skills":["./team-skills"]}"""
             : """{"skills":{"paths":["./team-skills"]}}""");
-        const string skill = "My customized Aspire instructions.";
-        await AgentConfigurationTestContext.WriteAsync(skillPath, skill);
+        await AgentConfigurationTestContext.WriteAsync(Path.Combine(skillDirectory, "SKILL.md"), "My customized Aspire instructions.");
+        await AgentConfigurationTestContext.WriteAsync(Path.Combine(skillDirectory, "references", "deploy.md"), "Supporting file.");
         var interaction = new TestInteractionService();
         using var provider = context.CreateServiceCollection(outputHelper, options =>
         {
@@ -976,8 +978,14 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         Assert.Empty(interaction.DisplayedErrors);
         Assert.Contains(interaction.DisplayedMessages, message => message.Emoji.Equals(KnownEmojis.PoliceCarLight) &&
             message.Message == string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_LocalSkillsConflict,
-                MigrationStrings.AgentSkillsDetail, "  team-skills/aspire"));
-        Assert.Equal(skill, await File.ReadAllTextAsync(skillPath));
+                "  team-skills/aspire/SKILL.md"));
+        Assert.Equal(
+            [new BooleanPromptCall(AgentCommandStrings.InitCommand_RemoveSkillCopiesPrompt, true)],
+            interaction.BooleanPromptCalls);
+        Assert.Contains(interaction.DisplayedMessages, message => message.Emoji.Equals(KnownEmojis.CheckMarkButton) &&
+            message.Message == string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_RemovedSkillCopy, "team-skills/aspire"));
+        Assert.False(Directory.Exists(skillDirectory));
+        Assert.True(Directory.Exists(Path.Combine(context.Project.FullName, "team-skills")));
         var config = JsonNode.Parse(await File.ReadAllTextAsync(configPath))!;
         var sources = array ? config["skills"]!.AsArray() : config["skills"]!["urls"]!.AsArray();
         Assert.Equal(array
@@ -986,6 +994,84 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             sources.Select(value => (string)value!));
         Assert.Null(config["mcp"]);
         Assert.Empty(context.Home.EnumerateFileSystemInfos());
+    }
+
+    [Theory]
+    [InlineData("declined")]
+    [InlineData("plugin-not-selected")]
+    [InlineData("registration-failed")]
+    public async Task Remote_KeepsSkillCopiesUnlessThePluginIsRegisteredAndRemovalIsAccepted(string reason)
+    {
+        using var context = new AgentConfigurationTestContext(outputHelper);
+        var skillPath = Path.Combine(context.Project.FullName, ".agents", "skills", "aspire", "SKILL.md");
+        const string skill = "My customized Aspire instructions.";
+        await AgentConfigurationTestContext.WriteAsync(skillPath, skill);
+        if (reason == "registration-failed")
+        {
+            await AgentConfigurationTestContext.WriteAsync(
+                context.Copilot.GetIntegrationConfigPath(AgentConfigurationScope.Project, context.Project),
+                """{"enabledPlugins":{"aspire@aspire-skills":false}}""");
+        }
+        var interaction = new TestInteractionService();
+        using var provider = context.CreateServiceCollection(outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interaction;
+        }).BuildServiceProvider();
+        var arguments = reason switch
+        {
+            "declined" => "--skills aspire --mcp=false --remove-skill-copies=false",
+            "plugin-not-selected" => "--skills none --mcp",
+            _ => "--skills aspire --mcp=false"
+        };
+
+        var result = provider.GetRequiredService<RootCommand>().Parse($"agent init --agents copilot --scope project {arguments}");
+
+        Assert.Equal(reason == "registration-failed" ? CliExitCodes.InvalidCommand : CliExitCodes.Success,
+            await result.InvokeAsync().DefaultTimeout());
+        Assert.Equal(skill, await File.ReadAllTextAsync(skillPath));
+        // The prompt is only recorded when no option value answers it, so a registration failure
+        // shows the copies were selected for removal and kept only because registration failed.
+        Assert.Equal(
+            reason == "registration-failed" ? [new BooleanPromptCall(AgentCommandStrings.InitCommand_RemoveSkillCopiesPrompt, true)] : [],
+            interaction.BooleanPromptCalls);
+        Assert.Equal(reason == "registration-failed" ? 1 : 0, interaction.DisplayedErrors.Count);
+    }
+
+    [Fact]
+    public async Task Remote_ReportsSkillCopiesReachedThroughLinkedFoldersWithoutRemovingThem()
+    {
+        using var context = new AgentConfigurationTestContext(outputHelper);
+        var shared = context.Workspace.CreateDirectory("shared-skills");
+        var sharedSkillPath = Path.Combine(shared.FullName, "aspire", "SKILL.md");
+        const string skill = "Shared Aspire instructions.";
+        await AgentConfigurationTestContext.WriteAsync(sharedSkillPath, skill);
+        var linkPath = Path.Combine(context.Project.FullName, ".agents", "skills");
+        Directory.CreateDirectory(Path.GetDirectoryName(linkPath)!);
+        try
+        {
+            Directory.CreateSymbolicLink(linkPath, shared.FullName);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Assert.Skip($"Symbolic links are not available: {ex.Message}");
+        }
+        var interaction = new TestInteractionService();
+        using var provider = context.CreateServiceCollection(outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interaction;
+        }).BuildServiceProvider();
+
+        var result = provider.GetRequiredService<RootCommand>().Parse(
+            "agent init --agents copilot --scope project --skills aspire --mcp=false");
+
+        Assert.Equal(CliExitCodes.InvalidCommand, await result.InvokeAsync().DefaultTimeout());
+        Assert.Equal(
+            string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_RemoveSkillCopyFailed,
+                ".agents/skills/aspire", AgentCommandStrings.InitCommand_SkillCopyBehindLink),
+            Assert.Single(interaction.DisplayedErrors));
+        Assert.Equal(skill, await File.ReadAllTextAsync(sharedSkillPath));
+        Assert.True(context.Copilot.HasIntegrationRegistration(
+            context.Project, AgentConfigurationScope.Project, [SkillSource.BuiltIn]));
     }
 
     [Theory]

@@ -268,6 +268,7 @@ internal static class CliTestHelper
         services.AddSingleton<IDcpConnectionChecker, TestDcpConnectionChecker>();
         services.AddSingleton<IEnvironmentCheck, DcpConnectionHealthCheck>();
         services.AddSingleton<IEnvironmentCheck, DeprecatedAgentConfigCheck>();
+        services.AddSingleton<IEnvironmentCheck, AspireSkillsCheck>();
         services.AddSingleton<IEnvironmentChecker, EnvironmentChecker>();
 
         // MCP server transport
@@ -350,7 +351,6 @@ internal static class CliTestHelper
         services.AddTransient<WaitCommand>();
         services.AddTransient<RestoreCommand>();
         services.AddSingleton<IMigration, TypeScriptAppHostMigration>();
-        services.AddSingleton<IMigration, AgentSkillsMigration>();
         services.AddTransient<SdkCommand>();
         services.AddTransient<SdkGenerateCommand>();
         services.AddTransient<SdkDumpCommand>();

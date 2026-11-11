@@ -172,7 +172,8 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
 
     /// <summary>
     /// Tests that aspire agent init with a .vscode folder shows client, skill, and scope selection
-    /// prompts, and that accepting the defaults registers the remote Aspire plugin.
+    /// prompts, and that accepting the defaults registers the remote Aspire plugin and removes copied
+    /// Aspire skills.
     /// </summary>
     [Fact]
     public async Task AgentInitCommand_DefaultSelection_RegistersRemotePlugin()
@@ -205,8 +206,8 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         await File.WriteAllTextAsync(localSkillPath, localSkillContent);
         string[] expectedWarnings =
         [
-            "Configured skill sources supersede copied Aspire skills",
-            ".agents/skills/aspire"
+            "Copied Aspire skills are not recommended; configured skill sources supersede them",
+            ".agents/skills/aspire/SKILL.md"
         ];
 
         // Accept agents before choosing independent assets and project scope.
@@ -230,6 +231,10 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
                 skillsScreen.IndexOf("Which skills and tools do you want to configure?", StringComparison.Ordinal));
         }
         await auto.EnterAsync();
+        // Removing the copies defaults to Yes once Aspire skills are selected.
+        await auto.WaitUntilTextAsync("Remove the copied Aspire skills listed above after configuring skill sources?",
+            timeout: TimeSpan.FromSeconds(30));
+        await auto.EnterAsync();
         await auto.WaitUntilAsync(
             s => s.ContainsText("Configure the Aspire MCP server for selected agent environments?"),
             timeout: TimeSpan.FromSeconds(30), description: "MCP server confirmation prompt");
@@ -243,6 +248,7 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("Where should skills and tools be installed?", timeout: TimeSpan.FromSeconds(30));
         await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("Removed copied Aspire skill '.agents/skills/aspire'", timeout: TimeSpan.FromSeconds(30));
         await auto.WaitUntilTextAsync("configuration complete", timeout: TimeSpan.FromSeconds(30));
         await auto.WaitForSuccessPromptAsync(counter);
 
@@ -252,9 +258,7 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         await auto.RunCommandAsync(
             """jq -e '.enabledPlugins["aspire@aspire-skills"] == true and .extraKnownMarketplaces["aspire-skills"].source.repo == "microsoft/aspire-skills"' "$ASPIRE_E2E_WORKSPACE/.github/copilot/settings.json" """,
             counter);
-        Assert.Equal(localSkillContent, await File.ReadAllTextAsync(localSkillPath));
-        Assert.Equal([localSkillPath], Directory.GetFiles(
-            Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills"), "*", SearchOption.AllDirectories));
+        Assert.False(Directory.Exists(Path.GetDirectoryName(localSkillPath)));
 
         // Verify MCP was not configured, since it was never selected in the prompt above.
         var vscodeMcpConfigPath = Path.Combine(vscodePath, "mcp.json");

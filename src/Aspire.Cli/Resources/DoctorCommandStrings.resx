@@ -387,6 +387,12 @@ The legacy file continues to work — this is a non-blocking warning.</value>
   <data name="PendingMigrationFix" xml:space="preserve">
     <value>Run 'aspire update --migrate' to apply the recommended migration.</value>
   </data>
+  <data name="AspireSkillsFix" xml:space="preserve">
+    <value>Run 'aspire agent init --skills aspire' to configure skill sources and remove these copies.</value>
+  </data>
+  <data name="AspireSkillsInspectionFailedMessage" xml:space="preserve">
+    <value>Could not inspect local Aspire skills</value>
+  </data>
   <data name="ContainerRuntimeExplicitSelectionSuffix" xml:space="preserve">
     <value> ← explicitly selected</value>
     <comment>Suffix marking a configured runtime. Preserve the leading space and arrow.</comment>

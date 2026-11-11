@@ -460,7 +460,7 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
         var expectedWarnings = new[]
         {
             string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_LocalSkillsConflict,
-                MigrationStrings.AgentSkillsDetail, "  .agents/skills/aspire")
+                "  .agents/skills/aspire/SKILL.md")
         };
         var interaction = new TestInteractionService
         {
@@ -517,7 +517,8 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
         Assert.Equal(
             [AgentCommandStrings.InitCommand_SelectAgentsPrompt, AgentCommandStrings.InitCommand_SelectSkills,
-                AgentCommandStrings.InitCommand_ConfigureMcpServerPrompt, AgentCommandStrings.InitCommand_SelectScopePrompt],
+                AgentCommandStrings.InitCommand_RemoveSkillCopiesPrompt, AgentCommandStrings.InitCommand_ConfigureMcpServerPrompt,
+                AgentCommandStrings.InitCommand_SelectScopePrompt],
             prompts);
         Assert.Equal(expectedWarnings, warnings);
         Assert.Equal(skill, await File.ReadAllTextAsync(skillPath));
@@ -1445,7 +1446,7 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
         {
             Assert.True(Directory.Exists(path));
         }
-        else
+        else if (existing == "malformed")
         {
             Assert.Equal(content, await File.ReadAllTextAsync(path));
         }
@@ -1454,11 +1455,16 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
             Assert.Empty(interaction.DisplayedErrors);
             Assert.Contains(interaction.DisplayedMessages, message => message.Emoji.Equals(KnownEmojis.PoliceCarLight) &&
                 message.Message == string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_LocalSkillsConflict,
-                    MigrationStrings.AgentSkillsDetail,
                     string.Join(System.Environment.NewLine,
-                        $"  {projectDirectory}/skills/aspire-init",
-                        "  ~/.agents/skills/aspire")));
-            Assert.Equal(content, await File.ReadAllTextAsync(projectSkillPath));
+                        $"  {projectDirectory}/skills/aspire-init/SKILL.md",
+                        "  ~/.agents/skills/aspire/SKILL.md")));
+            foreach (var removed in new[] { "~/.agents/skills/aspire", $"{projectDirectory}/skills/aspire-init" })
+            {
+                Assert.Contains(interaction.DisplayedMessages, message => message.Emoji.Equals(KnownEmojis.CheckMarkButton) &&
+                    message.Message == string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_RemovedSkillCopy, removed));
+            }
+            Assert.False(Directory.Exists(Path.GetDirectoryName(path)));
+            Assert.False(Directory.Exists(Path.GetDirectoryName(projectSkillPath)));
             Assert.True(File.Exists(context.Copilot.GetIntegrationConfigPath(AgentConfigurationScope.Global, context.Project)));
             Assert.True(File.Exists(context.Copilot.GetMcpConfigPath(AgentConfigurationScope.Global, context.Project)));
             Assert.False(File.Exists(context.ClaudeCode.GetIntegrationConfigPath(AgentConfigurationScope.Global, context.Project)));

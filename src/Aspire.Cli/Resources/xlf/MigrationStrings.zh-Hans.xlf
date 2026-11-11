@@ -2,41 +2,6 @@
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="zh-Hans" original="../MigrationStrings.resx">
     <body>
-      <trans-unit id="AgentSkillsApplied">
-        <source>Replaced copied Aspire skills with configured skill sources. Each copied skill directory was deleted.</source>
-        <target state="new">Replaced copied Aspire skills with configured skill sources. Each copied skill directory was deleted.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="AgentSkillsDeletedNoAgents">
-        <source>Deleted copied Aspire skills. No detected agent loads them, so nothing was registered.</source>
-        <target state="new">Deleted copied Aspire skills. No detected agent loads them, so nothing was registered.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="AgentSkillsDeletedNoSources">
-        <source>Deleted copied Aspire skills. No skill sources are configured and enabled, so nothing was registered.</source>
-        <target state="new">Deleted copied Aspire skills. No skill sources are configured and enabled, so nothing was registered.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="AgentSkillsDetail">
-        <source>Configured skill sources supersede copied Aspire skills.</source>
-        <target state="new">Configured skill sources supersede copied Aspire skills.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="AgentSkillsLinked">
-        <source>Copied Aspire skills were left in place because these are reached through a linked folder and may be shared: {0}. Remove them manually.</source>
-        <target state="new">Copied Aspire skills were left in place because these are reached through a linked folder and may be shared: {0}. Remove them manually.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="AgentSkillsRegistrationFailed">
-        <source>Copied Aspire skills were left in place because configured skill sources could not be registered.</source>
-        <target state="new">Copied Aspire skills were left in place because configured skill sources could not be registered.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="AgentSkillsTitle">
-        <source>Replace copied Aspire skills with configured skill sources.</source>
-        <target state="new">Replace copied Aspire skills with configured skill sources.</target>
-        <note />
-      </trans-unit>
       <trans-unit id="AvailableMigrationsHeader">
         <source>The following migrations will be applied:</source>
         <target state="translated">将应用以下迁移:</target>

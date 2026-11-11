@@ -22,7 +22,7 @@ internal static class LocalAspireSkills
         "aspireify"
     ];
 
-    internal static LocalAspireSkillsResult Find(
+    internal static (IReadOnlyList<string> Files, IReadOnlyList<string> Errors, bool HasFileErrors) Find(
         DirectoryInfo workingDirectory,
         DirectoryInfo workspaceRoot,
         IEnumerable<IAgentClient> agents,
@@ -33,9 +33,9 @@ internal static class LocalAspireSkills
         // Clients load project skills along the active ancestor chain, not just at its root.
         // Clamping to the workspace excludes sibling projects and unrelated current directories.
         var projectDirectories = AgentPath.ProjectDirectories(workingDirectory, workspaceRoot).ToArray();
-        var skills = new HashSet<string>(StringComparers.FileSystemPath);
+        var files = new Dictionary<string, string>(StringComparers.FileSystemPath);
         var errors = new HashSet<string>(StringComparer.Ordinal);
-        var consumers = new HashSet<(IAgentClient Client, AgentConfigurationScope Scope)>();
+        var inspected = new HashSet<string>(StringComparers.FileSystemPath);
         var hasFileErrors = false;
         foreach (var agent in agents)
         {
@@ -74,18 +74,20 @@ internal static class LocalAspireSkills
                     foreach (var name in s_legacySkillNames)
                     {
                         cancellationToken.ThrowIfCancellationRequested();
-                        // Clients can share a skill directory, so each client probes its own paths
-                        // and is recorded as a consumer of every copied skill it loads.
-                        var skillDirectory = Path.Combine(directory, name);
-                        var path = Path.Combine(skillDirectory, "SKILL.md");
+                        var path = Path.Combine(directory, name, "SKILL.md");
+                        if (!inspected.Add(path))
+                        {
+                            continue;
+                        }
+
                         try
                         {
+                            var fullPath = Path.GetFullPath(path);
                             // Older CLI versions copied Markdown verbatim, without an ownership
                             // stamp or installed version. Names identify possible collisions only;
                             // even byte-identical direct installs cannot be classified as obsolete.
-                            using var stream = File.OpenRead(path);
-                            skills.Add(Path.GetFullPath(skillDirectory));
-                            consumers.Add((agent, scope));
+                            using var stream = File.OpenRead(fullPath);
+                            files.TryAdd(fullPath, path);
                         }
                         catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
                         {
@@ -101,16 +103,6 @@ internal static class LocalAspireSkills
             }
         }
 
-        return new(skills.Order(StringComparers.FileSystemPath).ToArray(), errors.Order(StringComparer.Ordinal).ToArray(), hasFileErrors, consumers.ToArray());
+        return (files.Values.Order(StringComparers.FileSystemPath).ToArray(), errors.Order(StringComparer.Ordinal).ToArray(), hasFileErrors);
     }
-
-    internal static IReadOnlyList<string> GetDisplayPaths(IEnumerable<string> directories, DirectoryInfo workspaceRoot, CliExecutionContext executionContext)
-        => directories.Select(directory => AgentPath.GetDisplayPath(directory, workspaceRoot, executionContext))
-            .Order(StringComparer.Ordinal).ToArray();
 }
-
-internal sealed record LocalAspireSkillsResult(
-    IReadOnlyList<string> Directories,
-    IReadOnlyList<string> Errors,
-    bool HasFileErrors,
-    IReadOnlyList<(IAgentClient Client, AgentConfigurationScope Scope)> Consumers);

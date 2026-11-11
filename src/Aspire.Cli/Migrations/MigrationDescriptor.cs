@@ -30,10 +30,4 @@ internal sealed class MigrationDescriptor
     /// programmatic consumers.
     /// </summary>
     public JsonObject? Metadata { get; init; }
-
-    /// <summary>
-    /// Optional files or directories the migration will change, listed by <c>aspire doctor</c> and
-    /// before <c>aspire update --migrate</c> asks for confirmation.
-    /// </summary>
-    public IReadOnlyList<string>? Files { get; init; }
 }

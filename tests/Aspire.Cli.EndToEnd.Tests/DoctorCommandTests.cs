@@ -64,9 +64,9 @@ public sealed class DoctorCommandTests(ITestOutputHelper output)
 
         var text = await File.ReadAllTextAsync(
             Path.Combine(workspace.Path, "doctor-skills.txt"), TestContext.Current.CancellationToken);
-        string[] expectedFiles = [".agents/skills/aspire", "~/.agents/skills/aspire"];
+        string[] expectedFiles = [".agents/skills/aspire/SKILL.md", "~/.agents/skills/aspire/SKILL.md"];
+        Assert.Contains("Copied Aspire skills are not recommended; configured skill sources supersede them", text, StringComparison.Ordinal);
         var lines = text.Split('\n', StringSplitOptions.TrimEntries);
-        Assert.Contains(DoctorCommandStrings.PendingMigrationFix, lines);
         Assert.All(expectedFiles, file => Assert.Contains(file, lines));
 
         using var document = JsonDocument.Parse(await File.ReadAllTextAsync(
@@ -74,7 +74,6 @@ public sealed class DoctorCommandTests(ITestOutputHelper output)
         var check = Assert.Single(document.RootElement.GetProperty("checks").EnumerateArray(),
             check => check.GetProperty("name").GetString() == "aspire-skill-sources");
         Assert.Equal("warning", check.GetProperty("status").GetString());
-        Assert.Equal(DoctorCommandStrings.PendingMigrationFix, check.GetProperty("fix").GetString());
         Assert.Equal(expectedFiles, check.GetProperty("files").EnumerateArray().Select(file => file.GetString()));
         var workspaceRoot = $"/workspace/{workspace.WorkspaceRoot.Name}";
         Assert.Equal(workspaceRoot, check.GetProperty("metadata").GetProperty("workspaceRoot").GetString());
