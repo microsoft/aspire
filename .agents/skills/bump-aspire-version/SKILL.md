@@ -73,22 +73,27 @@ bumps or any bump that does not follow a newly created release branch.
 
 1. Confirm the new release branch exists:
    `git ls-remote --heads origin release/<X.Y>`.
-2. In `.github/workflows/generate-api-diffs.yml` and
-   `.github/workflows/generate-ats-diffs.yml`, replace the previous release branch
-   in the scheduled `target_branch` matrix, `'["main","release/<old>"]'`, with the
-   new branch. Keep `main` and change nothing else in either workflow.
-3. Update the "currently `release/<old>`" note in
-   `docs/ci/typescript-api-compat.md` to name the new branch.
-4. Check whether the previous release's shipped baselines reached `main`. Those are
+2. Add `--api-diff-release-branch release/<X.Y>` to the edit command, for example:
+
+   ```bash
+   dotnet run --file .agents/skills/bump-aspire-version/BumpVersion.cs -- 17.1 --branch main --milestone 17.1 --api-diff-release-branch release/17.0
+   ```
+
+   The script replaces the previous release branch in the scheduled
+   `target_branch` matrix of `.github/workflows/generate-api-diffs.yml` and
+   `.github/workflows/generate-ats-diffs.yml`, and the "currently `release/<old>`"
+   note in `docs/ci/typescript-api-compat.md`. It fails unless each file has
+   exactly one match.
+3. Check whether the previous release's shipped baselines reached `main`. Those are
    the `src/**/api/*.cs` and `src/**/api/*.ats.txt` files from the automated
    API/ATS diff PRs against `release/<old>`; #22152 merged the 13.6 baselines.
    Report any baselines still missing to the user. Do not import them in the bump
    PR unless asked.
 
 Precedent: #22172 retargeted both workflows from `release/13.6` to `release/17.0`.
-Make these edits by hand: `BumpVersion.cs` updates only `eng/Versions.props` and
-the milestone policy. Include them in the bump PR, or in a separate PR when the bump
-has already merged.
+Include the retarget in the bump PR. When the bump has already merged, rerun the
+same command with the current version and milestone; it leaves those files
+unchanged and retargets only the API diff files.
 
 ## Validate
 
@@ -97,7 +102,7 @@ properties, milestone assignment, any directly related comments, and (when
 applicable) the scheduled API/ATS diff release branch changed.
 
 Confirm the resulting version components and milestone title match the request.
-Run the edit command again and confirm it reports both files unchanged.
+Run the edit command again and confirm it reports every file unchanged.
 
 Check the diff separately to confirm prerelease settings and the dashboard-image
 pin were preserved. If the change extends beyond metadata, run focused validation

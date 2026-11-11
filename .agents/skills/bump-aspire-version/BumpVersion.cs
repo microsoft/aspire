@@ -4,6 +4,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 // Usage: dotnet run --file BumpVersion.cs -- <version> --branch <branch> --milestone <milestone>
+//            [--api-diff-release-branch <release/X.Y>]
 
 using System.Runtime.CompilerServices;
 using System.Text;
@@ -11,22 +12,34 @@ using System.Text.RegularExpressions;
 using System.Xml;
 using System.Xml.Linq;
 
+const string Usage = "<X.Y or X.Y.Z> --branch <target branch> --milestone <open milestone> [--api-diff-release-branch <release/X.Y>]";
+
+// The scheduled API/ATS diff workflows and their doc name the newest release branch.
+// The order must match the patterns in RetargetApiDiffs.
+string[] apiDiffPaths =
+[
+    ".github/workflows/generate-api-diffs.yml",
+    ".github/workflows/generate-ats-diffs.yml",
+    "docs/ci/typescript-api-compat.md",
+];
+
 try
 {
     if (args is ["--help"] or ["-h"])
     {
-        Console.WriteLine("Usage: BumpVersion.cs <X.Y or X.Y.Z> --branch <target branch> --milestone <open milestone>");
+        Console.WriteLine($"Usage: BumpVersion.cs {Usage}");
         return 0;
     }
 
-    if (args.Length != 5)
+    if (args.Length is not (5 or 7))
     {
-        throw new ArgumentException("Expected <version> --branch <target branch> --milestone <open milestone>.");
+        throw new ArgumentException($"Expected {Usage}.");
     }
 
     var version = args[0];
     string? branch = null;
     string? milestone = null;
+    string? apiDiffReleaseBranch = null;
     for (var i = 1; i < args.Length; i += 2)
     {
         switch (args[i])
@@ -36,6 +49,9 @@ try
                 break;
             case "--milestone" when milestone is null:
                 milestone = args[i + 1];
+                break;
+            case "--api-diff-release-branch" when apiDiffReleaseBranch is null:
+                apiDiffReleaseBranch = args[i + 1];
                 break;
             default:
                 throw new ArgumentException($"Unknown or duplicate option: {args[i]}");
@@ -48,14 +64,22 @@ try
     }
 
     var root = GetRepositoryRoot();
-    string[] paths = ["eng/Versions.props", ".github/policies/milestoneAssignment.prClosed.yml"];
+    List<string> paths = ["eng/Versions.props", ".github/policies/milestoneAssignment.prClosed.yml"];
+    if (apiDiffReleaseBranch is not null)
+    {
+        paths.AddRange(apiDiffPaths);
+    }
     var encoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
     var originals = paths.Select(path => encoding.GetString(File.ReadAllBytes(Path.Combine(root, path)))).ToArray();
     var (versions, policy) = PrepareUpdates(originals[0], originals[1], version, branch, milestone);
-    string[] updates = [versions, policy];
+    List<string> updates = [versions, policy];
+    if (apiDiffReleaseBranch is not null)
+    {
+        updates.AddRange(RetargetApiDiffs(apiDiffPaths, originals[2..], apiDiffReleaseBranch));
+    }
 
-    // Validate both inputs before writing either file.
-    for (var i = 0; i < paths.Length; i++)
+    // Validate every input before writing any file.
+    for (var i = 0; i < paths.Count; i++)
     {
         if (originals[i] != updates[i])
         {
@@ -165,4 +189,33 @@ static (string Versions, string Policy) PrepareUpdates(
     policy = policy[..task.Index] + updatedTask + policy[(task.Index + task.Length)..];
 
     return (versions, policy);
+}
+
+static string[] RetargetApiDiffs(string[] paths, string[] files, string releaseBranch)
+{
+    if (!Pattern(@"\Arelease/[0-9]+\.[0-9]+\z").IsMatch(releaseBranch))
+    {
+        throw new ArgumentException("API diff release branch must be release/X.Y.");
+    }
+
+    // Each workflow's scheduled matrix is a JSON literal inside a GitHub expression:
+    //     || '["main","release/17.0"]') }}
+    // Keep main and swap only the single release branch.
+    var matrix = Pattern(@"(?<=\x27\[""main"","")release/[0-9]+\.[0-9]+(?=""\]\x27)");
+
+    // The doc names the scheduled branch as: matrix (currently `release/17.0`).
+    var docNote = Pattern(@"(?<=\(currently `)release/[0-9]+\.[0-9]+(?=`\))");
+
+    Regex[] patterns = [matrix, matrix, docNote];
+    var results = new string[files.Length];
+    for (var i = 0; i < files.Length; i++)
+    {
+        if (patterns[i].Matches(files[i]).Count != 1)
+        {
+            throw new InvalidOperationException($"Expected exactly one scheduled release branch in {paths[i]}.");
+        }
+        results[i] = patterns[i].Replace(files[i], releaseBranch);
+    }
+
+    return results;
 }
