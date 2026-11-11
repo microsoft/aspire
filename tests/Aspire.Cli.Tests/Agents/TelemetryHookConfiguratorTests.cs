@@ -36,10 +36,9 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
         Assert.Equal("command", (string)entry["type"]!);
         Assert.Equal(CopilotAgentClient.TelemetryHookMatcher, (string)entry["matcher"]!);
         Assert.Equal(30, (int)entry["timeoutSec"]!);
-        var (command, args) = AgentTelemetryHook.GetHookCommand(CopilotAgentClient.ClientId, AgentConfigurationScope.Global);
+        var (command, args) = AgentTelemetryHook.GetCommand("--hook", "--source", "copilot", "--scope", "user");
         Assert.Equal(command, (string)entry["exec"]!);
         Assert.Equal(args, entry["args"]!.AsArray().Select(arg => (string)arg!));
-        Assert.Equal(["--source", "copilot", "--scope", "user"], args[^4..]);
         Assert.False(entry.ContainsKey("bash"));
         Assert.False(entry.ContainsKey("powershell"));
         Assert.False(Directory.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".github")));
@@ -66,10 +65,9 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
 
         var copilotFile = Path.Combine(workspace.WorkspaceRoot.FullName, ".github", "hooks", "aspire-telemetry.json");
         var copilotEntry = Assert.Single(JsonNode.Parse(await File.ReadAllTextAsync(copilotFile).DefaultTimeout())!["hooks"]!["postToolUse"]!.AsArray())!;
-        var (command, copilotArgs) = AgentTelemetryHook.GetHookCommand(CopilotAgentClient.ClientId, AgentConfigurationScope.Project);
+        var (command, copilotArgs) = AgentTelemetryHook.GetCommand("--hook", "--source", "copilot", "--scope", "project");
         Assert.Equal(command, (string)copilotEntry["exec"]!);
         Assert.Equal(copilotArgs, copilotEntry["args"]!.AsArray().Select(arg => (string)arg!));
-        Assert.Equal(["--source", "copilot", "--scope", "project"], copilotArgs[^4..]);
 
         var groups = await ReadClaudePostToolUseAsync(workspace.WorkspaceRoot).DefaultTimeout();
         Assert.Collection(groups,
@@ -348,7 +346,7 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
         var hooks = groups.SelectMany(group => group!["hooks"]!.AsArray()).ToArray();
         Assert.Equal(shouldReplace ? 3 : 4, hooks.Length);
         Assert.Equal(!shouldReplace, hooks.Any(hook => JsonNode.DeepEquals(hook, existingHook)));
-        var (command, args) = AgentTelemetryHook.GetHookCommand(ClaudeCodeAgentClient.ClientId, AgentConfigurationScope.Global);
+        var (command, args) = AgentTelemetryHook.GetCommand("--hook", "--source", "claude", "--scope", "user");
         Assert.Equal(3, hooks.Count(hook => (string?)hook!["command"] == command
             && hook["args"]!.AsArray().Select(arg => (string)arg!).SequenceEqual(args)));
     }
@@ -434,7 +432,8 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
     {
         Assert.Equal(matcher, (string?)group!["matcher"]);
         var hook = Assert.Single(group["hooks"]!.AsArray())!.AsObject();
-        var (command, args) = AgentTelemetryHook.GetHookCommand(ClaudeCodeAgentClient.ClientId, scope);
+        var (command, args) = AgentTelemetryHook.GetCommand(
+            "--hook", "--source", "claude", "--scope", scope is AgentConfigurationScope.Project ? "project" : "user");
         Assert.Equal("command", (string?)hook["type"]);
         Assert.Equal(command, (string?)hook["command"]);
         Assert.Equal(args, hook["args"]!.AsArray().Select(arg => (string)arg!));

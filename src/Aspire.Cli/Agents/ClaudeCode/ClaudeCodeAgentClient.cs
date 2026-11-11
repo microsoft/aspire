@@ -122,7 +122,6 @@ internal sealed class ClaudeCodeAgentClient(
         // Project hooks go in the shared settings.json, not settings.local.json, so they can be committed.
         // https://code.claude.com/docs/en/settings#settings-files
         var settingsPath = GetIntegrationConfigPath(scope, workspaceRoot);
-        var (command, args) = AgentTelemetryHook.GetHookCommand(Id, scope);
         var edit = new AgentConfiguration();
         byte[]? bytes;
         try
@@ -203,9 +202,9 @@ internal sealed class ClaudeCodeAgentClient(
         // Run directly, without a shell, and only for tools or skill file reads the classifier can
         // track so Claude does not launch the CLI on every tool call or read.
         // https://docs.claude.com/en/docs/claude-code/hooks
-        postToolUse.Add(CreateHookGroup(command, args, TelemetryHookSkillMatcher, TelemetryHookSkillIf));
-        postToolUse.Add(CreateHookGroup(command, args, TelemetryHookMcpMatcher, condition: null));
-        postToolUse.Add(CreateHookGroup(command, args, TelemetryHookReadMatcher, TelemetryHookReadIf));
+        postToolUse.Add(CreateHookGroup(TelemetryHookSkillMatcher, TelemetryHookSkillIf, scope));
+        postToolUse.Add(CreateHookGroup(TelemetryHookMcpMatcher, condition: null, scope));
+        postToolUse.Add(CreateHookGroup(TelemetryHookReadMatcher, TelemetryHookReadIf, scope));
 
         try
         {
@@ -220,8 +219,12 @@ internal sealed class ClaudeCodeAgentClient(
         }
     }
 
-    private static JsonNode CreateHookGroup(string command, IEnumerable<string> args, string matcher, string? condition)
+    private static JsonNode CreateHookGroup(string matcher, string? condition, AgentConfigurationScope scope)
     {
+        var (command, args) = AgentTelemetryHook.GetCommand(
+            AgentTelemetryProtocol.HookOptionName,
+            AgentTelemetryProtocol.SourceOptionName, ClientId,
+            AgentTelemetryProtocol.ScopeOptionName, scope is AgentConfigurationScope.Project ? AgentTelemetryProtocol.ProjectScope : AgentTelemetryProtocol.UserScope);
         var hook = new JsonObject
         {
             ["type"] = "command",

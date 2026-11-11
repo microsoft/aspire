@@ -138,7 +138,10 @@ internal sealed class CopilotAgentClient(
                 : Path.Combine(GetSettingsDirectory(), "hooks");
             Directory.CreateDirectory(hooksDirectory);
             var filePath = Path.Combine(hooksDirectory, TelemetryHookFileName);
-            var (command, args) = AgentTelemetryHook.GetHookCommand(Id, scope);
+            var (command, args) = AgentTelemetryHook.GetCommand(
+                AgentTelemetryProtocol.HookOptionName,
+                AgentTelemetryProtocol.SourceOptionName, ClientId,
+                AgentTelemetryProtocol.ScopeOptionName, scope is AgentConfigurationScope.Project ? AgentTelemetryProtocol.ProjectScope : AgentTelemetryProtocol.UserScope);
             var config = new JsonObject
             {
                 ["version"] = 1,

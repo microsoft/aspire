@@ -30,35 +30,15 @@ internal sealed class AgentTelemetryHook(IEnvironment environment, CliExecutionC
     // Clients build their hook matchers from this so they cannot drift from the classifier.
     internal static string McpMatcher => string.Join('|', s_mcpPrefixes.Select(prefix => prefix + ".+"));
 
-    internal static (string Command, string[] Args) GetCommand(string mode)
+    internal static (string Command, string[] Args) GetCommand(string mode, params string[] options)
     {
         var command = Environment.ProcessPath ?? throw new InvalidOperationException("Could not resolve the CLI executable.");
-        string[] args = [AgentTelemetryProtocol.AgentCommandName, AgentTelemetryProtocol.TelemetryCommandName, mode];
+        string[] args = [AgentTelemetryProtocol.AgentCommandName, AgentTelemetryProtocol.TelemetryCommandName, mode, .. options];
         if (Path.GetFileNameWithoutExtension(command).Equals("dotnet", StringComparison.OrdinalIgnoreCase))
         {
             args = [Path.Combine(AppContext.BaseDirectory, "aspire.dll"), .. args];
         }
         return (command, args);
-    }
-
-    /// <summary>
-    /// Gets the hook command written into an agent's hook configuration.
-    /// </summary>
-    /// <param name="clientId">The <see cref="IAgentClient.Id"/> whose hook configuration runs the command.</param>
-    /// <param name="scope">Where the hook configuration is installed.</param>
-    /// <remarks>
-    /// User and project hooks run the same CLI invocation. <c>--source</c> and <c>--scope</c> let
-    /// <see cref="ShouldRecord"/> detect when another installed hook records the same event.
-    /// </remarks>
-    internal static (string Command, string[] Args) GetHookCommand(string clientId, AgentConfigurationScope scope)
-    {
-        var (command, args) = GetCommand(AgentTelemetryProtocol.HookOptionName);
-        return (command,
-        [
-            .. args,
-            AgentTelemetryProtocol.SourceOptionName, clientId,
-            AgentTelemetryProtocol.ScopeOptionName, scope == AgentConfigurationScope.Project ? AgentTelemetryProtocol.ProjectScope : AgentTelemetryProtocol.UserScope
-        ]);
     }
 
     internal async Task<int> RunAsync(TextReader input, TextWriter output, TextWriter error, Func<string[], Task<int>> execute)
@@ -117,7 +97,7 @@ internal sealed class AgentTelemetryHook(IEnvironment environment, CliExecutionC
     /// </summary>
     /// <remarks>
     /// Each agent client owns its hook file layout and passes the handler's executable and arguments here, so this
-    /// matches only the CLI invocation that <see cref="GetHookCommand"/> writes, plus legacy hook scripts.
+    /// matches only the CLI invocation that <see cref="GetCommand"/> writes, plus legacy hook scripts.
     /// </remarks>
     internal static bool IsHookInvocation(JsonNode? executableNode, JsonNode? argsNode)
     {
