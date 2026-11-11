@@ -113,6 +113,103 @@ public class DashboardInteractionsTests : PlaywrightTestsBase<DashboardInteracti
 
     [Fact]
     [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task Tooltips_HiddenContentIsClonedAndUpdates()
+    {
+        await RunTestAsync(async page =>
+        {
+            await GoToResourcesAndWaitAsync(page);
+            await page.EvaluateAsync("""
+                () => {
+                    const button = document.createElement('button');
+                    button.id = 'table-tooltip-probe';
+                    button.textContent = 'Log entry';
+                    button.style.cssText = 'position:fixed;left:600px;top:250px;z-index:1000;';
+                    button.dataset.tooltipContent = 'hidden-tooltip-probe';
+                    const source = document.createElement('div');
+                    source.id = 'hidden-tooltip-probe';
+                    source.className = 'log-tooltip';
+                    source.hidden = true;
+                    source.innerHTML = `
+                        <div class="log-tooltip-title-container">
+                            <span class="log-tooltip-title"></span> <span class="log-tooltip-subtitle"></span><br>
+                        </div>
+                        <table class="log-tooltip-table"><tbody>
+                            <tr><td class="label-column">Level</td><td><strong>Information</strong></td></tr>
+                            <tr><td class="label-column">Timestamp</td><td>2026-01-01 10:00:00</td></tr>
+                            <tr><td class="label-column">Message</td><td></td></tr>
+                        </tbody></table>`;
+                    source.querySelector('.log-tooltip-title').textContent = 'Event <name>';
+                    source.querySelector('.log-tooltip-subtitle').textContent = 'Scope "name"';
+                    source.querySelector('tr:last-child td:last-child').textContent = 'Test <message>\nwith details';
+                    document.body.append(button, source);
+                }
+                """);
+
+            var anchor = page.Locator("#table-tooltip-probe");
+            var source = page.Locator("#hidden-tooltip-probe");
+            var tooltip = page.Locator(".dashboard-tooltip");
+            await anchor.HoverAsync();
+            await Assertions.Expect(tooltip).ToBeVisibleAsync();
+            await Assertions.Expect(page.Locator(".dashboard-tooltip.log-tooltip")).ToBeVisibleAsync();
+            await Assertions.Expect(tooltip.Locator(".log-tooltip-title")).ToHaveTextAsync("Event <name>");
+            await Assertions.Expect(tooltip.Locator(".log-tooltip-subtitle")).ToHaveTextAsync("Scope \"name\"");
+            await Assertions.Expect(tooltip.Locator("strong")).ToHaveTextAsync("Information");
+            await Assertions.Expect(source).ToBeHiddenAsync();
+            await Assertions.Expect(source.Locator(".log-tooltip-title")).ToHaveTextAsync("Event <name>");
+            await Assertions.Expect(tooltip.Locator("td")).ToHaveTextAsync(
+                ["Level", "Information", "Timestamp", "2026-01-01 10:00:00", "Message", "Test <message>\nwith details"]);
+
+            await source.EvaluateAsync("""
+                source => {
+                    source.querySelector('.log-tooltip-title').firstChild.data = 'Updated event';
+                    source.querySelector('tr:last-child td:last-child').textContent = 'Updated message';
+                }
+                """);
+            await Assertions.Expect(tooltip).ToHaveCountAsync(1);
+            await Assertions.Expect(tooltip.Locator(".log-tooltip-title")).ToHaveTextAsync("Updated event");
+            await Assertions.Expect(tooltip.Locator("td")).ToHaveTextAsync(
+                ["Level", "Information", "Timestamp", "2026-01-01 10:00:00", "Message", "Updated message"]);
+
+            await page.Keyboard.PressAsync("Escape");
+            await Assertions.Expect(tooltip).ToHaveCountAsync(0);
+            await anchor.FocusAsync();
+            await Assertions.Expect(tooltip.Locator(".log-tooltip-title")).ToHaveTextAsync("Updated event");
+            await Assertions.Expect(anchor).ToHaveAttributeAsync("aria-describedby", (await tooltip.GetAttributeAsync("id"))!);
+
+            await anchor.EvaluateAsync("""
+                anchor => {
+                    const source = document.createElement('div');
+                    source.id = 'replacement-tooltip-probe';
+                    source.hidden = true;
+                    const paragraph = document.createElement('p');
+                    paragraph.textContent = 'Another preview';
+                    source.appendChild(paragraph);
+                    document.body.appendChild(source);
+                    anchor.dataset.tooltipContent = source.id;
+                }
+                """);
+            await Assertions.Expect(tooltip.Locator("p")).ToHaveTextAsync("Another preview");
+            await Assertions.Expect(page.Locator(".dashboard-tooltip.log-tooltip")).ToHaveCountAsync(0);
+            await page.Locator("#replacement-tooltip-probe p").EvaluateAsync("paragraph => paragraph.firstChild.data = 'Updated preview'");
+            await Assertions.Expect(tooltip.Locator("p")).ToHaveTextAsync("Updated preview");
+
+            await anchor.EvaluateAsync("""
+                anchor => {
+                    delete anchor.dataset.tooltipContent;
+                    anchor.dataset.tooltip = 'Plain text';
+                }
+                """);
+            await Assertions.Expect(tooltip).ToHaveTextAsync("Plain text");
+            await Assertions.Expect(tooltip.Locator(":scope > span")).ToHaveTextAsync("Plain text");
+            await anchor.EvaluateAsync("anchor => anchor.remove()");
+            await Assertions.Expect(tooltip).ToHaveCountAsync(0);
+            await Assertions.Expect(source.Locator(".log-tooltip-title")).ToHaveTextAsync("Updated event");
+            await Assertions.Expect(source).ToBeHiddenAsync();
+        });
+    }
+
+    [Fact]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
     public async Task ReconnectModal_RemainsAboveInteractionDialog()
     {
         await RunTestAsync(async page =>
