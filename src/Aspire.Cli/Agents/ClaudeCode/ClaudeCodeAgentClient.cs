@@ -58,7 +58,9 @@ internal sealed class ClaudeCodeAgentClient(
     public AgentEnvironment Environments => AgentEnvironment.ClaudeCode;
 
     public string GetSkillBaseDirectory(AgentConfigurationScope scope, DirectoryInfo workspaceRoot)
-        => Path.Combine(ClaudeCodePaths.GetConfigDirectory(scope, workspaceRoot, context, environment), "skills");
+        => Path.Combine(scope is AgentConfigurationScope.Project
+            ? Path.Combine(workspaceRoot.FullName, ClaudeCodePaths.ConfigDirectoryName)
+            : ClaudeCodePaths.GetConfigDirectory(context, environment), "skills");
 
     public IEnumerable<string> GetLocalSkillDirectories(AgentConfigurationScope scope, DirectoryInfo workspaceRoot)
     {
@@ -72,7 +74,13 @@ internal sealed class ClaudeCodeAgentClient(
                 AgentConfiguration.EnumerateJsonFiles(Path.Combine(ManagedSettingsDirectory, "managed-settings.d"))), sources);
 
     public string GetIntegrationConfigPath(AgentConfigurationScope scope, DirectoryInfo workspaceRoot)
-        => Path.Combine(ClaudeCodePaths.GetConfigDirectory(scope, workspaceRoot, context, environment), "settings.json");
+    {
+        var directory = scope is AgentConfigurationScope.Project
+            ? Path.Combine(workspaceRoot.FullName, ClaudeCodePaths.ConfigDirectoryName)
+            : ClaudeCodePaths.GetConfigDirectory(context, environment);
+
+        return Path.Combine(directory, "settings.json");
+    }
 
     public Task UpdateIntegrationConfigAsync(
         JsonObject config, DirectoryInfo workspaceRoot, AgentConfigurationScope scope,
@@ -113,8 +121,7 @@ internal sealed class ClaudeCodeAgentClient(
     {
         // Project hooks go in the shared settings.json, not settings.local.json, so they can be committed.
         // https://code.claude.com/docs/en/settings#settings-files
-        var claudeDirectory = ClaudeCodePaths.GetConfigDirectory(scope, workspaceRoot, context, environment);
-        var settingsPath = Path.Combine(claudeDirectory, "settings.json");
+        var settingsPath = GetIntegrationConfigPath(scope, workspaceRoot);
         var (command, args) = AgentTelemetryHook.GetHookCommand(Id, scope);
         var edit = new AgentConfiguration();
         byte[]? bytes;
@@ -202,7 +209,7 @@ internal sealed class ClaudeCodeAgentClient(
 
         try
         {
-            Directory.CreateDirectory(claudeDirectory);
+            Directory.CreateDirectory(Path.GetDirectoryName(settingsPath)!);
             await edit.PublishAsync(settingsPath, settings, cancellationToken);
             return TelemetryHookStatus.Configured;
         }
@@ -256,28 +263,6 @@ internal sealed class ClaudeCodeAgentClient(
                 postToolUse.RemoveAt(groupIndex);
             }
         }
-    }
-
-    /// <summary>
-    /// Determines whether the repository's shared Claude settings install Aspire's telemetry hook at project scope.
-    /// </summary>
-    /// <remarks>
-    /// A user-scope hook uses this to defer to the project hook so one tool call is recorded once. Callers handle
-    /// I/O and JSON failures. Claude nests handlers in matcher groups:
-    /// <c>{"hooks":{"PostToolUse":[{"matcher":"...","hooks":[{"command":"/path/to/aspire","args":[...,"--scope","project"]}]}]}}</c>
-    /// </remarks>
-    public bool HasProjectTelemetryHook(DirectoryInfo repositoryRoot)
-    {
-        var settingsPath = Path.Combine(repositoryRoot.FullName, ClaudeCodePaths.ConfigDirectoryName, "settings.json");
-
-        return File.Exists(settingsPath)
-            && JsonNode.Parse(File.ReadAllText(settingsPath)) is JsonObject settings
-            && settings["hooks"] is JsonObject hooks
-            && hooks["PostToolUse"] is JsonArray postToolUse
-            && postToolUse.OfType<JsonObject>()
-                .SelectMany(group => group["hooks"] as JsonArray ?? [])
-                .OfType<JsonObject>()
-                .Any(hook => AgentTelemetryHook.IsProjectHookInvocation(hook["command"], hook["args"]));
     }
 
     private string ManagedSettingsDirectory

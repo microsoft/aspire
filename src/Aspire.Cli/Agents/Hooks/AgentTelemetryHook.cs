@@ -4,6 +4,7 @@
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Aspire.Cli.Agents.ClaudeCode;
 using Aspire.Cli.Agents.Copilot;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
@@ -13,7 +14,7 @@ namespace Aspire.Cli.Agents.Hooks;
 /// <summary>
 /// Classifies hook input before telemetry providers and enrichment are initialized.
 /// </summary>
-internal sealed class AgentTelemetryHook(IEnvironment environment)
+internal sealed class AgentTelemetryHook(IEnvironment environment, CliExecutionContext executionContext)
 {
     private const string SkillsDirectoryName = "skills";
     private const string SkillFileName = "SKILL.md";
@@ -47,7 +48,7 @@ internal sealed class AgentTelemetryHook(IEnvironment environment)
     /// <param name="scope">Where the hook configuration is installed.</param>
     /// <remarks>
     /// User and project hooks run the same CLI invocation. <c>--source</c> and <c>--scope</c> let
-    /// <see cref="TelemetryHookSkipPolicy"/> detect when another installed hook records the same event.
+    /// <see cref="ShouldRecord"/> detect when another installed hook records the same event.
     /// </remarks>
     internal static (string Command, string[] Args) GetHookCommand(string clientId, AgentConfigurationScope scope)
     {
@@ -147,13 +148,85 @@ internal sealed class AgentTelemetryHook(IEnvironment environment)
     }
 
     /// <summary>
-    /// Determines whether a hook handler runs Aspire's telemetry hook installed at project scope.
+    /// Determines whether the hook identified by <paramref name="source"/> and <paramref name="scope"/> records
+    /// the tool call, or leaves it to another installed Aspire hook that runs for the same call.
     /// </summary>
-    internal static bool IsProjectHookInvocation(JsonNode? executableNode, JsonNode? argsNode)
-        => IsHookInvocation(executableNode, argsNode)
-            && argsNode is JsonArray args
-            && args.Select(GetString).SkipWhile(arg => arg != AgentTelemetryProtocol.ScopeOptionName).Skip(1).FirstOrDefault()
-                == AgentTelemetryProtocol.ProjectScope;
+    /// <remarks>
+    /// <para>
+    /// Agents run every configured hook for a tool call without deduplicating them. GitHub Copilot runs hooks from
+    /// <c>~/.copilot/hooks</c> and, in a trusted repository, from <c>.github/hooks</c> and <c>.claude/settings.json</c>.
+    /// Claude Code runs hooks from its user and project settings.
+    /// https://docs.github.com/en/copilot/reference/hooks-reference#hooks-locations
+    /// https://code.claude.com/docs/en/settings#settings-files
+    /// </para>
+    /// <para>
+    /// A Claude Code hook skips inside Copilot, which never reads Claude user settings, so it can only be a
+    /// repository hook running next to Copilot's own. A project hook skips when its client also has the user hook,
+    /// because user hooks run in every folder while project hooks need a trusted repository. Hooks installed
+    /// before <c>--source</c> and <c>--scope</c> existed pass neither, and unreadable user settings never cause a
+    /// skip, so a hook only skips when another hook is known to record the call.
+    /// </para>
+    /// </remarks>
+    internal bool ShouldRecord(string? source, string? scope)
+    {
+        if (source is null || scope is null)
+        {
+            return true;
+        }
+
+        if (source == ClaudeCodeAgentClient.ClientId && GetCopilotRuntimeName(environment) is not null)
+        {
+            return false;
+        }
+
+        if (scope != AgentTelemetryProtocol.ProjectScope)
+        {
+            return true;
+        }
+
+        try
+        {
+            return !HasUserHook(source);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+        {
+            return true;
+        }
+    }
+
+    // Reads only the client's user hook location, never the repository, because this runs on every recorded tool call.
+    private bool HasUserHook(string source)
+    {
+        switch (source)
+        {
+            case CopilotAgentClient.ClientId:
+                // Aspire owns this file, so its presence means the user hook is installed.
+                var copilotDirectory = AgentPath.Expand(CopilotPaths.GetConfigDirectory(executionContext.HomeDirectory, environment), executionContext);
+                return File.Exists(Path.Combine(copilotDirectory, "hooks", CopilotAgentClient.TelemetryHookFileName));
+
+            case ClaudeCodeAgentClient.ClientId:
+                // Claude nests handlers in matcher groups:
+                // {"hooks":{"PostToolUse":[{"matcher":"...","hooks":[{"command":"/path/to/aspire","args":[...]}]}]}}
+                // A project hook installed in the home directory shares this file, so it does not count as the user hook.
+                var settingsPath = Path.Combine(ClaudeCodePaths.GetConfigDirectory(executionContext, environment), "settings.json");
+                return File.Exists(settingsPath)
+                    && JsonNode.Parse(File.ReadAllText(settingsPath)) is JsonObject settings
+                    && settings["hooks"] is JsonObject hooks
+                    && hooks["PostToolUse"] is JsonArray postToolUse
+                    && postToolUse.OfType<JsonObject>()
+                        .SelectMany(group => group["hooks"] as JsonArray ?? [])
+                        .OfType<JsonObject>()
+                        .Any(hook => IsHookInvocation(hook["command"], hook["args"]) && !IsProjectScoped(hook["args"]));
+
+            default:
+                return false;
+        }
+    }
+
+    // Hook args end with: ... --source claude --scope project
+    private static bool IsProjectScoped(JsonNode? argsNode)
+        => argsNode is JsonArray args
+            && args.Select(GetString).SkipWhile(arg => arg != AgentTelemetryProtocol.ScopeOptionName).Skip(1).FirstOrDefault() == AgentTelemetryProtocol.ProjectScope;
 
     private static string? GetString(JsonNode? node)
         => node is JsonValue value && value.TryGetValue<string>(out var text) ? text : null;

@@ -11,15 +11,6 @@ internal static class ClaudeCodePaths
         => GetConfigDirectoryOverride(executionContext, environment)
             ?? Path.Combine(executionContext.HomeDirectory.FullName, ConfigDirectoryName);
 
-    // Project and user settings share one layout, so callers can resolve skills and settings.json the same
-    // way for either scope. CLAUDE_CONFIG_DIR relocates only the user directory.
-    // https://code.claude.com/docs/en/settings#settings-files
-    public static string GetConfigDirectory(
-        AgentConfigurationScope scope, DirectoryInfo workspaceRoot, CliExecutionContext executionContext, IEnvironment environment)
-        => scope is AgentConfigurationScope.Project
-            ? Path.Combine(workspaceRoot.FullName, ConfigDirectoryName)
-            : GetConfigDirectory(executionContext, environment);
-
     public static string GetGlobalMcpConfigPath(CliExecutionContext executionContext, IEnvironment environment)
     {
         // CLAUDE_CONFIG_DIR relocates the state file into that directory, unlike ~/.claude.json.

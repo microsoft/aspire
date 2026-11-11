@@ -1,7 +1,9 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
+using Aspire.Cli.Agents;
 using Aspire.Cli.Agents.ClaudeCode;
 using Aspire.Cli.Agents.Copilot;
 using Aspire.Cli.Agents.Hooks;
@@ -10,7 +12,7 @@ using Aspire.Cli.Tests.Utils;
 
 namespace Aspire.Cli.Tests.Agents;
 
-public class AgentTelemetryHookTests
+public class AgentTelemetryHookTests(ITestOutputHelper outputHelper)
 {
     [Theory]
     [InlineData("{}")]
@@ -83,7 +85,7 @@ public class AgentTelemetryHookTests
     [Fact]
     public async Task HookAlwaysReturnsOneBenignResponseWithoutStartingTelemetryForUnrelatedInput()
     {
-        var hook = new AgentTelemetryHook(new TestEnvironment());
+        var hook = CreateHook(new TestEnvironment());
         using var input = new StringReader("""{"toolName":"bash","toolArgs":{"command":"echo hello"}}""");
         using var output = new StringWriter();
         using var error = new StringWriter();
@@ -102,7 +104,7 @@ public class AgentTelemetryHookTests
     [Fact]
     public async Task HookOptOutDoesNotReadOrInvoke()
     {
-        var hook = new AgentTelemetryHook(new TestEnvironment(new Dictionary<string, string?>
+        var hook = CreateHook(new TestEnvironment(new Dictionary<string, string?>
         {
             ["ASPIRE_CLI_TELEMETRY_OPTOUT"] = "TrUe"
         }));
@@ -151,7 +153,7 @@ public class AgentTelemetryHookTests
     [InlineData(null, "another_agent", "claude-code")]
     public async Task HookUsesInjectedClientEnvironmentAndReturnsBenignResponseOnFailure(string? copilotCli, string? aiAgent, string expectedClient)
     {
-        var hook = new AgentTelemetryHook(new TestEnvironment(new Dictionary<string, string?>
+        var hook = CreateHook(new TestEnvironment(new Dictionary<string, string?>
         {
             ["COPILOT_CLI"] = copilotCli,
             ["AI_AGENT"] = aiAgent
@@ -317,7 +319,7 @@ public class AgentTelemetryHookTests
     public async Task HookHonorsConfiguredLimitAndDrainsOversizedInput(int extraCharacters, bool expectedInvocation)
     {
         const string payload = """{"toolName":"skill","toolArgs":{"skill":"aspire"}}""";
-        var hook = new AgentTelemetryHook(new TestEnvironment(new Dictionary<string, string?>
+        var hook = CreateHook(new TestEnvironment(new Dictionary<string, string?>
         {
             [AgentTelemetryHook.PayloadLimitEnvironmentVariable] = payload.Length.ToString(System.Globalization.CultureInfo.InvariantCulture)
         }));
@@ -341,7 +343,7 @@ public class AgentTelemetryHookTests
     [Fact]
     public async Task HookReportsInvalidConfigurationWithoutInvokingCli()
     {
-        var hook = new AgentTelemetryHook(new TestEnvironment(new Dictionary<string, string?>
+        var hook = CreateHook(new TestEnvironment(new Dictionary<string, string?>
         {
             [AgentTelemetryHook.PayloadLimitEnvironmentVariable] = "0"
         }));
@@ -362,6 +364,92 @@ public class AgentTelemetryHookTests
         Assert.Null(AgentTelemetryHook.Classify(padded, new TestEnvironment(), AgentTelemetryHook.DefaultMaxPayloadCharacters));
         Assert.NotNull(AgentTelemetryHook.Classify(padded, new TestEnvironment(), padded.Length));
     }
+
+    [Theory]
+    [InlineData(null, null)]
+    [InlineData("copilot", null)]
+    [InlineData(null, "project")]
+    [InlineData("copilot", "user")]
+    [InlineData("claude", "user")]
+    [InlineData("copilot", "project")]
+    [InlineData("claude", "project")]
+    public void ShouldRecord_RecordsWhenNoOtherHookCoversTheCall(string? source, string? scope)
+    {
+        using var context = new AgentConfigurationTestContext(outputHelper);
+
+        Assert.True(new AgentTelemetryHook(context.Environment, context.ExecutionContext).ShouldRecord(source, scope));
+    }
+
+    [Theory]
+    [InlineData("COPILOT_CLI", "1", "user")]
+    [InlineData("COPILOT_CLI", "1", "project")]
+    [InlineData("AI_AGENT", "github_copilot_app_agent", "project")]
+    public void ShouldRecord_SkipsClaudeHookInsideCopilot(string variable, string value, string scope)
+    {
+        using var context = new AgentConfigurationTestContext(outputHelper);
+        context.SetVariable(variable, value);
+        var hook = new AgentTelemetryHook(context.Environment, context.ExecutionContext);
+
+        Assert.False(hook.ShouldRecord(ClaudeCodeAgentClient.ClientId, scope));
+        Assert.True(hook.ShouldRecord(CopilotAgentClient.ClientId, scope));
+    }
+
+    [Theory]
+    [InlineData("copilot")]
+    [InlineData("claude")]
+    public async Task ShouldRecord_SkipsProjectHookWhenSameClientHasUserHook(string clientId)
+    {
+        using var context = new AgentConfigurationTestContext(outputHelper);
+        IAgentClient client = clientId == CopilotAgentClient.ClientId ? context.Copilot : context.ClaudeCode;
+        var other = clientId == CopilotAgentClient.ClientId ? ClaudeCodeAgentClient.ClientId : CopilotAgentClient.ClientId;
+        Assert.Equal(TelemetryHookStatus.Configured,
+            await client.ConfigureTelemetryHookAsync(AgentConfigurationScope.Global, context.Project, CancellationToken.None));
+        var hook = new AgentTelemetryHook(context.Environment, context.ExecutionContext);
+
+        Assert.False(hook.ShouldRecord(clientId, AgentTelemetryProtocol.ProjectScope));
+        Assert.True(hook.ShouldRecord(clientId, AgentTelemetryProtocol.UserScope));
+        Assert.True(hook.ShouldRecord(other, AgentTelemetryProtocol.ProjectScope));
+    }
+
+    [Fact]
+    public async Task ShouldRecord_RecordsWhenClaudeUserSettingsAreMalformed()
+    {
+        using var context = new AgentConfigurationTestContext(outputHelper);
+        await AgentConfigurationTestContext.WriteAsync(Path.Combine(context.ClaudeDirectory, "settings.json"), "{ malformed");
+
+        Assert.True(new AgentTelemetryHook(context.Environment, context.ExecutionContext)
+            .ShouldRecord(ClaudeCodeAgentClient.ClientId, AgentTelemetryProtocol.ProjectScope));
+    }
+
+    [Fact]
+    public async Task ShouldRecord_IgnoresProjectHookInClaudeUserSettings()
+    {
+        // When the workspace is the home directory, the project hook is written to the user settings file.
+        using var context = new AgentConfigurationTestContext(outputHelper);
+        var (command, args) = AgentTelemetryHook.GetHookCommand(ClaudeCodeAgentClient.ClientId, AgentConfigurationScope.Project);
+        var settings = new JsonObject
+        {
+            ["hooks"] = new JsonObject
+            {
+                ["PostToolUse"] = new JsonArray(new JsonObject
+                {
+                    ["hooks"] = new JsonArray(new JsonObject
+                    {
+                        ["type"] = "command",
+                        ["command"] = command,
+                        ["args"] = new JsonArray([.. args.Select(arg => JsonValue.Create(arg))])
+                    })
+                })
+            }
+        };
+        await AgentConfigurationTestContext.WriteAsync(Path.Combine(context.ClaudeDirectory, "settings.json"), settings.ToJsonString());
+
+        Assert.True(new AgentTelemetryHook(context.Environment, context.ExecutionContext)
+            .ShouldRecord(ClaudeCodeAgentClient.ClientId, AgentTelemetryProtocol.ProjectScope));
+    }
+
+    private static AgentTelemetryHook CreateHook(IEnvironment environment)
+        => new(environment, TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(Path.GetTempPath())));
 
     // Both clients evaluate matchers as JavaScript regular expressions. Copilot wraps the pattern as
     // ^(?:PATTERN)$ and Claude searches unanchored, so emulate both with ECMAScript semantics.

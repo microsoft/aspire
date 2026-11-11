@@ -144,7 +144,6 @@ internal static class CliTestHelper
         services.AddSingleton<TelemetryTagsSource>();
         services.AddSingleton<TelemetryManager>();
         services.AddSingleton<AgentTelemetryHook>();
-        services.AddSingleton<TelemetryHookSkipPolicy>();
         services.AddSingleton<ProfilingTelemetry>();
         services.AddSingleton(options.ProjectLocatorFactory);
         services.AddSingleton(options.SolutionLocatorFactory);
