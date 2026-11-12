@@ -128,11 +128,20 @@
   <data name="EmployeeOrigin" xml:space="preserve">
     <value>Microsoft employee default</value>
   </data>
-  <data name="UseSourcePrompt" xml:space="preserve">
-    <value>Use configuration from this source?</value>
+  <data name="NewUseSourcePrompt" xml:space="preserve">
+    <value>Create app using configuration from this source?</value>
+  </data>
+  <data name="InitUseSourcePrompt" xml:space="preserve">
+    <value>Initialize Aspire using configuration from this source?</value>
+  </data>
+  <data name="UpdateUseSourcePrompt" xml:space="preserve">
+    <value>Update app to use configuration from this source?</value>
+  </data>
+  <data name="TemplateSourceListUseSourcePrompt" xml:space="preserve">
+    <value>Include template sources from this configuration source?</value>
   </data>
   <data name="ConsentRequired" xml:space="preserve">
-    <value>A configuration source is available. Specify --use-config-source to accept it or --use-config-source false to use standard Aspire configuration in non-interactive mode.</value>
+    <value>A configuration source is available, but confirmation can't be requested in non-interactive mode. Specify --use-config-source to use it, or --use-config-source false to use the standard Aspire configuration.</value>
     <comment>Do not translate "--use-config-source" or "false".</comment>
   </data>
   <data name="NoBinding" xml:space="preserve">
@@ -148,6 +157,12 @@
   <data name="UpdateAvailable" xml:space="preserve">
     <value>A new version of the configuration source is available. Run `aspire update --config-source` to apply it.</value>
     <comment>Do not translate "aspire update --config-source".</comment>
+  </data>
+  <data name="Updated" xml:space="preserve">
+    <value>Configuration updated to the latest version from its source.</value>
+  </data>
+  <data name="AlreadyUpToDate" xml:space="preserve">
+    <value>Configuration is already up to date with its source.</value>
   </data>
   <data name="AppliedVersionMissing" xml:space="preserve">
     <value>A saved configuration source has no recorded applied version. Run `aspire update --config-source` to save its allowed settings and establish the applied version.</value>
