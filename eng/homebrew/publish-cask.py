@@ -16,6 +16,7 @@ import os
 from pathlib import Path
 import platform
 import re
+import signal
 import socket
 import subprocess
 import tempfile
@@ -27,8 +28,15 @@ import urllib.parse
 TAP = "microsoft/homebrew-aspire"
 SOURCE = "microsoft/aspire"
 CASK = "Casks/a/aspire.rb"
-VALIDATOR_REVISION = "6221135ffc2bba7f92186154d2ef4cbeaf705ec1"
+VALIDATOR_REVISION = "89a2b248e4c7ab883d072ecb2d10874e04c2d6b1"
 PREFIX = f"/repos/{TAP}"
+SUBPROCESS_ENVIRONMENT = (
+    "PATH", "HOME", "USER", "LOGNAME", "SHELL", "TMPDIR", "TMP", "TEMP",
+    "LANG", "LC_ALL", "LC_CTYPE", "TERM", "CI", "DOTNET_ROOT", "DOTNET_ROOT_ARM64",
+    "DOTNET_ROOT_X64", "DOTNET_CLI_HOME", "DOTNET_CLI_TELEMETRY_OPTOUT",
+    "DOTNET_SKIP_FIRST_TIME_EXPERIENCE", "HOMEBREW_NO_AUTO_UPDATE",
+    "HOMEBREW_NO_INSTALL_CLEANUP", "HOMEBREW_NO_ANALYTICS", "VSTS_PROCESS_LOOKUP_ID",
+)
 
 
 class PublicationError(RuntimeError):
@@ -324,24 +332,131 @@ def publish_cask(candidate, version, client, validate, publish, writer):
     return {**result, "outcome": "submitted", "pr_url": pull["html_url"]}
 
 
-def run(command, log=None, cwd=None, env=None):
-    try:
-        process = subprocess.run(command, cwd=cwd, env=env, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=1800)
-    except subprocess.TimeoutExpired as error:
-        # subprocess retains partial output as bytes even with text=True.
-        # Keep the failing validator's diagnostics before its temporary state is removed.
-        output = error.stdout or b""
-        output = output.decode(errors="replace") if isinstance(output, bytes) else output
-        if log:
-            log.write_text(output)
-        print(output, end="")
-        raise PublicationError(f"{Path(command[0]).name} timed out after 1800s; see validation logs") from error
-    if log:
-        log.write_text(process.stdout)
-    print(process.stdout, end="")
-    if process.returncode:
-        raise PublicationError(f"{Path(command[0]).name} failed (exit {process.returncode}); see validation logs")
-    return process.stdout.strip()
+def run(command, log=None, cwd=None, env=None, timeout=1800, terminate_grace=10):
+    if os.name != "posix":
+        raise PublicationError("Publisher subprocess isolation requires POSIX process groups")
+
+    def signal_group(process, sig):
+        try:
+            os.killpg(process.pid, sig)
+            return True
+        except ProcessLookupError:
+            return False
+        except PermissionError:
+            # macOS can return EPERM for signal 0 while a just-terminated
+            # group leader is awaiting reap. Keep the bounded grace period;
+            # permission errors on an actual termination remain failures.
+            if sig == 0:
+                return True
+            raise
+
+    # A pipe can remain open in a descendant after its parent exits. Capture to
+    # a file instead, so neither timeout nor final output collection waits for
+    # inherited stdout. Each command owns a fresh session/process group.
+    with tempfile.TemporaryFile(dir=log.parent if log else cwd or Path.cwd()) as capture:
+        failure = None
+        diagnostics = []
+        cancelled = None
+        handle_sigterm = threading.current_thread() is threading.main_thread()
+        previous_handler = signal.getsignal(signal.SIGTERM) if handle_sigterm else None
+
+        def request_cancellation(signum, frame):
+            nonlocal cancelled
+            cancelled = cancelled or signal.Signals(signum).name
+
+        # Install before spawning: raising from a handler could interrupt Popen
+        # before it returns the owned PID, or bypass cleanup on a second signal.
+        # Record cancellation instead and observe it through a bounded wait.
+        # Python only permits process-global handler changes on the main thread.
+        # SIGINT keeps its ordinary KeyboardInterrupt/finally cleanup behavior.
+        try:
+            if handle_sigterm:
+                signal.signal(signal.SIGTERM, request_cancellation)
+            process = subprocess.Popen(
+                command, cwd=cwd, env=subprocess_environment() if env is None else env,
+                stdout=capture, stderr=subprocess.STDOUT,
+                start_new_session=True,
+            )
+            try:
+                try:
+                    deadline = time.monotonic() + timeout
+                    while process.poll() is None and cancelled is None:
+                        remaining = deadline - time.monotonic()
+                        if remaining <= 0:
+                            failure = f"timed out after {timeout:g}s"
+                            break
+                        try:
+                            process.wait(timeout=min(0.1, remaining))
+                        except subprocess.TimeoutExpired:
+                            continue
+                finally:
+                    # TERM lets the shell's EXIT trap retain assets and clean
+                    # its workspace. Also clean after cancellation or a
+                    # successful shell that left background children.
+                    process.poll()
+                    if signal_group(process, signal.SIGTERM):
+                        if failure is None and cancelled is None:
+                            failure = "left running descendants"
+                        deadline = time.monotonic() + terminate_grace
+                        while time.monotonic() < deadline:
+                            process.poll()
+                            if not signal_group(process, 0):
+                                break
+                            time.sleep(min(0.05, max(0, deadline - time.monotonic())))
+                        if signal_group(process, signal.SIGKILL):
+                            diagnostics.append("Escalated owned process group to SIGKILL.")
+                    process.wait(timeout=5)
+            except (OSError, subprocess.TimeoutExpired) as error:
+                failure = f"{failure or 'cleanup failed'}; owned process group cleanup failed: {error}"
+        finally:
+            if handle_sigterm:
+                signal.signal(signal.SIGTERM, previous_handler)
+            if cancelled:
+                failure = f"cancelled by {cancelled}" + (f"; {failure}" if failure else "")
+            capture.seek(0)
+            output = capture.read().decode(errors="replace")
+            if failure:
+                diagnostics.append(f"{Path(command[0]).name} {failure}.")
+            if diagnostics:
+                output += "\n" + "\n".join(diagnostics) + "\n"
+            if log:
+                log.write_text(output)
+            print(output, end="")
+        if failure:
+            raise PublicationError(f"{Path(command[0]).name} {failure}; see validation logs")
+        if process.returncode:
+            raise PublicationError(f"{Path(command[0]).name} failed (exit {process.returncode}); see validation logs")
+        return output.strip()
+
+
+def subprocess_environment():
+    # Validators retain raw diagnostics internally. Do not pass publisher,
+    # GitHub or Azure credentials (or ambient MSBuild Version) to their children.
+    # Keep Azure's nonsecret marker for its final orphan-cleanup fallback:
+    # https://github.com/microsoft/azure-pipelines-agent/blob/f1a37fb588a921d80b151448151374f5d92dd2a1/src/Agent.Worker/JobExtension.cs#L556-L568
+    return {name: os.environ[name] for name in SUBPROCESS_ENVIRONMENT if name in os.environ}
+
+
+def wait_for_public_assets(client, version, timeout, sleep=time.sleep, clock=time.monotonic):
+    deadline = clock() + timeout
+    expected = {f"aspire-cli-osx-{arch}-{version}.tar.gz" for arch in ("arm64", "x64")}
+    while True:
+        remaining = deadline - clock()
+        if remaining <= 0:
+            raise PublicationError(
+                f"Public assets for v{version} are unavailable; publish the draft and verify both macOS "
+                "archives, then rerun the Homebrew-only continuation with the same original release run ID"
+            )
+        client.begin_phase(min(deadline, clock() + 120))
+        release = optional_get(client, f"/repos/{SOURCE}/releases/tags/v{version}")
+        if release is not None:
+            if release["tag_name"] != f"v{version}" or release["prerelease"]:
+                raise PublicationError("Homebrew continuation requires a stable release")
+            if not release["draft"] and expected <= {asset["name"] for asset in release["assets"]}:
+                return
+        remaining = deadline - clock()
+        print(f"Waiting for public stable release assets for v{version} ({remaining:.0f}s remaining).")
+        sleep(max(0, min(10, remaining)))
 
 
 def verify_source_artifact(data, metadata, build_id, source_commit, version):
@@ -435,7 +550,8 @@ def validate_release(candidate, version, client, tap_checkout, output, source_co
         # Retain tap-owned restore evidence outside its disposable workspace.
         run(["bash", str(tap / "scripts/validate-cask.sh"), "--cask-file", str(candidate),
              "--diagnostics-dir", str((output / "validator-diagnostics").resolve())],
-            output / "validation.log", cwd=tap)
+            output / "validation.log", cwd=tap,
+            env={**subprocess_environment(), "MSBUILDDISABLENODEREUSE": "1"})
 
 
 def main(argv=None):
@@ -451,11 +567,15 @@ def main(argv=None):
     parser.add_argument("--source-build-metadata", type=Path, help="Build and container-artifact metadata fetched from the selected Azure run")
     parser.add_argument("--source-build-id", type=int)
     parser.add_argument("--source-build-commit")
+    parser.add_argument("--wait-for-release-seconds", type=int, default=0,
+                        help="Bounded public-asset wait for the release-pipeline continuation (0-600)")
     parser.add_argument("--test-server", help="Loopback-only HTTP fixture; ignores all credentials and never validates a real release")
     args = parser.parse_args(argv)
     args.output_dir.mkdir(parents=True, exist_ok=True)
     source = None
     try:
+        if not 0 <= args.wait_for_release_seconds <= 600:
+            raise PublicationError("--wait-for-release-seconds must be between 0 and 600")
         source_data = None
         if any(value is not None for value in (args.source_build_metadata, args.source_build_id, args.source_build_commit)):
             if not all(value is not None for value in (args.source_build_metadata, args.source_build_id, args.source_build_commit)):
@@ -488,6 +608,8 @@ def main(argv=None):
             def validation(candidate, version):
                 if source_data is not None and candidate.read_bytes() != source_data:
                     raise PublicationError("Candidate changed after source-artifact verification")
+                if args.wait_for_release_seconds:
+                    wait_for_public_assets(client, version, args.wait_for_release_seconds)
                 validate_release(candidate, version, client, args.tap_checkout, args.output_dir, args.source_build_commit)
             def writer():
                 token = os.environ.get("HOMEBREW_TAP_WRITE_TOKEN", "")

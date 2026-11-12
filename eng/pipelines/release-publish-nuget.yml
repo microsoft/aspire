@@ -49,6 +49,16 @@ parameters:
     type: boolean
     default: false
 
+  - name: HomebrewPublishOnly
+    displayName: 'Homebrew continuation only (after manually publishing the draft; DryRun=true plans without writes)'
+    type: boolean
+    default: false
+
+  - name: HomebrewReleaseRunId
+    displayName: 'Original release run ID for HomebrewPublishOnly (not the official source or publisher run ID)'
+    type: string
+    default: '0'
+
   - name: GaChannelName
     displayName: '[Advanced] GA Channel Name (darc promotion target; do NOT change even for Aspire 10.x+ — the channel is named "Aspire 9.x GA" historically)'
     type: string
@@ -135,7 +145,7 @@ parameters:
     default: 'main'
 
 variables:
-  - ${{ if not(parameters.HomebrewTestOnly) }}:
+  - ${{ if not(or(parameters.HomebrewTestOnly, parameters.HomebrewPublishOnly)) }}:
     - template: /eng/pipelines/common-variables.yml@self
     - template: /eng/common/templates-official/variables/pool-providers.yml@self
     - name: NPM_PUBLISH_REQUIRED_OWNERS
@@ -174,11 +184,18 @@ extends:
   # Test-only mode selects a different template before any release graph or
   # credential import is expanded. DryRun alone still dispatches GitHub tasks
   # in the ordinary release graph and is not a containment boundary.
-  ${{ if parameters.HomebrewTestOnly }}:
+  ${{ if and(parameters.HomebrewPublishOnly, not(parameters.HomebrewTestOnly)) }}:
+    template: /eng/pipelines/templates/publish-homebrew.yml@self
+    parameters:
+      dryRun: ${{ parameters.DryRun }}
+      releaseRunId: ${{ parameters.HomebrewReleaseRunId }}
+      testOnly: ${{ parameters.HomebrewTestOnly }}
+  ${{ elseif parameters.HomebrewTestOnly }}:
     template: /eng/pipelines/templates/test-homebrew-publisher.yml@self
     parameters:
       dryRun: ${{ parameters.DryRun }}
       version: ${{ parameters.ReleaseVersion }}
+      publishOnly: ${{ parameters.HomebrewPublishOnly }}
   ${{ else }}:
     # Use the MicroBuild + 1ES Official composite template (NOT the plain 1ES.Official.Publish.yml).
     # The `MicroBuild.` prefix is REQUIRED for ESRP-based publishing — it wires the MicroBuild
@@ -2441,6 +2458,47 @@ extends:
               )
             )
           jobs:
+            # The original release run finishes while GitHub assets are draft.
+            # A later HomebrewPublishOnly run consumes this exact-source handoff;
+            # never rediscover the official build from version/commit or latest.
+            - ${{ if and(not(parameters.DryRun), not(parameters.IsPrerelease)) }}:
+              - job: HomebrewHandoffJob
+                displayName: Record original source run for the Homebrew continuation
+                dependsOn: PublishReleaseAssetsJob
+                condition: in(dependencies.PublishReleaseAssetsJob.result, 'Succeeded', 'SucceededWithIssues', 'Skipped')
+                timeoutInMinutes: 10
+                pool:
+                  name: NetCore1ESPool-Internal
+                  image: 1es-ubuntu-2204
+                  os: linux
+                variables:
+                  ReleaseVersionEffective: $[ stageDependencies.PrepareArtifacts.PrepareJob.outputs['deriveReleaseVersion.releaseVersionEffective'] ]
+                templateContext:
+                  mb:
+                    publish:
+                      enabled: false
+                  outputs:
+                    - output: pipelineArtifact
+                      targetPath: $(Build.ArtifactStagingDirectory)/homebrew-release-handoff
+                      artifactName: homebrew-release-handoff
+                steps:
+                  - checkout: self
+                    persistCredentials: false
+                  - pwsh: |
+                      python3 eng/homebrew/release_handoff.py create `
+                        --release-run-id "$env:RELEASE_RUN_ID" --release-commit "$env:RELEASE_COMMIT" `
+                        --source-build-id "$env:SOURCE_BUILD_ID" --source-commit "$env:SOURCE_COMMIT" `
+                        --version "$env:HOMEBREW_RELEASE_VERSION" --output "$env:OUTPUT/handoff.json"
+                      if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+                    displayName: Preserve exact original release and official source run identities
+                    env:
+                      RELEASE_RUN_ID: $(Build.BuildId)
+                      RELEASE_COMMIT: $(Build.SourceVersion)
+                      SOURCE_BUILD_ID: $(resources.pipeline.aspire-build.runID)
+                      SOURCE_COMMIT: $(resources.pipeline.aspire-build.sourceCommit)
+                      HOMEBREW_RELEASE_VERSION: $(ReleaseVersionEffective)
+                      OUTPUT: $(Build.ArtifactStagingDirectory)/homebrew-release-handoff
+
             - job: DispatchGitHubTasksJob
               displayName: 'Dispatch and Wait for release-github-tasks workflow'
               condition: eq('${{ parameters.SkipGitHubTasks }}', 'false')

@@ -15,7 +15,7 @@ public sealed class HomebrewPublisherTests(ITestOutputHelper output)
         var result = await TestProcessRunner.RunAsync(
             output,
             "python3",
-            ["-m", "unittest", "discover", "-s", "tests/Infrastructure.Tests/Pipelines", "-p", "test_homebrew_publisher.py", "-v"],
+            ["-m", "unittest", "discover", "-s", "tests/Infrastructure.Tests/Pipelines", "-p", "test_homebrew_*.py", "-v"],
             RepoRoot.Path);
 
         Assert.True(result.ExitCode == 0, result.Output);

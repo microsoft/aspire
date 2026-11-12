@@ -17,6 +17,10 @@ The Aspire release process uses these main automation components:
    - Dispatches the GitHub Actions workflow below as the `aspire-repo-bot` GitHub App and waits for it to complete.
    - Uploads `aspire-cli-*` archives from the source build's `BlobArtifacts` onto the **draft** GitHub Release as the `aspire-repo-bot`.
    - Dispatches the Nix flake update workflow, passing the `aspire-cli-*.tar.gz.sha512` checksums read from the source build's `BlobArtifacts` (so the manifest is built from the build, not the draft release).
+   - Records a stable-release Homebrew handoff with the exact selected official
+     source run ID. After manual draft publication, a separate invocation of
+     this same pipeline consumes that handoff to validate and optionally propose
+     a draft Microsoft-tap cask PR.
 2. **GitHub Actions workflow** (`.github/workflows/release-github-tasks.yml`)
    - Creates Git tags.
    - Creates **draft** GitHub Releases (see [Draft-then-publish release flow](#draft-then-publish-release-flow)).
@@ -76,11 +80,12 @@ build release tag determine the version. Every job retains diagnostics on
 failure as well as success; source-artifact provenance and input bytes are
 retained separately from full-validation results.
 
-**Production Homebrew publication is not enabled by these tests.** Enabling it
-requires pipeline-owned continuation after the manager publishes the draft,
-per-cask serialization and least-privilege tap credentials. Neither an
-independent release-event publisher nor validation of unavailable draft URLs
-substitutes for that wiring. See [publisher behavior](../eng/homebrew/README.md#release-pipeline-owned-tap-publisher).
+**Contained tests do not publish Homebrew updates.** The production continuation
+is a separate `HomebrewPublishOnly=true` invocation of definition 1600 after the
+manager publishes the draft. It consumes `homebrew-release-handoff` from the
+explicit original `HomebrewReleaseRunId`, preserving the selected official
+source run rather than rediscovering it from version/commit. See
+[continuation and prerequisites](../eng/homebrew/README.md#human-controlled-production-continuation).
 
 GitHub's [immutable releases](https://docs.github.com/en/code-security/concepts/supply-chain-security/immutable-releases) lock release assets and the underlying tag at publish time. Once a release is published, the assets attached to it (and the tag itself) cannot be changed. The body and title remain editable, but everything else is frozen.
 
@@ -93,6 +98,17 @@ To support this, the release flow now creates the GitHub release as a **draft**:
 3. The AzDO pipeline's `PublishReleaseAssetsJob` uploads `aspire-cli-*` archives onto the draft via `gh release upload`. (Draft releases support asset upload via the Releases REST API.)
 4. **The release manager publishes the draft manually as a final step** — see [Step 5: Publish the draft release](#step-5-publish-the-draft-release).
 5. Publishing the draft fires `release: [published]`, which kicks off downstream workflows that need the live release: `release-update-support-mdx` (opens a PR on `microsoft/aspire.dev`) and `homebrew-validate-release` (validates the cask against the live download URLs). Both subscribe to `published` rather than `released` because GitHub does not reliably fire `released` when a release is published from a draft.
+6. For stable releases, run definition 1600 again with
+   `HomebrewPublishOnly=true`, `HomebrewTestOnly=false`,
+   `HomebrewReleaseRunId=<original release run ID>` and **`DryRun=true`**.
+   The original release must include its `homebrew-release-handoff` artifact;
+   the continuation downloads the cask from the exact official source run
+   recorded there. It waits at most ten minutes for public assets and does not
+   repeat any release publication/promotion jobs. After reviewing the plan and
+   configuring the protected environment/least-privilege tap credential, a
+   release manager may explicitly select live mode to submit a **draft** tap
+   PR. The environment's approval and exclusive lock cover all versions.
+   Merging that PR remains manual.
 
 The release-existence check uses the same GitHub App token as release creation.
 GitHub requires push access to see draft releases; a read-only automatic
@@ -109,6 +125,7 @@ Aspire ships through several channels. The release pipeline either submits the b
 | **NuGet** (libraries, AppHost SDK, `Aspire.Cli` tool packages) | `release-publish-nuget` pushes to NuGet.org | This document |
 | **WinGet** (`winget install Microsoft.Aspire`) | `release-publish-nuget` submits manifest PRs to `microsoft/winget-pkgs` via `wingetcreate` | [`eng/winget/README.md`](../eng/winget/README.md) |
 | **Homebrew cask** (`brew install --cask aspire`) | Upstream Homebrew/homebrew-cask's [autobump workflow](https://github.com/Homebrew/homebrew-cask/blob/master/.github/workflows/autobump.yml) opens the bump PR on a 3-hour schedule, detecting the new version via the cask's `livecheck` block. `homebrew-validate-release.yml` validates the cask against the live GitHub release after the release manager publishes it. | [`eng/homebrew/README.md`](../eng/homebrew/README.md) |
+| **Microsoft Homebrew tap** (`brew install --cask microsoft/aspire/aspire`) | Definition 1600's explicitly queued Homebrew-only continuation validates the original source cask after manual release publication, then plans or submits a draft tap PR behind a protected environment. | [`eng/homebrew/README.md`](../eng/homebrew/README.md#human-controlled-production-continuation) |
 | **`dotnet tool install -g Aspire.Cli`** | `release-publish-nuget` pushes the per-RID `Aspire.Cli.*.nupkg` packages to NuGet.org alongside the libraries | [`docs/specs/install-routes.md`](specs/install-routes.md) |
 | **Install script** (`get-aspire-cli.sh` / `.ps1`) | No separate publication — the script downloads directly from the GitHub release assets attached in Step 1 | [`docs/specs/install-routes.md`](specs/install-routes.md), `eng/scripts/get-aspire-cli.*` |
 | **Nix flake** (`nix run github:microsoft/aspire#aspire-cli`) | `release-publish-nuget` dispatches `.github/workflows/update-nix-cli-flake.yml`, passing the CLI `.sha512` checksums from the source build; the workflow adds the manifest update to the baseline version branch and creates or updates the PR | [`eng/nix/README.md`](../eng/nix/README.md), [`docs/ci/native-cli-packaging.md`](ci/native-cli-packaging.md) |
