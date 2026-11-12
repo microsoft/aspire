@@ -770,6 +770,8 @@ internal sealed class AgentInitCommand : BaseCommand
             {
                 // Probe a discarded in-memory copy with the client's own update logic, so each client's
                 // server container and nesting rules apply. Nothing to add means the server already exists.
+                // This relies on UpdateMcpConfig only mutating the passed JsonObject; files are written
+                // only when an AgentConfiguration edit is published, and this one never is.
                 var (config, configFilePath) = await client.ReadMcpConfigAsync(
                     path, workspaceRoot, scope, new AgentConfiguration(), cancellationToken);
                 if (!client.UpdateMcpConfig(config, configFilePath, configureServer, scope).Added)
@@ -785,9 +787,8 @@ internal sealed class AgentInitCommand : BaseCommand
         return false;
 
         // Unreadable config is not evidence of Aspire setup, and hook installation is best effort.
-        // The plugin registration parser rejects JSON nulls with ArgumentNullException.
         static bool IsUnreadableConfig(Exception ex) =>
-            ex is InvalidOperationException or IOException or UnauthorizedAccessException or ArgumentException;
+            ex is InvalidOperationException or IOException or UnauthorizedAccessException;
     }
 
     private async Task ConfigureTelemetryHooksAsync(
