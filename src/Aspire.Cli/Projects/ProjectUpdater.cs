@@ -348,7 +348,7 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
                         var restoreExitCode = await runner.RestoreAsync(projectFile, new()
                         {
                             NuGetRestoreTargetsFile = restorePreview?.TargetsFile ?? repairedRestorePreview?.TargetsFile,
-                            RestorePackagesDirectory = dryRunRestore is null ? null : new DirectoryInfo(dryRunRestore.PackagesDirectory),
+                            IsolatedRestorePackagesDirectory = dryRunRestore is null ? null : new DirectoryInfo(dryRunRestore.PackagesDirectory),
                             EnvironmentVariables = dryRunRestore?.EnvironmentVariables
                         }, cancellationToken);
                         if (restoreExitCode != 0)

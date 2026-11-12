@@ -881,7 +881,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         var options = new ProcessInvocationOptions
         {
             NuGetRestoreTargetsFile = candidate ? targets : null,
-            RestorePackagesDirectory = isolated ? packages : null
+            IsolatedRestorePackagesDirectory = isolated ? packages : null
         };
 
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);

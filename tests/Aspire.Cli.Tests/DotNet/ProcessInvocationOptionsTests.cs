@@ -24,7 +24,7 @@ public sealed class ProcessInvocationOptionsTests
             NoRestore = true,
             ExcludeRestorePackageImports = true,
             NuGetRestoreTargetsFile = new FileInfo(Path.Combine(Path.GetFullPath("."), "Candidate.targets")),
-            RestorePackagesDirectory = new DirectoryInfo(Path.Combine(Path.GetFullPath("."), "packages")),
+            IsolatedRestorePackagesDirectory = new DirectoryInfo(Path.Combine(Path.GetFullPath("."), "packages")),
             LaunchProfile = "E2E",
             StartDebugSession = true,
             Debug = true,

@@ -211,7 +211,7 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
             if (dryRun)
             {
                 packagesDirectory = options.EnvironmentVariables!["NUGET_PACKAGES"];
-                Assert.Equal(packagesDirectory, options.RestorePackagesDirectory?.FullName);
+                Assert.Equal(packagesDirectory, options.IsolatedRestorePackagesDirectory?.FullName);
                 var restoreDirectory = Path.GetDirectoryName(packagesDirectory)!;
                 Assert.Equal(validationRoot, Path.GetDirectoryName(restoreDirectory));
                 if (!OperatingSystem.IsWindows())
@@ -337,7 +337,7 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
         runner.RestoreAsyncCallback = (_, options, _) =>
         {
             Assert.NotNull(options.EnvironmentVariables);
-            Assert.Equal(options.EnvironmentVariables["NUGET_PACKAGES"], options.RestorePackagesDirectory?.FullName);
+            Assert.Equal(options.EnvironmentVariables["NUGET_PACKAGES"], options.IsolatedRestorePackagesDirectory?.FullName);
             Assert.NotNull(options.NuGetRestoreTargetsFile);
             Assert.Equal([newSource], NuGetTestHelper.GetEligiblePackageSources(
                 options.NuGetRestoreTargetsFile.DirectoryName!, "Aspire.AppHost.Sdk"));

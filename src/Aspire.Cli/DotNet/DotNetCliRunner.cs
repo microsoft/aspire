@@ -78,7 +78,7 @@ internal sealed class ProcessInvocationOptions
     /// </summary>
     public FileInfo? NuGetRestoreTargetsFile { get; set; }
 
-    public DirectoryInfo? RestorePackagesDirectory { get; set; }
+    public DirectoryInfo? IsolatedRestorePackagesDirectory { get; set; }
 
     public string? LaunchProfile { get; set; }
     public bool StartDebugSession { get; set; }
@@ -187,7 +187,7 @@ internal sealed class ProcessInvocationOptions
         NoRestore = NoRestore,
         ExcludeRestorePackageImports = ExcludeRestorePackageImports,
         NuGetRestoreTargetsFile = NuGetRestoreTargetsFile,
-        RestorePackagesDirectory = RestorePackagesDirectory,
+        IsolatedRestorePackagesDirectory = IsolatedRestorePackagesDirectory,
         LaunchProfile = LaunchProfile,
         StartDebugSession = StartDebugSession,
         Debug = Debug,
@@ -1262,7 +1262,7 @@ internal sealed class DotNetCliRunner(
         using var activity = telemetry.StartDiagnosticActivity();
 
         string[] cliArgs = ["restore", projectFilePath.FullName];
-        if (options.RestorePackagesDirectory is { } packagesDirectory)
+        if (options.IsolatedRestorePackagesDirectory is { } packagesDirectory)
         {
             cliArgs = [.. cliArgs, "--packages", packagesDirectory.FullName, "--no-http-cache", "--force"];
         }
