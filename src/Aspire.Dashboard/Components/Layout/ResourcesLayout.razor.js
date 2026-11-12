@@ -799,66 +799,6 @@ export function registerResourceContextMenu(layoutElement, dotNetRef) {
             event.target.click();
         }
     };
-    // Escape closes the resource content, as the header's close button does, when nothing else uses the key. Menus,
-    // popovers and dialogs close themselves with it, and text fields and the terminal keep it. Some of them close in
-    // their own keydown handler, so whether the key is free is decided in the capture phase, before any of them runs,
-    // and the button is clicked in the bubble phase, only if no handler took the key (preventDefault). The capture
-    // listener is on the window, which comes before the document: the tooltip provider removes a shown tooltip in its
-    // own capture listener on the document.
-    let escapeIsFree = false;
-    const escapeOwnerSelector = 'input, textarea, select, [contenteditable=""], [contenteditable="true"], .xterm, ' +
-        '[popover], fluent-popover-b, fluent-menu, fluent-dialog, dialog, [role="dialog"], [role="menu"], [role="listbox"], [role="combobox"], [role="textbox"]';
-    const hasOpenOverlay = () => {
-        // A control whose popup is open says so (aria-haspopup with aria-expanded="true"), whatever the popup is built
-        // with: the filter button's popover isn't a native popover, and focus stays on the button after clicking it.
-        // A tree toggle has aria-expanded but no popup, so it doesn't count.
-        if (document.querySelector('[aria-haspopup]:not([aria-haspopup="false"])[aria-expanded="true"]')) {
-            return true;
-        }
-        // A shown tooltip is dismissed by Escape (see app-tooltips.js), and the same key mustn't also close the content.
-        // https://www.w3.org/WAI/WCAG22/Understanding/content-on-hover-or-focus.html
-        if (document.querySelector('aspire-tooltip-provider fluent-tooltip:not([aria-hidden="true"])')) {
-            return true;
-        }
-        // A FluentPopover's dialog is in its shadow root, out of reach of the query below, and the button opening it
-        // doesn't always say so, like the URLs column's +N button. Its host says whether it's open:
-        //   <fluent-popover-b class="content-list-popover url-overflow-popover" anchor-id="…-more" opened="true">
-        if (document.querySelector('fluent-popover-b[opened="true"]')) {
-            return true;
-        }
-        try {
-            // Hidden tooltips can stay in the popover layer, so they're left to the check above.
-            return [...document.querySelectorAll(':popover-open, dialog[open]')]
-                .some(element => element.localName !== 'fluent-tooltip' && !element.closest('aspire-tooltip-provider'));
-        }
-        catch {
-            // Browsers without the popover API have no open popovers to protect.
-            return false;
-        }
-    };
-    const onEscapeCapture = event => {
-        escapeIsFree = event.key === 'Escape' && !event.isComposing && !event.repeat &&
-            !event.ctrlKey && !event.altKey && !event.metaKey && !event.shiftKey &&
-            !event.composedPath().some(target => target instanceof Element && target.matches(escapeOwnerSelector)) &&
-            !hasOpenOverlay();
-    };
-    const onEscape = event => {
-        const isFree = escapeIsFree;
-        escapeIsFree = false;
-        // Fluent's tab list cancels the keys it receives, Escape included, without doing anything with Escape. So a
-        // focused tab, for example the one just clicked to open the content, doesn't keep Escape from closing it.
-        const isFromTabList = event.composedPath().some(target => target instanceof Element && target.matches('[role="tablist"]'));
-        if (!isFree || (event.defaultPrevented && !isFromTabList)) {
-            return;
-        }
-        // The header renders the button only while there's content to close (see DetailPageCloseButton).
-        const close = layoutElement.querySelector('.resource-header-controls .detail-page-close');
-        if (close && close.getClientRects().length > 0 && !close.closest('[inert]')) {
-            event.preventDefault();
-            close.click();
-        }
-    };
-
     // While the resource list fills the page, Overview is selected, and choosing the underlying telemetry tab opens it.
     // The tab list can't report that choice (see OpenTabFromFullCanvasAsync), so a click, Enter or Space on a tab is
     // passed on. The tabs are in the page header, outside the layout, so this listens on the document.
@@ -889,8 +829,6 @@ export function registerResourceContextMenu(layoutElement, dotNetRef) {
     document.addEventListener('keydown', onTabUserActivation, true);
     layoutElement.addEventListener('mousedown', onShiftPointerDown, true);
     document.addEventListener('keydown', onContextMenuDismiss, true);
-    window.addEventListener('keydown', onEscapeCapture, true);
-    document.addEventListener('keydown', onEscape);
     document.addEventListener('click', onTabActivate);
     document.addEventListener('keydown', onTabActivate);
     layoutElement.addEventListener('click', onClick);
@@ -905,8 +843,6 @@ export function registerResourceContextMenu(layoutElement, dotNetRef) {
         document.removeEventListener('keydown', onTabUserActivation, true);
         layoutElement.removeEventListener('mousedown', onShiftPointerDown, true);
         document.removeEventListener('keydown', onContextMenuDismiss, true);
-        window.removeEventListener('keydown', onEscapeCapture, true);
-        document.removeEventListener('keydown', onEscape);
         document.removeEventListener('click', onTabActivate);
         document.removeEventListener('keydown', onTabActivate);
         layoutElement.removeEventListener('click', onClick);

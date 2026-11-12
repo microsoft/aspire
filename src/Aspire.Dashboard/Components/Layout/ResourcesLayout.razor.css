@@ -1458,11 +1458,6 @@
     margin-left: auto;
 }
 
-/* The overview selector's Table option replaces the Close action. */
-.resource-header-controls:has(.overview-header-actions) ::deep .detail-page-close {
-    display: none;
-}
-
 /* The heading size rather than the title size: when the resource list is collapsed, a picker button takes the
    title's place and shows the same text, so the two match (see .resource-picker). */
 .resource-title {

@@ -382,12 +382,6 @@
                             <SectionOutlet SectionName="@TabToolbarSectionName" />
                         </div>
                     }
-                    @* The full resource table lives on the Overview tab, the dashboard's home. The data tabs don't close
-                       into it: their own back links (such as "Traces" on a trace) and the tabs cover navigation there. *@
-                    @if (isDesktop && !IsDataTab && DetailParentUrl is { } parentUrl)
-                    {
-                        <DetailPageCloseButton ParentUrl="@parentUrl" OnClose="@(() => CloseDetailAsync(parentUrl))" ClosesOnEscape="true" />
-                    }
                 </div>
             }
             else if (_isPaneFullCanvas)

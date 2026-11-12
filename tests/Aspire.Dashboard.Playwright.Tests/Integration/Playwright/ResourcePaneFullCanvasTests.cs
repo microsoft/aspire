@@ -20,7 +20,7 @@ public sealed class ResourcePaneFullCanvasTests(ResourceTagPaneTests.TaggedResou
     [InlineData(769, 1024)]
     [InlineData(1440, 900)]
     [OuterloopTest("Resource-intensive Playwright browser test")]
-    public async Task CloseView_UsesKeyboardNavigationOrMobileDrawer(int width, int height)
+    public async Task ResourcePicker_UsesKeyboardNavigationOrMobileDrawer(int width, int height)
     {
         await RunTestAsync(async page =>
         {
@@ -45,9 +45,13 @@ public sealed class ResourcePaneFullCanvasTests(ResourceTagPaneTests.TaggedResou
             }
             else
             {
-                var close = page.GetByRole(AriaRole.Button, new() { Name = Resources.ControlsStrings.SummaryDetailsViewCloseView, Exact = true });
-                await close.FocusAsync();
-                await close.PressAsync("Enter");
+                await Assertions.Expect(page.Locator(".detail-page-close")).ToHaveCountAsync(0);
+                var allResources = page.Locator(".resource-row-all .resource-row-link");
+                await allResources.FocusAsync();
+                await allResources.PressAsync("Enter");
+                var table = page.Locator(".resource-header-actions button[aria-label='Table']");
+                await table.FocusAsync();
+                await table.PressAsync("Enter");
                 await Assertions.Expect(page.Locator(".pane-full-canvas")).ToBeVisibleAsync();
                 var summary = page.Locator(".resource-pane-view-selector button[aria-label='Summary']");
                 await summary.FocusAsync();
@@ -71,7 +75,8 @@ public sealed class ResourcePaneFullCanvasTests(ResourceTagPaneTests.TaggedResou
             await page.EmulateMediaAsync(new() { ReducedMotion = ReducedMotion.Reduce });
             await page.GotoAsync("/resources/tag-a");
             var close = page.Locator(".detail-page-close");
-            await close.ClickAsync();
+            await Assertions.Expect(close).ToHaveCountAsync(0);
+            await ResourcePaneNavigation.ToggleResourceListAsync(page);
             await Assertions.Expect(page.Locator(".pane-full-canvas")).ToBeVisibleAsync();
             var url = page.Url;
             await page.SetViewportSizeAsync(width, height);
@@ -85,7 +90,7 @@ public sealed class ResourcePaneFullCanvasTests(ResourceTagPaneTests.TaggedResou
             await page.GetByRole(AriaRole.Button, new() { Name = Resources.Layout.ResourcePaneClose, Exact = true }).ClickAsync();
             await Assertions.Expect(page.Locator(".resource-content")).ToBeVisibleAsync();
             await page.SetViewportSizeAsync(1440, 900);
-            await Assertions.Expect(close).ToBeHiddenAsync();
+            await Assertions.Expect(close).ToHaveCountAsync(0);
             await Assertions.Expect(page.Locator(".resource-header-actions button[aria-label='Table']")).ToBeVisibleAsync();
             await Assertions.Expect(page.Locator(".pane-full-canvas")).ToHaveCountAsync(0);
             await Assertions.Expect(page.Locator(".resource-pane-resizer")).ToHaveAttributeAsync("aria-valuenow", "507");
@@ -120,7 +125,7 @@ public sealed class ResourcePaneFullCanvasTests(ResourceTagPaneTests.TaggedResou
             Assert.NotNull(originalPane);
             var filter = pane.GetByRole(AriaRole.Searchbox);
             await filter.FillAsync("tag-");
-            await page.Locator(".detail-page-close").ClickAsync();
+            await ResourcePaneNavigation.ToggleResourceListAsync(page);
             await Assertions.Expect(page.Locator(".resources-layout.pane-full-canvas")).ToBeVisibleAsync();
             await page.WaitForFunctionAsync("""
                 () => Math.abs(document.querySelector('.resource-pane').getBoundingClientRect().width -
@@ -189,7 +194,7 @@ public sealed class ResourcePaneFullCanvasTests(ResourceTagPaneTests.TaggedResou
             {
                 await page.Locator(".resource-picker").ClickAsync();
             }
-            await page.Locator(".detail-page-close").ClickAsync();
+            await ResourcePaneNavigation.ToggleResourceListAsync(page);
             await Assertions.Expect(navigation).ToBeVisibleAsync();
             await SelectViewAsync("Console");
             await Assertions.Expect(page).ToHaveURLAsync(new System.Text.RegularExpressions.Regex("/consolelogs$"));
@@ -231,7 +236,7 @@ public sealed class ResourcePaneFullCanvasTests(ResourceTagPaneTests.TaggedResou
     [InlineData(1440, false)]
     [InlineData(1440, true)]
     [OuterloopTest("Resource-intensive Playwright browser test")]
-    public async Task CloseThenTab_OpensTheChosenTabForAllResourcesWithoutBouncingBack(int width, bool useKeyboard)
+    public async Task AllResourcesThenTab_OpensTheChosenTabWithoutBouncingBack(int width, bool useKeyboard)
     {
         await RunTestAsync(async page =>
         {
@@ -242,13 +247,9 @@ public sealed class ResourcePaneFullCanvasTests(ResourceTagPaneTests.TaggedResou
             var console = navigation.Locator("#tab-Console");
             await Assertions.Expect(console).ToBeVisibleAsync();
 
-            // Choose the tab right after closing, while the close may still be navigating (a click doesn't wait for
-            // navigation). The tab must open for all resources, not for the resource being closed, whether the choice
-            // waits for the close or lands on the outgoing tab strip. In the latter case only a real pointer or
-            // keyboard activation is honored, never the change events the strip raises as it's torn down. Which case
-            // a run hits depends on timing; FullCanvas_KeepsResponsiveNavigationUsableAndNewResourceScope reaches the
-            // outgoing strip at 769px in about half of its runs without the activation tracking.
-            await page.Locator(".detail-page-close").ClickAsync();
+            var allResources = page.Locator(".resource-row-all .resource-row-link");
+            await allResources.ClickAsync();
+            await Assertions.Expect(allResources).ToHaveAttributeAsync("aria-current", "page");
             if (useKeyboard)
             {
                 await console.FocusAsync();
@@ -262,7 +263,7 @@ public sealed class ResourcePaneFullCanvasTests(ResourceTagPaneTests.TaggedResou
             await Assertions.Expect(page).ToHaveURLAsync(new Regex("/consolelogs$"));
             await Assertions.Expect(navigation.Locator("#tab-Console")).ToHaveAttributeAsync("aria-selected", "true");
 
-            // A stale event that slipped through would navigate again shortly after, back to the closed resource or to
+            // A stale event that slipped through would navigate again shortly after, back to the previous resource or to
             // the full table. Give it time to show up, then check the page stayed put.
             await page.WaitForTimeoutAsync(1500);
             await Assertions.Expect(page).ToHaveURLAsync(new Regex("/consolelogs$"));
@@ -310,24 +311,22 @@ public sealed class ResourcePaneFullCanvasTests(ResourceTagPaneTests.TaggedResou
 
     [Fact]
     [OuterloopTest("Resource-intensive Playwright browser test")]
-    public async Task Escape_ClosesContentLikeTheCloseButtonWhenNothingElseUsesIt()
+    public async Task Escape_KeepsResourceDetailsAndOverviewOpen()
     {
         await RunTestAsync(async page =>
         {
             await page.SetViewportSizeAsync(1440, 900);
-            // The close button, and so Escape, is on the Overview tab: the full-page list lives there, and the data tabs
-            // don't close into it.
             await page.GotoAsync("/resources/tag-a");
             var fullCanvas = page.Locator(".resources-layout.pane-full-canvas");
             var close = page.Locator(".detail-page-close");
             var row = page.Locator(".resource-row[data-resource-name='tag-a'] .resource-row-link");
             var overview = page.GetByRole(AriaRole.Tab, new() { Name = Resources.Layout.ResourceTabOverview, Exact = true });
-            await Assertions.Expect(close).ToBeVisibleAsync();
+            await Assertions.Expect(close).ToHaveCountAsync(0);
 
             // A text field keeps Escape.
             await page.Locator(".resource-pane").GetByRole(AriaRole.Searchbox).FocusAsync();
             await page.Keyboard.PressAsync("Escape");
-            await Assertions.Expect(close).ToBeVisibleAsync();
+            await Assertions.Expect(close).ToHaveCountAsync(0);
 
             // So does an open menu, which closes.
             await page.Locator("#resourcePaneGroupingButton").ClickAsync();
@@ -338,16 +337,17 @@ public sealed class ResourcePaneFullCanvasTests(ResourceTagPaneTests.TaggedResou
             // The menu closes in the browser, and its button reports it closed once the server renders it. Until then,
             // Escape still counts as used by the menu.
             await Assertions.Expect(page.Locator("#resourcePaneGroupingButton")).Not.ToHaveAttributeAsync("aria-expanded", "true");
-            await Assertions.Expect(close).ToBeVisibleAsync();
+            await Assertions.Expect(close).ToHaveCountAsync(0);
             await Assertions.Expect(fullCanvas).ToHaveCountAsync(0);
 
-            // Otherwise it does what the close button does: the overview of all resources, behind the full-page list.
+            // Escape on the resource itself also leaves its details open.
             await row.FocusAsync();
             await page.Keyboard.PressAsync("Escape");
-            await Assertions.Expect(page).ToHaveURLAsync(new Regex("/resources$"));
-            await Assertions.Expect(fullCanvas).ToBeVisibleAsync();
+            await Assertions.Expect(page).ToHaveURLAsync(new Regex("/resources/tag-a$"));
+            await Assertions.Expect(fullCanvas).ToHaveCountAsync(0);
             await Assertions.Expect(overview).ToHaveAttributeAsync("aria-selected", "true");
 
+            await ResourcePaneNavigation.ToggleResourceListAsync(page);
             // Clicking the selected Overview keeps the list; selecting Summary opens the summary.
             await overview.ClickAsync();
             await Assertions.Expect(fullCanvas).ToBeVisibleAsync();

@@ -313,7 +313,7 @@ public sealed class ResourcePaneMotionTests(ResourcePaneResponsiveTests.Metadata
                                 layout.querySelector('[data-resource-name="frontend"] .resource-row-link').click();
                                 break;
                             case 'reverse':
-                                layout.querySelector('.detail-page-close').click();
+                                layout.querySelector('.resource-row-all .resource-row-link').click();
                                 break;
                             case 'back':
                                 history.back();
@@ -400,7 +400,7 @@ public sealed class ResourcePaneMotionTests(ResourcePaneResponsiveTests.Metadata
             var separator = page.GetByRole(AriaRole.Separator, new() { Name = Resources.Layout.ResourcePaneResize });
             await separator.PressAsync("End");
             var expectedWidth = await separator.EvaluateAsync<double>("e => Number(e.getAttribute('aria-valuenow'))");
-            var toggle = page.Locator(".detail-page-close:visible, .resource-header-actions button[aria-label='Table'], .resource-pane-view-selector button[aria-label='Summary']");
+            var toggle = page.Locator(".resource-header-actions button[aria-label='Table'], .resource-pane-view-selector button[aria-label='Summary']");
             await ToggleAsync();
             await Assertions.Expect(page.Locator(".pane-full-canvas")).ToBeVisibleAsync();
 
@@ -473,7 +473,7 @@ public sealed class ResourcePaneMotionTests(ResourcePaneResponsiveTests.Metadata
             }
             var layout = page.Locator(".resources-layout");
             var pane = page.Locator(".resource-pane");
-            var toggle = page.Locator(".detail-page-close:visible, .resource-header-actions button[aria-label='Table'], .resource-pane-view-selector button[aria-label='Summary']");
+            var toggle = page.Locator(".resource-header-actions button[aria-label='Table'], .resource-pane-view-selector button[aria-label='Summary']");
             var header = page.Locator(".resource-tabs-nav");
             var headerBox = await header.BoundingBoxAsync();
             var toolbarBox = await pane.Locator(".resource-pane-head").BoundingBoxAsync();

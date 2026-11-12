@@ -30,7 +30,7 @@ public sealed class ResourcePanelNavigationTests(ResourcePanelNavigationTests.Na
     [InlineData(1024, 768)]
     [InlineData(1440, 900)]
     [OuterloopTest("Resource-intensive Playwright browser test")]
-    public async Task ResourceNavigation_CloseOrDropdownReturnsToListAndSelectAllReopensContent(int width, int height)
+    public async Task ResourceNavigation_TableOrDropdownReturnsToListAndSummaryReopensContent(int width, int height)
     {
         await RunTestAsync(async page =>
         {
@@ -58,9 +58,9 @@ public sealed class ResourcePanelNavigationTests(ResourcePanelNavigationTests.Na
             }
             else
             {
-                await Assertions.Expect(close).ToBeVisibleAsync();
+                await Assertions.Expect(close).ToHaveCountAsync(0);
                 await Assertions.Expect(picker).ToHaveCountAsync(0);
-                await close.ClickAsync();
+                await ResourcePaneNavigation.ToggleResourceListAsync(page);
                 await Assertions.Expect(page.Locator(".pane-full-canvas")).ToBeVisibleAsync();
                 await Assertions.Expect(content).Not.ToBeVisibleAsync();
             }
@@ -77,7 +77,7 @@ public sealed class ResourcePanelNavigationTests(ResourcePanelNavigationTests.Na
             }
             else
             {
-                await close.ClickAsync();
+                await ResourcePaneNavigation.ToggleResourceListAsync(page);
             }
             if (width <= 768)
             {
@@ -90,7 +90,7 @@ public sealed class ResourcePanelNavigationTests(ResourcePanelNavigationTests.Na
             await Assertions.Expect(page).ToHaveURLAsync(new System.Text.RegularExpressions.Regex("/resources$"));
             await Assertions.Expect(content).ToBeVisibleAsync();
             await Assertions.Expect(page.Locator(".pane-full-canvas,.drawer-open")).ToHaveCountAsync(0);
-            await Assertions.Expect(close).ToBeHiddenAsync();
+            await Assertions.Expect(close).ToHaveCountAsync(0);
             await Assertions.Expect(page.Locator("#blazor-error-ui")).Not.ToBeVisibleAsync();
         });
     }
@@ -291,8 +291,7 @@ public sealed class ResourcePanelNavigationTests(ResourcePanelNavigationTests.Na
             await link.Locator(".resource-row-name").HoverAsync();
             await Assertions.Expect(tooltip).ToBeVisibleAsync();
             await Assertions.Expect(tooltip).ToHaveTextAsync(reason);
-            // Moving the pointer away dismisses the hover tooltip. (Escape would close the content on desktop, as its
-            // close button does, once no tooltip is shown.)
+            // Dismiss the hover tooltip before testing keyboard focus.
             await page.Mouse.MoveAsync(1, 1);
             await Assertions.Expect(tooltip).ToBeHiddenAsync();
             await page.Keyboard.PressAsync("Tab");

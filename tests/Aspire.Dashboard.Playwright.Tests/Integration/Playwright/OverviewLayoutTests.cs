@@ -68,10 +68,10 @@ public class OverviewLayoutTests(ResourcesTests.ResourcesDashboardServerFixture 
             foreach (var view in new[] { ControlsStrings.ChartContainerTableTab, Dialogs.SettingsDialogGroupOverviewSummary, ResourceStrings.GraphPageTitle })
             {
                 await layouts.GetByRole(AriaRole.Button, new() { Name = view, Exact = true }).ClickAsync();
-                await Assertions.Expect(page.Locator(".detail-page-close")).ToBeHiddenAsync();
+                await Assertions.Expect(page.Locator(".detail-page-close")).ToHaveCountAsync(0);
                 await page.Locator(".resource-row[data-resource-name='TestResource'] .resource-row-link").ClickAsync();
                 await Assertions.Expect(page.Locator(".overview-grid")).ToBeVisibleAsync();
-                await Assertions.Expect(page.Locator(".detail-page-close")).ToBeVisibleAsync();
+                await Assertions.Expect(page.Locator(".detail-page-close")).ToHaveCountAsync(0);
                 await allResources.ClickAsync();
 
                 if (view == ControlsStrings.ChartContainerTableTab)

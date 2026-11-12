@@ -27,22 +27,25 @@ internal static class ResourcePaneNavigation
         await Assertions.Expect(page.Locator(".resources-layout")).ToHaveAttributeAsync("data-pane-interactions-ready", "true");
         var isFullCanvas = await page.Locator(".pane-full-canvas").CountAsync() > 0;
         var table = page.Locator(".resource-header-actions").GetByRole(AriaRole.Button, new() { Name = Resources.ControlsStrings.ChartContainerTableTab, Exact = true });
-        var usesTable = !isFullCanvas && await table.IsVisibleAsync();
-        var toggle = usesTable ? table : page.Locator(isFullCanvas ? ".resource-pane-view-selector button[aria-label='Summary']" : ".detail-page-close");
-        var destination = isFullCanvas || usesTable ? null : new Uri(new Uri(page.Url),
-            await toggle.GetAttributeAsync("data-parent-url") ?? throw new InvalidOperationException("Close view must expose its parent URL.")).AbsoluteUri;
-        await toggle.ClickAsync();
-        if (destination is not null)
+        if (isFullCanvas)
         {
-            await Assertions.Expect(page).ToHaveURLAsync(destination);
+            await page.Locator(".resource-pane-view-selector").GetByRole(AriaRole.Button, new() { Name = Resources.Dialogs.SettingsDialogGroupOverviewSummary, Exact = true }).ClickAsync();
         }
-        else if (isFullCanvas)
+        else
         {
-            await Assertions.Expect(page.Locator(".resource-row-all .resource-row-link")).ToHaveAttributeAsync("aria-current", "page");
+            if (!await table.IsVisibleAsync())
+            {
+                var allResources = page.Locator(".resource-row-all .resource-row-link");
+                await allResources.ClickAsync();
+                await Assertions.Expect(allResources).ToHaveAttributeAsync("aria-current", "page");
+            }
+            if (await page.Locator(".pane-full-canvas").CountAsync() == 0)
+            {
+                await table.ClickAsync();
+            }
         }
         await Assertions.Expect(page.Locator(".pane-full-canvas")).ToHaveCountAsync(isFullCanvas ? 0 : 1);
-        // Close view navigates as well as hiding content. Wait for both the router
-        // and browser URL before testing the resulting presentation.
+        // All resources can navigate before Table expands the picker. Wait for the router and any pane animation.
         await page.WaitForFunctionAsync("""
             () => {
                 const layout = document.querySelector('.resources-layout');

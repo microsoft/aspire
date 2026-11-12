@@ -119,11 +119,6 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private string? _lastLocation;
     // The tab a click on the tab strip is navigating to, until the new location arrives. See OnTabChanged.
     private ResourceTab? _navigatingToTab;
-    // A close (the page's close button or Escape) clears the stored selection before it navigates to the parent, so
-    // there's a moment when it has started but the location hasn't changed. A tab chosen then waits for the close and
-    // opens for the parent's selection, rather than racing it with a URL for the resource being closed.
-    private string? _closingToLocation;
-    private ResourceTab? _tabAfterClose;
     private bool _isDisposed;
     private IReadOnlyList<string> _selectedResourceNames = [];
     private List<SelectedResourceItem> _selectedItems = [];
@@ -546,9 +541,6 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             IsResourceListHomeNavigation(location);
         _isPaneFullCanvas = false;
         _fullCanvasNavigation = null;
-        _closingToLocation = null;
-        var tabAfterClose = _tabAfterClose;
-        _tabAfterClose = null;
         ClearPaneActivity();
         var previousTab = CurrentTab;
         var previousSelection = _selectedResourceNames;
@@ -581,12 +573,6 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         await ApplyPaneModeFromLocationAsync(location);
         await TryRedirectLandingAsync();
         await PersistSelectedResourcesAsync();
-
-        // The close has landed: open the tab chosen while it was in flight, for the new selection.
-        if (tabAfterClose is { } chosenTab && GetTabs().FirstOrDefault(t => t.Tab == chosenTab && t.IsVisible)?.Href is { } chosenHref)
-        {
-            await NavigateToTabAsync(chosenTab, chosenHref);
-        }
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -956,34 +942,6 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
             var parentPath = parentQueryIndex >= 0 ? parentUrl[..parentQueryIndex] : parentUrl;
             return AddPaneToUrl(parentPath + (parentQuery.Count > 0 ? $"?{parentQuery}" : string.Empty));
-        }
-    }
-
-    private async Task CloseDetailAsync(string parentUrl)
-    {
-        _closingToLocation = NavigationManager.ToAbsoluteUri(parentUrl).AbsoluteUri;
-        if (ParseLocation(NavigationManager.ToBaseRelativePath(NavigationManager.ToAbsoluteUri(parentUrl).AbsoluteUri)).SelectedResourceNames.Count == 0)
-        {
-            // An unscoped overview normally restores the previous selection. Closing explicitly
-            // clears it first, including on a freshly opened resource detail link.
-            await SetStoredSelectionAsync([]);
-        }
-
-        var target = NavigationManager.ToAbsoluteUri(parentUrl).AbsoluteUri;
-        if (string.Equals(target, NavigationManager.Uri, StringComparison.Ordinal))
-        {
-            // Closing an unscoped tab changes presentation without changing its URL, so it's done: nothing will land.
-            _closingToLocation = null;
-            SetResourceListVisible(true);
-            if (_tabAfterClose is { } chosenTab)
-            {
-                _tabAfterClose = null;
-                await OpenChosenTabAsync(chosenTab);
-            }
-        }
-        else
-        {
-            _fullCanvasNavigation = target;
         }
     }
 
@@ -1858,9 +1816,6 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     // The density is set in the settings panel, which isn't part of this layout.
     private void OnViewPreferencesChanged() => InvokeAsync(StateHasChanged);
-
-    // Tabs that show a resource's data rather than the resource itself.
-    private bool IsDataTab => CurrentTab is ResourceTab.Console or ResourceTab.StructuredLogs or ResourceTab.Traces or ResourceTab.Metrics;
 
     private bool IsCompact => ViewPreferences.Density == ResourceListDensity.Compact;
 
@@ -2956,13 +2911,6 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             return;
         }
 
-        if (_closingToLocation is not null)
-        {
-            // A close is in flight: open this tab once it lands (see OnParametersSetAsync).
-            _tabAfterClose = tab;
-            return;
-        }
-
         await NavigateToTabAsync(tab, href);
     }
 
@@ -2972,12 +2920,6 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         if (GetTabs().FirstOrDefault(t => t.Tab == tab && t.IsVisible)?.Href is not { } href ||
             (tab == CurrentTab && !_isPaneFullCanvas))
         {
-            return;
-        }
-
-        if (_closingToLocation is not null)
-        {
-            _tabAfterClose = tab;
             return;
         }
 
