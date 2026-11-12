@@ -10,6 +10,8 @@ The derivation runs `aspire setup --install-path` to expand the bundle under `$o
 
 At runtime, the `nix` install route uses the package-owned layout without extracting the embedded payload again or creating bundle leases. Caches, logs, and other user state still use the normal Aspire home directory. Upgrade or repair the bundle through Nix, not by extracting new binaries into the store.
 
+On Linux, the tray executable's RUNPATH includes GTK 3, Ayatana AppIndicator, GTK layer-shell, and its directly imported GUI libraries. These paths are added only to the tray, preserving its existing RUNPATH without adding GUI paths to the CLI wrapper's `LD_LIBRARY_PATH`. A graphical session and a compatible desktop tray host are still required; Wayland panels also require a layer-shell-compatible compositor.
+
 ## Runtime validation
 
 The Nix CI job builds `runtime-image.nix` from the current CLI archive and runs `runtime-smoke/run.sh` in a non-root Nix-only image with a read-only root filesystem and writable workspace and `/tmp` mounts. The image has no generic Linux ELF interpreter or `nix-ld`; an unpatched DCP control must fail before the packaged CLI is exercised.
@@ -17,6 +19,8 @@ The Nix CI job builds `runtime-image.nix` from the current CLI archive and runs 
 The smoke creates an AppHost from the matching template package, starts an HTTP project, and verifies a container can reach it through Aspire's container tunnel. It checks Dashboard availability, package-owned executable paths, absence of runtime bundle extraction, and cleanup across two start/stop cycles. Host networking, the Docker socket, and identical host/container workspace paths are used only on the disposable Linux CI runner.
 
 This validates the loader and filesystem constraints relevant to NixOS, not a booted NixOS system or the macOS tray. Diagnostics are uploaded as the `nix-runtime-smoke` artifact.
+
+For bundles containing a Linux tray, package install checks also use its ELF interpreter to preload the GUI libraries by soname and run `--help` with `LD_LIBRARY_PATH` removed. Loader diagnostics fail the check, including unresolved preloads that glibc would otherwise ignore. This verifies library resolution through the tray's RUNPATH, not desktop initialization or interaction.
 
 ## Usage
 

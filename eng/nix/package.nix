@@ -7,6 +7,14 @@
   icu,
   openssl,
   zlib,
+  at-spi2-core,
+  cairo,
+  glib,
+  gtk3,
+  gtk-layer-shell ? null,
+  libayatana-appindicator ? null,
+  libx11,
+  pango,
   manifest ? builtins.fromJSON (builtins.readFile ./versions.json),
 }:
 let
@@ -22,6 +30,17 @@ let
     stdenv.cc.cc.lib
   ];
   linuxLibraryPath = lib.makeLibraryPath linuxLibraries;
+  trayLibraries = [
+    at-spi2-core
+    cairo
+    glib
+    gtk3
+    gtk-layer-shell
+    libayatana-appindicator
+    libx11
+    pango
+  ];
+  trayLibraryPath = lib.makeLibraryPath trayLibraries;
 in
 stdenv.mkDerivation {
   pname = "aspire-cli";
@@ -37,7 +56,7 @@ stdenv.mkDerivation {
     ++ lib.optionals isLinux [
       autoPatchelfHook
     ];
-  buildInputs = lib.optionals isLinux linuxLibraries;
+  buildInputs = lib.optionals isLinux (linuxLibraries ++ trayLibraries);
 
   dontConfigure = true;
   dontBuild = true;
@@ -89,6 +108,13 @@ stdenv.mkDerivation {
     # https://github.com/microsoft/dcp/blob/main/internal/dcptun/image_builder.go
     mapfile -d "" -t hostFiles < <(find "$out" -type f ! -path '*/dcp/dcptun_c' -print0)
     autoPatchelf "''${hostFiles[@]}"
+
+    tray="$out/lib/aspire-cli/bundle/tray/aspire-tray"
+    if test -f "$tray"; then
+      # NativeAOT loads these GUI libraries by name, not through DT_NEEDED.
+      # Keep their search paths on the tray, not in every CLI child's environment.
+      patchelf --add-rpath "${trayLibraryPath}" "$tray"
+    fi
   '';
 
   doInstallCheck = isLinux;
@@ -107,6 +133,20 @@ stdenv.mkDerivation {
     cat managed-usage.log
     test "$status" -eq 1
     grep -F "Usage:" managed-usage.log
+
+    # Older release bundles have no Linux tray. For bundles that do, preload its
+    # dynamically imported libraries by soname using the executable's RUNPATH.
+    # --help alone does not load GTK, and this check needs no graphical session.
+    tray="$out/lib/aspire-cli/bundle/tray/aspire-tray"
+    if test -f "$tray"; then
+      interpreter="$(patchelf --print-interpreter "$tray")"
+      env -u LD_LIBRARY_PATH "$interpreter" \
+        --preload libgtk-layer-shell.so.0:libgtk-3.so.0:libgdk-3.so.0:libayatana-appindicator3.so.1:libatk-1.0.so.0:libcairo.so.2:libgio-2.0.so.0:libglib-2.0.so.0:libgobject-2.0.so.0:libpango-1.0.so.0:libpangocairo-1.0.so.0:libX11.so.6 \
+        "$tray" --help > tray-usage.log 2> tray-loader.log
+      cat tray-usage.log tray-loader.log
+      # glibc can report an unresolved preload but still exit successfully.
+      test ! -s tray-loader.log
+    fi
 
     runHook postInstallCheck
   '';
