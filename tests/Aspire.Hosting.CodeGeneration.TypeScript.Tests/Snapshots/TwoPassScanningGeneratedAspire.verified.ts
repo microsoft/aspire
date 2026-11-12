@@ -24200,7 +24200,6 @@ export interface DotnetToolResource {
      * @param packageId The package identifier to assign to the tool configuration. Cannot be null.
      * @returns The resource builder.
      * @experimental
-     * @deprecated Use WithToolPackage on a DotnetCliToolResource from the Aspire.Hosting.Dotnet package instead.
      */
     withToolPackage(packageId: string): DotnetToolResourcePromise;
     /**
@@ -24208,14 +24207,12 @@ export interface DotnetToolResource {
      * @param version The package version to use
      * @returns The resource builder.
      * @experimental
-     * @deprecated Use WithToolVersion on a DotnetCliToolResource from the Aspire.Hosting.Dotnet package instead.
      */
     withToolVersion(version: string): DotnetToolResourcePromise;
     /**
      * Allows prerelease versions of the tool to be used
      * @returns The resource builder.
      * @experimental
-     * @deprecated Use WithToolPrerelease on a DotnetCliToolResource from the Aspire.Hosting.Dotnet package instead.
      */
     withToolPrerelease(): DotnetToolResourcePromise;
     /**
@@ -24223,21 +24220,18 @@ export interface DotnetToolResource {
      * @param source The source to add.
      * @returns The resource builder.
      * @experimental
-     * @deprecated Use WithToolSource on a DotnetCliToolResource from the Aspire.Hosting.Dotnet package instead.
      */
     withToolSource(source: string): DotnetToolResourcePromise;
     /**
      * Configures the tool to use only the specified package sources, ignoring existing NuGet configuration.
      * @returns The resource builder.
      * @experimental
-     * @deprecated Use WithToolIgnoreExistingFeeds on a DotnetCliToolResource from the Aspire.Hosting.Dotnet package instead.
      */
     withToolIgnoreExistingFeeds(): DotnetToolResourcePromise;
     /**
      * Configures the resource to treat package source failures as warnings.
      * @returns The resource builder.
      * @experimental
-     * @deprecated Use WithToolIgnoreFailedSources on a DotnetCliToolResource from the Aspire.Hosting.Dotnet package instead.
      */
     withToolIgnoreFailedSources(): DotnetToolResourcePromise;
     /**
@@ -24955,7 +24949,6 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      * @param packageId The package identifier to assign to the tool configuration. Cannot be null.
      * @returns The resource builder.
      * @experimental
-     * @deprecated Use WithToolPackage on a DotnetCliToolResource from the Aspire.Hosting.Dotnet package instead.
      */
     withToolPackage(packageId: string): DotnetToolResourcePromise;
     /**
@@ -24963,14 +24956,12 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      * @param version The package version to use
      * @returns The resource builder.
      * @experimental
-     * @deprecated Use WithToolVersion on a DotnetCliToolResource from the Aspire.Hosting.Dotnet package instead.
      */
     withToolVersion(version: string): DotnetToolResourcePromise;
     /**
      * Allows prerelease versions of the tool to be used
      * @returns The resource builder.
      * @experimental
-     * @deprecated Use WithToolPrerelease on a DotnetCliToolResource from the Aspire.Hosting.Dotnet package instead.
      */
     withToolPrerelease(): DotnetToolResourcePromise;
     /**
@@ -24978,21 +24969,18 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      * @param source The source to add.
      * @returns The resource builder.
      * @experimental
-     * @deprecated Use WithToolSource on a DotnetCliToolResource from the Aspire.Hosting.Dotnet package instead.
      */
     withToolSource(source: string): DotnetToolResourcePromise;
     /**
      * Configures the tool to use only the specified package sources, ignoring existing NuGet configuration.
      * @returns The resource builder.
      * @experimental
-     * @deprecated Use WithToolIgnoreExistingFeeds on a DotnetCliToolResource from the Aspire.Hosting.Dotnet package instead.
      */
     withToolIgnoreExistingFeeds(): DotnetToolResourcePromise;
     /**
      * Configures the resource to treat package source failures as warnings.
      * @returns The resource builder.
      * @experimental
-     * @deprecated Use WithToolIgnoreFailedSources on a DotnetCliToolResource from the Aspire.Hosting.Dotnet package instead.
      */
     withToolIgnoreFailedSources(): DotnetToolResourcePromise;
     /**
@@ -25759,7 +25747,6 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
      * @param packageId The package identifier to assign to the tool configuration. Cannot be null.
      * @returns The resource builder.
      * @experimental
-     * @deprecated Use WithToolPackage on a DotnetCliToolResource from the Aspire.Hosting.Dotnet package instead.
      */
     withToolPackage(packageId: string): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._withToolPackageInternal(packageId), this._client);
@@ -25780,7 +25767,6 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
      * @param version The package version to use
      * @returns The resource builder.
      * @experimental
-     * @deprecated Use WithToolVersion on a DotnetCliToolResource from the Aspire.Hosting.Dotnet package instead.
      */
     withToolVersion(version: string): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._withToolVersionInternal(version), this._client);
@@ -25800,7 +25786,6 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
      * Allows prerelease versions of the tool to be used
      * @returns The resource builder.
      * @experimental
-     * @deprecated Use WithToolPrerelease on a DotnetCliToolResource from the Aspire.Hosting.Dotnet package instead.
      */
     withToolPrerelease(): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._withToolPrereleaseInternal(), this._client);
@@ -25821,7 +25806,6 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
      * @param source The source to add.
      * @returns The resource builder.
      * @experimental
-     * @deprecated Use WithToolSource on a DotnetCliToolResource from the Aspire.Hosting.Dotnet package instead.
      */
     withToolSource(source: string): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._withToolSourceInternal(source), this._client);
@@ -25841,7 +25825,6 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
      * Configures the tool to use only the specified package sources, ignoring existing NuGet configuration.
      * @returns The resource builder.
      * @experimental
-     * @deprecated Use WithToolIgnoreExistingFeeds on a DotnetCliToolResource from the Aspire.Hosting.Dotnet package instead.
      */
     withToolIgnoreExistingFeeds(): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._withToolIgnoreExistingFeedsInternal(), this._client);
@@ -25861,7 +25844,6 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
      * Configures the resource to treat package source failures as warnings.
      * @returns The resource builder.
      * @experimental
-     * @deprecated Use WithToolIgnoreFailedSources on a DotnetCliToolResource from the Aspire.Hosting.Dotnet package instead.
      */
     withToolIgnoreFailedSources(): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._withToolIgnoreFailedSourcesInternal(), this._client);

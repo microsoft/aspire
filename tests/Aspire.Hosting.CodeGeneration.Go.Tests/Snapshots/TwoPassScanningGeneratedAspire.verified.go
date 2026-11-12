@@ -21835,9 +21835,6 @@ type DotnetToolResource interface {
 	//
 	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
 	// release.
-	//
-	// Deprecated: Use WithToolIgnoreExistingFeeds on a DotnetCliToolResource from
-	// the Aspire.Hosting.Dotnet package instead.
 	WithToolIgnoreExistingFeeds() DotnetToolResource
 
 	// WithToolIgnoreFailedSources configures the resource to treat package source
@@ -21849,9 +21846,6 @@ type DotnetToolResource interface {
 	//
 	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
 	// release.
-	//
-	// Deprecated: Use WithToolIgnoreFailedSources on a DotnetCliToolResource from
-	// the Aspire.Hosting.Dotnet package instead.
 	WithToolIgnoreFailedSources() DotnetToolResource
 
 	// WithToolPackage sets the package identifier for the tool configuration
@@ -21867,9 +21861,6 @@ type DotnetToolResource interface {
 	//
 	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
 	// release.
-	//
-	// Deprecated: Use WithToolPackage on a DotnetCliToolResource from the
-	// Aspire.Hosting.Dotnet package instead.
 	WithToolPackage(packageId string) DotnetToolResource
 
 	// WithToolPrerelease allows prerelease versions of the tool to be used
@@ -21880,9 +21871,6 @@ type DotnetToolResource interface {
 	//
 	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
 	// release.
-	//
-	// Deprecated: Use WithToolPrerelease on a DotnetCliToolResource from the
-	// Aspire.Hosting.Dotnet package instead.
 	WithToolPrerelease() DotnetToolResource
 
 	// WithToolSource adds a NuGet package source for tool acquisition.
@@ -21896,9 +21884,6 @@ type DotnetToolResource interface {
 	//
 	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
 	// release.
-	//
-	// Deprecated: Use WithToolSource on a DotnetCliToolResource from the
-	// Aspire.Hosting.Dotnet package instead.
 	WithToolSource(source string) DotnetToolResource
 
 	// WithToolVersion sets the package version for a tool to use.
@@ -21912,9 +21897,6 @@ type DotnetToolResource interface {
 	//
 	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
 	// release.
-	//
-	// Deprecated: Use WithToolVersion on a DotnetCliToolResource from the
-	// Aspire.Hosting.Dotnet package instead.
 	WithToolVersion(version string) DotnetToolResource
 
 	// WithTrait adds immutable, non-sensitive metadata to a resource. Repeated

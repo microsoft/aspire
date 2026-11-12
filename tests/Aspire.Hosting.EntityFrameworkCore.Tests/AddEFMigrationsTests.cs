@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREDOTNETTOOL
-#pragma warning disable CS0618 // Verify legacy EF tool callbacks and resource queries.
 #pragma warning disable ASPIREPROJECTS001
 #pragma warning disable CS0618 // Retains legacy project overload and property compatibility alongside V2 coverage.
 
