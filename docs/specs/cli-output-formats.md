@@ -711,6 +711,10 @@ The JSON form includes secret values. Do not redirect it to logs or files unless
 
 The `devtools` category surfaces development-tooling recommendations. The `vscode-extension` check only appears when VS Code is detected: it reports `warning` when the [Aspire VS Code extension](https://aka.ms/aspire/vscode-extension) is missing and `pass` when it is installed. Its `metadata` exposes `vsCodeInstalled` (bool), `extensionInstalled` (bool), and `extensionId` (string).
 
+The `environment` check `config-source` reports machine configuration-source availability without acquiring or authenticating to the repository. Its `metadata` includes `available` (bool). An available candidate also includes `repository`, `path`, optional `ref`, and `origin` (`ASPIRE_INIT_SOURCE_URL` or `microsoftEmployee`). Invalid candidate settings produce a warning instead of asserting availability.
+
+When doctor identifies a current AppHost, `apphost-config-source` in the `apphost` category reports its nearest local configuration's choice. Its `metadata` includes `appHostPath`, `settingsFile`, and `state` (`bound`, `optedOut`, or `unconfigured`). Bound sources also include `repository`, `path`, optional `ref`, and optional `appliedVersion`. An unconfigured AppHost with an available candidate gets a non-blocking warning and an `aspire update` suggestion; an explicit opt-out is reported as `pass`. Without an AppHost, or without both a saved choice and a candidate, no project adoption check is emitted. Invalid project bindings produce warnings. These checks do not change configuration or fetch source content.
+
 ### `aspire config info`
 
 `aspire config info --json` is a hidden tooling command that emits configuration paths, feature metadata, settings schemas, and advertised CLI capabilities:

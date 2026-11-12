@@ -97,6 +97,15 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Configuration source: {0} Configuration file: {1} Configuration ref: {2} Source origin: {3}.
+        /// </summary>
+        internal static string Candidate {
+            get {
+                return ResourceManager.GetString("Candidate", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to The configuration source update check failed: {0} Continuing with the saved configuration..
         /// </summary>
         internal static string CheckFailed {
@@ -150,6 +159,96 @@ namespace Aspire.Cli.Resources {
             }
         }
         
+        /// <summary>
+        ///   Looks up a localized string similar to Run &apos;aspire update&apos; to choose whether this AppHost should use the available configuration source..
+        /// </summary>
+        internal static string DoctorAdoptFix {
+            get {
+                return ResourceManager.GetString("DoctorAdoptFix", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to A configuration source is available on this machine..
+        /// </summary>
+        internal static string DoctorAvailable {
+            get {
+                return ResourceManager.GetString("DoctorAvailable", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Configuration source: {0} Configuration file: {1} Configuration ref: {2} Applied version: {3}.
+        /// </summary>
+        internal static string DoctorBindingDetails {
+            get {
+                return ResourceManager.GetString("DoctorBindingDetails", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to AppHost uses a saved configuration source..
+        /// </summary>
+        internal static string DoctorBound {
+            get {
+                return ResourceManager.GetString("DoctorBound", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The machine configuration source could not be resolved..
+        /// </summary>
+        internal static string DoctorCandidateFailed {
+            get {
+                return ResourceManager.GetString("DoctorCandidateFailed", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to AppHost has explicitly opted out of configuration sources..
+        /// </summary>
+        internal static string DoctorOptOut {
+            get {
+                return ResourceManager.GetString("DoctorOptOut", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to AppHost: {0} Settings file: {1}.
+        /// </summary>
+        internal static string DoctorProjectDetails {
+            get {
+                return ResourceManager.GetString("DoctorProjectDetails", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The AppHost configuration source could not be inspected..
+        /// </summary>
+        internal static string DoctorProjectFailed {
+            get {
+                return ResourceManager.GetString("DoctorProjectFailed", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to No configuration source is available on this machine..
+        /// </summary>
+        internal static string DoctorUnavailable {
+            get {
+                return ResourceManager.GetString("DoctorUnavailable", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to A configuration source is available, but this AppHost has not selected a configuration source..
+        /// </summary>
+        internal static string DoctorUnbound {
+            get {
+                return ResourceManager.GetString("DoctorUnbound", resourceCulture);
+            }
+        }
+
         /// <summary>
         ///   Looks up a localized string similar to Microsoft employee default.
         /// </summary>

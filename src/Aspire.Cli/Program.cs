@@ -664,6 +664,7 @@ public class Program
 
         // Environment checking services.
         builder.Services.AddSingleton<IEnvironmentCheck, AspireVersionCheck>();
+        builder.Services.AddSingleton<IEnvironmentCheck, ConfigSourceCheck>();
         builder.Services.AddSingleton<IEnvironmentCheck, OperatingSystemCheck>();
         builder.Services.AddSingleton<IEnvironmentCheck, WslEnvironmentCheck>();
         builder.Services.AddSingleton<IEnvironmentCheck, DotNetSdkCheck>();

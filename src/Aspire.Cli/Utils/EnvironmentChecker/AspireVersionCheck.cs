@@ -221,7 +221,7 @@ internal sealed class AspireVersionCheck(
         IReadOnlyList<FileInfo> appHostFiles;
         try
         {
-            appHostFiles = await ResolveAppHostFilesAsync(cancellationToken);
+            appHostFiles = await EnvironmentChecker.ResolveAppHostFilesAsync(projectLocator, executionContext.WorkingDirectory, logger, cancellationToken);
         }
         catch (ProjectLocatorException ex) when (ex.FailureReason is ProjectLocatorFailureReason.NoProjectFileFound or ProjectLocatorFailureReason.ProjectFileDoesntExist)
         {
@@ -363,36 +363,6 @@ internal sealed class AspireVersionCheck(
             logger.LogDebug(ex, "Could not read pinned channel from aspire.config.json in {Directory}.", directory);
             return null;
         }
-    }
-
-    private async Task<IReadOnlyList<FileInfo>> ResolveAppHostFilesAsync(CancellationToken cancellationToken)
-    {
-        // AppHost version reporting is intentionally shallow: use an AppHost explicitly
-        // configured in the current directory, or exactly one AppHost-looking file in
-        // the current directory. Avoid recursive discovery so doctor does not choose
-        // between multiple AppHosts or pay the cost of project-wide AppHost search for
-        // an informational version check.
-        var configuredAppHost = await projectLocator.GetAppHostFromSettingsAsync(executionContext.WorkingDirectory, searchParentDirectories: false, cancellationToken);
-        if (configuredAppHost is not null)
-        {
-            return [configuredAppHost];
-        }
-
-        var candidates = await projectLocator.FindAppHostProjectFilesAsync(
-            executionContext.WorkingDirectory,
-            AppHostDiscoveryScope.ExplicitDirectory,
-            maxDepth: 0,
-            cancellationToken);
-
-        if (candidates.Count > 1)
-        {
-            logger.LogDebug(
-                "Found multiple AppHost candidates in {WorkingDirectory}; skipping AppHost version check because no AppHost is configured.",
-                executionContext.WorkingDirectory.FullName);
-            return [];
-        }
-
-        return candidates;
     }
 
     private async Task<(bool IsAppHost, string? Version)> ResolveAppHostVersionAsync(FileInfo appHostFile, CancellationToken cancellationToken)

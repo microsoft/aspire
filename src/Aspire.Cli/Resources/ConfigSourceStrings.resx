@@ -122,6 +122,13 @@
     <value>{0} must be a nonempty absolute HTTP or HTTPS URL without control characters.</value>
     <comment>{0} is the environment variable name.</comment>
   </data>
+  <data name="Candidate" xml:space="preserve">
+    <value>Configuration source: {0}
+Configuration file: {1}
+Configuration ref: {2}
+Source origin: {3}</value>
+    <comment>{0} is the Git repository address, {1} is the repository-relative configuration file path, {2} is the branch name, commit SHA, or default-branch label, and {3} is the source origin (an environment variable name or Microsoft employee default).</comment>
+  </data>
   <data name="DefaultBranch" xml:space="preserve">
     <value>default branch</value>
   </data>
@@ -169,5 +176,42 @@
   <data name="IncompatibleOptions" xml:space="preserve">
     <value>--config-source cannot be combined with --self, --migrate, --channel, --quality, or --nuget-config-dir.</value>
     <comment>Do not translate the command-line option names.</comment>
+  </data>
+  <data name="DoctorAvailable" xml:space="preserve">
+    <value>A configuration source is available on this machine.</value>
+  </data>
+  <data name="DoctorUnavailable" xml:space="preserve">
+    <value>No configuration source is available on this machine.</value>
+  </data>
+  <data name="DoctorCandidateFailed" xml:space="preserve">
+    <value>The machine configuration source could not be resolved.</value>
+  </data>
+  <data name="DoctorBound" xml:space="preserve">
+    <value>AppHost uses a saved configuration source.</value>
+  </data>
+  <data name="DoctorOptOut" xml:space="preserve">
+    <value>AppHost has explicitly opted out of configuration sources.</value>
+  </data>
+  <data name="DoctorUnbound" xml:space="preserve">
+    <value>A configuration source is available, but this AppHost has not selected a configuration source.</value>
+  </data>
+  <data name="DoctorAdoptFix" xml:space="preserve">
+    <value>Run 'aspire update' to choose whether this AppHost should use the available configuration source.</value>
+    <comment>Do not translate "aspire update".</comment>
+  </data>
+  <data name="DoctorBindingDetails" xml:space="preserve">
+    <value>Configuration source: {0}
+Configuration file: {1}
+Configuration ref: {2}
+Applied version: {3}</value>
+    <comment>{0} is the Git repository address, {1} is the repository-relative configuration path, {2} is the selected ref or default-branch label, and {3} is the version last applied.</comment>
+  </data>
+  <data name="DoctorProjectDetails" xml:space="preserve">
+    <value>AppHost: {0}
+Settings file: {1}</value>
+    <comment>{0} is the AppHost file path and {1} is its settings file path.</comment>
+  </data>
+  <data name="DoctorProjectFailed" xml:space="preserve">
+    <value>The AppHost configuration source could not be inspected.</value>
   </data>
 </root>
