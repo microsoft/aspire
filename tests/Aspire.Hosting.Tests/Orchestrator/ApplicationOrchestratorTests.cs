@@ -1125,7 +1125,10 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
         var appOrchestrator = CreateOrchestrator(distributedAppModel, notificationService: resourceNotificationService, dcpEvents: events);
         await appOrchestrator.RunApplicationAsync();
 
-        await events.PublishAsync(new OnResourceStartingContext(CancellationToken.None, KnownResourceTypes.Tool, resource.Resource, "tool-dcp"));
+        var resourceType = resourceKind == "custom" ? KnownResourceTypes.Tool : resource.Resource.GetResourceType();
+        Assert.Equal(KnownResourceTypes.Tool, resourceType);
+
+        await events.PublishAsync(new OnResourceStartingContext(CancellationToken.None, resourceType, resource.Resource, "tool-dcp"));
 
         Assert.True(resourceNotificationService.TryGetCurrentState("tool-dcp", out var snapshotEvent));
         Assert.Equal(KnownResourceStates.Starting, snapshotEvent.Snapshot.State?.Text);
