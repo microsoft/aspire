@@ -95,6 +95,9 @@ func (e *CapabilityError) Error() string      { return e.err.Error() }
 //	}
 //
 // Non-SDK errors are returned via err.Error() unchanged.
+//
+// Callers commonly add context with fmt.Errorf("...: %w", err); the joined
+// failures are still found underneath, and the added context is dropped.
 func FormatError(err error) string {
 	if err == nil {
 		return ""
@@ -103,9 +106,9 @@ func FormatError(err error) string {
 	if !errors.As(err, &capErr) {
 		return err.Error()
 	}
-	if joined, ok := err.(interface{ Unwrap() []error }); ok {
+	if joined := findJoinedErrors(err); joined != nil {
 		var b strings.Builder
-		for _, child := range joined.Unwrap() {
+		for _, child := range joined {
 			formatted := FormatError(child)
 			if formatted == "" {
 				continue
@@ -146,6 +149,22 @@ func FormatError(err error) string {
 	return b.String()
 }
 
+// findJoinedErrors walks single-error wrappers (fmt.Errorf with one %w) down to
+// the first error that wraps several, such as the result of errors.Join.
+func findJoinedErrors(err error) []error {
+	for err != nil {
+		switch u := err.(type) {
+		case interface{ Unwrap() []error }:
+			return u.Unwrap()
+		case interface{ Unwrap() error }:
+			err = u.Unwrap()
+		default:
+			return nil
+		}
+	}
+	return nil
+}
+
 // CancellationToken wraps a context.Context to provide cooperative cancellation.
 // Use NewCancellationToken to create one; call Cancel() to cancel it.
 // Pass token.Context() to any standard Go library that accepts a context.
@@ -154,6 +173,10 @@ type CancellationToken struct {
 	cancel     context.CancelFunc
 	cancelOnce sync.Once
 	notify     func()
+	// remoteID is the host-issued ID of a token received in a callback. Forwarding
+	// the token to another capability reuses it so the host links the nested
+	// operation to the original cancellation source.
+	remoteID string
 }
 
 // NewCancellationToken creates a new cancellation token backed by a cancellable
@@ -171,6 +194,7 @@ func newCancellationTokenFrom(parent context.Context) *CancellationToken {
 
 func newRemoteCancellationToken(c *client, id string) *CancellationToken {
 	token := newCancellationTokenFrom(context.Background())
+	token.remoteID = id
 	token.notify = func() {
 		go c.cancelToken(id)
 	}
@@ -750,6 +774,11 @@ func (c *client) registerCancellation(token *CancellationToken) string {
 	if token == nil {
 		return ""
 	}
+	// The host already owns this ID, so there is nothing to register or watch locally:
+	// Cancel on the remote token notifies the host itself.
+	if token.remoteID != "" {
+		return token.remoteID
+	}
 	id := fmt.Sprintf("ct_%d_%d", c.cancellationCounter.Add(1), time.Now().UnixMilli())
 	c.cancellationsMu.Lock()
 	c.cancellations[id] = &cancellationRegistration{token: token}
@@ -875,6 +904,11 @@ func (c *client) invokeCapability(ctx context.Context, capabilityID string, args
 	return wrapIfHandle(result, c)
 }
 
+// clientCallback is a callback shim that needs the registering client, for
+// example to build remote cancellation tokens. DTO ToMap methods have no client
+// in scope, so they emit this type and marshalTransportValue binds the client.
+type clientCallback func(c *client, args ...any) any
+
 func (c *client) marshalTransportValue(value any) any {
 	if callback, ok := value.(func(...any) any); ok {
 		return c.registerCallback(callback)
@@ -884,6 +918,8 @@ func (c *client) marshalTransportValue(value any) any {
 	switch v := serialized.(type) {
 	case func(...any) any:
 		return c.registerCallback(v)
+	case clientCallback:
+		return c.registerCallback(func(args ...any) any { return v(c, args...) })
 	case map[string]any:
 		result := make(map[string]any, len(v))
 		for key, nestedValue := range v {

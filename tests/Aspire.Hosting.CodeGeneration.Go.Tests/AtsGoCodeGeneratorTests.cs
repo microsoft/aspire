@@ -1709,6 +1709,65 @@ public class AtsGoCodeGeneratorTests
                     }
                 }
 
+                func TestFormatErrorIncludesJoinedErrorsBehindWrappers(t *testing.T) {
+                    first := &CapabilityError{err: atsError{Code: "FIRST", Message: "first failed", Capability: "addFirst"}}
+                    second := &CapabilityError{err: atsError{Code: "SECOND", Message: "second failed", Capability: "addSecond"}}
+
+                    want := FormatError(errors.Join(first, second))
+                    wrapped := fmt.Errorf("building app: %w", fmt.Errorf("resources: %w", errors.Join(first, second)))
+                    if got := FormatError(wrapped); got != want {
+                        t.Errorf("FormatError() = %q, want %q", got, want)
+                    }
+                }
+
+                func TestForwardedCallbackTokenReusesHostID(t *testing.T) {
+                    c := newClient("")
+                    remote := newRemoteCancellationToken(c, "ct_host")
+                    if id := c.registerCancellation(remote); id != "ct_host" {
+                        t.Fatalf("registerCancellation() = %q, want the host-issued ID", id)
+                    }
+                    c.cancellationsMu.Lock()
+                    _, registered := c.cancellations["ct_host"]
+                    c.cancellationsMu.Unlock()
+                    if registered {
+                        t.Fatal("a host-owned token ID was registered as a local cancellation")
+                    }
+                }
+
+                func TestClientCallbackIsBoundToRegisteringClient(t *testing.T) {
+                    c := newClient("")
+                    var got *client
+                    marshaled, _ := c.marshalTransportValue(map[string]any{
+                        "cb": clientCallback(func(cl *client, args ...any) any { got = cl; return nil }),
+                    }).(map[string]any)
+                    id, _ := marshaled["cb"].(string)
+                    c.callbacksMu.Lock()
+                    callback := c.callbacks[id]
+                    c.callbacksMu.Unlock()
+                    if callback == nil {
+                        t.Fatalf("callback %q was not registered", id)
+                    }
+                    callback()
+                    if got != c {
+                        t.Fatalf("callback received client %p, want %p", got, c)
+                    }
+                }
+
+                func TestErroredHandleInUnionIsNotSent(t *testing.T) {
+                    c, received := connectChildErrorHost(t, "addTestRedis")
+                    builder := newBuilderOn(c)
+
+                    failed := builder.AddTestRedis("failed")
+                    target := newTestRedisResourceFromHandle(&handle{HandleID: "target", TypeID: testRedisTypeID}, c)
+                    target.WithUnionDependency(failed)
+                    if !errors.Is(target.Err(), failed.Err()) {
+                        t.Errorf("target.Err() = %v, want the dependency's error %v", target.Err(), failed.Err())
+                    }
+                    if got, want := received(), []string{"addTestRedis"}; !slices.Equal(got, want) {
+                        t.Errorf("the AppHost received %v, want %v (withUnionDependency must not be sent)", got, want)
+                    }
+                }
+
                 func TestFailedWithCallOnChildReachesBuilder(t *testing.T) {
                     c, _ := connectChildErrorHost(t, "withConnectionStringDirect")
                     builder := newBuilderOn(c)

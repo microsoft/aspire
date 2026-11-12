@@ -86,7 +86,7 @@
               "declaration": "Err() error",
               "returnType": "error",
               "errorModel": "none",
-              "summary": "Err returns the first error recorded on this wrapper. Returns nil if the wrapper resolved successfully and no chained operation has failed.",
+              "summary": "Err returns an error combining every failure recorded by this builder or by any handle created from it.",
               "synthesized": true
             }
           ]

@@ -2078,6 +2078,15 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
             var paramName = GetLocalIdentifier(p.Name);
             WriteLine($"{indent}if {paramName} != nil {{ if err := {paramName}.Err(); err != nil {{ {errorAction} }} }}");
         }
+
+        // Handle-valued unions are plain `any` locals, so the wrapper's Err is read through
+        // an interface assertion. Without it serializeValue turns an errored wrapper into nil.
+        foreach (var p in GetUnionParameters(capability))
+        {
+            if (p.Type!.UnionTypes is not { } members || !members.Any(m => m.Category == AtsTypeCategory.Handle)) { continue; }
+            var paramName = GetLocalIdentifier(p.Name);
+            WriteLine($"{indent}if e, ok := {paramName}.(interface{{ Err() error }}); ok {{ if err := e.Err(); err != nil {{ {errorAction} }} }}");
+        }
     }
 
     private void EmitArgsConstruction(
@@ -2186,8 +2195,8 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
 
     // Emits a strongly-typed DTO callback property into the DTO's ToMap output. Method parameters
     // pre-register their callback (putting a string id into reqArgs), but DTO properties instead
-    // embed the shim func directly in the map; the client's marshalTransportValue walks the
-    // serialized args, finds the func(...any) any value, and registers it. This keeps the public
+    // embed a clientCallback in the map; the client's marshalTransportValue walks the
+    // serialized args, binds itself to that shim, and registers it. This keeps the public
     // DTO field strongly typed (e.g. func(ctx InputsDialogValidationContext)) while reusing the
     // exact arg-decoding/return/writeback behavior of method-parameter callbacks.
     private void EmitDtoCallbackToMap(AtsDtoPropertyInfo property, string propertyName)
@@ -2195,9 +2204,9 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
         var p = DtoPropertyToParameterInfo(property);
         WriteLine($"\tif d.{propertyName} != nil {{");
         WriteLine($"\t\tcb := d.{propertyName}");
-        WriteLine($"\t\tm[{GoStringLiteral(JsonNamingPolicy.CamelCase.ConvertName(property.Name))}] = func(args ...any) any {{");
-        EmitGoCallbackShimBody("\t\t\t", p, clientExpression: null);
-        WriteLine($"\t\t}}");
+        WriteLine($"\t\tm[{GoStringLiteral(JsonNamingPolicy.CamelCase.ConvertName(property.Name))}] = clientCallback(func(c *client, args ...any) any {{");
+        EmitGoCallbackShimBody("\t\t\t", p, clientExpression: "c");
+        WriteLine($"\t\t}})");
         WriteLine($"\t}}");
     }
 
