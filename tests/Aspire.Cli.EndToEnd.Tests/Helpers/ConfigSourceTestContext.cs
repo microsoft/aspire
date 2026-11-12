@@ -195,8 +195,9 @@ internal sealed class ConfigSourceTestContext
 
     public async Task AssertNonInteractiveConsentRequiredAsync()
     {
+        // Wrapped error text can contain ANSI style resets between words.
         await _auto.RunCommandAsync(
-            $"{NewCommand} --non-interactive > \"$ASPIRE_E2E_WORKSPACE/consent.log\" 2>&1; " +
+            $"env -u ASPIRE_ANSI_PASS_THRU NO_COLOR=1 {NewCommand} --non-interactive > \"$ASPIRE_E2E_WORKSPACE/consent.log\" 2>&1; " +
             $"result=$?; cat \"$ASPIRE_E2E_WORKSPACE/consent.log\"; test \"$result\" -eq {CliExitCodes.InvalidCommand}",
             _counter, timeout: TimeSpan.FromMinutes(3));
         var consentOutput = await File.ReadAllTextAsync(Path.Combine(_root, "consent.log"), _cancellationToken);
