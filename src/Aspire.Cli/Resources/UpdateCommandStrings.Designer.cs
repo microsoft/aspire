@@ -349,13 +349,22 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Skip the validation restore when explicitly updating a .NET AppHost channel. Configuration conflicts still cause an error..
+        ///   Looks up a localized string similar to Validate an explicit .NET AppHost channel update using temporary NuGet caches, without proposing or applying changes..
         /// </summary>
-        internal static string ForceOptionDescription {
+        internal static string DryRunOptionDescription {
             get {
-                return ResourceManager.GetString("ForceOptionDescription", resourceCulture);
+                return ResourceManager.GetString("DryRunOptionDescription", resourceCulture);
             }
         }
+
+        internal static string DryRunRequiresChannel => ResourceManager.GetString("DryRunRequiresChannel", resourceCulture);
+        internal static string DryRunRequiresDotNet => ResourceManager.GetString("DryRunRequiresDotNet", resourceCulture);
+        internal static string DryRunSuccessful => ResourceManager.GetString("DryRunSuccessful", resourceCulture);
+        internal static string DryRunValidating => ResourceManager.GetString("DryRunValidating", resourceCulture);
+        internal static string DryRunExistingBackupsFormat => ResourceManager.GetString("DryRunExistingBackupsFormat", resourceCulture);
+        internal static string DryRunReplaceBackupsPrompt => ResourceManager.GetString("DryRunReplaceBackupsPrompt", resourceCulture);
+        internal static string DryRunBackupsNotReplaced => ResourceManager.GetString("DryRunBackupsNotReplaced", resourceCulture);
+        internal static string DryRunBackupRecoveryFormat => ResourceManager.GetString("DryRunBackupRecoveryFormat", resourceCulture);
 
         /// <summary>
         ///   Looks up a localized string similar to    Mapping: {0} (added).

@@ -107,11 +107,6 @@ environment-variable input is not a guarantee that the secret cannot be read.
 
 ### Updating .NET AppHosts
 
-Use `aspire update --channel <channel> --force` to skip the validation restore
-and persist the confirmed update even if restore would fail. Configuration
-conflicts still cause an error. `--force` does not bypass confirmation prompts
-or skip restore without an explicit channel (`--channel` or legacy `--quality`).
-
 `aspire update` preserves package-only AppHosts: it updates their
 `Aspire.Hosting.AppHost` reference without adding `Aspire.AppHost.Sdk`.
 SDK-based AppHosts remain supported, including C#, F#, and Visual Basic project
@@ -127,6 +122,13 @@ update instead of guessing which shared file to change.
 Automatic SDK rewrites are limited to unconditional declarations. Conditional
 SDK declarations that cannot be safely classified require an explicit version
 edit; source fallback does not guess whether their MSBuild conditions are active.
+
+Explicit channel updates apply confirmed changes without a validation restore.
+Use `aspire update --channel <channel> --dry-run` to validate with temporary
+NuGet caches instead, without proposing or applying changes. Configuration
+conflicts still fail in either mode. Dry runs restore source files from adjacent
+backups; leftover backups require separate consent to replace. See the
+[update validation details](../../docs/specs/polyglot-integration-restore.md#shared-policy-previews-and-net-persistence).
 
 ## Configured template sources
 

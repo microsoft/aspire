@@ -26,9 +26,10 @@ internal static class DotNetRestoreConfiguration
     internal static async Task<DotNetRestoreSettings> ReadAsync(
         IDotNetCliRunner runner,
         FileInfo projectFile,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IReadOnlyDictionary<string, string>? environmentVariables = null)
     {
-        return await TryReadAsync(runner, projectFile, cancellationToken) ??
+        return await TryReadAsync(runner, projectFile, cancellationToken, environmentVariables) ??
             throw new ProjectUpdaterException(
                 string.Format(CultureInfo.InvariantCulture, UpdateCommandStrings.FailedFetchItemsAndPropertiesFormat, projectFile.FullName));
     }
@@ -36,7 +37,8 @@ internal static class DotNetRestoreConfiguration
     internal static async Task<DotNetRestoreSettings?> TryReadAsync(
         IDotNetCliRunner runner,
         FileInfo projectFile,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IReadOnlyDictionary<string, string>? environmentVariables = null)
     {
         var (exitCode, output) = await runner.GetProjectItemsAndPropertiesAsync(
             projectFile,
@@ -58,7 +60,8 @@ internal static class DotNetRestoreConfiguration
                 // restore-graph evaluation mode and loading stale generated package imports.
                 NoRestore = true,
                 ExcludeRestorePackageImports = true,
-                SuppressLogging = true
+                SuppressLogging = true,
+                EnvironmentVariables = environmentVariables
             },
             cancellationToken);
         if (exitCode != 0 || output is null)

@@ -140,8 +140,17 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
 
         if (restoreFails)
         {
+            var context = new UpdatePackagesContext
+            {
+                AppHostFile = appHost,
+                Channel = channel,
+                HasExplicitChannel = true,
+                DryRun = true,
+                ConfirmBinding = PromptBinding.CreateDefault(true),
+                NuGetConfigDirBinding = PromptBinding.CreateDefault<string?>(null)
+            };
             await Assert.ThrowsAsync<ProjectUpdaterException>(() =>
-                updater.UpdateProjectAsync(CreateUpdateContext(appHost, channel)).DefaultTimeout());
+                updater.UpdateProjectAsync(context).DefaultTimeout());
             Assert.Equal(
                 [
                     (OutputLineStream.StdOut, "AppHost.csproj : error NU1102: Unable to find package Aspire.Hosting.Foundry with version (>= 17.0.0-preview.1)"),

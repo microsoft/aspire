@@ -36,7 +36,7 @@ internal sealed class UpdatePackagesContext
     /// </summary>
     public required bool HasExplicitChannel { get; init; }
 
-    public bool Force { get; init; }
+    public bool DryRun { get; init; }
 
     /// <summary>
     /// Gets the prompt binding for confirmation prompts.

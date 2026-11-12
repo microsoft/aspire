@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
+using Aspire.Cli.Interaction;
+using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Hosting.Utils;
 
@@ -22,6 +24,70 @@ internal sealed class DotNetAppHostUpdateTransaction : IAsyncDisposable
             static pair => pair.Key,
             static pair => new FileState(pair.Value),
             StringComparers.FileSystemPath);
+    }
+
+    internal async Task PrepareBackupsAsync(
+        IEnumerable<FileInfo> files, IInteractionService interactionService, CancellationToken cancellationToken)
+    {
+        var paths = files.Select(static file => PathNormalizer.ResolveToFilesystemPath(file.FullName))
+            .Distinct(StringComparers.FileSystemPath).ToArray();
+        var existingBackups = paths.SelectMany(static path => new[] { path + ".aspire-backup", path + ".aspire-backup-absent" })
+            .Where(File.Exists).ToArray();
+        if (existingBackups.Length > 0)
+        {
+            interactionService.DisplayPlainText(string.Format(
+                CultureInfo.CurrentCulture, UpdateCommandStrings.DryRunExistingBackupsFormat,
+                string.Join(Environment.NewLine, existingBackups)));
+            // Deliberately independent of --yes: replacing these files discards recovery data.
+            if (!await interactionService.PromptConfirmAsync(
+                UpdateCommandStrings.DryRunReplaceBackupsPrompt, PromptBinding.CreateDefault(false), cancellationToken))
+            {
+                throw new ProjectUpdaterException(UpdateCommandStrings.DryRunBackupsNotReplaced);
+            }
+        }
+
+        await VerifyAsync(cancellationToken);
+        foreach (var path in paths)
+        {
+            var state = _files[path];
+            var backup = path + (state.Original is null ? ".aspire-backup-absent" : ".aspire-backup");
+            var temporary = backup + "." + Guid.NewGuid().ToString("N");
+            try
+            {
+                var options = new FileStreamOptions
+                {
+                    Mode = FileMode.CreateNew,
+                    Access = FileAccess.Write,
+                    Share = FileShare.None,
+                    Options = FileOptions.Asynchronous
+                };
+                if (!OperatingSystem.IsWindows())
+                {
+                    options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+                }
+                await using (var stream = new FileStream(temporary, options))
+                {
+                    if (state.Original is not null)
+                    {
+                        await stream.WriteAsync(state.Original, cancellationToken);
+                    }
+                    await stream.FlushAsync(cancellationToken);
+                    stream.Flush(flushToDisk: true);
+                }
+                // A backup is visible only after its complete contents have been written.
+                File.Move(temporary, backup, overwrite: existingBackups.Contains(backup, StringComparers.FileSystemPath));
+                state.BackupPath = backup;
+                var otherBackup = path + (state.Original is null ? ".aspire-backup" : ".aspire-backup-absent");
+                if (existingBackups.Contains(otherBackup, StringComparers.FileSystemPath))
+                {
+                    File.Delete(otherBackup);
+                }
+            }
+            finally
+            {
+                File.Delete(temporary);
+            }
+        }
     }
 
     internal async Task ApplyAsync(
@@ -105,7 +171,7 @@ internal sealed class DotNetAppHostUpdateTransaction : IAsyncDisposable
         List<Exception> failures = [];
         foreach (var (path, state) in _files.Reverse())
         {
-            if (!state.Edited)
+            if (!state.Edited && state.BackupPath is null)
             {
                 continue;
             }
@@ -113,24 +179,36 @@ internal sealed class DotNetAppHostUpdateTransaction : IAsyncDisposable
             try
             {
                 var current = await ReadAsync(path, CancellationToken.None);
-                if (!Equal(current, state.Expected))
+                if (state.Edited && !Equal(current, state.Expected))
                 {
                     throw new InvalidOperationException(
                         string.Format(CultureInfo.CurrentCulture, UpdateCommandStrings.UpdateCandidateRollbackFileChangedFormat, path));
                 }
 
-                if (state.Original is null)
+                if (state.Edited)
                 {
-                    File.Delete(path);
+                    if (state.Original is null)
+                    {
+                        File.Delete(path);
+                    }
+                    else if (state.BackupPath is { } backupPath)
+                    {
+                        File.Copy(backupPath, path, overwrite: true);
+                    }
+                    else
+                    {
+                        await File.WriteAllBytesAsync(path, state.Original, CancellationToken.None);
+                    }
                 }
-                else
+                if (state.BackupPath is not null)
                 {
-                    await File.WriteAllBytesAsync(path, state.Original, CancellationToken.None);
+                    File.Delete(state.BackupPath);
                 }
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException)
             {
-                failures.Add(exception);
+                failures.Add(state.BackupPath is null ? exception : new IOException(string.Format(
+                    CultureInfo.CurrentCulture, UpdateCommandStrings.DryRunBackupRecoveryFormat, path, state.BackupPath), exception));
             }
         }
 
@@ -154,5 +232,6 @@ internal sealed class DotNetAppHostUpdateTransaction : IAsyncDisposable
         internal byte[]? Original { get; } = original;
         internal byte[]? Expected { get; set; } = original;
         internal bool Edited { get; set; }
+        internal string? BackupPath { get; set; }
     }
 }
