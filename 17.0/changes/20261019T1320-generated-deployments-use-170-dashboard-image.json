@@ -6,7 +6,9 @@
   "changeType": "Improvements",
   "communityContributors": [],
   "description": "Generated Docker Compose and Kubernetes deployments now reference the published Aspire 17.0 dashboard image instead of pinning to 13.6, so deployed environments get the current dashboard release by default.",
-  "docsPrs": [],
+  "docsPrs": [
+    1909
+  ],
   "docsRequired": false,
   "emoji": "🐳",
   "firstMergedAt": "2026-10-19T13:20:57Z",

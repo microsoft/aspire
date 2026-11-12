@@ -6,7 +6,9 @@
   "changeType": "Bug fixes",
   "communityContributors": [],
   "description": "Adding an identical bind mount is now a no-op, and a different mount on the same target throws immediately instead of failing later at container start. This fixes container restarts when mounts are added from BeforeResourceStartedEvent handlers.",
-  "docsPrs": [],
+  "docsPrs": [
+    2030
+  ],
   "docsRequired": false,
   "emoji": "🧲",
   "firstMergedAt": "2026-11-02T19:24:17Z",

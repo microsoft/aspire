@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "No matching changelog entry found (source PR not in milestone or docs-site styling only)",
+  "mergedAt": "2026-11-12T17:11:25Z",
+  "number": 2116,
+  "runDate": "2026-11-12T18:05:05Z",
+  "status": "excluded",
+  "title": "[docs] Document Git diagnostics and timeouts for aspire new"
+}

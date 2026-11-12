@@ -1,14 +1,16 @@
 {
   "area": "CLI",
-  "areaEmoji": "\ud83d\udcbb",
+  "areaEmoji": "💻",
   "backport": false,
   "breaking": false,
   "changeType": "New features",
   "communityContributors": [],
   "description": "Extends the experimental native tray companion to Linux with a StatusNotifierItem menu for managing local AppHosts from the desktop panel.",
-  "docsPrs": [],
+  "docsPrs": [
+    2067
+  ],
   "docsRequired": true,
-  "emoji": "\ud83d\udc27",
+  "emoji": "🐧",
   "firstMergedAt": "2026-11-06T00:29:44Z",
   "lastMergedAt": "2026-11-06T00:29:44Z",
   "name": "Native Linux tray support",
