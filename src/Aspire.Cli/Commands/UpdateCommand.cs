@@ -38,6 +38,7 @@ internal sealed class UpdateCommand : BaseCommand
     private readonly ICliUpdateNotifier _updateNotifier;
     private readonly IFeatures _features;
     private readonly IEnvironment _environment;
+    private readonly ICliHostEnvironment _hostEnvironment;
     private readonly IConfigurationService _configurationService;
     private readonly IConfiguration _configuration;
     private readonly IEnumerable<IMigration> _migrations;
@@ -96,6 +97,7 @@ internal sealed class UpdateCommand : BaseCommand
         _updateNotifier = services.UpdateNotifier;
         _features = services.Features;
         _environment = environment;
+        _hostEnvironment = services.HostEnvironment;
         _configurationService = configurationService;
         _configuration = configuration;
         _migrations = migrations;
@@ -284,7 +286,11 @@ internal sealed class UpdateCommand : BaseCommand
             IReadOnlyList<RepositoryToolManifest>? toolManifests = null;
             try
             {
-                if (passedAppHostProjectFile is not null)
+                if (dryRun)
+                {
+                    projectFile = await ResolveDryRunAppHostAsync(passedAppHostProjectFile, cancellationToken);
+                }
+                else if (passedAppHostProjectFile is not null)
                 {
                     projectFile = await _projectLocator.UseOrFindAppHostProjectFileAsync(passedAppHostProjectFile, createSettingsFile: !dryRun, cancellationToken);
                 }
@@ -484,6 +490,7 @@ internal sealed class UpdateCommand : BaseCommand
                 Channel = channel,
                 HasExplicitChannel = hasExplicitChannel,
                 DryRun = dryRun,
+                SupportsInteractiveInput = _hostEnvironment.SupportsInteractiveInput,
                 ConfirmBinding = confirmBinding,
                 NuGetConfigDirBinding = PromptBinding.Create(parseResult, s_nugetConfigDirOption),
                 AdditionalUpdateSteps = toolUpdateStep is null ? [] : [toolUpdateStep]
@@ -682,6 +689,34 @@ internal sealed class UpdateCommand : BaseCommand
                 InteractionService.DisplayMessage(KnownEmojis.PoliceCarLight, UpdateCommandStrings.MigrationApplyFailedWarning);
             }
         }
+    }
+
+    private async Task<FileInfo> ResolveDryRunAppHostAsync(FileInfo? requestedFile, CancellationToken cancellationToken)
+    {
+        // Update is also a recovery command. Avoid locator validation, which can resolve
+        // NuGet SDKs before the updater establishes the dry run's isolated environment.
+        if (requestedFile is not null && !Directory.Exists(requestedFile.FullName))
+        {
+            if (!requestedFile.Exists)
+            {
+                throw new ProjectLocatorException(ErrorStrings.ProjectFileDoesntExist, ProjectLocatorFailureReason.ProjectFileDoesntExist);
+            }
+            return requestedFile;
+        }
+        if (requestedFile is null && await _projectLocator.GetAppHostFromSettingsAsync(cancellationToken) is { } configured)
+        {
+            return configured;
+        }
+        var candidates = await _projectLocator.FindAppHostProjectFilesAsync(
+            requestedFile is null ? ExecutionContext.WorkingDirectory : new DirectoryInfo(requestedFile.FullName),
+            requestedFile is null ? AppHostDiscoveryScope.DefaultFiltered : AppHostDiscoveryScope.ExplicitDirectory,
+            cancellationToken, skipValidation: true);
+        return candidates.Count switch
+        {
+            1 => candidates[0],
+            0 => throw new ProjectLocatorException(ErrorStrings.NoProjectFileFound, ProjectLocatorFailureReason.NoProjectFileFound),
+            _ => throw new ProjectLocatorException(ErrorStrings.MultipleProjectFilesFound, ProjectLocatorFailureReason.MultipleProjectFilesFound)
+        };
     }
 
     private async Task<(CommandResult? Result, bool SkipRepositoryToolUpdates)> TryUpdateCliBeforeGuestProjectUpdateAsync(

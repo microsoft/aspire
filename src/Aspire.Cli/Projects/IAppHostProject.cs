@@ -38,6 +38,8 @@ internal sealed class UpdatePackagesContext
 
     public bool DryRun { get; init; }
 
+    public bool SupportsInteractiveInput { get; init; }
+
     /// <summary>
     /// Gets the prompt binding for confirmation prompts.
     /// Enables non-interactive confirmation via CLI options (e.g. <c>--yes</c>).

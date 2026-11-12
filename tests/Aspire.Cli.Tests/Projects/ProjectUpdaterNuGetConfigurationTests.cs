@@ -180,7 +180,20 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
         var targetVersion = sdkAlreadyCurrent ? "9.4.1" : "9.4.2";
         var restoreCount = 0;
         var runner = CreateRunner(projectFile, hasExplicitChannel: false);
-        runner.GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) => CreatePackageEvaluation();
+        string? discoveryPackagesDirectory = null;
+        runner.GetProjectItemsAndPropertiesAsyncCallbackWithTargets = (file, _, properties, _, options, _) =>
+        {
+            Assert.Equal(dryRun, options.EnvironmentVariables is not null);
+            if (dryRun)
+            {
+                var discoveryPackages = options.EnvironmentVariables!["NUGET_PACKAGES"];
+                discoveryPackagesDirectory ??= discoveryPackages;
+                Assert.Equal(discoveryPackagesDirectory, discoveryPackages);
+            }
+            return properties.Contains("RestoreConfigFile", StringComparer.Ordinal)
+                ? (0, TestDotNetCliRunner.CreateRestoreSettingsOutput(file, properties))
+                : CreatePackageEvaluation();
+        };
         runner.SearchPackagesAsyncCallback = (directory, query, _, _, _, _, _, _, _, _) =>
         {
             Assert.Equal(projectFile.DirectoryName, directory.FullName);
@@ -204,6 +217,7 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
             if (dryRun)
             {
                 packagesDirectory = options.EnvironmentVariables!["NUGET_PACKAGES"];
+                Assert.Equal(discoveryPackagesDirectory, packagesDirectory);
                 Assert.Equal(packagesDirectory, options.RestorePackagesDirectory?.FullName);
             }
             Assert.Equal(originalConfig, File.ReadAllText(configPath));
@@ -380,6 +394,7 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
         }
 
         Assert.Equal(2, inspectionCount);
+        Assert.Equal(outcome == "restore", client.LastAcquisitionBypassedCaches);
         Assert.Equal(outcome == "success" ? ["bootstrap", "policy", "package"]
             : outcome == "restore" ? ["bootstrap", "policy", "package", "restore"]
             : ["bootstrap", "policy"], calls);

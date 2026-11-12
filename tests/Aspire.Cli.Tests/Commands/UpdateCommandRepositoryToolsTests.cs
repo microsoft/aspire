@@ -36,11 +36,12 @@ public class UpdateCommandRepositoryToolsTests(ITestOutputHelper outputHelper)
             ConfigureUpdates(options, interaction);
             options.ProjectLocatorFactory = _ => new TestProjectLocator
             {
-                UseOrFindAppHostProjectFileAsyncCallback = (_, createSettings, _) =>
+                FindAppHostProjectFilesAsyncCallback = (_, _, _, skipValidation) =>
                 {
-                    Assert.False(createSettings);
-                    return Task.FromResult<FileInfo?>(appHost);
-                }
+                    Assert.True(skipValidation);
+                    return Task.FromResult(new List<FileInfo> { appHost });
+                },
+                UseOrFindAppHostProjectFileAsyncCallback = (_, _, _) => throw new InvalidOperationException("Dry runs must not validate through the locator.")
             };
             options.ProjectUpdaterFactory = _ => new TestProjectUpdater
             {
@@ -530,6 +531,7 @@ public class UpdateCommandRepositoryToolsTests(ITestOutputHelper outputHelper)
             };
             options.ProjectLocatorFactory = _ => new TestProjectLocator
             {
+                GetAppHostFromSettingsAsyncCallback = _ => Task.FromResult<FileInfo?>(appHost),
                 UseOrFindAppHostProjectFileAsyncCallback = (_, _, _) => Task.FromResult<FileInfo?>(appHost)
             };
             options.PackagingServiceFactory = _ => new TestPackagingService

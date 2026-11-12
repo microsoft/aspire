@@ -371,6 +371,7 @@ internal sealed class BundleNuGetService : INuGetService
         (string Id, string Version) package,
         NuGetPackageOperationConfiguration configuration,
         string globalPackagesFolder,
+        bool bypassCaches,
         CancellationToken cancellationToken)
     {
         var directory = Directory.CreateTempSubdirectory("aspire-package-acquisition-");
@@ -380,7 +381,7 @@ internal sealed class BundleNuGetService : INuGetService
             await _nuGetClient.AcquirePackageAsync(
                 package, directory.FullName,
                 configuration.EffectiveWorkingDirectory.FullName, globalPackagesFolder,
-                settings.SensitiveSourceValues, cancellationToken);
+                settings.SensitiveSourceValues, bypassCaches, cancellationToken);
         }
         catch (NuGetOperationException exception)
         {

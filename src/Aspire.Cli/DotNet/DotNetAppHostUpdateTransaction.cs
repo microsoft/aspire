@@ -27,7 +27,7 @@ internal sealed class DotNetAppHostUpdateTransaction : IAsyncDisposable
     }
 
     internal async Task PrepareBackupsAsync(
-        IEnumerable<FileInfo> files, IInteractionService interactionService, CancellationToken cancellationToken)
+        IEnumerable<FileInfo> files, IInteractionService interactionService, bool supportsInteractiveInput, CancellationToken cancellationToken)
     {
         var paths = files.Select(static file => PathNormalizer.ResolveToFilesystemPath(file.FullName))
             .Distinct(StringComparers.FileSystemPath).ToArray();
@@ -39,7 +39,7 @@ internal sealed class DotNetAppHostUpdateTransaction : IAsyncDisposable
                 CultureInfo.CurrentCulture, UpdateCommandStrings.DryRunExistingBackupsFormat,
                 string.Join(Environment.NewLine, existingBackups)));
             // Deliberately independent of --yes: replacing these files discards recovery data.
-            if (!await interactionService.PromptConfirmAsync(
+            if (!supportsInteractiveInput || !await interactionService.PromptConfirmAsync(
                 UpdateCommandStrings.DryRunReplaceBackupsPrompt, PromptBinding.CreateDefault(false), cancellationToken))
             {
                 throw new ProjectUpdaterException(UpdateCommandStrings.DryRunBackupsNotReplaced);

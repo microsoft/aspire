@@ -342,14 +342,14 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
             {
                 await nuGetService.AcquirePackageAsync(
                     ("Aspire.AppHost.Sdk", sdkVersion), preview.RootConfiguration, sdkCache,
-                    TestContext.Current.CancellationToken);
+                    bypassCaches: isolated, TestContext.Current.CancellationToken);
                 Assert.True(File.Exists(Path.Combine(sdkPackageDirectory, "Sdk", "Sdk.props")));
                 // SDK-only packages have no runtime-asset manifest to invalidate. A deleted
                 // package directory must be acquired again rather than treated as cached.
                 Directory.Delete(sdkPackageDirectory, recursive: true);
                 await nuGetService.AcquirePackageAsync(
                     ("Aspire.AppHost.Sdk", sdkVersion), preview.RootConfiguration, sdkCache,
-                    TestContext.Current.CancellationToken);
+                    bypassCaches: isolated, TestContext.Current.CancellationToken);
                 Assert.True(File.Exists(Path.Combine(sdkPackageDirectory, "Sdk", "Sdk.props")));
                 string[] restoreArguments =
                     ["restore", projectFile.FullName, $"-property:NuGetRestoreTargets={MSBuildEscaping.Escape(preview.TargetsFile.FullName)}"];
