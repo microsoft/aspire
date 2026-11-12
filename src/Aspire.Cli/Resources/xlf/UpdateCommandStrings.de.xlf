@@ -63,8 +63,8 @@
         <note />
       </trans-unit>
       <trans-unit id="ChannelUpdateRequiresAmbientNuGetConfigurationFormat">
-        <source>Cannot apply channel '{0}' for '{1}' because MSBuild overrides NuGet configuration: {2}. Remove these overrides to enable explicit channel updates. Updates without an explicit channel remain supported.</source>
-        <target state="translated">Der Kanal „{0}“ kann für „{1}“ nicht angewendet werden, da MSBuild die NuGet-Konfiguration überschreibt: {2}. Entfernen Sie diese Überschreibungen, um explizite Kanalupdates zu ermöglichen. Updates ohne expliziten Kanal werden weiterhin unterstützt.</target>
+        <source>Cannot apply channel '{0}' for '{1}' because MSBuild overrides NuGet configuration: {2}. Remove these overrides to enable channel updates. Updates without a command-line or configured channel remain supported.</source>
+        <target state="needs-review-translation">Der Kanal „{0}“ kann für „{1}“ nicht angewendet werden, da MSBuild die NuGet-Konfiguration überschreibt: {2}. Entfernen Sie diese Überschreibungen, um explizite Kanalupdates zu ermöglichen. Updates ohne expliziten Kanal werden weiterhin unterstützt.</target>
         <note />
       </trans-unit>
       <trans-unit id="CheckingForUpdates">
@@ -81,6 +81,11 @@
         <source>Cannot safely update conditional Aspire.AppHost.Sdk declarations for '{0}'; update the conditional SDK version explicitly.</source>
         <target state="translated">Bedingte Aspire.AppHost.Sdk-Deklarationen für „{0}“ können nicht sicher aktualisiert werden. Aktualisieren Sie die bedingte SDK-Version explizit.</target>
         <note>{0} = AppHost project path.</note>
+      </trans-unit>
+      <trans-unit id="ConfiguredChannelNotFoundFormat">
+        <source>Cannot use channel '{0}' from Aspire configuration. {1}</source>
+        <target state="new">Cannot use channel '{0}' from Aspire configuration. {1}</target>
+        <note>{0} = configured channel name. {1} = reason the channel could not be resolved.</note>
       </trans-unit>
       <trans-unit id="CouldNotFindPackageVersionInDirectoryPackagesProps">
         <source>Could not find PackageVersion element for '{0}' in {1}</source>
@@ -436,6 +441,11 @@
         <source>Update successful!</source>
         <target state="translated">Update erfolgreich.</target>
         <note />
+      </trans-unit>
+      <trans-unit id="UsingConfiguredChannelFormat">
+        <source>Using channel '{0}' from Aspire configuration. Pass --channel to override.</source>
+        <target state="new">Using channel '{0}' from Aspire configuration. Pass --channel to override.</target>
+        <note>{0} = configured channel name.</note>
       </trans-unit>
       <trans-unit id="WhichDirectoryNuGetConfigPrompt">
         <source>Which directory for NuGet.config file?</source>
