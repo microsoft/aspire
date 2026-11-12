@@ -11,7 +11,7 @@
     --resource-row-line-height: var(--lineHeightBase300);
     --resource-secondary-font-size: var(--aspire-font-size-secondary);
     --resource-secondary-line-height: 18px;
-    /* The full canvas's action rail from 960px: two lifecycle commands and the menu, 3 x 28px + 2 x 4px gaps. The
+    /* The full canvas's action rail from 960px: two highlighted commands and the menu, 3 x 28px + 2 x 4px gaps. The
        expand toggle leads the row instead, and the URLs column replaces an open-URL button. */
     --resource-row-actions-width: 92px;
     /* The full canvas's Started column: a clock, the verb and a short age, up to "Stopped 23h ago". */
@@ -2197,8 +2197,8 @@
 
 @container resource-pane (min-width: 420px) {
     .resource-row.resource-row-table {
-        /* Identity and lifecycle actions take priority over secondary metadata. */
-        --resource-row-tracks: [identity] minmax(0, 1fr) [status] var(--resource-row-status-width) [endpoint source insights actions] 98px [end];
+        /* Identity and actions take priority over secondary metadata. */
+        --resource-row-tracks: [identity] minmax(0, 1fr) [status] var(--resource-row-status-width) [endpoint source insights actions] 76px [end];
         --resource-row-actions-column: actions;
         display: grid;
         grid-template-columns: var(--resource-row-tracks);
@@ -2263,7 +2263,7 @@
 
 @container resource-pane (min-width: 540px) {
     .resource-row.resource-row-table {
-        --resource-row-tracks: [identity] minmax(160px, 1.5fr) [status] var(--resource-row-status-width) [endpoint] minmax(96px, 1fr) [source insights actions] 98px [end];
+        --resource-row-tracks: [identity] minmax(160px, 1.5fr) [status] var(--resource-row-status-width) [endpoint] minmax(96px, 1fr) [source insights actions] 76px [end];
     }
 
     .resource-row-endpoints {
@@ -2390,10 +2390,6 @@
     }
 }
 
-.resource-row-actions ::deep .resource-row-wide-command {
-    display: none;
-}
-
 @container resource-pane (min-width: 420px) {
     /* Fixed action slots reserve a missing endpoint just like missing metadata.
        Narrower panes retain lifecycle commands in the existing overflow menu. */
@@ -2442,8 +2438,7 @@
         column-gap: var(--spacingHorizontalM);
     }
 
-    /* The toggle, two lifecycle commands, the primary endpoint and the menu. The URLs column lists the URLs, and
-       console logs, the terminal and JSON are in the menu. */
+    /* Shared row slots are overridden by the sidebar and full-page layouts below. */
     .resource-row.resource-row-table .resource-row-actions {
         grid-template-columns: 20px repeat(4, 28px);
         gap: var(--aspire-space-1);
@@ -2957,28 +2952,19 @@
     }
 }
 
-/* The full-page list's action slots: two lifecycle commands, then the menu. Its rows have no toggle slot (the toggle
-   leads the row) and no open-URL slot (the URLs column has the links). These outrank the shared slot rules above. */
+/* Reserve room for two highlighted commands and the menu, but pack the available actions against the
+   trailing edge so resources and parameters with fewer actions have no empty slots between their buttons. */
 @container resource-pane (min-width: 420px) {
     .pane-full-canvas .resource-row.resource-row-table .resource-row-actions {
-        grid-template-columns: repeat(3, 24px);
-    }
-
-    .pane-full-canvas .resource-row-actions ::deep .resource-row-command-slot-0 {
-        grid-column: 1;
-    }
-
-    .pane-full-canvas .resource-row-actions ::deep .resource-row-command-slot-1 {
-        grid-column: 2;
-    }
-
-    .pane-full-canvas .resource-row-actions ::deep .aspire-menu-button {
-        grid-column: 3;
+        display: flex;
+        justify-content: flex-end;
+        justify-self: end;
+        width: 76px;
     }
 }
 
 @container resource-pane (min-width: 720px) {
     .pane-full-canvas .resource-row.resource-row-table .resource-row-actions {
-        grid-template-columns: repeat(3, 28px);
+        width: var(--resource-row-actions-width);
     }
 }
