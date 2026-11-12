@@ -60,17 +60,12 @@ public sealed class ResourceViewModel
             ? property.Value.ListValue.Values.Where(v => v.HasStringValue).Select(v => v.StringValue).ToArray()
             : [];
 
-    internal IReadOnlyList<string> AppHostTags => GetTraitValues(KnownResourceTraits.DashboardTag);
+    internal IReadOnlyList<string> AppHostTags => GetTraitValues(KnownResourceTraits.Tag);
 
-    internal int? DefaultDashboardPosition
-    {
-        get
-        {
-            var values = GetTraitValues(KnownResourceTraits.DashboardPosition);
-
-            return values.Count > 0 && int.TryParse(values[^1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var position) ? position : null;
-        }
-    }
+    internal int? DisplayOrder =>
+        Properties.TryGetValue(KnownProperties.Resource.DisplayOrder, out var property) &&
+        property.Value.HasStringValue &&
+        int.TryParse(property.Value.StringValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out var order) ? order : null;
 
     /// <summary>
     /// A persistent key for the resource that takes into account replicas.
@@ -407,12 +402,12 @@ public sealed class DisplayedResourcePropertyViewModel : IPropertyGridItem
     public int SortOrder => _propertyViewModel.SortOrder;
     public bool IsTrait => _propertyViewModel.IsTrait;
 
-    // The AppHost sends the raw trait name as the display name, e.g. "Aspire_Dashboard_Tag". Reserved dashboard
-    // traits get a readable, localized name instead.
+    // The AppHost sends the raw trait name as the display name, e.g. "Aspire_Tag". Reserved Aspire
+    // properties get a readable, localized name instead.
     public string DisplayName => _propertyViewModel.Name switch
     {
-        KnownProperties.Resource.TraitPrefix + KnownResourceTraits.DashboardTag => _loc[nameof(Resources.Resources.ResourceTraitDashboardTags)],
-        KnownProperties.Resource.TraitPrefix + KnownResourceTraits.DashboardPosition => _loc[nameof(Resources.Resources.ResourceTraitDashboardPosition)],
+        KnownProperties.Resource.TraitPrefix + KnownResourceTraits.Tag => _loc[nameof(Resources.Resources.ResourceTraitDashboardTags)],
+        KnownProperties.Resource.DisplayOrder => _loc[nameof(Resources.Resources.ResourceDisplayOrder)],
         _ => _propertyViewModel.DisplayName ?? _propertyViewModel.KnownProperty?.GetDisplayName(_loc) ?? _propertyViewModel.Name
     };
 

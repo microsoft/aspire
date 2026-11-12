@@ -9,7 +9,7 @@
     align-items: center;
     justify-content: center;
     padding: 4px;
-    border-radius: 6px;
+    border-radius: var(--aspire-radius-small);
     text-decoration: none;
     --unread-logs-badge-color: #ffffff;
 }
@@ -128,14 +128,14 @@
 
 .resources-filter-popup-container ::deep .resources-filter-popup .filter-group > legend {
     font-family: var(--aspire-font-display);
-    font-size: 16px;
-    font-weight: 500;
+    font-size: var(--aspire-font-size-heading);
+    font-weight: var(--aspire-font-weight-semibold);
     line-height: 27px;
 }
 
 .resources-filter-popup-container ::deep .resources-filter-popup .filter-group > .fluent-stack-vertical {
     min-width: 0;
-    row-gap: 4px;
+    row-gap: var(--aspire-space-1);
     width: 100%;
 }
 
@@ -168,7 +168,7 @@
     right: 30px;
     bottom: 30px;
     display: flex;
-    column-gap: 10px;
+    column-gap: var(--aspire-space-2);
 }
 
 ::deep .resource-graph-controls.resource-graph-game-launch {
@@ -208,7 +208,7 @@
 ::deep .resource-name {
     fill: var(--colorNeutralForeground1);
     stroke: var(--aspire-page-background);
-    font-size: 15px;
+    font-size: var(--aspire-font-size-large);
     text-anchor: middle;
     stroke-width: 0.5em;
     paint-order: stroke;
@@ -279,7 +279,7 @@
 
 ::deep .resource-endpoint {
     fill: var(--foreground-subtext-rest);
-    font-size: 11px;
+    font-size: var(--aspire-font-size-caption);
     text-anchor: middle;
 }
 

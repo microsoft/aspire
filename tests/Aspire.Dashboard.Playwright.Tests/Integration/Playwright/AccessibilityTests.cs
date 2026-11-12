@@ -579,7 +579,10 @@ public sealed class AccessibilityTests : PlaywrightTestsBase<AccessibilityTests.
         var path = relativeUrl.Split('?', 2)[0].TrimEnd('/');
         var content = path switch
         {
-            "" => page.GetByRole(AriaRole.Link, new() { Name = "frontend", Exact = true }).Last,
+            // Desktop opens on the full-page resource list. Narrow layouts show the overview summary instead, whose
+            // headline is the signal there: its insight panels, which listed every resource, stay hidden until there is
+            // request or error telemetry.
+            "" => page.Locator("[data-resource-name='frontend'] .resource-row-link:visible, .home-hero-headline:visible").First,
             "/legacy/resources" => page.GetByText("frontend", new PageGetByTextOptions { Exact = true }).First,
             "/resources/frontend" => page.Locator("h1.resource-title", new PageLocatorOptions { HasText = "frontend" }),
             "/consolelogs" => page.GetByText(ConsoleLogs.ConsoleLogsNoLogsFound, new PageGetByTextOptions { Exact = true }).First,

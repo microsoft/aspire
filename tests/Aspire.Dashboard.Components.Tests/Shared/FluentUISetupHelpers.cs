@@ -161,8 +161,16 @@ internal static class FluentUISetupHelpers
         bool readOnly,
         Func<ITelemetryRepositoryWriter, Task> seed)
     {
-        context.Services.AddSingleton(new TelemetryRepositoryConfiguration(readOnly));
+        AddTelemetryRepositoryConfiguration(context.Services, readOnly);
+        await SeedTelemetryRepositoryAsync(context, seed);
+    }
 
+    // For setups that build the service provider before seeding, which is too late to add services.
+    public static void AddTelemetryRepositoryConfiguration(IServiceCollection services, bool readOnly) =>
+        services.AddSingleton(new TelemetryRepositoryConfiguration(readOnly));
+
+    public static async Task SeedTelemetryRepositoryAsync(BunitContext context, Func<ITelemetryRepositoryWriter, Task> seed)
+    {
         var databasePath = Path.Combine(context.Services.GetRequiredService<TemporaryWorkspace>().Path, "dashboard.db");
         var loggerFactory = context.Services.GetRequiredService<ILoggerFactory>();
         var options = context.Services.GetRequiredService<IOptions<DashboardOptions>>();
@@ -270,9 +278,10 @@ internal static class FluentUISetupHelpers
         context.Services.AddScoped<SpanMenuBuilder>();
         context.Services.AddScoped<TraceMenuBuilder>();
         context.Services.AddSingleton<IOptions<DashboardOptions>>(Options.Create(new DashboardOptions()));
-        context.Services.AddSingleton(new ResourceTagStore(databasePath: null, Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance));
-        context.Services.AddSingleton(new ResourceOrderStore(databasePath: null, Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance));
-        context.Services.AddSingleton(new MetricPinStore(databasePath: null, Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance));
+        context.Services.AddSingleton<LocalStorageLocks>();
+        context.Services.AddScoped<ResourceTagStore>();
+        context.Services.AddScoped<ResourceOrderStore>();
+        context.Services.AddScoped<MetricPinStore>();
         context.Services.AddScoped<ResourcePaneState>();
         context.Services.AddScoped<Aspire.Dashboard.Components.Layout.TerminalDockState>();
         context.Services.AddScoped<DashboardViewPreferences>();
