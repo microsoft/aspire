@@ -190,8 +190,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             await page.GotoAsync("/resources/cache?pane=tags");
             // These are expanded-list rows: a compact row is a single 32px line, and a comfortable one has two lines.
             foreach (var (density, fontSize, lineHeight, rowHeight) in new[]
-                // Secondary text sizes on the type scale: caption and secondary.
-                { ("Compact", 11d, 16d, 32d), ("Comfortable", 12d, 18d, 52d) })
+                { ("Compact", 12d, 16d, 32d), ("Comfortable", 12d, 18d, 52d) })
             {
                 await page.GetByRole(AriaRole.Button, new() { Name = "Settings", Exact = true }).ClickAsync();
                 await page.GetByRole(AriaRole.Button, new() { Name = density, Exact = true }).ClickAsync();
@@ -1188,15 +1187,15 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                             if (icon.width !== iconBox || icon.height !== iconBox) errors.push(`${row.dataset.resourceName}: icon box`);
                             const mainGlyph = row.querySelector('.resource-row-glyph svg').getBoundingClientRect();
                             if (mainGlyph.width !== glyphSize || mainGlyph.height !== glyphSize) errors.push(`${row.dataset.resourceName}: glyph`);
-                            // The type scale: secondary (12px), body (13px) and large (14px) for the three densities' names.
-                            const expectedFont = compact ? 12 : 13;
+                            // Both densities use the shared body size for names and secondary size for chips.
+                            const expectedFont = 13;
                             if (parseFloat(getComputedStyle(row.querySelector('.resource-row-name')).fontSize) !== expectedFont)
                                 errors.push(`${row.dataset.resourceName}: density font`);
                             for (const chip of row.querySelectorAll('.resource-row-insight')) {
                                 const chipBox = chip.getBoundingClientRect();
                                 if (!chipBox.width) continue;
                                 const style = getComputedStyle(chip), glyph = chip.querySelector('svg').getBoundingClientRect();
-                                const font = compact ? 11 : 12; // caption and secondary on the type scale
+                                const font = 12;
                                 const line = compact ? 16 : 18;
                                 const target = compact ? 24 : 28;
                                 const iconSize = compact ? 12 : 14;
