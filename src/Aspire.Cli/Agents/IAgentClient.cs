@@ -39,6 +39,8 @@ internal interface IAgentClient
         string configFilePath, DirectoryInfo workspaceRoot, AgentConfigurationScope scope,
         AgentConfiguration edit, CancellationToken cancellationToken);
 
+    // Must only mutate config in memory. AgentInitCommand probes for an existing server by calling this
+    // on a discarded copy, so writing files here would change user config during that probe.
     (bool Repaired, bool Added) UpdateMcpConfig(
         JsonObject config, string configFilePath, bool configureServer, AgentConfigurationScope scope);
 
