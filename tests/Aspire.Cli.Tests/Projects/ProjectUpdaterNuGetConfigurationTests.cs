@@ -180,25 +180,10 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
         var targetVersion = sdkAlreadyCurrent ? "9.4.1" : "9.4.2";
         var restoreCount = 0;
         var runner = CreateRunner(projectFile, hasExplicitChannel: false);
-        string? discoveryPackagesDirectory = null;
         string? validationRoot = null;
         runner.GetProjectItemsAndPropertiesAsyncCallbackWithTargets = (file, _, properties, _, options, _) =>
         {
-            Assert.Equal(dryRun, options.EnvironmentVariables is not null);
-            if (dryRun)
-            {
-                var discoveryPackages = options.EnvironmentVariables!["NUGET_PACKAGES"];
-                discoveryPackagesDirectory ??= discoveryPackages;
-                Assert.Equal(discoveryPackagesDirectory, discoveryPackages);
-                var restoreDirectory = Path.GetDirectoryName(discoveryPackages)!;
-                Assert.Equal(validationRoot, Path.GetDirectoryName(restoreDirectory));
-                if (!OperatingSystem.IsWindows())
-                {
-                    var ownerOnly = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute;
-                    Assert.Equal(ownerOnly, File.GetUnixFileMode(validationRoot!));
-                    Assert.Equal(ownerOnly, File.GetUnixFileMode(restoreDirectory));
-                }
-            }
+            Assert.Null(options.EnvironmentVariables);
             return properties.Contains("RestoreConfigFile", StringComparer.Ordinal)
                 ? (0, TestDotNetCliRunner.CreateRestoreSettingsOutput(file, properties))
                 : CreatePackageEvaluation();
@@ -226,8 +211,15 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
             if (dryRun)
             {
                 packagesDirectory = options.EnvironmentVariables!["NUGET_PACKAGES"];
-                Assert.Equal(discoveryPackagesDirectory, packagesDirectory);
                 Assert.Equal(packagesDirectory, options.RestorePackagesDirectory?.FullName);
+                var restoreDirectory = Path.GetDirectoryName(packagesDirectory)!;
+                Assert.Equal(validationRoot, Path.GetDirectoryName(restoreDirectory));
+                if (!OperatingSystem.IsWindows())
+                {
+                    var ownerOnly = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute;
+                    Assert.Equal(ownerOnly, File.GetUnixFileMode(validationRoot!));
+                    Assert.Equal(ownerOnly, File.GetUnixFileMode(restoreDirectory));
+                }
             }
             Assert.Equal(originalConfig, File.ReadAllText(configPath));
             restoreCount++;
@@ -286,6 +278,102 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
             Assert.False(File.Exists(restoreDirectory + ".lock"));
             Assert.Empty(Directory.EnumerateFileSystemEntries(validationRoot!));
         }
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task UpdateAsync_DryRunUsesAmbientEvaluationForImportedSdkAndColdCandidateRestore(bool restoreSucceeds)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var projectFile = await CreateAppHostAsync(workspace, "AppHost.csproj");
+        var project = System.Xml.Linq.XDocument.Load(projectFile.FullName);
+        project.Root!.Element("Sdk")!.Remove();
+        await File.WriteAllTextAsync(projectFile.FullName, project.ToString());
+        var propsPath = Path.Combine(workspace.Path, "Directory.Build.props");
+        const string originalProps = """<Project><Sdk Name="Aspire.AppHost.Sdk" Version="9.4.1" /></Project>""";
+        await File.WriteAllTextAsync(propsPath, originalProps);
+        var originalProject = await File.ReadAllBytesAsync(projectFile.FullName);
+        var configFile = await WriteCurrentPolicyAsync(workspace, "https://old.example/v3/index.json", configureCache: false);
+        var originalConfig = await File.ReadAllBytesAsync(configFile.FullName);
+        const string newSource = "https://new.example/v3/index.json";
+        var evaluationCount = 0;
+        var restoreCount = 0;
+        var runner = CreateRunner(projectFile, hasExplicitChannel: false);
+        runner.GetProjectItemsAndPropertiesAsyncCallbackWithTargets = (file, _, properties, _, options, _) =>
+        {
+            // The original SDK resolves only with ambient caches. Isolating planning loses
+            // the evaluated DirectoryBuildPropsPath before the replacement SDK can be staged.
+            if (options.EnvironmentVariables is not null)
+            {
+                return (1, null);
+            }
+            Assert.Equal(originalProps, File.ReadAllText(propsPath));
+            evaluationCount++;
+            if (properties.Contains("RestoreConfigFile", StringComparer.Ordinal))
+            {
+                return (0, TestDotNetCliRunner.CreateRestoreSettingsOutput(file, properties));
+            }
+            var output = new JsonObject()
+                .WithSdkVersion("9.4.1")
+                .WithProperty("_UsingAspireAppHostSdk", "true")
+                .WithProperty("DirectoryBuildPropsPath", propsPath)
+                .WithPackageReference("Aspire.Hosting.Redis", "9.4.1");
+            return (0, JsonDocument.Parse(output.ToJsonString()));
+        };
+        runner.SearchPackagesAsyncCallback = (directory, query, _, _, _, _, _, _, _, _) =>
+        {
+            Assert.Equal([newSource], NuGetTestHelper.GetEligiblePackageSources(directory.FullName, query));
+            return (0, [new NuGetPackageCli { Id = query, Version = "9.4.2", Source = newSource }]);
+        };
+        runner.GetNuGetConfigPathsAsyncCallback = (_, _, _) => (0, [configFile.FullName]);
+        runner.AddPackageAsyncCallback = (file, _, version, _, noRestore, options, _) =>
+        {
+            Assert.True(noRestore);
+            Assert.NotNull(options.EnvironmentVariables);
+            File.WriteAllText(file.FullName, File.ReadAllText(file.FullName).Replace("9.4.1", version, StringComparison.Ordinal));
+            return 0;
+        };
+        runner.RestoreAsyncCallback = (_, options, _) =>
+        {
+            Assert.NotNull(options.EnvironmentVariables);
+            Assert.Equal(options.EnvironmentVariables["NUGET_PACKAGES"], options.RestorePackagesDirectory?.FullName);
+            Assert.NotNull(options.NuGetRestoreTargetsFile);
+            Assert.Equal([newSource], NuGetTestHelper.GetEligiblePackageSources(
+                options.NuGetRestoreTargetsFile.DirectoryName!, "Aspire.AppHost.Sdk"));
+            var declaration = System.Xml.Linq.XDocument.Load(propsPath);
+            Assert.Equal("9.4.2", declaration.Root!.Element("Sdk")!.Attribute("Version")!.Value);
+            Assert.Equal(originalProps, File.ReadAllText(propsPath + ".aspire-backup"));
+            Assert.Equal(originalConfig, File.ReadAllBytes(configFile.FullName));
+            restoreCount++;
+            return restoreSucceeds ? 0 : 1;
+        };
+        var client = new FakeNuGetClient { GetSettingsCallback = NuGetTestHelper.CreateClient().GetSettings };
+        using var provider = CreateServices(workspace, runner, client).BuildServiceProvider();
+        var channel = PackageChannel.CreateExplicitChannel(
+            "daily", PackageChannelQuality.Both, [new("Aspire*", newSource)],
+            provider.GetRequiredService<INuGetPackageCache>(), new TestFeatures(), NullLogger.Instance);
+        var updater = provider.GetRequiredService<IProjectUpdater>();
+        var context = CreateContext(projectFile, channel, hasExplicitChannel: true, dryRun: true);
+
+        if (restoreSucceeds)
+        {
+            var result = await updater.UpdateProjectAsync(context, TestContext.Current.CancellationToken);
+            Assert.False(result.UpdatedApplied);
+        }
+        else
+        {
+            await Assert.ThrowsAsync<ProjectUpdaterException>(() =>
+                updater.UpdateProjectAsync(context, TestContext.Current.CancellationToken));
+        }
+
+        Assert.True(evaluationCount > 0);
+        Assert.Equal(1, restoreCount);
+        Assert.True(client.LastAcquisitionBypassedCaches);
+        Assert.Equal(originalProps, await File.ReadAllTextAsync(propsPath));
+        Assert.Equal(originalProject, await File.ReadAllBytesAsync(projectFile.FullName));
+        Assert.Equal(originalConfig, await File.ReadAllBytesAsync(configFile.FullName));
+        Assert.False(File.Exists(propsPath + ".aspire-backup"));
     }
 
     [Theory]
@@ -1477,7 +1565,8 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
         {
             GetSettingsCallback = NuGetTestHelper.CreateClient().GetSettings
         });
-        services.AddSingleton(TestExecutionContextHelper.CreateExecutionContext(invocationDirectory));
+        services.AddSingleton(TestExecutionContextHelper.CreateExecutionContext(
+            invocationDirectory, aspireHomeDirectory: workspace.CreateDirectory("aspire-home")));
         using var provider = services.BuildServiceProvider();
         var channel = PackageChannel.CreateExplicitChannel(
             "daily", PackageChannelQuality.Both, [new("Aspire*", "https://new.example/v3/index.json")],

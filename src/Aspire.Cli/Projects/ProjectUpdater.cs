@@ -49,8 +49,10 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
                 await DotNetAppHostUpdateTransaction.ReadAsync(normalizedPath, cancellationToken));
         }
 
+        // Planning uses the current project's ambient policy and cache. Only the candidate
+        // restore must work cold; hiding the current SDK here also hides its imported declarations.
         var restoreConfiguration = await ReadRestoreConfigurationForUpdateAsync(
-            context, allowFailedEvaluation: true, cancellationToken, dryRunRestore?.EnvironmentVariables);
+            context, allowFailedEvaluation: true, cancellationToken);
         var hasExplicitChannelPolicy = context.HasExplicitChannel && channel.Type == PackageChannelType.Explicit;
         var restoreConfigurationDeferred = hasExplicitChannelPolicy && restoreConfiguration is null;
         // An unresolved SDK permits discovery through a provisional policy, not permission to
@@ -476,13 +478,13 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
         FileInfo projectFile,
         PackageChannel channel,
         NuGetPackageOperationConfiguration? packageConfiguration,
-        IReadOnlyDictionary<string, string>? environmentVariables,
+        IReadOnlyDictionary<string, string>? updateEnvironmentVariables,
         CancellationToken cancellationToken)
     {
         var context = new UpdateContext(projectFile, channel)
         {
             PackageConfiguration = packageConfiguration,
-            EnvironmentVariables = environmentVariables
+            UpdateEnvironmentVariables = updateEnvironmentVariables
         };
 
         var appHostAnalyzeStep = new AnalyzeStep(UpdateCommandStrings.AnalyzeAppHost, () => AnalyzeAppHostAsync(context, cancellationToken));
@@ -591,25 +593,24 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
 
     private const string ItemsAndPropertiesCacheKeyPrefix = "ItemsAndProperties";
 
-    private async Task<JsonDocument> GetItemsAndPropertiesAsync(FileInfo projectFile, IReadOnlyDictionary<string, string>? environmentVariables, CancellationToken cancellationToken)
+    private async Task<JsonDocument> GetItemsAndPropertiesAsync(FileInfo projectFile, CancellationToken cancellationToken)
     {
-        return await GetItemsAndPropertiesAsync(projectFile, ["PackageReference", "ProjectReference"], ["AspireHostingSDKVersion", "ManagePackageVersionsCentrally", "NuGetRestoreTargets", "_UsingAspireAppHostSdk", "_AspireAppHostPackageVersion", "DirectoryBuildPropsPath", "DirectoryBuildTargetsPath", "MSBuildAllProjects", "MSBuildProjectFullPath"], environmentVariables, cancellationToken);
+        return await GetItemsAndPropertiesAsync(projectFile, ["PackageReference", "ProjectReference"], ["AspireHostingSDKVersion", "ManagePackageVersionsCentrally", "NuGetRestoreTargets", "_UsingAspireAppHostSdk", "_AspireAppHostPackageVersion", "DirectoryBuildPropsPath", "DirectoryBuildTargetsPath", "MSBuildAllProjects", "MSBuildProjectFullPath"], cancellationToken);
     }
 
-    private async Task<JsonDocument> GetItemsAndPropertiesAsync(FileInfo projectFile, string[] items, string[] properties, IReadOnlyDictionary<string, string>? environmentVariables, CancellationToken cancellationToken)
+    private async Task<JsonDocument> GetItemsAndPropertiesAsync(FileInfo projectFile, string[] items, string[] properties, CancellationToken cancellationToken)
     {
         // Create a cache key that includes the project file and the requested items/properties
         var itemsKey = string.Join(",", items.OrderBy(x => x));
         var propertiesKey = string.Join(",", properties.OrderBy(x => x));
-        var cacheKey = $"{ItemsAndPropertiesCacheKeyPrefix}_{projectFile.FullName}_{itemsKey}_{propertiesKey}_{environmentVariables?.GetValueOrDefault("NUGET_PACKAGES")}";
+        var cacheKey = $"{ItemsAndPropertiesCacheKeyPrefix}_{projectFile.FullName}_{itemsKey}_{propertiesKey}";
 
         var (exitCode, document) = await cache.GetOrCreateAsync(cacheKey, async entry =>
         {
             return await runner.GetProjectItemsAndPropertiesAsync(projectFile, items, properties, targets: [], new()
             {
                 NoRestore = true,
-                ExcludeRestorePackageImports = true,
-                EnvironmentVariables = environmentVariables
+                ExcludeRestorePackageImports = true
             }, cancellationToken);
         });
 
@@ -631,7 +632,7 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
         try
         {
             // Try normal MSBuild evaluation first
-            return await GetItemsAndPropertiesAsync(projectFile, items, properties, context.EnvironmentVariables, cancellationToken);
+            return await GetItemsAndPropertiesAsync(projectFile, items, properties, cancellationToken);
         }
         catch (ProjectUpdaterException ex) when (IsAppHostProject(projectFile, context.AppHostProjectFile))
         {
@@ -1412,7 +1413,7 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
         // Use fallback wrapper for AppHost project, normal method for others
         var itemsAndPropertiesDocument = IsAppHostProject(projectFile, context.AppHostProjectFile)
             ? await GetItemsAndPropertiesWithFallbackAsync(projectFile, context, cancellationToken)
-            : await GetItemsAndPropertiesAsync(projectFile, context.EnvironmentVariables, cancellationToken);
+            : await GetItemsAndPropertiesAsync(projectFile, cancellationToken);
 
         // Check if this project has ManagePackageVersionsCentrally set to false
         var usesCentralPackageManagement = true;
@@ -1558,7 +1559,7 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
         var updateStep = new PackageUpdateStep(
             string.Format(CultureInfo.InvariantCulture, UpdateCommandStrings.UpdatePackageFormat, packageId, packageVersion, latestPackage.Version),
             () => IsAppHostProject(definingFile, projectFile)
-                ? UpdatePackageReferenceInProject(projectFile, latestPackage, context.EnvironmentVariables, cancellationToken)
+                ? UpdatePackageReferenceInProject(projectFile, latestPackage, context.UpdateEnvironmentVariables, cancellationToken)
                 : UpdateImportedPackageReferenceAsync(definingFile, latestPackage),
             packageId,
             packageVersion,
@@ -1572,7 +1573,7 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
 
     private async Task AnalyzePackageForCentralPackageManagementAsync(string packageId, FileInfo projectFile, FileInfo directoryPackagesPropsFile, UpdateContext context, CancellationToken cancellationToken)
     {
-        var currentVersion = await GetPackageVersionFromDirectoryPackagesPropsAsync(packageId, directoryPackagesPropsFile, projectFile, context.EnvironmentVariables, cancellationToken);
+        var currentVersion = await GetPackageVersionFromDirectoryPackagesPropsAsync(packageId, directoryPackagesPropsFile, projectFile, cancellationToken);
 
         if (currentVersion is null)
         {
@@ -1610,8 +1611,7 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
     }
 
     private async Task<string?> GetPackageVersionFromDirectoryPackagesPropsAsync(
-        string packageId, FileInfo directoryPackagesPropsFile, FileInfo projectFile,
-        IReadOnlyDictionary<string, string>? environmentVariables, CancellationToken cancellationToken)
+        string packageId, FileInfo directoryPackagesPropsFile, FileInfo projectFile, CancellationToken cancellationToken)
     {
         try
         {
@@ -1631,7 +1631,7 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
                 var propertyName = ExtractPropertyNameFromExpression(versionAttribute);
                 if (propertyName is not null)
                 {
-                    var resolvedValue = await ResolveMSBuildPropertyAsync(propertyName, projectFile, environmentVariables, cancellationToken);
+                    var resolvedValue = await ResolveMSBuildPropertyAsync(propertyName, projectFile, cancellationToken);
                     if (resolvedValue is not null && IsValidSemanticVersion(resolvedValue))
                     {
                         return resolvedValue;
@@ -1682,7 +1682,7 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
     }
 
     private async Task<string?> ResolveMSBuildPropertyAsync(
-        string propertyName, FileInfo projectFile, IReadOnlyDictionary<string, string>? environmentVariables, CancellationToken cancellationToken)
+        string propertyName, FileInfo projectFile, CancellationToken cancellationToken)
     {
         try
         {
@@ -1690,7 +1690,6 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
                 projectFile,
                 Array.Empty<string>(), // No items needed
                 [propertyName], // Just the property we want
-                environmentVariables,
                 cancellationToken);
 
             var propertiesElement = document.RootElement.GetProperty("Properties");
@@ -2073,7 +2072,7 @@ internal sealed class UpdateContext(FileInfo appHostProjectFile, PackageChannel 
     public FileInfo AppHostProjectFile { get; } = appHostProjectFile;
     public PackageChannel Channel { get; } = channel;
     public NuGetPackageOperationConfiguration? PackageConfiguration { get; init; }
-    public IReadOnlyDictionary<string, string>? EnvironmentVariables { get; init; }
+    public IReadOnlyDictionary<string, string>? UpdateEnvironmentVariables { get; init; }
     public ConcurrentQueue<UpdateStep> UpdateSteps { get; } = new();
     public ConcurrentQueue<AnalyzeStep> AnalyzeSteps { get; } = new();
     public HashSet<string> VisitedProjects { get; } = new();
