@@ -33,9 +33,8 @@ internal sealed class ConfigSourceService(
     ILogger<ConfigSourceService> logger) : IDisposable
 {
     internal const string MicrosoftRepository = "https://msft.ghe.com/coreai/aspire-1p-init";
-    internal const string MicrosoftReadmeUrl = $"{MicrosoftRepository}/blob/HEAD/README.md";
+    internal const string MicrosoftReadmeUrl = MicrosoftRepository;
     private static readonly string[] s_allowedSettings = [SkillSource.SectionName, IntegrationSourceConfiguration.SectionName];
-    private static readonly TimeSpan s_gitTimeout = TimeSpan.FromSeconds(30);
     private readonly Dictionary<ConfigSourceIdentity, ConfigSourceSnapshot> _snapshots = [];
     private string? _projectDirectory;
     private bool _projectChecked;
@@ -179,8 +178,7 @@ internal sealed class ConfigSourceService(
             Ref = explicitSource ? environment.GetEnvironmentVariable(CliConfigNames.InitSourceRef) : null
         };
         source.Validate();
-        var readmeUrl = environment.GetEnvironmentVariable(CliConfigNames.InitSourceReadmeUrl)
-            ?? (source.Repository == MicrosoftRepository ? MicrosoftReadmeUrl : null);
+        var readmeUrl = GetReadmeUrl(source);
         if (readmeUrl is not null && (!UrlHelper.IsHttpUrl(readmeUrl) || readmeUrl.Any(char.IsControl)))
         {
             throw new ConfigSourceException(string.Format(CultureInfo.CurrentCulture,
@@ -233,6 +231,10 @@ internal sealed class ConfigSourceService(
         await AcquireAsync(source, force: false, allowInteractiveInput, cancellationToken);
         return source;
     }
+
+    private string? GetReadmeUrl(ConfigSource source) =>
+        environment.GetEnvironmentVariable(CliConfigNames.InitSourceReadmeUrl)
+            ?? (source.Repository == MicrosoftRepository ? MicrosoftReadmeUrl : null);
 
     public async Task<ConfigSource?> SelectForInitializationAsync(
         DirectoryInfo projectDirectory, ParseResult parseResult, CancellationToken cancellationToken)
@@ -639,6 +641,19 @@ internal sealed class ConfigSourceService(
             }
             return snapshot;
         }
+        catch (ConfigSourceException ex)
+        {
+            var readmeUrl = GetReadmeUrl(source);
+            if (readmeUrl is not null && UrlHelper.IsHttpUrl(readmeUrl) && !readmeUrl.Any(char.IsControl))
+            {
+                ex.ReadmeUrl = readmeUrl;
+            }
+            else if (readmeUrl is not null)
+            {
+                logger.LogDebug("The configuration source README URL is invalid; access help is unavailable.");
+            }
+            throw;
+        }
         finally
         {
             File.Delete(temporaryPointer);
@@ -708,7 +723,7 @@ internal sealed class ConfigSourceService(
     private async Task<(string Commit, string Version, JsonObject Configuration)> AcquireRepositoryAsync(
         ConfigSource source, string directory, bool allowInteractiveInput, CancellationToken cancellationToken)
     {
-        using var deadline = new CancellationTokenSource(s_gitTimeout, timeProvider);
+        using var deadline = new CancellationTokenSource(GitClient.OperationTimeout, timeProvider);
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
         try
         {
@@ -757,7 +772,7 @@ internal sealed class ConfigSourceService(
 
     private async Task<(string Commit, string Version)> CheckRepositoryAsync(ConfigSource source, string directory, CancellationToken cancellationToken)
     {
-        using var deadline = new CancellationTokenSource(s_gitTimeout, timeProvider);
+        using var deadline = new CancellationTokenSource(GitClient.OperationTimeout, timeProvider);
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
         try
         {

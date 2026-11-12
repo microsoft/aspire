@@ -2,6 +2,11 @@
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="zh-Hant" original="../ConfigSourceStrings.resx">
     <body>
+      <trans-unit id="AccessHelp">
+        <source>For help accessing this configuration source, see {0}.</source>
+        <target state="new">For help accessing this configuration source, see {0}.</target>
+        <note>{0} is a hyperlink to the configuration source README.</note>
+      </trans-unit>
       <trans-unit id="AppliedVersionMissing">
         <source>A saved configuration source has no recorded applied version. Run `aspire update --config-source` to save its allowed settings and establish the applied version.</source>
         <target state="new">A saved configuration source has no recorded applied version. Run `aspire update --config-source` to save its allowed settings and establish the applied version.</target>

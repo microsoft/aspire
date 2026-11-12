@@ -937,7 +937,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
 
         Assert.True(Assert.IsType<ConfigSource>(source).OptOut);
         Assert.Equal(explicitSource ? 0 : 1, detector.Calls);
-        Assert.Equal($"[link=https://msft.ghe.com/coreai/aspire-1p-init/blob/HEAD/README.md]{ConfigSourceStrings.ReadmeLink}[/]",
+        Assert.Equal($"[link=https://msft.ghe.com/coreai/aspire-1p-init]{ConfigSourceStrings.ReadmeLink}[/]",
             interaction.DisplayedMessages[1].Message);
         Assert.Single(interaction.DisplayedRenderables);
         await Verify(string.Join(Environment.NewLine, interaction.DisplayedMessages.Select(message => message.Message)), "txt")
