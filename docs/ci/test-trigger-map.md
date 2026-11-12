@@ -106,7 +106,8 @@ still select their normal validation.
 | `<GROUP_NAME>` | a named group (see `groups:`) expanding **recursively** to its `test:`/`job:` members |
 
 Starter validation runs C#, TypeScript, and Go starters on all six native runner
-platforms. The Go scenario waits for the API and frontend on every platform and Redis on Linux.
+platforms. The Go scenario waits for the frontend before stopping the first run,
+then waits for the API and frontend on every platform and Redis on Linux after restart.
 Containerless macOS/Windows runners use `--use-redis-cache false`; the default
 Redis-enabled starter remains covered by Linux runners and Docker CLI E2E tests.
 Diagnostics are staged separately for upload, preserving generated projects while

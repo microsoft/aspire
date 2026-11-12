@@ -10,12 +10,14 @@ namespace Infrastructure.Tests;
 public sealed class CliStarterValidationTests(ITestOutputHelper output)
 {
     [Theory]
-    [InlineData(false, false)]
-    [InlineData(true, false)]
-    [InlineData(false, true)]
-    [InlineData(true, true)]
+    [InlineData(false, "none")]
+    [InlineData(true, "none")]
+    [InlineData(false, "run")]
+    [InlineData(true, "run")]
+    [InlineData(false, "start")]
+    [InlineData(true, "start")]
     [RequiresTools(["pwsh"])]
-    public async Task ValidatesGoFrontendAndStopsWithoutDeletingDependencies(bool linux, bool failFrontend)
+    public async Task ValidatesGoFrontendAndStopsWithoutDeletingDependencies(bool linux, string failedPhase)
     {
         using var workspace = TemporaryWorkspace.Create(output);
         var wrapperPath = Path.Combine(workspace.Path, "validate.ps1");
@@ -69,8 +71,12 @@ public sealed class CliStarterValidationTests(ITestOutputHelper output)
                 }
 
                 Write-Invocation $ArgumentList[0] @($ArgumentList | Select-Object -Skip 1) $WorkingDirectory
+                if ($ArgumentList[0] -in @('run', 'start'))
+                {
+                    $global:TestPhase = $ArgumentList[0]
+                }
                 $exitCode = 0
-                if ($env:TEST_FAIL_FRONTEND -eq 'true' -and
+                if ($env:TEST_FAIL_PHASE -eq $global:TestPhase -and
                     $WorkingDirectory -like '*AspireCliGoStarterSmoke' -and
                     $ArgumentList[0] -eq 'wait' -and $ArgumentList[1] -eq 'frontend')
                 {
@@ -103,10 +109,10 @@ public sealed class CliStarterValidationTests(ITestOutputHelper output)
             .WithEnvironmentVariable("TEST_ROOT", validationRoot)
             .WithEnvironmentVariable("TEST_EVENTS", eventsPath)
             .WithEnvironmentVariable("TEST_LINUX", linux ? "true" : "false")
-            .WithEnvironmentVariable("TEST_FAIL_FRONTEND", failFrontend ? "true" : "false");
+            .WithEnvironmentVariable("TEST_FAIL_PHASE", failedPhase);
 
         var result = await command.ExecuteAsync();
-        if (failFrontend)
+        if (failedPhase != "none")
         {
             Assert.NotEqual(0, result.ExitCode);
             Assert.Contains("aspire-go-starter: aspire wait for resource frontend failed with exit code 1.", result.Output);
@@ -124,17 +130,26 @@ public sealed class CliStarterValidationTests(ITestOutputHelper output)
             .Where(item => item.GetProperty("command").GetString() == "wait")
             .Select(item => item.GetProperty("arguments")[0].GetString())
             .ToArray();
-        Assert.Equal(linux && !failFrontend ? ["app", "frontend", "cache"] : ["app", "frontend"], waitedResources);
-        var finalCommands = failFrontend ? new[] { "logs", "stop" } : ["stop"];
-        Assert.Equal(["add", "run", "stop", "start", "resources", .. waitedResources.Select(_ => "wait"), .. finalCommands],
-            invocations.Select(item => item.GetProperty("command").GetString()).ToArray());
+        var commands = invocations.Select(item => item.GetProperty("command").GetString()).ToArray();
+        if (failedPhase == "run")
+        {
+            Assert.Equal(["frontend"], waitedResources);
+            Assert.Equal(["add", "run", "wait", "logs", "stop"], commands);
+        }
+        else
+        {
+            Assert.Equal(linux && failedPhase == "none" ? ["frontend", "app", "frontend", "cache"] : ["frontend", "app", "frontend"], waitedResources);
+            var finalCommands = failedPhase == "start" ? new[] { "logs", "stop" } : ["stop"];
+            Assert.Equal(["add", "run", "wait", "stop", "start", "resources", .. waitedResources.Skip(1).Select(_ => "wait"), .. finalCommands], commands);
+        }
 
         var goProject = Path.Combine(validationRoot, "aspire-go-starter", "AspireCliGoStarterSmoke");
-        if (failFrontend)
+        if (failedPhase != "none")
         {
             var logInvocation = Assert.Single(invocations, item => item.GetProperty("command").GetString() == "logs");
             Assert.Contains("--include-hidden", logInvocation.GetProperty("arguments").EnumerateArray().Select(arg => arg.GetString()));
-            var logPath = Path.Combine(validationRoot, "aspire-go-starter", "diagnostics", "aspire-resource-logs.log");
+            var logFile = failedPhase == "run" ? "aspire-run-resource-logs.log" : "aspire-resource-logs.log";
+            var logPath = Path.Combine(validationRoot, "aspire-go-starter", "diagnostics", logFile);
             Assert.Equal("installer diagnostic", File.ReadAllText(logPath).Trim());
         }
 
