@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Text.RegularExpressions;
 using Aspire.Cli.Agents.Hooks;
 using Aspire.Cli.Mcp;
 using Aspire.Cli.Tests.Utils;
@@ -16,6 +15,8 @@ public class AgentTelemetryHookTests
     [InlineData("{ malformed")]
     [InlineData("""{"toolName":"bash","toolArgs":{"command":"aspire run"}}""")]
     [InlineData("""{"toolName":"Read","tool_input":{"file_path":"/skills/third-party/SKILL.md"}}""")]
+    [InlineData("""{"toolName":"aspire-third_party_tool"}""")]
+    [InlineData("""{"toolName":"ASPIRE-wait_for_resources"}""")]
     public void UnrelatedOrMalformedEventsDoNotInitializeCli(string payload)
     {
         Assert.Null(AgentTelemetryHook.Classify(payload, new TestEnvironment(), AgentTelemetryHook.DefaultMaxPayloadCharacters));
@@ -177,21 +178,24 @@ public class AgentTelemetryHookTests
         Assert.Equal(KnownMcpTools.All.Order(), AgentTelemetryCatalog.Canonical.Tools.Order());
     }
 
-    [Fact]
-    public void AllowlistsMatchCanonicalPowerShellHook()
+    [Theory]
+    [InlineData("aspire-", false)]
+    [InlineData("mcp__aspire__", false)]
+    [InlineData("mcp_aspire_", false)]
+    [InlineData("aspire-", true)]
+    public void KnownMcpToolsAreReportedForEachClientPrefix(string prefix, bool uppercase)
     {
-        using var stream = typeof(AgentTelemetryHook).Assembly.GetManifestResourceStream("track-telemetry.ps1")!;
-        using var reader = new StreamReader(stream);
-        var script = reader.ReadToEnd();
-        // Canonical declarations have the form $AspireSkills = @('aspire', 'aspire-init', ...).
-        static string[] Values(string script, string name)
+        Assert.Contains(KnownMcpTools.WaitForResources, KnownMcpTools.All);
+        foreach (var knownTool in KnownMcpTools.All)
         {
-            var body = Regex.Match(script, $@"\${name} = @\((.*?)\)", RegexOptions.Singleline).Groups[1].Value;
-            return Regex.Matches(body, "'([^']+)'").Select(match => match.Groups[1].Value).Order().ToArray();
+            var tool = prefix + (uppercase ? knownTool.ToUpperInvariant() : knownTool);
+            var args = AgentTelemetryHook.Classify(
+                $$"""{"toolName":"{{tool}}"}""", new TestEnvironment(), AgentTelemetryHook.DefaultMaxPayloadCharacters);
+
+            Assert.NotNull(args);
+            Assert.Equal("tool_invocation", args[Array.IndexOf(args, "--event-type") + 1]);
+            Assert.Equal(tool, args[Array.IndexOf(args, "--tool-name") + 1]);
         }
-        Assert.Equal(Values(script, "AspireSkills"), AgentTelemetryCatalog.Canonical.Skills.Order());
-        Assert.Equal(Values(script, "AspireMcpTools"), AgentTelemetryCatalog.Canonical.Tools.Order());
-        Assert.Equal(Values(script, "AspireReferenceFiles"), AgentTelemetryCatalog.Canonical.References.Order());
     }
 
     [Theory]

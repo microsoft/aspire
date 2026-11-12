@@ -12,7 +12,8 @@ namespace Aspire.Cli.Agents.Hooks;
 internal interface ITelemetryHookConfigurator
 {
     /// <summary>
-    /// Materializes the hook scripts and registers them for each supported, detected agent environment.
+    /// Registers the telemetry hook for each supported, detected agent environment, replacing any
+    /// existing Aspire telemetry hook registrations.
     /// </summary>
     /// <param name="detectedEnvironments">The detected agent environments.</param>
     /// <param name="cancellationToken">A token to cancel the operation.</param>

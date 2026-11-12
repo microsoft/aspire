@@ -770,14 +770,5 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("SkippedMalformedConfigFile", resourceCulture);
             }
         }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Could not update the telemetry hook script &apos;{0}&apos;: {1}.
-        /// </summary>
-        internal static string TelemetryHookScriptUpdateFailed {
-            get {
-                return ResourceManager.GetString("TelemetryHookScriptUpdateFailed", resourceCulture);
-            }
-        }
     }
 }

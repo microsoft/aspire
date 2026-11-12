@@ -389,8 +389,7 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
             workspace.WorkspaceRoot,
             homeDirectory: home);
         var environment = new TestEnvironment(environmentVariables);
-        var installer = new TelemetryHookInstaller(executionContext, NullLogger<TelemetryHookInstaller>.Instance);
-        return new TelemetryHookConfigurator(installer,
+        return new TelemetryHookConfigurator(
         [
             new CopilotAgentClient(executionContext, environment, NullLogger<CopilotAgentClient>.Instance),
             new ClaudeCodeAgentClient(executionContext, environment, NullLogger<ClaudeCodeAgentClient>.Instance),
