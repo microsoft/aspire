@@ -9,15 +9,15 @@ internal static class ResourcePaneNavigation
 {
     /// <summary>
     /// Opens the overview of all resources from the dashboard's start page, /resources, which opens (and reloads) on the
-    /// full-page resource list with no view open on desktop. "All resources" opens the current tab's view, which is the
-    /// overview. Narrow layouts have no full-page list and already show the overview.
+    /// full-page resource list on desktop. Summary opens the overview. Narrow layouts have no full-page list and
+    /// already show the overview.
     /// </summary>
     public static async Task OpenAllResourcesOverviewAsync(IPage page)
     {
         await Assertions.Expect(page.Locator(".resources-layout")).ToHaveAttributeAsync("data-pane-interactions-ready", "true");
         if (await page.Locator(".resources-layout.pane-full-canvas").CountAsync() > 0)
         {
-            await page.Locator(".resource-row-all .resource-row-link").ClickAsync();
+            await page.Locator(".resource-pane-view-selector").GetByRole(AriaRole.Button, new() { Name = Resources.Dialogs.SettingsDialogGroupOverviewSummary, Exact = true }).ClickAsync();
             await Assertions.Expect(page.Locator(".resources-layout.pane-full-canvas")).ToHaveCountAsync(0);
         }
     }
@@ -26,15 +26,17 @@ internal static class ResourcePaneNavigation
     {
         await Assertions.Expect(page.Locator(".resources-layout")).ToHaveAttributeAsync("data-pane-interactions-ready", "true");
         var isFullCanvas = await page.Locator(".pane-full-canvas").CountAsync() > 0;
-        var toggle = page.Locator(isFullCanvas ? ".pane-full-canvas .resource-row-all .resource-row-link" : ".detail-page-close");
-        var destination = isFullCanvas ? null : new Uri(new Uri(page.Url),
+        var table = page.Locator(".resource-header-actions").GetByRole(AriaRole.Button, new() { Name = Resources.ControlsStrings.ChartContainerTableTab, Exact = true });
+        var usesTable = !isFullCanvas && await table.IsVisibleAsync();
+        var toggle = usesTable ? table : page.Locator(isFullCanvas ? ".resource-pane-view-selector button[aria-label='Summary']" : ".detail-page-close");
+        var destination = isFullCanvas || usesTable ? null : new Uri(new Uri(page.Url),
             await toggle.GetAttributeAsync("data-parent-url") ?? throw new InvalidOperationException("Close view must expose its parent URL.")).AbsoluteUri;
         await toggle.ClickAsync();
         if (destination is not null)
         {
             await Assertions.Expect(page).ToHaveURLAsync(destination);
         }
-        else
+        else if (isFullCanvas)
         {
             await Assertions.Expect(page.Locator(".resource-row-all .resource-row-link")).ToHaveAttributeAsync("aria-current", "page");
         }

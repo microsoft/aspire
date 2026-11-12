@@ -80,6 +80,9 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private bool _isPaneCollapsed;
     private bool _isDrawerOpen;
     private bool _isPaneFullCanvas;
+    private bool _wasOverviewFullCanvas;
+    // The chosen group view survives selecting a resource, unlike the current Overview presentation.
+    private bool _preferTableOverview;
     private string? _fullCanvasNavigation;
 
     /// <summary>
@@ -497,6 +500,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         if (!ViewportInformation.IsDesktop && (_isPaneFullCanvas || _isPaneSelectionReveal))
         {
             _isPaneFullCanvas = false;
+            _wasOverviewFullCanvas = false;
             _animatePaneTransition = false;
             CancelPaneSelectionReveal();
             _animatedPaneNavigation = null;
@@ -510,6 +514,13 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         if (string.Equals(location, _lastLocation, StringComparison.Ordinal))
         {
             return;
+        }
+
+        // Tab navigation remembers the presentation before revealing its destination. Other links, such as a row's
+        // console logs action, leave the presentation intact until the router reaches this point.
+        if (_navigatingToTab is null)
+        {
+            RememberOverviewPresentation();
         }
 
         // An unscoped page can restore saved filters, e.g. /traces -> /traces?type=server.
@@ -539,16 +550,20 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         var tabAfterClose = _tabAfterClose;
         _tabAfterClose = null;
         ClearPaneActivity();
-        _navigatingToTab = null;
         var previousTab = CurrentTab;
         var previousSelection = _selectedResourceNames;
         // Closing the menu can yield a render. Publish the new selection first so
         // its reveal cannot briefly show the previous resource's heading.
         UpdateFromLocation(location);
+        if (!previousSelection.SequenceEqual(_selectedResourceNames, StringComparers.ResourceName))
+        {
+            _wasOverviewFullCanvas = false;
+        }
         if (showResourceList)
         {
             SetResourceListVisible(true);
         }
+        _navigatingToTab = null;
         _isDrawerOpen = !ViewportInformation.IsDesktop && showResourceList;
         // Modifier selection changes the URL without dismissing the picker. Other navigation still closes it.
         _isResourcePickerOpen = _isResourcePickerOpen && string.Equals(location, _resourcePickerSelectionLocation, StringComparison.Ordinal);
@@ -570,7 +585,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         // The close has landed: open the tab chosen while it was in flight, for the new selection.
         if (tabAfterClose is { } chosenTab && GetTabs().FirstOrDefault(t => t.Tab == chosenTab && t.IsVisible)?.Href is { } chosenHref)
         {
-            await NavigateToTabAsync(chosenHref);
+            await NavigateToTabAsync(chosenTab, chosenHref);
         }
     }
 
@@ -714,8 +729,8 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         ? string.Create(CultureInfo.InvariantCulture, $"--resource-pane-expanded-width: {width}px")
         : null;
 
-    // The home page is the full-width resource list, with its URLs, on desktop. The overview summary stays at the
-    // same URL and opens from the list's "All resources" row, so links to /resources keep showing the summary.
+    // The home page is the full-width resource list, with its URLs, on desktop. Summary and Graph share its URL,
+    // so the history entry distinguishes an explicit home navigation from a link to the overview content.
     private bool IsResourceListHomeNavigation(string location)
     {
         if (!ViewportInformation.IsDesktop || !DashboardClient.IsEnabled ||
@@ -732,11 +747,13 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     {
         CancelPaneSelectionReveal();
         _animatedPaneNavigation = null;
-        _animatePaneTransition = true;
+        // Returning to the list through a tab switch shows it immediately, rather than expanding the previous page.
+        _animatePaneTransition = !visible || _navigatingToTab is null;
         _isPaneFullCanvas = ViewportInformation.IsDesktop && visible;
         _isDrawerOpen = !ViewportInformation.IsDesktop && visible;
         if (_isPaneFullCanvas)
         {
+            _preferTableOverview = true;
             QueuePaneActivityRefresh(immediate: true);
         }
         else
@@ -2209,8 +2226,8 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     private string? GetResourceUnavailableReason(ResourceViewModel resource)
     {
-        // While the resource list fills the page, its content is closed and no tab is shown selected (see
-        // RenderTabNavigation). CurrentTab is only kept for the next selection, so no row is unavailable for it.
+        // While the resource list fills the page, Overview is selected. CurrentTab is only kept for the next
+        // selection, so no row is unavailable for it.
         if (_isPaneFullCanvas)
         {
             return null;
@@ -2706,6 +2723,11 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     private async Task OnAllResourcesClickAsync()
     {
+        if (_isPaneFullCanvas)
+        {
+            return;
+        }
+
         _isResourcePickerOpen = false;
         var uri = NavigationManager.ToAbsoluteUri(NavigationManager.Uri);
         var path = NavigationManager.ToBaseRelativePath(uri.GetLeftPart(UriPartial.Path));
@@ -2720,12 +2742,39 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         // Remember the cleared selection so entering the overview later doesn't select a resource again.
         await SetStoredSelectionAsync([]);
 
-        // Select all also opens the summary when the full-canvas list already has the same URL.
-        SetResourceListVisible(false);
+        var showTable = _preferTableOverview && ViewportInformation.IsDesktop &&
+            DashboardClient.IsEnabled && CurrentTab == ResourceTab.Overview;
+        SetResourceListVisible(showTable);
         if (!reopenCurrentContent)
         {
-            NavigationManager.NavigateTo(DashboardClient.IsEnabled && CurrentTab == ResourceTab.Overview ? DashboardUrls.ResourceListUrl() : GetSelectionUrl([]));
+            var url = DashboardClient.IsEnabled && CurrentTab == ResourceTab.Overview ? DashboardUrls.ResourceListUrl() : GetSelectionUrl([]);
+            if (showTable)
+            {
+                _fullCanvasNavigation = NavigationManager.ToAbsoluteUri(url).AbsoluteUri;
+            }
+            NavigationManager.NavigateTo(url);
         }
+    }
+
+    internal async Task ShowGroupOverviewAsync()
+    {
+        _preferTableOverview = false;
+        if (!_isPaneFullCanvas)
+        {
+            return;
+        }
+
+        // A group view keeps a multi-selection; a single selected row has resource details instead, so choosing
+        // Summary or Graph from its full-width picker returns to the overview of all resources.
+        var selection = IsMultiSelection ? _selectedResourceNames : [];
+        if (selection.Count == 0)
+        {
+            await SetStoredSelectionAsync([]);
+        }
+
+        SetResourceListVisible(false);
+        _wasOverviewFullCanvas = false;
+        await NavigateToTabAsync(ResourceTab.Overview, AddPaneToUrl(GetTabUrl(ResourceTab.Overview, selection)));
     }
 
     /// <summary>
@@ -2824,6 +2873,10 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     private static string GetTabId(ResourceTab tab) => $"tab-{tab}";
 
+    private ResourceTab? GetActiveTab() => _navigatingToTab ?? (_isPaneFullCanvas
+        ? GetTabs().Any(t => t.Tab == ResourceTab.Overview && t.IsVisible) ? ResourceTab.Overview : null
+        : CurrentTab);
+
     // The id of the hidden tab that's active while no tab is shown selected (see RenderTabNavigation). It doesn't
     // start with "tab-", so OnTabChanged ignores it.
     private const string NoActiveTabId = "resource-tab-none";
@@ -2866,7 +2919,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             || !Enum.TryParse<ResourceTab>(id["tab-".Length..], out var tab)
             // Includes choosing the current tab while the content is closed: FluentTabs raises the same change when it
             // syncs with ActiveTabId, so it can't tell the user's choice apart. OpenTabFromFullCanvasAsync handles it.
-            || tab == CurrentTab
+            || tab == CurrentTab || tab == GetActiveTab()
             // A navigation started from the tab strip is still in flight. The layout re-renders when this handler
             // returns, before the router reaches the new location, and that render must not put the previous tab
             // back: the strip would report it as a change once the new page shows, and navigate back to it, forever.
@@ -2910,11 +2963,10 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             return;
         }
 
-        await NavigateToTabAsync(href);
+        await NavigateToTabAsync(tab, href);
     }
 
-    // Opens a tab the user chose, for the current selection. While the full-page list is showing, choosing the tab that's
-    // already current opens its content; otherwise it navigates to the tab.
+    // Opens a tab the user chose, for the current selection.
     private async Task OpenChosenTabAsync(ResourceTab tab)
     {
         if (GetTabs().FirstOrDefault(t => t.Tab == tab && t.IsVisible)?.Href is not { } href ||
@@ -2929,12 +2981,12 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             return;
         }
 
-        await NavigateToTabAsync(href);
+        await NavigateToTabAsync(tab, href);
     }
 
     /// <summary>
     /// Called by the layout's script when the user clicks a tab, or presses Enter or Space on it, while the resource list
-    /// fills the page. No tab is shown selected then, so choosing the current tab must open its content. FluentTabs
+    /// fills the page. Choosing the underlying telemetry tab must open its content. FluentTabs
     /// can't report that choice: it raises the same change when it syncs with ActiveTabId, for example right after
     /// closing the content with a tab still focused, which would reopen it. Other tabs open through OnTabChanged.
     /// </summary>
@@ -2950,13 +3002,29 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             return;
         }
 
-        await NavigateToTabAsync(href);
+        await NavigateToTabAsync(tab, href);
     }
 
-    private async Task NavigateToTabAsync(string href)
+    private void RememberOverviewPresentation()
     {
-        var persistExpandedPane = _isPaneFullCanvas && _isPaneCollapsed;
-        if (_isPaneFullCanvas)
+        if (CurrentTab == ResourceTab.Overview || _isPaneFullCanvas)
+        {
+            _wasOverviewFullCanvas = _isPaneFullCanvas;
+        }
+    }
+
+    private async Task NavigateToTabAsync(ResourceTab tab, string href)
+    {
+        RememberOverviewPresentation();
+        _navigatingToTab = tab;
+        var showResourceList = ViewportInformation.IsDesktop && tab == ResourceTab.Overview && _wasOverviewFullCanvas;
+        var persistExpandedPane = _isPaneFullCanvas && !showResourceList && _isPaneCollapsed;
+        if (showResourceList)
+        {
+            SetResourceListVisible(true);
+            _fullCanvasNavigation = NavigationManager.ToAbsoluteUri(href).AbsoluteUri;
+        }
+        else if (_isPaneFullCanvas)
         {
             // Reveal the destination as soon as navigation starts, even if its page is
             // slow to render or the current tab's menu item doesn't change the URL.
@@ -2969,6 +3037,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         if (string.Equals(NavigationManager.ToAbsoluteUri(href).AbsoluteUri, NavigationManager.Uri, StringComparison.Ordinal))
         {
             _navigatingToTab = null;
+            _fullCanvasNavigation = null;
         }
 
         NavigationManager.NavigateTo(href);
@@ -3033,10 +3102,9 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
                 Text = tab.Text,
                 StartIcon = tab.Icon,
                 Role = MenuItemRole.Radio,
-                // Like the tab strip, the menu shows no current view while the content is closed.
-                Checked = tab.Tab == CurrentTab && !_isPaneFullCanvas,
+                Checked = tab.Tab == GetActiveTab(),
                 Tooltip = tab.IsAvailable ? null : Loc[nameof(Resources.Layout.ResourceTabUnavailable)].Value,
-                OnClick = () => NavigateToTabAsync(tab.Href)
+                OnClick = () => NavigateToTabAsync(tab.Tab, tab.Href)
             });
         }
 

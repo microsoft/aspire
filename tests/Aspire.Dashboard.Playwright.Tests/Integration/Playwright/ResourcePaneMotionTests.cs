@@ -400,7 +400,7 @@ public sealed class ResourcePaneMotionTests(ResourcePaneResponsiveTests.Metadata
             var separator = page.GetByRole(AriaRole.Separator, new() { Name = Resources.Layout.ResourcePaneResize });
             await separator.PressAsync("End");
             var expectedWidth = await separator.EvaluateAsync<double>("e => Number(e.getAttribute('aria-valuenow'))");
-            var toggle = page.Locator(".detail-page-close, .pane-full-canvas .resource-row-all .resource-row-link");
+            var toggle = page.Locator(".detail-page-close:visible, .resource-header-actions button[aria-label='Table'], .resource-pane-view-selector button[aria-label='Summary']");
             await ToggleAsync();
             await Assertions.Expect(page.Locator(".pane-full-canvas")).ToBeVisibleAsync();
 
@@ -473,7 +473,7 @@ public sealed class ResourcePaneMotionTests(ResourcePaneResponsiveTests.Metadata
             }
             var layout = page.Locator(".resources-layout");
             var pane = page.Locator(".resource-pane");
-            var toggle = page.Locator(".detail-page-close, .pane-full-canvas .resource-row-all .resource-row-link");
+            var toggle = page.Locator(".detail-page-close:visible, .resource-header-actions button[aria-label='Table'], .resource-pane-view-selector button[aria-label='Summary']");
             var header = page.Locator(".resource-tabs-nav");
             var headerBox = await header.BoundingBoxAsync();
             var toolbarBox = await pane.Locator(".resource-pane-head").BoundingBoxAsync();
@@ -549,7 +549,9 @@ public sealed class ResourcePaneMotionTests(ResourcePaneResponsiveTests.Metadata
                     Assert.Equal(toolbarBox.Height, frame[10]);
                     Assert.Equal(1, frame[11]);
                 });
-                await Assertions.Expect(page.GetByRole(AriaRole.Group, new() { Name = "Layout", Exact = true })).ToHaveCountAsync(expanding ? 0 : width > 768 ? 1 : 0);
+                var layoutSelector = page.Locator(expanding ? ".resource-pane-head" : ".resource-header-actions")
+                    .GetByRole(AriaRole.Group, new() { Name = "Layout", Exact = true });
+                await Assertions.Expect(layoutSelector).ToBeVisibleAsync();
                 var intermediate = frames.Any(frame => frame[0] > Math.Min(start.Width, end.Width) + 0.1 && frame[0] < Math.Max(start.Width, end.Width) - 0.1);
                 Assert.Equal(!reducedMotion, intermediate);
                 await page.ScreenshotAsync(new() { Path = Path.Combine(AppContext.BaseDirectory, $"resource-pane-motion-{width}-{reducedMotion}-{expanding}.png") });

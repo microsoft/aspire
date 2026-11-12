@@ -79,11 +79,18 @@ public sealed class ResourcePanelNavigationTests(ResourcePanelNavigationTests.Na
             {
                 await close.ClickAsync();
             }
-            await pane.Locator(".resource-row-all .resource-row-link").ClickAsync();
+            if (width <= 768)
+            {
+                await pane.Locator(".resource-row-all .resource-row-link").ClickAsync();
+            }
+            else
+            {
+                await pane.Locator(".resource-pane-view-selector button[aria-label='Summary']").ClickAsync();
+            }
             await Assertions.Expect(page).ToHaveURLAsync(new System.Text.RegularExpressions.Regex("/resources$"));
             await Assertions.Expect(content).ToBeVisibleAsync();
             await Assertions.Expect(page.Locator(".pane-full-canvas,.drawer-open")).ToHaveCountAsync(0);
-            await Assertions.Expect(close).ToHaveCountAsync(width <= 768 ? 0 : 1);
+            await Assertions.Expect(close).ToBeHiddenAsync();
             await Assertions.Expect(page.Locator("#blazor-error-ui")).Not.ToBeVisibleAsync();
         });
     }

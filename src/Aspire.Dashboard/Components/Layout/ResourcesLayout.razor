@@ -63,6 +63,13 @@
                                       Title="@Loc[nameof(Dashboard.Resources.Layout.ResourcePaneGrouping)]" />
                 }
 
+                @if (_isPaneFullCanvas && DashboardClient.IsEnabled)
+                {
+                    <div class="resource-pane-view-selector">
+                        <ResourceOverviewSelector Layout="this" IsTable="true" />
+                    </div>
+                }
+
                 @if (!isDesktop)
                 {
                     <FluentButton Class="toolbar-button resource-pane-button"
@@ -108,7 +115,10 @@
                        choosing an item like any other. *@
                     <div class="resource-row resource-row-all @(isAllSelected ? "selected" : string.Empty)">
                         <a class="resource-row-link"
-                           href="@GetSelectionUrl([])"
+                           href="@(_isPaneFullCanvas ? null : GetSelectionUrl([]))"
+                           role="link"
+                           aria-disabled="@(_isPaneFullCanvas ? "true" : null)"
+                           tabindex="@(_isPaneFullCanvas ? "-1" : null)"
                            aria-current="@(isAllSelected ? "page" : null)"
                            aria-label="@allResourcesText"
                            aria-description="@allResourcesCountText"
@@ -807,11 +817,9 @@
     {
         // When the row no longer has room for every label, the container query swaps this for the compact dropdown
         // instead of letting the top navigation grow its own scrollbar.
-        // While a tab click navigates, the strip keeps showing the clicked tab (see OnTabChanged). While the resource
-        // list fills the page, its content is closed and no tab is shown selected: each tab then opens that view for
-        // the selection, which is all resources once the content is closed. CurrentTab is kept for the session, so
-        // selecting resources in the list opens the tab that was last shown.
-        ResourceTab? activeTab = _isPaneFullCanvas ? null : _navigatingToTab ?? CurrentTab;
+        // While a tab click navigates, the strip keeps showing the clicked tab (see OnTabChanged). The full-page list
+        // selects Overview, but CurrentTab is kept so selecting resources opens the tab that was last shown.
+        var activeTab = GetActiveTab();
         var renderedLocation = _lastLocation;
         var currentTabItem = activeTab is { } active ? GetTabs().FirstOrDefault(t => t.Tab == active) : null;
     <div class="resource-tabs-nav">

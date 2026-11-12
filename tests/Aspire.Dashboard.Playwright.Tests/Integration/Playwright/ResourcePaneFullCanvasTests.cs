@@ -49,9 +49,9 @@ public sealed class ResourcePaneFullCanvasTests(ResourceTagPaneTests.TaggedResou
                 await close.FocusAsync();
                 await close.PressAsync("Enter");
                 await Assertions.Expect(page.Locator(".pane-full-canvas")).ToBeVisibleAsync();
-                var selectAll = page.Locator(".resource-row-all .resource-row-link");
-                await selectAll.FocusAsync();
-                await selectAll.PressAsync("Enter");
+                var summary = page.Locator(".resource-pane-view-selector button[aria-label='Summary']");
+                await summary.FocusAsync();
+                await summary.PressAsync("Enter");
                 await Assertions.Expect(page.Locator(".pane-full-canvas")).ToHaveCountAsync(0);
                 await Assertions.Expect(page.Locator(".resource-content")).ToBeVisibleAsync();
             }
@@ -85,7 +85,8 @@ public sealed class ResourcePaneFullCanvasTests(ResourceTagPaneTests.TaggedResou
             await page.GetByRole(AriaRole.Button, new() { Name = Resources.Layout.ResourcePaneClose, Exact = true }).ClickAsync();
             await Assertions.Expect(page.Locator(".resource-content")).ToBeVisibleAsync();
             await page.SetViewportSizeAsync(1440, 900);
-            await Assertions.Expect(close).ToBeVisibleAsync();
+            await Assertions.Expect(close).ToBeHiddenAsync();
+            await Assertions.Expect(page.Locator(".resource-header-actions button[aria-label='Table']")).ToBeVisibleAsync();
             await Assertions.Expect(page.Locator(".pane-full-canvas")).ToHaveCountAsync(0);
             await Assertions.Expect(page.Locator(".resource-pane-resizer")).ToHaveAttributeAsync("aria-valuenow", "507");
             Assert.Equal(url, page.Url);
@@ -127,8 +128,7 @@ public sealed class ResourcePaneFullCanvasTests(ResourceTagPaneTests.TaggedResou
                 """);
             await Assertions.Expect(page.Locator(".resource-content")).Not.ToBeVisibleAsync();
             await Assertions.Expect(navigation).ToBeVisibleAsync();
-            // With the content closed, no view is shown selected. The overview is kept for the next selection.
-            await Assertions.Expect(navigation.Locator("#tab-Overview")).ToHaveAttributeAsync("aria-selected", "false");
+            await Assertions.Expect(navigation.Locator("#tab-Overview")).ToHaveAttributeAsync("aria-selected", "true");
             await Assertions.Expect(filter).ToHaveValueAsync("tag-");
             await Assertions.Expect(page).ToHaveURLAsync(new System.Text.RegularExpressions.Regex("/resources$"));
             Assert.True(await originalPane.EvaluateAsync<bool>("pane => pane === document.querySelector('.resource-pane')"));
@@ -139,11 +139,11 @@ public sealed class ResourcePaneFullCanvasTests(ResourceTagPaneTests.TaggedResou
             Assert.InRange(Math.Abs(paneBox.Width - layoutBox.Width), 0, 1);
             await Assertions.Expect(pane.Locator(".resource-row-all .resource-row-link")).ToHaveAttributeAsync("aria-current", "page");
 
-            await pane.Locator(".resource-row-all .resource-row-link").ClickAsync();
+            await pane.Locator(".resource-pane-view-selector button[aria-label='Summary']").ClickAsync();
             await Assertions.Expect(page.Locator(".resource-content")).ToBeVisibleAsync();
             await Assertions.Expect(navigation).ToBeVisibleAsync();
             await Assertions.Expect(navigation.Locator("#tab-Overview")).ToHaveAttributeAsync("aria-selected", "true");
-            await page.Locator(".detail-page-close").ClickAsync();
+            await ResourcePaneNavigation.ToggleResourceListAsync(page);
             await row.ClickAsync();
             await Assertions.Expect(page.Locator("h1.resource-title")).ToHaveTextAsync("tag-b");
             await Assertions.Expect(page.Locator(".resource-content")).ToBeVisibleAsync();
@@ -273,7 +273,7 @@ public sealed class ResourcePaneFullCanvasTests(ResourceTagPaneTests.TaggedResou
 
     [Fact]
     [OuterloopTest("Resource-intensive Playwright browser test")]
-    public async Task Dashboard_OpensOnTheCompactFullPageListWithNoViewSelected()
+    public async Task Dashboard_OpensOnTheCompactFullPageListWithOverviewSelected()
     {
         await RunTestAsync(async page =>
         {
@@ -285,13 +285,25 @@ public sealed class ResourcePaneFullCanvasTests(ResourceTagPaneTests.TaggedResou
             var allResources = page.Locator(".resource-row-all .resource-row-link");
             await Assertions.Expect(allResources).ToContainTextAsync(Resources.Layout.ResourceHeaderAllResources);
             await Assertions.Expect(page.Locator(".resource-row-all.selected")).ToHaveCountAsync(1);
-            await AssertNoTabSelectedAsync(page);
-
-            // The overview is the view kept for a selection, and choosing it opens it for all resources.
             var overview = page.GetByRole(AriaRole.Tab, new() { Name = Resources.Layout.ResourceTabOverview, Exact = true });
-            await overview.ClickAsync();
-            await Assertions.Expect(page.Locator(".resources-layout.pane-full-canvas")).ToHaveCountAsync(0);
             await Assertions.Expect(overview).ToHaveAttributeAsync("aria-selected", "true");
+            await overview.ClickAsync();
+            await Assertions.Expect(page.Locator(".resources-layout.pane-full-canvas")).ToBeVisibleAsync();
+            await allResources.ClickAsync(new() { Force = true });
+            await Assertions.Expect(page.Locator(".resources-layout.pane-full-canvas")).ToBeVisibleAsync();
+
+            var console = page.GetByRole(AriaRole.Tab, new() { Name = Resources.Layout.NavMenuConsoleLogsTab, Exact = true });
+            await ClickResourceTabAndWaitForRenderAsync(page, () => console.ClickAsync());
+            await Assertions.Expect(page).ToHaveURLAsync(new Regex("/consolelogs$"));
+            await Assertions.Expect(page.Locator(".resources-layout.pane-full-canvas")).ToHaveCountAsync(0);
+            await Assertions.Expect(console).ToHaveAttributeAsync("aria-selected", "true");
+            await ClickResourceTabAndWaitForRenderAsync(page, () => overview.ClickAsync());
+            await Assertions.Expect(page).ToHaveURLAsync(new Regex("/resources$"));
+            await Assertions.Expect(page.Locator(".resources-layout.pane-full-canvas")).ToBeVisibleAsync();
+            await Assertions.Expect(overview).ToHaveAttributeAsync("aria-selected", "true");
+
+            await page.Locator(".resource-pane-view-selector button[aria-label='Summary']").ClickAsync();
+            await Assertions.Expect(page.Locator(".resources-layout.pane-full-canvas")).ToHaveCountAsync(0);
             await Assertions.Expect(page.Locator("h1.resource-title")).ToHaveTextAsync(Resources.Layout.ResourceHeaderAllResources);
         }, useDefaultDensity: true);
     }
@@ -334,15 +346,21 @@ public sealed class ResourcePaneFullCanvasTests(ResourceTagPaneTests.TaggedResou
             await page.Keyboard.PressAsync("Escape");
             await Assertions.Expect(page).ToHaveURLAsync(new Regex("/resources$"));
             await Assertions.Expect(fullCanvas).ToBeVisibleAsync();
-            await AssertNoTabSelectedAsync(page);
+            await Assertions.Expect(overview).ToHaveAttributeAsync("aria-selected", "true");
 
-            // The overview is still the current tab, and choosing it opens it again.
+            // Clicking the selected Overview keeps the list; selecting Summary opens the summary.
             await overview.ClickAsync();
+            await Assertions.Expect(fullCanvas).ToBeVisibleAsync();
+            await page.Locator(".resource-pane-view-selector button[aria-label='Summary']").ClickAsync();
             await Assertions.Expect(fullCanvas).ToHaveCountAsync(0);
             await Assertions.Expect(overview).ToHaveAttributeAsync("aria-selected", "true");
 
-            // Closed again, selecting a resource opens the view last shown.
+            // Summary has Table instead of Close, so Escape doesn't close it.
             await page.Keyboard.PressAsync("Escape");
+            await Assertions.Expect(fullCanvas).ToHaveCountAsync(0);
+
+            // Selecting Table, then a resource, returns to its details.
+            await page.Locator(".resource-header-actions button[aria-label='Table']").ClickAsync();
             await Assertions.Expect(fullCanvas).ToBeVisibleAsync();
             await row.ClickAsync();
             await Assertions.Expect(page).ToHaveURLAsync(new Regex("/resources/tag-a$"));
@@ -350,8 +368,4 @@ public sealed class ResourcePaneFullCanvasTests(ResourceTagPaneTests.TaggedResou
             await Assertions.Expect(overview).ToHaveAttributeAsync("aria-selected", "true");
         });
     }
-
-    // While the content is closed, the active tab is a hidden placeholder, so no visible tab is selected.
-    private static Task AssertNoTabSelectedAsync(IPage page) =>
-        Assertions.Expect(page.Locator(".resources-tab-header fluent-tab[aria-selected='true']:visible")).ToHaveCountAsync(0);
 }

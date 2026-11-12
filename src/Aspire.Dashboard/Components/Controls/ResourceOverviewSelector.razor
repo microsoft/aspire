@@ -1,0 +1,7 @@
+<IconToggleGroup TValue="GroupOverview?"
+                 Label="@Loc[nameof(Dashboard.Resources.Resources.LayoutLabel)]"
+                 Options="@Options"
+                 Value="@(IsTable ? null : ViewPreferences.GroupOverview)"
+                 ValueChanged="@SelectViewAsync"
+                 ShowLabel="false"
+                 ShowCurrentLabel="false" />

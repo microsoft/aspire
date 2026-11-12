@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Threading.Channels;
+using Aspire.Dashboard.Components.Controls;
 using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Components.Tests.Shared;
@@ -55,9 +56,9 @@ public class ResourcesLayoutTests : DashboardTestContext
         cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
         if (appHostEnabled && !selected)
         {
-            // The dashboard opens on the full-page list. "All resources" opens their overview next to the collapsed pane.
+            // The dashboard opens on the full-page list. Summary opens the overview next to the collapsed pane.
             Assert.True(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
-            await cut.InvokeAsync(() => cut.Find(".resource-row-all .resource-row-link").Click());
+            await cut.Find(".resource-pane-view-selector [aria-label='Summary']").ClickAsync();
         }
 
         var picker = cut.Find("#resourcePanePickerButton");
@@ -683,6 +684,12 @@ public class ResourcesLayoutTests : DashboardTestContext
         await cut.InvokeAsync(() => cut.Instance.SetPaneWidthAsync(440));
         ResourceSetupHelpers.ToggleResourceList(cut);
         Assert.True(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
+        Assert.Equal("tab-Overview", header.FindComponent<FluentTabs>().Instance.ActiveTabId);
+        var overview = header.FindComponents<FluentTab>().Single(t => t.Instance.Id == "tab-Overview").Instance;
+        // Synchronizing the selected Overview tab must not navigate away from the underlying console logs.
+        await header.InvokeAsync(() => header.FindComponent<FluentTabs>().Instance.ActiveTabChanged.InvokeAsync(overview));
+        Assert.Equal("http://localhost/consolelogs/resource/api", navigation.Uri);
+        Assert.True(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
         var traces = header.FindComponents<FluentTab>().Single(t => t.Instance.Id == "tab-Traces").Instance;
 
         await header.InvokeAsync(() => header.FindComponent<FluentTabs>().Instance.ActiveTabChanged.InvokeAsync(traces));
@@ -697,6 +704,285 @@ public class ResourcesLayoutTests : DashboardTestContext
         cut.Render();
         Assert.Equal(ResourceTab.Traces, cut.Instance.CurrentTab);
         Assert.False(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
+    }
+
+    [Theory]
+    [InlineData("/resources", new string[0])]
+    [InlineData("/resources/api", new[] { "api" })]
+    [InlineData("/consolelogs/resource/api", new[] { "api" })]
+    [InlineData("/resources?resource=api&resource=cache", new[] { "api", "cache" })]
+    public async Task FullCanvas_AllResourcesDoesNotChangePresentationOrSelection(string url, string[] selection)
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("api"), ModelTestHelpers.CreateResource("cache")],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo(url);
+        var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
+        await cut.InvokeAsync(() => cut.Instance.SetResourceListVisible(true));
+
+        var allResources = cut.Find(".resource-row-all .resource-row-link");
+        Assert.Null(allResources.GetAttribute("href"));
+        Assert.Equal("true", allResources.GetAttribute("aria-disabled"));
+        Assert.Equal("-1", allResources.GetAttribute("tabindex"));
+        await allResources.ClickAsync();
+        cut.Render();
+
+        Assert.Equal(url, "/" + navigation.ToBaseRelativePath(navigation.Uri));
+        Assert.Equal(selection, cut.Instance.SelectedResourceNames);
+        Assert.True(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
+        Assert.True(cut.Find(".resource-content").HasAttribute("inert"));
+    }
+
+    [Theory]
+    [InlineData(true, true, false)]
+    [InlineData(true, false, false)]
+    [InlineData(false, true, false)]
+    [InlineData(true, true, true)]
+    public async Task OverviewSelector_SwitchesBetweenTableSummaryAndGraph(bool isDesktop, bool graphEnabled, bool multiSelection)
+    {
+        var viewport = new ViewportInformation(IsDesktop: isDesktop, IsUltraLowHeight: false, IsUltraLowWidth: !isDesktop);
+        Services.Configure<Configuration.DashboardOptions>(options => options.UI.DisableResourceGraph = !graphEnabled);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("api"), ModelTestHelpers.CreateResource("cache")],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        JSInterop.SetupModule("/js/app-resourcegraph.js").Mode = JSRuntimeMode.Loose;
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        var url = multiSelection ? "/resources?resource=api&resource=cache" : "/resources";
+        navigation.NavigateTo(url);
+        var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport).Add(p => p.Body, builder =>
+        {
+            builder.OpenComponent<ApplicationSummary>(0);
+            builder.AddAttribute(1, nameof(ApplicationSummary.ResourceNames), multiSelection ? new[] { "api", "cache" } : null);
+            builder.CloseComponent();
+        }));
+        cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
+
+        if (isDesktop)
+        {
+            await cut.InvokeAsync(() => cut.Instance.SetResourceListVisible(true));
+            Assert.Equal(graphEnabled ? ["Table", "Summary", "Graph"] : ["Table", "Summary"],
+                cut.FindAll(".resource-pane-head .icon-toggle").Select(button => button.GetAttribute("aria-label")));
+            Assert.Equal("true", cut.Find(".resource-pane-head [aria-label='Table']").GetAttribute("aria-pressed"));
+            await cut.Find(".resource-pane-head [aria-label='Summary']").ClickAsync();
+            cut.Render();
+            Assert.False(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
+            Assert.Empty(cut.FindAll(".resource-pane-view-selector"));
+        }
+
+        Assert.Equal(isDesktop ? graphEnabled ? ["Table", "Summary", "Graph"] : ["Table", "Summary"] : ["Summary", "Graph"],
+            cut.FindAll(".resource-header-actions .icon-toggle").Select(button => button.GetAttribute("aria-label")));
+        if (graphEnabled)
+        {
+            await cut.Find(".resource-header-actions [aria-label='Graph']").ClickAsync();
+            cut.WaitForAssertion(() => Assert.False(cut.Find(".home-resource-graph-layout").HasAttribute("hidden")));
+        }
+
+        if (isDesktop)
+        {
+            await cut.Find(".resource-header-actions [aria-label='Table']").ClickAsync();
+            Assert.True(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
+            Assert.Equal("true", cut.Find(".resource-pane-head [aria-label='Table']").GetAttribute("aria-pressed"));
+            await cut.Find($".resource-pane-head [aria-label='{(graphEnabled ? "Graph" : "Summary")}']").ClickAsync();
+            cut.Render();
+            Assert.False(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
+            Assert.False(cut.Find(".resource-content").HasAttribute("inert"));
+        }
+
+        Assert.Equal(url, "/" + navigation.ToBaseRelativePath(navigation.Uri));
+        Assert.Equal(multiSelection ? ["api", "cache"] : [], cut.Instance.SelectedResourceNames);
+        Assert.Equal(graphEnabled ? GroupOverview.Graph : GroupOverview.Summary, Services.GetRequiredService<DashboardViewPreferences>().GroupOverview);
+    }
+
+    [Theory]
+    [InlineData("Table", false)]
+    [InlineData("Table", true)]
+    [InlineData("Summary", false)]
+    [InlineData("Graph", false)]
+    public async Task AllResourcesRow_RestoresSelectedOverviewView(string view, bool multiSelection)
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("api"), ModelTestHelpers.CreateResource("cache")],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        JSInterop.SetupModule("/js/app-resourcegraph.js").Mode = JSRuntimeMode.Loose;
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo("/resources");
+        var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport).Add(p => p.Body, builder =>
+        {
+            builder.OpenComponent<ApplicationSummary>(0);
+            builder.CloseComponent();
+        }));
+        cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
+        await cut.Find(".resource-pane-view-selector [aria-label='Summary']").ClickAsync();
+        cut.Render();
+        await cut.Find(".resource-header-actions [aria-label='Table']").ClickAsync();
+        if (view != "Table")
+        {
+            await cut.Find($".resource-pane-view-selector [aria-label='{view}']").ClickAsync();
+            cut.Render();
+        }
+
+        await cut.Find("[data-resource-name='api'] .resource-row-link").ClickAsync();
+        cut.Render();
+        if (multiSelection)
+        {
+            await cut.Find("[data-resource-name='cache'] .resource-row-link").ClickAsync(new MouseEventArgs { CtrlKey = true });
+            cut.Render();
+        }
+        Assert.False(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
+        Assert.Equal(multiSelection ? ["api", "cache"] : ["api"], cut.Instance.SelectedResourceNames);
+
+        await cut.Find(".resource-row-all .resource-row-link").ClickAsync();
+        cut.Render();
+
+        var isTable = view == "Table";
+        Assert.Equal("http://localhost/resources", navigation.Uri);
+        Assert.Empty(cut.Instance.SelectedResourceNames);
+        Assert.Equal(ResourceTab.Overview, cut.Instance.CurrentTab);
+        Assert.Equal(isTable, cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
+        Assert.Equal(isTable, cut.Find(".resource-content").HasAttribute("inert"));
+        Assert.Equal("true", cut.Find(isTable
+            ? ".resource-pane-view-selector [aria-label='Table']"
+            : $".resource-header-actions [aria-label='{view}']").GetAttribute("aria-pressed"));
+    }
+
+    [Theory]
+    [InlineData("/consolelogs/resource/api", "/consolelogs")]
+    [InlineData("/traces?resource=api&resource=cache", "/traces")]
+    public async Task AllResourcesRow_TablePreferenceDoesNotReplaceTelemetryContent(string url, string expectedUrl)
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("api"), ModelTestHelpers.CreateResource("cache")],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo("/resources");
+        var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
+
+        navigation.NavigateTo(url);
+        cut.Render();
+        await cut.Find(".resource-row-all .resource-row-link").ClickAsync();
+        cut.Render();
+
+        Assert.Equal(expectedUrl, "/" + navigation.ToBaseRelativePath(navigation.Uri));
+        Assert.Empty(cut.Instance.SelectedResourceNames);
+        Assert.False(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
+        Assert.False(cut.Find(".resource-content").HasAttribute("inert"));
+    }
+
+    [Theory]
+    [InlineData("/resources/api", "/resources")]
+    [InlineData("/consolelogs/resource/api", "/resources")]
+    [InlineData("/consolelogs?resource=api&resource=cache", "/resources?resource=api&resource=cache")]
+    public async Task FullCanvas_SummaryOpensGroupOverviewFromAnotherPage(string url, string expectedUrl)
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("api"), ModelTestHelpers.CreateResource("cache")],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo(url);
+        var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
+        await cut.InvokeAsync(() => cut.Instance.SetResourceListVisible(true));
+
+        await cut.Find(".resource-pane-head [aria-label='Summary']").ClickAsync();
+        cut.Render();
+
+        Assert.Equal(expectedUrl, "/" + navigation.ToBaseRelativePath(navigation.Uri));
+        Assert.False(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
+        Assert.False(cut.Find(".resource-content").HasAttribute("inert"));
+    }
+
+    [Theory]
+    [InlineData(false, null)]
+    [InlineData(true, null)]
+    [InlineData(false, "resource-tabs-overflow-button")]
+    [InlineData(true, "resource-tabs-overflow-button")]
+    [InlineData(false, "resource-tabs-compact-button")]
+    [InlineData(true, "resource-tabs-compact-button")]
+    public async Task Tabs_OverviewRestoresItsFullCanvasPresentation(bool fullCanvas, string? menuButtonClass)
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("api"), ModelTestHelpers.CreateResource("cache")],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo("/resources/api");
+        var header = Render<SectionOutlet>(p => p.Add(p => p.SectionName, MainLayout.HeaderContextSectionName));
+        var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
+        if (fullCanvas)
+        {
+            ResourceSetupHelpers.ToggleResourceList(cut);
+            Assert.True(cut.Find(".resources-layout").ClassList.Contains("pane-motion-enabled"));
+        }
+        await cut.InvokeAsync(() => cut.Instance.SetOverflowTabs(["tab-Overview", "tab-Console"]));
+        AssertSelectedTab("tab-Overview");
+
+        await SelectTabAsync("tab-Console");
+        cut.Render();
+        Assert.Equal("http://localhost/consolelogs/resource/api", navigation.Uri);
+        Assert.False(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
+        AssertSelectedTab("tab-Console");
+
+        await SelectTabAsync("tab-Overview");
+        if (fullCanvas)
+        {
+            Assert.True(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
+            Assert.False(cut.Find(".resources-layout").ClassList.Contains("pane-motion-enabled"));
+        }
+        cut.Render();
+        Assert.Equal("http://localhost/resources/api", navigation.Uri);
+        Assert.Equal(fullCanvas, cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
+        Assert.Equal(fullCanvas, cut.Find(".resource-content").HasAttribute("inert"));
+        Assert.False(cut.Find(".resources-layout").ClassList.Contains("pane-motion-enabled"));
+        AssertSelectedTab("tab-Overview");
+        Assert.Equal(["api"], cut.Instance.SelectedResourceNames);
+        Assert.Empty(JSInterop.Invocations["startPaneSelectionReveal"]);
+
+        // Selecting another resource opens its details, rather than restoring the full-page list on the next visit.
+        if (fullCanvas)
+        {
+            await cut.Find("[data-resource-name='cache'] .resource-row-link").ClickAsync();
+            cut.Render();
+            await cut.InvokeAsync(() => cut.Instance.CompletePaneSelectionReveal(navigation.Uri));
+            await SelectTabAsync("tab-Console");
+            cut.Render();
+            await SelectTabAsync("tab-Overview");
+            cut.Render();
+            Assert.Equal("http://localhost/resources/cache", navigation.Uri);
+            Assert.False(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
+        }
+
+        async Task SelectTabAsync(string id)
+        {
+            if (menuButtonClass is not null)
+            {
+                var item = header.FindComponents<AspireMenuButton>().Single(b => b.Instance.ButtonClass == menuButtonClass)
+                    .Instance.ItemsProvider().Single(item => item.Id == $"{id}-menu-item");
+                await header.InvokeAsync(item.OnClick!);
+            }
+            else
+            {
+                var tab = header.FindComponents<FluentTab>().Single(t => t.Instance.Id == id).Instance;
+                await header.InvokeAsync(() => header.FindComponent<FluentTabs>().Instance.ActiveTabChanged.InvokeAsync(tab));
+            }
+        }
+
+        void AssertSelectedTab(string id)
+        {
+            Assert.Equal(id, header.FindComponent<FluentTabs>().Instance.ActiveTabId);
+            foreach (var button in header.FindComponents<AspireMenuButton>()
+                .Where(b => b.Instance.ButtonClass is "resource-tabs-overflow-button" or "resource-tabs-compact-button"))
+            {
+                Assert.Equal([$"{id}-menu-item"], button.Instance.ItemsProvider().Where(item => item.Checked).Select(item => item.Id));
+            }
+        }
     }
 
     [Theory]
@@ -1949,7 +2235,7 @@ public class ResourcesLayoutTests : DashboardTestContext
     }
 
     [Fact]
-    public async Task Landing_WithoutRememberedSelection_ShowsAllResourcesInTheFullCanvasListWithNoTabSelected()
+    public async Task Landing_WithoutRememberedSelection_ShowsAllResourcesInTheFullCanvasListWithOverviewSelected()
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
@@ -1971,8 +2257,7 @@ public class ResourcesLayoutTests : DashboardTestContext
         Assert.True(allRow.ClassList.Contains("selected"));
         Assert.Equal("page", allRow.QuerySelector(".resource-row-link")!.GetAttribute("aria-current"));
         Assert.Empty(cut.FindAll(".resource-row.selected[data-resource-name]"));
-        // No tab is shown selected, but the overview is kept as the tab to open for a selection.
-        Assert.Equal("resource-tab-none", header.FindComponent<FluentTabs>().Instance.ActiveTabId);
+        Assert.Equal("tab-Overview", header.FindComponent<FluentTabs>().Instance.ActiveTabId);
         Assert.Equal(ResourceTab.Overview, cut.Instance.CurrentTab);
         Assert.Equal(DashboardUrls.ResourceOverviewUrl("api"), cut.Find("[data-resource-name='api'] .resource-row-link").GetAttribute("href"));
 
@@ -1983,8 +2268,15 @@ public class ResourcesLayoutTests : DashboardTestContext
         cut.Render();
         Assert.True(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
 
-        // Clicking it, which the layout's script reports, opens it for all resources although the URL doesn't change.
+        // Clicking the selected Overview tab also keeps the full-page list.
         await cut.InvokeAsync(() => cut.Instance.OpenTabFromFullCanvasAsync("tab-Overview"));
+        cut.Render();
+        Assert.True(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
+
+        await cut.Find(".resource-row-all .resource-row-link").ClickAsync();
+        cut.Render();
+        Assert.True(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
+        await cut.Find(".resource-pane-view-selector [aria-label='Summary']").ClickAsync();
         cut.Render();
         Assert.False(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
         Assert.Equal("resources", navigationManager.ToBaseRelativePath(navigationManager.Uri));
@@ -2051,7 +2343,7 @@ public class ResourcesLayoutTests : DashboardTestContext
         cut.WaitForAssertion(() => Assert.True(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas")));
         cut.WaitForAssertion(() => Assert.Equal([false], writes));
 
-        await cut.InvokeAsync(() => cut.Instance.OpenTabFromFullCanvasAsync("tab-Overview"));
+        await cut.Find(".resource-pane-view-selector [aria-label='Summary']").ClickAsync();
         cut.WaitForAssertion(() => Assert.Equal([false, true], writes));
     }
 

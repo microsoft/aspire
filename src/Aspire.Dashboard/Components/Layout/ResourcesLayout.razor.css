@@ -333,6 +333,15 @@
     flex-shrink: 0;
 }
 
+.resource-pane-view-selector {
+    flex-shrink: 0;
+    margin-inline-start: var(--aspire-space-2);
+}
+
+.pane-full-canvas .resource-row-all .resource-row-link {
+    cursor: default;
+}
+
 .resource-pane-head ::deep .aspire-menu-container:has(.resource-grouping-menu-item) fluent-menu-list {
     /* Match the filter's viewport-bounded anchor area, including inline/block
        collision fallbacks. Fluent supplies the button's position-anchor. */
@@ -1447,6 +1456,11 @@
     gap: var(--aspire-space-2);
     min-width: 0;
     margin-left: auto;
+}
+
+/* The overview selector's Table option replaces the Close action. */
+.resource-header-controls:has(.overview-header-actions) ::deep .detail-page-close {
+    display: none;
 }
 
 /* The heading size rather than the title size: when the resource list is collapsed, a picker button takes the

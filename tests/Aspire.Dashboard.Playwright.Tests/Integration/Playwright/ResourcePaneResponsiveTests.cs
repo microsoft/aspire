@@ -2383,7 +2383,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             {
                 await page.Locator(".resource-picker").ClickAsync();
             }
-            await page.Locator(".detail-page-close").ClickAsync();
+            await ResourcePaneNavigation.ToggleResourceListAsync(page);
             await Assertions.Expect(page.Locator(".resources-layout.pane-full-canvas")).ToBeVisibleAsync();
             var pane = page.Locator(".resource-pane");
             var row = pane.Locator("[data-resource-name='frontend']");
@@ -2469,7 +2469,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             var api = pane.Locator("[data-resource-name='api']").First;
             var metadata = api.Locator(".resource-row-wide-metadata");
             await Assertions.Expect(api).ToBeVisibleAsync();
-            var layoutActions = page.GetByRole(AriaRole.Group, new() { Name = "Layout", Exact = true });
+            var layoutActions = page.Locator(".resource-header-actions").GetByRole(AriaRole.Group, new() { Name = "Layout", Exact = true });
             await Assertions.Expect(layoutActions).ToBeVisibleAsync();
             var actionNames = await layoutActions.GetByRole(AriaRole.Button).AllTextContentsAsync();
             await Assertions.Expect(metadata.Locator(".resource-row-health")).Not.ToBeVisibleAsync();
@@ -2519,17 +2519,17 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             var queueUrls = pane.Locator("[data-resource-name='queue'] .url-container");
             await Assertions.Expect(queueUrls.Locator("span")).ToBeVisibleAsync();
             await Assertions.Expect(queueUrls.Locator("a")).ToHaveCountAsync(0);
-            await page.Locator(".resource-row-all .resource-row-link").ClickAsync();
+            await page.Locator(".resource-pane-view-selector button[aria-label='Summary']").ClickAsync();
             await page.WaitForFunctionAsync("() => Math.abs(document.querySelector('.resource-pane').getBoundingClientRect().width - 560) < 0.05");
 
             var target = api.Locator(".resource-row-link");
             var targetBox = await target.BoundingBoxAsync();
             Assert.NotNull(targetBox);
-            await page.Locator(".detail-page-close").ClickAsync();
+            await ResourcePaneNavigation.ToggleResourceListAsync(page);
             await Assertions.Expect(page.Locator(".resources-layout.pane-full-canvas")).ToBeVisibleAsync();
             await Assertions.Expect(layoutActions).Not.ToBeVisibleAsync();
             await AssertRowGapsAsync();
-            await pane.Locator(".resource-row-all .resource-row-link").ClickAsync();
+            await pane.Locator(".resource-pane-view-selector button[aria-label='Summary']").ClickAsync();
             await Assertions.Expect(page.Locator(".resources-layout.pane-full-canvas")).ToHaveCountAsync(0);
             await page.WaitForFunctionAsync("() => Math.abs(document.querySelector('.resource-pane').getBoundingClientRect().width - 560) < 0.05");
             await Assertions.Expect(layoutActions).ToBeVisibleAsync();

@@ -124,7 +124,7 @@ public class ResourcesLayoutCloseTests : DashboardTestContext
 
     [Theory]
     [InlineData("/resources", true)]
-    public async Task AllResourcesRow_ReopensTabAfterClosingContent(string url, bool isDesktop)
+    public async Task SummarySelector_ReopensOverviewAfterClosingContent(string url, bool isDesktop)
     {
         var viewport = new ViewportInformation(IsDesktop: isDesktop, IsUltraLowHeight: false, IsUltraLowWidth: false);
         ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
@@ -141,6 +141,8 @@ public class ResourcesLayoutCloseTests : DashboardTestContext
         Assert.True(cut.Find(".resource-content").HasAttribute("inert"));
 
         await cut.Find(".resource-row-all .resource-row-link").ClickAsync();
+        Assert.True(cut.Find(".resource-content").HasAttribute("inert"));
+        await cut.Find(".resource-pane-view-selector [aria-label='Summary']").ClickAsync();
         cut.Render();
 
         Assert.Equal(url.TrimStart('/'), navigation.ToBaseRelativePath(navigation.Uri));
@@ -304,13 +306,13 @@ public class ResourcesLayoutCloseTests : DashboardTestContext
     }
 
     // The dashboard opens /resources on the full-page list (see ResourcesLayout.TryRedirectLandingAsync), so there's
-    // no content to close until "All resources" opens the overview.
+    // no content to close until Summary opens the overview.
     private static async Task OpenStartPageContentAsync(IRenderedComponent<ResourcesLayout> cut, string url, bool isDesktop)
     {
         if (isDesktop && url == DashboardUrls.ResourceListUrl())
         {
             Assert.True(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
-            await cut.Find(".resource-row-all .resource-row-link").ClickAsync();
+            await cut.Find(".resource-pane-view-selector [aria-label='Summary']").ClickAsync();
             cut.Render();
             Assert.False(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
         }

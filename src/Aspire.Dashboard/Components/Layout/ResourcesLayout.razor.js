@@ -859,7 +859,7 @@ export function registerResourceContextMenu(layoutElement, dotNetRef) {
         }
     };
 
-    // While the resource list fills the page, no tab is shown selected, and choosing the current tab opens its content.
+    // While the resource list fills the page, Overview is selected, and choosing the underlying telemetry tab opens it.
     // The tab list can't report that choice (see OpenTabFromFullCanvasAsync), so a click, Enter or Space on a tab is
     // passed on. The tabs are in the page header, outside the layout, so this listens on the document.
     const onTabActivate = event => {

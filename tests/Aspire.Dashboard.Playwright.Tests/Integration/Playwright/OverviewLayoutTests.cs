@@ -17,6 +17,79 @@ public class OverviewLayoutTests(ResourcesTests.ResourcesDashboardServerFixture 
     : PlaywrightTestsBase<ResourcesTests.ResourcesDashboardServerFixture>(fixture)
 {
     [Theory]
+    [InlineData(769)]
+    [InlineData(1440)]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task OverviewSelector_TableSummaryAndGraphShareTheExpandedPicker(int width)
+    {
+        await RunTestAsync(async page =>
+        {
+            await page.SetViewportSizeAsync(width, 900);
+            await page.GotoAsync("/resources");
+            await Assertions.Expect(page.Locator(".resource-row[data-resource-name='TestResource']")).ToBeVisibleAsync();
+            var expanded = page.Locator(".resource-pane-view-selector");
+            await Assertions.Expect(expanded.GetByRole(AriaRole.Button, new() { Name = ControlsStrings.ChartContainerTableTab, Exact = true }))
+                .ToHaveAttributeAsync("aria-pressed", "true");
+            var allResources = page.Locator(".resource-row-all .resource-row-link");
+            await Assertions.Expect(allResources).ToHaveAttributeAsync("aria-disabled", "true");
+            await allResources.ClickAsync(new() { Force = true });
+            await Assertions.Expect(page.Locator(".pane-full-canvas")).ToBeVisibleAsync();
+
+            var search = page.Locator(".resource-pane-search").GetByRole(AriaRole.Searchbox);
+            var filter = page.Locator("#resourcePaneGroupingButton");
+            Assert.True(await expanded.EvaluateAsync<bool>("el => el.getBoundingClientRect().right <= innerWidth"));
+            var selectorBox = await expanded.BoundingBoxAsync();
+            var filterBox = await filter.BoundingBoxAsync();
+            Assert.NotNull(selectorBox);
+            Assert.NotNull(filterBox);
+            Assert.True(selectorBox.X >= filterBox.X + filterBox.Width);
+            await Assertions.Expect(search).ToBeVisibleAsync();
+
+            var summary = expanded.GetByRole(AriaRole.Button, new() { Name = Dialogs.SettingsDialogGroupOverviewSummary, Exact = true });
+            await summary.FocusAsync();
+            await summary.PressAsync("Enter");
+            await Assertions.Expect(page.Locator(".home-hero")).ToBeVisibleAsync();
+            await Assertions.Expect(expanded).ToHaveCountAsync(0);
+            var header = page.Locator(".resource-header-actions");
+            var table = header.GetByRole(AriaRole.Button, new() { Name = ControlsStrings.ChartContainerTableTab, Exact = true });
+            await table.ClickAsync();
+            await Assertions.Expect(page.Locator(".pane-full-canvas")).ToBeVisibleAsync();
+            var graph = expanded.GetByRole(AriaRole.Button, new() { Name = ResourceStrings.GraphPageTitle, Exact = true });
+            await graph.ClickAsync();
+            await Assertions.Expect(page.Locator(".home-resource-graph-layout")).ToBeVisibleAsync();
+            await table.ClickAsync();
+            await Assertions.Expect(page.Locator(".pane-full-canvas")).ToBeVisibleAsync();
+            await Assertions.Expect(expanded.GetByRole(AriaRole.Button, new() { Name = ControlsStrings.ChartContainerTableTab, Exact = true }))
+                .ToHaveAttributeAsync("aria-pressed", "true");
+            await Assertions.Expect(page.GetByRole(AriaRole.Tab, new() { Name = Layout.ResourceTabOverview, Exact = true }))
+                .ToHaveAttributeAsync("aria-selected", "true");
+
+            var layouts = page.GetByRole(AriaRole.Group, new() { Name = ResourceStrings.LayoutLabel, Exact = true });
+            foreach (var view in new[] { ControlsStrings.ChartContainerTableTab, Dialogs.SettingsDialogGroupOverviewSummary, ResourceStrings.GraphPageTitle })
+            {
+                await layouts.GetByRole(AriaRole.Button, new() { Name = view, Exact = true }).ClickAsync();
+                await Assertions.Expect(page.Locator(".detail-page-close")).ToBeHiddenAsync();
+                await page.Locator(".resource-row[data-resource-name='TestResource'] .resource-row-link").ClickAsync();
+                await Assertions.Expect(page.Locator(".overview-grid")).ToBeVisibleAsync();
+                await Assertions.Expect(page.Locator(".detail-page-close")).ToBeVisibleAsync();
+                await allResources.ClickAsync();
+
+                if (view == ControlsStrings.ChartContainerTableTab)
+                {
+                    await Assertions.Expect(page.Locator(".pane-full-canvas")).ToBeVisibleAsync();
+                }
+                else
+                {
+                    await Assertions.Expect(page.Locator(".pane-full-canvas")).ToHaveCountAsync(0);
+                    await Assertions.Expect(page.Locator(view == Dialogs.SettingsDialogGroupOverviewSummary ? ".home-hero" : ".home-resource-graph-layout")).ToBeVisibleAsync();
+                }
+                await Assertions.Expect(layouts.GetByRole(AriaRole.Button, new() { Name = view, Exact = true }))
+                    .ToHaveAttributeAsync("aria-pressed", "true");
+            }
+        });
+    }
+
+    [Theory]
     [InlineData(390, 844, "Light")]
     [InlineData(390, 844, "Dark")]
     [InlineData(768, 1024, "Light")]
@@ -50,7 +123,7 @@ public class OverviewLayoutTests(ResourcesTests.ResourcesDashboardServerFixture 
             await page.WaitForFunctionAsync("key => JSON.parse(localStorage.getItem(key)) === 'Summary'", BrowserStorageKeys.GroupOverview);
             await Assertions.Expect(page.Locator(".home-hero-headline")).ToHaveTextAsync("All 3 resources are running");
             var layout = page.GetByRole(AriaRole.Group, new() { Name = ResourceStrings.LayoutLabel, Exact = true });
-            await Assertions.Expect(layout.GetByRole(AriaRole.Button)).ToHaveCountAsync(2);
+            await Assertions.Expect(layout.GetByRole(AriaRole.Button)).ToHaveCountAsync(width > 768 ? 3 : 2);
             var summary = layout.GetByRole(AriaRole.Button, new() { Name = Dialogs.SettingsDialogGroupOverviewSummary, Exact = true });
             var graph = layout.GetByRole(AriaRole.Button, new() { Name = ResourceStrings.GraphPageTitle, Exact = true });
             await Assertions.Expect(summary).ToHaveAttributeAsync("aria-pressed", "true");

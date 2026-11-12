@@ -69,6 +69,9 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
     [Parameter]
     public IReadOnlyList<string>? ResourceNames { get; set; }
 
+    [CascadingParameter]
+    public ResourcesLayout? Layout { get; set; }
+
     [Inject]
     public required IDashboardClient DashboardClient { get; init; }
 
@@ -106,9 +109,6 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
     public required IStringLocalizer<Dashboard.Resources.ControlsStrings> ControlsStringsLoc { get; init; }
 
     [Inject]
-    public required IStringLocalizer<Dashboard.Resources.Dialogs> DialogsLoc { get; init; }
-
-    [Inject]
     public required IJSRuntime JS { get; init; }
 
     [Inject]
@@ -118,15 +118,6 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
     public required ViewportInformation ViewportInformation { get; init; }
 
     private ITelemetryRepository TelemetryRepository => DataSource.TelemetryRepository;
-    private IReadOnlyList<IconToggleOption<GroupOverview>> OverviewOptions =>
-        new IconToggleOption<GroupOverview>[]
-        {
-            new(GroupOverview.Summary, new Icons.Regular.Size20.DataUsage(), DialogsLoc[nameof(Dashboard.Resources.Dialogs.SettingsDialogGroupOverviewSummary)]),
-            new(GroupOverview.Graph, new Icons.Regular.Size20.Flow(), Loc[nameof(Dashboard.Resources.Resources.GraphPageTitle)])
-        }
-        .Where(option => option.Value != GroupOverview.Graph || ViewPreferences.IsGraphEnabled)
-        .ToList();
-
     private int GetMissingParameterCount() =>
         _resourceByName.Values.Count(resource => resource.HasMissingParameterValueState() && IsInScope(resource));
 
