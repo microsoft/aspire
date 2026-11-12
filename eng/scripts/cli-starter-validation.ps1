@@ -398,7 +398,7 @@ foreach ($template in $templates)
                     {
                         # Capture installer logs before stopping the AppHost; they can explain
                         # why a dependent resource entered FailedToStart.
-                        aspire logs --include-hidden --tail 200 *>&1 |
+                        aspire logs --include-hidden *>&1 |
                             Out-File -FilePath (Join-Path $diagnosticsDir 'aspire-resource-logs.log') -Encoding utf8
                     }
                     catch
