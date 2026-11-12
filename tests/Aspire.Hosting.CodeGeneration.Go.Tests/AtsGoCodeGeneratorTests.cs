@@ -1359,6 +1359,7 @@ public class AtsGoCodeGeneratorTests
                 import (
                     "bufio"
                     "bytes"
+                    "context"
                     "encoding/json"
                     "errors"
                     "fmt"
@@ -1720,6 +1721,14 @@ public class AtsGoCodeGeneratorTests
                     }
                 }
 
+                func TestForwardedCallbackTokenFromOtherClientIsRegisteredLocally(t *testing.T) {
+                    other := newClient("")
+                    remote := newRemoteCancellationToken(newClient(""), "ct_host")
+                    if id := other.registerCancellation(remote); id == "ct_host" || id == "" {
+                        t.Fatalf("registerCancellation() = %q, want a locally issued ID", id)
+                    }
+                }
+
                 func TestForwardedCallbackTokenReusesHostID(t *testing.T) {
                     c := newClient("")
                     remote := newRemoteCancellationToken(c, "ct_host")
@@ -1754,6 +1763,13 @@ public class AtsGoCodeGeneratorTests
                 }
 
                 func TestErroredHandleInUnionIsNotSent(t *testing.T) {
+                    ctx, cancel := context.WithCancel(context.Background())
+                    cancel()
+                    unrelated := newTestRedisResourceFromHandle(&handle{HandleID: "u", TypeID: testRedisTypeID}, newClient(""))
+                    unrelated.WithUnionDependency(ctx)
+                    if err := unrelated.Err(); err == nil || !strings.Contains(err.Error(), "must be one of") {
+                        t.Errorf("a canceled context got %v, want the union guard error", err)
+                    }
                     c, received := connectChildErrorHost(t, "addTestRedis")
                     builder := newBuilderOn(c)
 

@@ -4274,7 +4274,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithBuildArg(n
 	if s.Err() != nil {
 		return s
 	}
-	if e, ok := value.(interface{ Err() error }); ok {
+	if e, ok := value.(handleReference); ok {
 		if err := e.Err(); err != nil {
 			s.setPropagatedErr(err)
 			return s
@@ -5024,7 +5024,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithEnvironmen
 	if s.Err() != nil {
 		return s
 	}
-	if e, ok := value.(interface{ Err() error }); ok {
+	if e, ok := value.(handleReference); ok {
 		if err := e.Err(); err != nil {
 			s.setPropagatedErr(err)
 			return s
@@ -6072,7 +6072,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithReference(
 	if s.Err() != nil {
 		return s
 	}
-	if e, ok := source.(interface{ Err() error }); ok {
+	if e, ok := source.(handleReference); ok {
 		if err := e.Err(); err != nil {
 			s.setPropagatedErr(err)
 			return s
@@ -6395,7 +6395,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithUnionDepen
 	if s.Err() != nil {
 		return s
 	}
-	if e, ok := dependency.(interface{ Err() error }); ok {
+	if e, ok := dependency.(handleReference); ok {
 		if err := e.Err(); err != nil {
 			s.setPropagatedErr(err)
 			return s
@@ -6427,7 +6427,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithUrl(url an
 	if s.Err() != nil {
 		return s
 	}
-	if e, ok := url.(interface{ Err() error }); ok {
+	if e, ok := url.(handleReference); ok {
 		if err := e.Err(); err != nil {
 			s.setPropagatedErr(err)
 			return s
@@ -8902,7 +8902,7 @@ func (s *cSharpAppResource) WithEnvironment(name string, value any) CSharpAppRes
 	if s.Err() != nil {
 		return s
 	}
-	if e, ok := value.(interface{ Err() error }); ok {
+	if e, ok := value.(handleReference); ok {
 		if err := e.Err(); err != nil {
 			s.setPropagatedErr(err)
 			return s
@@ -9843,7 +9843,7 @@ func (s *cSharpAppResource) WithReference(source any, options ...WithReferenceOp
 	if s.Err() != nil {
 		return s
 	}
-	if e, ok := source.(interface{ Err() error }); ok {
+	if e, ok := source.(handleReference); ok {
 		if err := e.Err(); err != nil {
 			s.setPropagatedErr(err)
 			return s
@@ -10183,7 +10183,7 @@ func (s *cSharpAppResource) WithUnionDependency(dependency any) CSharpAppResourc
 	if s.Err() != nil {
 		return s
 	}
-	if e, ok := dependency.(interface{ Err() error }); ok {
+	if e, ok := dependency.(handleReference); ok {
 		if err := e.Err(); err != nil {
 			s.setPropagatedErr(err)
 			return s
@@ -10215,7 +10215,7 @@ func (s *cSharpAppResource) WithUrl(url any, options ...WithUrlOption) CSharpApp
 	if s.Err() != nil {
 		return s
 	}
-	if e, ok := url.(interface{ Err() error }); ok {
+	if e, ok := url.(handleReference); ok {
 		if err := e.Err(); err != nil {
 			s.setPropagatedErr(err)
 			return s
@@ -10532,7 +10532,7 @@ func (s *commandLineArgsEditor) Add(value any) error {
 	if err := s.Err(); err != nil {
 		return err
 	}
-	if e, ok := value.(interface{ Err() error }); ok {
+	if e, ok := value.(handleReference); ok {
 		if err := e.Err(); err != nil {
 			return err
 		}
@@ -13906,7 +13906,7 @@ func (s *containerRegistryResource) WithUnionDependency(dependency any) Containe
 	if s.Err() != nil {
 		return s
 	}
-	if e, ok := dependency.(interface{ Err() error }); ok {
+	if e, ok := dependency.(handleReference); ok {
 		if err := e.Err(); err != nil {
 			s.setPropagatedErr(err)
 			return s
@@ -13938,7 +13938,7 @@ func (s *containerRegistryResource) WithUrl(url any, options ...WithUrlOption) C
 	if s.Err() != nil {
 		return s
 	}
-	if e, ok := url.(interface{ Err() error }); ok {
+	if e, ok := url.(handleReference); ok {
 		if err := e.Err(); err != nil {
 			s.setPropagatedErr(err)
 			return s
@@ -15871,7 +15871,7 @@ func (s *containerResource) WithBuildArg(name string, value any) ContainerResour
 	if s.Err() != nil {
 		return s
 	}
-	if e, ok := value.(interface{ Err() error }); ok {
+	if e, ok := value.(handleReference); ok {
 		if err := e.Err(); err != nil {
 			s.setPropagatedErr(err)
 			return s
@@ -16621,7 +16621,7 @@ func (s *containerResource) WithEnvironment(name string, value any) ContainerRes
 	if s.Err() != nil {
 		return s
 	}
-	if e, ok := value.(interface{ Err() error }); ok {
+	if e, ok := value.(handleReference); ok {
 		if err := e.Err(); err != nil {
 			s.setPropagatedErr(err)
 			return s
@@ -17669,7 +17669,7 @@ func (s *containerResource) WithReference(source any, options ...WithReferenceOp
 	if s.Err() != nil {
 		return s
 	}
-	if e, ok := source.(interface{ Err() error }); ok {
+	if e, ok := source.(handleReference); ok {
 		if err := e.Err(); err != nil {
 			s.setPropagatedErr(err)
 			return s
@@ -17992,7 +17992,7 @@ func (s *containerResource) WithUnionDependency(dependency any) ContainerResourc
 	if s.Err() != nil {
 		return s
 	}
-	if e, ok := dependency.(interface{ Err() error }); ok {
+	if e, ok := dependency.(handleReference); ok {
 		if err := e.Err(); err != nil {
 			s.setPropagatedErr(err)
 			return s
@@ -18024,7 +18024,7 @@ func (s *containerResource) WithUrl(url any, options ...WithUrlOption) Container
 	if s.Err() != nil {
 		return s
 	}
-	if e, ok := url.(interface{ Err() error }); ok {
+	if e, ok := url.(handleReference); ok {
 		if err := e.Err(); err != nil {
 			s.setPropagatedErr(err)
 			return s
@@ -18620,7 +18620,7 @@ func (s *distributedApplicationBuilder) AddContainerRegistry(name string, endpoi
 	if err := s.resourceBuilderBase.Err(); err != nil {
 		return &containerRegistryResource{resourceBuilderBase: newPropagatedErroredResourceBuilder(err, s.client)}
 	}
-	if e, ok := endpoint.(interface{ Err() error }); ok {
+	if e, ok := endpoint.(handleReference); ok {
 		if err := e.Err(); err != nil {
 			return &containerRegistryResource{resourceBuilderBase: newPropagatedErroredResourceBuilder(err, s.client)}
 		}
@@ -18861,7 +18861,7 @@ func (s *distributedApplicationBuilder) AddExternalService(name string, url any)
 	if err := s.resourceBuilderBase.Err(); err != nil {
 		return &externalServiceResource{resourceBuilderBase: newPropagatedErroredResourceBuilder(err, s.client)}
 	}
-	if e, ok := url.(interface{ Err() error }); ok {
+	if e, ok := url.(handleReference); ok {
 		if err := e.Err(); err != nil {
 			return &externalServiceResource{resourceBuilderBase: newPropagatedErroredResourceBuilder(err, s.client)}
 		}
@@ -22626,7 +22626,7 @@ func (s *dotnetToolResource) WithEnvironment(name string, value any) DotnetToolR
 	if s.Err() != nil {
 		return s
 	}
-	if e, ok := value.(interface{ Err() error }); ok {
+	if e, ok := value.(handleReference); ok {
 		if err := e.Err(); err != nil {
 			s.setPropagatedErr(err)
 			return s
@@ -23612,7 +23612,7 @@ func (s *dotnetToolResource) WithReference(source any, options ...WithReferenceO
 	if s.Err() != nil {
 		return s
 	}
-	if e, ok := source.(interface{ Err() error }); ok {
+	if e, ok := source.(handleReference); ok {
 		if err := e.Err(); err != nil {
 			s.setPropagatedErr(err)
 			return s
@@ -24031,7 +24031,7 @@ func (s *dotnetToolResource) WithUnionDependency(dependency any) DotnetToolResou
 	if s.Err() != nil {
 		return s
 	}
-	if e, ok := dependency.(interface{ Err() error }); ok {
+	if e, ok := dependency.(handleReference); ok {
 		if err := e.Err(); err != nil {
 			s.setPropagatedErr(err)
 			return s
@@ -24063,7 +24063,7 @@ func (s *dotnetToolResource) WithUrl(url any, options ...WithUrlOption) DotnetTo
 	if s.Err() != nil {
 		return s
 	}
-	if e, ok := url.(interface{ Err() error }); ok {
+	if e, ok := url.(handleReference); ok {
 		if err := e.Err(); err != nil {
 			s.setPropagatedErr(err)
 			return s
@@ -25490,7 +25490,7 @@ func (s *environmentEditor) Set(name string, value any) error {
 	if err := s.Err(); err != nil {
 		return err
 	}
-	if e, ok := value.(interface{ Err() error }); ok {
+	if e, ok := value.(handleReference); ok {
 		if err := e.Err(); err != nil {
 			return err
 		}
@@ -27760,7 +27760,7 @@ func (s *executableResource) WithEnvironment(name string, value any) ExecutableR
 	if s.Err() != nil {
 		return s
 	}
-	if e, ok := value.(interface{ Err() error }); ok {
+	if e, ok := value.(handleReference); ok {
 		if err := e.Err(); err != nil {
 			s.setPropagatedErr(err)
 			return s
@@ -28746,7 +28746,7 @@ func (s *executableResource) WithReference(source any, options ...WithReferenceO
 	if s.Err() != nil {
 		return s
 	}
-	if e, ok := source.(interface{ Err() error }); ok {
+	if e, ok := source.(handleReference); ok {
 		if err := e.Err(); err != nil {
 			s.setPropagatedErr(err)
 			return s
@@ -29069,7 +29069,7 @@ func (s *executableResource) WithUnionDependency(dependency any) ExecutableResou
 	if s.Err() != nil {
 		return s
 	}
-	if e, ok := dependency.(interface{ Err() error }); ok {
+	if e, ok := dependency.(handleReference); ok {
 		if err := e.Err(); err != nil {
 			s.setPropagatedErr(err)
 			return s
@@ -29101,7 +29101,7 @@ func (s *executableResource) WithUrl(url any, options ...WithUrlOption) Executab
 	if s.Err() != nil {
 		return s
 	}
-	if e, ok := url.(interface{ Err() error }); ok {
+	if e, ok := url.(handleReference); ok {
 		if err := e.Err(); err != nil {
 			s.setPropagatedErr(err)
 			return s
@@ -31533,7 +31533,7 @@ func (s *externalServiceResource) WithUnionDependency(dependency any) ExternalSe
 	if s.Err() != nil {
 		return s
 	}
-	if e, ok := dependency.(interface{ Err() error }); ok {
+	if e, ok := dependency.(handleReference); ok {
 		if err := e.Err(); err != nil {
 			s.setPropagatedErr(err)
 			return s
@@ -31565,7 +31565,7 @@ func (s *externalServiceResource) WithUrl(url any, options ...WithUrlOption) Ext
 	if s.Err() != nil {
 		return s
 	}
-	if e, ok := url.(interface{ Err() error }); ok {
+	if e, ok := url.(handleReference); ok {
 		if err := e.Err(); err != nil {
 			s.setPropagatedErr(err)
 			return s
@@ -36259,7 +36259,7 @@ func (s *parameterResource) WithUnionDependency(dependency any) ParameterResourc
 	if s.Err() != nil {
 		return s
 	}
-	if e, ok := dependency.(interface{ Err() error }); ok {
+	if e, ok := dependency.(handleReference); ok {
 		if err := e.Err(); err != nil {
 			s.setPropagatedErr(err)
 			return s
@@ -36291,7 +36291,7 @@ func (s *parameterResource) WithUrl(url any, options ...WithUrlOption) Parameter
 	if s.Err() != nil {
 		return s
 	}
-	if e, ok := url.(interface{ Err() error }); ok {
+	if e, ok := url.(handleReference); ok {
 		if err := e.Err(); err != nil {
 			s.setPropagatedErr(err)
 			return s
@@ -39457,7 +39457,7 @@ func (s *projectResource) WithEnvironment(name string, value any) ProjectResourc
 	if s.Err() != nil {
 		return s
 	}
-	if e, ok := value.(interface{ Err() error }); ok {
+	if e, ok := value.(handleReference); ok {
 		if err := e.Err(); err != nil {
 			s.setPropagatedErr(err)
 			return s
@@ -40398,7 +40398,7 @@ func (s *projectResource) WithReference(source any, options ...WithReferenceOpti
 	if s.Err() != nil {
 		return s
 	}
-	if e, ok := source.(interface{ Err() error }); ok {
+	if e, ok := source.(handleReference); ok {
 		if err := e.Err(); err != nil {
 			s.setPropagatedErr(err)
 			return s
@@ -40738,7 +40738,7 @@ func (s *projectResource) WithUnionDependency(dependency any) ProjectResource {
 	if s.Err() != nil {
 		return s
 	}
-	if e, ok := dependency.(interface{ Err() error }); ok {
+	if e, ok := dependency.(handleReference); ok {
 		if err := e.Err(); err != nil {
 			s.setPropagatedErr(err)
 			return s
@@ -40770,7 +40770,7 @@ func (s *projectResource) WithUrl(url any, options ...WithUrlOption) ProjectReso
 	if s.Err() != nil {
 		return s
 	}
-	if e, ok := url.(interface{ Err() error }); ok {
+	if e, ok := url.(handleReference); ok {
 		if err := e.Err(); err != nil {
 			s.setPropagatedErr(err)
 			return s
@@ -41918,7 +41918,7 @@ func (s *resourceCommandService) ExecuteCommandAsync(resource any, commandName s
 		var zero *ExecuteCommandResult
 		return zero, err
 	}
-	if e, ok := resource.(interface{ Err() error }); ok {
+	if e, ok := resource.(handleReference); ok {
 		if err := e.Err(); err != nil {
 			var zero *ExecuteCommandResult
 			return zero, err
@@ -42617,7 +42617,7 @@ func (s *resourceUrlsEditor) Add(url any, options ...AddOption) error {
 	if err := s.Err(); err != nil {
 		return err
 	}
-	if e, ok := url.(interface{ Err() error }); ok {
+	if e, ok := url.(handleReference); ok {
 		if err := e.Err(); err != nil {
 			return err
 		}
@@ -42661,7 +42661,7 @@ func (s *resourceUrlsEditor) AddForEndpoint(endpoint EndpointReference, url any,
 			return err
 		}
 	}
-	if e, ok := url.(interface{ Err() error }); ok {
+	if e, ok := url.(handleReference); ok {
 		if err := e.Err(); err != nil {
 			return err
 		}
@@ -45089,7 +45089,7 @@ func (s *testDatabaseResource) WithBuildArg(name string, value any) TestDatabase
 	if s.Err() != nil {
 		return s
 	}
-	if e, ok := value.(interface{ Err() error }); ok {
+	if e, ok := value.(handleReference); ok {
 		if err := e.Err(); err != nil {
 			s.setPropagatedErr(err)
 			return s
@@ -45839,7 +45839,7 @@ func (s *testDatabaseResource) WithEnvironment(name string, value any) TestDatab
 	if s.Err() != nil {
 		return s
 	}
-	if e, ok := value.(interface{ Err() error }); ok {
+	if e, ok := value.(handleReference); ok {
 		if err := e.Err(); err != nil {
 			s.setPropagatedErr(err)
 			return s
@@ -46887,7 +46887,7 @@ func (s *testDatabaseResource) WithReference(source any, options ...WithReferenc
 	if s.Err() != nil {
 		return s
 	}
-	if e, ok := source.(interface{ Err() error }); ok {
+	if e, ok := source.(handleReference); ok {
 		if err := e.Err(); err != nil {
 			s.setPropagatedErr(err)
 			return s
@@ -47210,7 +47210,7 @@ func (s *testDatabaseResource) WithUnionDependency(dependency any) TestDatabaseR
 	if s.Err() != nil {
 		return s
 	}
-	if e, ok := dependency.(interface{ Err() error }); ok {
+	if e, ok := dependency.(handleReference); ok {
 		if err := e.Err(); err != nil {
 			s.setPropagatedErr(err)
 			return s
@@ -47242,7 +47242,7 @@ func (s *testDatabaseResource) WithUrl(url any, options ...WithUrlOption) TestDa
 	if s.Err() != nil {
 		return s
 	}
-	if e, ok := url.(interface{ Err() error }); ok {
+	if e, ok := url.(handleReference); ok {
 		if err := e.Err(); err != nil {
 			s.setPropagatedErr(err)
 			return s
@@ -49829,7 +49829,7 @@ func (s *testRedisResource) WithBuildArg(name string, value any) TestRedisResour
 	if s.Err() != nil {
 		return s
 	}
-	if e, ok := value.(interface{ Err() error }); ok {
+	if e, ok := value.(handleReference); ok {
 		if err := e.Err(); err != nil {
 			s.setPropagatedErr(err)
 			return s
@@ -50075,7 +50075,7 @@ func (s *testRedisResource) WithConnectionProperty(name string, value any) TestR
 	if s.Err() != nil {
 		return s
 	}
-	if e, ok := value.(interface{ Err() error }); ok {
+	if e, ok := value.(handleReference); ok {
 		if err := e.Err(); err != nil {
 			s.setPropagatedErr(err)
 			return s
@@ -50703,7 +50703,7 @@ func (s *testRedisResource) WithEnvironment(name string, value any) TestRedisRes
 	if s.Err() != nil {
 		return s
 	}
-	if e, ok := value.(interface{ Err() error }); ok {
+	if e, ok := value.(handleReference); ok {
 		if err := e.Err(); err != nil {
 			s.setPropagatedErr(err)
 			return s
@@ -51876,7 +51876,7 @@ func (s *testRedisResource) WithReference(source any, options ...WithReferenceOp
 	if s.Err() != nil {
 		return s
 	}
-	if e, ok := source.(interface{ Err() error }); ok {
+	if e, ok := source.(handleReference); ok {
 		if err := e.Err(); err != nil {
 			s.setPropagatedErr(err)
 			return s
@@ -52232,7 +52232,7 @@ func (s *testRedisResource) WithUnionDependency(dependency any) TestRedisResourc
 	if s.Err() != nil {
 		return s
 	}
-	if e, ok := dependency.(interface{ Err() error }); ok {
+	if e, ok := dependency.(handleReference); ok {
 		if err := e.Err(); err != nil {
 			s.setPropagatedErr(err)
 			return s
@@ -52264,7 +52264,7 @@ func (s *testRedisResource) WithUrl(url any, options ...WithUrlOption) TestRedis
 	if s.Err() != nil {
 		return s
 	}
-	if e, ok := url.(interface{ Err() error }); ok {
+	if e, ok := url.(handleReference); ok {
 		if err := e.Err(); err != nil {
 			s.setPropagatedErr(err)
 			return s

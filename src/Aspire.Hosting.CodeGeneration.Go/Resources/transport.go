@@ -185,6 +185,9 @@ type CancellationToken struct {
 	// the token to another capability reuses it so the host links the nested
 	// operation to the original cancellation source.
 	remoteID string
+	// remoteClient is the connection that issued remoteID; cancellation IDs are
+	// only meaningful on that connection.
+	remoteClient *client
 }
 
 // NewCancellationToken creates a new cancellation token backed by a cancellable
@@ -203,6 +206,7 @@ func newCancellationTokenFrom(parent context.Context) *CancellationToken {
 func newRemoteCancellationToken(c *client, id string) *CancellationToken {
 	token := newCancellationTokenFrom(context.Background())
 	token.remoteID = id
+	token.remoteClient = c
 	token.notify = func() {
 		go c.cancelToken(id)
 	}
@@ -782,9 +786,10 @@ func (c *client) registerCancellation(token *CancellationToken) string {
 	if token == nil {
 		return ""
 	}
-	// The host already owns this ID, so there is nothing to register or watch locally:
-	// Cancel on the remote token notifies the host itself.
-	if token.remoteID != "" {
+	// The host already owns this ID on this connection, so there is nothing to register
+	// or watch locally: Cancel on the remote token notifies the host itself. A token
+	// forwarded through a different client takes the normal local registration below.
+	if token.remoteID != "" && token.remoteClient == c {
 		return token.remoteID
 	}
 	id := fmt.Sprintf("ct_%d_%d", c.cancellationCounter.Add(1), time.Now().UnixMilli())
