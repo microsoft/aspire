@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Concurrent;
+using System.Text.RegularExpressions;
 using Aspire.Dashboard.Resources;
 using Aspire.Dashboard.Tests.Integration.Playwright.Infrastructure;
 using Aspire.Dashboard.Utils;
@@ -86,6 +87,49 @@ public class OverviewLayoutTests(ResourcesTests.ResourcesDashboardServerFixture 
                 await Assertions.Expect(layouts.GetByRole(AriaRole.Button, new() { Name = view, Exact = true }))
                     .ToHaveAttributeAsync("aria-pressed", "true");
             }
+        });
+    }
+
+    [Fact]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task OverviewSelector_BackAndForwardRestoreTableUnlessGroupViewWasChosen()
+    {
+        await RunTestAsync(async page =>
+        {
+            await page.SetViewportSizeAsync(1440, 900);
+            await page.GotoAsync("/resources");
+            await Assertions.Expect(page.Locator(".resource-row[data-resource-name='TestResource']")).ToBeVisibleAsync();
+            await Assertions.Expect(page.Locator(".resources-layout")).ToHaveAttributeAsync("data-pane-interactions-ready", "true");
+            var fullCanvas = page.Locator(".pane-full-canvas");
+            var expanded = page.Locator(".resource-pane-view-selector");
+            var console = page.GetByRole(AriaRole.Tab, new() { Name = Layout.NavMenuConsoleLogsTab, Exact = true });
+            await Assertions.Expect(fullCanvas).ToBeVisibleAsync();
+
+            await console.ClickAsync();
+            await Assertions.Expect(page).ToHaveURLAsync(new Regex("/consolelogs"));
+            await Assertions.Expect(fullCanvas).ToHaveCountAsync(0);
+
+            await page.GoBackAsync();
+            await Assertions.Expect(page).ToHaveURLAsync(new Regex("/resources$"));
+            await Assertions.Expect(fullCanvas).ToBeVisibleAsync();
+            await Assertions.Expect(expanded.GetByRole(AriaRole.Button, new() { Name = ControlsStrings.ChartContainerTableTab, Exact = true }))
+                .ToHaveAttributeAsync("aria-pressed", "true");
+
+            await page.GoForwardAsync();
+            await Assertions.Expect(page).ToHaveURLAsync(new Regex("/consolelogs"));
+            await Assertions.Expect(fullCanvas).ToHaveCountAsync(0);
+            await page.GoBackAsync();
+            await Assertions.Expect(fullCanvas).ToBeVisibleAsync();
+
+            // An explicit Summary choice is kept when returning through history.
+            await expanded.GetByRole(AriaRole.Button, new() { Name = Dialogs.SettingsDialogGroupOverviewSummary, Exact = true }).ClickAsync();
+            await Assertions.Expect(page.Locator(".home-hero")).ToBeVisibleAsync();
+            await console.ClickAsync();
+            await Assertions.Expect(page).ToHaveURLAsync(new Regex("/consolelogs"));
+            await page.GoBackAsync();
+            await Assertions.Expect(page).ToHaveURLAsync(new Regex("/resources$"));
+            await Assertions.Expect(page.Locator(".home-hero")).ToBeVisibleAsync();
+            await Assertions.Expect(fullCanvas).ToHaveCountAsync(0);
         });
     }
 

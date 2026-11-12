@@ -83,6 +83,8 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private bool _wasOverviewFullCanvas;
     // The chosen group view survives selecting a resource, unlike the current Overview presentation.
     private bool _preferTableOverview;
+    // The overview view option to focus once the selector that replaces the activated one renders.
+    private string? _focusOverviewSelectorOption;
     private string? _fullCanvasNavigation;
 
     /// <summary>
@@ -513,7 +515,8 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
         // Tab navigation remembers the presentation before revealing its destination. Other links, such as a row's
         // console logs action, leave the presentation intact until the router reaches this point.
-        if (_navigatingToTab is null)
+        var isRouterNavigation = _navigatingToTab is null;
+        if (isRouterNavigation)
         {
             RememberOverviewPresentation();
         }
@@ -551,9 +554,19 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         {
             _wasOverviewFullCanvas = false;
         }
-        if (showResourceList)
+        // Tab switches restore the remembered Overview presentation in NavigateToTabAsync. Router-driven returns, such
+        // as browser Back from Console logs to an Overview last shown as the full-page list for the same selection,
+        // restore it here. Choosing Summary or Graph clears the memory, so those explicit choices are kept.
+        var restoreResourceList = !showResourceList && isRouterNavigation && _wasOverviewFullCanvas &&
+            ViewportInformation.IsDesktop && DashboardClient.IsEnabled && CurrentTab == ResourceTab.Overview;
+        if (showResourceList || restoreResourceList)
         {
             SetResourceListVisible(true);
+        }
+        if (restoreResourceList)
+        {
+            // Like a tab switch, returning to the page shows the list immediately rather than expanding the previous page.
+            _animatePaneTransition = false;
         }
         _navigatingToTab = null;
         _isDrawerOpen = !ViewportInformation.IsDesktop && showResourceList;
@@ -585,7 +598,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         var registrationChanged = showResizer != _isResizerRegistered || !_isOrderingRegistered;
         if (_usesCommandSelectionModifier is not null && !pickerChanged && !focusResourcePicker &&
             !registrationChanged && _isTabOverflowRegistered &&
-            _startPaneSelectionReveal is null && _focusPaneSelectionReveal is null)
+            _startPaneSelectionReveal is null && _focusPaneSelectionReveal is null && _focusOverviewSelectorOption is null)
         {
             return;
         }
@@ -661,6 +674,11 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
                 // This render has removed inert. Focus only after the selected page is
                 // accessible, not while its normal-width surface is still clipped.
                 await _jsModule.InvokeVoidAsync("focusPaneSelectionReveal", _layoutElement, focusLocation);
+            }
+            if (_focusOverviewSelectorOption is { } optionKey)
+            {
+                _focusOverviewSelectorOption = null;
+                await _jsModule.InvokeVoidAsync("focusOverviewSelectorOption", _layoutElement, optionKey);
             }
             if (renderSelectionModifier)
             {
@@ -2710,6 +2728,8 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             NavigationManager.NavigateTo(url);
         }
     }
+
+    internal void FocusOverviewSelectorOptionAfterRender(string optionKey) => _focusOverviewSelectorOption = optionKey;
 
     internal async Task ShowGroupOverviewAsync()
     {

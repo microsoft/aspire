@@ -6,6 +6,7 @@ using Microsoft.FluentUI.AspNetCore.Components;
 namespace Aspire.Dashboard.Components.Controls;
 
 /// <summary>
-/// An option of an <see cref="IconToggleGroup{TValue}"/>: its value, its icon and its name.
+/// An option of an <see cref="IconToggleGroup{TValue}"/>: its value, its icon and its name. <paramref name="Key"/>
+/// identifies the option's button in the DOM, for example to move focus to it when another group replaces this one.
 /// </summary>
-public sealed record IconToggleOption<TValue>(TValue Value, Icon Icon, string Text, string? BadgeText = null);
+public sealed record IconToggleOption<TValue>(TValue Value, Icon Icon, string Text, string? BadgeText = null, string? Key = null);

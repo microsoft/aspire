@@ -823,10 +823,17 @@ export function registerResourceContextMenu(layoutElement, dotNetRef) {
         }
     };
 
+    // Browser Back or Forward re-creates the tab strip like any navigation. A tab clicked just before it must not be
+    // mistaken for a choice made on the new strip, which would navigate straight back to that tab.
+    const onHistoryNavigation = () => {
+        recentTabActivation = null;
+    };
+
     layoutElement.addEventListener('contextmenu', onContextMenu);
     layoutElement.addEventListener('pointerdown', onShiftPointerDown, true);
     document.addEventListener('pointerdown', onTabUserActivation, true);
     document.addEventListener('keydown', onTabUserActivation, true);
+    window.addEventListener('popstate', onHistoryNavigation);
     layoutElement.addEventListener('mousedown', onShiftPointerDown, true);
     document.addEventListener('keydown', onContextMenuDismiss, true);
     document.addEventListener('click', onTabActivate);
@@ -841,6 +848,7 @@ export function registerResourceContextMenu(layoutElement, dotNetRef) {
         layoutElement.removeEventListener('pointerdown', onShiftPointerDown, true);
         document.removeEventListener('pointerdown', onTabUserActivation, true);
         document.removeEventListener('keydown', onTabUserActivation, true);
+        window.removeEventListener('popstate', onHistoryNavigation);
         layoutElement.removeEventListener('mousedown', onShiftPointerDown, true);
         document.removeEventListener('keydown', onContextMenuDismiss, true);
         document.removeEventListener('click', onTabActivate);
@@ -960,4 +968,33 @@ export function focusPaneSelectionReveal(layoutElement, location) {
     const target = layoutElement.querySelector('.resource-title') ?? content;
     target.tabIndex = -1;
     target.focus({ preventScroll: true });
+}
+
+// Moves focus to an overview view option (see ResourceOverviewSelector) after choosing a view replaced the selector
+// whose button had focus: Table in the page header opens the full-page list with its own selector, and Summary or
+// Graph there returns to the page header. The replacement can render after this call, for example once the router
+// reaches the overview, so it's awaited briefly. Focus only moves while it's still on the activated button or was
+// dropped to the body with it, never away from a control the user has moved to since.
+export function focusOverviewSelectorOption(layoutElement, optionKey) {
+    const active = document.activeElement;
+    const trigger = active instanceof Element && active.matches('[data-option-key]') ? active : null;
+    if (active && active !== document.body && !trigger) {
+        return;
+    }
+    const deadline = performance.now() + 2000;
+    const tryFocus = () => {
+        const current = document.activeElement;
+        if (!layoutElement.isConnected || (current && current !== document.body && current !== trigger)) {
+            return;
+        }
+        const target = [...layoutElement.querySelectorAll(`[data-option-key="${CSS.escape(optionKey)}"]`)]
+            .find(element => element !== trigger && element.getClientRects().length > 0 && !element.closest('[inert]'));
+        if (target) {
+            target.focus();
+        }
+        else if (performance.now() < deadline) {
+            requestAnimationFrame(tryFocus);
+        }
+    };
+    tryFocus();
 }

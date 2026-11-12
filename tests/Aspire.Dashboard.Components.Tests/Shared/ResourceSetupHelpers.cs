@@ -71,6 +71,7 @@ internal static class ResourceSetupHelpers
         module.SetupVoid("restoreResourceContextMenuFocus", _ => true).SetVoidResult();
         module.SetupVoid("startPaneSelectionReveal", _ => true).SetVoidResult();
         module.SetupVoid("focusPaneSelectionReveal", _ => true).SetVoidResult();
+        module.SetupVoid("focusOverviewSelectorOption", _ => true).SetVoidResult();
         module.SetupVoid("cancelPaneSelectionReveal", _ => true).SetVoidResult();
         module.SetupVoid("registerTabOverflow", _ => true).SetVoidResult();
         module.SetupVoid("unregisterTabOverflow", _ => true).SetVoidResult();

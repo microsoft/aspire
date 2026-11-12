@@ -986,6 +986,96 @@ public class ResourcesLayoutTests : DashboardTestContext
     }
 
     [Theory]
+    [InlineData(null)]
+    [InlineData("Summary")]
+    [InlineData("Graph")]
+    public async Task RouterReturn_OverviewRestoresTableUnlessGroupViewWasChosen(string? chosenView)
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("api"), ModelTestHelpers.CreateResource("cache")],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        JSInterop.SetupModule("/js/app-resourcegraph.js").Mode = JSRuntimeMode.Loose;
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo("/resources");
+        var header = Render<SectionOutlet>(p => p.Add(p => p.SectionName, MainLayout.HeaderContextSectionName));
+        var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport).Add(p => p.Body, builder =>
+        {
+            builder.OpenComponent<ApplicationSummary>(0);
+            builder.CloseComponent();
+        }));
+        cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
+        await cut.InvokeAsync(() => cut.Instance.SetResourceListVisible(true));
+        if (chosenView is not null)
+        {
+            await cut.Find($".resource-pane-view-selector [aria-label='{chosenView}']").ClickAsync();
+            cut.Render();
+            Assert.False(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
+        }
+
+        var console = header.FindComponents<FluentTab>().Single(t => t.Instance.Id == "tab-Console").Instance;
+        await header.InvokeAsync(() => header.FindComponent<FluentTabs>().Instance.ActiveTabChanged.InvokeAsync(console));
+        cut.Render();
+        Assert.Equal("http://localhost/consolelogs", navigation.Uri);
+        Assert.False(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
+
+        // Browser Back reaches the layout as a router navigation, without the tab strip or a history entry marker.
+        navigation.NavigateTo("/resources");
+        cut.Render();
+
+        var isTable = chosenView is null;
+        Assert.Equal(ResourceTab.Overview, cut.Instance.CurrentTab);
+        Assert.Equal(isTable, cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
+        Assert.Equal(isTable, cut.Find(".resource-content").HasAttribute("inert"));
+        Assert.False(cut.Find(".resources-layout").ClassList.Contains("pane-motion-enabled"));
+        Assert.Equal("true", cut.Find(isTable
+            ? ".resource-pane-view-selector [aria-label='Table']"
+            : $".resource-header-actions [aria-label='{chosenView}']").GetAttribute("aria-pressed"));
+
+        // Forward to the console logs, then Back again, keeps the same presentation.
+        navigation.NavigateTo("/consolelogs");
+        cut.Render();
+        Assert.False(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
+        navigation.NavigateTo("/resources");
+        cut.Render();
+        Assert.Equal(isTable, cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
+    }
+
+    [Theory]
+    [InlineData(null, "overview-table")]
+    [InlineData("Summary", "overview-summary")]
+    [InlineData("Graph", "overview-graph")]
+    public async Task OverviewSelector_ReplacingSelectorRestoresFocusToTheChosenView(string? paneView, string expectedOptionKey)
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("api")],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        JSInterop.SetupModule("/js/app-resourcegraph.js").Mode = JSRuntimeMode.Loose;
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo("/resources");
+        var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport).Add(p => p.Body, builder =>
+        {
+            builder.OpenComponent<ApplicationSummary>(0);
+            builder.CloseComponent();
+        }));
+        cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
+        await cut.InvokeAsync(() => cut.Instance.SetResourceListVisible(false));
+
+        await cut.Find(".resource-header-actions [aria-label='Table']").ClickAsync();
+        if (paneView is not null)
+        {
+            cut.WaitForAssertion(() => Assert.NotEmpty(JSInterop.Invocations["focusOverviewSelectorOption"]));
+            await cut.Find($".resource-pane-view-selector [aria-label='{paneView}']").ClickAsync();
+        }
+
+        cut.WaitForAssertion(() => Assert.Equal(expectedOptionKey,
+            JSInterop.Invocations["focusOverviewSelectorOption"][^1].Arguments[1]));
+        // The activated selector is gone, and the replacement renders the option that receives focus.
+        Assert.Single(cut.FindAll($"[data-option-key='{expectedOptionKey}']"));
+    }
+
+    [Theory]
     [InlineData("resource-tabs-overflow-button", "tab-Traces-menu-item", "/traces/resource/api")]
     [InlineData("resource-tabs-overflow-button", "tab-Console-menu-item", "/consolelogs/resource/api")]
     [InlineData("resource-tabs-compact-button", "tab-Traces-menu-item", "/traces/resource/api")]

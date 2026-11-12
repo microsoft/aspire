@@ -53,11 +53,20 @@ public sealed class ResourcePaneFullCanvasTests(ResourceTagPaneTests.TaggedResou
                 await table.FocusAsync();
                 await table.PressAsync("Enter");
                 await Assertions.Expect(page.Locator(".pane-full-canvas")).ToBeVisibleAsync();
+                // Table replaces the header's selector with the expanded list's, and focus moves with the choice.
+                await Assertions.Expect(page.Locator(".resource-pane-view-selector button[aria-label='Table']")).ToBeFocusedAsync();
+                await page.Keyboard.PressAsync("Tab");
                 var summary = page.Locator(".resource-pane-view-selector button[aria-label='Summary']");
-                await summary.FocusAsync();
-                await summary.PressAsync("Enter");
+                await Assertions.Expect(summary).ToBeFocusedAsync();
+                await page.Keyboard.PressAsync("Enter");
                 await Assertions.Expect(page.Locator(".pane-full-canvas")).ToHaveCountAsync(0);
                 await Assertions.Expect(page.Locator(".resource-content")).ToBeVisibleAsync();
+                await Assertions.Expect(page.Locator(".resource-header-actions button[aria-label='Summary']")).ToBeFocusedAsync();
+                await page.Keyboard.PressAsync("Shift+Tab");
+                await Assertions.Expect(table).ToBeFocusedAsync();
+                await page.Keyboard.PressAsync("Enter");
+                await Assertions.Expect(page.Locator(".pane-full-canvas")).ToBeVisibleAsync();
+                await Assertions.Expect(page.Locator(".resource-pane-view-selector button[aria-label='Table']")).ToBeFocusedAsync();
             }
         });
     }
