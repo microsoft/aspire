@@ -35,9 +35,9 @@ jobs:
     if: ${{ github.repository == 'microsoft/aspire' }}
     runs-on: ${{ inputs.runner }}
     # Shared budget for every caller of this reusable workflow. The validation script can spend
-    # up to six startup waits (run + start for three templates) and five resource waits, which is
-    # 42 minutes on the current Windows ARM64 input set before template creation, package add, log
-    # collection, and artifact upload. Keep the job timeout above that aggregate budget.
+    # up to six startup waits (run + start for three templates) and six resource waits (seven on
+    # Linux), which is 48 minutes on the current Windows ARM64 input set before template creation,
+    # package add, log collection, and artifact upload. Keep the job timeout above that aggregate budget.
     timeout-minutes: 60
     env:
       GH_TOKEN: ${{ github.token }}
@@ -149,5 +149,10 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: cli-starter-validation-${{ inputs.artifactSuffix }}
-          path: ${{ runner.temp }}/aspire-cli-starter-validation
+          # Stop can return while npm rolls back an interrupted install. Exclude both the
+          # dependency directories and their contents so enumeration never stats disappearing files.
+          path: |
+            ${{ runner.temp }}/aspire-cli-starter-validation
+            !${{ runner.temp }}/aspire-cli-starter-validation/**/node_modules
+            !${{ runner.temp }}/aspire-cli-starter-validation/**/node_modules/**
           if-no-files-found: ignore

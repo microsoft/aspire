@@ -355,7 +355,7 @@ public sealed class TestTriggerMapTests
         },
         {
             "eng/scripts/cli-starter-validation.ps1",
-            ["job:cli-starter-validation"]
+            ["test:Infrastructure.Tests", "job:cli-starter-validation"]
         },
         {
             "eng/scripts/test-native-dashboard.ps1",

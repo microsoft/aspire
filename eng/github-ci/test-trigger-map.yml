@@ -355,6 +355,10 @@ path_rules:
     targets: [job:cli-starter-validation]
     reason: the reusable workflow, PR installer, and scenario script implement starter validation
   - paths:
+      - eng/scripts/cli-starter-validation.ps1
+    targets: [test:Infrastructure.Tests]
+    reason: starter validation script behavioral tests execute this loose input
+  - paths:
       - .github/workflows/native-dashboard-validation.yml
       - eng/scripts/test-native-dashboard.ps1
       - tests/Aspire.Dashboard.Tests/Aspire.Dashboard.Tests.csproj
