@@ -2,13 +2,14 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { spawnSync } from 'child_process';
 import type { AspireExtensionE2EControlCommand, AspireExtensionE2EControlStatus } from '../../types/extensionApi';
+import { getPsFollowProcessLogPath, readPsFollowProcesses, type PsFollowProcessRecord } from '../../testing/psFollowProcessLog';
 import {
     lsJsonStreamCapability,
     type ConfigInfo,
 } from '../../types/configInfo';
 import { applyE2eControl, isSamePath, readStateFile, sleepSynchronously, waitForExtensionState } from './assertions';
 import { VSBrowser } from './extester';
-import { getCliPath, getControlFilePath, getPrimaryAppHostProjectPath, getRepoRoot, getRunRoot, getWorkspaceRoot } from './paths';
+import { getCliPath, getControlFilePath, getPrimaryAppHostProjectPath, getRepoRoot, getRunId, getRunRoot, getStateFilePath, getWorkspaceRoot } from './paths';
 import { ProcessError, runProcess } from './process';
 import { reloadWindow } from './vscode';
 
@@ -113,6 +114,11 @@ export async function setWorkspaceFoldersForE2E(folders: readonly { folderPath: 
     return status.result as Array<{ name: string; uri: string; fileName: string }>;
 }
 
+export async function getWorkspaceFoldersForE2E(): Promise<Array<{ name: string; uri: string; fileName: string }>> {
+    const status = await executeE2eControlCommand({ name: 'getWorkspaceFolders' });
+    return status.result as Array<{ name: string; uri: string; fileName: string }>;
+}
+
 export async function setWorkspaceFolderCliPathForE2E(folderPath: string, cliPath: string): Promise<{ targetKey: string; cliPath: string }> {
     const status = await executeE2eControlCommand({ name: 'setWorkspaceFolderCliPath', folderPath, cliPath });
     return status.result as { targetKey: string; cliPath: string };
@@ -122,8 +128,28 @@ export async function clearWorkspaceFolderCliPathsForE2E(): Promise<void> {
     await executeE2eControlCommand({ name: 'clearWorkspaceFolderCliPaths' });
 }
 
-export async function restoreWorkspaceFoldersForE2E(): Promise<void> {
-    await setWorkspaceFoldersForE2E([{ folderPath: getWorkspaceRoot() }]);
+export async function restoreWorkspaceFoldersForE2E(options?: { waitForExtensionHostReload?: boolean; timeoutMs?: number }): Promise<void> {
+    const workspaceRoot = getWorkspaceRoot();
+    if (!options?.waitForExtensionHostReload) {
+        await setWorkspaceFoldersForE2E([{ folderPath: workspaceRoot }]);
+        return;
+    }
+
+    const deadline = Date.now() + (options.timeoutMs ?? 120000);
+    const currentWorkspaceFolders = await getWorkspaceFoldersForE2E();
+    const workspaceChangeRequired = currentWorkspaceFolders.length !== 1 || !isSamePath(currentWorkspaceFolders[0].fileName, workspaceRoot);
+    const previousExtensionHostSessionId = readStateFile().extensionHostSessionId;
+
+    await setWorkspaceFoldersForE2E([{ folderPath: workspaceRoot }]);
+    if (!workspaceChangeRequired) {
+        return;
+    }
+
+    await waitForExtensionState(
+        file => file.extensionHostSessionId !== previousExtensionHostSessionId,
+        'extension host to reload with the default E2E workspace open',
+        Math.max(1, deadline - Date.now()));
+    await VSBrowser.instance.waitForWorkbench(Math.max(1, deadline - Date.now()));
 }
 
 export async function snapshotClipboardForE2E(): Promise<void> {
@@ -171,8 +197,7 @@ function redactE2eTeardownFailure(failure: unknown): string {
         .replace(/Last state:[\s\S]*/g, 'Last state: <redacted>');
 }
 
-export async function createEmptyAppHostProject(projectName: string): Promise<string> {
-    const outputPath = getGeneratedProjectRoot(projectName);
+export async function createEmptyAppHostProject(projectName: string, outputPath = getGeneratedProjectRoot(projectName)): Promise<string> {
     removePath(outputPath, { recursive: true, force: true });
     await runProcess(getCliPath(), [
         'new',
@@ -191,7 +216,7 @@ export async function createEmptyAppHostProject(projectName: string): Promise<st
         cwd: getWorkspaceRoot(),
         timeoutMs: 180000,
     });
-    await waitForPath(getGeneratedAppHostPath(projectName), 180000);
+    await waitForPath(path.join(outputPath, 'apphost.cs'), 180000);
     await waitForPath(path.join(outputPath, 'aspire.config.json'), 180000);
 
     return outputPath;
@@ -470,8 +495,20 @@ export function touchPrimaryAppHostProject(): void {
     fs.appendFileSync(getPrimaryAppHostProjectPath(), '\n');
 }
 
-export function writeDelayedPsCliWrapper(delayMs = 1_500): string {
-    return writeCliWrapper('aspire-delayed-ps', { psSnapshotDelayMs: delayMs });
+/**
+ * A CLI whose `ps` snapshots block until the test releases them, so a refresh stays observably in
+ * flight for as long as the test needs instead of for a fixed delay that a slow runner can outlast.
+ */
+export function writeGatedPsCliWrapper(): { cliPath: string; releasePsSnapshot: () => void } {
+    const gateDirectory = path.join(getWorkspaceRoot(), '.e2e-cli-wrappers', 'gated-ps');
+    const psSnapshotReleaseFilePath = path.join(gateDirectory, 'release-ps-snapshot');
+    removePath(gateDirectory, { recursive: true, force: true });
+    fs.mkdirSync(gateDirectory, { recursive: true });
+
+    return {
+        cliPath: writeCliWrapper('aspire-gated-ps', { psSnapshotReleaseFilePath }),
+        releasePsSnapshot: () => writeFileWithRetry(psSnapshotReleaseFilePath, ''),
+    };
 }
 
 export function writeTrackedDelayedPsCliWrapper(delayMs = 1_500): { cliPath: string; invocationLogPath: string } {
@@ -482,6 +519,14 @@ export function writeTrackedDelayedPsCliWrapper(delayMs = 1_500): { cliPath: str
         psSnapshotDelayMs: delayMs,
     });
     return { cliPath, invocationLogPath };
+}
+
+export function getPsFollowProcesses(): PsFollowProcessRecord[] {
+    const runId = getRunId();
+    if (!runId) {
+        throw new Error('ASPIRE_EXTENSION_E2E_RUN_ID is required to identify owned ps followers.');
+    }
+    return readPsFollowProcesses(getPsFollowProcessLogPath(getStateFilePath()), runId);
 }
 
 export function getCliWrapperInvocations(invocationLogPath: string): string[][] {

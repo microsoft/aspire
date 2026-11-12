@@ -47,6 +47,7 @@
 
   <ItemGroup>
     <Using Include="Aspire.Tests.Utils" />
+    <Using Remove="Xunit" />
   </ItemGroup>
 
   <ItemGroup>
@@ -55,11 +56,13 @@
     <PackageReference Include="Azure.Search.Documents" />
     <PackageReference Include="Hex1b" />
     <PackageReference Include="Microsoft.DotNet.XUnitV3Extensions" />
+    <PackageReference Include="Verify.XunitV3" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="$(TestsSharedDir)CliInstallStrategy.cs" Link="shared\CliInstallStrategy.cs" />
     <Compile Include="$(TestsSharedDir)CliPackageDiscovery.cs" Link="shared\CliPackageDiscovery.cs" />
     <Compile Include="$(TestsSharedDir)TemporaryWorkspace.cs" Link="shared\TemporaryWorkspace.cs" />
+    <Compile Include="$(TestsSharedDir)PebbleAcmeFixture.cs" Link="shared\PebbleAcmeFixture.cs" />
     <Compile Include="$(TestsSharedDir)Hex1bTestHelpers.cs" Link="shared\Hex1bTestHelpers.cs" />
     <Compile Include="$(TestsSharedDir)Hex1bAutomatorTestHelpers.cs" Link="shared\Hex1bAutomatorTestHelpers.cs" />
   </ItemGroup>

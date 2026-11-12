@@ -164,6 +164,31 @@ public class AddMongoDBReplicaSetTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public void WithMemberThrowsBeforeMutatingInPublishMode()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var keyFile = builder.AddParameter("keyfile", "sharedkey", secret: true);
+        var password = builder.AddParameter("password", "sharedpassword", secret: true);
+        // The public constructor bypasses AddMongoDBReplicaSet's publish guard.
+        var rs = builder.AddResource(new MongoDBReplicaSetResource("rs0", keyFile.Resource, null, password.Resource));
+        var member = builder.AddMongoDB("mongo1");
+        var memberAnnotations = member.Resource.Annotations.ToArray();
+        var replicaSetAnnotations = rs.Resource.Annotations.ToArray();
+        var memberPassword = member.Resource.PasswordParameter;
+        var resources = builder.Resources.ToArray();
+
+        Assert.Throws<NotSupportedException>(() => rs.WithMember(member));
+
+        Assert.Null(member.Resource.ReplicaSetName);
+        Assert.Equal(memberAnnotations, member.Resource.Annotations);
+        Assert.Equal(replicaSetAnnotations, rs.Resource.Annotations);
+        Assert.Null(member.Resource.UserNameParameter);
+        Assert.Same(memberPassword, member.Resource.PasswordParameter);
+        Assert.True(member.Resource.PasswordParameterWasGenerated);
+        Assert.Equal(resources, builder.Resources);
+    }
+
+    [Fact]
     public void WithMemberOptsTheMemberInToTheDeveloperCertificate()
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);

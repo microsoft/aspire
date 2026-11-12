@@ -1,20 +1,17 @@
-// Licensed to the .NET Foundation under one or more agreements.
+﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using Aspire.Dashboard.Components.Controls.Grid;
 using Aspire.Dashboard.Components.Controls.PropertyValues;
-using Aspire.Dashboard.Components.Pages;
 using Aspire.Dashboard.Extensions;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Resources;
 using Aspire.Dashboard.Telemetry;
 using Aspire.Dashboard.Utils;
-using Aspire.Shared;
 using Google.Protobuf.WellKnownTypes;
-using Humanizer;
 using Microsoft.AspNetCore.Components;
-using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
 using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
@@ -30,6 +27,12 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
 
     [Parameter]
     public bool ShowSpecOnlyToggle { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the filter input is focused when the details are displayed.
+    /// </summary>
+    [Parameter]
+    public bool AutofocusFilter { get; set; } = true;
 
     [Parameter]
     public bool ShowHiddenResources { get; set; }
@@ -75,43 +78,36 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
     private readonly HashSet<string> _unmaskedItemNames = new();
     private const string StateDescriptionPropertyKey = "resource-state-description";
 
-    internal IQueryable<EnvironmentVariableViewModel> FilteredEnvironmentVariables =>
+        internal IEnumerable<EnvironmentVariableViewModel> FilteredEnvironmentVariables =>
         Resource.Environment
             .Where(vm => (_showAll || vm.FromSpec) && ((IPropertyGridItem)vm).MatchesFilter(_filter))
-            .OrderBy(vm => vm.Name, StringComparers.EnvironmentVariableName)
-            .AsQueryable();
+            .OrderBy(vm => vm.Name, StringComparers.EnvironmentVariableName);
 
-    internal IQueryable<DisplayedUrl> FilteredUrls =>
+        internal IEnumerable<DisplayedUrl> FilteredUrls =>
         GetUrls()
-            .Where(vm => vm.MatchesFilter(_filter))
-            .AsQueryable();
+            .Where(vm => vm.MatchesFilter(_filter));
 
-    internal IQueryable<ResourceDetailRelationshipViewModel> FilteredRelationships =>
+        internal IEnumerable<ResourceDetailRelationshipViewModel> FilteredRelationships =>
         GetRelationships()
-            .Where(vm => vm.MatchesFilter(_filter))
-            .AsQueryable();
+            .Where(vm => vm.MatchesFilter(_filter));
 
-    internal IQueryable<ResourceDetailRelationshipViewModel> FilteredBackRelationships =>
+        internal IEnumerable<ResourceDetailRelationshipViewModel> FilteredBackRelationships =>
         GetBackRelationships()
-            .Where(vm => vm.MatchesFilter(_filter))
-            .AsQueryable();
+            .Where(vm => vm.MatchesFilter(_filter));
 
-    internal IQueryable<VolumeViewModel> FilteredVolumes =>
+        internal IEnumerable<VolumeViewModel> FilteredVolumes =>
         Resource.Volumes
             .Where(vm => vm.MatchesFilter(_filter))
-            .OrderBy(vm => vm.Source, StringComparer.OrdinalIgnoreCase)
-            .AsQueryable();
+            .OrderBy(vm => vm.Source, StringComparer.OrdinalIgnoreCase);
 
-    internal IQueryable<HealthReportViewModel> FilteredHealthReports =>
+        internal IEnumerable<HealthReportViewModel> FilteredHealthReports =>
         Resource.HealthReports
             .Where(vm => vm.MatchesFilter(_filter))
-            .OrderBy(vm => vm.Name, StringComparer.OrdinalIgnoreCase)
-            .AsQueryable();
+            .OrderBy(vm => vm.Name, StringComparer.OrdinalIgnoreCase);
 
-    internal IQueryable<DisplayedResourcePropertyViewModel> FilteredResourceProperties =>
+        internal IEnumerable<DisplayedResourcePropertyViewModel> FilteredResourceProperties =>
         GetResourceProperties(ordered: true)
-            .Where(vm => (_showAll || vm.KnownProperty != null || vm.IsHighlighted) && vm.MatchesFilter(_filter))
-            .AsQueryable();
+            .Where(vm => (_showAll || vm.KnownProperty != null || vm.IsHighlighted || vm.IsTrait) && vm.MatchesFilter(_filter));
 
     private bool _isVolumesExpanded;
     private bool _isEnvironmentVariablesExpanded;
@@ -132,7 +128,7 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
         set { _isMaskAllChecked = value; }
     }
 
-    private readonly GridSort<DisplayedUrl> _urlValueSort = GridSort<DisplayedUrl>.ByAscending(vm => vm.Url ?? vm.Text);
+    private readonly EnumerableGridSort<DisplayedUrl> _urlValueSort = EnumerableGridSort<DisplayedUrl>.ByAscending(vm => vm.Url ?? vm.Text);
 
     protected override void OnParametersSet()
     {
@@ -307,6 +303,7 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
             CommandSelected,
             IsCommandExecuting,
             showViewDetails: false,
+            showTerminalItem: true,
             showConsoleLogsItem: true,
             showUrls: true);
     }
@@ -454,7 +451,11 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
 
     public Task OnViewRelationshipAsync(ResourceDetailRelationshipViewModel relationship)
     {
-        NavigationManager.NavigateTo(DashboardUrls.ResourcesUrl(resource: relationship.Resource.Name));
+        // The previous experience has no resource overview page. It keeps main's query-based resource URL, which its
+        // resources page supports.
+        NavigationManager.NavigateTo(DashboardExperienceComponents.IsLegacyLocation(NavigationManager)
+            ? DashboardUrls.ResourcesUrl(resource: relationship.Resource.Name)
+            : DashboardUrls.ResourceOverviewUrl(relationship.Resource.Name));
         return Task.CompletedTask;
     }
 
@@ -468,43 +469,9 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
         ], Logger);
     }
 
-    private string GetHealthStatusWithTime(HealthReportViewModel context)
-    {
-        var statusText = context.HealthStatus?.Humanize() ?? Loc[nameof(Aspire.Dashboard.Resources.Resources.WaitingHealthDataStatusMessage)];
+    private string GetHealthStatusWithTime(HealthReportViewModel context) => HealthReportFormatter.GetStatusWithTime(context, Loc);
 
-        // Show timestamp for all resources when available per @davidfowl feedback
-        if (context.LastRunAtTimeStamp.HasValue)
-        {
-            var duration = DateTime.UtcNow.Subtract(context.LastRunAtTimeStamp.Value);
-
-            // Round duration to seconds to avoid sub-second precision issues
-            var roundedDuration = TimeSpan.FromSeconds(Math.Round(duration.TotalSeconds));
-
-            // Display "just now" for health checks that ran in the last 10 seconds
-            if (roundedDuration.TotalSeconds < 10)
-            {
-                return Loc[nameof(Aspire.Dashboard.Resources.Resources.HealthCheckStatusJustNowFormat), statusText];
-            }
-
-            var formattedDuration = DurationFormatter.FormatDuration(roundedDuration, System.Globalization.CultureInfo.CurrentCulture);
-            return Loc[nameof(Aspire.Dashboard.Resources.Resources.HealthCheckStatusWithTimeFormat), statusText, formattedDuration];
-        }
-
-        return statusText;
-    }
-
-    private string? GetHealthStatusTooltip(HealthReportViewModel context)
-    {
-        var statusText = context.HealthStatus?.Humanize() ?? Loc[nameof(Aspire.Dashboard.Resources.Resources.WaitingHealthDataStatusMessage)];
-
-        if (context.LastRunAtTimeStamp.HasValue)
-        {
-            var localTime = FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, context.LastRunAtTimeStamp.Value);
-            return Loc[nameof(Aspire.Dashboard.Resources.Resources.HealthCheckStatusWithTimeTooltipFormat), statusText, localTime];
-        }
-
-        return null;
-    }
+    private string? GetHealthStatusTooltip(HealthReportViewModel context) => HealthReportFormatter.GetStatusTooltip(context, Loc, TimeProvider);
 
     public void Dispose()
     {

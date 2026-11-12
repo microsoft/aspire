@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREDOCKERFILEBUILDER001
-
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
@@ -1316,5 +1314,3 @@ internal static partial class JavaDockerfileGenerator
     [GeneratedRegex(@"apache-maven-(?<major>\d+)\.")]
     private static partial Regex MavenDistributionRegex();
 }
-
-#pragma warning restore ASPIREDOCKERFILEBUILDER001

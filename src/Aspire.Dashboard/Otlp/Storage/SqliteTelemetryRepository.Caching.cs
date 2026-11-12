@@ -323,7 +323,8 @@ public sealed partial class SqliteTelemetryRepository
                 Description = metric.Description,
                 Unit = metric.Unit,
                 InstrumentType = (int)MapMetricType(metric.DataCase),
-                AggregationTemporality = (int)MapAggregationTemporality(metric)
+                AggregationTemporality = (int)MapAggregationTemporality(metric),
+                IsMonotonic = metric.DataCase == Metric.DataOneofCase.Sum && metric.Sum.IsMonotonic
             };
             resource.InstrumentCount++;
             _metricIngestionState.LoadedDimensionInstruments.Add(instrumentId);
@@ -339,7 +340,7 @@ public sealed partial class SqliteTelemetryRepository
         CachedResource resource,
         CachedResourceView resourceView,
         CachedResourceScope resourceScope,
-        RepeatedField<Metric> metrics)
+        IEnumerable<Metric> metrics)
     {
         lock (_cacheLock)
         {
@@ -393,7 +394,7 @@ public sealed partial class SqliteTelemetryRepository
                     """);
 
                 var metricsByName = batch.ToDictionary(metric => metric.Name, StringComparer.Ordinal);
-                var insertedRecords = connection.Query<InsertedInstrumentRecord>(sql.ToString(), parameters, transaction).ToList();
+                var insertedRecords = connection.Query<InsertedInstrumentRecord>(sql.ToString(), parameters, transaction).AsList();
 
                 foreach (var insertedRecord in insertedRecords)
                 {
@@ -408,7 +409,8 @@ public sealed partial class SqliteTelemetryRepository
                         Description = metric.Description,
                         Unit = metric.Unit,
                         InstrumentType = (int)MapMetricType(metric.DataCase),
-                        AggregationTemporality = (int)MapAggregationTemporality(metric)
+                        AggregationTemporality = (int)MapAggregationTemporality(metric),
+                        IsMonotonic = metric.DataCase == Metric.DataOneofCase.Sum && metric.Sum.IsMonotonic
                     });
                     _metricIngestionState.LoadedDimensionInstruments.Add(insertedRecord.InstrumentId);
                     _metricIngestionState.DimensionCounts[insertedRecord.InstrumentId] = 0;
@@ -439,7 +441,8 @@ public sealed partial class SqliteTelemetryRepository
                 description AS Description,
                 unit AS Unit,
                 instrument_type AS InstrumentType,
-                aggregation_temporality AS AggregationTemporality
+                aggregation_temporality AS AggregationTemporality,
+                is_monotonic AS IsMonotonic
             FROM telemetry_metric_instruments
             WHERE resource_id = @ResourceId AND scope_id = @ScopeId;
             """, new
@@ -482,67 +485,66 @@ public sealed partial class SqliteTelemetryRepository
                 }
 
                 using var connection = _database.OpenConnection();
-                using var reader = connection.QueryMultiple("""
-                SELECT
-                    resource_id AS ResourceId,
-                    resource_name AS ResourceName,
-                    instance_id AS InstanceId,
-                    uninstrumented_peer AS UninstrumentedPeer,
-                    has_logs AS HasLogs,
-                    has_traces AS HasTraces,
-                    has_metrics AS HasMetrics
-                FROM telemetry_resources;
-
-                SELECT
-                    v.resource_view_id AS ResourceViewId,
-                    v.resource_id AS ResourceId,
-                    a.attribute_key AS AttributeKey,
-                    a.attribute_value AS AttributeValue
-                FROM telemetry_resource_views v
-                LEFT JOIN telemetry_resource_view_attributes a ON a.resource_view_id = v.resource_view_id
-                ORDER BY v.resource_view_id, a.ordinal;
-
-                SELECT DISTINCT
-                    u.resource_id AS ResourceId,
-                    u.scope_id AS ScopeId,
-                    u.telemetry_type AS TelemetryType,
-                    s.scope_name AS ScopeName,
-                    s.scope_version AS ScopeVersion
-                FROM (
-                    SELECT resource_id, scope_id, 1 AS telemetry_type FROM telemetry_logs
-                    UNION ALL
-                    SELECT resource_id, scope_id, 2 AS telemetry_type FROM telemetry_spans
-                    UNION ALL
-                    SELECT resource_id, scope_id, 4 AS telemetry_type FROM telemetry_metric_instruments
-                ) u
-                JOIN telemetry_scopes s ON s.scope_id = u.scope_id;
-
-                SELECT
-                    scope_id AS ScopeId,
-                    attribute_key AS AttributeKey,
-                    attribute_value AS AttributeValue
-                FROM telemetry_scope_attributes
-                ORDER BY scope_id, ordinal;
-
-                SELECT
-                    instrument_id AS InstrumentId,
-                    resource_id AS ResourceId,
-                    resource_view_id AS ResourceViewId,
-                    scope_id AS ScopeId,
-                    instrument_name AS InstrumentName,
-                    description AS Description,
-                    unit AS Unit,
-                    instrument_type AS InstrumentType,
-                    aggregation_temporality AS AggregationTemporality
-                FROM telemetry_metric_instruments
-                ORDER BY instrument_id;
-                """);
-
-                var resources = reader.Read<CachedResourceRecord>().AsList();
-                var resourceViews = reader.Read<CachedResourceViewRecord>().AsList();
-                var scopeUsages = reader.Read<CachedScopeUsageRecord>().AsList();
-                var scopeAttributes = reader.Read<CachedScopeAttributeRecord>().ToLookup(record => record.ScopeId);
-                var instruments = reader.Read<CachedInstrumentRecord>().AsList();
+                var resources = connection.Query<CachedResourceRecord>("""
+                    SELECT
+                        resource_id AS ResourceId,
+                        resource_name AS ResourceName,
+                        instance_id AS InstanceId,
+                        uninstrumented_peer AS UninstrumentedPeer,
+                        has_logs AS HasLogs,
+                        has_traces AS HasTraces,
+                        has_metrics AS HasMetrics
+                    FROM telemetry_resources;
+                    """).AsList();
+                var resourceViews = connection.Query<CachedResourceViewRecord>("""
+                    SELECT
+                        v.resource_view_id AS ResourceViewId,
+                        v.resource_id AS ResourceId,
+                        a.attribute_key AS AttributeKey,
+                        a.attribute_value AS AttributeValue
+                    FROM telemetry_resource_views v
+                    LEFT JOIN telemetry_resource_view_attributes a ON a.resource_view_id = v.resource_view_id
+                    ORDER BY v.resource_view_id, a.ordinal;
+                    """).AsList();
+                var scopeUsages = connection.Query<CachedScopeUsageRecord>("""
+                    SELECT DISTINCT
+                        u.resource_id AS ResourceId,
+                        u.scope_id AS ScopeId,
+                        u.telemetry_type AS TelemetryType,
+                        s.scope_name AS ScopeName,
+                        s.scope_version AS ScopeVersion
+                    FROM (
+                        SELECT resource_id, scope_id, 1 AS telemetry_type FROM telemetry_logs
+                        UNION ALL
+                        SELECT resource_id, scope_id, 2 AS telemetry_type FROM telemetry_spans
+                        UNION ALL
+                        SELECT resource_id, scope_id, 4 AS telemetry_type FROM telemetry_metric_instruments
+                    ) u
+                    JOIN telemetry_scopes s ON s.scope_id = u.scope_id;
+                    """).AsList();
+                var scopeAttributes = connection.Query<CachedScopeAttributeRecord>("""
+                    SELECT
+                        scope_id AS ScopeId,
+                        attribute_key AS AttributeKey,
+                        attribute_value AS AttributeValue
+                    FROM telemetry_scope_attributes
+                    ORDER BY scope_id, ordinal;
+                    """).ToLookup(record => record.ScopeId);
+                var instruments = connection.Query<CachedInstrumentRecord>("""
+                    SELECT
+                        instrument_id AS InstrumentId,
+                        resource_id AS ResourceId,
+                        resource_view_id AS ResourceViewId,
+                        scope_id AS ScopeId,
+                        instrument_name AS InstrumentName,
+                        description AS Description,
+                        unit AS Unit,
+                        instrument_type AS InstrumentType,
+                        aggregation_temporality AS AggregationTemporality,
+                        is_monotonic AS IsMonotonic
+                    FROM telemetry_metric_instruments
+                    ORDER BY instrument_id;
+                    """).AsList();
 
                 foreach (var record in resources)
                 {
@@ -676,6 +678,7 @@ public sealed partial class SqliteTelemetryRepository
                     Unit = record.Unit,
                     Type = (OtlpInstrumentType)record.InstrumentType,
                     AggregationTemporality = (OtlpAggregationTemporality)record.AggregationTemporality,
+                    IsMonotonic = record.IsMonotonic,
                     Parent = resourceScope.Scope.Scope,
                     ResourceView = resource.ViewsById[record.ResourceViewId].View
                 });
@@ -792,7 +795,7 @@ public sealed partial class SqliteTelemetryRepository
         Metrics = 4
     }
 
-    private sealed class CachedResourceRecord
+    internal sealed class CachedResourceRecord
     {
         public required long ResourceId { get; init; }
         public required string ResourceName { get; init; }
@@ -803,7 +806,7 @@ public sealed partial class SqliteTelemetryRepository
         public required bool HasMetrics { get; init; }
     }
 
-    private sealed class CachedResourceViewRecord
+    internal sealed class CachedResourceViewRecord
     {
         public required long ResourceViewId { get; init; }
         public required long ResourceId { get; init; }
@@ -811,7 +814,7 @@ public sealed partial class SqliteTelemetryRepository
         public string? AttributeValue { get; init; }
     }
 
-    private sealed class CachedScopeUsageRecord
+    internal sealed class CachedScopeUsageRecord
     {
         public required long ResourceId { get; init; }
         public required long ScopeId { get; init; }
@@ -820,7 +823,7 @@ public sealed partial class SqliteTelemetryRepository
         public required string ScopeVersion { get; init; }
     }
 
-    private sealed class CachedScopeRecord
+    internal sealed class CachedScopeRecord
     {
         public required long ScopeId { get; init; }
         public required string ScopeName { get; init; }
@@ -829,14 +832,14 @@ public sealed partial class SqliteTelemetryRepository
         public string? AttributeValue { get; init; }
     }
 
-    private sealed class CachedScopeAttributeRecord
+    internal sealed class CachedScopeAttributeRecord
     {
         public required long ScopeId { get; init; }
         public required string AttributeKey { get; init; }
         public required string AttributeValue { get; init; }
     }
 
-    private sealed class CachedInstrumentRecord
+    internal sealed class CachedInstrumentRecord
     {
         public required long InstrumentId { get; init; }
         public required long ResourceId { get; init; }
@@ -847,9 +850,10 @@ public sealed partial class SqliteTelemetryRepository
         public required string Unit { get; init; }
         public required int InstrumentType { get; init; }
         public required int AggregationTemporality { get; init; }
+        public required bool IsMonotonic { get; init; }
     }
 
-    private sealed class InsertedInstrumentRecord
+    internal sealed class InsertedInstrumentRecord
     {
         public required long InstrumentId { get; init; }
         public required string InstrumentName { get; init; }

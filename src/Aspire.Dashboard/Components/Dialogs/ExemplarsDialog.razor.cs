@@ -31,7 +31,7 @@ public partial class ExemplarsDialog : IDisposable
 
     public ITelemetryRepository TelemetryRepository => DataSource.TelemetryRepository;
 
-    public IQueryable<ChartExemplar> MetricView => Content.Exemplars.AsQueryable();
+    public IEnumerable<ChartExemplar> MetricView => Content.Exemplars;
 
     private readonly CancellationTokenSource _cts = new();
 

@@ -20,7 +20,7 @@ namespace Aspire.Dashboard.Components;
 /// </remarks>
 public partial class IconCheckbox : ComponentBase, IAsyncDisposable
 {
-    private const string JsModulePath = "./Components/Controls/IconCheckbox.razor.js";
+    private const string JsModulePath = "Components/Controls/IconCheckbox.razor.js";
 
     // The control owns the mapping from state to icon so callers only describe the
     // checked state via CheckState rather than wiring up icons and aria values themselves.
@@ -101,7 +101,7 @@ public partial class IconCheckbox : ComponentBase, IAsyncDisposable
     {
         if (firstRender)
         {
-            _jsModule = await JS.InvokeAsync<IJSObjectReference>("import", JsModulePath);
+            _jsModule = await JS.InvokeAsync<IJSObjectReference>("import", $"./{Assets[JsModulePath]}");
             await _jsModule.InvokeVoidAsync("initializeIconCheckboxKeyboard", _element);
             _keyboardInitialized = true;
         }

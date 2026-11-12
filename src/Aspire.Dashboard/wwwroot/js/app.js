@@ -8,6 +8,7 @@ fluentDropdownStyleSheet.replaceSync(`
         background-color: var(--colorNeutralBackground1);
         border: 1px solid var(--colorNeutralStroke1);
         box-shadow: none !important;
+        min-width: var(--aspire-dropdown-min-width, 160px);
     }
 
     .control:hover {
@@ -123,11 +124,68 @@ document.addEventListener("cancel", function (event) {
     }
 }, true);
 
+// AspireTooltip renders fluent-tooltip as manual popovers so they don't light-dismiss open menus.
+// beforetoggle doesn't bubble, so listen in the capture phase.
+// https://developer.mozilla.org/en-US/docs/Web/API/HTMLElement/beforetoggle_event
+document.addEventListener("beforetoggle", function (event) {
+    const target = event.target;
+    if (event.newState !== "open" || !(target instanceof HTMLElement)) {
+        return;
+    }
+
+    // A menu opening hides tooltips, e.g. the tooltip of the button that was just clicked to open it.
+    if (target.matches("fluent-menu-list")) {
+        hideAspireTooltips(null);
+        return;
+    }
+
+    if (!target.matches("fluent-tooltip.aspire-tooltip")) {
+        return;
+    }
+
+    const tooltip = target;
+    const anchor = document.getElementById(tooltip.getAttribute("anchor") ?? "");
+
+    // Don't cover a menu with the tooltip of the button that opened it.
+    if (anchor?.getAttribute("aria-expanded") === "true") {
+        event.preventDefault();
+        return;
+    }
+
+    // Opening a menu focuses an item, which would immediately show that item's tooltip. Menu item tooltips are
+    // shown on hover only, like the title attribute they replace. Screen readers still announce them through
+    // the aria-describedby that fluent-tooltip sets on the item.
+    if (anchor?.matches("fluent-menu-item") && !anchor.matches(":hover")) {
+        event.preventDefault();
+        return;
+    }
+
+    // fluent-tooltip names its anchor (anchor-name: --<anchor id>) when it connects, but fluent-menu later
+    // renames its trigger to --anchor-<trigger id>. Follow the anchor's current name so the tooltip isn't
+    // positioned at the viewport origin.
+    const anchorName = anchor?.style.anchorName;
+    if (anchorName) {
+        tooltip.style.positionAnchor = anchorName;
+    }
+
+    // Manual popovers don't close each other. Keep a single tooltip visible, e.g. when a menu item's tooltip
+    // is shown because the item has focus while the pointer hovers another item or the item's action button.
+    hideAspireTooltips(tooltip);
+}, true);
+
+function hideAspireTooltips(except) {
+    for (const tooltip of document.querySelectorAll("fluent-tooltip.aspire-tooltip:popover-open")) {
+        if (tooltip !== except) {
+            tooltip.hidePopover();
+        }
+    }
+}
+
 // Register a global click event listener to handle copy/open button clicks.
 // Required because an "onclick" attribute is denied by CSP.
 document.addEventListener("click", function (e) {
     // The copy 'button' could either be a button or a menu item.
-    const targetElement = isElementTagName(e.target, "fluent-button") ? e.target : getFluentMenuItemForTarget(e.target);
+    const targetElement = e.target.closest("fluent-button") ?? getFluentMenuItemForTarget(e.target);
     if (targetElement) {
         if (targetElement.getAttribute("data-copybutton")) {
             buttonCopyTextToClipboard(targetElement);
@@ -137,90 +195,6 @@ document.addEventListener("click", function (e) {
         e.stopPropagation();
     }
 });
-
-let isScrolledToContent = false;
-let lastScrollHeight = null;
-
-window.getIsScrolledToContent = function () {
-    return isScrolledToContent;
-}
-
-window.setIsScrolledToContent = function (value) {
-    if (isScrolledToContent != value) {
-        isScrolledToContent = value;
-        console.log(`isScrolledToContent=${isScrolledToContent}`);
-    }
-}
-
-window.resetContinuousScrollPosition = function () {
-    // Reset to scrolling to the end of the content after switching.
-    setIsScrolledToContent(false);
-}
-
-window.initializeContinuousScroll = function () {
-    // Reset to scrolling to the end of the content when initializing.
-    // This needs to be called because the value is remembered across Aspire pages because the browser isn't reloading.
-    resetContinuousScrollPosition();
-
-    const container = document.querySelector('.continuous-scroll-overflow');
-    if (container == null) {
-        return;
-    }
-
-    // The scroll event is used to detect when the user scrolls to view content.
-    container.addEventListener('scroll', () => {
-        var atBottom = isScrolledToBottom(container);
-        if (atBottom === null) {
-            return;
-        }
-        setIsScrolledToContent(!atBottom);
-   }, { passive: true });
-
-    // The ResizeObserver reports changes in the grid size.
-    // This ensures that the logs are scrolled to the bottom when there are new logs
-    // unless the user has scrolled to view content.
-    const observer = new ResizeObserver(function () {
-        lastScrollHeight = container.scrollHeight;
-
-        if (lastScrollHeight == container.clientHeight) {
-            // There is no scrollbar. This could be because there's no content, or the content might have been cleared.
-            // Reset to default behavior: scroll to bottom
-            setIsScrolledToContent(false);
-            return;
-        }
-
-        var isScrolledToContent = getIsScrolledToContent();
-        if (!isScrolledToContent) {
-            container.scrollTop = lastScrollHeight;
-            return;
-        }
-    });
-    for (const child of container.children) {
-        observer.observe(child);
-    }
-};
-
-function isScrolledToBottom(container) {
-    lastScrollHeight = lastScrollHeight || container.scrollHeight
-
-    // There can be a race between resizing and scrolling events.
-    // Use the last scroll height from the resize event to figure out if we've scrolled to the bottom.
-    if (!getIsScrolledToContent()) {
-        if (lastScrollHeight != container.scrollHeight) {
-            console.log(`lastScrollHeight ${lastScrollHeight} doesn't equal container scrollHeight ${container.scrollHeight}.`);
-
-            // Unknown because the container size changed.
-            return null;
-        }
-    }
-
-    const marginOfError = 5;
-    const containerScrollBottom = lastScrollHeight - container.clientHeight;
-    const difference = containerScrollBottom - container.scrollTop;
-
-    var atBottom = difference < marginOfError;
-    return atBottom;
-}
 
 window.buttonOpenLink = function (element) {
     const url = element.getAttribute("data-url");
@@ -246,13 +220,33 @@ window.copyTextToClipboard = function (id, text, precopy, postcopy) {
         delete button.dataset.copyTimeout;
     }
 
+    // An earlier clipboard request may still be pending when the same button is clicked again.
+    const request = Symbol();
+    button.copyRequest = request;
     const copyIcon = button.querySelector('.copy-icon');
     const checkmarkIcon = button.querySelector('.checkmark-icon');
-
+    const copyStatus = button.nextElementSibling?.classList.contains('terminal-copy-status')
+        ? button.nextElementSibling : null;
+    if (copyStatus) {
+        copyStatus.textContent = '';
+    }
     const anchoredTooltip = document.querySelector(`fluent-tooltip[anchor="${id}"]`);
     const tooltipDiv = anchoredTooltip ? anchoredTooltip.children[0] : null;
+    if (tooltipDiv) {
+        tooltipDiv.innerText = precopy;
+    }
+    if (copyIcon && checkmarkIcon) {
+        copyIcon.style.display = '';
+        checkmarkIcon.style.display = 'none';
+    }
     navigator.clipboard.writeText(text)
         .then(() => {
+            if (button.copyRequest !== request) {
+                return;
+            }
+            if (copyStatus) {
+                copyStatus.textContent = postcopy;
+            }
             if (tooltipDiv) {
                 tooltipDiv.innerText = postcopy;
             }
@@ -261,31 +255,88 @@ window.copyTextToClipboard = function (id, text, precopy, postcopy) {
                 checkmarkIcon.style.display = '';
             }
         })
-        .catch(() => {
-            if (tooltipDiv) {
-                tooltipDiv.innerText = 'Could not access clipboard';
+        .catch(error => {
+            if (button.copyRequest !== request) {
+                return;
             }
+            if (copyStatus) {
+                copyStatus.textContent = button.getAttribute('data-copyfailed');
+            }
+            if (tooltipDiv) {
+                tooltipDiv.innerText = button.getAttribute('data-copyfailed') || 'Could not access clipboard';
+            } else {
+                console.warn("Dashboard clipboard copy failed.", error);
+            }
+        })
+        .finally(() => {
+            if (button.copyRequest !== request) {
+                return;
+            }
+            button.dataset.copyTimeout = setTimeout(function () {
+                if (copyStatus) {
+                    copyStatus.textContent = '';
+                }
+                if (tooltipDiv) {
+                    tooltipDiv.innerText = precopy;
+                }
+
+                if (copyIcon && checkmarkIcon) {
+                    copyIcon.style.display = '';
+                    checkmarkIcon.style.display = 'none';
+                }
+                delete button.dataset.copyTimeout;
+            }, Number(button.dataset.copyDuration) || 1500);
         });
-
-    button.dataset.copyTimeout = setTimeout(function () {
-        if (tooltipDiv) {
-            tooltipDiv.innerText = precopy;
-        }
-
-        if (copyIcon && checkmarkIcon) {
-            copyIcon.style.display = '';
-            checkmarkIcon.style.display = 'none';
-        }
-        delete button.dataset.copyTimeout;
-    }, 1500);
 };
 
 window.copyText = function (text) {
     return navigator.clipboard.writeText(text);
 };
 
+window.copyTextAndOpen = async function (text, url) {
+    window.open(url, '_blank', 'noopener,noreferrer');
+    try {
+        await navigator.clipboard.writeText(text);
+        return true;
+    } catch {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        textarea.style.pointerEvents = 'none';
+        document.body.appendChild(textarea);
+        textarea.select();
+        try {
+            return typeof document.execCommand === 'function' && document.execCommand('copy');
+        } finally {
+            textarea.remove();
+        }
+    }
+};
+
+window.setDashboardExperience = function (experience, targetPath) {
+    const secure = window.location.protocol === 'https:' ? '; Secure' : '';
+    document.cookie = `Aspire_Dashboard_Experience=${experience}; Path=/; Max-Age=31536000; SameSite=Lax${secure}`;
+    // replace() keeps the page being left out of the history, so Back can't return to the other experience.
+    window.location.replace(targetPath);
+};
+
 function isActiveElementInput() {
-    const currentElement = document.activeElement;
+    let currentElement = document.activeElement;
+    // Hex1b can focus a non-editable <div class="hex1b-terminal" tabindex="-1">
+    // for canvas keyboard input. The whole viewport owns those keys, not only its textarea.
+    if (currentElement.closest(".terminal-container")) {
+        return true;
+    }
+
+    // Document.activeElement is the shadow host when Hex1b's textarea has
+    // focus. Follow focused shadow roots so printable keys remain terminal
+    // input rather than triggering dashboard navigation shortcuts. Stop at
+    // Fluent dropdowns so their host-level input semantics are preserved.
+    // https://developer.mozilla.org/en-US/docs/Web/API/Document/activeElement
+    while (currentElement.shadowRoot?.activeElement && !currentElement.closest("fluent-dropdown")) {
+        currentElement = currentElement.shadowRoot.activeElement;
+    }
 
     // Fluent v5 renders the dropdown's focusable control as a light-DOM button. Treat the control
     // and popup options as input elements so global shortcuts don't run while a dropdown is active.
@@ -296,7 +347,8 @@ function isActiveElementInput() {
     const tagName = currentElement.tagName.toLowerCase();
 
     // fluent components may have shadow roots that contain inputs
-    return tagName === "input" || tagName === "textarea" || tagName.startsWith("fluent") ? isInputElement(currentElement, false) : false;
+    return currentElement.isContentEditable || tagName === "select" ||
+        ((tagName === "input" || tagName === "textarea" || tagName.startsWith("fluent")) && isInputElement(currentElement, false));
 }
 
 function isInputElement(element, isRoot, isShadowRoot) {
@@ -363,6 +415,14 @@ window.registerGlobalKeydownListener = function (shortcutManager) {
         }
 
         if (hasNoModifiers(e)) {
+            // Match the unmodified physical Backquote key across keyboard layouts, not the produced character.
+            // The focused-input guard runs before this, so terminal and text inputs still receive their keys.
+            // To toggle from terminal input, press F6 first to focus its controls.
+            // https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent/code
+            if (e.code === "Backquote") {
+                return 400;
+            }
+
             switch (e.key) {
                 case "r": // go to resources
                     return 200;
@@ -374,6 +434,16 @@ window.registerGlobalKeydownListener = function (shortcutManager) {
                     return 230;
                 case "m": // go to metrics
                     return 240;
+                case "e": // go to terminals
+                    return 250;
+                case "p": // go to parameters
+                    return 270;
+                case "g": // go to graph
+                    return 280;
+                case "x": // go to extensions
+                    return 290;
+                case "o": // go to telemetry sources (observability)
+                    return 295;
             }
         }
 
@@ -381,7 +451,7 @@ window.registerGlobalKeydownListener = function (shortcutManager) {
     }
 
     const keydownListener = function (e) {
-        if (isActiveElementInput()) {
+        if (e.defaultPrevented || e.isComposing || isActiveElementInput()) {
             return;
         }
 
@@ -459,6 +529,94 @@ window.disposeMobileNavMenuKeyboardNavigation = function (obj) {
     document.removeEventListener("keydown", obj.keydownListener, true);
     obj.menu?.removeEventListener("focusout", obj.focusoutListener);
 };
+
+// Fluent buttons and checkboxes render as focusable custom elements without exposing their native roles,
+// so assistive technology receives their names but not their control types or checked state. Keep the host
+// semantics explicit until Fluent exposes them itself. Related upstream accessibility history:
+// https://github.com/microsoft/fluentui-blazor/issues/2671
+function updateFluentButtonSemantics(button) {
+    button.setAttribute("role", "button");
+    if (button.disabled) {
+        button.setAttribute("aria-disabled", "true");
+    } else {
+        button.removeAttribute("aria-disabled");
+    }
+}
+
+function updateFluentCheckboxSemantics(checkbox) {
+    checkbox.setAttribute("role", "checkbox");
+    checkbox.setAttribute("aria-checked", checkbox.indeterminate ? "mixed" : String(checkbox.checked));
+    if (checkbox.disabled) {
+        checkbox.setAttribute("aria-disabled", "true");
+    } else {
+        checkbox.removeAttribute("aria-disabled");
+    }
+}
+
+function applyFluentControlRoles(root) {
+    // Mutation records also report text nodes and the document, which have no matches().
+    if (root.matches?.("fluent-button")) {
+        updateFluentButtonSemantics(root);
+    }
+    if (root.matches?.("fluent-checkbox")) {
+        updateFluentCheckboxSemantics(root);
+    }
+
+    root.querySelectorAll?.("fluent-button").forEach(updateFluentButtonSemantics);
+    root.querySelectorAll?.("fluent-checkbox").forEach(updateFluentCheckboxSemantics);
+}
+
+applyFluentControlRoles(document);
+
+// The observer sees every node the dashboard adds, including streamed console log lines and grid rows, which can be
+// thousands per second. Scanning each added subtree as it arrives puts that work on the busiest paths, so added
+// elements are collected and scanned together a little later. Text nodes, which most log output is, are skipped
+// without any work. A timer is used rather than requestAnimationFrame because animation frames don't run in a
+// background tab, where the pending set would otherwise keep growing.
+const pendingFluentControlRoots = new Set();
+let pendingFluentControlTimer = null;
+
+function applyPendingFluentControlRoles() {
+    pendingFluentControlTimer = null;
+    for (const root of pendingFluentControlRoots) {
+        // Rows of a virtualized grid or log viewer are often removed again before the scan runs.
+        if (root.isConnected) {
+            applyFluentControlRoles(root);
+        }
+    }
+    pendingFluentControlRoots.clear();
+}
+
+new MutationObserver(records => {
+    for (const record of records) {
+        if (record.type === "attributes") {
+            // Only "disabled" is observed, and it changes the semantics of the element itself, not its children.
+            if (record.target.matches("fluent-button")) {
+                updateFluentButtonSemantics(record.target);
+            } else if (record.target.matches("fluent-checkbox")) {
+                updateFluentCheckboxSemantics(record.target);
+            }
+            continue;
+        }
+
+        for (const node of record.addedNodes) {
+            if (node.nodeType === Node.ELEMENT_NODE) {
+                pendingFluentControlRoots.add(node);
+            }
+        }
+    }
+
+    if (pendingFluentControlRoots.size > 0 && pendingFluentControlTimer === null) {
+        pendingFluentControlTimer = setTimeout(applyPendingFluentControlRoles, 50);
+    }
+}).observe(document.body, { attributes: true, attributeFilter: ["disabled"], childList: true, subtree: true });
+
+document.addEventListener("change", event => {
+    const checkbox = event.composedPath().find(element => element instanceof Element && element.matches("fluent-checkbox"));
+    if (checkbox) {
+        updateFluentCheckboxSemantics(checkbox);
+    }
+});
 
 window.getWindowDimensions = function() {
     return {
@@ -627,224 +785,3 @@ window.downloadStreamAsFile = async function (fileName, contentStreamReference) 
     anchorElement.remove();
     URL.revokeObjectURL(url);
 };
-
-// ===== Scroll-to-bottom button for live-data scroll containers =====
-// Console logs, traces, and structured logs can grow to thousands of lines. Add a floating jump-to-
-// bottom button only when those regions meaningfully overflow and the user isn't already near the end.
-//
-// Design notes:
-// - The control is appended to <body> and positioned with `position: fixed`, tracking the target's
-//   getBoundingClientRect(). We deliberately do NOT wrap or inject nodes inside the scroll container
-//   because that DOM is owned by Blazor's renderer; adding foreign children there can trip Blazor's
-//   node diffing. A body-level sibling is invisible to the render tree.
-// - Discovery re-runs on a debounced MutationObserver so it survives Blazor SPA navigation;
-//   registration is idempotent (guarded by a WeakSet).
-// - Reposition/visibility updates are throttled through requestAnimationFrame and driven by the
-//   container's own 'scroll', a ResizeObserver, and window scroll/resize (capture-phase, because
-//   inner scroll events don't bubble to window).
-(function initializeScrollButtonsFeature() {
-    const TARGET_SELECTOR = ".continuous-scroll-overflow";
-
-    // Only surface the buttons once there's a meaningful amount to scroll past, so they stay out of
-    // the way for small content. Roughly 1.5 viewports of the region reads as "large" in practice.
-    const OVERFLOW_THRESHOLD_PX = 240;
-    // How far from an edge the user must be before the matching button appears.
-    const EDGE_THRESHOLD_PX = 120;
-
-    // The only body-level structural changes we care about: a scroll target appearing/disappearing,
-    // or a dialog opening/closing (updateEntry() also keys visibility off whether a dialog is open).
-    // Used to cheaply skip the rescan on high-churn mutations that touch none of these.
-    const MUTATION_TRIGGER_SELECTOR = TARGET_SELECTOR + ", fluent-dialog";
-
-    const CHEVRON_DOWN = '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4.47 7.03a.75.75 0 0 1 1.06-1.06L10 10.44l4.47-4.47a.75.75 0 1 1 1.06 1.06l-5 5a.75.75 0 0 1-1.06 0l-5-5Z"/></svg>';
-
-    const registered = new WeakSet();
-    const controls = []; // { container, root, bottomBtn, resizeObserver }
-    let rafPending = false;
-
-    function scheduleUpdate() {
-        if (rafPending) {
-            return;
-        }
-        rafPending = true;
-        requestAnimationFrame(function () {
-            rafPending = false;
-            updateAll();
-        });
-    }
-
-    function makeButton(kind, label, svg) {
-        const btn = document.createElement("button");
-        btn.type = "button";
-        btn.className = "scroll-button scroll-to-" + kind;
-        btn.setAttribute("aria-label", label);
-        btn.setAttribute("title", label);
-        // Supplemental affordance only - keyboard users can already scroll the focused region
-        // natively, so keep these out of the tab order to avoid extra tab stops per container.
-        btn.tabIndex = -1;
-        btn.innerHTML = svg;
-        return btn;
-    }
-
-    function register(container) {
-        if (registered.has(container)) {
-            return;
-        }
-        registered.add(container);
-
-        const root = document.createElement("div");
-        root.className = "scroll-buttons";
-        // The label is localized in .NET and rendered onto <body> by App.razor. This button is created
-        // purely in JS, so read it from the document and retain a defensive accessible-name fallback.
-        const labels = document.body?.dataset ?? {};
-        const bottomBtn = makeButton("bottom", labels.scrollToBottomLabel || "Scroll to bottom", CHEVRON_DOWN);
-        root.appendChild(bottomBtn);
-        document.body.appendChild(root);
-
-        bottomBtn.addEventListener("click", function () {
-            container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
-        });
-
-        const entry = { container, root, bottomBtn };
-        controls.push(entry);
-
-        container.addEventListener("scroll", scheduleUpdate, { passive: true });
-        const ro = new ResizeObserver(scheduleUpdate);
-        ro.observe(container);
-        entry.resizeObserver = ro;
-
-        scheduleUpdate();
-    }
-
-    function updateEntry(entry) {
-        const container = entry.container;
-        const root = entry.root;
-
-        // Drop controls whose container has been removed (page navigation, dialog closed).
-        if (!container.isConnected) {
-            if (entry.resizeObserver) {
-                entry.resizeObserver.disconnect();
-            }
-            root.remove();
-            return false;
-        }
-
-        const rect = container.getBoundingClientRect();
-        const overflow = container.scrollHeight - container.clientHeight;
-        const PAD = 12;
-        const scrollbarWidth = container.offsetWidth - container.clientWidth;
-        const visibleLeft = Math.max(rect.left, 0);
-        const visibleRight = Math.min(rect.right - scrollbarWidth, window.innerWidth);
-        const visibleTop = Math.max(rect.top, 0);
-        const visibleBottom = Math.min(rect.bottom, window.innerHeight);
-        const visibleWidth = Math.max(0, visibleRight - visibleLeft);
-        const visibleHeight = Math.max(0, visibleBottom - visibleTop);
-        const buttonStyle = getComputedStyle(entry.bottomBtn);
-        const buttonWidth = Number.parseFloat(buttonStyle.width);
-        const buttonHeight = Number.parseFloat(buttonStyle.height);
-        let active =
-            rect.width > 0 &&
-            rect.height > 0 &&
-            visibleWidth >= buttonWidth &&
-            visibleHeight >= buttonHeight + PAD * 2 &&
-            overflow > OVERFLOW_THRESHOLD_PX;
-
-        // When a modal dialog is open, only show buttons for containers inside it; otherwise the
-        // page's own buttons would float on top of the dialog surface.
-        const openDialog = document.querySelector("fluent-dialog");
-        if (openDialog && !openDialog.contains(container)) {
-            active = false;
-        }
-
-        root.classList.toggle("is-active", active);
-        if (!active) {
-            return true;
-        }
-
-        // Center the control horizontally over the region and anchor it near the visible bottom edge.
-        // Clamp its span to the viewport and exclude the scrollbar from the horizontal center.
-        root.style.right = "auto";
-        root.style.bottom = "auto";
-        root.style.left = (visibleLeft + visibleWidth / 2) + "px";
-        root.style.top = (visibleTop + PAD) + "px";
-        root.style.height = (visibleHeight - PAD * 2) + "px";
-
-        const atBottom = overflow - container.scrollTop <= EDGE_THRESHOLD_PX;
-        entry.bottomBtn.classList.toggle("is-visible", !atBottom);
-        return true;
-    }
-
-    function updateAll() {
-        for (let i = controls.length - 1; i >= 0; i--) {
-            const keep = updateEntry(controls[i]);
-            if (!keep) {
-                registered.delete(controls[i].container);
-                controls.splice(i, 1);
-            }
-        }
-    }
-
-    function scan() {
-        for (const el of document.querySelectorAll(TARGET_SELECTOR)) {
-            register(el);
-        }
-    }
-
-    // Debounced rescan so SPA navigation and dialog opens are picked up without thrashing.
-    let scanTimer = null;
-    function scheduleScan() {
-        if (scanTimer !== null) {
-            return;
-        }
-        scanTimer = setTimeout(function () {
-            scanTimer = null;
-            scan();
-            scheduleUpdate();
-        }, 200);
-    }
-
-    // Inner scroll events don't bubble, so listen in the capture phase to catch every region.
-    window.addEventListener("scroll", scheduleUpdate, { passive: true, capture: true });
-    window.addEventListener("resize", scheduleUpdate, { passive: true });
-
-    function start() {
-        scan();
-        // A body-wide subtree observer is required because scroll targets are inserted deep in
-        // Blazor's render tree (SPA navigation) and dialogs are appended at the <body> level. But
-        // reacting to every mutation batch would run a document-wide querySelectorAll scan on a
-        // 200ms cadence for nothing on high-churn pages (streaming console logs, large grids). So we
-        // first cheaply check whether a batch actually added or removed a scroll target (or a dialog)
-        // before scheduling a rescan; pure content churn inside an already-registered container is
-        // ignored. This keeps discovery correct while dropping the continuous idle cost.
-        new MutationObserver(onBodyMutations).observe(document.body, { childList: true, subtree: true });
-    }
-
-    function onBodyMutations(mutations) {
-        for (const m of mutations) {
-            if (nodeListHasTrigger(m.addedNodes) || nodeListHasTrigger(m.removedNodes)) {
-                scheduleScan();
-                return;
-            }
-        }
-    }
-
-    function nodeListHasTrigger(nodes) {
-        for (const node of nodes) {
-            // Only element nodes can be (or contain) a scroll region or dialog; skip text/comment
-            // churn, which is what streaming log output mostly produces.
-            if (node.nodeType !== 1) {
-                continue;
-            }
-            if (node.matches?.(MUTATION_TRIGGER_SELECTOR) || node.querySelector?.(MUTATION_TRIGGER_SELECTOR)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    if (document.readyState === "loading") {
-        document.addEventListener("DOMContentLoaded", start, { once: true });
-    } else {
-        start();
-    }
-})();

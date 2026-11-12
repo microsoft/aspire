@@ -1101,6 +1101,15 @@ internal sealed class ResourceSnapshot
     public string? ResourceType { get; init; }
 
     /// <summary>
+    /// Gets the human-readable resource type label, falling back to the resource type for older producers.
+    /// </summary>
+    public string? ResourceTypeDisplayName
+    {
+        get => string.IsNullOrWhiteSpace(field) ? ResourceType : field;
+        init;
+    }
+
+    /// <summary>
     /// Gets the type of the resource (e.g., "Project", "Container", "Executable").
     /// </summary>
     [Obsolete("Use ResourceType property instead.")]
@@ -1745,7 +1754,7 @@ internal sealed class ListTerminalsRequest : BackchannelRequest
 
 /// <summary>
 /// One entry per <c>WithTerminal</c>-enabled resource. Returned inside
-/// <see cref="ListTerminalsResponse.Terminals"/>. Replica details (current size, attached peers)
+/// <see cref="ListTerminalsResponse.ResourceTerminals"/>. Replica details (current size, attached peers)
 /// are only populated when the host process is reachable; otherwise <see cref="IsHostReachable"/>
 /// is false and the per-replica entries are degraded (<see cref="TerminalReplicaInfo.IsAlive"/> =
 /// false, AppHost-known <see cref="TerminalReplicaInfo.ConsumerUdsPath"/>), but the array shape
@@ -1795,15 +1804,54 @@ internal sealed class TerminalSummary
 }
 
 /// <summary>
-/// Response from <c>ListTerminalsAsync</c>. Lists every <c>WithTerminal</c>-enabled resource in the
-/// AppHost. Empty array when no resource is configured for terminals.
+/// Response from <c>ListTerminalsAsync</c>. Lists every terminal in the AppHost, whether it belongs to a
+/// resource or to the AppHost itself.
 /// </summary>
 internal sealed class ListTerminalsResponse
 {
     /// <summary>
     /// Gets the per-resource summaries. Empty (not null) when there are no terminal-enabled resources.
     /// </summary>
-    public required TerminalSummary[] Terminals { get; init; }
+    public required TerminalSummary[] ResourceTerminals { get; init; }
+
+    /// <summary>
+    /// Gets the terminals owned by the AppHost process rather than by a resource.
+    /// Empty when there are no AppHost-owned terminals.
+    /// </summary>
+    /// <remarks>
+    /// Carried separately from <see cref="ResourceTerminals"/> rather than folded into it because the resource
+    /// summaries are shaped around replicas and terminal hosts, neither of which an AppHost terminal has.
+    /// </remarks>
+    public required AppHostTerminalSummary[] AppHostTerminals { get; init; }
+}
+
+/// <summary>
+/// One terminal whose workload is owned by the AppHost.
+/// </summary>
+/// <remarks>
+/// These terminals have no resource replicas or separate terminal host. The AppHost owns the workload
+/// and tunnels terminal I/O to the dashboard over gRPC. This summary does not report workload liveness.
+/// </remarks>
+internal sealed class AppHostTerminalSummary
+{
+    /// <summary>
+    /// Gets the identifier used to address this terminal.
+    /// </summary>
+    public required string TerminalId { get; init; }
+
+    /// <summary>
+    /// Gets the terminal's title, as shown on its dock tab or in its dialog.
+    /// </summary>
+    public required string Title { get; init; }
+
+    /// <summary>
+    /// Gets where the terminal is displayed: <c>Dock</c>, <c>Dialog</c>, <c>ResourceView</c>, or <c>None</c>.
+    /// </summary>
+    /// <remarks>
+    /// Sent as a string rather than an enum so that a value added later deserializes on an older CLI instead
+    /// of failing the whole listing.
+    /// </remarks>
+    public required string Placement { get; init; }
 }
 
 #endregion

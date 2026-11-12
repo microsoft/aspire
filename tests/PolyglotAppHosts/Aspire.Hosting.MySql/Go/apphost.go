@@ -9,7 +9,7 @@ import (
 func main() {
 	builder, err := aspire.CreateBuilder()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	rootPassword := builder.AddParameter("mysql-root-password",
@@ -17,7 +17,7 @@ func main() {
 
 	mysql := builder.AddMySql("mysql", &aspire.AddMySqlOptions{
 		Password: &rootPassword,
-		Port:     aspire.Float64Ptr(3306),
+		Port:     aspire.IntPtr(3306),
 	})
 
 	mysql.WithPassword(rootPassword)
@@ -28,7 +28,7 @@ func main() {
 	mysql.WithPhpMyAdmin(&aspire.WithPhpMyAdminOptions{
 		ContainerName: aspire.StringPtr("phpmyadmin"),
 		ConfigureContainer: func(container aspire.PhpMyAdminContainerResource) {
-			container.WithHostPort(aspire.Float64Ptr(8080))
+			container.WithHostPort(aspire.IntPtr(8080))
 		},
 	})
 
@@ -37,7 +37,7 @@ func main() {
 	})
 	db.WithCreationScript("CREATE DATABASE IF NOT EXISTS appdb;")
 	if err = db.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	_ = mysql.PrimaryEndpoint()
@@ -49,14 +49,14 @@ func main() {
 	_, _ = mysql.Databases()
 
 	if err = mysql.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	app, err := builder.Build()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 	if err := app.Run(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 }

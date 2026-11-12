@@ -36,10 +36,39 @@ var setupInstallPath = forwardedArgs switch
 };
 if (setupInstallPath is not null)
 {
+    var setupCapturePath = Environment.GetEnvironmentVariable("ASPIRE_TEST_CAPTURE_PATH");
+    if (setupCapturePath is not null)
+    {
+        File.WriteAllLines(setupCapturePath, forwardedArgs);
+    }
+
+    var setupExitCodePath = Path.Combine(AppContext.BaseDirectory, "setup-exit-code");
+    if (File.Exists(setupExitCodePath))
+    {
+        Console.WriteLine("Acquiring Aspire CLI; package source: 'test-feed'.");
+        Console.Error.WriteLine("error: Unable to load 'test-feed'; response: 401 (Unauthorized).");
+        Environment.ExitCode = int.Parse(File.ReadAllText(setupExitCodePath), CultureInfo.InvariantCulture);
+        if (Environment.ExitCode != 0)
+        {
+            return;
+        }
+    }
+
+    // Like the real CLI, `setup --install-path` validates the extracted layout through layout discovery,
+    // which only probes ASPIRE_LAYOUT_PATH and the Aspire home for a CLI that is not colocated with it.
+    if (forwardedArgs is not ["setup"] && !IsDiscoverableLayoutPath(setupInstallPath))
+    {
+        Console.Error.WriteLine($"Bundle was extracted to {setupInstallPath} but layout validation failed.");
+        Environment.ExitCode = 1;
+        return;
+    }
+
     var dcpDirectory = Directory.CreateDirectory(Path.Combine(setupInstallPath, "bundle", "dcp"));
     var managedDirectory = Directory.CreateDirectory(Path.Combine(setupInstallPath, "bundle", "managed"));
+    var dashboardDirectory = Directory.CreateDirectory(Path.Combine(setupInstallPath, "bundle", "dashboard"));
     File.WriteAllText(Path.Combine(dcpDirectory.FullName, OperatingSystem.IsWindows() ? "dcp.exe" : "dcp"), "");
     File.WriteAllText(Path.Combine(managedDirectory.FullName, OperatingSystem.IsWindows() ? "aspire-managed.exe" : "aspire-managed"), "");
+    File.WriteAllText(Path.Combine(dashboardDirectory.FullName, OperatingSystem.IsWindows() ? "Aspire.Dashboard.exe" : "Aspire.Dashboard"), "");
     return;
 }
 
@@ -58,3 +87,23 @@ if (forwardedArgs.Length > 0 && forwardedArgs[^1] == "--version")
 var capturePath = Environment.GetEnvironmentVariable("ASPIRE_TEST_CAPTURE_PATH")
     ?? throw new InvalidOperationException("ASPIRE_TEST_CAPTURE_PATH is not set.");
 File.WriteAllLines(capturePath, forwardedArgs);
+
+static bool IsDiscoverableLayoutPath(string path)
+{
+    var aspireHome = Environment.GetEnvironmentVariable("ASPIRE_HOME");
+    if (string.IsNullOrEmpty(aspireHome))
+    {
+        aspireHome = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".aspire");
+    }
+
+    return IsSamePath(path, Environment.GetEnvironmentVariable("ASPIRE_LAYOUT_PATH")) || IsSamePath(path, aspireHome);
+}
+
+static bool IsSamePath(string path, string? other)
+{
+    return !string.IsNullOrEmpty(other) &&
+        string.Equals(
+            Path.TrimEndingDirectorySeparator(Path.GetFullPath(path)),
+            Path.TrimEndingDirectorySeparator(Path.GetFullPath(other)),
+            OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+}

@@ -1,7 +1,9 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using Aspire.Dashboard.Model;
+using Aspire.Shared;
 using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
@@ -13,18 +15,20 @@ namespace Aspire.Dashboard.Components.Controls;
 
 public partial class DashboardRunSelect : ComponentBase
 {
-    private static readonly Icon s_checkmarkIcon = new Icons.Regular.Size16.Checkmark();
-    private static readonly Icon s_pinIcon = new Icons.Regular.Size16.Pin();
-    private static readonly Icon s_pinnedIcon = new Icons.Filled.Size16.Pin();
+    private static readonly Icon s_historyIcon = new Icons.Regular.Size24.History();
 
-    private string RunSelectTitle => Loc[nameof(LayoutResources.DashboardRunSelectTitle)];
+    // The button is icon-only: a dot shows whether the live view or a recording is displayed, and the header pill
+    // names the recording. The tooltip and accessible label state what is being viewed.
+    private string RunSelectTitle => SelectedRunIsCurrent
+        ? Loc[nameof(LayoutResources.DashboardRunSelectTitle)]
+        : FormatRunDate(SelectedRunStartedAtUtc);
     private string RunSelectAccessibleLabel => Loc[nameof(LayoutResources.DashboardRunSelectAccessibleLabel), SelectedRunText];
     private string SelectedRunText => SelectedRunIsCurrent
         ? Loc[nameof(LayoutResources.DashboardRunSelectCurrent)]
-        : FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, SelectedRunStartedAtUtc.UtcDateTime);
+        : FormatRunDate(SelectedRunStartedAtUtc);
 
     [Parameter, EditorRequired]
-    public required string SelectedRunId { get; set; }
+    public required string ButtonId { get; set; }
 
     [Parameter]
     public bool SelectedRunIsCurrent { get; set; }
@@ -33,7 +37,7 @@ public partial class DashboardRunSelect : ComponentBase
     public DateTimeOffset SelectedRunStartedAtUtc { get; set; }
 
     [Parameter]
-    public EventCallback<string?> SelectedRunIdChanged { get; set; }
+    public EventCallback OnClick { get; set; }
 
     [Inject]
     public required IStringLocalizer<LayoutResources> Loc { get; init; }
@@ -41,71 +45,72 @@ public partial class DashboardRunSelect : ComponentBase
     [Inject]
     public required BrowserTimeProvider TimeProvider { get; init; }
 
-    [Inject]
-    public required IDashboardRunStore RunStore { get; init; }
-
-    [Inject]
-    public required ILogger<DashboardRunSelect> Logger { get; init; }
-
-    private IList<MenuButtonItem> LoadRuns()
+    internal static List<DashboardRunDescriptor> GetSortedRuns(IReadOnlyList<DashboardRunDescriptor> storedRuns)
     {
-        var runs = RunStore.GetRuns()
-            .Where(run => !run.IsPruned)
-            .OrderByDescending(run => run.IsCurrent)
-            .ThenByDescending(run => run.IsPinned)
-            .ThenByDescending(run => run.StartedAtUtc)
-            .ToArray();
-        var menuItems = new List<MenuButtonItem>();
-        foreach (var run in runs)
+        var runs = new List<DashboardRunDescriptor>(storedRuns.Count);
+        foreach (var run in storedRuns)
         {
-            var menuItem = new MenuButtonItem
+            if (!run.IsPruned && (run.IsSelectable || !run.IsCompatible))
             {
-                Text = FormatRunOption(run),
-                Role = MenuItemRole.Radio,
-                Checked = string.Equals(run.RunId, SelectedRunId, StringComparison.Ordinal),
-                Icon = s_checkmarkIcon,
-                SecondaryActionIcon = run.IsPinned ? s_pinnedIcon : s_pinIcon,
-                SecondaryActionAriaLabel = Loc[run.IsPinned
-                    ? nameof(LayoutResources.DashboardRunSelectUnpin)
-                    : nameof(LayoutResources.DashboardRunSelectPin)],
-                IsSecondaryActionSelected = run.IsPinned,
-                OnSecondaryActionClick = () =>
-                {
-                    SetRunPinned(run, !run.IsPinned);
-                    return Task.CompletedTask;
-                },
-                OnClick = () => SelectedRunIdChanged.InvokeAsync(run.IsCurrent ? null : run.RunId)
-            };
-            menuItems.Add(menuItem);
-
-            if (run.IsCurrent && runs.Any(candidate => !candidate.IsCurrent))
-            {
-                menuItems.Add(new MenuButtonItem { IsDivider = true });
+                runs.Add(run);
             }
         }
+        runs.Sort(CompareRuns);
 
-        return menuItems;
+        return runs;
     }
 
-    private void SetRunPinned(DashboardRunDescriptor run, bool isPinned)
+    private static int CompareRuns(DashboardRunDescriptor left, DashboardRunDescriptor right)
     {
-        try
+        var result = right.IsCurrent.CompareTo(left.IsCurrent);
+        if (result == 0)
         {
-            RunStore.SetRunPinned(run, isPinned);
+            result = right.IsPinned.CompareTo(left.IsPinned);
         }
-        catch (Exception exception)
+        if (result == 0)
         {
-            Logger.LogError(exception, "Failed to update the pinned state of dashboard run '{RunId}'.", run.RunId);
+            result = right.StartedAtUtc.CompareTo(left.StartedAtUtc);
         }
+        if (result == 0)
+        {
+            result = string.Compare(left.RunId, right.RunId, StringComparison.Ordinal);
+        }
+
+        return result;
     }
 
-    private string FormatRunOption(DashboardRunDescriptor run)
+    private string FormatRunDate(DateTimeOffset startedAtUtc) => FormatHelpers.FormatDateTime(TimeProvider, startedAtUtc.UtcDateTime);
+
+    internal static string FormatRunAge(DateTimeOffset startedAtUtc, DateTimeOffset utcNow, IStringLocalizer<LayoutResources> loc)
     {
-        if (run.IsCurrent)
+        // Clamp so a start time slightly in the future (clock skew between processes) reads as "a moment ago".
+        var age = utcNow - startedAtUtc;
+        if (age < TimeSpan.Zero)
         {
-            return Loc[nameof(LayoutResources.DashboardRunSelectCurrent)];
+            age = TimeSpan.Zero;
         }
 
-        return FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, run.StartedAtUtc.UtcDateTime);
+        return age switch
+        {
+            { TotalMinutes: < 1 } => loc[nameof(LayoutResources.DashboardRunSelectMomentAgo)],
+            { TotalMinutes: < 2 } => loc[nameof(LayoutResources.DashboardRunSelectMinuteAgo)],
+            { TotalHours: < 1 } => loc[nameof(LayoutResources.DashboardRunSelectMinutesAgo), (int)age.TotalMinutes],
+            { TotalDays: < 1 } => loc[nameof(LayoutResources.DashboardRunSelectHoursAgo), (int)age.TotalHours],
+            { TotalDays: < 2 } => loc[nameof(LayoutResources.DashboardRunSelectDayAgo)],
+            _ => loc[nameof(LayoutResources.DashboardRunSelectDaysAgo), (int)age.TotalDays]
+        };
+    }
+
+    internal static string? FormatRunDuration(DashboardRunDescriptor run)
+    {
+        // Runs that didn't shut down cleanly have no end time, so their duration is unknown.
+        if (run.IsCurrent || run.EndedAtUtc is not { } endedAtUtc || endedAtUtc < run.StartedAtUtc)
+        {
+            return null;
+        }
+
+        // Round to whole seconds: sub-second precision is noise for a run's length.
+        var duration = TimeSpan.FromSeconds(Math.Round((endedAtUtc - run.StartedAtUtc).TotalSeconds));
+        return $"({DurationFormatter.FormatDuration(duration, CultureInfo.CurrentCulture)})";
     }
 }

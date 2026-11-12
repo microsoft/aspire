@@ -1,0 +1,9 @@
+﻿{
+  apphost.mts: import { createBuilder } from "./.aspire/sdk/aspire.js";,
+  aspire.config.json:
+{
+  "appHost": { "path": "apphost.mts", "language": "typescript/nodejs" },
+  "sdk": { "version": "17.0.0-pr.12345" },
+  "packages": { "Aspire.Hosting.JavaScript": "17.0.0-pr.12345" }
+}
+}

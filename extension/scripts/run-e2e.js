@@ -68,6 +68,11 @@ const useJavaStarterWorkspace = enableJavaE2E && javaStarterTestSpecs.length > 0
 // dependency of it. capabilities.ts only advertises the `java` capability - which is what makes the
 // CLI hand the AppHost launch back to the extension - when the first two are both installed.
 const REQUIRED_JAVA_EXTENSION_IDS = ['redhat.java', 'vscjava.vscode-java-debug', 'vscjava.vscode-java-dependency'];
+const REQUIRED_RESOURCE_DEBUG_EXTENSION_IDS = [
+  'ms-dotnettools.vscode-dotnet-runtime',
+  'ms-dotnettools.csharp',
+  'golang.go',
+];
 const extesterVersion = extensionPackageJson.devDependencies?.['vscode-extension-tester'];
 if (!extesterVersion) {
   throw new Error('vscode-extension-tester must be pinned in extension/package.json devDependencies.');
@@ -136,10 +141,15 @@ const POSIX_SHELL_INERT_PATH_PATTERN = /^[A-Za-z0-9._/+,=:@%-]+$/;
 const WINDOWS_COMMAND_INERT_PATH_PATTERN = /^[A-Za-z0-9._\\/:+@~-]+$/;
 const isWindows = process.platform === 'win32';
 const enableAzureFunctionsE2E = process.env.ASPIRE_EXTENSION_E2E_ENABLE_AZURE_FUNCTIONS === 'true';
+const enableResourceDebugE2E = process.env.ASPIRE_EXTENSION_E2E_ENABLE_RESOURCE_DEBUG === 'true';
+const installAzureFunctionsVsix = process.env.ASPIRE_EXTENSION_E2E_INSTALL_AZURE_FUNCTIONS_VSIX === 'true';
 const enableWinUiE2E = process.env.ASPIRE_EXTENSION_E2E_ENABLE_WINUI === 'true';
 const enableBrowserDebuggerE2E = shardName === 'browser-debugger';
+const enableNodeFunctionsE2E = shardName === 'azure-functions-node';
+const enableCoordinatedBuildE2E = shardName === 'coordinated-build'
+  || matchedTestSpecs.some(specPath => path.basename(specPath) === 'coordinatedBuild.e2e.test.js');
 const browserDebuggerTargetFramework = 'net11.0';
-const enableDebuggerExtensions = enableAzureFunctionsE2E || enableBrowserDebuggerE2E || enableWinUiE2E;
+const enableDebuggerExtensions = installAzureFunctionsVsix || enableBrowserDebuggerE2E || enableNodeFunctionsE2E || enableWinUiE2E || enableCoordinatedBuildE2E || enableResourceDebugE2E;
 const e2eBrowser = process.platform === 'win32' ? 'msedge' : 'chrome';
 const COMMAND_INERT_PATH_PATTERN = isWindows ? WINDOWS_COMMAND_INERT_PATH_PATTERN : POSIX_SHELL_INERT_PATH_PATTERN;
 const COMMAND_INTERPRETER_NAME = isWindows ? 'cmd.exe' : '/bin/sh';
@@ -332,9 +342,21 @@ function shouldUseShellForCommand(command) {
 }
 
 function assertSpecMatches(spec) {
-  if (matchedTestSpecs.length === 0) {
-    throw new Error(`E2E spec '${spec}' did not match any compiled test files under ${path.relative(extensionRoot, path.join(extensionRoot, 'out', 'test-e2e'))}. Run corepack yarn@1.22.22 compile-e2e and check ASPIRE_EXTENSION_E2E_SPEC.`);
+  const alternatives = expandSpecAlternatives(spec);
+  const missingAlternatives = alternatives.filter(alternative => findSpecMatches(alternative).length === 0);
+  if (missingAlternatives.length > 0) {
+    throw new Error(`E2E spec '${spec}' did not match compiled test files for: ${missingAlternatives.join(', ')} under ${path.relative(extensionRoot, path.join(extensionRoot, 'out', 'test-e2e'))}. Run corepack yarn@1.22.22 compile-e2e and check ASPIRE_EXTENSION_E2E_SPEC.`);
   }
+}
+
+function expandSpecAlternatives(spec) {
+  const match = /^([^{}]*)\{([^{}]*)\}(.*)$/.exec(spec);
+  if (!match) {
+    return [spec];
+  }
+
+  return match[2].split(',').flatMap(alternative =>
+    expandSpecAlternatives(`${match[1]}${alternative}${match[3]}`));
 }
 
 function logE2eConfiguration() {
@@ -645,6 +667,7 @@ async function main() {
     const cliPath = enableJavaE2E ? bundledCliPath : isolateCliPath(bundledCliPath);
     cliPathForCleanup = cliPath;
     validateCliPath(cliPath);
+    prepareCliBundle(cliPath);
     const appHostSdkVersion = resolveAppHostSdkVersion(cliPath);
     prepareWorkspaceFixture(cliPath, appHostSdkVersion);
     prepareJavaWorkspace(bundledCliPath, appHostSdkVersion);
@@ -661,11 +684,15 @@ async function main() {
     if (enableAzureFunctionsE2E) {
       validateAzureFunctionsCoreTools();
     }
+    if (enableResourceDebugE2E) {
+      validateResourceDebugTools();
+    }
 
     ensureExtester();
     patchExtesterLaunchLocale();
     writeVsCodeLocaleFile();
 
+    const devCertificatePath = exportDevelopmentCertificate();
     const extestEnv = getAspireCliEnvironment({
       ASPIRE_EXTENSION_E2E_CLI_PATH: cliPath,
       ASPIRE_EXTENSION_E2E_EXTENSION_ROOT: extensionRoot,
@@ -679,6 +706,7 @@ async function main() {
       // ignore an extension host left behind by an earlier run that is still polling them.
       ASPIRE_EXTENSION_E2E_RUN_ID: runId,
       ASPIRE_EXTENSION_E2E_ENABLE_BRIDGE: 'true',
+      ...(devCertificatePath ? { ASPIRE_EXTENSION_E2E_DEV_CERT_PATH: devCertificatePath } : {}),
       NUGET_PACKAGES: e2eNuGetPackages,
       ASPIRE_EXTENSION_E2E_NUGET_PACKAGES: e2eNuGetPackages,
       ASPIRE_EXTENSION_E2E_SKIP_CURRENT_CLI_REGRESSIONS: process.env.ASPIRE_EXTENSION_E2E_SKIP_CURRENT_CLI_REGRESSIONS === 'true' ? 'true' : 'false',
@@ -686,7 +714,11 @@ async function main() {
       ASPIRE_EXTENSION_E2E_APPHOST_SDK_VERSION: appHostSdkVersion,
       ASPIRE_EXTENSION_E2E_EXTESTER_MODULE: extesterModule,
       ASPIRE_EXTENSION_E2E_ENABLE_AZURE_FUNCTIONS: enableAzureFunctionsE2E ? 'true' : 'false',
+      ASPIRE_EXTENSION_E2E_ENABLE_RESOURCE_DEBUG: enableResourceDebugE2E ? 'true' : 'false',
       ...(enableBrowserDebuggerE2E ? { ASPIRE_EXTENSION_E2E_BROWSER: e2eBrowser } : {}),
+      // Exercise Edge's compatibility-layer relaunch through the real VS Code process environment.
+      // https://github.com/microsoft/aspire/issues/20151
+      ...(enableBrowserDebuggerE2E && isWindows ? { __COMPAT_LAYER: 'DetectorsAppHealth' } : {}),
       ASPIRE_EXTENSION_E2E_ENABLE_WINUI: enableWinUiE2E ? 'true' : 'false',
       VSCODE_NLS_CONFIG: JSON.stringify({ locale: 'en', availableLanguages: {} }),
       LANG: 'C.UTF-8',
@@ -737,6 +769,7 @@ async function main() {
       run(process.execPath, [extesterCli, 'install-vsix', '--storage', storageDir, '--extensions_dir', extensionsDir, '--vsix_file', debuggerVsix.path], extestEnv, { timeout: 300000 });
     }
     assertJavaExtensionsRegistered();
+    assertResourceDebugExtensionsRegistered();
 
     recording = startRecording();
     try {
@@ -773,11 +806,7 @@ async function main() {
 
     if (cleanupErrors.length > 0) {
       cleanupFailed = true;
-      // Node prints an AggregateError without its `errors`, so a cleanup failure would otherwise
-      // reach CI as a bare "one or more steps failed" with nothing naming the step that broke.
-      const cleanupFailure = new AggregateError(
-        cleanupErrors,
-        `One or more E2E cleanup steps failed:\n  ${cleanupErrors.map(error => error.stack ?? error.message).join('\n  ')}`);
+      const cleanupFailure = createCleanupFailure(cleanupErrors);
       if (testFailure) {
         console.error(cleanupFailure);
       }
@@ -813,6 +842,14 @@ async function runCleanupStep(name, action, cleanupErrors) {
   }
 }
 
+function createCleanupFailure(cleanupErrors) {
+  // Node prints an AggregateError without its `errors`. Include the individual failures so
+  // CI output identifies every failed source, including failures nested in a cleanup step.
+  return new AggregateError(
+    cleanupErrors,
+    `One or more E2E cleanup steps failed:\n  ${cleanupErrors.map(error => error.stack ?? error.message).join('\n  ')}`);
+}
+
 function resolveCliPath() {
   if (process.env.ASPIRE_EXTENSION_E2E_CLI_PATH) {
     const configuredPath = path.resolve(process.env.ASPIRE_EXTENSION_E2E_CLI_PATH);
@@ -829,12 +866,12 @@ function resolveCliPath() {
 
   const candidatePaths = process.platform === 'win32'
     ? [
-      path.join(repoRoot, 'artifacts', 'bin', 'aspire', 'Debug', 'net10.0', 'aspire.exe'),
-      path.join(repoRoot, 'artifacts', 'bin', 'Aspire.Cli', 'Debug', 'net10.0', 'aspire.exe'),
+      path.join(repoRoot, 'artifacts', 'bin', 'aspire', 'Debug', 'net11.0', 'aspire.exe'),
+      path.join(repoRoot, 'artifacts', 'bin', 'Aspire.Cli', 'Debug', 'net11.0', 'aspire.exe'),
     ]
     : [
-      path.join(repoRoot, 'artifacts', 'bin', 'aspire', 'Debug', 'net10.0', 'aspire'),
-      path.join(repoRoot, 'artifacts', 'bin', 'Aspire.Cli', 'Debug', 'net10.0', 'aspire'),
+      path.join(repoRoot, 'artifacts', 'bin', 'aspire', 'Debug', 'net11.0', 'aspire'),
+      path.join(repoRoot, 'artifacts', 'bin', 'Aspire.Cli', 'Debug', 'net11.0', 'aspire'),
     ];
 
   const candidatePath = candidatePaths.find(p => fs.existsSync(p));
@@ -882,35 +919,97 @@ function validateCliPath(resolvedCliPath) {
   }
 }
 
+function prepareCliBundle(resolvedCliPath) {
+  // Each run has a fresh ASPIRE_HOME; direct dotnet fixture builds need its native bundle.
+  const result = spawnSync(resolvedCliPath, ['setup', '--install-path', getAspireCliEnvironment().ASPIRE_HOME], {
+    cwd: extensionRoot,
+    env: getAspireCliEnvironment(),
+    shell: false,
+    encoding: 'utf8',
+    timeout: 120000,
+  });
+  if (result.error || result.status !== 0) {
+    throw new Error(`Aspire CLI bundle setup failed for ${resolvedCliPath}: ${result.error?.message ?? `exit ${result.status ?? `signal ${result.signal}`}`}.\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`);
+  }
+  const home = getAspireCliEnvironment().ASPIRE_HOME;
+  const versionsDirectory = path.join(home, 'versions');
+  const executableSuffix = process.platform === 'win32' ? '.exe' : '';
+  const completeBundle = fs.existsSync(versionsDirectory)
+    && fs.readdirSync(versionsDirectory, { withFileTypes: true }).some(entry => entry.isDirectory()
+      && [
+        path.join('dcp', `dcp${executableSuffix}`),
+        path.join('managed', `aspire-managed${executableSuffix}`),
+        path.join('dashboard', `Aspire.Dashboard${executableSuffix}`),
+      ].every(relativePath => fs.existsSync(path.join(versionsDirectory, entry.name, relativePath))));
+  if (!completeBundle && (process.env.CI || fs.existsSync(path.join(home, '.aspire-bundle-version')))) {
+    throw new Error(`Aspire CLI setup did not provide a complete native bundle in ${home}.\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`);
+  }
+}
+
 function resolveDebuggerVsixPaths() {
   if (!enableDebuggerExtensions) {
     return [];
   }
 
-  // .NET resource shards need the C# extension and its .NET runtime dependency. Azure Functions
-  // additionally needs the Azure Resource Groups and Functions extensions before Aspire advertises
-  // that launch capability. All dependencies must be explicit because the E2E instance runs offline.
+  // AppHost debugging needs the C# extension and its .NET runtime dependency. The .NET Functions
+  // shard additionally needs the Azure Resource Groups and Functions extensions before Aspire
+  // advertises that launch capability. The Node Functions shard attaches through pwa-node and must
+  // not install that extension because its Function Host Exceptions Debugger intercepts AppHost
+  // exception stops. Resource attach also needs Go. All dependencies must be explicit because the
+  // E2E instance runs offline, and shared dependencies only need to be installed once.
+  const selectingFeatureFlag = enableAzureFunctionsE2E
+    ? 'ASPIRE_EXTENSION_E2E_ENABLE_AZURE_FUNCTIONS'
+    : enableResourceDebugE2E ? 'ASPIRE_EXTENSION_E2E_ENABLE_RESOURCE_DEBUG' : undefined;
   const vsixPaths = [
     {
       displayName: '.NET Install Tool',
-      path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_DOTNET_RUNTIME_VSIX'),
+      path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_DOTNET_RUNTIME_VSIX', selectingFeatureFlag),
     },
     {
       displayName: 'C#',
-      path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_CSHARP_VSIX'),
+      path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_CSHARP_VSIX', selectingFeatureFlag),
     },
   ];
-  if (enableAzureFunctionsE2E) {
+  if (installAzureFunctionsVsix) {
     vsixPaths.push({
       displayName: 'Azure Resource Groups',
-      path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_AZURE_RESOURCE_GROUPS_VSIX'),
+      path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_AZURE_RESOURCE_GROUPS_VSIX', 'ASPIRE_EXTENSION_E2E_ENABLE_AZURE_FUNCTIONS'),
     }, {
       displayName: 'Azure Functions',
-      path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_AZURE_FUNCTIONS_VSIX'),
+      path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_AZURE_FUNCTIONS_VSIX', 'ASPIRE_EXTENSION_E2E_ENABLE_AZURE_FUNCTIONS'),
+    });
+  }
+  if (enableResourceDebugE2E) {
+    vsixPaths.push({
+      displayName: 'Go',
+      path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_GO_VSIX', 'ASPIRE_EXTENSION_E2E_ENABLE_RESOURCE_DEBUG'),
     });
   }
 
   return vsixPaths;
+}
+
+function validateResourceDebugTools() {
+  const result = spawnSync('dlv', ['version'], {
+    cwd: extensionRoot,
+    env: getAspireCliEnvironment(),
+    shell: false,
+    encoding: 'utf8',
+    timeout: 60000,
+  });
+  if (result.error || result.status !== 0) {
+    throw new Error(`The resource debug E2E shard requires dlv on PATH. ${result.error?.message ?? result.stderr ?? `exit code ${result.status}`}`);
+  }
+
+  if (process.platform === 'linux') {
+    const ptraceScopePath = '/proc/sys/kernel/yama/ptrace_scope';
+    if (fs.existsSync(ptraceScopePath)) {
+      const ptraceScope = fs.readFileSync(ptraceScopePath, 'utf8').trim();
+      if (ptraceScope !== '0') {
+        throw new Error(`The resource debug E2E shard requires kernel.yama.ptrace_scope=0 so Delve can attach to DCP-launched Go processes, but ${ptraceScopePath} contains '${ptraceScope}'.`);
+      }
+    }
+  }
 }
 
 /**
@@ -1231,6 +1330,18 @@ function assertJavaExtensionsRegistered() {
     return;
   }
 
+  assertExtensionsRegistered('Java', REQUIRED_JAVA_EXTENSION_IDS);
+}
+
+function assertResourceDebugExtensionsRegistered() {
+  if (!enableResourceDebugE2E) {
+    return;
+  }
+
+  assertExtensionsRegistered('Resource debug', REQUIRED_RESOURCE_DEBUG_EXTENSION_IDS);
+}
+
+function assertExtensionsRegistered(label, requiredExtensionIds) {
   const manifestPath = path.join(extensionsDir, 'extensions.json');
   if (!fs.existsSync(manifestPath)) {
     throw new Error(`VS Code did not write ${manifestPath}, so no extension is registered for the run.`);
@@ -1248,7 +1359,7 @@ function assertJavaExtensionsRegistered() {
     .map(entry => entry?.identifier?.id)
     .filter(Boolean);
 
-  for (const identifier of REQUIRED_JAVA_EXTENSION_IDS) {
+  for (const identifier of requiredExtensionIds) {
     const entry = registered.find(candidate => candidate?.identifier?.id?.toLowerCase() === identifier.toLowerCase());
     if (!entry) {
       throw new Error(`${identifier} is not registered in ${manifestPath}, so VS Code will not load it. Registered: ${registeredIds.join(', ') || '(none)'}`);
@@ -1257,7 +1368,7 @@ function assertJavaExtensionsRegistered() {
     assertExtensionSupportsVsCodeVersion(path.join(extensionsDir, entry.relativeLocation), entry.relativeLocation);
   }
 
-  console.log(`Java extensions registered for the run: ${REQUIRED_JAVA_EXTENSION_IDS.join(', ')}.`);
+  console.log(`${label} extensions registered for the run: ${requiredExtensionIds.join(', ')}.`);
 }
 
 /**
@@ -1291,14 +1402,22 @@ function assertExtensionSupportsVsCodeVersion(extensionDirectory, directoryName)
   }
 }
 
-function resolveRequiredVsixPath(environmentVariable) {
+function resolveRequiredVsixPath(environmentVariable, selectingFeatureFlag) {
   const configuredPath = process.env[environmentVariable];
   if (!configuredPath) {
+    if (selectingFeatureFlag) {
+      throw new Error(`${environmentVariable} is required when ${selectingFeatureFlag}=true.`);
+    }
+
     throw new Error(`${environmentVariable} is required when a debugger-backed E2E shard is enabled.`);
   }
 
   const resolvedPath = path.resolve(configuredPath);
   if (!fs.existsSync(resolvedPath)) {
+    if (selectingFeatureFlag) {
+      throw new Error(`${environmentVariable} points to a missing file: ${resolvedPath}. It is required when ${selectingFeatureFlag}=true.`);
+    }
+
     throw new Error(`${environmentVariable} points to a missing file: ${resolvedPath}`);
   }
 
@@ -1419,6 +1538,10 @@ function prepareWorkspaceFixture(resolvedCliPath, resolvedAppHostSdkVersion) {
   }
   else {
     writeWorkerProject('AspireE2E.Worker');
+    if (enableResourceDebugE2E) {
+      writeCustomOutputWorkerProject('AspireE2E.CustomOutputWorker');
+      writeGoWorker('AspireE2E.Go');
+    }
     if (enableAzureFunctionsE2E) {
       writeAzureFunctionsProject('AspireE2E.Functions');
     }
@@ -1428,7 +1551,7 @@ function prepareWorkspaceFixture(resolvedCliPath, resolvedAppHostSdkVersion) {
       }
       writeWinUiProject('AspireE2E.WinUI');
     }
-    writeAppHostProject('AspireE2E.AppHost', resolvedAppHostSdkVersion, enableAzureFunctionsE2E, enableWinUiE2E);
+    writeAppHostProject('AspireE2E.AppHost', resolvedAppHostSdkVersion, enableAzureFunctionsE2E, enableWinUiE2E, enableResourceDebugE2E);
   }
   writeNuGetConfigIfLocalPackageSourcesExist();
 
@@ -1610,6 +1733,8 @@ function replaceCounterHandler(counterPath) {
 function writeBrowserDebuggerAppHostProject(projectName, resolvedAppHostSdkVersion) {
   const projectDirectory = path.join(workspaceRoot, projectName);
   fs.mkdirSync(projectDirectory, { recursive: true });
+  // The standalone client still consumes generated Projects metadata. Keep that SDK and
+  // the browser fixtures' project-reference graph for restore/build prewarming.
   fs.writeFileSync(path.join(projectDirectory, `${projectName}.csproj`), `<Project Sdk="Aspire.AppHost.Sdk/${resolvedAppHostSdkVersion}">
 
   <PropertyGroup>
@@ -1626,6 +1751,7 @@ function writeBrowserDebuggerAppHostProject(projectName, resolvedAppHostSdkVersi
     <ProjectReference Include="../HostedPerPage/HostedPerPage/HostedPerPage.csproj" />
     <ProjectReference Include="../HostedPerPage/HostedPerPage.Client/HostedPerPage.Client.csproj" />
     <PackageReference Include="Aspire.Hosting.Blazor" Version="${resolvedAppHostSdkVersion}" />
+    <PackageReference Include="Aspire.Hosting.Dotnet" Version="${resolvedAppHostSdkVersion}" />
   </ItemGroup>
 
 </Project>
@@ -1638,17 +1764,17 @@ var builder = DistributedApplication.CreateBuilder(args);
 var browser = Environment.GetEnvironmentVariable("ASPIRE_EXTENSION_E2E_BROWSER") ?? "chrome";
 var standalone = builder.AddBlazorWasmProject<Projects.StandaloneClient>("standalone")
     .WithBlazorDebuggerBrowser(browser);
-var gateway = builder.AddBlazorGateway("standalone-gateway");
+var gateway = builder.AddDotnetProjectBlazorGateway("standalone-gateway");
 // Match the HTTP-only client fixtures without depending on machine-wide browser certificate trust.
 gateway.Resource.Annotations.Remove(gateway.Resource.Annotations.OfType<EndpointAnnotation>().Single(endpoint => endpoint.UriScheme == "https"));
 gateway.WithExternalHttpEndpoints()
     .WithBlazorClientApp(standalone);
 // Launch one server per scenario rather than competing for C# run-api startup timeouts.
-builder.AddProject<Projects.HostedGlobal>("hosted-global")
+builder.AddDotnetProject("hosted-global", "../HostedGlobal/HostedGlobal/HostedGlobal.csproj")
     .WithExplicitStart()
     .WithBlazorDebuggerBrowser(browser)
     .ProxyBlazorTelemetry();
-builder.AddProject<Projects.HostedPerPage>("hosted-per-page")
+builder.AddDotnetProject("hosted-per-page", "../HostedPerPage/HostedPerPage/HostedPerPage.csproj")
     .WithExplicitStart()
     .WithBlazorDebuggerBrowser(browser)
     .ProxyBlazorTelemetry();
@@ -1656,16 +1782,39 @@ builder.Build().Run();
 `);
 }
 
-function writeAppHostProject(projectName, resolvedAppHostSdkVersion, includeAzureFunctions, includeWinUi) {
+function writeAppHostProject(projectName, resolvedAppHostSdkVersion, includeAzureFunctions, includeWinUi, includeResourceDebug) {
   const projectDirectory = path.join(workspaceRoot, projectName);
+  const includeLanguageSources = matchedTestSpecs.some(specPath => path.basename(specPath) === 'treeActions.e2e.test.js');
   fs.mkdirSync(projectDirectory, { recursive: true });
+  fs.mkdirSync(path.join(projectDirectory, 'e2e-source-image'), { recursive: true });
+  fs.writeFileSync(path.join(projectDirectory, 'e2e-source-tool'), 'Non-filesystem source collision fixture.');
+  if (includeLanguageSources) {
+    const pythonDirectory = path.join(projectDirectory, 'e2e-python-source');
+    const pythonInterpreter = path.join(pythonDirectory, '.venv', isWindows ? 'Scripts' : 'bin', isWindows ? 'python.exe' : 'python');
+    fs.mkdirSync(path.dirname(pythonInterpreter), { recursive: true });
+    fs.writeFileSync(pythonInterpreter, Buffer.from([0x4d, 0x5a, 0, 0]));
+    fs.writeFileSync(path.join(pythonDirectory, 'main.py'), 'print("Python source navigation fixture")\n');
+    const javaDirectory = path.join(projectDirectory, 'e2e-java-source');
+    const javaLauncher = path.join(projectDirectory, 'e2e-java-launcher', 'cmd.exe');
+    fs.mkdirSync(javaDirectory, { recursive: true });
+    fs.mkdirSync(path.dirname(javaLauncher), { recursive: true });
+    fs.writeFileSync(javaLauncher, Buffer.from([0x4d, 0x5a, 0, 0]));
+    fs.writeFileSync(path.join(javaDirectory, 'App.java'), 'class App {}\n');
+  }
+  const outsideWorkspaceSourcePath = path.join(shortRunRoot, 'e2e-outside-workspace-source');
+  fs.mkdirSync(outsideWorkspaceSourcePath, { recursive: true });
+  // Keep the Functions lane's SDK machinery; ordinary V2 resources no longer need generated metadata.
+  const projectSdk = includeAzureFunctions ? `Aspire.AppHost.Sdk/${resolvedAppHostSdkVersion}` : 'Microsoft.NET.Sdk';
+  const appHostPackageReference = includeAzureFunctions
+    ? ''
+    : `    <PackageReference Include="Aspire.Hosting.AppHost" Version="${resolvedAppHostSdkVersion}" />\n`;
   const azureFunctionsPackageReference = includeAzureFunctions
     ? `    <PackageReference Include="Aspire.Hosting.Azure.Functions" Version="${resolvedAppHostSdkVersion}" />\n`
     : '';
-  const winUiProjectReference = includeWinUi
-    ? '    <ProjectReference Include="../AspireE2E.WinUI/AspireE2E.WinUI.csproj" />\n'
+  const goPackageReference = includeResourceDebug
+    ? `    <PackageReference Include="Aspire.Hosting.Go" Version="${resolvedAppHostSdkVersion}" />\n`
     : '';
-  fs.writeFileSync(path.join(projectDirectory, `${projectName}.csproj`), `<Project Sdk="Aspire.AppHost.Sdk/${resolvedAppHostSdkVersion}">
+  fs.writeFileSync(path.join(projectDirectory, `${projectName}.csproj`), `<Project Sdk="${projectSdk}">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -1675,8 +1824,8 @@ function writeAppHostProject(projectName, resolvedAppHostSdkVersion, includeAzur
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../AspireE2E.Worker/AspireE2E.Worker.csproj" />
-${winUiProjectReference}${azureFunctionsPackageReference}  </ItemGroup>
+${appHostPackageReference}${azureFunctionsPackageReference}    <PackageReference Include="Aspire.Hosting.Dotnet" Version="${resolvedAppHostSdkVersion}" />
+${goPackageReference}  </ItemGroup>
 
 </Project>
 `);
@@ -1684,19 +1833,56 @@ ${winUiProjectReference}${azureFunctionsPackageReference}  </ItemGroup>
   const azureFunctionsResource = includeAzureFunctions
     ? `builder.AddAzureFunctionsProject("e2e-functions", "../AspireE2E.Functions/AspireE2E.Functions.csproj");\n\n`
     : '';
+  const goResource = includeResourceDebug
+    ? `builder.AddGoApp("e2e-go", "../AspireE2E.Go", gcFlags: "all=-N -l")
+    .WithHttpEndpoint(name: "http", env: "PORT");
+
+`
+    : '';
+  const customOutputWorkerResource = includeResourceDebug
+    ? `builder.AddDotnetProject("e2e-custom-output-worker", "../AspireE2E.CustomOutputWorker/AspireE2E.CustomOutputWorker.csproj")
+    .WithBuildEnvironment("BUILD_FLAVOR", "custom")
+    .WithHttpEndpoint(name: "http");
+
+`
+    : '';
   const winUiResource = includeWinUi
-    ? 'builder.AddProject<Projects.AspireE2E_WinUI>("e2e-winui", launchProfileName: "E2E");\n\n'
+    ? 'builder.AddDotnetProject("e2e-winui", "../AspireE2E.WinUI/AspireE2E.WinUI.csproj", options => options.LaunchProfileName = "E2E");\n\n'
+    : '';
+  const languageSourceResources = includeLanguageSources
+    ? `// Match source metadata with existing binaries without installing or launching Python or Java.
+foreach (var (language, launcher) in new[]
+{
+    ("python", Path.Combine(builder.AppHostDirectory, "e2e-python-source", ".venv", ${isWindows ? '"Scripts", "python.exe"' : '"bin", "python"'})),
+    ("java", Path.Combine(builder.AppHostDirectory, "e2e-java-launcher", "cmd.exe"))
+})
+{
+    builder.AddResource(new NoCommandsResource($"e2e-{language}-source"))
+        .WithInitialState(new CustomResourceSnapshot
+        {
+            ResourceType = "Executable",
+            State = KnownResourceStates.Running,
+            Properties = [
+                new("resource.sourcePath", Path.Combine(builder.AppHostDirectory, $"e2e-{language}-source")),
+                new("executable.path", launcher),
+                new("executable.workDir", Path.Combine(builder.AppHostDirectory, $"e2e-{language}-source"))
+            ]
+        });
+}
+
+`
     : '';
   fs.writeFileSync(path.join(projectDirectory, 'AppHost.cs'), `${csharpFileHeader}#pragma warning disable ASPIREINTERACTION001
-#pragma warning disable ASPIREPIPELINES001
+#pragma warning disable ASPIREPIPELINES001 // Older published SDKs still mark pipeline APIs experimental.
 #pragma warning disable ASPIRETERMINAL001
 
+using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
 
 // The E2E fixture intentionally covers interaction command arguments and terminal metadata while those APIs are still experimental.
 var builder = DistributedApplication.CreateBuilder(args);
 
-builder.AddProject<Projects.AspireE2E_Worker>("e2e-worker")
+var worker = builder.AddDotnetProject("e2e-worker", "../AspireE2E.Worker/AspireE2E.Worker.csproj")
     .WithHttpEndpoint(name: "http")
     .WithCommand(
         "echo-arguments",
@@ -1762,14 +1948,92 @@ builder.AddProject<Projects.AspireE2E_Worker>("e2e-worker")
 
 builder.AddResource(new NoCommandsResource("e2e-no-commands"));
 
+var workerProjectPath = worker.Resource.GetProjectMetadata().ProjectPath;
+
+// Metadata-only resources cover image/package source collisions without downloading containers or tools.
+builder.AddResource(new NoCommandsResource("e2e-image-source"))
+    .WithInitialState(new CustomResourceSnapshot
+    {
+        ResourceType = "Container",
+        State = KnownResourceStates.Running,
+        Properties = [
+            new("container.image", "e2e-source-image"),
+            new(CustomResourceKnownProperties.Source, "e2e-source-image")
+        ]
+    });
+
+builder.AddResource(new NoCommandsResource("e2e-tool-source"))
+    .WithInitialState(new CustomResourceSnapshot
+    {
+        ResourceType = "Tool",
+        State = KnownResourceStates.Running,
+        Properties = [
+            new("tool.package", "e2e-source-tool"),
+            new("executable.path", Path.Combine(builder.AppHostDirectory, "e2e-source-tool")),
+            new(CustomResourceKnownProperties.Source, "e2e-source-tool")
+        ]
+    });
+
+builder.AddResource(new NoCommandsResource("e2e-suppressed-source"))
+    .WithInitialState(new CustomResourceSnapshot
+    {
+        ResourceType = "Project",
+        State = KnownResourceStates.Running,
+        Properties = [
+            new("project.path", workerProjectPath),
+            new(CustomResourceKnownProperties.Source, string.Empty)
+        ]
+    });
+
+builder.AddResource(new NoCommandsResource("e2e-directory-source"))
+    .WithInitialState(new CustomResourceSnapshot
+    {
+        ResourceType = "Executable",
+        State = KnownResourceStates.Running,
+        Properties = [
+            new("executable.path", "dotnet"),
+            new("executable.workDir", Path.GetDirectoryName(workerProjectPath))
+        ]
+    });
+
+${languageSourceResources}builder.AddResource(new NoCommandsResource("e2e-display-source"))
+    .WithInitialState(new CustomResourceSnapshot
+    {
+        ResourceType = "Custom",
+        State = KnownResourceStates.Running,
+        Properties = [
+            new(CustomResourceKnownProperties.Source, workerProjectPath)
+        ]
+    });
+
+builder.AddResource(new NoCommandsResource("e2e-missing-source"))
+    .WithInitialState(new CustomResourceSnapshot
+    {
+        ResourceType = "Project",
+        State = KnownResourceStates.Running,
+        Properties = [
+            new("project.path", Path.ChangeExtension(workerProjectPath, ".missing.csproj"))
+        ]
+    });
+
+builder.AddResource(new NoCommandsResource("e2e-outside-workspace-source"))
+    .WithInitialState(new CustomResourceSnapshot
+    {
+        ResourceType = "Project",
+        State = KnownResourceStates.Running,
+        Properties = [
+            new("project.path", ${JSON.stringify(outsideWorkspaceSourcePath)})
+        ]
+    });
+
 // e2e-terminal opts into WithTerminal so the real CLI surfaces terminal.enabled and
 // terminal.replicaIndex over the backchannel. The extension's Open terminal action reads
 // those properties, so this resource exercises that metadata flowing through a real CLI process.
-builder.AddProject<Projects.AspireE2E_Worker>("e2e-terminal")
+builder.AddDotnetProject("e2e-terminal", "../AspireE2E.Worker/AspireE2E.Worker.csproj")
     .WithHttpEndpoint(name: "http")
     .WithTerminal();
 
-${winUiResource}${azureFunctionsResource}builder.Pipeline.AddStep("e2e-run-action-step", async context =>
+${winUiResource}${azureFunctionsResource}${customOutputWorkerResource}${goResource}builder.Pipeline.AddStep("e2e-run-action-step", async context =>
 {
     var task = await context.ReportingStep
         .CreateTaskAsync("Running E2E run action pipeline step", context.CancellationToken)
@@ -1831,6 +2095,9 @@ function writeWinUiProject(projectName) {
     <EnableMsixTooling>true</EnableMsixTooling>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <!-- Roslyn can reload while Aspire builds. Isolate XAML intermediates without moving
+         the shared NuGet assets. See https://github.com/microsoft/aspire/issues/19935. -->
+    <IntermediateOutputPath Condition="'$(DesignTimeBuild)' == 'true'">$(BaseIntermediateOutputPath)design-time\\$(Configuration)\\</IntermediateOutputPath>
   </PropertyGroup>
 
   <ItemGroup>
@@ -1874,7 +2141,11 @@ public partial class App : Application
     {
         var readyFile = Environment.GetEnvironmentVariable("ASPIRE_WINUI_E2E_READY_FILE")
             ?? throw new InvalidOperationException("ASPIRE_WINUI_E2E_READY_FILE is required.");
-        File.WriteAllText(readyFile, $"ready:{Environment.ProcessId}");
+        // Publish the marker atomically: the E2E test polls for this file and asserts on its
+        // first successful read, so it must never observe a created-but-empty file.
+        var pendingReadyFile = readyFile + ".tmp";
+        File.WriteAllText(pendingReadyFile, $"ready:{Environment.ProcessId}");
+        File.Move(pendingReadyFile, readyFile, overwrite: true);
 
         _window = new Window
         {
@@ -2010,6 +2281,59 @@ app.Run();
 `);
 }
 
+function writeCustomOutputWorkerProject(projectName) {
+  const projectDirectory = path.join(workspaceRoot, projectName);
+  fs.mkdirSync(projectDirectory, { recursive: true });
+  fs.writeFileSync(path.join(projectDirectory, `${projectName}.csproj`), `<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <UseAppHost>false</UseAppHost>
+    <BUILD_FLAVOR>default</BUILD_FLAVOR>
+    <OutputPath Condition="'$(BUILD_FLAVOR)' == 'custom'">bin/custom/</OutputPath>
+  </PropertyGroup>
+
+</Project>
+`);
+
+  fs.writeFileSync(path.join(projectDirectory, 'Program.cs'), `${csharpFileHeader}var builder = WebApplication.CreateBuilder(args);
+var app = builder.Build();
+
+app.MapGet("/", () => "custom-ok");
+
+app.Run();
+`);
+}
+
+function writeGoWorker(projectName) {
+  const projectDirectory = path.join(workspaceRoot, projectName);
+  fs.mkdirSync(projectDirectory, { recursive: true });
+  fs.writeFileSync(path.join(projectDirectory, 'go.mod'), `module example.com/aspire-e2e-go
+
+go 1.24
+`);
+  fs.writeFileSync(path.join(projectDirectory, 'main.go'), `package main
+
+import (
+	"fmt"
+	"log"
+	"net/http"
+	"os"
+)
+
+func main() {
+	http.HandleFunc("/", func(writer http.ResponseWriter, _ *http.Request) {
+		message := "go-ok"
+		_, _ = fmt.Fprint(writer, message)
+	})
+	log.Fatal(http.ListenAndServe(":"+os.Getenv("PORT"), nil))
+}
+`);
+
+}
+
 function resolveAppHostSdkVersion(resolvedCliPath) {
   if (process.env.ASPIRE_EXTENSION_E2E_APPHOST_SDK_VERSION) {
     return process.env.ASPIRE_EXTENSION_E2E_APPHOST_SDK_VERSION;
@@ -2092,6 +2416,34 @@ function compareConcreteVersions(left, right) {
   return 0;
 }
 
+/**
+ * Exports the public half of the ASP.NET Core development certificate. The AppHost serves the
+ * Dashboard and HTTPS resource endpoints with it, and the tests pin it (see readTrustedDevCertificate
+ * in src/test-e2e/helpers/assertions.ts) instead of disabling certificate validation. `dotnet dev-certs`
+ * writes a private key only when --password or --no-password is passed, so none is exported here.
+ * Like the CLI on first run, the export creates the certificate when the machine has none, but it
+ * never trusts it.
+ *
+ * A failure is not fatal: shards that never probe an HTTPS endpoint do not need the certificate, and
+ * the probes in the shards that do fail with a certificate error under the default trust store.
+ */
+function exportDevelopmentCertificate() {
+  logStep('Exporting the ASP.NET Core development certificate');
+  const certificatePath = path.join(shortRunRoot, 'aspnetcore-dev-cert.pem');
+  try {
+    run('dotnet', ['dev-certs', 'https', '--export-path', certificatePath, '--format', 'Pem'], {}, { timeout: 120000 });
+    if (!fs.existsSync(certificatePath)) {
+      throw new Error(`dotnet dev-certs did not write ${certificatePath}.`);
+    }
+  }
+  catch (error) {
+    console.warn(`Warning: unable to export the ASP.NET Core development certificate, so HTTPS probes will use the default trust store: ${error instanceof Error ? error.message : String(error)}`);
+    return undefined;
+  }
+
+  return certificatePath;
+}
+
 function getAspireCliEnvironment(extraEnv = {}) {
   return {
     ...process.env,
@@ -2114,7 +2466,7 @@ function getAspireCliEnvironment(extraEnv = {}) {
     ...(enableJavaE2E ? {
       ASPIRE_REPO_ROOT: repoRoot,
       features__polyglotSupportEnabled: 'true',
-      features__experimentalPolyglot__java: 'true',
+      features__experimentalPolyglotJava: 'true',
     } : {}),
     ...extraEnv,
   };
@@ -2129,9 +2481,12 @@ function writeNuGetConfigIfLocalPackageSourcesExist() {
   const sourceEntries = packageSources
     .map((source, index) => `    <add key="e2e-source-${index}" value="${escapeXml(source)}" />`)
     .join('\n');
-  const fallbackSourceEntries = getApprovedFallbackPackageSources()
+  const fallbackSources = getApprovedFallbackPackageSources();
+  const fallbackSourceEntries = fallbackSources
     .map(source => `    <add key="${escapeXml(source.key)}" value="${escapeXml(source.value)}" />`)
     .join('\n');
+  // Clear inherited mappings without enabling mapping: generated AppHosts inherit these
+  // fixture-owned aliases, which the CLI must not modify to add integration mappings.
   const nugetConfig = `<?xml version="1.0" encoding="utf-8"?>
 <configuration>
   <packageSources>
@@ -2156,6 +2511,7 @@ function getApprovedFallbackPackageSources() {
     { key: 'dotnet-eng', value: 'https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-eng/nuget/v3/index.json' },
     { key: 'dotnet9', value: 'https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json' },
     { key: 'dotnet10', value: 'https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet10/nuget/v3/index.json' },
+    { key: 'dotnet11', value: 'https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet11/nuget/v3/index.json' },
     { key: 'dotnet-libraries', value: 'https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-libraries/nuget/v3/index.json' },
   ];
 }
@@ -2486,22 +2842,85 @@ function isPartialDownloadArchiveName(name) {
     || lowerCaseName.endsWith('.gz');
 }
 
-function copyStorageDiagnostics() {
+async function copyStorageDiagnostics() {
   removePath(storageDiagnosticsDir, { recursive: true, force: true });
-  copyIfExists(isolatedAspireHome, path.join(storageDiagnosticsDir, 'aspire-home'), skipAspireLeaseFiles);
-  copyIfExists(path.join(storageDir, 'screenshots'), path.join(storageDiagnosticsDir, 'screenshots'));
-  copyIfExists(path.join(storageDir, 'settings', 'CrashpadMetrics-active.pma'), path.join(storageDiagnosticsDir, 'settings', 'CrashpadMetrics-active.pma'));
-  copyIfExists(path.join(storageDir, 'settings', 'logs'), path.join(storageDiagnosticsDir, 'settings', 'logs'));
-  copyIfExists(path.join(storageDir, 'settings', 'User', 'settings.json'), path.join(storageDiagnosticsDir, 'settings', 'User', 'settings.json'));
-  redactTextFilesForArtifacts(storageDiagnosticsDir);
+  const cleanupErrors = [];
+  // Select diagnostic inputs rather than walking Aspire home: Dashboard persistence, package
+  // caches and workspace-config-locks contain live coordination files, not uploadable diagnostics.
+  await copyDiagnosticSource(path.join(isolatedAspireHome, 'logs'), path.join(storageDiagnosticsDir, 'aspire-home', 'logs'), cleanupErrors, skipAspireLeaseFiles);
+  await copyDiagnosticSource(path.join(isolatedAspireHome, 'cache', 'apphost-info'), path.join(storageDiagnosticsDir, 'aspire-home', 'cache', 'apphost-info'), cleanupErrors, skipAspireLeaseFiles);
+  await copyDiagnosticSource(path.join(isolatedAspireHome, 'aspire.config.json'), path.join(storageDiagnosticsDir, 'aspire-home', 'aspire.config.json'), cleanupErrors);
+  await copyDiagnosticSource(path.join(storageDir, 'screenshots'), path.join(storageDiagnosticsDir, 'screenshots'), cleanupErrors);
+  await copyDiagnosticSource(path.join(storageDir, 'settings', 'logs'), path.join(storageDiagnosticsDir, 'settings', 'logs'), cleanupErrors);
+  await copyDiagnosticSource(path.join(storageDir, 'settings', 'User', 'settings.json'), path.join(storageDiagnosticsDir, 'settings', 'User', 'settings.json'), cleanupErrors);
+  if (cleanupErrors.length > 0) {
+    throw createCleanupFailure(cleanupErrors);
+  }
 }
 
-function copyWorkspaceDiagnostics() {
+async function copyWorkspaceDiagnostics() {
   removePath(workspaceDiagnosticsDir, { recursive: true, force: true });
-  copyIfExists(path.join(workspaceRoot, '.aspire'), path.join(workspaceDiagnosticsDir, '.aspire'));
-  copyIfExists(path.join(workspaceRoot, '.vscode', 'settings.json'), path.join(workspaceDiagnosticsDir, '.vscode', 'settings.json'));
-  copyWorkspaceProjectSources();
-  redactTextFilesForArtifacts(workspaceDiagnosticsDir);
+  const cleanupErrors = [];
+  // Workspace .aspire/integrations also contains live restore and project-layout locks.
+  await copyDiagnosticSource(path.join(workspaceRoot, '.aspire', 'logs'), path.join(workspaceDiagnosticsDir, '.aspire', 'logs'), cleanupErrors);
+  await copyDiagnosticSource(path.join(workspaceRoot, '.aspire', 'settings.json'), path.join(workspaceDiagnosticsDir, '.aspire', 'settings.json'), cleanupErrors);
+  await copyDiagnosticSource(path.join(workspaceRoot, 'aspire.config.json'), path.join(workspaceDiagnosticsDir, 'aspire.config.json'), cleanupErrors);
+  await copyDiagnosticSource(path.join(workspaceRoot, '.vscode', 'settings.json'), path.join(workspaceDiagnosticsDir, '.vscode', 'settings.json'), cleanupErrors);
+  await runCleanupStep('find workspace project diagnostics', () => copyWorkspaceProjectSources(cleanupErrors), cleanupErrors);
+  await copyDiagnosticSource(winUiReadyMarkerPath, path.join(workspaceDiagnosticsDir, path.basename(winUiReadyMarkerPath)), cleanupErrors);
+  if (cleanupErrors.length > 0) {
+    throw createCleanupFailure(cleanupErrors);
+  }
+}
+
+async function copyDiagnosticSource(sourcePath, destinationPath, cleanupErrors, filter) {
+  // A source may never have been created if setup failed. Missing descendants discovered during
+  // traversal are different: report those errors rather than hiding an interrupted diagnostic copy.
+  await copyDiagnosticPath(sourcePath, destinationPath, cleanupErrors, filter, true);
+}
+
+async function copyDiagnosticPath(sourcePath, destinationPath, cleanupErrors, filter, optionalSource) {
+  await runCleanupStep(`copy diagnostic ${sourcePath}`, async () => {
+    if (filter && !filter(sourcePath)) {
+      return;
+    }
+
+    let stats;
+    try {
+      stats = fs.lstatSync(sourcePath);
+    }
+    catch (error) {
+      if (optionalSource && error.code === 'ENOENT') {
+        return;
+      }
+      throw error;
+    }
+
+    if (stats.isDirectory()) {
+      fs.mkdirSync(destinationPath, { recursive: true });
+      for (const entry of fs.readdirSync(sourcePath)) {
+        await copyDiagnosticPath(path.join(sourcePath, entry), path.join(destinationPath, entry), cleanupErrors, filter, false);
+      }
+    }
+    else if (stats.isFile()) {
+      fs.mkdirSync(path.dirname(destinationPath), { recursive: true });
+      if (isTextArtifact(sourcePath)) {
+        // Apply redaction before writing, so a later copy failure cannot bypass it. Preserve the
+        // original bytes when unchanged, rather than re-encoding logs that are not UTF-8.
+        const contents = fs.readFileSync(sourcePath);
+        const text = contents.toString('utf8');
+        const redacted = redactSensitiveArtifactText(text);
+        fs.writeFileSync(destinationPath, redacted === text ? contents : redacted);
+      }
+      else {
+        fs.copyFileSync(sourcePath, destinationPath);
+      }
+    }
+    else {
+      // Do not follow symlinks out of the explicitly selected diagnostic inputs.
+      throw new Error(`Unsupported diagnostic file type: ${sourcePath}`);
+    }
+  }, cleanupErrors);
 }
 
 function copyIfExists(sourcePath, destinationPath, filter) {
@@ -2514,13 +2933,15 @@ function copyIfExists(sourcePath, destinationPath, filter) {
 }
 
 function skipAspireLeaseFiles(sourcePath) {
-  // Aspire CLI lease files can remain locked briefly on Windows after the test
-  // process exits. They are not useful diagnostics, and failing to copy them can
-  // mask the actual E2E failure or prevent artifact upload.
-  return !sourcePath.split(/[\\/]/).includes('.leases') && !sourcePath.endsWith('.lease');
+  const relativePath = path.relative(isolatedAspireHome, sourcePath);
+  const normalizedPath = isWindows ? relativePath.toLowerCase() : relativePath;
+  const segments = normalizedPath.split(path.sep);
+
+  // AppHost metadata can include CLI leases that remain locked after the test process exits.
+  return !segments.includes('.leases') && !normalizedPath.endsWith('.lease');
 }
 
-function copyWorkspaceProjectSources() {
+async function copyWorkspaceProjectSources(cleanupErrors) {
   if (!fs.existsSync(workspaceRoot)) {
     return;
   }
@@ -2532,15 +2953,14 @@ function copyWorkspaceProjectSources() {
 
     const sourceDirectory = path.join(workspaceRoot, entry.name);
     const destinationDirectory = path.join(workspaceDiagnosticsDir, entry.name);
-    copyIfExists(path.join(sourceDirectory, 'App.xaml'), path.join(destinationDirectory, 'App.xaml'));
-    copyIfExists(path.join(sourceDirectory, 'App.xaml.cs'), path.join(destinationDirectory, 'App.xaml.cs'));
-    copyIfExists(path.join(sourceDirectory, 'AppHost.cs'), path.join(destinationDirectory, 'AppHost.cs'));
-    copyIfExists(path.join(sourceDirectory, 'Program.cs'), path.join(destinationDirectory, 'Program.cs'));
-    copyIfExists(path.join(sourceDirectory, 'app.manifest'), path.join(destinationDirectory, 'app.manifest'));
-    copyIfExists(path.join(sourceDirectory, 'Properties', 'launchSettings.json'), path.join(destinationDirectory, 'Properties', 'launchSettings.json'));
-    copyIfExists(path.join(sourceDirectory, `${entry.name}.csproj`), path.join(destinationDirectory, `${entry.name}.csproj`));
+    await copyDiagnosticSource(path.join(sourceDirectory, 'App.xaml'), path.join(destinationDirectory, 'App.xaml'), cleanupErrors);
+    await copyDiagnosticSource(path.join(sourceDirectory, 'App.xaml.cs'), path.join(destinationDirectory, 'App.xaml.cs'), cleanupErrors);
+    await copyDiagnosticSource(path.join(sourceDirectory, 'AppHost.cs'), path.join(destinationDirectory, 'AppHost.cs'), cleanupErrors);
+    await copyDiagnosticSource(path.join(sourceDirectory, 'Program.cs'), path.join(destinationDirectory, 'Program.cs'), cleanupErrors);
+    await copyDiagnosticSource(path.join(sourceDirectory, 'app.manifest'), path.join(destinationDirectory, 'app.manifest'), cleanupErrors);
+    await copyDiagnosticSource(path.join(sourceDirectory, 'Properties', 'launchSettings.json'), path.join(destinationDirectory, 'Properties', 'launchSettings.json'), cleanupErrors);
+    await copyDiagnosticSource(path.join(sourceDirectory, `${entry.name}.csproj`), path.join(destinationDirectory, `${entry.name}.csproj`), cleanupErrors);
   }
-  copyIfExists(winUiReadyMarkerPath, path.join(workspaceDiagnosticsDir, path.basename(winUiReadyMarkerPath)));
 }
 
 function redactTextFilesForArtifacts(directory) {
@@ -2569,7 +2989,7 @@ function redactTextFilesForArtifacts(directory) {
 }
 
 function isTextArtifact(file) {
-  return /\.(log|txt|json|jsonl|xml|config|cs|ts|js|md)$/i.test(file) || path.basename(file).toLowerCase() === 'settings';
+  return /\.(log|txt|json|jsonl|xml|config|cs|csproj|xaml|manifest|ts|js|md)$/i.test(file) || path.basename(file).toLowerCase() === 'settings';
 }
 
 function redactSensitiveArtifactText(value) {
@@ -2598,6 +3018,10 @@ function printFailureDiagnosticsSummary() {
   console.error(`Workspace diagnostics directory: ${path.relative(extensionRoot, workspaceDiagnosticsDir)}`);
 
   const results = readMochaResults();
+  if (results?.complete === false) {
+    console.error('Mocha did not finish the run; mocha.json contains only the tests that completed before it stopped.');
+  }
+
   if (results?.failures?.length > 0) {
     console.error('Failed E2E tests:');
     for (const failure of results.failures) {

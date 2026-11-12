@@ -7,12 +7,12 @@ using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Azure.Tests;
 
-public class FoundryDeploymentConnectionPropertiesTests
+public class FoundryDeploymentConnectionPropertiesTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public void FoundryDeploymentResourceGetConnectionPropertiesReturnsExpectedValues_Local()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var deployment = builder.AddFoundry("aifoundry")
             .RunAsFoundryLocal()
             .AddDeployment("chat", FoundryModel.Local.Phi4);
@@ -61,7 +61,7 @@ public class FoundryDeploymentConnectionPropertiesTests
     [Fact]
     public void FoundryDeploymentResourceGetConnectionPropertiesReturnsExpectedValues_Azure()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var deployment = builder.AddFoundry("aifoundry")
             .AddDeployment("chat", FoundryModel.Microsoft.Phi4);
 

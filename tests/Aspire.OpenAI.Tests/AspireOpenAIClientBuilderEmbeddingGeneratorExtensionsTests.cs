@@ -164,16 +164,21 @@ public class AspireOpenAIClientBuilderEmbeddingGeneratorExtensionsTests
     }
 
     [Theory]
-    [InlineData(true, false)]
-    [InlineData(false, false)]
-    [InlineData(true, true)]
-    [InlineData(false, true)]
-    public void AddsOpenTelemetry(bool useKeyed, bool disableOpenTelemetry)
+    [InlineData(true, false, false)]
+    [InlineData(false, false, false)]
+    [InlineData(true, true, false)]
+    [InlineData(false, true, false)]
+    [InlineData(true, false, true)]
+    [InlineData(false, false, true)]
+    [InlineData(true, true, true)]
+    [InlineData(false, true, true)]
+    public void AddsOpenTelemetry(bool useKeyed, bool disableTracing, bool disableMetrics)
     {
         var builder = Host.CreateEmptyApplicationBuilder(null);
         builder.Configuration.AddInMemoryCollection([
             new("ConnectionStrings:openai", $"Endpoint=https://aspireopenaitests.openai.azure.com/;Key=fake"),
-            new("Aspire:OpenAI:DisableTracing", disableOpenTelemetry.ToString()),
+            new("Aspire:OpenAI:DisableTracing", disableTracing.ToString()),
+            new("Aspire:OpenAI:DisableMetrics", disableMetrics.ToString()),
         ]);
 
         if (useKeyed)
@@ -190,7 +195,7 @@ public class AspireOpenAIClientBuilderEmbeddingGeneratorExtensionsTests
             host.Services.GetRequiredKeyedService<IEmbeddingGenerator<string, Embedding<float>>>("openai_embeddinggenerator") :
             host.Services.GetRequiredService<IEmbeddingGenerator<string, Embedding<float>>>();
 
-        Assert.Equal(disableOpenTelemetry, generator.GetService<OpenTelemetryEmbeddingGenerator<string, Embedding<float>>>() is null);
+        Assert.Equal(disableTracing && disableMetrics, generator.GetService<OpenTelemetryEmbeddingGenerator<string, Embedding<float>>>() is null);
     }
 
     [Theory]
@@ -232,6 +237,7 @@ public class AspireOpenAIClientBuilderEmbeddingGeneratorExtensionsTests
         builder.Configuration.AddInMemoryCollection([
             new("ConnectionStrings:openai", $"Endpoint=https://aspireopenaitests.openai.azure.com/;Key=fake"),
             new("Aspire:OpenAI:DisableTracing", disableOpenTelemetry.ToString()),
+            new("Aspire:OpenAI:DisableMetrics", disableOpenTelemetry.ToString()),
         ]);
 
         builder.Services.AddSingleton<ILoggerFactory, TestLoggerFactory>();

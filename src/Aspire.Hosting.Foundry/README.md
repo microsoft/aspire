@@ -14,7 +14,11 @@ From your AppHost directory, add the `Aspire.Hosting.Foundry` integration with t
 
 ```bash
 aspire add Aspire.Hosting.Foundry
+aspire add Aspire.Hosting.Dotnet
 ```
+
+Foundry's own
+`AddProject` / `addProject` APIs model Foundry projects and are unrelated to .NET service hosting.
 
 ## Configure Azure Provisioning for local development
 
@@ -38,7 +42,7 @@ In the AppHost, add a Microsoft Foundry deployment and reference it from another
 var chat = builder.AddFoundry("foundry")
                   .AddDeployment("chat", "Phi-4", "1", "Microsoft");
 
-var myService = builder.AddProject<Projects.MyService>()
+var myService = builder.AddDotnetProject("myservice", "../MyService/MyService.csproj")
                        .WithReference(chat);
 ```
 
@@ -51,6 +55,9 @@ const chat = await builder.addFoundry("foundry")
 const myService = await builder.addNodeApp("myService", "../my-service", "server.js")
                        .withReference(chat);
 ```
+
+Browser-origin endpoint properties for hosted agents use the deployed project's public authority.
+The origin excludes the project's `/api/projects/<name>` and agent navigation paths; it is emitted as a deployment output rather than derived from local endpoint allocation.
 
 ## Foundry Local usage
 
@@ -193,11 +200,13 @@ builder.AddPythonApp("agent", "./app", "main:app")
 
 In run mode, the agent runs locally with health check endpoints and OpenTelemetry instrumentation. In publish mode, the agent is deployed as a hosted agent in Microsoft Foundry.
 
+The preview `HostedAgentConfiguration.Tools` property has been removed. Configure hosted-agent
+tools in the agent application, not in the AppHost.
+
 ## Toolbox usage
 
-Toolboxes bundle reusable Foundry tools behind a single MCP endpoint. Aspire creates the first
-immutable Toolbox version and promotes new versions only when the configured tools, description,
-or metadata change.
+Toolboxes bundle reusable Foundry tools behind a single MCP endpoint. Aspire reuses unchanged
+versions and creates a new default version when the configuration or hosting integration changes.
 
 **C#**
 
@@ -222,7 +231,7 @@ var toolbox = project.AddToolbox("field-tools")
             }
         });
 
-builder.AddProject<Projects.MyService>("service")
+builder.AddDotnetProject("service", "../MyService/MyService.csproj")
     .WithReference(toolbox)
     .WaitFor(toolbox);
 ```

@@ -7,15 +7,23 @@
     <!-- Toolbar -->
     @if (ViewportInformation.IsDesktop)
     {
-        @* Teleport the page title (<h1 class="page-header">) up into the top header, where it
-           renders as a suffix after the app/brand name. This keeps the page title in a single,
-           consistent place (the header IA) instead of a large banner above each page's toolbar. *@
-        <SectionContent SectionName="@DashboardUIHelpers.PageTitleTopBarSection">
-            @PageTitleSection
-        </SectionContent>
+        @if (DashboardExperienceComponents.IsLegacyLocation(NavigationManager))
+        {
+            @* The previous experience keeps main's behavior: the page title is teleported into its top header, which
+               has no other indication of the page. *@
+            <SectionContent SectionName="@DashboardUIHelpers.PageTitleTopBarSection">
+                @PageTitleSection
+            </SectionContent>
+        }
+        else
+        {
+            @* The header's top-level navigation and the resource header already show where the user is, so the
+               page title is kept for assistive technology only. *@
+            <div class="visually-hidden">@PageTitleSection</div>
+        }
 
         @* A page can opt out of the desktop toolbar row (HideDesktopToolbar) when it renders its toolbar
-           controls somewhere else - e.g. Resources moves them onto the tabs row. Skipping the <header>
+           controls somewhere else. Skipping the <header>
            entirely lets the "page-header" grid row collapse instead of leaving an empty toolbar band. *@
         @if (!HideDesktopToolbar)
         {

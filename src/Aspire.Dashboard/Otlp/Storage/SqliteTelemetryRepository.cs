@@ -5,6 +5,7 @@ using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Otlp;
 using Aspire.Dashboard.Otlp.Model;
+using Dapper;
 using System.Diagnostics;
 using Google.Protobuf.Collections;
 using Microsoft.Data.Sqlite;
@@ -12,7 +13,6 @@ using Microsoft.Extensions.Options;
 using OpenTelemetry.Proto.Logs.V1;
 using OpenTelemetry.Proto.Metrics.V1;
 using OpenTelemetry.Proto.Trace.V1;
-using SQLitePCL;
 
 namespace Aspire.Dashboard.Otlp.Storage;
 
@@ -28,12 +28,37 @@ public sealed partial class SqliteTelemetryRepository : ITelemetryRepository, IT
     private readonly IReadOnlyList<IOutgoingPeerResolver> _outgoingPeerResolvers;
     private readonly List<IDisposable> _outgoingPeerSubscriptions = [];
     private int _disposed;
+    private int _hasReceivedTelemetry = -1;
 
     private static string CreateContainsLikePattern(string value) => $"%{EscapeLikePattern(value)}%";
 
     private static string CreateStartsWithLikePattern(string value) => $"{EscapeLikePattern(value)}%";
 
     public bool IsReadOnly => _database.IsReadOnly;
+
+    public bool HasReceivedTelemetry
+    {
+        get
+        {
+            if (Volatile.Read(ref _hasReceivedTelemetry) == -1)
+            {
+                // Seed resumed databases from actual content, not resource envelopes, which can be empty.
+                // The latch belongs to this process and must survive all subsequent clears and cache resets.
+                using (_database.WriteLock.Lock())
+                {
+                    using var connection = _database.OpenConnection();
+                    var hasTelemetry = connection.QuerySingle<bool>("""
+                        SELECT EXISTS (SELECT 1 FROM telemetry_logs)
+                            OR EXISTS (SELECT 1 FROM telemetry_spans)
+                            OR EXISTS (SELECT 1 FROM telemetry_metric_points);
+                        """);
+                    Interlocked.CompareExchange(ref _hasReceivedTelemetry, hasTelemetry ? 1 : 0, -1);
+                }
+            }
+
+            return Volatile.Read(ref _hasReceivedTelemetry) == 1;
+        }
+    }
 
     private static string EscapeLikePattern(string value)
     {
@@ -97,7 +122,12 @@ public sealed partial class SqliteTelemetryRepository : ITelemetryRepository, IT
         EnsureWritable();
         try
         {
-            NotifyLogsAdded(await AddLogsToDatabaseAsync(context, resourceLogs).ConfigureAwait(false));
+            var logs = await AddLogsToDatabaseAsync(context, resourceLogs).ConfigureAwait(false);
+            if (logs.Count > 0)
+            {
+                Interlocked.Exchange(ref _hasReceivedTelemetry, 1);
+            }
+            NotifyLogsAdded(logs);
         }
         catch
         {
@@ -122,6 +152,7 @@ public sealed partial class SqliteTelemetryRepository : ITelemetryRepository, IT
         await AddMetricsToDatabaseAsync(context, resourceMetrics).ConfigureAwait(false);
         if (context.SuccessCount > successCount)
         {
+            Interlocked.Exchange(ref _hasReceivedTelemetry, 1);
             NotifyMetricsAdded();
         }
     }
@@ -137,7 +168,12 @@ public sealed partial class SqliteTelemetryRepository : ITelemetryRepository, IT
         EnsureWritable();
         try
         {
-            NotifySpansAdded(await AddTracesToDatabaseAsync(context, resourceSpans).ConfigureAwait(false));
+            var spans = await AddTracesToDatabaseAsync(context, resourceSpans).ConfigureAwait(false);
+            if (spans.Count > 0)
+            {
+                Interlocked.Exchange(ref _hasReceivedTelemetry, 1);
+            }
+            NotifySpansAdded(spans);
         }
         catch
         {
@@ -153,9 +189,9 @@ public sealed partial class SqliteTelemetryRepository : ITelemetryRepository, IT
     /// Runs a cancellable database read on the thread pool.
     /// </summary>
     /// <remarks>
-    /// The read registers <c>sqlite3_interrupt</c> for <paramref name="cancellationToken"/>, which surfaces as
-    /// a <see cref="SqliteException"/> with <c>SQLITE_INTERRUPT</c> rather than an <see cref="OperationCanceledException"/>.
-    /// Translate it here so callers see normal cancellation semantics.
+    /// The read registers <c>sqlite3_interrupt</c> for <paramref name="cancellationToken"/>, which usually surfaces as
+    /// a <see cref="SqliteException"/> with <c>SQLITE_INTERRUPT</c>. Cancellation during statement preparation can
+    /// surface as a different SQLite error, so translate any SQLite failure after cancellation was requested.
     /// </remarks>
     internal static Task<T> RunReadAsync<T>(Func<CancellationToken, T> read, CancellationToken cancellationToken) =>
         Task.Run(() =>
@@ -164,7 +200,7 @@ public sealed partial class SqliteTelemetryRepository : ITelemetryRepository, IT
             {
                 return read(cancellationToken);
             }
-            catch (SqliteException ex) when (ex.SqliteErrorCode == raw.SQLITE_INTERRUPT)
+            catch (SqliteException)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 throw;
@@ -217,6 +253,8 @@ public sealed partial class SqliteTelemetryRepository : ITelemetryRepository, IT
         RunReadAsync(token => GetTraceSummariesFromDatabase(context, token), cancellationToken);
     public Task<GetSpansResponse> GetSpansAsync(GetSpansRequest context, CancellationToken cancellationToken) =>
         RunReadAsync(token => GetSpansFromDatabase(context, token), cancellationToken);
+    public Task<GetRequestSpansResponse> GetRequestSpansAsync(GetRequestSpansRequest request, CancellationToken cancellationToken) =>
+        RunReadAsync(token => GetRequestSpansFromDatabase(request, token), cancellationToken);
     public Task<Dictionary<string, int>> GetTraceFieldValuesAsync(string attributeName, CancellationToken cancellationToken) =>
         RunReadAsync(token => GetTraceFieldValuesFromDatabase(attributeName, token), cancellationToken);
     public Task<Dictionary<string, int>> GetLogsFieldValuesAsync(string attributeName, CancellationToken cancellationToken) =>

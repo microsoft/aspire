@@ -1,0 +1,12 @@
+﻿---
+apiVersion: "v1"
+kind: "PersistentVolumeClaim"
+metadata:
+  name: "parameter"
+spec:
+  storageClassName: "{{ .Values.parameters.parameter.storageclass }}"
+  accessModes:
+    - "ReadWriteOnce"
+  resources:
+    requests:
+      storage: "1Gi"

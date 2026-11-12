@@ -1160,6 +1160,7 @@ internal sealed partial class TypeScriptApiProjector
             Declaration = signature.Declaration,
             Summary = capability.Documentation?.Summary,
             Remarks = capability.Documentation?.Remarks,
+            IsExperimental = AtsTypeSystemCompatibility.IsExperimental(capability),
             DeprecationMessage = capability.IsObsolete ? capability.ObsoleteMessage ?? string.Empty : null,
             CapabilityId = capability.CapabilityId,
             OwningAssemblyName = GetCapabilityOwningAssemblyName(capability),
@@ -1220,6 +1221,8 @@ internal sealed partial class TypeScriptApiProjector
             Declaration = declaration,
             Summary = documentation?.Summary,
             Remarks = documentation?.Remarks,
+            IsExperimental = (getter ?? setter) is { } propertyCapability &&
+                AtsTypeSystemCompatibility.IsExperimental(propertyCapability),
             DeprecationMessage = (getter ?? setter) is { IsObsolete: true } obsolete ? obsolete.ObsoleteMessage ?? string.Empty : null,
             CapabilityId = (getter ?? setter)?.CapabilityId,
             OwningAssemblyName = (getter ?? setter) is { } capability ? GetCapabilityOwningAssemblyName(capability) : null
@@ -1241,6 +1244,7 @@ internal sealed partial class TypeScriptApiProjector
             OwningAssemblyName = owningAssemblyName,
             Summary = capability.Documentation?.Summary,
             Remarks = capability.Documentation?.Remarks,
+            IsExperimental = AtsTypeSystemCompatibility.IsExperimental(capability),
             Members = []
         };
 
@@ -3103,10 +3107,11 @@ internal sealed partial class TypeScriptApiProjector
 
         var paramsString = paramList.Count > 0 ? string.Join(", ", paramList) : "";
 
-        // Determine return type
+        // Callback results cross the wire as JSON data, just like DTO properties, rather
+        // than AspireList/AspireDict handles for server-owned mutable collections.
         var returnType = callbackReturnType == null || callbackReturnType.TypeId == AtsConstants.Void
             ? "void"
-            : MapTypeRefToTypeScript(callbackReturnType);
+            : MapDtoPropertyTypeToTypeScript(callbackReturnType);
 
         // Callbacks are always async in TypeScript
         return $"({paramsString}) => Promise<{returnType}>";

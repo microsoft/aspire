@@ -13,6 +13,8 @@ public class TestServerStreamWriter<T> : IServerStreamWriter<T> where T : class
 
     public WriteOptions? WriteOptions { get; set; }
 
+    public Func<T, CancellationToken, Task>? BeforeWriteAsync { get; set; }
+
     public TestServerStreamWriter(ServerCallContext serverCallContext)
     {
         _channel = Channel.CreateUnbounded<T>();
@@ -41,20 +43,22 @@ public class TestServerStreamWriter<T> : IServerStreamWriter<T> where T : class
         throw new InvalidOperationException("Unable to read message.");
     }
 
-    public Task WriteAsync(T message, CancellationToken cancellationToken)
+    public async Task WriteAsync(T message, CancellationToken cancellationToken)
     {
-        if (_serverCallContext.CancellationToken.IsCancellationRequested ||
-            _serverCallContext.CancellationToken.IsCancellationRequested)
+        _serverCallContext.CancellationToken.ThrowIfCancellationRequested();
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (BeforeWriteAsync is { } beforeWrite)
         {
-            return Task.FromCanceled(_serverCallContext.CancellationToken);
+            await beforeWrite(message, cancellationToken).ConfigureAwait(false);
+            _serverCallContext.CancellationToken.ThrowIfCancellationRequested();
+            cancellationToken.ThrowIfCancellationRequested();
         }
 
         if (!_channel.Writer.TryWrite(message))
         {
             throw new InvalidOperationException("Unable to write message.");
         }
-
-        return Task.CompletedTask;
     }
 
     public Task WriteAsync(T message)

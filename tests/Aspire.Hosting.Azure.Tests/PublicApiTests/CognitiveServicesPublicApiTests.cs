@@ -8,7 +8,7 @@ using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Azure.Tests.PublicApiTests;
 
-public class CognitiveServicesPublicApiTests
+public class CognitiveServicesPublicApiTests(ITestOutputHelper testOutputHelper)
 {
     [Theory]
     [InlineData(false)]
@@ -78,7 +78,7 @@ public class CognitiveServicesPublicApiTests
     [InlineData(true)]
     public void AddAzureOpenAIShouldThrowWhenNameIsNullOrEmpty(bool isNull)
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var name = isNull ? null! : string.Empty;
 
         var action = () => builder.AddAzureOpenAI(name);
@@ -104,7 +104,7 @@ public class CognitiveServicesPublicApiTests
     [Fact]
     public void AddDeploymentShouldThrowWhenDeploymentIsNull()
     {
-        using var testBuilder = TestDistributedApplicationBuilder.Create();
+        using var testBuilder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var builder = testBuilder.AddAzureOpenAI("open-ai");
         AzureOpenAIDeployment deployment = null!;
 

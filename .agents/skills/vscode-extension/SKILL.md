@@ -152,7 +152,7 @@ fixed only by the current repo-built CLI.
    **Run Extension (cli stop on entry)** to make the CLI wait for a debugger to attach (use this to
    debug the CLI and the extension together).
 3. To debug against a locally built CLI, set the `Aspire Cli Executable Path` setting to the build
-   output, e.g. `artifacts/bin/Aspire.Cli/Debug/net10.0/aspire` (relative to the repo root). The
+   output, e.g. `artifacts/bin/Aspire.Cli/Debug/net11.0/aspire` (relative to the repo root). The
    `Aspire: Extension settings` command opens settings filtered to the extension.
 
 RPC and debugger issues usually live in `src/server/`, `src/debugger/`, or `src/dcp/`.

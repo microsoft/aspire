@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
+    <IsPackable>true</IsPackable>
+    <DisablePackageBaselineValidation>true</DisablePackageBaselineValidation>
+    <SuppressFinalPackageVersion>true</SuppressFinalPackageVersion>
+    <EnableAspireIntegrationAnalyzers>true</EnableAspireIntegrationAnalyzers>
+    <PackageTags>aspire integration hosting azure provisioning keyvault security secrets cloud polyglot</PackageTags>
+    <Description>Opt-in Azure Provisioning Key Vault APIs for polyglot Aspire AppHosts.</Description>
+    <PackageIconFullPath>$(SharedDir)AzureKeyVault_256x.png</PackageIconFullPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\Aspire.Hosting.Azure.Provisioning\ExperimentalAssemblyInfo.cs" Link="ExperimentalAssemblyInfo.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Aspire.Hosting.Azure\Aspire.Hosting.Azure.csproj" />
+    <ProjectReference Include="..\Aspire.Hosting.Azure.KeyVault\Aspire.Hosting.Azure.KeyVault.csproj" />
+    <ProjectReference Include="..\Aspire.Hosting.Azure.Provisioning\Aspire.Hosting.Azure.Provisioning.csproj" />
+    <ProjectReference Include="..\Aspire.Hosting.Azure.Provisioning.Generators\Aspire.Hosting.Azure.Provisioning.Generators.csproj" PrivateAssets="all" ReferenceOutputAssembly="false" OutputItemType="Analyzer" />
+    <PackageReference Include="Azure.Provisioning" />
+    <PackageReference Include="Azure.Provisioning.KeyVault" />
+  </ItemGroup>
+
+</Project>

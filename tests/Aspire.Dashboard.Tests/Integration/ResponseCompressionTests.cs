@@ -33,6 +33,7 @@ public class ResponseCompressionTests(ITestOutputHelper testOutputHelper)
 
     [Theory]
     [InlineData("/js/app.js")]
+    [InlineData("/js/app-scroll.js")]
     [InlineData("/css/layout.css")]
     public async Task Static_Asset_Responses_Are_Compressed(string path)
     {

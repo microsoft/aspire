@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREDOTNETTOOL
+#pragma warning disable ASPIREPROJECTS001
 
 using Aspire.Hosting.ApplicationModel;
 
@@ -10,9 +11,6 @@ namespace Aspire.Hosting.EntityFrameworkCore;
 /// <summary>
 /// Represents an EF Core migration resource associated with a project.
 /// </summary>
-/// <param name="name">The name of the resource.</param>
-/// <param name="projectResource">The parent project resource that contains the DbContext.</param>
-/// <param name="dbContextTypeName">The fully qualified name of the DbContext type, or null to auto-detect.</param>
 /// <remarks>
 /// The resource inherits from <see cref="ContainerResource"/> so it can be published as a container image
 /// that runs the migration bundle at deploy time when
@@ -21,13 +19,76 @@ namespace Aspire.Hosting.EntityFrameworkCore;
 /// </remarks>
 /// <ats-remarks />
 [AspireExport(ExposeProperties = true)]
-public class EFMigrationResource(string name, ProjectResource projectResource, string? dbContextTypeName)
-    : ContainerResource(name)
+public class EFMigrationResource : ContainerResource
 {
+    /// <inheritdoc/>
+    public override string ResourceTypeDisplayName => "Entity Framework Core Migration";
+
+    private readonly ProjectResource? _legacyProjectResource;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="EFMigrationResource"/> class.
+    /// </summary>
+    /// <param name="name">The name of the resource.</param>
+    /// <param name="projectResource">The startup project resource that contains the DbContext.</param>
+    /// <param name="dbContextTypeName">The fully qualified name of the DbContext type, or null to auto-detect.</param>
+    public EFMigrationResource(string name, ProjectResource projectResource, string? dbContextTypeName)
+        : this(name, projectResource, dbContextTypeName, projectResource)
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="EFMigrationResource"/> class for a .NET program resource.
+    /// </summary>
+    /// <param name="name">The name of the resource.</param>
+    /// <param name="startupProjectResource">The startup .NET program resource that contains the DbContext configuration.</param>
+    /// <param name="dbContextTypeName">The fully qualified name of the DbContext type, or null to auto-detect.</param>
+    /// <remarks>
+    /// This constructor captures resource data only. Use <c>AddEFMigrations</c> on a startup project builder
+    /// to register the resource and configure its tools, commands, relationships, and publishing pipeline.
+    /// </remarks>
+    /// <exception cref="ArgumentNullException"><paramref name="startupProjectResource"/> is null.</exception>
+    public EFMigrationResource(
+        string name,
+        IDotnetProgramResource startupProjectResource,
+        string? dbContextTypeName)
+        : this(name, startupProjectResource, dbContextTypeName, startupProjectResource as ProjectResource)
+    {
+    }
+
+    private EFMigrationResource(
+        string name,
+        IDotnetProgramResource startupProjectResource,
+        string? dbContextTypeName,
+        ProjectResource? legacyProjectResource)
+        : base(name)
+    {
+        StartupProjectResource = startupProjectResource ?? throw new ArgumentNullException(nameof(startupProjectResource));
+        DbContextTypeName = dbContextTypeName;
+        _legacyProjectResource = legacyProjectResource;
+    }
+
+    /// <summary>
+    /// Gets the startup .NET program resource that contains the DbContext configuration.
+    /// </summary>
+    public IDotnetProgramResource StartupProjectResource { get; }
+
     /// <summary>
     /// Gets the parent project resource that contains the DbContext.
     /// </summary>
-    public ProjectResource ProjectResource { get; } = projectResource;
+    /// <remarks>
+    /// This property is retained for compatibility with migration resources created from legacy
+    /// <see cref="ProjectResource"/> instances. Use <see cref="StartupProjectResource"/> for resources created from
+    /// any .NET program model.
+    /// </remarks>
+    /// <exception cref="InvalidOperationException">
+    /// This migration resource was created from a .NET program that is not a <see cref="ProjectResource"/>.
+    /// </exception>
+    [Obsolete($"Use {nameof(StartupProjectResource)} instead.")]
+    public ProjectResource ProjectResource =>
+        _legacyProjectResource ?? throw new InvalidOperationException(
+            $"Migration resource '{Name}' uses a startup .NET program that is not a {nameof(ProjectResource)}. " +
+            $"Use {nameof(StartupProjectResource)} instead.");
 
     /// <summary>
     /// Gets the fully qualified name of the DbContext type to use for migrations, or null to auto-detect.
@@ -36,7 +97,7 @@ public class EFMigrationResource(string name, ProjectResource projectResource, s
     /// This property is used to specify which DbContext to use when the project contains multiple DbContext types.
     /// When null, the EF Core tools will auto-detect the DbContext to use.
     /// </remarks>
-    public string? DbContextTypeName { get; } = dbContextTypeName;
+    public string? DbContextTypeName { get; }
 
     /// <summary>
     /// Gets or sets whether a migration script should be generated during publishing.
@@ -129,7 +190,20 @@ public class EFMigrationResource(string name, ProjectResource projectResource, s
     /// If not specified, migrations are assumed to be in the startup project.
     /// When specified, this project's path will be used as the target for migration operations.
     /// </remarks>
-    public string? MigrationsProjectPath { get; set; }
+    public string? MigrationsProjectPath
+    {
+        get;
+        set
+        {
+            field = value;
+            MigrationsProjectResource = null;
+            MigrationsProjectMetadata = null;
+        }
+    }
+
+    internal IDotnetProgramResource? MigrationsProjectResource { get; set; }
+
+    internal IProjectMetadata? MigrationsProjectMetadata { get; set; }
 
     /// <summary>
     /// Gets or sets the callback to configure the dotnet-ef tool resource.

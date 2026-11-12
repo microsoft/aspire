@@ -74,6 +74,11 @@ internal static class TelemetryConstants
         public const string CliBuildId = "aspire.cli.build_id";
 
         /// <summary>
+        /// Tag for the mechanism that installed the running CLI.
+        /// </summary>
+        public const string InstallSource = "aspire.cli.install.source";
+
+        /// <summary>
         /// Tag for the CLI's effective identity version. This is the version the CLI is
         /// behaving as — which honors <c>ASPIRE_CLI_VERSION</c> / the sidecar config — and may
         /// differ from <see cref="CliVersion"/> (the physical binary's assembly version) when the

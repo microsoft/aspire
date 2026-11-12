@@ -12,9 +12,11 @@ var funcApp = builder.AddAzureFunctionsProject<Projects.AzureFunctionsService>("
 // IDE execution when DEBUG_SESSION_PORT is set and the extension
 // advertises SupportedLaunchConfigurations that include "project"
 // (or omits the list entirely, e.g. Visual Studio).
+#pragma warning disable CS0618 // This regression specifically exercises legacy ProjectResource IDE execution.
 builder.AddProject<Projects.StandardService>("standard-service")
     .WithReference(funcApp)
     .WaitFor(funcApp);
+#pragma warning restore CS0618
 
 // Bug #15606/#15647 repro (internal fake integration): a ProjectResource subclass
 // added via AddResource (not AddProject) with no SupportsDebuggingAnnotation and
@@ -31,10 +33,12 @@ builder.AddFakeIntegrationProject(
 // which sets DEBUG_SESSION_PORT but NOT DEBUG_SESSION_INFO.
 // WithDebugSupport replaces the default "project" annotation with a custom type,
 // exactly as Aspire.Hosting.Azure.Functions does with "azure-functions".
+#pragma warning disable CS0618 // Preserve the legacy custom-debug integration contract alongside the subtype regression.
 builder.AddProject<Projects.CustomDebugService>("custom-debug-service")
     .WithDebugSupport(
         mode => new CustomLaunchConfiguration { Mode = mode, ProjectPath = "CustomDebugService" },
         "custom-debug-type");
+#pragma warning restore CS0618
 
 builder.Build().Run();
 

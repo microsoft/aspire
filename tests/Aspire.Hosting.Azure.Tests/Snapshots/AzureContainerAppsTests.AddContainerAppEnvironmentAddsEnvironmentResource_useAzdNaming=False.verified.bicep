@@ -38,8 +38,9 @@ resource env_law 'Microsoft.OperationalInsights/workspaces@2025-02-01' = {
   tags: tags
 }
 
-resource env 'Microsoft.App/managedEnvironments@2025-07-01' = {
+resource env 'Microsoft.App/managedEnvironments@2026-07-01' = {
   name: take('env${uniqueString(resourceGroup().id)}', 24)
+  tags: tags
   location: location
   properties: {
     appLogsConfiguration: {
@@ -56,7 +57,6 @@ resource env 'Microsoft.App/managedEnvironments@2025-07-01' = {
       }
     ]
   }
-  tags: tags
 }
 
 resource aspireDashboard 'Microsoft.App/managedEnvironments/dotNetComponents@2025-10-02-preview' = {
@@ -67,35 +67,35 @@ resource aspireDashboard 'Microsoft.App/managedEnvironments/dotNetComponents@202
   parent: env
 }
 
-resource env_storageVolume 'Microsoft.Storage/storageAccounts@2024-01-01' = {
+resource env_storageVolume 'Microsoft.Storage/storageAccounts@2026-06-01' = {
   name: take('envstoragevolume${uniqueString(resourceGroup().id)}', 24)
-  kind: 'StorageV2'
+  tags: tags
   location: location
-  sku: {
-    name: 'Standard_LRS'
-  }
   properties: {
     largeFileSharesState: 'Enabled'
     minimumTlsVersion: 'TLS1_2'
   }
-  tags: tags
+  sku: {
+    name: 'Standard_LRS'
+  }
+  kind: 'StorageV2'
 }
 
-resource storageVolumeFileService 'Microsoft.Storage/storageAccounts/fileServices@2024-01-01' = {
+resource storageVolumeFileService 'Microsoft.Storage/storageAccounts/fileServices@2026-06-01' = {
   name: 'default'
   parent: env_storageVolume
 }
 
-resource shares_volumes_cache_0 'Microsoft.Storage/storageAccounts/fileServices/shares@2024-01-01' = {
+resource shares_volumes_cache_0 'Microsoft.Storage/storageAccounts/fileServices/shares@2026-06-01' = {
   name: take('sharesvolumescache0-${uniqueString(resourceGroup().id)}', 63)
   properties: {
-    enabledProtocols: 'SMB'
     shareQuota: 1024
+    enabledProtocols: 'SMB'
   }
   parent: storageVolumeFileService
 }
 
-resource managedStorage_volumes_cache_0 'Microsoft.App/managedEnvironments/storages@2025-07-01' = {
+resource managedStorage_volumes_cache_0 'Microsoft.App/managedEnvironments/storages@2026-07-01' = {
   name: take('managedstoragevolumescache${uniqueString(resourceGroup().id)}', 24)
   properties: {
     azureFile: {
@@ -125,3 +125,5 @@ output AZURE_CONTAINER_APPS_ENVIRONMENT_NAME string = env.name
 output AZURE_CONTAINER_APPS_ENVIRONMENT_ID string = env.id
 
 output AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN string = env.properties.defaultDomain
+
+output AZURE_CONTAINER_APPS_ENVIRONMENT_LOCATION string = toLower(replace(env.location, ' ', ''))

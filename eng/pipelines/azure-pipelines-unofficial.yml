@@ -245,11 +245,6 @@ extends:
                   # stage that owns -publish — so run Arcade's Publish target
                   # inline here to keep Publishing.props validations exercised.
                   runPublish: true
-                  # The unofficial pipeline is monolithic — it has no parallel
-                  # template_tests stage like azure-pipelines.yml — so the
-                  # inline Aspire.Templates.Tests run lives here, matching
-                  # behavior prior to the official pipeline restructure.
-                  runTemplateTests: true
               - pwsh: |
                   $ErrorActionPreference = 'Stop'
                   $shippingDir = "$(Build.SourcesDirectory)/artifacts/packages/$(_BuildConfig)/Shipping"

@@ -1,4 +1,4 @@
-// Licensed to the .NET Foundation under one or more agreements.
+﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
@@ -24,6 +24,10 @@ namespace Aspire.Dashboard.Components.Pages;
 
 public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionAndUrlState<StructuredLogs.StructuredLogsPageViewModel, StructuredLogs.StructuredLogsPageState>
 {
+    private static readonly IEqualityComparer<LogSummary> s_logSummaryComparer = EqualityComparer<LogSummary>.Create(
+        static (x, y) => ReferenceEquals(x, y) || (x is not null && y is not null && x.InternalId == y.InternalId),
+        static item => item.InternalId.GetHashCode());
+
     private const string ScrollContainerId = "structuredLogsScrollContainer";
     private const string ResourceColumn = nameof(ResourceColumn);
     private const string LogLevelColumn = nameof(LogLevelColumn);
@@ -43,7 +47,6 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     private Subscription? _resourcesSubscription;
     private Subscription? _logsSubscription;
     private int? _displayedItemCount;
-    private bool _resourceChanged;
     private string? _elementIdBeforeDetailsViewOpened;
     private string? _pendingFocusElementId;
     private AspirePageContentLayout? _contentLayout;
@@ -86,9 +89,6 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     public required ITelemetryErrorRecorder ErrorRecorder { get; init; }
 
     [Inject]
-    public required DimensionManager DimensionManager { get; init; }
-
-    [Inject]
     public required IOptions<DashboardOptions> DashboardOptions { get; init; }
 
     [Inject]
@@ -103,8 +103,22 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     [CascadingParameter]
     public required ViewportInformation ViewportInformation { get; set; }
 
+    /// <summary>
+    /// The resources layout hosting this page. When present, the layout's resource pane selects the resource
+    /// and displays resource commands, so the page doesn't display its own resource selector.
+    /// </summary>
+    [CascadingParameter]
+    public ResourcesLayout? ResourcesLayout { get; set; }
+
     [Parameter]
     public string? ResourceName { get; set; }
+
+    /// <summary>
+    /// Gets or sets the resources selected in the resource list when several resources are selected.
+    /// </summary>
+    [Parameter]
+    [SupplyParameterFromQuery(Name = DashboardUrls.ResourceSelectionQueryName)]
+    public string[]? SelectedResourceNames { get; set; }
 
     [Parameter]
     [SupplyParameterFromQuery]
@@ -128,8 +142,9 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
 
     private async ValueTask<GridItemsProviderResult<LogSummary>> GetData(GridItemsProviderRequest<LogSummary> request)
     {
+        ViewModel.ResourceKeys = ResourcesLayout?.GetSelectionTelemetryKeys(SelectedResourceNames);
         ViewModel.StartIndex = request.StartIndex;
-        ViewModel.Count = request.Count ?? DashboardUIHelpers.DefaultDataGridResultCount;
+        ViewModel.Count = request.Count is > 0 ? request.Count.Value : DashboardUIHelpers.DefaultDataGridResultCount;
 
         var logs = await ViewModel.GetLogsAsync(request.CancellationToken);
 
@@ -160,7 +175,17 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
         _totalItemsCount = logs.TotalItemCount;
         _totalItemsFooter?.UpdateDisplayedCount(_totalItemsCount, _displayedItemCount);
 
-        TelemetryRepository.MarkViewedErrorLogs(ViewModel.ResourceKey);
+        if (ViewModel.ResourceKeys is { } resourceKeys)
+        {
+            foreach (var resourceKey in resourceKeys)
+            {
+                TelemetryRepository.MarkViewedErrorLogs(resourceKey);
+            }
+        }
+        else
+        {
+            TelemetryRepository.MarkViewedErrorLogs(ViewModel.ResourceKey);
+        }
 
         return GridItemsProviderResult.From(logs.Items, virtualizedLogCount);
     }
@@ -217,6 +242,10 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
         };
 
         UpdateResources();
+        if (ResourcesLayout is { } layout)
+        {
+            layout.ResourcesChanged += OnLayoutResourcesChanged;
+        }
         _resourcesSubscription = TelemetryRepository.OnNewResources(() => InvokeAsync(() =>
         {
             UpdateResources();
@@ -245,7 +274,7 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
             // Navigate to remove ?logEntryId=xxx in the URL. A small delay is required here, otherwise the page rendering breaks.
             await Task.Delay(200, _cts.Token);
 
-            NavigationManager.NavigateTo(DashboardUrls.StructuredLogsUrl(), new NavigationOptions { ReplaceHistoryEntry = true });
+            NavigationManager.NavigateTo(ResourcesLayout?.GetTabUrl(ResourceTab.StructuredLogs) ?? DashboardUrls.StructuredLogsUrl(), new NavigationOptions { ReplaceHistoryEntry = true });
         }
     }
 
@@ -256,17 +285,27 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
         _resourceViewModels.Insert(0, _allResource);
     }
 
+    private void OnLayoutResourcesChanged()
+    {
+        if (ResourcesLayout?.GetSelectionTelemetryKeys(SelectedResourceNames) is not { } resourceKeys ||
+            ViewModel.ResourceKeys is { } current && current.SequenceEqual(resourceKeys))
+        {
+            return;
+        }
+
+        // The layout can finish loading its resource snapshot after the grid's first query.
+        ViewModel.ResourceKeys = resourceKeys;
+        ViewModel.ClearData();
+        _ = InvokeAsync(_dataGrid.SafeRefreshDataAsync);
+    }
+
     private Task HandleSelectedResourceChangedAsync()
     {
-        _resourceChanged = true;
-
         return this.AfterViewModelChangedAsync(_contentLayout, waitToApplyMobileChange: true);
     }
 
     private async Task HandleSelectedLogLevelChangedAsync()
     {
-        _resourceChanged = true;
-
         await ClearSelectedLogEntryIfExcludedAsync(_filter, ViewModel.Filters);
 
         await this.AfterViewModelChangedAsync(_contentLayout, waitToApplyMobileChange: true);
@@ -426,25 +465,11 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        // Check to see whether max item count should be set on every render.
-        // This is required because the data grid's virtualize component can be recreated on data change.
-        if (_dataGrid != null && FluentDataGridHelper<LogSummary>.TrySetMaxItemCount(_dataGrid, 10_000))
-        {
-            StateHasChanged();
-        }
-
-        if (_resourceChanged)
-        {
-            await JS.InvokeVoidAsync("resetContinuousScrollPosition");
-            _resourceChanged = false;
-        }
         if (firstRender)
         {
-            await JS.InvokeVoidAsync("initializeContinuousScroll");
             // Focus the scroll container without showing the focus ring. The container is a large
             // content area where a visible focus indicator would be visually noisy on initial load.
             await JS.InvokeVoidAsync("focusElement", ScrollContainerId, true);
-            DimensionManager.OnViewportInformationChanged += OnBrowserResize;
         }
 
         if (_pendingFocusElementId is { } pendingFocusElementId)
@@ -452,15 +477,7 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
             _pendingFocusElementId = null;
             await JS.InvokeVoidAsync("focusElement", pendingFocusElementId);
         }
-    }
 
-    private void OnBrowserResize(object? o, EventArgs args)
-    {
-        InvokeAsync(async () =>
-        {
-            await JS.InvokeVoidAsync("resetContinuousScrollPosition");
-            await JS.InvokeVoidAsync("initializeContinuousScroll");
-        });
     }
 
     private string? PauseText => PauseManager.AreStructuredLogsPaused(out var startTime)
@@ -472,10 +489,13 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
 
     public void Dispose()
     {
+        if (ResourcesLayout is { } layout)
+        {
+            layout.ResourcesChanged -= OnLayoutResourcesChanged;
+        }
         _cts.Cancel();
         _resourcesSubscription?.Dispose();
         _logsSubscription?.Dispose();
-        DimensionManager.OnViewportInformationChanged -= OnBrowserResize;
         TelemetryContext.Dispose();
     }
 
@@ -483,12 +503,14 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     {
         var filters = (serializable.Filters.Count > 0) ? TelemetryFilterFormatter.SerializeFiltersToString(serializable.Filters) : null;
 
+        // In the resources layout, the resource list owns the selection, so a resource remembered in the session
+        // doesn't replace it.
         var url = DashboardUrls.StructuredLogsUrl(
-            resource: serializable.SelectedResource,
+            resource: ResourcesLayout is { } layout ? layout.SelectedResourceName : serializable.SelectedResource,
             logLevel: serializable.LogLevelText,
             filters: filters);
 
-        return url;
+        return ResourcesLayout?.AddSelectionToUrl(url) ?? url;
     }
 
     public StructuredLogsPageState ConvertViewModelToSerializable()
@@ -505,6 +527,7 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     {
         viewModel.SelectedResource = _resourceViewModels.GetResource(Logger, ResourceName, canSelectGrouping: true, _allResource);
         ViewModel.ResourceKey = PageViewModel.SelectedResource.Id?.GetResourceKey();
+        ViewModel.ResourceKeys = ResourcesLayout?.GetSelectionTelemetryKeys(SelectedResourceNames);
 
         if (LogLevelText is not null && Enum.TryParse<LogLevel>(LogLevelText, ignoreCase: true, out var logLevel))
         {
@@ -582,6 +605,10 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     private Task ClearStructureLogs(ResourceKey? key)
     {
         DataSource.EnsureWritable();
+        if (ResourcesLayout?.GetSelectionTelemetryKeys(SelectedResourceNames) is { } keys)
+        {
+            return Task.WhenAll(keys.Select(resourceKey => TelemetryRepositoryWriter.ClearStructuredLogsAsync(resourceKey)));
+        }
         return TelemetryRepositoryWriter.ClearStructuredLogsAsync(key);
     }
 

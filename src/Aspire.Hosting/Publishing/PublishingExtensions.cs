@@ -1,16 +1,11 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREPIPELINES001
-
-using System.Diagnostics.CodeAnalysis;
-
 namespace Aspire.Hosting.Pipelines;
 
 /// <summary>
 /// Extension methods for <see cref="IReportingStep"/> and <see cref="IReportingTask"/> to provide direct operations.
 /// </summary>
-[Experimental("ASPIREPIPELINES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 [AspireExportIgnore(Reason = "Convenience wrapper over pipeline APIs — use the dedicated ATS pipeline exports instead.")]
 public static class PublishingExtensions
 {

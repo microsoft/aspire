@@ -44,6 +44,41 @@ public static class ProjectResourceExtensions
         return GetProjectMetadata((IResource)projectResource);
     }
 
+    /// <summary>
+    /// Gets the project metadata for the specified .NET program resource.
+    /// </summary>
+    /// <param name="programResource">The .NET program resource.</param>
+    /// <returns>The project metadata.</returns>
+    /// <exception cref="InvalidOperationException">
+    /// The resource does not carry exactly one stable <see cref="IProjectMetadata"/> annotation.
+    /// </exception>
+    [Experimental("ASPIREPROJECTS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireExportIgnore(Reason = "Project metadata is a .NET-specific contract and is not part of the ATS surface.")]
+    public static IProjectMetadata GetProjectMetadata(this IDotnetProgramResource programResource)
+    {
+        ArgumentNullException.ThrowIfNull(programResource);
+
+        return GetProjectMetadata((IResource)programResource);
+    }
+
+    /// <summary>
+    /// Gets a value indicating whether the resource is configured for .NET SDK container publishing.
+    /// </summary>
+    /// <param name="resource">The resource to inspect.</param>
+    /// <returns>
+    /// <see langword="true"/> when the resource is a .NET program configured for SDK container publishing;
+    /// otherwise, <see langword="false"/>.
+    /// </returns>
+    [Experimental("ASPIREPROJECTS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireExportIgnore(Reason = "Application model inspection helper — not part of the ATS surface.")]
+    public static bool SupportsDotnetProgramPublishing(this IResource resource)
+    {
+        ArgumentNullException.ThrowIfNull(resource);
+
+        return resource is IDotnetProgramResource &&
+            resource.HasAnnotationOfType<DotnetProgramPublishingAnnotation>();
+    }
+
     internal static IProjectMetadata GetProjectMetadata(this IResource projectResource)
     {
         if (!projectResource.TryGetProjectMetadata(out var projectMetadata))

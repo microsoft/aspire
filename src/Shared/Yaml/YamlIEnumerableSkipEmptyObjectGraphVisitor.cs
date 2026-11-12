@@ -47,6 +47,11 @@ internal sealed class YamlIEnumerableSkipEmptyObjectGraphVisitor(
     {
         var retVal = false;
 
+        if (key.GetCustomAttribute<PreserveEmptyStringAttribute>() is { })
+        {
+            return base.EnterMapping(key, value, context, serializer);
+        }
+
         switch (value.Value)
         {
             case null:

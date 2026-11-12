@@ -1,4 +1,7 @@
-﻿@inject IStringLocalizer<Aspire.Dashboard.Resources.ControlsStrings> ControlsLoc
+﻿@using Aspire.Dashboard.Configuration
+@using Microsoft.Extensions.Options
+@inject IOptionsMonitor<DashboardOptions> DashboardOptions
+
 <!DOCTYPE html>
 <html lang="@GlobalizationHelpers.GetHtmlLanguageName(System.Globalization.CultureInfo.CurrentUICulture)">
 
@@ -6,30 +9,40 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width" />
     <meta name="aspire-version" content="@VersionHelpers.DashboardDisplayVersion" />
-    <meta name="dotnet-runtime-version" content="@System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription" />
+    <meta name="dotnet-runtime-version" content="@VersionHelpers.RuntimeFrameworkDescription" />
+    <meta name="dotnet-runtime-mode" content="@VersionHelpers.RuntimeMode" />
+    <meta name="aspire-dashboard-legacy-available" content="@DashboardExperienceComponents.IsLegacyAvailable.ToString().ToLowerInvariant()" />
+    <meta name="aspire-dashboard-default-experience" content="@(DashboardExperienceComponents.IsLegacyAvailable && DashboardOptions.CurrentValue.UI.DisableModernDashboard == true ? "legacy" : "modern")" />
     <base href="/" />
-    <link rel="icon" type="image/x-icon" href="favicon.ico" />
-    <link rel="stylesheet" href="_content/Microsoft.FluentUI.AspNetCore.Components/css/reboot.css" />
-    <link rel="stylesheet" href="css/design.css" />
-    <link rel="stylesheet" href="css/controls.css" />
-    <link rel="stylesheet" href="css/layout.css" />
-    <link rel="stylesheet" href="css/highlight.css" />
-    <link rel="stylesheet" href="css/markdown.css" />
-    <link rel="stylesheet" href="Aspire.Dashboard.styles.css" />
-    <script src="js/app-theme-bootstrap.js"></script>
+    <link rel="icon" type="image/x-icon" href="@Assets["favicon.ico"]" />
+    <link rel="stylesheet" href="@Assets["_content/Microsoft.FluentUI.AspNetCore.Components/css/reboot.css"]" />
+    <link rel="stylesheet" href="@Assets["css/design.css"]" />
+    <link rel="stylesheet" href="@Assets["css/controls.css"]" />
+    <link rel="stylesheet" href="@Assets["css/layout.css"]" />
+    <link rel="stylesheet" href="@Assets["css/highlight.css"]" />
+    <link rel="stylesheet" href="@Assets["css/markdown.css"]" />
+    <link rel="stylesheet" href="@Assets["Aspire.Dashboard.styles.css"]" />
+    <script src="@Assets["js/app-theme-bootstrap.js"]"></script>
+    <script src="@Assets["js/app-dashboard-experience.js"]"></script>
 
     <HeadOutlet @rendermode="@(new InteractiveServerRenderMode(prerender: false))" />
 </head>
 
-<body data-scroll-to-bottom-label="@ControlsLoc[nameof(Aspire.Dashboard.Resources.ControlsStrings.ScrollToBottom)]">
+<body>
     <Routes @rendermode="@(new InteractiveServerRenderMode(prerender: false))" />
+    @* Shared controls show tooltips through data-tooltip, which this provider displays. It's here rather than in a
+       layout so the pages of both experiences, and every layout, get it. *@
+    <aspire-tooltip-provider></aspire-tooltip-provider>
     <ReconnectModal />
-    <script src="js/imask-7.6.1.min.js"></script>
-    <BlazorScript />
-    <script src="js/app.js"></script>
-    <script src="js/app-reconnect.js"></script>
+    <script src="@Assets["js/imask-7.6.1.min.js"]"></script>
+    <script src="@Assets["_framework/blazor.web.js"]"></script>
+    <script src="@Assets["js/app.js"]"></script>
+    <script src="@Assets["js/app-reconnect.js"]"></script>
 
-    <script src="js/app-theme.js" type="module"></script>
-    <script src="_content/Microsoft.FluentUI.AspNetCore.Components/Microsoft.FluentUI.AspNetCore.Components.lib.module.js" type="module"></script>
+    <script src="@Assets["js/app-theme.js"]" type="module"></script>
+    <script src="@Assets["js/app-scroll.js"]" type="module"></script>
+    <script src="@Assets["js/app-tooltips.js"]" type="module"></script>
+    <script src="@Assets["js/app-tag-overflow.js"]" type="module"></script>
+    <script src="@Assets["_content/Microsoft.FluentUI.AspNetCore.Components/Microsoft.FluentUI.AspNetCore.Components.lib.module.js"]" type="module"></script>
 </body>
 </html>

@@ -13,6 +13,7 @@ using Aspire.Cli.Caching;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.NuGet;
 using Aspire.Cli.Processes;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
@@ -41,12 +42,19 @@ internal interface IDotNetCliRunner
     Task<int> BuildAsync(FileInfo projectFilePath, bool noRestore, IDictionary<string, string>? env, ProcessInvocationOptions options, CancellationToken cancellationToken);
     Task<int> AddPackageAsync(FileInfo projectFilePath, string packageName, string packageVersion, string? nugetSource, bool noRestore, ProcessInvocationOptions options, CancellationToken cancellationToken);
     Task<int> AddProjectToSolutionAsync(FileInfo solutionFile, FileInfo projectFile, ProcessInvocationOptions options, CancellationToken cancellationToken);
-    Task<(int ExitCode, NuGetPackage[]? Packages)> SearchPackagesAsync(DirectoryInfo workingDirectory, string query, bool exactMatch, bool prerelease, int take, int skip, FileInfo? nugetConfigFile, bool useCache, ProcessInvocationOptions options, CancellationToken cancellationToken);
+    Task<DotNetPackageSearchResult> SearchPackagesAsync(DirectoryInfo workingDirectory, string query, bool exactMatch, bool prerelease, int take, int skip, FileInfo? nugetConfigFile, bool useCache, ProcessInvocationOptions options, INuGetClient nuGetClient, CancellationToken cancellationToken);
     Task<(int ExitCode, string[] ConfigPaths)> GetNuGetConfigPathsAsync(DirectoryInfo workingDirectory, ProcessInvocationOptions options, CancellationToken cancellationToken);
     Task<(int ExitCode, IReadOnlyList<FileInfo> Projects)> GetSolutionProjectsAsync(FileInfo solutionFile, ProcessInvocationOptions options, CancellationToken cancellationToken);
     Task<int> AddProjectReferenceAsync(FileInfo projectFile, FileInfo referencedProject, ProcessInvocationOptions options, CancellationToken cancellationToken);
     Task<int> InitUserSecretsAsync(FileInfo projectFile, ProcessInvocationOptions options, CancellationToken cancellationToken);
 }
+
+// Packages carry feed locations; SDK source names are resolved before returning.
+internal sealed record DotNetPackageSearchResult(
+    int ExitCode,
+    NuGetPackage[]? Packages,
+    IReadOnlyList<string> FailedSources,
+    bool HasFullSourcePage);
 
 internal sealed class ProcessInvocationOptions
 {
@@ -54,6 +62,22 @@ internal sealed class ProcessInvocationOptions
     public Action<string>? StandardErrorCallback { get; set; }
 
     public bool NoLaunchProfile { get; set; }
+
+    /// <summary>
+    /// Suppresses implicit restore during single-file project property and target queries.
+    /// </summary>
+    public bool NoRestore { get; set; }
+
+    /// <summary>
+    /// Excludes generated package imports during MSBuild restore-settings inspection.
+    /// </summary>
+    public bool ExcludeRestorePackageImports { get; set; }
+
+    /// <summary>
+    /// Imports invocation-scoped NuGet restore targets for candidate graph validation.
+    /// </summary>
+    public FileInfo? NuGetRestoreTargetsFile { get; set; }
+
     public string? LaunchProfile { get; set; }
     public bool StartDebugSession { get; set; }
     public bool Debug { get; set; }
@@ -85,35 +109,36 @@ internal sealed class ProcessInvocationOptions
     public bool IsolateConsole { get; set; }
 
     /// <summary>
-    /// When <c>true</c>, the child is bound to the CLI's Windows kill-on-close job so the OS terminates
-    /// it when the CLI exits unexpectedly (crash / SIGKILL), even if the child does not react 
-    /// to cancellation request. This is an OS-level, Windows-only crash-time safety net
-    /// for background helpers that must never outlive their parent — the <c>aspire-managed</c> NuGet
-    /// helper, the standalone dashboard, and the profiling collector — and, unlike
-    /// <see cref="IsolateConsole"/>, it does not give the child a new console group.
+    /// Binds a child to its owner's lifetime, independently of cooperative cancellation.
     /// </summary>
     /// <remarks>
-    /// On non-Windows hosts this is a no-op; process-group signalling plus the in-child
-    /// parent-liveness watchdog (which self-terminates when <c>ASPIRE_CLI_PID</c> disappears) provide
-    /// the cross-platform equivalent. The two layers are complementary: the job is the instant,
-    /// guaranteed backstop on Windows, and the watchdog is the graceful, cross-platform mechanism.
+    /// Ordinary owned children use the shared guardian on every platform. AppHost children
+    /// retain the Windows breakaway job so DCP can finish cleanup after the AppHost exits.
     /// </remarks>
     public bool KillOnParentExit { get; set; }
+    public ChildProcessLifetime Lifetime { get; set; }
+    public string? CompletionPath { get; set; }
+    public Func<ProcessStartInfo, string?, TimeSpan, ProcessStartInfo> CreateSupervisorStartInfo { get; set; } = ProcessSupervisor.CreateStartInfo;
 
     /// <summary>
     /// When <c>true</c>, the process is launched as a detached child that survives the launching CLI.
+    /// Standard streams are connected to the null device and inherited handles are not passed to it.
     /// </summary>
+    /// <remarks>
+    /// On Unix the child starts in a new session (<see cref="System.Diagnostics.ProcessStartInfo.StartDetached"/>).
+    /// On Windows it keeps a console (hidden when <see cref="IsolateConsole"/> is set) so it can still receive CTRL+C.
+    /// </remarks>
     public bool Detached { get; set; }
-
-    /// <summary>
-    /// Test hook for overriding the DCP executable used to launch detached Unix processes.
-    /// </summary>
-    internal string? DetachedUnixLauncherPathOverride { get; set; }
 
     /// <summary>
     /// Optional predicate for inherited environment variable names that should be removed before applying caller-supplied variables.
     /// </summary>
     public Func<string, bool>? EnvironmentVariableFilter { get; set; }
+
+    /// <summary>
+    /// Environment variables to apply to the spawned process.
+    /// </summary>
+    public IReadOnlyDictionary<string, string>? EnvironmentVariables { get; set; }
 
     /// <summary>
     /// Index of the first argument that is user-supplied AppHost input rather than a CLI-owned
@@ -157,6 +182,9 @@ internal sealed class ProcessInvocationOptions
         StandardOutputCallback = StandardOutputCallback,
         StandardErrorCallback = StandardErrorCallback,
         NoLaunchProfile = NoLaunchProfile,
+        NoRestore = NoRestore,
+        ExcludeRestorePackageImports = ExcludeRestorePackageImports,
+        NuGetRestoreTargetsFile = NuGetRestoreTargetsFile,
         LaunchProfile = LaunchProfile,
         StartDebugSession = StartDebugSession,
         Debug = Debug,
@@ -164,9 +192,12 @@ internal sealed class ProcessInvocationOptions
         KillEntireProcessTreeOnCancel = KillEntireProcessTreeOnCancel,
         IsolateConsole = IsolateConsole,
         KillOnParentExit = KillOnParentExit,
+        Lifetime = Lifetime,
+        CompletionPath = CompletionPath,
+        CreateSupervisorStartInfo = CreateSupervisorStartInfo,
         Detached = Detached,
-        DetachedUnixLauncherPathOverride = DetachedUnixLauncherPathOverride,
         EnvironmentVariableFilter = EnvironmentVariableFilter,
+        EnvironmentVariables = EnvironmentVariables,
         AppHostArgumentStartIndex = AppHostArgumentStartIndex,
         GracefulShutdownSignaler = GracefulShutdownSignaler,
         ShutdownService = ShutdownService,
@@ -217,6 +248,13 @@ internal sealed class DotNetCliRunner(
 
         // Build the final environment variables by merging caller-provided env with dotnet-specific settings.
         var finalEnv = env?.ToDictionary() ?? new Dictionary<string, string>();
+        if (options.EnvironmentVariables is not null)
+        {
+            foreach (var (name, value) in options.EnvironmentVariables)
+            {
+                finalEnv[name] = value;
+            }
+        }
         ConfigureDotNetEnvironment(finalEnv);
         AddAspireCliPathEnvironment(finalEnv, projectFile);
         processActivity.AddContextToEnvironment(finalEnv);
@@ -404,9 +442,12 @@ internal sealed class DotNetCliRunner(
             // and intentionally keep the force-kill path.
             IsolateConsole = options.IsolateConsole,
             KillOnParentExit = options.KillOnParentExit,
+            Lifetime = options.Lifetime,
+            CompletionPath = options.CompletionPath,
+            CreateSupervisorStartInfo = options.CreateSupervisorStartInfo,
             Detached = options.Detached,
-            DetachedUnixLauncherPathOverride = options.DetachedUnixLauncherPathOverride,
             EnvironmentVariableFilter = options.EnvironmentVariableFilter,
+            EnvironmentVariables = options.EnvironmentVariables,
             // Without this the redaction boundary is lost between the runner and the process
             // factory, and a direct AppHost launch would log its forwarded arguments verbatim.
             AppHostArgumentStartIndex = options.AppHostArgumentStartIndex,
@@ -638,7 +679,7 @@ internal sealed class DotNetCliRunner(
         }
 
         // Users often invoke the dogfood CLI through a symlink such as
-        // ~/bin/aspire -> artifacts/bin/Aspire.Cli/Debug/net10.0/aspire. Resolve the
+        // ~/bin/aspire -> artifacts/bin/Aspire.Cli/Debug/net11.0/aspire. Resolve the
         // link before forwarding so a symlinked raw build cannot stamp stale
         // bundle metadata through ResolveAspireCliBundle's AspireCliPath path.
         var resolvedProcessPath = PathNormalizer.ResolveSymlinks(processPath);
@@ -707,79 +748,17 @@ internal sealed class DotNetCliRunner(
 
         if (exitCode == 0 && jsonDocument != null)
         {
-            var rootElement = jsonDocument.RootElement;
-
-            if (!rootElement.TryGetProperty("Properties", out var properties))
+            using (jsonDocument)
             {
-                return (exitCode, false, null);
-            }
-
-            if (!properties.TryGetProperty("IsAspireHost", out var isAspireHostElement))
-            {
-                return (exitCode, false, null);
-            }
-
-            if (isAspireHostElement.GetString() == "true")
-            {
-                // Try to get Aspire.Hosting version from PackageReference items
-                string? aspireHostingVersion = null;
-
-                if (rootElement.TryGetProperty("Items", out var items))
-                {
-                    // Check PackageReference items first
-                    if (items.TryGetProperty("PackageReference", out var packageReferences))
-                    {
-                        aspireHostingVersion = GetPackageVersion(packageReferences, "Aspire.Hosting") ??
-                            GetPackageVersion(packageReferences, "Aspire.Hosting.AppHost");
-                    }
-
-                    // Fallback to AspireProjectOrPackageReference items if not found
-                    if (aspireHostingVersion == null && items.TryGetProperty("AspireProjectOrPackageReference", out var aspireProjectOrPackageReferences))
-                    {
-                        aspireHostingVersion = GetPackageVersion(aspireProjectOrPackageReferences, "Aspire.Hosting") ??
-                            GetPackageVersion(aspireProjectOrPackageReferences, "Aspire.Hosting.AppHost");
-                    }
-
-                    // Fallback to PackageVersion items for Central Package Management if not found
-                    if (aspireHostingVersion == null && items.TryGetProperty("PackageVersion", out var packageVersions))
-                    {
-                        aspireHostingVersion = GetPackageVersion(packageVersions, "Aspire.Hosting") ??
-                            GetPackageVersion(packageVersions, "Aspire.Hosting.AppHost");
-                    }
-                }
-
-                // If no package version found, fallback to SDK version
-                if (aspireHostingVersion == null && properties.TryGetProperty("AspireHostingSDKVersion", out var aspireHostingSdkVersionElement))
-                {
-                    aspireHostingVersion = aspireHostingSdkVersionElement.GetString();
-                }
-
-                return (exitCode, true, aspireHostingVersion);
-            }
-            else
-            {
-                return (exitCode, false, null);
+                var output = JsonSerializer.Deserialize(jsonDocument.RootElement, JsonSourceGenerationContext.Default.AppHostProjectInspectionOutput);
+                var info = Projects.AppHostInfoResolver.ParseAppHostInfo(output, exitCode);
+                return (exitCode, info.IsAspireHost, info.AspireHostingVersion);
             }
         }
         else
         {
             return (exitCode, false, null);
         }
-    }
-
-    private static string? GetPackageVersion(JsonElement items, string packageId)
-    {
-        foreach (var item in items.EnumerateArray())
-        {
-            if (item.TryGetProperty("Identity", out var identity) &&
-                identity.GetString() == packageId &&
-                item.TryGetProperty("Version", out var version))
-            {
-                return version.GetString();
-            }
-        }
-
-        return null;
     }
 
     public async Task<(int ExitCode, JsonDocument? Output)> GetProjectItemsAndPropertiesAsync(FileInfo projectFile, string[] items, string[] properties, string[] targets, ProcessInvocationOptions options, CancellationToken cancellationToken)
@@ -790,6 +769,14 @@ internal sealed class DotNetCliRunner(
 
         // If we are a single file app host then we use the build command instead of msbuild command.
         var cliArgsList = new List<string> { isSingleFileAppHost ? "build" : "msbuild" };
+        if (isSingleFileAppHost && options.NoRestore)
+        {
+            cliArgsList.Add("--no-restore");
+        }
+        if (options.ExcludeRestorePackageImports)
+        {
+            cliArgsList.Add("-property:ExcludeRestorePackageImports=true");
+        }
 
         if (properties.Length > 0)
         {
@@ -865,14 +852,18 @@ internal sealed class DotNetCliRunner(
 
             var stdout = stdoutBuilder.ToString();
             var stderr = stderrBuilder.ToString();
+            // Restore-setting probes can return credential-bearing source properties.
+            // Suppression must cover failure and retry diagnostics as well as process output.
+            var diagnosticStdout = options.SuppressLogging ? string.Empty : stdout;
+            var diagnosticStderr = options.SuppressLogging ? string.Empty : stderr;
 
             if (exitCode != 0)
             {
                 logger.LogError(
                     "Failed to get items and properties from project. Exit code was: {ExitCode}. See debug logs for more details. Stderr: {Stderr}, Stdout: {Stdout}",
                     exitCode,
-                    stderr,
-                    stdout
+                    diagnosticStderr,
+                    diagnosticStdout
                 );
 
                 return (exitCode, null);
@@ -886,7 +877,7 @@ internal sealed class DotNetCliRunner(
                         "dotnet msbuild returned exit code 0 but produced no output (attempt {Attempt}/{MaxRetries}). Retrying after delay. Stderr: {Stderr}",
                         attempt + 1,
                         maxRetries,
-                        stderr);
+                        diagnosticStderr);
                     await Task.Delay(TimeSpan.FromSeconds(attempt + 1), cancellationToken).ConfigureAwait(false);
                     continue;
                 }
@@ -894,7 +885,7 @@ internal sealed class DotNetCliRunner(
                 logger.LogWarning(
                     "dotnet msbuild returned exit code 0 but produced no output after {MaxRetries} attempts. Stderr: {Stderr}",
                     maxRetries,
-                    stderr);
+                    diagnosticStderr);
                 return (exitCode, null);
             }
 
@@ -1268,6 +1259,10 @@ internal sealed class DotNetCliRunner(
         using var activity = telemetry.StartDiagnosticActivity();
 
         string[] cliArgs = ["restore", projectFilePath.FullName];
+        if (options.NuGetRestoreTargetsFile is { } restoreTargets)
+        {
+            cliArgs = [.. cliArgs, $"-property:NuGetRestoreTargets={MSBuildEscaping.Escape(restoreTargets.FullName)}"];
+        }
 
         return await ExecuteAsync(
             args: cliArgs,
@@ -1460,12 +1455,13 @@ internal sealed class DotNetCliRunner(
         return result;
     }
 
-    public async Task<(int ExitCode, NuGetPackage[]? Packages)> SearchPackagesAsync(DirectoryInfo workingDirectory, string query, bool exactMatch, bool prerelease, int take, int skip, FileInfo? nugetConfigFile, bool useCache, ProcessInvocationOptions options, CancellationToken cancellationToken)
+    public async Task<DotNetPackageSearchResult> SearchPackagesAsync(DirectoryInfo workingDirectory, string query, bool exactMatch, bool prerelease, int take, int skip, FileInfo? nugetConfigFile, bool useCache, ProcessInvocationOptions options, INuGetClient nuGetClient, CancellationToken cancellationToken)
     {
         using var activity = telemetry.StartDiagnosticActivity();
 
         string? rawKey = null;
         var cacheEnabled = useCache;
+        var pageSize = exactMatch ? 0 : take;
         if (useCache)
         {
             try
@@ -1493,8 +1489,7 @@ internal sealed class DotNetCliRunner(
                 {
                     try
                     {
-                        var foundPackages = PackageUpdateHelpers.ParsePackageSearchResults(cached);
-                        return (0, foundPackages.ToArray());
+                        return ReadPackageSearchResults(cached, workingDirectory, nugetConfigFile, pageSize, nuGetClient);
                     }
                     catch (JsonException ex)
                     {
@@ -1610,19 +1605,19 @@ internal sealed class DotNetCliRunner(
                 stderr,
                 stdout);
 
-            return (result, null);
+            return new(result, null, [], HasFullSourcePage: false);
         }
         else
         {
             if (stdout is null)
             {
                 logger.LogError("Failed to read stdout from the process. This should never happen.");
-                return (CliExitCodes.FailedToAddPackage, null);
+                return new(CliExitCodes.FailedToAddPackage, null, [], HasFullSourcePage: false);
             }
 
             try
             {
-                var foundPackages = PackageUpdateHelpers.ParsePackageSearchResults(stdout);
+                var searchResults = ReadPackageSearchResults(stdout, workingDirectory, nugetConfigFile, pageSize, nuGetClient);
 
                 // Attempt to persist the raw stdout JSON for future lookups when cache enabled
                 if (cacheEnabled && rawKey is not null)
@@ -1630,15 +1625,33 @@ internal sealed class DotNetCliRunner(
                     await _diskCache.SetAsync(rawKey, stdout, cancellationToken).ConfigureAwait(false);
                 }
 
-                return (result, foundPackages.ToArray());
+                return searchResults;
             }
             catch (JsonException ex)
             {
                 logger.LogError($"Failed to read JSON returned by the package search. {ex.Message}");
-                return (CliExitCodes.FailedToAddPackage, null);
+                return new(CliExitCodes.FailedToAddPackage, null, [], HasFullSourcePage: false);
             }
 
         }
+    }
+
+    private static DotNetPackageSearchResult ReadPackageSearchResults(
+        string output, DirectoryInfo workingDirectory, FileInfo? nugetConfigFile, int pageSize, INuGetClient nuGetClient)
+    {
+        var packages = PackageUpdateHelpers.ParsePackageSearchResults(output, out var failedSources, packageId: null);
+        // The SDK pages each alias separately, even when aliases share a location.
+        // Determine page completeness before resolving aliases into locations.
+        var hasFullSourcePage = pageSize > 0 && packages.GroupBy(package => package.Source)
+            .Any(page => page.Count() >= pageSize);
+        var resolvedPackages = nuGetClient.ResolveSdkPackageSearchSourceNames(
+            packages, nugetConfigFile?.FullName, workingDirectory.FullName);
+
+        return new(
+            CliExitCodes.Success,
+            resolvedPackages.ToArray(),
+            failedSources.Select(PackageSourceRedactor.RedactForDisplay).ToArray(),
+            hasFullSourcePage);
     }
 
     public async Task<(int ExitCode, string[] ConfigPaths)> GetNuGetConfigPathsAsync(DirectoryInfo workingDirectory, ProcessInvocationOptions options, CancellationToken cancellationToken)

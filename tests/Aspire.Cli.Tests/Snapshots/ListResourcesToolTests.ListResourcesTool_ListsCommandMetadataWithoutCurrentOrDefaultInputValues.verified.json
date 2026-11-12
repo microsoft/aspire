@@ -1,0 +1,59 @@
+﻿{
+      "disabled": {
+        "state": "Disabled",
+        "argument_inputs": []
+      },
+      "reload": {
+        "state": "Enabled",
+        "description": "Reload configuration.",
+        "argument_inputs": [
+          {
+            "name": "configuration",
+            "input_type": "Text",
+            "description": "Configuration name.",
+            "required": true,
+            "allow_custom_choice": false,
+            "disabled": false,
+            "max_length": 100
+          },
+          {
+            "name": "password",
+            "input_type": "SecretText",
+            "required": true,
+            "allow_custom_choice": false,
+            "disabled": false
+          },
+          {
+            "name": "environment",
+            "input_type": "Choice",
+            "required": true,
+            "options": {
+              "staging": "Staging",
+              "production": "Production"
+            },
+            "allow_custom_choice": true,
+            "disabled": false,
+            "dynamic_loading": {
+              "always_load_on_start": true,
+              "depends_on_inputs": [
+                "configuration"
+              ]
+            }
+          },
+          {
+            "name": "force",
+            "input_type": "Boolean",
+            "required": false,
+            "allow_custom_choice": false,
+            "disabled": false
+          },
+          {
+            "name": "attempts",
+            "input_type": "Number",
+            "required": false,
+            "allow_custom_choice": false,
+            "disabled": true
+          }
+        ]
+      }
+    }

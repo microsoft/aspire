@@ -9,7 +9,7 @@ import (
 func main() {
 	builder, err := aspire.CreateBuilder()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	mongo := builder.AddMongoDB("mongo")
@@ -19,7 +19,7 @@ func main() {
 	mongo.AddDatabase("db2", &aspire.AddDatabaseOptions{DatabaseName: aspire.StringPtr("customdb2")})
 
 	if err = mongo.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	builder.AddMongoDB("mongo-volume").WithDataVolume()
@@ -28,7 +28,7 @@ func main() {
 
 	builder.AddMongoDB("mongo-express").WithMongoExpress(&aspire.WithMongoExpressOptions{
 		ConfigureContainer: func(container aspire.MongoExpressContainerResource) {
-			container.WithHostPort(aspire.Float64Ptr(8082))
+			container.WithHostPort(aspire.IntPtr(8082))
 		},
 	})
 
@@ -47,20 +47,32 @@ func main() {
 	mongoChained.AddDatabase("analytics-db", &aspire.AddDatabaseOptions{DatabaseName: aspire.StringPtr("analytics")})
 
 	if err = mongoChained.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	// Test 11: Test WithBindIpAll
 	builder.AddMongoDB("mongo-bind-all").WithBindIpAll()
 
-	// Test 12: Test WithReplicaSet with WithKeyFile, WithTlsMode and WithTlsAllowInvalidCertificates
-	keyFileParam := builder.AddParameter("rs-keyfile", &aspire.AddParameterOptions{Secret: aspire.BoolPtr(true), Value: aspire.StringPtr("my-secret-key")})
-	mongoRsMember := builder.AddMongoDB("mongo-rs-member").WithReplicaSet("rs0").WithKeyFile(keyFileParam, &aspire.WithKeyFileOptions{KeyFilePath: aspire.StringPtr("/etc/rs.key")}).WithTlsMode().WithTlsAllowInvalidCertificates()
-	if err = mongoRsMember.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+	// Test 12: Initialize a single-member replica set with the resource name and a generated keyfile.
+	singleDB := builder.AddMongoDB("mongo-single").WithReplicaSet().AddDatabase("single-db")
+	if err = singleDB.Err(); err != nil {
+		log.Fatal(aspire.FormatError(err))
 	}
 
-	// Test 13: Test AddMongoDBReplicaSet with WithMember
+	// Test 13: Initialize a single-member replica set with an explicit set name.
+	namedSingleDB := builder.AddMongoDB("mongo-single-named").WithReplicaSet(&aspire.WithReplicaSetOptions{Name: aspire.StringPtr("app-rs")}).AddDatabase("single-named-db")
+	if err = namedSingleDB.Err(); err != nil {
+		log.Fatal(aspire.FormatError(err))
+	}
+
+	// Test 14: Supply a keyfile before initialization; TLS options are separate export coverage, not prerequisites.
+	keyFileParam := builder.AddParameter("rs-keyfile", &aspire.AddParameterOptions{Secret: aspire.BoolPtr(true), Value: aspire.StringPtr("bW9uZ29kYmtleWZpbGUxMjM0")})
+	mongoConfigured := builder.AddMongoDB("mongo-rs-configured").WithKeyFile(keyFileParam, &aspire.WithKeyFileOptions{KeyFilePath: aspire.StringPtr("/etc/rs.key")}).WithReplicaSet(&aspire.WithReplicaSetOptions{Name: aspire.StringPtr("configured-rs")}).WithTlsMode().WithTlsAllowInvalidCertificates()
+	if err = mongoConfigured.Err(); err != nil {
+		log.Fatal(aspire.FormatError(err))
+	}
+
+	// Test 15: Advanced local multi-member experiments use plain servers, not WithReplicaSet single-member sets.
 	// NOTE: The members are not given a key file of their own here. WithMember gives them the replica set's shared one,
 	// and a member carrying a different key file is rejected.
 	mongo1 := builder.AddMongoDB("mongo-rs-1")
@@ -68,7 +80,7 @@ func main() {
 
 	replicaSet := builder.AddMongoDBReplicaSet("rs0").WithMember(mongo1).WithMember(mongo2)
 	if err = replicaSet.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	_ = mongo.PrimaryEndpoint()
@@ -81,9 +93,9 @@ func main() {
 
 	app, err := builder.Build()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 	if err := app.Run(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 }

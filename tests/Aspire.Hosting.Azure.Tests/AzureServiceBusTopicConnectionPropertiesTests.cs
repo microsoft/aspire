@@ -6,12 +6,12 @@ using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Azure.Tests;
 
-public class AzureServiceBusTopicConnectionPropertiesTests
+public class AzureServiceBusTopicConnectionPropertiesTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public void AzureServiceBusTopicResourceGetConnectionPropertiesReturnsExpectedValues()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var serviceBus = builder.AddAzureServiceBus("servicebus");
         var topic = serviceBus.AddServiceBusTopic("topic", "mytopic");
 

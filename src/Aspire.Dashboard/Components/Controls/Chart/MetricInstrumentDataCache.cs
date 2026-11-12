@@ -25,12 +25,14 @@ internal static class MetricInstrumentDataCache
             var latestValue = dimension.Values[^1];
             // Refresh recent complete buckets because data can arrive behind the latest displayed value. Starting from
             // the rolled value's start when it is earlier also retains source points that determine its representative.
-            var lookbackStartTicks = latestValue.End.Ticks - Math.Min(latestValue.End.Ticks, refreshLookback.Ticks);
-            var alignedLookbackStartTicks = lookbackStartTicks - (lookbackStartTicks % dataPointInterval.Ticks);
+            var refreshLookbackUnixNano = checked((ulong)refreshLookback.Ticks * (ulong)TimeSpan.NanosecondsPerTick);
+            var pointIntervalUnixNano = checked((ulong)dataPointInterval.Ticks * (ulong)TimeSpan.NanosecondsPerTick);
+            var lookbackStartUnixNano = latestValue.EndTimeUnixNano - Math.Min(latestValue.EndTimeUnixNano, refreshLookbackUnixNano);
+            var alignedLookbackStartUnixNano = lookbackStartUnixNano - (lookbackStartUnixNano % pointIntervalUnixNano);
             cursors.Add(new MetricDimensionCursor
             {
                 Attributes = dimension.Attributes,
-                StartTime = new DateTime(Math.Min(latestValue.Start.Ticks, alignedLookbackStartTicks), DateTimeKind.Utc)
+                StartTime = OtlpHelpers.UnixNanoSecondsToDateTime(Math.Min(latestValue.StartTimeUnixNano, alignedLookbackStartUnixNano))
             });
         }
         return cursors;
@@ -42,6 +44,10 @@ internal static class MetricInstrumentDataCache
         IReadOnlyList<MetricDimensionCursor> cursors,
         DateTime windowStart)
     {
+        // A delta number is observed at its end, so the refreshed read starts after the cursor and a value ending exactly
+        // at the cursor is kept from the previous read. Other values overlapping the cursor are read again.
+        var isDeltaNumber = cached.Summary.AggregationTemporality == OtlpAggregationTemporality.Delta &&
+            cached.Summary.Type != OtlpInstrumentType.Histogram;
         var dimensions = new List<DimensionScope>(refreshed.Dimensions.Count);
         foreach (var refreshedDimension in refreshed.Dimensions)
         {
@@ -54,9 +60,11 @@ internal static class MetricInstrumentDataCache
             }
 
             var mergedDimension = new DimensionScope(refreshedDimension.Capacity, refreshedDimension.Attributes);
+            var cursorUnixNano = OtlpHelpers.DateTimeToUnixNanoseconds(cursor.StartTime);
             foreach (var value in cachedDimension.Values)
             {
-                if (value.End >= windowStart && value.End < cursor.StartTime)
+                if (value.End >= windowStart &&
+                    (isDeltaNumber ? value.EndTimeUnixNano <= cursorUnixNano : value.End < cursor.StartTime))
                 {
                     mergedDimension.Values.Add(MetricValueBase.Clone(value));
                 }
@@ -93,6 +101,6 @@ internal static class MetricInstrumentDataCache
         return clone;
     }
 
-    private static bool AttributesEqual(KeyValuePair<string, string>[] left, KeyValuePair<string, string>[] right)
+    internal static bool AttributesEqual(KeyValuePair<string, string>[] left, KeyValuePair<string, string>[] right)
         => left.AsSpan().SequenceEqual(right);
 }

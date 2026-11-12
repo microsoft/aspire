@@ -230,6 +230,12 @@ public sealed class AtsEnumValueInfo
     /// Gets documentation for this enum value.
     /// </summary>
     public AtsDocumentationInfo? Documentation { get; init; }
+
+    /// <summary>
+    /// Gets whether this enum value is obsolete.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool IsObsolete { get; init; }
 }
 
 /// <summary>
@@ -288,6 +294,11 @@ public sealed class AtsCapabilityInfo
     /// Gets or sets the XML documentation captured for this capability.
     /// </summary>
     public AtsDocumentationInfo? Documentation { get; init; }
+
+    /// <summary>
+    /// Gets or sets whether this capability is experimental.
+    /// </summary>
+    public bool IsExperimental { get; init; }
 
     /// <summary>
     /// Gets or sets whether this capability is obsolete.
@@ -491,6 +502,12 @@ public sealed class AtsTypeInfo
     /// Gets or sets the XML documentation captured for this type.
     /// </summary>
     public AtsDocumentationInfo? Documentation { get; init; }
+
+    /// <summary>
+    /// Gets whether this handle type is obsolete.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool IsObsolete { get; init; }
 }
 
 /// <summary>
@@ -528,6 +545,12 @@ public sealed class AtsDtoTypeInfo
     /// Gets or sets the properties of this DTO.
     /// </summary>
     public required IReadOnlyList<AtsDtoPropertyInfo> Properties { get; init; }
+
+    /// <summary>
+    /// Gets whether this DTO type is obsolete.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool IsObsolete { get; init; }
 }
 
 /// <summary>
@@ -577,6 +600,12 @@ public sealed class AtsDtoPropertyInfo
     /// Gets or sets whether this property is optional (nullable or has default).
     /// </summary>
     public bool IsOptional { get; init; }
+
+    /// <summary>
+    /// Gets whether this DTO property is obsolete.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool IsObsolete { get; init; }
 }
 
 /// <summary>
@@ -614,4 +643,10 @@ public sealed class AtsEnumTypeInfo
     /// Gets or sets the XML documentation captured for this enum type.
     /// </summary>
     public AtsDocumentationInfo? Documentation { get; init; }
+
+    /// <summary>
+    /// Gets whether this enum type is obsolete.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool IsObsolete { get; init; }
 }

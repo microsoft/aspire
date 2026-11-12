@@ -7,7 +7,6 @@ using System.Xml;
 using Aspire.TestUtilities;
 using Microsoft.Playwright;
 using Xunit;
-using static Aspire.Templates.Tests.TestExtensions;
 
 namespace Aspire.Templates.Tests;
 
@@ -159,7 +158,7 @@ public partial class TemplateTestsBase
     {
         try
         {
-            return await CheckDashboardHasResourcesActualAsync(dashboardPageWrapper, expectedResources, testOutput, timeoutSecs);
+            return await DashboardResourceAssertions.CheckResourcesAsync(dashboardPageWrapper, expectedResources, testOutput, timeoutSecs);
         }
         catch
         {
@@ -168,96 +167,6 @@ public partial class TemplateTestsBase
             testOutput.WriteLine($"Dashboard screenshot saved to {screenshotPath}");
             throw;
         }
-    }
-
-    private static async Task<ResourceRow[]> CheckDashboardHasResourcesActualAsync(WrapperForIPage dashboardPageWrapper, IEnumerable<ResourceRow> expectedResources, ITestOutputHelper testOutput, int timeoutSecs = 120)
-    {
-        // FIXME: check the page has 'Resources' label
-        // fluent-toolbar/h1 resources
-
-        var numAttempts = 0;
-        testOutput.WriteLine($"Waiting for resources to appear on the dashboard");
-        await Task.Delay(500);
-
-        var expectedRowsTable = expectedResources.ToDictionary(r => r.Name);
-        HashSet<string> foundNames = [];
-        List<ResourceRow> foundRows = [];
-
-        var cts = new CancellationTokenSource();
-        cts.CancelAfter(TimeSpan.FromSeconds(timeoutSecs));
-
-        while (foundNames.Count < expectedRowsTable.Count && !cts.IsCancellationRequested)
-        {
-            if (dashboardPageWrapper.HasErrors)
-            {
-                if (numAttempts >= 3)
-                {
-                    throw new InvalidOperationException($"Failed to load dashboard page after {numAttempts} attempts");
-                }
-
-                testOutput.WriteLine($"----- Reloading dashboard page");
-                await dashboardPageWrapper.ReloadAsync(new PageReloadOptions { WaitUntil = WaitUntilState.Load });
-                numAttempts++;
-            }
-
-            await Task.Delay(500);
-
-            // _testOutput.WriteLine($"Checking for rows again");
-            var rowsLocator = dashboardPageWrapper.Page.Locator("//tr[@class='fluent-data-grid-row hover resource-row']");
-            var allRows = await rowsLocator.AllAsync();
-            // _testOutput.WriteLine($"found rows#: {allRows.Count}");
-            if (allRows.Count == 0)
-            {
-                // Console.WriteLine ($"** no rows found ** elapsed: {sw.Elapsed.TotalSeconds} secs");
-                continue;
-            }
-
-            foreach (var rowLoc in allRows)
-            {
-                // get the cells
-                var cellLocs = await rowLoc.Locator("//td[@role='gridcell']").AllAsync();
-
-                // is the resource name expected?
-                var resourceNameCell = cellLocs[0];
-                var resourceName = await resourceNameCell.InnerTextAsync();
-                resourceName = resourceName.Trim();
-                if (!expectedRowsTable.TryGetValue(resourceName, out var expectedRow))
-                {
-                    Assert.Fail($"Row with unknown name found: '{resourceName}'. Expected values: {string.Join(", ", expectedRowsTable.Keys.Select(k => $"'{k}'"))}");
-                }
-                if (foundNames.Contains(resourceName))
-                {
-                    continue;
-                }
-
-                AssertEqual(expectedRow.Name, resourceName, $"Name for '{resourceName}'");
-
-                var stateCell = cellLocs[1];
-                var actualState = await stateCell.InnerTextAsync().ConfigureAwait(false);
-                actualState = actualState.Trim();
-                if (expectedRow.State != actualState && actualState != "Finished" && !actualState.Contains("failed", StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-                AssertEqual(expectedRow.State, actualState, $"State for {resourceName}");
-
-                // Check 'Source' column
-                var sourceCell = cellLocs[3];
-                // Since this will be the entire command, we can just confirm that the path of the executable contains
-                // the expected source (executable/project)
-                Assert.Contains(expectedRow.SourceContains, await sourceCell.InnerTextAsync());
-
-                foundRows.Add(expectedRow);
-                foundNames.Add(resourceName);
-            }
-        }
-
-        if (foundNames.Count != expectedRowsTable.Count)
-        {
-            Assert.Fail($"Expected rows not found: {string.Join(", ", expectedRowsTable.Keys.Except(foundNames))}");
-        }
-
-        return foundRows.ToArray();
     }
 
     // Don't fixup the prefix so it can have characters meant for testing, like spaces
@@ -325,42 +234,42 @@ public partial class TemplateTestsBase
                                     .WithWorkingDirectory(testProjectDirectory)
                                     .WithTimeout(TimeSpan.FromSeconds(testRunTimeoutSecs));
 
-            (await buildCmd.ExecuteAsync($"test -c {config}")).EnsureSuccessful();
+            (await buildCmd.ExecuteAsync($"build -c {config}")).EnsureSuccessful();
 
             // .. then test with --no-build
             using var testCmd = new DotNetCommand(testOutput, label: $"test-{testType}")
                                     .WithWorkingDirectory(testProjectDirectory)
                                     .WithTimeout(TimeSpan.FromSeconds(testRunTimeoutSecs));
 
-            var testRes = (await testCmd.ExecuteAsync($"test -c {config} --no-build"))
+            // MSTest uses an MTP executable. Run it directly to support SDKs 8 and 9 as well as
+            // SDK 10+, where MTP 2 no longer supports the VSTest-based dotnet test entry point.
+            // This also avoids imposing a global.json runner selection on generated projects.
+            // See https://learn.microsoft.com/dotnet/core/testing/microsoft-testing-platform-integration-dotnet-test.
+            var command = testType == "mstest" ? "run" : "test";
+            var testRes = (await testCmd.ExecuteAsync($"{command} -c {config} --no-build"))
                                 .EnsureSuccessful();
 
-            Assert.Matches("Passed! * - Failed: *0, Passed: *1, Skipped: *0, Total: *1", testRes.Output);
+            if (testType == "mstest")
+            {
+                TestRunOutput.AssertSinglePassedMtpTest(testRes.Output);
+            }
+            else
+            {
+                Assert.Matches("Passed! * - Failed: *0, Passed: *1, Skipped: *0, Total: *1", testRes.Output);
+            }
             return testRes;
         }
     }
 
     public static TheoryData<string, string, TestSdk, TestTargetFramework, string?> TestDataForNewAndBuildTemplateTests(string templateName, string extraArgs) => new()
         {
-            { templateName, extraArgs, TestSdk.Net8, TestTargetFramework.Net8, null },
-            { templateName, extraArgs, TestSdk.Net8, TestTargetFramework.Net9, "The current .NET SDK does not support targeting .NET 9.0" },
 
-            { templateName, extraArgs, TestSdk.Net9, TestTargetFramework.Net8, null },
-            { templateName, extraArgs, TestSdk.Net9, TestTargetFramework.Net9, null },
-            { templateName, extraArgs, TestSdk.Net9, TestTargetFramework.Net10, "The current .NET SDK does not support targeting .NET 10.0" },
-
-            { templateName, extraArgs, TestSdk.Net10, TestTargetFramework.Net8, null },
-            { templateName, extraArgs, TestSdk.Net10, TestTargetFramework.Net9, null },
             { templateName, extraArgs, TestSdk.Net10, TestTargetFramework.Net10, null },
             { templateName, extraArgs, TestSdk.Net10, TestTargetFramework.Net11, "The current .NET SDK does not support targeting .NET 11.0" },
 
-            { templateName, extraArgs, TestSdk.Net11, TestTargetFramework.Net8, null },
-            { templateName, extraArgs, TestSdk.Net11, TestTargetFramework.Net9, null },
             { templateName, extraArgs, TestSdk.Net11, TestTargetFramework.Net10, null },
             { templateName, extraArgs, TestSdk.Net11, TestTargetFramework.Net11, null },
 
-            { templateName, extraArgs, TestSdk.Net11WithAllSupportedRuntimes, TestTargetFramework.Net8, null },
-            { templateName, extraArgs, TestSdk.Net11WithAllSupportedRuntimes, TestTargetFramework.Net9, null },
             { templateName, extraArgs, TestSdk.Net11WithAllSupportedRuntimes, TestTargetFramework.Net10, null },
             { templateName, extraArgs, TestSdk.Net11WithAllSupportedRuntimes, TestTargetFramework.Net11, null },
         };

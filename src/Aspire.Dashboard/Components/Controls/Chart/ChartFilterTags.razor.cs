@@ -21,6 +21,9 @@ public partial class ChartFilterTags : IDisposable
     [Parameter, EditorRequired]
     public required EventCallback<DimensionFilterViewModel> OnSelectionChanged { get; set; }
 
+    [Parameter, EditorRequired]
+    public required EventCallback<DimensionFilterViewModel> OnShowPopover { get; set; }
+
     private const int MaxRenderedOverflowItems = 20;
 
     protected override void OnInitialized()
@@ -54,11 +57,7 @@ public partial class ChartFilterTags : IDisposable
         await OnSelectionChanged.InvokeAsync(Filter);
     }
 
-    private void ShowPopover()
-    {
-        Filter.PopupVisible = true;
-        Filter.NotifyStateChanged?.Invoke();
-    }
+    private Task ShowPopoverAsync() => OnShowPopover.InvokeAsync(Filter);
 
     /// <summary>
     /// Orders dimension values numerically if all values are parsable as doubles;

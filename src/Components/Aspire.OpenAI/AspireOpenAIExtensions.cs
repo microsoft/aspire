@@ -73,7 +73,7 @@ public static class AspireOpenAIExtensions
         configSection.Bind(settings);
         namedConfigSection.Bind(settings);
 
-        if (builder.Configuration.GetConnectionString(connectionName) is string connectionString)
+        if (builder.Configuration.TryGetConnectionString(connectionName, out var connectionString))
         {
             settings.ParseConnectionString(connectionString);
         }
@@ -123,7 +123,10 @@ public static class AspireOpenAIExtensions
                 .WithMetrics(b => b.AddMeter(telemetrySources));
         }
 
-        return new AspireOpenAIClientBuilder(builder, connectionName, serviceKey, settings.DisableTracing, settings.EnableSensitiveTelemetryData);
+        return new AspireOpenAIClientBuilder(builder, connectionName, serviceKey, settings.DisableTracing, settings.EnableSensitiveTelemetryData)
+        {
+            DisableMetrics = settings.DisableMetrics
+        };
 
         OpenAIClient ConfigureOpenAI(IServiceProvider serviceProvider)
         {

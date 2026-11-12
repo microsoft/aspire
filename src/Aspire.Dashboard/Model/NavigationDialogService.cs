@@ -42,7 +42,7 @@ public sealed class NavigationDialogService(IServiceProvider serviceProvider, IF
 
         try
         {
-            return await base.ShowDialogAsync(componentType, options).ConfigureAwait(true);
+            return await ShowDialogCoreAsync(componentType, options).ConfigureAwait(true);
         }
         finally
         {
@@ -54,6 +54,12 @@ public sealed class NavigationDialogService(IServiceProvider serviceProvider, IF
             options.OnStateChange = onStateChange;
         }
     }
+
+    // An async base call generates a compiler helper without the trimming annotation.
+    // Keep the base call in a non-async method so its parameter requirements are preserved.
+    private Task<DialogResult> ShowDialogCoreAsync(
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] Type componentType,
+        DialogOptions options) => base.ShowDialogAsync(componentType, options);
 
     public async Task DismissAllAsync()
     {

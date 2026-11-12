@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREFILESYSTEM001 // Type is for evaluation purposes only
-
 using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
@@ -12,17 +10,16 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure.Provisioning.Internal;
 using Aspire.Hosting.Azure.Resources;
 using Aspire.Hosting.Pipelines;
+using Aspire.Hosting.Utils;
 using Azure;
 using Azure.Core;
 using Azure.Identity;
 using Azure.ResourceManager;
-using Azure.ResourceManager.Resources;
-using Azure.ResourceManager.Resources.Models;
+using Azure.ResourceManager.Resources.Deployments;
+using Azure.ResourceManager.Resources.Deployments.Models;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Azure.Provisioning;
-
-#pragma warning disable ASPIREPIPELINES002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 internal sealed class BicepProvisioner(
     ResourceNotificationService notificationService,
@@ -64,7 +61,7 @@ internal sealed class BicepProvisioner(
             return false;
         }
 
-        var currentCheckSum = await BicepUtilities.GetCurrentChecksumAsync(resource, stateSection, logger, cancellationToken).ConfigureAwait(false);
+        var currentCheckSum = await BicepUtilities.GetCurrentChecksumAsync(resource, stateSection, executionContext, logger, cancellationToken).ConfigureAwait(false);
         var configCheckSum = stateSection.Data[BicepUtilities.DeploymentStateChecksumKey]?.GetValue<string>();
 
         if (string.IsNullOrEmpty(configCheckSum))
@@ -566,7 +563,7 @@ internal sealed class BicepProvisioner(
         logger.LogDebug("Setting parameters and scope for resource {ResourceName}", resource.Name);
         // Convert the parameters to a JSON object
         var parameters = new JsonObject();
-        await BicepUtilities.SetParametersAsync(parameters, resource, cancellationToken: cancellationToken).ConfigureAwait(false);
+        await BicepUtilities.SetParametersAsync(parameters, resource, executionContext, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         var scope = new JsonObject();
         await BicepUtilities.SetScopeAsync(scope, resource, cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -576,7 +573,12 @@ internal sealed class BicepProvisioner(
             : isSubscriptionScoped
                 ? subscription.GetArmDeployments()
                 : resourceGroup.GetArmDeployments();
-        var deploymentName = executionContext.IsPublishMode ? $"{resource.Name}-{_timeProvider.GetUtcNow().ToUnixTimeSeconds()}" : resource.Name;
+        var deploymentSuffix = executionContext.IsPublishMode
+            ? $"-{_timeProvider.GetUtcNow().ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture)}"
+            : string.Empty;
+        // Reserve the publish suffix before shortening so ARM's 64-character limit is never exceeded.
+        // https://learn.microsoft.com/azure/azure-resource-manager/management/resource-name-rules#microsoftresources
+        var deploymentName = ResourceNameHelpers.TruncateWithHash(resource.Name, 64 - deploymentSuffix.Length) + deploymentSuffix;
         var deploymentId = GetDeploymentId(isTenantScoped, isSubscriptionScoped, subscription, resourceGroup, deploymentName);
         var checksum = BicepUtilities.GetChecksum(resource, parameters, scope);
         var sw = Stopwatch.StartNew();
@@ -1436,7 +1438,8 @@ internal sealed class BicepProvisioner(
             resource.Parameters[AzureBicepResource.KnownParameters.PrincipalType] = context.Principal.Type;
         }
 
-        if (!resource.Parameters.TryGetValue(AzureBicepResource.KnownParameters.Location, out var location) || location is null)
+        if (resource.HasLocationParameter &&
+            (!resource.Parameters.TryGetValue(AzureBicepResource.KnownParameters.Location, out var location) || location is null))
         {
             resource.Parameters[AzureBicepResource.KnownParameters.Location] = context.Location.Name;
         }

@@ -136,7 +136,7 @@
       </trans-unit>
       <trans-unit id="aspire-vscode.strings.invalidTokenProvided">
         <source xml:lang="en">Invalid token provided.</source>
-        <target state="translated">提供的權杖無效。</target>
+        <target state="translated">提供了無效的 Token。</target>
       </trans-unit>
       <trans-unit id="aspire-vscode.strings.openAspireDashboard">
         <source xml:lang="en">Launch Aspire Dashboard</source>

@@ -86,7 +86,7 @@ public sealed class KubernetesDeployWithPersistentVolumeTests(ITestOutputHelper 
                     .WithDataVolume("pg-data")
                     .WithPersistentVolume(pgData);
 
-                builder.AddProject<Projects.{{ProjectName}}_ApiService>("server")
+                builder.AddDotnetProject("server", "../{{ProjectName}}.ApiService/{{ProjectName}}.ApiService.csproj")
                     .WithReference(postgres)
                     .WaitFor(postgres)
                     .WithExternalHttpEndpoints();
@@ -206,13 +206,7 @@ public sealed class KubernetesDeployWithPersistentVolumeTests(ITestOutputHelper 
             // workload had rendered as a Deployment with an emptyDir, or the publisher
             // generates a fresh PVC name on each render), the row will be gone.
             output.WriteLine("Phase 2: delete pg-statefulset-0 and wait for K8s to recreate it");
-            await auto.TypeAsync($"kubectl delete pod pg-statefulset-0 -n {k8sNamespace}");
-            await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(60));
-
-            await auto.TypeAsync($"kubectl wait --for=condition=Ready pod pg-statefulset-0 -n {k8sNamespace} --timeout=180s");
-            await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(4));
+            await auto.RestartStatefulSetPodAsync(counter, k8sNamespace, "pg-statefulset-0");
 
             // === Phase 3: read data — the durability proof ===
             await PortForwardServerAsync(auto, counter, k8sNamespace, LocalPort);

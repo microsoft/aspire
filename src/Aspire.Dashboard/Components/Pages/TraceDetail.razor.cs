@@ -1,7 +1,8 @@
-// Licensed to the .NET Foundation under one or more agreements.
+﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using System.Globalization;
 using Aspire.Dashboard.Components.Controls.Grid;
 using Aspire.Dashboard.Components.Dialogs;
 using Aspire.Dashboard.Components.Layout;
@@ -14,6 +15,7 @@ using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Resources;
 using Aspire.Dashboard.Telemetry;
 using Aspire.Dashboard.Utils;
+using Aspire.Shared;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
 using Microsoft.FluentUI.AspNetCore.Components;
@@ -47,6 +49,8 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
     private readonly List<MenuButtonItem> _traceActionsMenuItems = [];
     private AspirePageContentLayout? _layout;
     private List<SelectViewModel<SpanType>> _spanTypes = default!;
+    private TotalItemsFooter _totalItemsFooter = default!;
+    private int _totalItemsCount;
 
     public TraceDetailPageViewModel PageViewModel { get; set; } = new();
 
@@ -84,6 +88,12 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
     public required IStringLocalizer<Dashboard.Resources.StructuredLogs> StructuredLogsLoc { get; init; }
 
     [Inject]
+    public required IStringLocalizer<Dashboard.Resources.Traces> TracesLoc { get; init; }
+
+    [Inject]
+    public required PauseManager PauseManager { get; init; }
+
+    [Inject]
     public required IStringLocalizer<ControlsStrings> ControlStringsLoc { get; init; }
 
     [Inject]
@@ -97,6 +107,13 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
 
     [CascadingParameter]
     public required ViewportInformation ViewportInformation { get; set; }
+
+    /// <summary>
+    /// The resources layout hosting this page. When present, the layout's resource pane selects the resource
+    /// and displays resource commands, so the page doesn't display its own resource selector.
+    /// </summary>
+    [CascadingParameter]
+    public ResourcesLayout? ResourcesLayout { get; set; }
 
     protected override void OnInitialized()
     {
@@ -155,6 +172,8 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
     {
         var visibleItems = GetVisibleSpanViewModels().ToList();
         var totalItemCount = visibleItems.Count;
+        _totalItemsCount = totalItemCount;
+        _totalItemsFooter?.UpdateDisplayedCount(totalItemCount);
         var startIndex = Math.Min(request.StartIndex, visibleItems.Count);
         var count = Math.Min(request.Count ?? DashboardUIHelpers.DefaultDataGridResultCount, visibleItems.Count - startIndex);
         var page = count > 0
@@ -178,6 +197,15 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
         return TraceDetailPageViewModel.ApplySpanFilters(PageViewModel.SpanWaterfallViewModels, PageViewModel.ContextFilterMatches, PageViewModel.DurationFilterMatches);
     }
 
+    private string TracesListUrl => ResourcesLayout?.DetailParentUrl ?? DashboardUrls.TracesUrl();
+
+    private string? PauseText => PauseManager.AreTracesPaused(out var startTime)
+        ? string.Format(
+            CultureInfo.CurrentCulture,
+            TracesLoc[nameof(Dashboard.Resources.Traces.PauseInProgressText)],
+            FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, startTime.Value))
+        : null;
+
     internal string? GetPageTitle()
     {
         if (_trace is null)
@@ -187,6 +215,29 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
 
         var headerSpan = _trace.RootOrFirstSpan;
         return $"{GetResourceName(headerSpan.Source)}: {headerSpan.Name}";
+    }
+
+    private TraceDetailItem[] GetTraceDetailItems(OtlpTrace trace)
+    {
+        return
+        [
+            new(
+                Loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailTraceStartHeader)],
+                FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, trace.FirstSpan.StartTime, MillisecondsDisplay.Truncated),
+                FormatHelpers.FormatDateTime(TimeProvider, trace.FirstSpan.StartTime, MillisecondsDisplay.Full)),
+            new(
+                Loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailDurationHeader)],
+                DurationFormatter.FormatDuration(trace.Duration, CultureInfo.CurrentCulture)),
+            new(
+                Loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailResourcesHeader)],
+                _resourceCount.ToString(CultureInfo.CurrentCulture)),
+            new(
+                Loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailDepthHeader)],
+                _maxDepth.ToString(CultureInfo.CurrentCulture)),
+            new(
+                Loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailTotalSpansHeader)],
+                trace.Spans.Count.ToString(CultureInfo.CurrentCulture))
+        ];
     }
 
     protected override async Task OnParametersSetAsync()
@@ -216,19 +267,12 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
             // Navigate to remove ?spanId=xxx in the URL. A small delay is required here, otherwise the page rendering breaks.
             await Task.Delay(200, _cts.Token);
 
-            NavigationManager.NavigateTo(DashboardUrls.TraceDetailUrl(TraceId), new NavigationOptions { ReplaceHistoryEntry = true });
+            NavigationManager.NavigateTo(ResourcesLayout?.GetTraceDetailUrl(TraceId) ?? DashboardUrls.TraceDetailUrl(TraceId), new NavigationOptions { ReplaceHistoryEntry = true });
         }
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        // Check to see whether max item count should be set on every render.
-        // This is required because the data grid's virtualize component can be recreated on data change.
-        if (_dataGrid != null && FluentDataGridHelper<SpanWaterfallViewModel>.TrySetMaxItemCount(_dataGrid, 10_000))
-        {
-            StateHasChanged();
-        }
-
         if (firstRender)
         {
             // OnParametersSetAsync runs before the grid reference is assigned, so its initial
@@ -931,4 +975,6 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
         }
 
     }
+
+    private sealed record TraceDetailItem(string Name, string Value, string? Tooltip = null);
 }

@@ -4,6 +4,42 @@
 	"version": "2.0.0",
 	"tasks": [
 		{
+			"label": "run: Aspire CLI (outside debugger)",
+			"type": "process",
+			"command": "dotnet",
+			"args": [
+				"${workspaceFolder}/artifacts/bin/Aspire.Cli/Debug/net11.0/aspire.dll",
+				"new"
+			],
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
+			"presentation": {
+				"reveal": "always",
+				"focus": true
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "build: Aspire CLI",
+			"type": "process",
+			"command": "dotnet",
+			"args": [
+				"build",
+				"${workspaceFolder}/src/Aspire.Cli/Aspire.Cli.csproj",
+				"--configuration",
+				"Debug"
+			],
+			"options": {
+				"cwd": "${workspaceFolder}",
+				"env": {
+					"MSBUILDTERMINALLOGGER": "false"
+				}
+			},
+			"problemMatcher": "$msCompile",
+			"group": "build"
+		},
+		{
 			"label": "yarn: install extension",
 			"type": "shell",
 			"command": "yarn install",

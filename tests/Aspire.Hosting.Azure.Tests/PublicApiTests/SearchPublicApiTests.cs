@@ -5,7 +5,7 @@ using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Azure.Tests.PublicApiTests;
 
-public class SearchPublicApiTests
+public class SearchPublicApiTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public void AddAzureSearchShouldThrowWhenBuilderIsNull()
@@ -24,7 +24,7 @@ public class SearchPublicApiTests
     [InlineData(true)]
     public void AddAzureSearchShouldThrowWhenNameIsNullOrEmpty(bool isNull)
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var name = isNull ? null! : string.Empty;
 
         var action = () => builder.AddAzureSearch(name);

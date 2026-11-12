@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREPIPELINES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIRECOMPUTE002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 using System.Diagnostics.CodeAnalysis;
@@ -9,6 +8,7 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dcp.Process;
+using Aspire.Hosting.Kubernetes.Annotations;
 using Aspire.Hosting.Kubernetes.Extensions;
 using Aspire.Hosting.Kubernetes.Resources;
 using Aspire.Hosting.Pipelines;
@@ -31,6 +31,9 @@ namespace Aspire.Hosting.Kubernetes;
 [AspireExport(ExposeProperties = true)]
 public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmentResource, IComputeEnvironmentWithVolumeMounts
 {
+    /// <inheritdoc/>
+    public override string ResourceTypeDisplayName => "Kubernetes Environment";
+
     private const int HttpRouteHostnameLimit = 16;
     private const string HttpRouteSpecDocumentationUrl = "https://gateway-api.sigs.k8s.io/reference/api-spec/main/spec/#httproutespec";
 
@@ -460,6 +463,7 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
         // TypeScript AppHost RPC bridge (which may use a different resource instance)
         // resolve correctly.
         var deploymentTargets = new Dictionary<IResource, KubernetesResource>(new ResourceNameComparer());
+        var pendingResources = new List<(IResource Resource, IComputeEnvironmentResource ComputeEnvironment)>();
 
         foreach (var r in appModel.GetComputeResources())
         {
@@ -502,6 +506,14 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
                 ConfigureOtlp(r, dashboardResource);
             }
 
+            pendingResources.Add((r, computeEnvForAnnotation));
+        }
+
+        // Create the Kubernetes resources only after every resource has its OTLP configuration.
+        // Creating a resource eagerly creates the resources it references, so configuring OTLP
+        // in the same loop would miss resources that are referenced before they are visited.
+        foreach (var (r, computeEnvForAnnotation) in pendingResources)
+        {
             // Create a Kubernetes compute resource for the resource
             var serviceResource = await environmentContext.CreateKubernetesResourceAsync(r, executionContext, cancellationToken).ConfigureAwait(false);
             serviceResource.AddPrintSummaryStep();
@@ -1040,20 +1052,57 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
             : DefaultStorageSize;
         claim.Spec.Resources.Requests.Add("storage", capacity);
 
-        if (volumeResource.StorageClassName is { } storageClassExpression)
+        if (volumeResource.PersistentVolumeName is { } volumeNameExpression)
         {
-            var storageClass = await ResolveExpressionAsync(storageClassExpression, volumeResource.Name, cancellationToken).ConfigureAwait(false);
-            if (!string.IsNullOrWhiteSpace(storageClass))
-            {
-                claim.Spec.StorageClassName = storageClass;
-            }
+            claim.Spec.VolumeName = await ResolveExpressionAsync(volumeNameExpression, volumeResource.Name, cancellationToken).ConfigureAwait(false);
         }
-        else if (!string.IsNullOrEmpty(DefaultStorageClassName))
+
+        claim.Spec.StorageClassName = await ResolveStorageClass(volumeResource, cancellationToken).ConfigureAwait(false);
+
+        foreach (var annotation in volumeResource.Annotations.OfType<KubernetesPersistentVolumeCustomizationAnnotation>())
         {
-            claim.Spec.StorageClassName = DefaultStorageClassName;
+            annotation.Configure(claim);
         }
 
         return claim;
+    }
+
+    private async Task<string?> ResolveStorageClass(KubernetesPersistentVolumeResource volumeResource, CancellationToken cancellationToken)
+    {
+        if (!volumeResource.ShouldRequestStorageClassName)
+        {
+            return null;
+        }
+
+        string? storageClassName;
+        if (volumeResource.StorageClassName is { } storageClassExpression)
+        {  
+            if (storageClassExpression.Format.Length == 0)
+            {
+                storageClassName = string.Empty;
+            }
+            else
+            {
+                storageClassName = await ResolveExpressionAsync(storageClassExpression, volumeResource.Name, cancellationToken).ConfigureAwait(false);
+                if (storageClassName is { Length: > 0 } && string.IsNullOrWhiteSpace(storageClassName))
+                {
+                    storageClassName = null;
+                }
+            }
+        }
+        else if (DefaultStorageClassName == "")
+        {
+            // Preserve behavior of legacy PVCs. When DefaultStorageClassName
+            // was set to an empty string and volumeResource.StorageClassName
+            // was empty or null, legacy PVCs would omit the storageClassName entirely.
+            storageClassName = null;
+        }
+        else
+        {
+            storageClassName = DefaultStorageClassName;
+        }
+
+        return storageClassName;
     }
 
     private async Task BuildGatewayObjects(

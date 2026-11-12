@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics.CodeAnalysis;
-using System.Reflection;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dotnet;
 using Aspire.Hosting.Utils;
@@ -13,7 +11,7 @@ using Aspire.Hosting.Utils;
 namespace Aspire.Hosting;
 
 /// <summary>
-/// Provides extension methods for adding C# projects and file-based C# apps (by path) to an
+/// Provides extension methods for adding SDK-style .NET projects and file-based C# apps (by path) to an
 /// <see cref="IDistributedApplicationBuilder"/>.
 /// </summary>
 public static class DotnetProjectHostingExtensions
@@ -36,8 +34,8 @@ public static class DotnetProjectHostingExtensions
     /// </exception>
     /// <remarks>
     /// <para>
-    /// This method supports project files (<c>.csproj</c>) only. File-based C# apps (<c>.cs</c>) do not support
-    /// build-only environment variables.
+    /// This method supports SDK-style project files (<c>.csproj</c>, <c>.fsproj</c>, and <c>.vbproj</c>) only.
+    /// File-based C# apps (<c>.cs</c>) do not support build-only environment variables.
     /// </para>
     /// <para>
     /// The variable is available while Aspire builds the project but is not added to the environment of the
@@ -47,10 +45,20 @@ public static class DotnetProjectHostingExtensions
     /// Configuring a build environment causes Aspire to build this project separately from traversal groups.
     /// </para>
     /// <para>
-    /// Do not use this API for secrets. Aspire must carry the value in IDE launch metadata and process environments,
-    /// and the value can appear in build diagnostics. Protected temporary MSBuild response files preserve
-    /// global-property semantics without exposing values in process command lines, but they are not a general-purpose
-    /// secret transport.
+    /// IDE launches require support for <see cref="KnownLaunchConfigurationTypes.ProjectWithExternalBuild"/> so the
+    /// launcher can consume the same build context. Aspire rejects legacy project-only IDE sessions because they
+    /// cannot reliably locate output produced with project-specific build settings.
+    /// </para>
+    /// <para>
+    /// When publishing a container, do not use this API to set MSBuild properties that control the output artifact's
+    /// identity, destination, format, or target platform. Aspire rejects those properties because downstream
+    /// publishing steps use the values configured with <c>WithContainerBuildOptions</c>.
+    /// </para>
+    /// <para>
+    /// Do not use this API for secrets. Aspire carries the value in build process environments and, for
+    /// external-build-capable IDEs, launch metadata. The value can appear in build diagnostics. Protected temporary
+    /// MSBuild response files preserve global-property semantics without exposing values in process command lines,
+    /// but they are not a general-purpose secret transport.
     /// </para>
     /// </remarks>
     /// <example>
@@ -60,7 +68,6 @@ public static class DotnetProjectHostingExtensions
     ///     .WithBuildEnvironment("BUILD_FLAVOR", "custom");
     /// </code>
     /// </example>
-    [Experimental("ASPIREDOTNETPROJECT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExport]
     public static IResourceBuilder<DotnetProjectResource> WithBuildEnvironment(
         this IResourceBuilder<DotnetProjectResource> builder,
@@ -88,16 +95,26 @@ public static class DotnetProjectHostingExtensions
     /// </exception>
     /// <remarks>
     /// <para>
-    /// This method supports project files (<c>.csproj</c>) only. File-based C# apps (<c>.cs</c>) do not support
-    /// build-only environment variables.
+    /// This method supports SDK-style project files (<c>.csproj</c>, <c>.fsproj</c>, and <c>.vbproj</c>) only.
+    /// File-based C# apps (<c>.cs</c>) do not support build-only environment variables.
+    /// </para>
+    /// <para>
+    /// IDE launches require support for <see cref="KnownLaunchConfigurationTypes.ProjectWithExternalBuild"/> so the
+    /// launcher can consume the same build context. Aspire rejects legacy project-only IDE sessions because they
+    /// cannot reliably locate output produced with project-specific build settings.
+    /// </para>
+    /// <para>
+    /// When publishing a container, do not use this API to set MSBuild properties that control the output artifact's
+    /// identity, destination, format, or target platform. Aspire rejects those properties because downstream
+    /// publishing steps use the values configured with <c>WithContainerBuildOptions</c>.
     /// </para>
     /// <para>
     /// Values configured by this callback are not added to the environment of the launched project. Do not use this API
-    /// for secrets because Aspire carries the values in IDE launch metadata, process environments, and protected
-    /// temporary MSBuild response files, and the values can appear in build diagnostics.
+    /// for secrets because Aspire carries the values in build process environments and, for external-build-capable
+    /// IDEs, launch metadata. Protected temporary MSBuild response files preserve global-property semantics without
+    /// exposing values in process command lines, but the values can appear in build diagnostics.
     /// </para>
     /// </remarks>
-    [Experimental("ASPIREDOTNETPROJECT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExportIgnore(Reason = "Raw Action delegate callbacks are not ATS-compatible.")]
     public static IResourceBuilder<DotnetProjectResource> WithBuildEnvironment(
         this IResourceBuilder<DotnetProjectResource> builder,
@@ -127,16 +144,26 @@ public static class DotnetProjectHostingExtensions
     /// </exception>
     /// <remarks>
     /// <para>
-    /// This method supports project files (<c>.csproj</c>) only. File-based C# apps (<c>.cs</c>) do not support
-    /// build-only environment variables.
+    /// This method supports SDK-style project files (<c>.csproj</c>, <c>.fsproj</c>, and <c>.vbproj</c>) only.
+    /// File-based C# apps (<c>.cs</c>) do not support build-only environment variables.
+    /// </para>
+    /// <para>
+    /// IDE launches require support for <see cref="KnownLaunchConfigurationTypes.ProjectWithExternalBuild"/> so the
+    /// launcher can consume the same build context. Aspire rejects legacy project-only IDE sessions because they
+    /// cannot reliably locate output produced with project-specific build settings.
+    /// </para>
+    /// <para>
+    /// When publishing a container, do not use this API to set MSBuild properties that control the output artifact's
+    /// identity, destination, format, or target platform. Aspire rejects those properties because downstream
+    /// publishing steps use the values configured with <c>WithContainerBuildOptions</c>.
     /// </para>
     /// <para>
     /// Values configured by this callback are not added to the environment of the launched project. Do not use this API
-    /// for secrets because Aspire carries the values in IDE launch metadata, process environments, and protected
-    /// temporary MSBuild response files, and the values can appear in build diagnostics.
+    /// for secrets because Aspire carries the values in build process environments and, for external-build-capable
+    /// IDEs, launch metadata. Protected temporary MSBuild response files preserve global-property semantics without
+    /// exposing values in process command lines, but the values can appear in build diagnostics.
     /// </para>
     /// </remarks>
-    [Experimental("ASPIREDOTNETPROJECT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExportIgnore(Reason = "Raw Func delegate callbacks are not ATS-compatible.")]
     public static IResourceBuilder<DotnetProjectResource> WithBuildEnvironment(
         this IResourceBuilder<DotnetProjectResource> builder,
@@ -150,7 +177,8 @@ public static class DotnetProjectHostingExtensions
             ValidateBuildEnvironmentSupport(builder.Resource, metadata);
         }
 
-        return builder.WithAnnotation(new DotnetProjectBuildEnvironmentCallbackAnnotation(callback));
+        builder.WithAnnotation(new DotnetProjectBuildEnvironmentCallbackAnnotation(callback));
+        return builder.WithDotnetProgramBuildEnvironment(callback);
     }
 
     internal static void ValidateBuildEnvironmentSupport(IResource resource, IProjectMetadata metadata)
@@ -163,7 +191,88 @@ public static class DotnetProjectHostingExtensions
     }
 
     /// <summary>
-    /// Adds a C# project or file-based app to the application model.
+    /// Configures the number of replicas of the .NET project.
+    /// </summary>
+    /// <param name="builder">The .NET project resource builder.</param>
+    /// <param name="replicas">The number of replicas.</param>
+    /// <returns>The same builder for chaining additional configuration.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> is null.</exception>
+    [AspireExport("withDotnetProjectReplicas", MethodName = "withReplicas")]
+    public static IResourceBuilder<DotnetProjectResource> WithReplicas(
+        this IResourceBuilder<DotnetProjectResource> builder,
+        int replicas)
+    {
+        return DotnetProgramResourceBuilderExtensions.WithReplicas(builder, replicas);
+    }
+
+    /// <summary>
+    /// Disables automatic forwarded-header configuration when publishing the .NET project.
+    /// </summary>
+    /// <param name="builder">The .NET project resource builder.</param>
+    /// <returns>The same builder for chaining additional configuration.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> is null.</exception>
+    [AspireExport("disableDotnetProjectForwardedHeaders", MethodName = "disableForwardedHeaders")]
+    public static IResourceBuilder<DotnetProjectResource> DisableForwardedHeaders(
+        this IResourceBuilder<DotnetProjectResource> builder)
+    {
+        return DotnetProgramResourceBuilderExtensions.DisableForwardedHeaders(builder);
+    }
+
+    /// <summary>
+    /// Configures which endpoints contribute environment variables for the .NET project.
+    /// </summary>
+    /// <param name="builder">The .NET project resource builder.</param>
+    /// <param name="filter">A filter that returns true for endpoints whose environment variables should be injected.</param>
+    /// <returns>The same builder for chaining additional configuration.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> or <paramref name="filter"/> is null.</exception>
+    /// <remarks>
+    /// Filters compose: an endpoint is included only when every configured filter accepts it.
+    /// </remarks>
+    [AspireExportIgnore(Reason = "Uses Func<EndpointAnnotation, bool>; polyglot AppHosts use the endpoint-name dispatcher.")]
+    public static IResourceBuilder<DotnetProjectResource> WithEndpointsInEnvironment(
+        this IResourceBuilder<DotnetProjectResource> builder,
+        Func<EndpointAnnotation, bool> filter)
+    {
+        return DotnetProgramResourceBuilderExtensions.WithEndpointsInEnvironment(builder, filter);
+    }
+
+    /// <summary>
+    /// Gets the project metadata for the .NET project resource.
+    /// </summary>
+    /// <param name="projectResource">The .NET project resource.</param>
+    /// <returns>The project metadata.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="projectResource"/> is null.</exception>
+    /// <exception cref="InvalidOperationException">The resource does not carry exactly one stable project metadata annotation.</exception>
+    /// <remarks>
+    /// Project metadata cannot be replaced after project defaults have been applied because launch settings,
+    /// endpoints, and rebuild behavior are derived from that annotation.
+    /// </remarks>
+    [AspireExportIgnore(Reason = "Project metadata is a .NET-specific contract and is not part of the ATS surface.")]
+    public static IProjectMetadata GetProjectMetadata(this DotnetProjectResource projectResource)
+    {
+        ArgumentNullException.ThrowIfNull(projectResource);
+
+        return ProjectResourceExtensions.GetProjectMetadata((IDotnetProgramResource)projectResource);
+    }
+
+    /// <summary>
+    /// Configures endpoint environment-variable injection for a .NET project in polyglot AppHosts.
+    /// </summary>
+    [AspireExport("withDotnetProjectEndpointsInEnvironment", MethodName = "withEndpointsInEnvironment")]
+    internal static IResourceBuilder<DotnetProjectResource> WithEndpointsInEnvironmentForPolyglot(
+        this IResourceBuilder<DotnetProjectResource> builder,
+        string[] endpointNames)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(endpointNames);
+
+        var includedEndpointNames = endpointNames.ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        return builder.WithEndpointsInEnvironment(endpoint => includedEndpointNames.Contains(endpoint.Name));
+    }
+
+    /// <summary>
+    /// Adds an SDK-style .NET project or file-based C# app to the application model.
     /// </summary>
     /// <param name="builder">The <see cref="IDistributedApplicationBuilder"/>.</param>
     /// <param name="name">The name of the resource. This name will be used for service discovery when referenced in a dependency.</param>
@@ -171,9 +280,14 @@ public static class DotnetProjectHostingExtensions
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     /// <remarks>
     /// <para>
-    /// This overload of the <see cref="AddDotnetProject(IDistributedApplicationBuilder, string, string)"/> method adds a C# project or file-based app to the application
-    /// model using a path to the file-based app .cs file, project file (.csproj), or project directory.
+    /// This overload adds a path to a file-based app (<c>.cs</c>), an SDK-style C#, F#, or Visual Basic project
+    /// (<c>.csproj</c>, <c>.fsproj</c>, or <c>.vbproj</c>), or a directory containing exactly one supported project.
+    /// Directories containing multiple supported projects require an explicit project filename.
     /// If the path is not an absolute path then it will be computed relative to the app host directory.
+    /// </para>
+    /// <para>
+    /// Visual Basic projects prefer <c>My Project/launchSettings.json</c> and fall back to
+    /// <c>Properties/launchSettings.json</c>. F# scripts and non-SDK project systems are not supported.
     /// </para>
     /// <example>
     /// Add a file-based app to the app model via a file path.
@@ -186,7 +300,6 @@ public static class DotnetProjectHostingExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [Experimental("ASPIREDOTNETPROJECT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addDotnetProject dispatcher export.")]
     public static IResourceBuilder<DotnetProjectResource> AddDotnetProject(this IDistributedApplicationBuilder builder, [ResourceName] string name, string path)
     {
@@ -198,15 +311,14 @@ public static class DotnetProjectHostingExtensions
     }
 
     /// <summary>
-    /// Adds a C# application resource.
+    /// Adds a .NET application resource.
     /// </summary>
-    [Experimental("ASPIREDOTNETPROJECT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExport("addDotnetProject")]
     internal static IResourceBuilder<DotnetProjectResource> AddDotnetProjectForPolyglot(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name,
         string path,
-        ProjectResourceOptions? options = null)
+        DotnetProjectOptions? options = null)
     {
         return options is null
             ? builder.AddDotnetProject(name, path, _ => { })
@@ -214,18 +326,23 @@ public static class DotnetProjectHostingExtensions
     }
 
     /// <summary>
-    /// Adds a C# project or file-based app to the application model.
+    /// Adds an SDK-style .NET project or file-based C# app to the application model.
     /// </summary>
     /// <param name="builder">The <see cref="IDistributedApplicationBuilder"/>.</param>
     /// <param name="name">The name of the resource. This name will be used for service discovery when referenced in a dependency.</param>
     /// <param name="path">The path to the file-based app file, project file, or project directory.</param>
-    /// <param name="configure">An optional action to configure the C# app resource options.</param>
+    /// <param name="configure">An action to configure the .NET project resource options.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     /// <remarks>
     /// <para>
-    /// This overload of the <see cref="AddDotnetProject(IDistributedApplicationBuilder, string, string)"/> method adds a C# project or file-based app to the application
-    /// model using a path to the file-based app .cs file, project file (.csproj), or project directory.
+    /// This overload adds a path to a file-based app (<c>.cs</c>), an SDK-style C#, F#, or Visual Basic project
+    /// (<c>.csproj</c>, <c>.fsproj</c>, or <c>.vbproj</c>), or a directory containing exactly one supported project.
+    /// Directories containing multiple supported projects require an explicit project filename.
     /// If the path is not an absolute path then it will be computed relative to the app host directory.
+    /// </para>
+    /// <para>
+    /// Visual Basic projects prefer <c>My Project/launchSettings.json</c> and fall back to
+    /// <c>Properties/launchSettings.json</c>. F# scripts and non-SDK project systems are not supported.
     /// </para>
     /// <example>
     /// Add a file-based app to the app model via a file path.
@@ -238,7 +355,6 @@ public static class DotnetProjectHostingExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [Experimental("ASPIREDOTNETPROJECT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addDotnetProject dispatcher export.")]
     public static IResourceBuilder<DotnetProjectResource> AddDotnetProject(this IDistributedApplicationBuilder builder, [ResourceName] string name, string path, Action<ProjectResourceOptions> configure)
     {
@@ -254,23 +370,29 @@ public static class DotnetProjectHostingExtensions
 
         // The app host's own build configuration (Debug/Release) is propagated to every child launch
         // so process and IDE launchers resolve the output produced by the coordinated build.
-        var configuration = builder.AppHostAssembly?.GetCustomAttribute<AssemblyConfigurationAttribute>()?.Configuration;
-        var projectMetadata = new DotnetProjectMetadata(path, configuration);
+        var configuration = builder.Configuration["AppHost:BuildConfiguration"];
+        var projectMetadata = new DotnetProjectMetadata(path, configuration, name);
         var buildCoordinator = DotnetProjectBuildCoordinator.Prepare(builder, projectMetadata);
 
         // ExecutableResource requires a working directory. Use the project/app directory so the process
         // launches from the same place a ProjectResource would (DCP used Path.GetDirectoryName(ProjectPath)).
-        // Accessing ProjectPath also resolves a project directory to its single .csproj. Falling back to the
-        // app host directory keeps construction valid for invalid paths, which are reported by the
-        // OnBeforeResourceStarted validation below.
+        // Accessing ProjectPath also resolves directory shorthand. Unresolved paths are validated
+        // during launch-settings discovery or resource startup, depending on launch-profile options.
         var workingDirectory = Path.GetDirectoryName(projectMetadata.ProjectPath) ?? builder.AppHostDirectory;
+        var iconName = Path.GetExtension(projectMetadata.ProjectPath).ToLowerInvariant() switch
+        {
+            ".fsproj" => "CodeFsRectangle",
+            ".vbproj" => "CodeVbRectangle",
+            _ => "CodeCsRectangle"
+        };
 
         var app = new DotnetProjectResource(name, workingDirectory);
 
         var resource = builder.AddResource(app)
                               .WithAnnotation(projectMetadata)
-                              .WithIconName("CodeCsRectangle")
-                              .WithProjectDefaults(options);
+                              .WithIconName(iconName)
+                              .WithProjectDefaults(options)
+                              .WithDotnetProgramPublishing();
         var projectLaunchConfigurationType = resource.Resource.Annotations
             .OfType<SupportsDebuggingAnnotation>()
             .LastOrDefault()
@@ -312,6 +434,7 @@ public static class DotnetProjectHostingExtensions
                             ctx.Logger,
                             cancellationToken),
                         ctx.CancellationToken).ConfigureAwait(false);
+                    projectMetadata.SetBuildTarget(runProperties.TargetPath, runProperties.UseAppHost);
                     var executableAnnotation = ctx.Resource.Annotations.OfType<ExecutableAnnotation>().Last();
                     executableAnnotation.Command = runProperties.Command;
                     if (!executableAnnotation.WorkingDirectoryExplicitlySet)
@@ -390,17 +513,7 @@ public static class DotnetProjectHostingExtensions
 
         resource.OnBeforeResourceStarted((r, e, ct) =>
         {
-            var projectPath = projectMetadata.ProjectPath;
-
-            // Validate project path
-            if (!projectPath.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase) && !projectPath.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
-            {
-                // Project path did not resolve to a .csproj or .cs file
-                var message = Directory.Exists(projectPath)
-                    ? $"Path to C# project could not be determined. The directory '{projectPath}' must contain a single .csproj file."
-                    : $"The C# app path '{projectPath}' is invalid. The path must be to a .cs file, .csproj file, or directory containing a single .csproj file.";
-                throw new DistributedApplicationException(message);
-            }
+            projectMetadata.ValidateProjectPath();
 
             // The minimum-SDK check for file-based apps is applied by WithProjectDefaults.
             return Task.CompletedTask;
@@ -409,7 +522,6 @@ public static class DotnetProjectHostingExtensions
         return resource;
     }
 
-#pragma warning disable ASPIREDOTNETPROJECT001
     internal static async Task<DotnetProjectRunProperties> ResolveRunPropertiesAfterBuildAsync(
         DotnetProjectBuildCoordinator.CoordinatorState coordinator,
         DotnetProjectResource resource,
@@ -424,9 +536,8 @@ public static class DotnetProjectHostingExtensions
 
         return await resolver(cancellationToken).ConfigureAwait(false);
     }
-#pragma warning restore ASPIREDOTNETPROJECT001
 
-    private static void ApplyProjectResourceOptions(ProjectResourceOptions target, ProjectResourceOptions source)
+    private static void ApplyProjectResourceOptions(ProjectResourceOptions target, DotnetProjectOptions source)
     {
         ArgumentNullException.ThrowIfNull(target);
         ArgumentNullException.ThrowIfNull(source);

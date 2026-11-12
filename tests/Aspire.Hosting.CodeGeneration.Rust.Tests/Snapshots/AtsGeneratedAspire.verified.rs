@@ -74,23 +74,23 @@ impl std::fmt::Display for TestResourceStatus {
 /// TestConfigDto
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct TestConfigDto {
-    #[serde(rename = "Name")]
+    #[serde(rename = "name", alias = "Name")]
     pub name: String,
-    #[serde(rename = "Port")]
+    #[serde(rename = "port", alias = "Port")]
     pub port: f64,
-    #[serde(rename = "Enabled")]
+    #[serde(rename = "enabled", alias = "Enabled")]
     pub enabled: bool,
-    #[serde(rename = "OptionalField")]
+    #[serde(rename = "optionalField", alias = "OptionalField")]
     pub optional_field: Option<String>,
 }
 
 impl TestConfigDto {
     pub fn to_map(&self) -> HashMap<String, Value> {
         let mut map = HashMap::new();
-        map.insert("Name".to_string(), serde_json::to_value(&self.name).unwrap_or(Value::Null));
-        map.insert("Port".to_string(), serde_json::to_value(&self.port).unwrap_or(Value::Null));
-        map.insert("Enabled".to_string(), serde_json::to_value(&self.enabled).unwrap_or(Value::Null));
-        map.insert("OptionalField".to_string(), serde_json::to_value(&self.optional_field).unwrap_or(Value::Null));
+        map.insert("name".to_string(), serde_json::to_value(&self.name).unwrap_or(Value::Null));
+        map.insert("port".to_string(), serde_json::to_value(&self.port).unwrap_or(Value::Null));
+        map.insert("enabled".to_string(), serde_json::to_value(&self.enabled).unwrap_or(Value::Null));
+        map.insert("optionalField".to_string(), serde_json::to_value(&self.optional_field).unwrap_or(Value::Null));
         map
     }
 }
@@ -98,23 +98,23 @@ impl TestConfigDto {
 /// TestNestedDto
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct TestNestedDto {
-    #[serde(rename = "Id")]
+    #[serde(rename = "id", alias = "Id")]
     pub id: String,
-    #[serde(rename = "Config")]
+    #[serde(rename = "config", alias = "Config")]
     pub config: TestConfigDto,
-    #[serde(rename = "Tags")]
+    #[serde(rename = "tags", alias = "Tags")]
     pub tags: Vec<String>,
-    #[serde(rename = "Counts")]
+    #[serde(rename = "counts", alias = "Counts")]
     pub counts: HashMap<String, f64>,
 }
 
 impl TestNestedDto {
     pub fn to_map(&self) -> HashMap<String, Value> {
         let mut map = HashMap::new();
-        map.insert("Id".to_string(), serde_json::to_value(&self.id).unwrap_or(Value::Null));
-        map.insert("Config".to_string(), serde_json::to_value(&self.config).unwrap_or(Value::Null));
-        map.insert("Tags".to_string(), serde_json::to_value(&self.tags).unwrap_or(Value::Null));
-        map.insert("Counts".to_string(), serde_json::to_value(&self.counts).unwrap_or(Value::Null));
+        map.insert("id".to_string(), serde_json::to_value(&self.id).unwrap_or(Value::Null));
+        map.insert("config".to_string(), serde_json::to_value(&self.config).unwrap_or(Value::Null));
+        map.insert("tags".to_string(), serde_json::to_value(&self.tags).unwrap_or(Value::Null));
+        map.insert("counts".to_string(), serde_json::to_value(&self.counts).unwrap_or(Value::Null));
         map
     }
 }
@@ -122,17 +122,17 @@ impl TestNestedDto {
 /// TestDeeplyNestedDto
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct TestDeeplyNestedDto {
-    #[serde(rename = "NestedData")]
+    #[serde(rename = "nestedData", alias = "NestedData")]
     pub nested_data: HashMap<String, Vec<TestConfigDto>>,
-    #[serde(rename = "MetadataArray")]
+    #[serde(rename = "metadataArray", alias = "MetadataArray")]
     pub metadata_array: Vec<HashMap<String, String>>,
 }
 
 impl TestDeeplyNestedDto {
     pub fn to_map(&self) -> HashMap<String, Value> {
         let mut map = HashMap::new();
-        map.insert("NestedData".to_string(), serde_json::to_value(&self.nested_data).unwrap_or(Value::Null));
-        map.insert("MetadataArray".to_string(), serde_json::to_value(&self.metadata_array).unwrap_or(Value::Null));
+        map.insert("nestedData".to_string(), serde_json::to_value(&self.nested_data).unwrap_or(Value::Null));
+        map.insert("metadataArray".to_string(), serde_json::to_value(&self.metadata_array).unwrap_or(Value::Null));
         map
     }
 }
@@ -1554,6 +1554,128 @@ impl TestResourceContext {
     }
 }
 
+/// Wrapper for Aspire.Hosting.CodeGeneration.Rust.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestReturnValueContext
+pub struct TestReturnValueContext {
+    handle: Handle,
+    client: Arc<AspireClient>,
+}
+
+impl HasHandle for TestReturnValueContext {
+    fn handle(&self) -> &Handle {
+        &self.handle
+    }
+}
+
+impl TestReturnValueContext {
+    pub fn new(handle: Handle, client: Arc<AspireClient>) -> Self {
+        Self { handle, client }
+    }
+
+    pub fn handle(&self) -> &Handle {
+        &self.handle
+    }
+
+    pub fn client(&self) -> &Arc<AspireClient> {
+        &self.client
+    }
+
+    /// Invokes the GetNullableString method
+    pub fn get_nullable_string(&self) -> Result<Option<String>, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getNullableString", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Invokes the GetNullableStringTaskAsync method
+    pub fn get_nullable_string_task_async(&self) -> Result<Option<String>, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getNullableStringTaskAsync", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Invokes the GetNullableStringValueTaskAsync method
+    pub fn get_nullable_string_value_task_async(&self) -> Result<Option<String>, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getNullableStringValueTaskAsync", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Invokes the GetString method
+    pub fn get_string(&self) -> Result<String, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getString", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Invokes the GetStringTaskAsync method
+    pub fn get_string_task_async(&self) -> Result<String, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getStringTaskAsync", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Invokes the GetStringValueTaskAsync method
+    pub fn get_string_value_task_async(&self) -> Result<String, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getStringValueTaskAsync", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Invokes the GetNullableInt method
+    pub fn get_nullable_int(&self) -> Result<Option<f64>, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getNullableInt", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Invokes the GetNullableIntTaskAsync method
+    pub fn get_nullable_int_task_async(&self) -> Result<Option<f64>, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getNullableIntTaskAsync", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Invokes the GetNullableIntValueTaskAsync method
+    pub fn get_nullable_int_value_task_async(&self) -> Result<Option<f64>, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getNullableIntValueTaskAsync", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Invokes the GetInt method
+    pub fn get_int(&self) -> Result<f64, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getInt", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Invokes the GetIntTaskAsync method
+    pub fn get_int_task_async(&self) -> Result<f64, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getIntTaskAsync", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Invokes the GetIntValueTaskAsync method
+    pub fn get_int_value_task_async(&self) -> Result<f64, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getIntValueTaskAsync", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+}
+
 /// Wrapper for Aspire.Hosting.CodeGeneration.Rust.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestVaultResource
 pub struct TestVaultResource {
     handle: Handle,
@@ -1897,21 +2019,21 @@ pub fn create_builder(options: Option<CreateBuilderOptions>) -> Result<IDistribu
             resolved_options.insert(k, v);
         }
     }
-    if !resolved_options.contains_key("Args") {
+    if !resolved_options.contains_key("args") {
         let args: Vec<String> = std::env::args().skip(1).collect();
-        resolved_options.insert("Args".to_string(), serde_json::to_value(args).unwrap_or(Value::Null));
+        resolved_options.insert("args".to_string(), serde_json::to_value(args).unwrap_or(Value::Null));
     }
-    if !resolved_options.contains_key("ProjectDirectory") {
+    if !resolved_options.contains_key("projectDirectory") {
         if let Some(project_directory) = std::env::var("ASPIRE_PROJECT_DIRECTORY").ok().filter(|s| !s.is_empty()) {
-            resolved_options.insert("ProjectDirectory".to_string(), Value::String(project_directory));
+            resolved_options.insert("projectDirectory".to_string(), Value::String(project_directory));
         } else if let Ok(pwd) = std::env::current_dir() {
-            resolved_options.insert("ProjectDirectory".to_string(), Value::String(pwd.to_string_lossy().to_string()));
+            resolved_options.insert("projectDirectory".to_string(), Value::String(pwd.to_string_lossy().to_string()));
         }
     }
-    if !resolved_options.contains_key("AppHostFilePath") {
+    if !resolved_options.contains_key("appHostFilePath") {
         if let Ok(app_host_file_path) = std::env::var("ASPIRE_APPHOST_FILEPATH") {
             if !app_host_file_path.is_empty() {
-                resolved_options.insert("AppHostFilePath".to_string(), Value::String(app_host_file_path));
+                resolved_options.insert("appHostFilePath".to_string(), Value::String(app_host_file_path));
             }
         }
     }

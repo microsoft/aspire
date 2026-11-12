@@ -88,8 +88,8 @@ public class AppHostAuxiliaryBackchannelTests
 
         var response = await backchannel.ListTerminalsAsync().DefaultTimeout();
 
-        Assert.NotNull(response.Terminals);
-        Assert.Empty(response.Terminals);
+        Assert.Empty(response.ResourceTerminals);
+        Assert.Empty(response.AppHostTerminals);
     }
 
     [Theory]

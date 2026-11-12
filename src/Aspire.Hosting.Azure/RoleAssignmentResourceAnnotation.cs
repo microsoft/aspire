@@ -8,7 +8,6 @@ namespace Aspire.Hosting.Azure;
 /// <summary>
 /// An annotation that points to the resource that contains the role assignments for an Azure resource.
 /// </summary>
-#pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 internal sealed class RoleAssignmentResourceAnnotation(AzureRoleAssignmentResource rolesResource) : IResourceAnnotation
 {
     /// <summary>
@@ -16,4 +15,3 @@ internal sealed class RoleAssignmentResourceAnnotation(AzureRoleAssignmentResour
     /// </summary>
     public AzureRoleAssignmentResource RolesResource { get; } = rolesResource;
 }
-#pragma warning restore ASPIREAZURE003

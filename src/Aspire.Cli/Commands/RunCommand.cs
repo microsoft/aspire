@@ -16,6 +16,7 @@ using Aspire.Cli.Processes;
 using Aspire.Cli.Profiling;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
+using Aspire.Cli.Secrets;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
@@ -74,6 +75,7 @@ internal sealed class RunCommand : BaseCommand
     private readonly ProfilingTelemetry _profilingTelemetry;
     private readonly ProfileCaptureState _profileCaptureState;
     private readonly TimeProvider _timeProvider;
+    private readonly AspireSecretsStoreResolver _aspireSecretsStoreResolver;
     private readonly ConsoleCancellationManager _cancellationManager;
     private bool _isDetachMode;
     private const int MaxDisplayedAppHostStartupOutputLines = 80;
@@ -110,6 +112,8 @@ internal sealed class RunCommand : BaseCommand
 
     protected override TimeSpan GracefulShutdownBudget => s_gracefulShutdownBudget;
 
+    protected override string CancellationMessage => InteractionServiceStrings.StoppingAspire;
+
     internal override void PrepareForExecution(ParseResult parseResult)
     {
         // The spawned child runs without --detach, so its environment marker preserves detach-only
@@ -140,6 +144,7 @@ internal sealed class RunCommand : BaseCommand
         ProfilingTelemetry profilingTelemetry,
         ProfileCaptureState profileCaptureState,
         TimeProvider timeProvider,
+        AspireSecretsStoreResolver aspireSecretsStoreResolver,
         CommonCommandServices services)
         : base("run", RunCommandStrings.Description, services)
     {
@@ -157,6 +162,7 @@ internal sealed class RunCommand : BaseCommand
         _profilingTelemetry = profilingTelemetry;
         _profileCaptureState = profileCaptureState;
         _timeProvider = timeProvider;
+        _aspireSecretsStoreResolver = aspireSecretsStoreResolver;
         _cancellationManager = services.CancellationManager;
 
         Options.Add(s_detachOption);
@@ -284,7 +290,7 @@ internal sealed class RunCommand : BaseCommand
             // Start a reported telemetry activity for the app host run early so that
             // all failure paths (project not found, incompatible version, etc.) are captured.
             runActivity = Telemetry.StartReportedActivity(name: TelemetryConstants.Activities.RunAppHost);
-            runActivity?.SetTag(TelemetryConstants.Tags.AppHostDetached, _configuration.GetBool(KnownConfigNames.CliRunDetached) is true);
+            Telemetry.SetActivityProperty(runActivity, TelemetryConstants.Tags.AppHostDetached, _configuration.GetBool(KnownConfigNames.CliRunDetached) is true);
 
             using var activity = _profilingTelemetry.StartRunCommand();
 
@@ -305,18 +311,21 @@ internal sealed class RunCommand : BaseCommand
 
             if (effectiveAppHostFile is null)
             {
-                runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "project_not_found");
+                Telemetry.SetActivityProperty(runActivity, TelemetryConstants.Tags.ErrorType, "project_not_found");
                 return CommandResult.Failure(CliExitCodes.FailedToFindProject);
             }
 
-            var isolated = AppHostLauncher.ResolveIsolated(parseResult);
-            runActivity?.SetTag(TelemetryConstants.Tags.AppHostIsolated, isolated);
+            var isolated = AppHostLauncher.ResolveIsolated(
+                parseResult,
+                effectiveAppHostFile,
+                _features);
+            Telemetry.SetActivityProperty(runActivity, TelemetryConstants.Tags.AppHostIsolated, isolated);
 
             // Resolve the language for this file and get the appropriate handler
             var project = _projectFactory.TryGetProject(effectiveAppHostFile);
             if (project is null)
             {
-                runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "project_not_found");
+                Telemetry.SetActivityProperty(runActivity, TelemetryConstants.Tags.ErrorType, "project_not_found");
                 return CommandResult.Failure(CliExitCodes.FailedToFindProject, "Unrecognized app host type.");
             }
 
@@ -327,7 +336,7 @@ internal sealed class RunCommand : BaseCommand
                     launchProfileError);
             }
 
-            runActivity?.SetTag(TelemetryConstants.Tags.AppHostLanguage, project.LanguageId);
+            Telemetry.SetActivityProperty(runActivity, TelemetryConstants.Tags.AppHostLanguage, project.LanguageId);
 
             // Check for running instance — even if we fail to stop we won't
             // block the apphost starting to make sure we don't ever break flow.
@@ -342,7 +351,7 @@ internal sealed class RunCommand : BaseCommand
             // If in isolated mode and a running instance was stopped, warn the user
             if (isolated && runningInstanceResult == RunningInstanceResult.InstanceStopped)
             {
-                InteractionService.DisplayMessage(KnownEmojis.Warning, RunCommandStrings.IsolatedModeRunningInstanceWarning);
+                InteractionService.DisplayMessage(KnownEmojis.PoliceCarLight, RunCommandStrings.IsolatedModeRunningInstanceWarning);
             }
 
             // The completion sources are the contract between RunCommand and IAppHostProject
@@ -372,6 +381,10 @@ internal sealed class RunCommand : BaseCommand
             {
                 ProfileCaptureEnvironment.AddCurrentToEnvironment(context.EnvironmentVariables);
             }
+            // Launch profiles can still change the environment in RunAsync. Pass the identity, not an
+            // environment-specific file, so Hosting selects secrets after the final environment is known.
+            context.EnvironmentVariables[KnownConfigNames.AspireUserSecretsId] =
+                await _aspireSecretsStoreResolver.ResolveAppHostIdAsync(effectiveAppHostFile, project, cancellationToken);
 
             // Start the project run as a pending task - we'll handle UX while it runs
             var startupTimeout = TimeSpan.FromSeconds(timeoutSeconds);
@@ -423,11 +436,11 @@ internal sealed class RunCommand : BaseCommand
                 var runExitCode = await runTask;
                 if (cancellationToken.IsCancellationRequested && runExitCode == CliExitCodes.Cancelled)
                 {
-                    runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "canceled");
+                    Telemetry.SetActivityProperty(runActivity, TelemetryConstants.Tags.ErrorType, "canceled");
                     return CommandResult.Cancelled(CliExitCodes.Success);
                 }
 
-                runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "build_failed");
+                Telemetry.SetActivityProperty(runActivity, TelemetryConstants.Tags.ErrorType, "build_failed");
                 // Build failed - display captured output and return exit code
                 if (context.OutputCollector is { } outputCollector)
                 {
@@ -467,7 +480,7 @@ internal sealed class RunCommand : BaseCommand
                 }
                 catch (TimeoutException)
                 {
-                    runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "startup_timeout");
+                    Telemetry.SetActivityProperty(runActivity, TelemetryConstants.Tags.ErrorType, "startup_timeout");
                     await CancelAppHostRunAsync(runCts, runTask, s_appHostStartupCancellationTimeout, cancellationToken).ConfigureAwait(false);
                     return CreateStartupTimeoutResult(timeoutSeconds);
                 }
@@ -478,7 +491,7 @@ internal sealed class RunCommand : BaseCommand
 
                 if (dashboardUrls.DashboardHealthy is false)
                 {
-                    InteractionService.DisplayMessage(KnownEmojis.Warning, RunCommandStrings.DashboardFailedToStart);
+                    InteractionService.DisplayMessage(KnownEmojis.PoliceCarLight, RunCommandStrings.DashboardFailedToStart);
                 }
 
                 // Display the UX
@@ -637,7 +650,7 @@ internal sealed class RunCommand : BaseCommand
                     catch (Exception ex)
                     {
                         _logger.LogWarning(ex, "Failed to capture logs from AppHost");
-                        InteractionService.DisplayMessage(KnownEmojis.Warning, "No longer receiving logs from AppHost.");
+                        InteractionService.DisplayMessage(KnownEmojis.PoliceCarLight, "No longer receiving logs from AppHost.");
                     }
                     finally
                     {
@@ -689,7 +702,7 @@ internal sealed class RunCommand : BaseCommand
             ex is ExtensionOperationCanceledException ||
             (runCts is not null && ex.CancellationToken == runCts.Token && cancellationToken.IsCancellationRequested))
         {
-            runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "canceled");
+            Telemetry.SetActivityProperty(runActivity, TelemetryConstants.Tags.ErrorType, "canceled");
             cancellationRequested = true;
 
             // User Ctrl+C is the normal exit path for `aspire run`; surface as success.
@@ -699,12 +712,12 @@ internal sealed class RunCommand : BaseCommand
         }
         catch (ProjectLocatorException ex)
         {
-            runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "project_not_found");
+            Telemetry.SetActivityProperty(runActivity, TelemetryConstants.Tags.ErrorType, "project_not_found");
             return HandleProjectLocatorException(ex, InteractionService, Telemetry);
         }
         catch (AppHostIncompatibleException ex)
         {
-            runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "incompatible_version");
+            Telemetry.SetActivityProperty(runActivity, TelemetryConstants.Tags.ErrorType, "incompatible_version");
             Telemetry.RecordError(ex.Message, ex);
             return CommandResult.FromExitCode(InteractionService.DisplayIncompatibleVersionError(ex, ex.AspireHostingVersion ?? ex.RequiredCapability));
         }
@@ -714,7 +727,7 @@ internal sealed class RunCommand : BaseCommand
             // AppHost startup failure (e.g. the user's code crashed), not a CLI infrastructure
             // error. WaitForAppHostStartupAsync normally wraps this in AppHostExitedDuringStartupException
             // with the real exit code; this catch is a defensive fallback for edge-case races.
-            runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "backchannel_connection_failed");
+            Telemetry.SetActivityProperty(runActivity, TelemetryConstants.Tags.ErrorType, "backchannel_connection_failed");
             _logger.LogDebug(ex, "AppHost exited before backchannel connected.");
             var errorMessage = string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.ErrorConnectingToAppHost, ex.Message);
             return CommandResult.Failure(CliExitCodes.FailedToDotnetRunAppHost, errorMessage);
@@ -731,7 +744,7 @@ internal sealed class RunCommand : BaseCommand
         }
         catch (Exception ex)
         {
-            runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, ex.GetType().FullName);
+            Telemetry.SetActivityProperty(runActivity, TelemetryConstants.Tags.ErrorType, ex.GetType().FullName);
             var errorMessage = string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.UnexpectedErrorOccurred, ex.Message);
             Telemetry.RecordError(errorMessage, ex);
             return CommandResult.Failure(CliExitCodes.FailedToDotnetRunAppHost, errorMessage);
@@ -953,7 +966,7 @@ internal sealed class RunCommand : BaseCommand
             var failureMessage = string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.UnexpectedErrorOccurred, ex.Message);
             DisplayRecentAppHostStartupOutput(InteractionService, outputCollector, appHostStartupOutputStartIndex);
 
-            if (AppHostFollowDisconnectHelpers.IsExpectedDisconnect(ex))
+            if (BackchannelDisconnectHelpers.IsExpectedDisconnect(ex))
             {
                 // The backchannel connection itself died, so the AppHost is dying too. Wait for it
                 // to exit so we can surface its real exit code/captured output rather than a
@@ -1325,7 +1338,7 @@ internal sealed class RunCommand : BaseCommand
                     }
                 }
             }
-            catch (Exception ex) when (AppHostFollowDisconnectHelpers.IsExpectedDisconnect(ex))
+            catch (Exception ex) when (BackchannelDisconnectHelpers.IsExpectedDisconnect(ex))
             {
                 // The AppHost process exited and the backchannel connection was lost. This is
                 // expected during orderly shutdown, but buffered records still need to be flushed.
@@ -1345,7 +1358,7 @@ internal sealed class RunCommand : BaseCommand
             // Swallow the exception if the operation was cancelled.
             return;
         }
-        catch (Exception ex) when (AppHostFollowDisconnectHelpers.IsExpectedDisconnect(ex))
+        catch (Exception ex) when (BackchannelDisconnectHelpers.IsExpectedDisconnect(ex))
         {
             // The AppHost process exited and the backchannel connection was lost. This is
             // expected during orderly shutdown — the connection drops before the cancellation

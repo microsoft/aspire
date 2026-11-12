@@ -1,0 +1,27 @@
+﻿{
+  "DOCS": {
+    "custom": "local",
+    "API": {
+      "other": "preserved"
+    },
+    "api": {
+      "flag": true
+    }
+  },
+  "docs": {
+    "api": {
+      "SITEMAPURL": "nested",
+      "OBJECT": {
+        "enabled": true
+      }
+    }
+  },
+  "section": {
+    "NODE": null
+  },
+  "SECTION": {
+    "node": {
+      "value": "nested"
+    }
+  }
+}

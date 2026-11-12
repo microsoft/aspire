@@ -7,17 +7,19 @@ import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 import { EventEmitter } from 'events';
 import { PassThrough } from 'stream';
-import { AppHostDataRepository, AspireCliFailedError, isMatchingAppHostPath, shortenPath } from '../data/AppHostDataRepository';
+import { AppHostDataRepository, AspireCliFailedError, AspireCliParseError, isMatchingAppHostPath, shortenPath } from '../data/AppHostDataRepository';
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { AppHostDiscoveryService, type CandidateAppHostDisplayInfo } from '../utils/appHostDiscovery';
 import * as cliModule from '../utils/process/cliProcess';
 import * as configInfoProvider from '../utils/configInfoProvider';
-import { describeIncludeDisabledCommandsCapability, lsJsonStreamCapability } from '../types/configInfo';
-import { errorFetchingAppHosts } from '../loc/strings';
+import { describeAppHostPidCapability, describeIncludeDisabledCommandsCapability, lsJsonStreamCapability } from '../types/configInfo';
+import { errorFetchingAppHosts, errorStoppingAppHostWatcher } from '../loc/strings';
 import { windowCliPathTarget, workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
+import { createAppHostOperationTarget } from '../utils/appHostOperationTarget';
 import { onDidResolveCliForOperation } from '../utils/cliOperationResolution';
+import { extensionLogOutputChannel } from '../utils/logging';
 
-import { removeDirectorySafely } from './testHelpers';
+import { createDeferred, isProcessAlive, removeDirectorySafely } from './testHelpers';
 class TestChildProcess extends EventEmitter {
     stdout = new PassThrough();
     stderr = new PassThrough();
@@ -97,7 +99,7 @@ suite('AppHostDataRepository', () => {
         // Default to a current CLI so common-path tests use streamed discovery and include disabled
         // commands in describe output. Compatibility tests override this response explicitly.
         getConfigInfoStub = sinon.stub(configInfoProvider.ConfigInfoProvider.prototype, 'getConfigInfo').resolves({
-            capabilities: [describeIncludeDisabledCommandsCapability, lsJsonStreamCapability],
+            capabilities: [describeAppHostPidCapability, describeIncludeDisabledCommandsCapability, lsJsonStreamCapability],
         } as any);
         defaultWorkspaceFoldersStub = sinon.stub(vscode.workspace, 'workspaceFolders').value(undefined);
         findFilesStub = sinon.stub(vscode.workspace, 'findFiles').resolves([]);
@@ -179,6 +181,7 @@ suite('AppHostDataRepository', () => {
                 status: 'buildable',
                 selected: workspaceFolder.name === selectedFolder.name,
             }],
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: candidateChangeEmitter.event,
             dispose: () => { },
         } as unknown as AppHostDiscoveryService;
@@ -255,6 +258,7 @@ suite('AppHostDataRepository', () => {
             });
         // A discovery that never resolves keeps `_workspaceAppHostDiscoveryComplete` false.
         const appHostDiscoveryService = {
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: new vscode.EventEmitter<vscode.WorkspaceFolder>().event,
             discover: () => new Promise<CandidateAppHostDisplayInfo[]>(() => { }),
             dispose: () => { },
@@ -298,6 +302,7 @@ suite('AppHostDataRepository', () => {
         const appHostPath = '/configured/AppHost.csproj';
         let discoveryCount = 0;
         const appHostDiscoveryService = {
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: candidateChangeEmitter.event,
             discover: () => ++discoveryCount === 1
                 ? Promise.resolve([{
@@ -381,6 +386,7 @@ suite('AppHostDataRepository', () => {
         const discoveryService = {
             discover,
             forgetWorkspaceFolder: () => { },
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: candidateChangeEmitter.event,
             dispose: () => { },
         } as unknown as AppHostDiscoveryService;
@@ -423,6 +429,7 @@ suite('AppHostDataRepository', () => {
         const candidateChangeEmitter = new vscode.EventEmitter<vscode.WorkspaceFolder>();
         const discover = sinon.stub().callsFake(() => new Promise<CandidateAppHostDisplayInfo[]>(() => { }));
         const appHostDiscoveryService = {
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: candidateChangeEmitter.event,
             discover,
             dispose: () => { },
@@ -541,6 +548,7 @@ suite('AppHostDataRepository', () => {
         }]);
         const discoveryService = {
             discover,
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: candidateChangeEmitter.event,
             dispose: () => { },
         } as unknown as AppHostDiscoveryService;
@@ -593,6 +601,7 @@ suite('AppHostDataRepository', () => {
         }]);
         const discoveryService = {
             discover,
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: candidateChangeEmitter.event,
             dispose: () => { },
         } as unknown as AppHostDiscoveryService;
@@ -641,6 +650,7 @@ suite('AppHostDataRepository', () => {
         }]);
         const discoveryService = {
             discover,
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: candidateChangeEmitter.event,
             dispose: () => { },
         } as unknown as AppHostDiscoveryService;
@@ -682,6 +692,7 @@ suite('AppHostDataRepository', () => {
         }]);
         const discoveryService = {
             discover,
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: candidateChangeEmitter.event,
             dispose: () => { },
         } as unknown as AppHostDiscoveryService;
@@ -756,6 +767,7 @@ suite('AppHostDataRepository', () => {
             }]);
         const discoveryService = {
             discover,
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: candidateChangeEmitter.event,
             dispose: () => { },
         } as unknown as AppHostDiscoveryService;
@@ -796,6 +808,7 @@ suite('AppHostDataRepository', () => {
                 : siblingDiscovery.promise);
         const discoveryService = {
             discover,
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: candidateChangeEmitter.event,
             dispose: () => { },
         } as unknown as AppHostDiscoveryService;
@@ -848,6 +861,7 @@ suite('AppHostDataRepository', () => {
                 : Promise.reject(new Error('root-b discovery failed')));
         const discoveryService = {
             discover,
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: candidateChangeEmitter.event,
             dispose: () => { },
         } as unknown as AppHostDiscoveryService;
@@ -888,6 +902,7 @@ suite('AppHostDataRepository', () => {
         });
         const discoveryService = {
             discover,
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: candidateChangeEmitter.event,
             dispose: () => { },
         } as unknown as AppHostDiscoveryService;
@@ -946,6 +961,7 @@ suite('AppHostDataRepository', () => {
             const discoveryService = {
                 discover,
                 forgetWorkspaceFolder,
+                onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
                 onDidChangeCandidates: candidateChangeEmitter.event,
                 dispose: () => { },
         } as unknown as AppHostDiscoveryService;
@@ -993,6 +1009,7 @@ suite('AppHostDataRepository', () => {
         }]);
         const discoveryService = {
             discover,
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: candidateChangeEmitter.event,
             dispose: () => { },
         } as unknown as AppHostDiscoveryService;
@@ -1030,6 +1047,7 @@ suite('AppHostDataRepository', () => {
         const candidateChangeEmitter = new vscode.EventEmitter<vscode.WorkspaceFolder>();
         const discoveryService = {
             discover: () => new Promise<CandidateAppHostDisplayInfo[]>(() => { }),
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: candidateChangeEmitter.event,
             dispose: () => { },
         } as unknown as AppHostDiscoveryService;
@@ -1067,7 +1085,7 @@ suite('AppHostDataRepository', () => {
         repository.setPanelVisible(true);
         await waitForMicrotasks();
 
-        repository.setAppHostFilesOpen(['/workspace/AppHost.csproj']);
+        repository.setAppHostFilesOpen(['/workspace/AppHost.csproj'], true);
         await waitForMicrotasks();
         const psCalls = spawnStub.getCalls().filter(call =>
             (call.args[2] as string[])[0] === 'ps' && (call.args[2] as string[]).includes('--follow'));
@@ -1109,7 +1127,7 @@ suite('AppHostDataRepository', () => {
         try {
             repository.activate();
             repository.setPanelVisible(true);
-            repository.setAppHostFilesOpen(['/workspace/AppHost.csproj']);
+            repository.setAppHostFilesOpen(['/workspace/AppHost.csproj'], true);
             await waitForMicrotasks();
             const describeCall = await startDescribeForRunningAppHost('/workspace/AppHost.csproj');
 
@@ -1200,7 +1218,7 @@ suite('AppHostDataRepository', () => {
         repository.setPanelVisible(true);
         await waitForMicrotasks();
 
-        repository.setAppHostFilesOpen(['/workspace/AppHost.csproj']);
+        repository.setAppHostFilesOpen(['/workspace/AppHost.csproj'], true);
         await waitForMicrotasks();
         const psCalls = spawnStub.getCalls().filter(call =>
             (call.args[2] as string[])[0] === 'ps' && (call.args[2] as string[]).includes('--follow'));
@@ -1231,7 +1249,7 @@ suite('AppHostDataRepository', () => {
             repository.setPanelVisible(true);
             await waitForMicrotasks();
 
-            repository.setAppHostFilesOpen(['/workspace/AppHost.csproj']);
+            repository.setAppHostFilesOpen(['/workspace/AppHost.csproj'], true);
             await waitForMicrotasks();
             const psCalls = spawnStub.getCalls().filter(call =>
                 (call.args[2] as string[])[0] === 'ps' && (call.args[2] as string[]).includes('--follow'));
@@ -1291,7 +1309,7 @@ suite('AppHostDataRepository', () => {
             repository.setPanelVisible(true);
             await waitForMicrotasks();
 
-            repository.setAppHostFilesOpen(['/workspace/AppHost.csproj']);
+            repository.setAppHostFilesOpen(['/workspace/AppHost.csproj'], true);
             await waitForMicrotasks();
             const psFollowCall = spawnStub.getCalls().find(call => {
                 const spawnArgs = call.args[2] as string[];
@@ -1424,6 +1442,185 @@ suite('AppHostDataRepository', () => {
         } finally {
             repository.dispose();
             getWorkspaceFolderStub.restore();
+        }
+    });
+
+    test('fetchAppHostResourcesOnce describes one AppHost process with the caller cancellation token', async () => {
+        const describeProcess = new TestChildProcess();
+        spawnStub.onFirstCall().returns(describeProcess);
+        const repository = new AppHostDataRepository(terminalProvider);
+        const cancellation = new vscode.CancellationTokenSource();
+
+        try {
+            const fetchPromise = repository.fetchAppHostResourcesOnce(
+                createAppHostOperationTarget('/workspace/AppHost.csproj', '/workspace/AppHost.csproj'),
+                cancellation.token,
+                1234);
+            await waitForMicrotasks();
+
+            assert.deepStrictEqual(spawnStub.firstCall.args[2], ['describe', '--format', 'json', '--nologo', '--apphost', '/workspace/AppHost.csproj', '--apphost-pid', '1234']);
+            cancellation.cancel();
+
+            await assert.rejects(fetchPromise, vscode.CancellationError);
+            assert.strictEqual(describeProcess.killed, true);
+        } finally {
+            cancellation.dispose();
+            repository.dispose();
+        }
+    });
+
+    test('fetchAppHostResourcesOnce describes only the requested AppHost with cancellation support', async () => {
+        const describeProcess = new TestChildProcess();
+        spawnStub.returns(describeProcess);
+        const repository = new AppHostDataRepository(terminalProvider);
+        const cancellationSource = new vscode.CancellationTokenSource();
+
+        try {
+            const fetchPromise = repository.fetchAppHostResourcesOnce(createAppHostOperationTarget('/workspace/Exact/AppHost.csproj', '/workspace/Exact/AppHost.csproj'), cancellationSource.token);
+            await waitForMicrotasks();
+
+            assert.deepStrictEqual(spawnStub.firstCall.args[2], [
+                'describe',
+                '--format',
+                'json',
+                '--nologo',
+                '--apphost',
+                '/workspace/Exact/AppHost.csproj',
+            ]);
+            assert.strictEqual(spawnStub.firstCall.args[3].noExtensionVariables, true);
+
+            spawnStub.firstCall.args[3].stdoutCallback(JSON.stringify({
+                resources: [{
+                    name: 'api',
+                    displayName: 'api',
+                    resourceType: 'Project',
+                    state: 'Running',
+                    stateStyle: null,
+                    healthStatus: null,
+                    healthReports: null,
+                    exitCode: null,
+                    dashboardUrl: null,
+                    urls: [],
+                    commands: null,
+                    properties: {
+                        'project.path': '/workspace/Api/Api.csproj',
+                    },
+                }],
+            }));
+            spawnStub.firstCall.args[3].exitCallback(0);
+
+            const resources = await fetchPromise;
+            assert.deepStrictEqual(resources.map(resource => resource.name), ['api']);
+        }
+        finally {
+            cancellationSource.dispose();
+            repository.dispose();
+        }
+    });
+
+    test('fetchAppHostResourcesOnce fails before describe when the CLI cannot bind an AppHost process', async () => {
+        getConfigInfoStub.resolves({
+            capabilities: [describeIncludeDisabledCommandsCapability, lsJsonStreamCapability],
+        });
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        try {
+            await assert.rejects(
+                repository.fetchAppHostResourcesOnce(
+                    createAppHostOperationTarget('/workspace/AppHost.csproj', '/workspace/AppHost.csproj'),
+                    undefined,
+                    1234),
+                /cannot bind resource snapshots to an AppHost process/);
+            assert.strictEqual(spawnStub.called, false);
+        } finally {
+            repository.dispose();
+        }
+    });
+
+    test('fetchAppHostResourcesOnce uses the canonical operation path and selector workspace scope', async () => {
+        const describeProcess = new TestChildProcess();
+        spawnStub.returns(describeProcess);
+        const folder = {
+            uri: vscode.Uri.file('/workspace/selector'),
+            name: 'selector',
+            index: 0,
+        } as vscode.WorkspaceFolder;
+        const getWorkspaceFolderStub = sinon.stub(vscode.workspace, 'getWorkspaceFolder')
+            .callsFake(uri => uri.fsPath.startsWith(folder.uri.fsPath) ? folder : undefined);
+        const repository = new AppHostDataRepository(terminalProvider);
+        const operationPath = '/physical/AppHost/AppHost.csproj';
+        const scopePath = '/workspace/selector/AppHost/AppHost.csproj';
+
+        try {
+            const fetchPromise = repository.fetchAppHostResourcesOnce(
+                createAppHostOperationTarget(operationPath, scopePath),
+                undefined,
+                1234);
+            await waitForMicrotasks();
+
+            assert.deepStrictEqual(spawnStub.firstCall.args[2], [
+                'describe',
+                '--format',
+                'json',
+                '--nologo',
+                '--apphost',
+                operationPath,
+                '--apphost-pid',
+                '1234',
+            ]);
+            assert.deepStrictEqual(getCliPathStub.firstCall.args, [workspaceFolderCliPathTarget(folder)]);
+
+            spawnStub.firstCall.args[3].stdoutCallback(JSON.stringify({ resources: [] }));
+            spawnStub.firstCall.args[3].exitCallback(0);
+            assert.deepStrictEqual(await fetchPromise, []);
+        }
+        finally {
+            repository.dispose();
+            getWorkspaceFolderStub.restore();
+        }
+    });
+
+    test('fetchAppHostResourcesOnce reports empty stopped-AppHost output as an aspire describe parse failure', async () => {
+        const describeProcess = new TestChildProcess();
+        spawnStub.returns(describeProcess);
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        try {
+            const fetchPromise = repository.fetchAppHostResourcesOnce(createAppHostOperationTarget('/workspace/Stopped/AppHost.csproj', '/workspace/Stopped/AppHost.csproj'));
+            await waitForMicrotasks();
+
+            spawnStub.firstCall.args[3].exitCallback(0);
+
+            await assert.rejects(fetchPromise, (error: unknown) => {
+                assert.ok(error instanceof AspireCliParseError);
+                assert.strictEqual(error.command, 'aspire describe');
+                assert.strictEqual(error.output, '');
+                return true;
+            });
+        }
+        finally {
+            repository.dispose();
+        }
+    });
+
+    test('fetchAppHostResourcesOnce cancels the exact describe process', async () => {
+        const describeProcess = new TestChildProcess(false);
+        spawnStub.returns(describeProcess);
+        const repository = new AppHostDataRepository(terminalProvider);
+        const cancellationSource = new vscode.CancellationTokenSource();
+
+        try {
+            const fetchPromise = repository.fetchAppHostResourcesOnce(createAppHostOperationTarget('/workspace/Exact/AppHost.csproj', '/workspace/Exact/AppHost.csproj'), cancellationSource.token);
+            await waitForMicrotasks();
+
+            cancellationSource.cancel();
+
+            await assert.rejects(fetchPromise, (error: unknown) => error instanceof vscode.CancellationError);
+            assert.strictEqual(describeProcess.killed, true);
+        }
+        finally {
+            cancellationSource.dispose();
+            repository.dispose();
         }
     });
 
@@ -1901,7 +2098,7 @@ suite('AppHostDataRepository', () => {
         repository.setPanelVisible(true);
         await waitForMicrotasks();
 
-        repository.setAppHostFilesOpen(['/workspace/AppHost.csproj']);
+        repository.setAppHostFilesOpen(['/workspace/AppHost.csproj'], true);
         await waitForMicrotasks();
         const psCalls = spawnStub.getCalls().filter(call =>
             (call.args[2] as string[])[0] === 'ps' && (call.args[2] as string[]).includes('--follow'));
@@ -1930,7 +2127,7 @@ suite('AppHostDataRepository', () => {
         repository.setPanelVisible(true);
         await waitForMicrotasks();
 
-        repository.setAppHostFilesOpen(['/workspace/AppHost.csproj']);
+        repository.setAppHostFilesOpen(['/workspace/AppHost.csproj'], true);
         await waitForMicrotasks();
         const psCalls = spawnStub.getCalls().filter(call =>
             (call.args[2] as string[])[0] === 'ps' && (call.args[2] as string[]).includes('--follow'));
@@ -1970,7 +2167,7 @@ suite('AppHostDataRepository', () => {
         repository.setPanelVisible(true);
         await waitForMicrotasks();
 
-        repository.setAppHostFilesOpen(['/workspace/AppHost.csproj']);
+        repository.setAppHostFilesOpen(['/workspace/AppHost.csproj'], true);
         await waitForMicrotasks();
         const psCalls = spawnStub.getCalls().filter(call =>
             (call.args[2] as string[])[0] === 'ps' && (call.args[2] as string[]).includes('--follow'));
@@ -2019,6 +2216,7 @@ suite('AppHostDataRepository', () => {
                 status: 'buildable' as const,
                 selected: true,
             }],
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: () => ({ dispose: () => { } }),
             dispose: () => { },
         } as unknown as AppHostDiscoveryService;
@@ -2029,7 +2227,7 @@ suite('AppHostDataRepository', () => {
             repository.setPanelVisible(true);
             await waitForMicrotasks();
 
-            repository.setAppHostFilesOpen(['/workspace/AppHost.csproj']);
+            repository.setAppHostFilesOpen(['/workspace/AppHost.csproj'], true);
             await waitForMicrotasks();
             const psCalls = spawnStub.getCalls().filter(call =>
                 (call.args[2] as string[])[0] === 'ps' && (call.args[2] as string[]).includes('--follow'));
@@ -2086,6 +2284,7 @@ suite('AppHostDataRepository', () => {
                 status: 'buildable' as const,
                 selected: true,
             }],
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: () => ({ dispose: () => { } }),
             dispose: () => { },
         } as unknown as AppHostDiscoveryService;
@@ -2096,7 +2295,7 @@ suite('AppHostDataRepository', () => {
             repository.setPanelVisible(true);
             await waitForMicrotasks();
 
-            repository.setAppHostFilesOpen(['/workspace/AppHost.csproj']);
+            repository.setAppHostFilesOpen(['/workspace/AppHost.csproj'], true);
             await waitForMicrotasks();
             const psCalls = spawnStub.getCalls().filter(call =>
                 (call.args[2] as string[])[0] === 'ps' && (call.args[2] as string[]).includes('--follow'));
@@ -2208,7 +2407,7 @@ suite('AppHostDataRepository', () => {
             repository.setPanelVisible(true);
             await waitForMicrotasks();
 
-            repository.setAppHostFilesOpen(['/other/AppHost.csproj']);
+            repository.setAppHostFilesOpen(['/other/AppHost.csproj'], true);
             await waitForMicrotasks();
             const psCalls = spawnStub.getCalls().filter(call =>
                 (call.args[2] as string[])[0] === 'ps' && (call.args[2] as string[]).includes('--follow'));
@@ -2251,7 +2450,7 @@ suite('AppHostDataRepository', () => {
             repository.setPanelVisible(true);
             await waitForMicrotasks();
 
-            repository.setAppHostFilesOpen(['/workspace/AppHost.csproj']);
+            repository.setAppHostFilesOpen(['/workspace/AppHost.csproj'], true);
             await waitForMicrotasks();
             const psCalls = spawnStub.getCalls().filter(call =>
                 (call.args[2] as string[])[0] === 'ps' && (call.args[2] as string[]).includes('--follow'));
@@ -2310,7 +2509,7 @@ suite('AppHostDataRepository', () => {
             repository.setPanelVisible(true);
             await waitForMicrotasks();
 
-            repository.setAppHostFilesOpen(['/workspace/AppHost.csproj']);
+            repository.setAppHostFilesOpen(['/workspace/AppHost.csproj'], true);
             await waitForMicrotasks();
             const psCall = spawnStub.getCalls().find(call => {
                 const args = call.args[2] as string[];
@@ -2379,7 +2578,7 @@ suite('AppHostDataRepository', () => {
                 () => repository.isWorkspaceAppHostDiscoveryComplete,
                 'workspace AppHost discovery did not complete');
 
-            repository.setAppHostFilesOpen(['/workspace/apps/Store/AppHost.csproj']);
+            repository.setAppHostFilesOpen(['/workspace/apps/Store/AppHost.csproj'], true);
             await waitForMicrotasks();
             const psCalls = spawnStub.getCalls().filter(call =>
                 (call.args[2] as string[])[0] === 'ps' && (call.args[2] as string[]).includes('--follow'));
@@ -2453,7 +2652,7 @@ suite('AppHostDataRepository', () => {
                 () => repository.isWorkspaceAppHostDiscoveryComplete,
                 'workspace AppHost discovery did not complete');
 
-            repository.setAppHostFilesOpen(['/workspace/AppHost.csproj']);
+            repository.setAppHostFilesOpen(['/workspace/AppHost.csproj'], true);
             await waitForMicrotasks();
             const psCalls = spawnStub.getCalls().filter(call =>
                 (call.args[2] as string[])[0] === 'ps' && (call.args[2] as string[]).includes('--follow'));
@@ -2516,7 +2715,7 @@ suite('AppHostDataRepository', () => {
                 () => repository.isWorkspaceAppHostDiscoveryComplete,
                 'workspace AppHost discovery did not complete');
 
-            repository.setAppHostFilesOpen(['/workspace/apps/Store/AppHost.csproj']);
+            repository.setAppHostFilesOpen(['/workspace/apps/Store/AppHost.csproj'], true);
             await waitForMicrotasks();
             const psCalls = spawnStub.getCalls().filter(call =>
                 (call.args[2] as string[])[0] === 'ps' && (call.args[2] as string[]).includes('--follow'));
@@ -2671,7 +2870,7 @@ suite('AppHostDataRepository', () => {
                 '/workspace/selected/AppHost.csproj',
                 '/workspace/peer-one/AppHost.csproj',
                 '/workspace/peer-two/AppHost.csproj',
-            ]);
+            ], true);
             await waitForMicrotasks();
 
             const psCall = spawnStub.getCalls().find(call => {
@@ -2840,6 +3039,7 @@ suite('AppHostDataRepository', () => {
                 status: 'buildable' as const,
                 selected: true,
             }],
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: () => ({ dispose: () => { } }),
             dispose: () => { },
         } as unknown as AppHostDiscoveryService;
@@ -2904,6 +3104,7 @@ suite('AppHostDataRepository', () => {
                 status: 'buildable' as const,
                 selected: true,
             }],
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: () => ({ dispose: () => { } }),
             dispose: () => { },
         } as unknown as AppHostDiscoveryService;
@@ -2972,6 +3173,7 @@ suite('AppHostDataRepository', () => {
                 status: 'buildable' as const,
                 selected: true,
             }],
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: () => ({ dispose: () => { } }),
             dispose: () => { },
         } as unknown as AppHostDiscoveryService;
@@ -3057,6 +3259,7 @@ suite('AppHostDataRepository', () => {
                 status: 'buildable' as const,
                 selected: true,
             }],
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: () => ({ dispose: () => { } }),
             dispose: () => { },
         } as unknown as AppHostDiscoveryService;
@@ -3126,6 +3329,7 @@ suite('AppHostDataRepository', () => {
                 status: 'buildable' as const,
                 selected: true,
             }],
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: () => ({ dispose: () => { } }),
             dispose: () => { },
         } as unknown as AppHostDiscoveryService;
@@ -3193,6 +3397,7 @@ suite('AppHostDataRepository', () => {
                 status: 'buildable' as const,
                 selected: true,
             }],
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: () => ({ dispose: () => { } }),
             dispose: () => { },
         } as unknown as AppHostDiscoveryService;
@@ -3247,6 +3452,7 @@ suite('AppHostDataRepository', () => {
                 status: 'buildable' as const,
                 selected: true,
             }],
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: () => ({ dispose: () => { } }),
             dispose: () => { },
         } as unknown as AppHostDiscoveryService;
@@ -3570,7 +3776,6 @@ suite('AppHostDataRepository', () => {
             assert.strictEqual(selectedAppHost.resources![0].name, 'api');
             assert.strictEqual(repository.workspaceResources.length, 1);
             assert.strictEqual(repository.workspaceResources[0].name, 'api');
-
             // The non-selected host is populated the same way, from its own stream.
             const nonSelectedAppHost = repository.appHosts.find((a: any) => a.appHostPath === '/workspace/samples/Store/AppHost.csproj');
             assert.ok(nonSelectedAppHost);
@@ -3583,15 +3788,19 @@ suite('AppHostDataRepository', () => {
         }
     });
 
-    test('configured AppHost outside aspire ls candidates remains selected in workspace view', async () => {
-        const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-extension-workspace-'));
-        const configuredAppHostPath = path.join(path.dirname(workspaceRoot), 'external', 'AppHost.csproj');
+    test('configured AppHost returned by aspire ls remains selected outside the workspace', async () => {
+        const fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-extension-workspace-'));
+        const workspaceRoot = path.join(fixtureRoot, 'workspace');
+        const configuredAppHostPath = path.join(fixtureRoot, 'external', 'AppHost.csproj');
         const discoveredAppHostPath = path.join(workspaceRoot, 'apps', 'Store', 'AppHost.csproj');
         const secondDiscoveredAppHostPath = path.join(workspaceRoot, 'samples', 'Store', 'AppHost.csproj');
         let workspaceFoldersStub: sinon.SinonStub | undefined;
         let repository: AppHostDataRepository | undefined;
 
         try {
+            fs.mkdirSync(workspaceRoot);
+            fs.mkdirSync(path.dirname(configuredAppHostPath));
+            fs.writeFileSync(configuredAppHostPath, '<Project Sdk="Aspire.AppHost.Sdk/13.5.0" />');
             fs.writeFileSync(path.join(workspaceRoot, 'aspire.config.json'), JSON.stringify({
                 appHost: {
                     path: configuredAppHostPath,
@@ -3624,6 +3833,12 @@ suite('AppHostDataRepository', () => {
             assert.ok(getAppHostsLineCallback);
 
             getAppHostsLineCallback(JSON.stringify([
+                {
+                    relativePath: path.relative(workspaceRoot, configuredAppHostPath),
+                    path: configuredAppHostPath,
+                    language: 'csharp',
+                    status: 'buildable',
+                },
                 {
                     relativePath: 'apps/Store/AppHost.csproj',
                     path: discoveredAppHostPath,
@@ -3670,7 +3885,7 @@ suite('AppHostDataRepository', () => {
         } finally {
             repository?.dispose();
             workspaceFoldersStub?.restore();
-            removeDirectorySafely(workspaceRoot);
+            removeDirectorySafely(fixtureRoot);
         }
     });
 
@@ -3884,6 +4099,7 @@ suite('AppHostDataRepository', () => {
         ];
         const discoveryChanges = new vscode.EventEmitter<vscode.WorkspaceFolder>();
         const appHostDiscoveryService = {
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: discoveryChanges.event,
             discover: async () => candidates,
             dispose: () => { },
@@ -3943,6 +4159,7 @@ suite('AppHostDataRepository', () => {
         const workspaceFoldersStub = stubWorkspaceFolders([workspaceFolder]);
         const discovery = createDeferred<CandidateAppHostDisplayInfo[]>();
         const appHostDiscoveryService = {
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: () => ({ dispose: () => { } }),
             discover: async () => discovery.promise,
             dispose: () => { },
@@ -4001,6 +4218,7 @@ suite('AppHostDataRepository', () => {
         const workspaceFoldersStub = stubWorkspaceFolders([workspaceFolder]);
         const discovery = createDeferred<CandidateAppHostDisplayInfo[]>();
         const appHostDiscoveryService = {
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: () => ({ dispose: () => { } }),
             discover: async () => discovery.promise,
             dispose: () => { },
@@ -4080,6 +4298,7 @@ suite('AppHostDataRepository', () => {
         const workspaceFoldersStub = stubWorkspaceFolders([workspaceFolder]);
         const discovery = createDeferred<CandidateAppHostDisplayInfo[]>();
         const appHostDiscoveryService = {
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: () => ({ dispose: () => { } }),
             discover: async () => discovery.promise,
             dispose: () => { },
@@ -4188,6 +4407,7 @@ suite('AppHostDataRepository', () => {
         const workspaceFoldersStub = stubWorkspaceFolders([workspaceFolder]);
         const discovery = createDeferred<CandidateAppHostDisplayInfo[]>();
         const appHostDiscoveryService = {
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: () => ({ dispose: () => { } }),
             discover: async () => discovery.promise,
             dispose: () => { },
@@ -4228,6 +4448,7 @@ suite('AppHostDataRepository', () => {
         // the condition under which the old gate refused to clear loading for open-tab-only hosts.
         const discovery = createDeferred<CandidateAppHostDisplayInfo[]>();
         const appHostDiscoveryService = {
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: () => ({ dispose: () => { } }),
             discover: async () => discovery.promise,
             dispose: () => { },
@@ -4239,7 +4460,7 @@ suite('AppHostDataRepository', () => {
             repository.setPanelVisible(true);
 
             const outsideAppHostPath = '/other/aspnetcore/aspnetcore.AppHost.csproj';
-            repository.setAppHostFilesOpen([outsideAppHostPath]);
+            repository.setAppHostFilesOpen([outsideAppHostPath], true);
             await waitForMicrotasks();
             const psCalls = spawnStub.getCalls().filter(call =>
                 (call.args[2] as string[])[0] === 'ps' && (call.args[2] as string[]).includes('--follow'));
@@ -4274,7 +4495,7 @@ suite('AppHostDataRepository', () => {
 
             // Close the only open tab. The host is pruned, the tree empties, and loading must stay
             // cleared so the spinner never resurfaces.
-            repository.setAppHostFilesOpen([]);
+            repository.setAppHostFilesOpen([], false);
             await waitForMicrotasks();
 
             assert.strictEqual(repository.appHosts.length, 0);
@@ -4303,6 +4524,7 @@ suite('AppHostDataRepository', () => {
         // the workspace view must clear its "Searching…" loading state the moment discovery resolves —
         // not linger until a ps change that never arrives (the toggle-to-global-and-back workaround).
         const appHostDiscoveryService = {
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: () => ({ dispose: () => { } }),
             discover: async () => [
                 {
@@ -4346,6 +4568,7 @@ suite('AppHostDataRepository', () => {
         const workspaceFoldersStub = stubWorkspaceFolders([workspaceFolder]);
         const discovery = createDeferred<CandidateAppHostDisplayInfo[]>();
         const appHostDiscoveryService = {
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: () => ({ dispose: () => { } }),
             discover: async () => discovery.promise,
             dispose: () => { },
@@ -4393,6 +4616,7 @@ suite('AppHostDataRepository', () => {
         discoverStub.onFirstCall().returns(firstDiscovery.promise);
         discoverStub.onSecondCall().returns(secondDiscovery.promise);
         const appHostDiscoveryService = {
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: discoveryChanges.event,
             discover: discoverStub,
             dispose: () => { },
@@ -4450,6 +4674,7 @@ suite('AppHostDataRepository', () => {
             return secondDiscovery.promise;
         });
         const appHostDiscoveryService = {
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: discoveryChanges.event,
             discover: discoverStub,
             dispose: () => { },
@@ -4502,6 +4727,7 @@ suite('AppHostDataRepository', () => {
         const discovery = createDeferred<CandidateAppHostDisplayInfo[]>();
         let incrementalCandidateCallback: ((candidate: CandidateAppHostDisplayInfo) => void) | undefined;
         const appHostDiscoveryService = {
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: () => ({ dispose: () => { } }),
             discover: (_folder: vscode.WorkspaceFolder, _forceRefresh?: boolean, _cancellationToken?: vscode.CancellationToken, onIncrementalCandidate?: (candidate: CandidateAppHostDisplayInfo) => void) => {
                 incrementalCandidateCallback = onIncrementalCandidate;
@@ -4554,6 +4780,7 @@ suite('AppHostDataRepository', () => {
         const discovery = createDeferred<CandidateAppHostDisplayInfo[]>();
         let incrementalCandidateCallback: ((candidate: CandidateAppHostDisplayInfo) => void) | undefined;
         const appHostDiscoveryService = {
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: () => ({ dispose: () => { } }),
             discover: (_folder: vscode.WorkspaceFolder, _forceRefresh?: boolean, _cancellationToken?: vscode.CancellationToken, onIncrementalCandidate?: (candidate: CandidateAppHostDisplayInfo) => void) => {
                 incrementalCandidateCallback = onIncrementalCandidate;
@@ -4607,6 +4834,7 @@ suite('AppHostDataRepository', () => {
         const discovery = createDeferred<CandidateAppHostDisplayInfo[]>();
         let incrementalCandidateCallback: ((candidate: CandidateAppHostDisplayInfo) => void) | undefined;
         const appHostDiscoveryService = {
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: () => ({ dispose: () => { } }),
             discover: (_folder: vscode.WorkspaceFolder, _forceRefresh?: boolean, _cancellationToken?: vscode.CancellationToken, onIncrementalCandidate?: (candidate: CandidateAppHostDisplayInfo) => void) => {
                 incrementalCandidateCallback = onIncrementalCandidate;
@@ -4653,6 +4881,7 @@ suite('AppHostDataRepository', () => {
         const workspaceFoldersStub = stubWorkspaceFolders([workspaceFolder]);
         const discovery = createDeferred<CandidateAppHostDisplayInfo[]>();
         const appHostDiscoveryService = {
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: () => ({ dispose: () => { } }),
             discover: () => discovery.promise,
             dispose: () => { },
@@ -4700,6 +4929,7 @@ suite('AppHostDataRepository', () => {
         const discovery = createDeferred<CandidateAppHostDisplayInfo[]>();
         let incrementalCandidateCallback: ((candidate: CandidateAppHostDisplayInfo) => void) | undefined;
         const appHostDiscoveryService = {
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: () => ({ dispose: () => { } }),
             discover: (_folder: vscode.WorkspaceFolder, _forceRefresh?: boolean, _cancellationToken?: vscode.CancellationToken, onIncrementalCandidate?: (candidate: CandidateAppHostDisplayInfo) => void) => {
                 incrementalCandidateCallback = onIncrementalCandidate;
@@ -4769,6 +4999,7 @@ suite('AppHostDataRepository', () => {
         });
         discoverStub.onSecondCall().returns(secondDiscovery.promise);
         const appHostDiscoveryService = {
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: (listener: (workspaceFolder: vscode.WorkspaceFolder) => void) => {
                 candidatesChanged = listener;
                 return { dispose: () => { } };
@@ -4817,6 +5048,7 @@ suite('AppHostDataRepository', () => {
             status: 'buildable',
         }]);
         const appHostDiscoveryService = {
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: () => ({ dispose: () => { } }),
             discover: discoverStub,
             dispose: () => { },
@@ -4869,6 +5101,7 @@ suite('AppHostDataRepository', () => {
         };
         const workspaceFoldersStub = stubWorkspaceFolders([workspaceFolder]);
         const appHostDiscoveryService = {
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: () => ({ dispose: () => { } }),
             discover: async () => {
                 throw new Error('aspire ls failed');
@@ -4903,6 +5136,7 @@ suite('AppHostDataRepository', () => {
         const workspaceFoldersStub = stubWorkspaceFolders([workspaceFolder]);
         const discoverStub = sinon.stub().resolves([]);
         const appHostDiscoveryService = {
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: () => ({ dispose: () => { } }),
             discover: discoverStub,
             dispose: () => { },
@@ -4957,6 +5191,7 @@ suite('AppHostDataRepository', () => {
         const discovery = createDeferred<CandidateAppHostDisplayInfo[]>();
         const discoverStub = sinon.stub().returns(discovery.promise);
         const appHostDiscoveryService = {
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: () => ({ dispose: () => { } }),
             discover: discoverStub,
             dispose: () => { },
@@ -5023,6 +5258,7 @@ suite('AppHostDataRepository', () => {
         const workspaceFoldersStub = stubWorkspaceFolders([workspaceFolder]);
         const discoverStub = sinon.stub().resolves([]);
         const appHostDiscoveryService = {
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: () => ({ dispose: () => { } }),
             discover: discoverStub,
             dispose: () => { },
@@ -5067,6 +5303,7 @@ suite('AppHostDataRepository', () => {
         discoverStub.onFirstCall().returns(firstDiscovery.promise);
         discoverStub.onSecondCall().returns(secondDiscovery.promise);
         const appHostDiscoveryService = {
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: () => ({ dispose: () => { } }),
             discover: discoverStub,
             dispose: () => { },
@@ -5187,6 +5424,7 @@ suite('AppHostDataRepository', () => {
         const workspaceFoldersStub = stubWorkspaceFolders([workspaceFolder]);
         const executeCommandStub = sinon.stub(vscode.commands, 'executeCommand').resolves(undefined);
         const appHostDiscoveryService = {
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: () => ({ dispose: () => { } }),
             discover: async () => [
                 {
@@ -5235,6 +5473,7 @@ suite('AppHostDataRepository', () => {
         }]);
         const executeCommandStub = sinon.stub(vscode.commands, 'executeCommand').resolves(undefined);
         const appHostDiscoveryService = {
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: () => ({ dispose: () => { } }),
             discover: async () => {
                 throw new Error('aspire ls failed');
@@ -5272,7 +5511,7 @@ suite('AppHostDataRepository', () => {
         repository.setPanelVisible(true);
         await waitForMicrotasks();
 
-        repository.setAppHostFilesOpen(['/workspace/AppHost.csproj']);
+        repository.setAppHostFilesOpen(['/workspace/AppHost.csproj'], true);
         await waitForMicrotasks();
         const psCalls = spawnStub.getCalls().filter(call =>
             (call.args[2] as string[])[0] === 'ps' && (call.args[2] as string[]).includes('--follow'));
@@ -5298,7 +5537,7 @@ suite('AppHostDataRepository', () => {
         repository.setPanelVisible(false);
         await waitForMicrotasks();
 
-        repository.setAppHostFilesOpen([]);
+        repository.setAppHostFilesOpen([], false);
         await waitForMicrotasks();
 
         assert.deepStrictEqual(repository.appHosts, []);
@@ -5373,6 +5612,7 @@ suite('AppHostDataRepository', () => {
         }]);
         const discoveryEmitter = new vscode.EventEmitter<vscode.WorkspaceFolder>();
         const appHostDiscoveryService = {
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: discoveryEmitter.event,
             discover: () => new Promise<CandidateAppHostDisplayInfo[]>(() => { }),
             dispose: () => { },
@@ -6220,6 +6460,399 @@ suite('AppHostDataRepository global polling', () => {
         repository.dispose();
     });
 
+    test('rapid ps follow restarts wait for the previous process termination', async () => {
+        const firstProcess = new TestChildProcess(false);
+        const replacementProcess = new TestChildProcess();
+        spawnStub.onFirstCall().returns(firstProcess);
+        spawnStub.onSecondCall().returns(replacementProcess);
+        const termination = createDeferred<void>();
+        const terminateStub = sinon.stub(cliModule, 'terminateCliProcess').resolves();
+        terminateStub.onFirstCall().returns(termination.promise);
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        try {
+            repository.setViewMode('global');
+            repository.setPanelVisible(true);
+            await waitForMicrotasks();
+            assert.strictEqual(spawnStub.callCount, 1);
+            const firstExitCallback = spawnStub.firstCall.args[3].exitCallback;
+
+            for (let restart = 0; restart < 5; restart++) {
+                repository.setPanelVisible(false);
+                repository.setPanelVisible(true);
+                await waitForMicrotasks();
+            }
+
+            assert.strictEqual(spawnStub.callCount, 1, 'a replacement must not overlap a still-live follower');
+            sinon.assert.calledOnce(terminateStub);
+
+            firstProcess.markExited();
+            firstExitCallback(1);
+            termination.resolve();
+            await waitForCondition(() => spawnStub.callCount === 2, 'replacement ps follow did not start after cleanup');
+        } finally {
+            termination.resolve();
+            repository.dispose();
+            await waitForMicrotasks();
+            terminateStub.restore();
+        }
+    });
+
+    for (const command of ['follow', 'snapshot']) {
+        test(`failed ps ${command} spawn during restart does not retain cleanup ownership`, async () => {
+            const failedProcess = new TestChildProcess(false);
+            const follower = new TestChildProcess(false);
+            const failedCallIndex = command === 'follow' ? 0 : 1;
+            spawnStub.onFirstCall().returns(command === 'follow' ? failedProcess : follower);
+            spawnStub.onSecondCall().returns(command === 'follow' ? new TestChildProcess() : failedProcess);
+            const cleanupFailure = new Error('the process never started');
+            const terminateStub = sinon.stub(cliModule, 'terminateCliProcess').resolves();
+            terminateStub.onCall(failedCallIndex).rejects(cleanupFailure);
+            const repository = new AppHostDataRepository(terminalProvider);
+
+            try {
+                repository.setViewMode('global');
+                repository.setPanelVisible(true);
+                await waitForMicrotasks();
+                if (command === 'snapshot') {
+                    repository.refresh();
+                    await waitForMicrotasks();
+                }
+                const initialSpawnCount = spawnStub.callCount;
+                const failedCallbacks = spawnStub.getCall(failedCallIndex).args[3];
+
+                repository.setPanelVisible(false);
+                repository.setPanelVisible(true);
+                await waitForMicrotasks();
+                failedCallbacks.errorCallback(new Error('spawn ENOENT'));
+                failedProcess.markExited(-2);
+                failedCallbacks.exitCallback(-2);
+
+                repository.setPanelVisible(false);
+                repository.setPanelVisible(true);
+                await waitForMicrotasks();
+
+                assert.strictEqual(spawnStub.callCount, initialSpawnCount + 1);
+                assert.strictEqual(repository.errorMessage, undefined);
+                await repository.shutdown();
+            } finally {
+                terminateStub.resolves();
+                repository.dispose();
+                await waitForMicrotasks();
+                terminateStub.restore();
+            }
+        });
+    }
+
+    for (const command of ['follow', 'snapshot']) {
+        test(`shutdown racing a failed ps ${command} spawn waits for the spawn outcome`, async () => {
+            const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-failed-ps-spawn-'));
+            getCliPathStub.resolves(path.join(directory, 'missing-aspire'));
+            spawnStub.resetBehavior();
+            spawnStub.callThrough();
+            if (command === 'snapshot') {
+                spawnStub.onFirstCall().returns(new TestChildProcess());
+            }
+            const spawned = createDeferred<void>();
+            const subscription = cliModule.onDidSpawnCliProcess(() => spawned.resolve());
+            const repository = new AppHostDataRepository(terminalProvider);
+
+            try {
+                repository.setViewMode('global');
+                repository.setPanelVisible(true);
+                if (command === 'snapshot') {
+                    await waitForMicrotasks();
+                    repository.refresh();
+                }
+
+                // Resume in the spawning microtask, before Node delivers ENOENT on its next tick.
+                await spawned.promise;
+                await repository.shutdown();
+                assert.strictEqual(repository.errorMessage, undefined);
+            } finally {
+                subscription.dispose();
+                repository.dispose();
+                await waitForMicrotasks();
+                removeDirectorySafely(directory);
+            }
+        });
+    }
+
+    for (const snapshot of [
+        { name: 'success', exitCode: 0, stdout: '[]', stderr: '' },
+        { name: 'failure', exitCode: 1, stdout: '', stderr: 'snapshot unavailable' },
+    ]) {
+        test(`ps cleanup failure survives view changes, snapshot ${snapshot.name}, and a pending retry`, async () => {
+            const workspaceFoldersStub = sinon.stub(vscode.workspace, 'workspaceFolders').value(undefined);
+            const firstProcess = new TestChildProcess(false);
+            spawnStub.onFirstCall().returns(firstProcess);
+            const expectedError = new Error('process-tree cleanup could not be confirmed');
+            const cleanupError = errorStoppingAppHostWatcher(String(expectedError));
+            const terminateStub = sinon.stub(cliModule, 'terminateCliProcess').rejects(expectedError);
+            const retry = createDeferred<void>();
+            const repository = new AppHostDataRepository(terminalProvider);
+
+            try {
+                repository.setViewMode('global');
+                repository.setPanelVisible(true);
+                await waitForMicrotasks();
+                repository.setPanelVisible(false);
+                repository.setPanelVisible(true);
+                await waitForMicrotasks();
+                assert.strictEqual(repository.errorMessage, cleanupError);
+
+                repository.setViewMode('workspace');
+                repository.setViewMode('global');
+                assert.strictEqual(repository.errorMessage, cleanupError);
+
+                terminateStub.returns(retry.promise);
+                repository.setPanelVisible(false);
+                repository.setPanelVisible(true);
+                await waitForMicrotasks();
+                assert.strictEqual(repository.errorMessage, cleanupError);
+                assert.strictEqual(spawnStub.callCount, 1);
+                sinon.assert.alwaysCalledWith(terminateStub, firstProcess);
+
+                repository.refresh();
+                await waitForMicrotasks();
+                assert.strictEqual(repository.errorMessage, cleanupError, 'refresh must not clear unconfirmed cleanup');
+                const snapshotCall = spawnStub.getCalls().find(call => call.args[2][0] === 'ps' && !call.args[2].includes('--follow'));
+                assert.ok(snapshotCall);
+                snapshotCall.args[3].stdoutCallback(snapshot.stdout);
+                snapshotCall.args[3].stderrCallback(snapshot.stderr);
+                snapshotCall.args[3].exitCallback(snapshot.exitCode);
+                assert.strictEqual(repository.errorMessage, cleanupError);
+                assert.strictEqual(repository.isLoading, false);
+
+                firstProcess.markExited();
+                spawnStub.firstCall.args[3].exitCallback(1);
+                retry.resolve();
+                await waitForCondition(
+                    () => spawnStub.getCalls().filter(call => call.args[2].includes('--follow')).length === 2,
+                    'replacement ps follow did not start after cleanup retry');
+                assert.strictEqual(repository.errorMessage,
+                    snapshot.exitCode === 0 ? undefined : errorFetchingAppHosts(snapshot.stderr));
+            } finally {
+                retry.resolve();
+                terminateStub.resolves();
+                await repository.shutdown();
+                terminateStub.restore();
+                workspaceFoldersStub.restore();
+            }
+        });
+    }
+
+    test('ps cleanup failure after leader exit is not mistaken for successful tree cleanup', async () => {
+        const firstProcess = new TestChildProcess(false);
+        spawnStub.returns(firstProcess);
+        const expectedError = new Error('descendant cleanup could not be confirmed');
+        let rejectTermination!: (error: Error) => void;
+        const termination = new Promise<void>((_resolve, reject) => { rejectTermination = reject; });
+        const terminateStub = sinon.stub(cliModule, 'terminateCliProcess').returns(termination);
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        try {
+            repository.setViewMode('global');
+            repository.setPanelVisible(true);
+            await waitForMicrotasks();
+            repository.setPanelVisible(false);
+            firstProcess.markExited();
+            spawnStub.firstCall.args[3].exitCallback(1);
+            rejectTermination(expectedError);
+            await waitForMicrotasks();
+
+            repository.setPanelVisible(true);
+            await waitForMicrotasks();
+            assert.strictEqual(repository.errorMessage, errorStoppingAppHostWatcher(String(expectedError)));
+            assert.strictEqual(spawnStub.callCount, 1);
+            sinon.assert.calledOnce(terminateStub);
+            await assert.rejects(repository.shutdown(), error => error === expectedError);
+        } finally {
+            repository.dispose();
+            await waitForMicrotasks();
+            terminateStub.restore();
+        }
+    });
+
+    test('repository shutdown awaits pending ps termination and prevents a queued restart', async () => {
+        spawnStub.returns(new TestChildProcess(false));
+        const termination = createDeferred<void>();
+        const terminateStub = sinon.stub(cliModule, 'terminateCliProcess').returns(termination.promise);
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        try {
+            repository.setViewMode('global');
+            repository.setPanelVisible(true);
+            await waitForMicrotasks();
+            repository.setPanelVisible(false);
+            repository.setPanelVisible(true);
+            await waitForMicrotasks();
+            const shutdown = repository.shutdown();
+            let settled = false;
+            void shutdown.then(() => { settled = true; });
+            repository.dispose();
+            repository.setPanelVisible(false);
+            repository.setPanelVisible(true);
+            await waitForMicrotasks();
+
+            assert.strictEqual(settled, false);
+            assert.strictEqual(spawnStub.callCount, 1);
+            sinon.assert.calledOnce(terminateStub);
+
+            termination.resolve();
+            await shutdown;
+            await waitForMicrotasks();
+            assert.strictEqual(settled, true);
+            assert.strictEqual(spawnStub.callCount, 1);
+        } finally {
+            termination.resolve();
+            await repository.shutdown();
+            terminateStub.restore();
+        }
+    });
+
+    test('disposing during ps CLI path resolution prevents a late spawn', async () => {
+        const cliPath = createDeferred<string>();
+        getCliPathStub.returns(cliPath.promise);
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        try {
+            repository.setPanelVisible(true);
+            await waitForMicrotasks();
+            await repository.shutdown();
+            cliPath.resolve('aspire');
+            await waitForMicrotasks();
+
+            sinon.assert.notCalled(spawnStub);
+        } finally {
+            cliPath.resolve('aspire');
+            await repository.shutdown();
+        }
+    });
+
+    test('repository shutdown drains every ps process even when one cleanup fails', async () => {
+        spawnStub.onFirstCall().returns(new TestChildProcess(false));
+        spawnStub.onSecondCall().returns(new TestChildProcess(false));
+        const expectedError = new Error('follow cleanup failed');
+        const snapshotTermination = createDeferred<void>();
+        const terminateStub = sinon.stub(cliModule, 'terminateCliProcess');
+        terminateStub.onFirstCall().rejects(expectedError);
+        terminateStub.onSecondCall().returns(snapshotTermination.promise);
+        const repository = new AppHostDataRepository(terminalProvider);
+        let rejection: Promise<void> | undefined;
+
+        try {
+            repository.setViewMode('global');
+            repository.setPanelVisible(true);
+            await waitForMicrotasks();
+            repository.refresh();
+            await waitForMicrotasks();
+            sinon.assert.calledTwice(spawnStub);
+
+            const shutdown = repository.shutdown();
+            rejection = assert.rejects(shutdown, error => error === expectedError);
+            let settled = false;
+            void rejection.then(() => { settled = true; });
+            await waitForMicrotasks();
+            sinon.assert.calledTwice(terminateStub);
+            assert.strictEqual(settled, false, 'failed follow cleanup must still drain the snapshot process');
+
+            snapshotTermination.resolve();
+            await rejection;
+            assert.strictEqual(settled, true);
+        } finally {
+            snapshotTermination.resolve();
+            repository.dispose();
+            await rejection;
+            terminateStub.restore();
+        }
+    });
+
+    test('ps follow restarts reap real Windows cmd shim children', async function () {
+        if (process.platform !== 'win32') {
+            this.skip();
+        }
+        this.timeout(30_000);
+
+        const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-ps-'));
+        const scriptPath = path.join(directory, 'follow.js');
+        const shimPath = path.join(directory, 'aspire.cmd');
+        const pidLogPath = path.join(directory, 'pids.log');
+        fs.writeFileSync(scriptPath, `
+require('fs').appendFileSync(${JSON.stringify(pidLogPath)}, String(process.pid) + '\\n');
+setInterval(() => {}, 1000);
+`);
+        fs.writeFileSync(shimPath, `@echo off\r\n"${process.execPath}" "${scriptPath}" %*\r\n`);
+        const environmentStub = sinon.stub(terminalProvider, 'createEnvironment').returns({
+            ...process.env,
+            ELECTRON_RUN_AS_NODE: '1',
+        });
+        getCliPathStub.resolves(shimPath);
+        spawnStub.resetBehavior();
+        spawnStub.callThrough();
+        const repository = new AppHostDataRepository(terminalProvider);
+        const readPids = (): number[] => {
+            if (!fs.existsSync(pidLogPath)) {
+                return [];
+            }
+            // The stand-in appends "<pid>\n". Ignore an unfinished final line while it writes.
+            return fs.readFileSync(pidLogPath, 'utf8').split(/\r?\n/).slice(0, -1).map(line => {
+                const pid = Number(line);
+                assert.ok(Number.isSafeInteger(pid) && pid > 0, `Invalid follow process PID: ${line}`);
+                return pid;
+            });
+        };
+
+        try {
+            repository.setViewMode('global');
+            repository.setPanelVisible(true);
+            for (let generation = 0; generation < 2; generation++) {
+                await waitForCondition(() => readPids().length === generation + 1, 'Windows follow process did not start', 5000);
+                const pids = readPids();
+                assert.deepStrictEqual(pids.map(isProcessAlive), pids.map((_pid, index) => index === generation));
+                const leaders: nodeChildProcess.ChildProcessWithoutNullStreams[] = spawnStub.getCalls().map(call => call.returnValue);
+                assert.strictEqual(leaders.filter(child => child.exitCode === null && child.signalCode === null).length, 1);
+
+                if (generation === 0) {
+                    repository.setPanelVisible(false);
+                    repository.setPanelVisible(true);
+                }
+            }
+
+            await repository.shutdown();
+            assert.deepStrictEqual(readPids().map(isProcessAlive), [false, false]);
+        } finally {
+            try {
+                await repository.shutdown();
+            } finally {
+                environmentStub.restore();
+                removeDirectorySafely(directory);
+            }
+        }
+    });
+
+    test('an active AppHost debug session keeps status data available only for its lifetime', async () => {
+        const repository = new AppHostDataRepository(terminalProvider);
+        try {
+            repository.activate();
+            repository.setAppHostDebugSessionActive(true);
+            await waitForMicrotasks();
+            const psCall = spawnStub.getCalls().find(call => call.args[2][0] === 'ps');
+            assert.ok(psCall, 'an active run/debug session needs status data even without visible UI');
+            assert.strictEqual(psCall.returnValue.killed, false);
+
+            repository.setAppHostDebugSessionActive(true);
+            await waitForMicrotasks();
+            assert.strictEqual(spawnStub.getCalls().filter(call => call.args[2][0] === 'ps').length, 1);
+
+            repository.setAppHostDebugSessionActive(false);
+            await waitForMicrotasks();
+            assert.strictEqual(psCall.returnValue.killed, true);
+        } finally {
+            repository.dispose();
+        }
+    });
+
     test('background data lease keeps ps follow active while the panel is hidden', async () => {
         const childProcess = new TestChildProcess();
         spawnStub.returns(childProcess);
@@ -6264,7 +6897,7 @@ suite('AppHostDataRepository global polling', () => {
         repository.activate();
         repository.setPanelVisible(true);
         // Open an AppHost tab so the data sources go active and ps --follow starts in workspace view.
-        repository.setAppHostFilesOpen(['/workspace/AppHost.csproj']);
+        repository.setAppHostFilesOpen(['/workspace/AppHost.csproj'], true);
         await waitForMicrotasks();
 
         const psCall = spawnStub.getCalls().find(call => (call.args[2] as string[])[0] === 'ps');
@@ -6424,6 +7057,7 @@ suite('AppHostDataRepository global polling', () => {
         });
         const discoveryService = {
             discover: discoverStub,
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: discoveryChanges.event,
             dispose: () => discoveryChanges.dispose(),
         } as unknown as AppHostDiscoveryService;
@@ -6549,6 +7183,766 @@ suite('AppHostDataRepository global polling', () => {
         assert.strictEqual(repository.appHosts[1].appHostPid, 9999);
 
         repository.dispose();
+    });
+
+    test('describe watchers preserve their arguments across AppHosts and restarts', async () => {
+        const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
+        const repository = new AppHostDataRepository(terminalProvider);
+        try {
+            repository.setViewMode('global');
+            repository.setPanelVisible(true);
+            await waitForMicrotasks();
+            const follow = spawnStub.firstCall;
+            const firstPath = vscode.Uri.file('/workspace/first/AppHost.csproj').fsPath;
+            const secondPath = vscode.Uri.file('/workspace/second/AppHost.csproj').fsPath;
+            follow.args[3].lineCallback(JSON.stringify([
+                { appHostPath: firstPath, appHostPid: 1, status: 'running' },
+                { appHostPath: secondPath, appHostPid: 2, status: 'running' },
+            ]));
+            await waitForMicrotasks();
+            const describes = spawnStub.getCalls().filter(call => call.args[2][0] === 'describe');
+            assert.strictEqual(describes.length, 2);
+            describes[0].returnValue.markExited(1);
+            describes[0].args[3].exitCallback(1);
+            await clock.tickAsync(5000);
+            const restarted = spawnStub.getCalls().filter(call => call.args[2][0] === 'describe').at(-1);
+            assert.ok(restarted);
+            assert.deepStrictEqual(restarted.args[2], describes[0].args[2]);
+        } finally {
+            repository.dispose();
+            clock.restore();
+        }
+    });
+
+    test('changing debug logging restarts status and resource watchers', async () => {
+        const changes = new vscode.EventEmitter<vscode.ConfigurationChangeEvent>();
+        const changeStub = sinon.stub(vscode.workspace, 'onDidChangeConfiguration').callsFake(listener => changes.event(listener));
+        const get = sinon.stub();
+        get.withArgs('appHostsPollingInterval', 30000).returns(30000);
+        get.withArgs('enableAspireCliDebugLogging', false).returns(false);
+        const configuration = sinon.stub(vscode.workspace, 'getConfiguration');
+        configuration.withArgs('aspire').returns({
+            get,
+            inspect: () => ({}),
+        } as unknown as vscode.WorkspaceConfiguration);
+        const repository = new AppHostDataRepository(terminalProvider);
+        try {
+            repository.setViewMode('global');
+            repository.setPanelVisible(true);
+            await waitForMicrotasks();
+            spawnStub.firstCall.args[3].lineCallback(JSON.stringify({
+                appHostPath: '/workspace/AppHost.csproj', appHostPid: 1, status: 'running',
+            }));
+            await waitForMicrotasks();
+            assert.strictEqual(spawnStub.callCount, 2);
+
+            for (const enabled of [true, false]) {
+                const initialCalls = spawnStub.callCount;
+                get.withArgs('enableAspireCliDebugLogging', false).returns(enabled);
+                changes.fire({ affectsConfiguration: section => section === 'aspire.enableAspireCliDebugLogging' });
+                await waitForMicrotasks();
+                const restarted = spawnStub.getCalls().slice(initialCalls);
+                assert.deepStrictEqual(restarted.map(call => call.args[2][0]).sort(), ['describe', 'ps']);
+            }
+        } finally {
+            repository.dispose();
+            configuration.restore();
+            changeStub.restore();
+            changes.dispose();
+        }
+    });
+
+    test('failed status followers and snapshots report stderr in Aspire Output without dumping results', async () => {
+        const warning = sinon.spy(extensionLogOutputChannel, 'warn');
+        const repository = new AppHostDataRepository(terminalProvider);
+        try {
+            repository.setViewMode('global');
+            repository.setPanelVisible(true);
+            await waitForMicrotasks();
+            const follow = spawnStub.firstCall;
+            follow.args[3].stdoutCallback('{"private":"status payload"}');
+            follow.args[3].stderrCallback('Follower connection failed');
+            follow.returnValue.markExited(1);
+            follow.args[3].exitCallback(1);
+            await waitForMicrotasks();
+
+            const snapshot = spawnStub.secondCall;
+            snapshot.args[3].stdoutCallback('{"private":"status payload"}');
+            snapshot.args[3].stderrCallback('Snapshot access denied');
+            snapshot.returnValue.markExited(2);
+            snapshot.args[3].exitCallback(2);
+
+            assert.deepStrictEqual(warning.getCalls().map(call => call.args[0]), [
+                'aspire ps --follow failed (exit code 1): Follower connection failed',
+                errorFetchingAppHosts('Snapshot access denied'),
+            ]);
+            assert.strictEqual(repository.errorMessage, errorFetchingAppHosts('Snapshot access denied'));
+        } finally {
+            repository.dispose();
+            warning.restore();
+        }
+    });
+
+    for (const { name, setting, interval, reconciliationInterval } of [
+        { name: 'default polling', setting: 'appHostsPollingInterval', interval: undefined, reconciliationInterval: 30000 },
+        { name: 'fast polling', setting: 'appHostsPollingInterval', interval: 1000, reconciliationInterval: 1000 },
+        { name: 'legacy fast polling', setting: 'globalAppHostsPollingInterval', interval: 2000, reconciliationInterval: 2000 },
+        { name: 'slower polling', setting: 'appHostsPollingInterval', interval: 600000, reconciliationInterval: 600000 },
+    ]) {
+        test(`healthy ps follow preserves the configured safety cadence with ${name}`, async () => {
+            const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
+            const inspect = sinon.stub().returns({});
+            inspect.withArgs(setting).returns({ globalValue: interval });
+            const getConfigurationStub = sinon.stub(vscode.workspace, 'getConfiguration');
+            getConfigurationStub.withArgs('aspire').returns({
+                inspect,
+                get: sinon.stub().withArgs('appHostsPollingInterval', 30000).returns(30000),
+            } as unknown as vscode.WorkspaceConfiguration);
+            spawnStub.callsFake((_terminalProvider, _command, args: string[], options: cliModule.SpawnProcessOptions) => {
+                const child = new TestChildProcess();
+                if (args[0] === 'ps' && !args.includes('--follow')) {
+                    options.stdoutCallback?.('[]');
+                    options.exitCallback?.(0);
+                    child.markExited();
+                }
+                return child;
+            });
+            const repository = new AppHostDataRepository(terminalProvider);
+            const psCalls = () => spawnStub.getCalls().filter(call => call.args[2][0] === 'ps');
+            const snapshotCalls = () => psCalls().filter(call => !call.args[2].includes('--follow'));
+
+            try {
+                repository.activate();
+                repository.setViewMode('global');
+                repository.setPanelVisible(true);
+                await waitForMicrotasks();
+                assert.strictEqual(psCalls().length, 1);
+                assert.strictEqual(repository.isLoading, false);
+                assert.strictEqual(getConfigInfoStub.called, false, 'Status queries do not need a diagnostic capability probe.');
+
+                await clock.tickAsync(reconciliationInterval - 1);
+                assert.strictEqual(snapshotCalls().length, 0);
+
+                repository.refreshRuntimeState();
+                await waitForMicrotasks();
+                assert.strictEqual(snapshotCalls().length, 1, 'Explicit refresh must not wait for the safety interval.');
+
+                await clock.tickAsync(1);
+                assert.strictEqual(snapshotCalls().length, 2, 'The first safety snapshot must run at the expected interval.');
+                await clock.tickAsync(reconciliationInterval);
+                assert.strictEqual(snapshotCalls().length, 3);
+                assert.strictEqual(psCalls().filter(call => call.args[2].includes('--follow')).length, 1);
+            } finally {
+                repository.dispose();
+                getConfigurationStub.restore();
+                clock.restore();
+            }
+        });
+    }
+
+    for (const [failure, synchronous] of [
+        ['clean exit', false],
+        ['clean exit', true],
+        ['error exit', false],
+        ['error exit', true],
+        ['spawn error', false],
+        ['spawn error', true],
+    ] as const) {
+        test(`ps follow resumes fast interval polling after ${synchronous ? 'synchronous' : 'asynchronous'} ${failure}`, async () => {
+            const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
+            const inspect = sinon.stub().returns({});
+            inspect.withArgs('appHostsPollingInterval').returns({ globalValue: 1000 });
+            const getConfigurationStub = sinon.stub(vscode.workspace, 'getConfiguration');
+            getConfigurationStub.withArgs('aspire').returns({
+                inspect,
+                get: sinon.stub().withArgs('appHostsPollingInterval', 30000).returns(30000),
+            } as unknown as vscode.WorkspaceConfiguration);
+            const completeFollow = (child: TestChildProcess, options: cliModule.SpawnProcessOptions) => {
+                if (failure === 'spawn error') {
+                    options.errorCallback?.(new Error('spawn ENOENT'));
+                } else {
+                    const code = failure === 'clean exit' ? 0 : 1;
+                    child.markExited(code);
+                    options.exitCallback?.(code);
+                }
+            };
+            spawnStub.callsFake((_terminalProvider, _command, args: string[], options: cliModule.SpawnProcessOptions) => {
+                const child = new TestChildProcess();
+                if (args[0] === 'ps' && !args.includes('--follow')) {
+                    options.stdoutCallback?.('[]');
+                    options.exitCallback?.(0);
+                    child.markExited();
+                } else if (args[0] === 'ps' && synchronous) {
+                    completeFollow(child, options);
+                }
+                return child;
+            });
+            const repository = new AppHostDataRepository(terminalProvider);
+
+            try {
+                repository.activate();
+                repository.setViewMode('global');
+                repository.setPanelVisible(true);
+                await waitForMicrotasks();
+                const follow = spawnStub.firstCall;
+                assert.deepStrictEqual(follow.args[2], ['ps', '--follow', '--format', 'json', '--nologo']);
+
+                if (!synchronous) {
+                    completeFollow(follow.returnValue, follow.args[3]);
+                }
+                await waitForMicrotasks();
+                assert.strictEqual(spawnStub.callCount, 2);
+
+                await clock.tickAsync(999);
+                assert.strictEqual(spawnStub.callCount, 2);
+                await clock.tickAsync(1);
+                assert.deepStrictEqual(spawnStub.getCalls().map(call => call.args[2]), [
+                    ['ps', '--follow', '--format', 'json', '--nologo'],
+                    ['ps', '--format', 'json', '--nologo'],
+                    ['ps', '--format', 'json', '--nologo'],
+                ]);
+            } finally {
+                repository.dispose();
+                getConfigurationStub.restore();
+                clock.restore();
+            }
+        });
+    }
+
+    test('hiding the panel while the follow executable is resolving does not start a stale watcher', async () => {
+        const cliPath = createDeferred<string>();
+        getCliPathStub.returns(cliPath.promise);
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        try {
+            repository.activate();
+            repository.setViewMode('global');
+            repository.setPanelVisible(true);
+            await waitForMicrotasks();
+            assert.strictEqual(getCliPathStub.calledOnce, true);
+
+            repository.setPanelVisible(false);
+            cliPath.resolve('aspire');
+            await waitForMicrotasks();
+            assert.strictEqual(spawnStub.called, false);
+        } finally {
+            cliPath.resolve('aspire');
+            repository.dispose();
+        }
+    });
+
+    test('hiding and resuming resets the safety interval and uses the current CLI executable', async () => {
+        const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
+        getCliPathStub.resolves('/current/aspire');
+        spawnStub.callsFake((_terminalProvider, _command, args: string[], options: cliModule.SpawnProcessOptions) => {
+            const child = new TestChildProcess();
+            if (args[0] === 'ps' && !args.includes('--follow')) {
+                options.stdoutCallback?.('[]');
+                options.exitCallback?.(0);
+                child.markExited();
+            }
+            return child;
+        });
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        try {
+            repository.activate();
+            repository.setViewMode('global');
+            repository.setPanelVisible(true);
+            await waitForMicrotasks();
+            await clock.tickAsync(29000);
+            assert.strictEqual(spawnStub.callCount, 1);
+            assert.strictEqual(spawnStub.firstCall.args[1], '/current/aspire');
+
+            repository.setPanelVisible(false);
+            await waitForMicrotasks();
+            await clock.tickAsync(30000);
+            assert.strictEqual(spawnStub.callCount, 1, 'Hidden UI must cancel the pending safety rescan.');
+            getCliPathStub.resolves('/older/aspire');
+            repository.setPanelVisible(true);
+            await waitForMicrotasks();
+            assert.strictEqual(spawnStub.secondCall.args[1], '/older/aspire');
+
+            await clock.tickAsync(29999);
+            assert.strictEqual(spawnStub.callCount, 2);
+            await clock.tickAsync(1);
+            assert.deepStrictEqual(spawnStub.getCalls().map(call => [call.args[1], call.args[2]]), [
+                ['/current/aspire', ['ps', '--follow', '--format', 'json', '--nologo']],
+                ['/older/aspire', ['ps', '--follow', '--format', 'json', '--nologo']],
+                ['/older/aspire', ['ps', '--format', 'json', '--nologo']],
+            ]);
+        } finally {
+            repository.dispose();
+            clock.restore();
+        }
+    });
+
+    test('ps follow periodically reconciles a missed AppHost delta', async () => {
+        const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
+        const inspect = sinon.stub();
+        inspect.withArgs('appHostsPollingInterval').returns({ globalValue: 1000 });
+        inspect.withArgs('globalAppHostsPollingInterval').returns({ globalValue: 9000 });
+        const getConfigurationStub = sinon.stub(vscode.workspace, 'getConfiguration');
+        getConfigurationStub.withArgs('aspire').returns({
+            inspect,
+            get: sinon.stub().withArgs('appHostsPollingInterval', 30000).returns(30000),
+        } as unknown as vscode.WorkspaceConfiguration);
+        const spawned: { args: string[]; options: any }[] = [];
+        spawnStub.callsFake((_terminalProvider, _command, args, options) => {
+            spawned.push({ args, options });
+            return new TestChildProcess();
+        });
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        try {
+            repository.activate();
+            repository.setViewMode('global');
+            repository.setPanelVisible(true);
+            await waitForMicrotasks();
+
+            const followArgs = JSON.stringify(['ps', '--follow', '--format', 'json', '--nologo']);
+            const snapshotArgs = JSON.stringify(['ps', '--format', 'json', '--nologo']);
+            assert.strictEqual(spawned.filter(call => JSON.stringify(call.args) === followArgs).length, 1);
+            assert.strictEqual(spawned.filter(call => JSON.stringify(call.args) === snapshotArgs).length, 0);
+
+            // Simulate a running AppHost whose start delta never arrives on the long-lived stream.
+            await clock.tickAsync(1000);
+            const snapshotCall = spawned.find(call => JSON.stringify(call.args) === snapshotArgs);
+            assert.ok(snapshotCall, 'expected a periodic authoritative snapshot while ps --follow remains active');
+            snapshotCall.options.stdoutCallback(JSON.stringify([{
+                appHostPath: '/workspace/AppHost.csproj',
+                appHostPid: 1234,
+                status: 'running',
+            }]));
+            snapshotCall.options.exitCallback(0);
+            await waitForMicrotasks();
+
+            assert.strictEqual(repository.appHosts.length, 1);
+            assert.strictEqual(repository.appHosts[0].appHostPath, '/workspace/AppHost.csproj');
+            assert.strictEqual(spawned.filter(call => JSON.stringify(call.args) === followArgs).length, 1);
+        } finally {
+            repository.dispose();
+            getConfigurationStub.restore();
+            clock.restore();
+        }
+    });
+
+    test('ps follow delta wins over an older in-flight authoritative snapshot', async () => {
+        const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
+        const inspect = sinon.stub();
+        inspect.withArgs('appHostsPollingInterval').returns({ globalValue: 1000 });
+        inspect.withArgs('globalAppHostsPollingInterval').returns({ globalValue: 9000 });
+        const getConfigurationStub = sinon.stub(vscode.workspace, 'getConfiguration');
+        getConfigurationStub.withArgs('aspire').returns({
+            inspect,
+            get: sinon.stub().withArgs('appHostsPollingInterval', 30000).returns(30000),
+        } as unknown as vscode.WorkspaceConfiguration);
+        const spawned: { args: string[]; options: any }[] = [];
+        spawnStub.callsFake((_terminalProvider, _command, args, options) => {
+            spawned.push({ args, options });
+            return new TestChildProcess();
+        });
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        try {
+            repository.activate();
+            repository.setViewMode('global');
+            repository.setPanelVisible(true);
+            await waitForMicrotasks();
+
+            const followCall = spawned.find(call =>
+                call.args[0] === 'ps' && call.args.includes('--follow'));
+            assert.ok(followCall);
+            followCall.options.lineCallback(JSON.stringify({
+                appHostPath: '/workspace/AppHost.csproj',
+                appHostPid: 1234,
+                status: 'running',
+            }));
+            await waitForMicrotasks();
+            assert.strictEqual(repository.appHosts.length, 1);
+
+            await clock.tickAsync(1000);
+            const snapshotCall = spawned.find(call =>
+                call.args[0] === 'ps' && !call.args.includes('--follow'));
+            assert.ok(snapshotCall);
+            snapshotCall.options.stdoutCallback(JSON.stringify([{
+                appHostPath: '/workspace/AppHost.csproj',
+                appHostPid: 1234,
+                status: 'running',
+            }]));
+
+            followCall.options.lineCallback(JSON.stringify({
+                appHostPath: '/workspace/AppHost.csproj',
+                appHostPid: 1234,
+                status: 'stopped',
+            }));
+            await waitForMicrotasks();
+            assert.deepStrictEqual(repository.appHosts, []);
+
+            snapshotCall.options.exitCallback(0);
+            await waitForMicrotasks();
+            assert.deepStrictEqual(repository.appHosts, []);
+        }
+        finally {
+            repository.dispose();
+            getConfigurationStub.restore();
+            clock.restore();
+        }
+    });
+
+    test('ps reconciliation retains unrelated AppHosts missed by follow while replaying newer deltas', async () => {
+        const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
+        const inspect = sinon.stub();
+        inspect.withArgs('appHostsPollingInterval').returns({ globalValue: 1000 });
+        inspect.withArgs('globalAppHostsPollingInterval').returns({ globalValue: 9000 });
+        const getConfigurationStub = sinon.stub(vscode.workspace, 'getConfiguration');
+        getConfigurationStub.withArgs('aspire').returns({
+            inspect,
+            get: sinon.stub().withArgs('appHostsPollingInterval', 30000).returns(30000),
+        } as unknown as vscode.WorkspaceConfiguration);
+        const spawned: { args: string[]; options: any }[] = [];
+        spawnStub.callsFake((_terminalProvider, _command, args, options) => {
+            spawned.push({ args, options });
+            return new TestChildProcess();
+        });
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        try {
+            repository.activate();
+            repository.setViewMode('global');
+            repository.setPanelVisible(true);
+            await waitForMicrotasks();
+
+            const followCall = spawned.find(call =>
+                call.args[0] === 'ps' && call.args.includes('--follow'));
+            assert.ok(followCall);
+            followCall.options.lineCallback(JSON.stringify({
+                appHostPath: '/workspace/AppHost.csproj',
+                appHostPid: 1234,
+                status: 'running',
+            }));
+            await waitForMicrotasks();
+
+            await clock.tickAsync(1000);
+            const snapshotCall = spawned.find(call =>
+                call.args[0] === 'ps' && !call.args.includes('--follow'));
+            assert.ok(snapshotCall);
+            snapshotCall.options.stdoutCallback(JSON.stringify([
+                {
+                    appHostPath: '/workspace/AppHost.csproj',
+                    appHostPid: 1234,
+                    status: 'running',
+                },
+                {
+                    appHostPath: '/workspace/MissedAppHost.csproj',
+                    appHostPid: 5678,
+                    status: 'running',
+                },
+            ]));
+
+            followCall.options.lineCallback('malformed follow output');
+            followCall.options.lineCallback(JSON.stringify({
+                appHostPath: '/workspace/AppHost.csproj',
+                appHostPid: 1234,
+                status: 'stopped',
+            }));
+            await waitForMicrotasks();
+
+            snapshotCall.options.exitCallback(0);
+            await waitForMicrotasks();
+
+            assert.deepStrictEqual(
+                repository.appHosts.map(appHost => appHost.appHostPath),
+                ['/workspace/MissedAppHost.csproj']);
+            assert.strictEqual(
+                spawned.filter(call => call.args[0] === 'ps' && !call.args.includes('--follow')).length,
+                1,
+                'replayed follow deltas should not queue another authoritative snapshot');
+        }
+        finally {
+            repository.dispose();
+            getConfigurationStub.restore();
+            clock.restore();
+        }
+    });
+
+    test('ps reconciliation abandons a snapshot whose replay window is contested by a follow delta', async () => {
+        const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
+        const inspect = sinon.stub();
+        inspect.withArgs('appHostsPollingInterval').returns({ globalValue: 1000 });
+        inspect.withArgs('globalAppHostsPollingInterval').returns({ globalValue: 9000 });
+        const getConfigurationStub = sinon.stub(vscode.workspace, 'getConfiguration');
+        getConfigurationStub.withArgs('aspire').returns({
+            inspect,
+            get: sinon.stub().withArgs('appHostsPollingInterval', 30000).returns(30000),
+        } as unknown as vscode.WorkspaceConfiguration);
+        const spawned: { args: string[]; options: any }[] = [];
+        spawnStub.callsFake((_terminalProvider, _command, args, options) => {
+            spawned.push({ args, options });
+            return new TestChildProcess();
+        });
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        try {
+            repository.activate();
+            repository.setViewMode('global');
+            repository.setPanelVisible(true);
+            await waitForMicrotasks();
+
+            const followCall = spawned.find(call =>
+                call.args[0] === 'ps' && call.args.includes('--follow'));
+            assert.ok(followCall);
+
+            await clock.tickAsync(1000);
+            const contestedSnapshot = spawned.find(call =>
+                call.args[0] === 'ps' && !call.args.includes('--follow'));
+            assert.ok(contestedSnapshot);
+
+            // The delta lands before the snapshot's first byte, so there is no evidence of whether
+            // it happened before or after the CLI enumerated. Replaying it could resurrect an
+            // AppHost the snapshot omits, and dropping it could erase a stop that really did
+            // happen after enumeration, so the snapshot is abandoned rather than guessed at.
+            followCall.options.lineCallback(JSON.stringify({
+                appHostPath: '/workspace/Contested.csproj',
+                appHostPid: 4321,
+                status: 'running',
+            }));
+            await waitForMicrotasks();
+
+            contestedSnapshot.options.stdoutCallback(JSON.stringify([
+                {
+                    appHostPath: '/workspace/SnapshotOnly.csproj',
+                    appHostPid: 1234,
+                    status: 'running',
+                },
+            ]));
+            contestedSnapshot.options.exitCallback(0);
+            await waitForMicrotasks();
+
+            // The abandoned snapshot contributes nothing, so its AppHost never appears and the
+            // live follow state is left exactly as the stream delivered it.
+            assert.deepStrictEqual(
+                repository.appHosts.map(appHost => appHost.appHostPath),
+                ['/workspace/Contested.csproj']);
+
+            // The next tick takes a fresh snapshot. Its window is uncontested, so it applies
+            // normally and reconciles the state the abandoned one could not.
+            await clock.tickAsync(1000);
+            const uncontestedSnapshot = spawned.filter(call =>
+                call.args[0] === 'ps' && !call.args.includes('--follow')).at(-1);
+            assert.ok(uncontestedSnapshot);
+            assert.notStrictEqual(uncontestedSnapshot, contestedSnapshot);
+
+            uncontestedSnapshot.options.stdoutCallback(JSON.stringify([
+                {
+                    appHostPath: '/workspace/SnapshotOnly.csproj',
+                    appHostPid: 1234,
+                    status: 'running',
+                },
+            ]));
+            uncontestedSnapshot.options.exitCallback(0);
+            await waitForMicrotasks();
+
+            assert.deepStrictEqual(
+                repository.appHosts.map(appHost => appHost.appHostPath),
+                ['/workspace/SnapshotOnly.csproj']);
+        }
+        finally {
+            repository.dispose();
+            getConfigurationStub.restore();
+            clock.restore();
+        }
+    });
+
+    test('ps reconciliation replays follow deltas observed after the authoritative snapshot was captured', async () => {
+        const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
+        const inspect = sinon.stub();
+        inspect.withArgs('appHostsPollingInterval').returns({ globalValue: 1000 });
+        inspect.withArgs('globalAppHostsPollingInterval').returns({ globalValue: 9000 });
+        const getConfigurationStub = sinon.stub(vscode.workspace, 'getConfiguration');
+        getConfigurationStub.withArgs('aspire').returns({
+            inspect,
+            get: sinon.stub().withArgs('appHostsPollingInterval', 30000).returns(30000),
+        } as unknown as vscode.WorkspaceConfiguration);
+        const spawned: { args: string[]; options: any }[] = [];
+        spawnStub.callsFake((_terminalProvider, _command, args, options) => {
+            spawned.push({ args, options });
+            return new TestChildProcess();
+        });
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        try {
+            repository.activate();
+            repository.setViewMode('global');
+            repository.setPanelVisible(true);
+            await waitForMicrotasks();
+
+            const followCall = spawned.find(call =>
+                call.args[0] === 'ps' && call.args.includes('--follow'));
+            assert.ok(followCall);
+
+            await clock.tickAsync(1000);
+            const snapshotCall = spawned.find(call =>
+                call.args[0] === 'ps' && !call.args.includes('--follow'));
+            assert.ok(snapshotCall);
+
+            // The snapshot's first byte establishes its capture point, so this AppHost started
+            // after the CLI enumerated and the delta is provably newer than the snapshot.
+            snapshotCall.options.stdoutCallback(JSON.stringify([
+                {
+                    appHostPath: '/workspace/SnapshotOnly.csproj',
+                    appHostPid: 1234,
+                    status: 'running',
+                },
+            ]));
+            followCall.options.lineCallback(JSON.stringify({
+                appHostPath: '/workspace/StartedAfterCapture.csproj',
+                appHostPid: 4321,
+                status: 'running',
+            }));
+            await waitForMicrotasks();
+
+            snapshotCall.options.exitCallback(0);
+            await waitForMicrotasks();
+
+            assert.deepStrictEqual(
+                repository.appHosts.map(appHost => appHost.appHostPath).sort(),
+                ['/workspace/SnapshotOnly.csproj', '/workspace/StartedAfterCapture.csproj']);
+        }
+        finally {
+            repository.dispose();
+            getConfigurationStub.restore();
+            clock.restore();
+        }
+    });
+
+    test('ps reconciliation restarts the replay window when an older CLI rejects nologo on stdout', async () => {
+        const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
+        const inspect = sinon.stub();
+        inspect.withArgs('appHostsPollingInterval').returns({ globalValue: 1000 });
+        inspect.withArgs('globalAppHostsPollingInterval').returns({ globalValue: 9000 });
+        const getConfigurationStub = sinon.stub(vscode.workspace, 'getConfiguration');
+        getConfigurationStub.withArgs('aspire').returns({
+            inspect,
+            get: sinon.stub().withArgs('appHostsPollingInterval', 30000).returns(30000),
+        } as unknown as vscode.WorkspaceConfiguration);
+        const spawned: { args: string[]; options: any }[] = [];
+        spawnStub.callsFake((_terminalProvider, _command, args, options) => {
+            spawned.push({ args, options });
+            return new TestChildProcess();
+        });
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        try {
+            repository.activate();
+            repository.setViewMode('global');
+            repository.setPanelVisible(true);
+            await waitForMicrotasks();
+
+            const followCall = spawned.find(call =>
+                call.args[0] === 'ps' && call.args.includes('--follow'));
+            assert.ok(followCall);
+
+            await clock.tickAsync(1000);
+            const rejectedSnapshotCall = spawned.find(call =>
+                call.args[0] === 'ps' && !call.args.includes('--follow') && call.args.includes('--nologo'));
+            assert.ok(rejectedSnapshotCall);
+
+            // An older CLI can report the rejection on stdout rather than stderr, so the attempt
+            // looks like it started producing a snapshot even though it never enumerated anything.
+            rejectedSnapshotCall.options.stdoutCallback("Unrecognized command or argument '--nologo'.");
+            rejectedSnapshotCall.options.exitCallback(1);
+            await waitForMicrotasks();
+
+            const retrySnapshotCall = spawned.find(call =>
+                call.args[0] === 'ps' && !call.args.includes('--follow') && !call.args.includes('--nologo'));
+            assert.ok(retrySnapshotCall);
+
+            // Without clearing the false capture, this delta would count as newer than the retry's
+            // snapshot and be replayed over it. It is actually unorderable against the retry, so
+            // the retry's window is contested and its snapshot must be abandoned.
+            followCall.options.lineCallback(JSON.stringify({
+                appHostPath: '/workspace/Contested.csproj',
+                appHostPid: 4321,
+                status: 'running',
+            }));
+            await waitForMicrotasks();
+
+            retrySnapshotCall.options.stdoutCallback(JSON.stringify([
+                {
+                    appHostPath: '/workspace/SnapshotOnly.csproj',
+                    appHostPid: 1234,
+                    status: 'running',
+                },
+            ]));
+            retrySnapshotCall.options.exitCallback(0);
+            await waitForMicrotasks();
+
+            assert.deepStrictEqual(
+                repository.appHosts.map(appHost => appHost.appHostPath),
+                ['/workspace/Contested.csproj']);
+        }
+        finally {
+            repository.dispose();
+            getConfigurationStub.restore();
+            clock.restore();
+        }
+    });
+
+    test('ps reconciliation retries when the bounded follow replay buffer overflows', async () => {
+        const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
+        const inspect = sinon.stub();
+        inspect.withArgs('appHostsPollingInterval').returns({ globalValue: 1000 });
+        inspect.withArgs('globalAppHostsPollingInterval').returns({ globalValue: 9000 });
+        const getConfigurationStub = sinon.stub(vscode.workspace, 'getConfiguration');
+        getConfigurationStub.withArgs('aspire').returns({
+            inspect,
+            get: sinon.stub().withArgs('appHostsPollingInterval', 30000).returns(30000),
+        } as unknown as vscode.WorkspaceConfiguration);
+        const spawned: { args: string[]; options: any }[] = [];
+        spawnStub.callsFake((_terminalProvider, _command, args, options) => {
+            spawned.push({ args, options });
+            return new TestChildProcess();
+        });
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        try {
+            repository.activate();
+            repository.setViewMode('global');
+            repository.setPanelVisible(true);
+            await waitForMicrotasks();
+
+            const followCall = spawned.find(call =>
+                call.args[0] === 'ps' && call.args.includes('--follow'));
+            assert.ok(followCall);
+
+            await clock.tickAsync(1000);
+            const snapshotCall = spawned.find(call =>
+                call.args[0] === 'ps' && !call.args.includes('--follow'));
+            assert.ok(snapshotCall);
+            snapshotCall.options.stdoutCallback('[]');
+
+            for (let index = 0; index < 257; index++) {
+                followCall.options.lineCallback(JSON.stringify({
+                    appHostPath: `/workspace/AppHost-${index}.csproj`,
+                    appHostPid: index + 1,
+                    status: 'running',
+                }));
+            }
+
+            snapshotCall.options.exitCallback(0);
+            await waitForMicrotasks();
+
+            assert.strictEqual(
+                spawned.filter(call => call.args[0] === 'ps' && !call.args.includes('--follow')).length,
+                2,
+                'an incomplete bounded replay should queue a fresh authoritative snapshot');
+        }
+        finally {
+            repository.dispose();
+            getConfigurationStub.restore();
+            clock.restore();
+        }
     });
 
     test('global ps follow retries older-CLI nologo rejection from bounded output suffix', async () => {
@@ -6682,6 +8076,7 @@ suite('AppHostDataRepository global polling', () => {
         }];
         const discoveryService = {
             discover: async () => candidates,
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: discoveryChanges.event,
             dispose: () => discoveryChanges.dispose(),
         } as unknown as AppHostDiscoveryService;
@@ -6743,6 +8138,7 @@ suite('AppHostDataRepository global polling', () => {
         }];
         const discoveryService = {
             discover: async () => candidates,
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: discoveryChanges.event,
             dispose: () => discoveryChanges.dispose(),
         } as unknown as AppHostDiscoveryService;
@@ -7044,7 +8440,7 @@ suite('AppHostDataRepository global polling', () => {
             await waitForMicrotasks();
 
             assert.strictEqual(spawnStub.calledTwice, true);
-            assert.strictEqual(clock.countTimers(), timerCountBeforeFallback + 1);
+            assert.strictEqual(clock.countTimers(), timerCountBeforeFallback);
         } finally {
             repository.dispose();
             clock.restore();
@@ -7264,11 +8660,37 @@ suite('AppHostDataRepository open-AppHost-tab describe', () => {
         return call.args[call.args.indexOf('--apphost') + 1];
     }
 
+    test('a background AppHost tab does not start status polling until its editor is visible', async () => {
+        const repository = new AppHostDataRepository(terminalProvider);
+        try {
+            repository.activate();
+            repository.setAppHostFilesOpen(['/test/AppHost.cs'], false);
+            await waitForMicrotasks();
+            assert.strictEqual(spawned.filter(call => call.args[0] === 'ps').length, 0);
+
+            repository.setAppHostFilesOpen(['/test/AppHost.cs'], true);
+            await waitForMicrotasks();
+            assert.strictEqual(spawned.filter(call => call.args[0] === 'ps').length, 1);
+            await reportRunningAppHost({ appHostPath: '/test/AppHost.cs', appHostPid: 4321 });
+            const statusCall = spawned.find(call => call.args[0] === 'ps');
+            assert.ok(statusCall);
+            const statusProcess = statusCall.process;
+            const describeProcess = describeCalls()[0].process;
+
+            repository.setAppHostFilesOpen(['/test/AppHost.cs'], false);
+            await waitForMicrotasks();
+            assert.strictEqual(statusProcess.killed, true);
+            assert.strictEqual(describeProcess.killed, true);
+        } finally {
+            repository.dispose();
+        }
+    });
+
     test('opening a single-file AppHost tab follows the running host reported by aspire ps', async () => {
         const repository = new AppHostDataRepository(terminalProvider);
 
         repository.activate();
-        repository.setAppHostFilesOpen(['/test/AppHost.cs']);
+        repository.setAppHostFilesOpen(['/test/AppHost.cs'], true);
         await waitForMicrotasks();
 
         assert.ok(spawned.some(call => call.args[0] === 'ps'), 'expected `aspire ps` to start for the open tab');
@@ -7286,14 +8708,14 @@ suite('AppHostDataRepository open-AppHost-tab describe', () => {
         const repository = new AppHostDataRepository(terminalProvider);
 
         repository.activate();
-        repository.setAppHostFilesOpen(['/test/AppHost.cs']);
+        repository.setAppHostFilesOpen(['/test/AppHost.cs'], true);
         await waitForMicrotasks();
 
         const psCall = spawned.find(call => call.args[0] === 'ps');
         assert.ok(psCall);
         assert.strictEqual(psCall.process.killed, false);
 
-        repository.setAppHostFilesOpen([]);
+        repository.setAppHostFilesOpen([], false);
         await waitForMicrotasks();
 
         assert.strictEqual(psCall.process.killed, true);
@@ -7305,7 +8727,7 @@ suite('AppHostDataRepository open-AppHost-tab describe', () => {
         const repository = new AppHostDataRepository(terminalProvider);
 
         repository.activate();
-        repository.setAppHostFilesOpen(['/test/AppHost.cs']);
+        repository.setAppHostFilesOpen(['/test/AppHost.cs'], true);
         await waitForMicrotasks();
 
         await reportRunningAppHost({ appHostPath: '/test/AppHost.csproj', appHostPid: 4321 });
@@ -7316,25 +8738,22 @@ suite('AppHostDataRepository open-AppHost-tab describe', () => {
         repository.dispose();
     });
 
-    test('aspire ps stays alive and is not respawned when one of several open AppHost tabs is closed', async () => {
+    test('closing an AppHost tab does not restart polling while another AppHost editor remains visible', async () => {
         const repository = new AppHostDataRepository(terminalProvider);
 
         repository.activate();
-        repository.setAppHostFilesOpen(['/test/AppHost.cs', '/other/apphost.ts']);
+        repository.setAppHostFilesOpen(['/test/AppHost.cs', '/other/apphost.ts'], true);
         await waitForMicrotasks();
 
         const psCalls = spawned.filter(call => call.args[0] === 'ps');
         assert.strictEqual(psCalls.length, 1);
         assert.strictEqual(psCalls[0].process.killed, false);
 
-        // Closing one tab while another AppHost tab stays open leaves the open set non-empty, so the
-        // keep-alive gate must not flip: ps must neither be terminated nor respawned. A flip here is
-        // exactly the spawn/force-kill churn this guards against.
-        repository.setAppHostFilesOpen(['/test/AppHost.cs']);
+        repository.setAppHostFilesOpen(['/test/AppHost.cs'], true);
         await waitForMicrotasks();
 
-        assert.strictEqual(spawned.filter(call => call.args[0] === 'ps').length, 1, 'ps must not respawn while an AppHost tab remains open');
-        assert.strictEqual(psCalls[0].process.killed, false, 'ps must not be terminated while an AppHost tab remains open');
+        assert.strictEqual(spawned.filter(call => call.args[0] === 'ps').length, 1, 'ps must not respawn while an AppHost editor remains visible');
+        assert.strictEqual(psCalls[0].process.killed, false, 'ps must not be terminated while an AppHost editor remains visible');
 
         repository.dispose();
     });
@@ -7343,7 +8762,7 @@ suite('AppHostDataRepository open-AppHost-tab describe', () => {
         const repository = new AppHostDataRepository(terminalProvider);
 
         repository.activate();
-        repository.setAppHostFilesOpen(['/test/AppHost.cs', '/other/apphost.ts']);
+        repository.setAppHostFilesOpen(['/test/AppHost.cs', '/other/apphost.ts'], true);
         await waitForMicrotasks();
         await reportRunningAppHost({ appHostPath: '/test/AppHost.cs', appHostPid: 4321 });
         await reportRunningAppHost({ appHostPath: '/other/apphost.ts', appHostPid: 8765 });
@@ -7360,7 +8779,7 @@ suite('AppHostDataRepository open-AppHost-tab describe', () => {
         const repository = new AppHostDataRepository(terminalProvider);
 
         repository.activate();
-        repository.setAppHostFilesOpen(['/test/AppHost.cs']);
+        repository.setAppHostFilesOpen(['/test/AppHost.cs'], true);
         await waitForMicrotasks();
         await reportRunningAppHost({ appHostPath: '/test/AppHost.cs', appHostPid: 4321 });
 
@@ -7368,7 +8787,7 @@ suite('AppHostDataRepository open-AppHost-tab describe', () => {
         assert.ok(describeCall);
         assert.strictEqual(describeCall.process.killed, false);
 
-        repository.setAppHostFilesOpen([]);
+        repository.setAppHostFilesOpen([], false);
         await waitForMicrotasks();
 
         assert.strictEqual(describeCall.process.killed, true);
@@ -7380,8 +8799,8 @@ suite('AppHostDataRepository open-AppHost-tab describe', () => {
         const repository = new AppHostDataRepository(terminalProvider);
 
         repository.activate();
-        repository.setAppHostFilesOpen(['/test/AppHost.cs']);
-        repository.setAppHostFilesOpen(['/test/AppHost.cs']);
+        repository.setAppHostFilesOpen(['/test/AppHost.cs'], true);
+        repository.setAppHostFilesOpen(['/test/AppHost.cs'], true);
         await waitForMicrotasks();
 
         assert.strictEqual(spawned.filter(call => call.args[0] === 'ps').length, 1);
@@ -7407,7 +8826,7 @@ suite('AppHostDataRepository open-AppHost-tab describe', () => {
         // Opening the tab must surface the already-running host immediately by re-deriving against the
         // retained running set — `ps --follow` will not re-emit the unchanged host, so requiring a
         // refresh here is the bug this guards against.
-        repository.setAppHostFilesOpen(['/test/AppHost.cs']);
+        repository.setAppHostFilesOpen(['/test/AppHost.cs'], true);
         await waitForMicrotasks();
 
         assert.ok(
@@ -7458,8 +8877,8 @@ async function waitForAppHostDiscovery(): Promise<void> {
     await waitForMicrotasks();
 }
 
-async function waitForCondition(condition: () => boolean, message: string): Promise<void> {
-    for (let i = 0; i < 100; i++) {
+async function waitForCondition(condition: () => boolean, message: string, maxAttempts = 100): Promise<void> {
+    for (let i = 0; i < maxAttempts; i++) {
         if (condition()) {
             return;
         }
@@ -7468,12 +8887,4 @@ async function waitForCondition(condition: () => boolean, message: string): Prom
     }
 
     assert.ok(condition(), message);
-}
-
-function createDeferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
-    let resolve: (value: T) => void = () => { };
-    const promise = new Promise<T>(promiseResolve => {
-        resolve = promiseResolve;
-    });
-    return { promise, resolve };
 }

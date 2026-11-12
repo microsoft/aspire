@@ -5,10 +5,9 @@
 @inject IJSRuntime JS
 @inject IStringLocalizer<ConsoleLogs> Loc
 
-@implements IAsyncDisposable
-
 @* Console logs always have a dark background. Set data-theme="dark" so dark theme accent colors are used *@
 <div id="@ScrollContainerId" class="log-overflow console-overflow continuous-scroll-overflow" tabindex="0" role="region" aria-label="@Loc[nameof(ConsoleLogs.ConsoleLogsHeader)]" data-theme="dark">
+    <aspire-scroll-to-bottom hidden data-follow-initial-content data-scroll-to-bottom-label="@ControlsStringsLoc[nameof(ControlsStrings.ScrollToBottom)]"></aspire-scroll-to-bottom>
     <div class="@GetLogContainerClass()" id="logContainer">
         @if (LogEntries is { } logEntries)
         {
@@ -26,7 +25,7 @@
                     <span>@Loc[nameof(ConsoleLogs.ConsoleLogsNoLogsMatchFilter)]</span>
                 </div>
             }
-            <Virtualize @ref="VirtualizeRef" ItemsProvider="@GetItems" ItemSize="20" OverscanCount="200" TItem="LogEntry">
+            <Virtualize @ref="VirtualizeRef" ItemsProvider="@GetItems" ItemComparer="@s_logEntryComparer" ItemSize="20" OverscanCount="100" AnchorMode="VirtualizeAnchorMode.End" TItem="LogEntry">
                 @if (context.Pause is { } pause)
                 {
                     // If this is a previous pause but no logs were obtained during the pause, we don't need to show anything.
@@ -77,7 +76,7 @@
                                         {
                                             @s_spaceMarkup
                                         }
-                                        <span class="timestamp" title="@FormatHelpers.FormatDateTime(TimeProvider, timestamp, MillisecondsDisplay.Full, CultureInfo.CurrentCulture)">@GetDisplayTimestamp(timestamp)</span>
+                                        <span class="timestamp">@GetDisplayTimestamp(timestamp)</span>
                                     }
                                     @if (ShowResourcePrefix && context.ResourcePrefix is { } resourcePrefix)
                                     {

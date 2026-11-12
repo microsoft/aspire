@@ -34,6 +34,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Aspire.TestUtilities\Aspire.TestUtilities.csproj" IsAspireProjectResource="false" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.AppHost\Aspire.Hosting.AppHost.csproj" IsAspireProjectResource="false" />
+    <ProjectReference Include="../../src/Aspire.Hosting.Dotnet/Aspire.Hosting.Dotnet.csproj" IsAspireProjectResource="false" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.Testing\Aspire.Hosting.Testing.csproj" IsAspireProjectResource="false" />
     <ProjectReference Include="..\TestingAppHost1\TestingAppHost1.AppHost\TestingAppHost1.AppHost.csproj" IsAspireProjectResource="false" />
 
@@ -43,8 +44,14 @@
 
     <!-- Tests here start a real dashboard. The AppHost launches it from the repo-wide AspireDashboardDir
          set in Directory.Build.props, which is only populated when Aspire.Dashboard itself has been built,
-         so take a build-only dependency on it rather than relying on another test leg having built it. -->
-    <ProjectReference Include="..\..\src\Aspire.Dashboard\Aspire.Dashboard.csproj" ReferenceOutputAssembly="false" IsAspireProjectResource="false" Private="false" />
+      so take a build-only dependency on it rather than relying on another test leg having built it.
+      Build it for its own framework without requiring compatibility with the test project's framework. -->
+    <ProjectReference Include="..\..\src\Aspire.Dashboard\Aspire.Dashboard.csproj"
+          ReferenceOutputAssembly="false"
+          IsAspireProjectResource="false"
+          Private="false"
+          SkipGetTargetFrameworkProperties="true"
+          UndefineProperties="TargetFramework;RuntimeIdentifier;PlatformTarget;SelfContained" />
   </ItemGroup>
 
   <ItemGroup>

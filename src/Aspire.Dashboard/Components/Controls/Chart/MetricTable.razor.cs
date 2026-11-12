@@ -23,7 +23,6 @@ public partial class MetricTable : ChartBase
     private List<ChartExemplar> _exemplars = [];
     private string _unitColumnHeader = string.Empty;
     private IJSObjectReference? _jsModule;
-    private FluentDataGrid<MetricViewBase> _dataGrid = null!;
 
     private OtlpInstrumentSummary? _instrument;
     private bool _showCount;
@@ -31,7 +30,7 @@ public partial class MetricTable : ChartBase
 
     protected override TimeSpan UpdateInterval => TimeSpan.FromSeconds(1);
 
-    private IQueryable<MetricViewBase> _metricsView => _metrics.Values.AsEnumerable().Reverse().ToList().AsQueryable();
+    private IEnumerable<MetricViewBase> _metricsView => _metrics.Values.Reverse();
 
     [Inject]
     public required IJSRuntime JS { get; init; }
@@ -145,7 +144,14 @@ public partial class MetricTable : ChartBase
 
                 if (traceValuesByPercentile.Values.All(value => value is null))
                 {
-                    continue;
+                    // Incompatible bounds can leave valid exemplars without percentile values.
+                    // Keep their interval visible, but still omit empty chart windows.
+                    var startTime = i > 0 ? xValues[i - 1] : (DateTimeOffset?)null;
+                    var endTime = i < xValues.Count - 1 ? xValue : (DateTimeOffset?)null;
+                    if (!exemplars.Exists(exemplar => IsExemplarInInterval(exemplar, startTime, endTime)))
+                    {
+                        continue;
+                    }
                 }
 
                 if (OnlyShowValueChangesInTable && valueDiffs.All(diff => DoubleEquals(diff, 0)))
@@ -157,11 +163,12 @@ public partial class MetricTable : ChartBase
 
                 MetricViewBase CreateHistogramMetricView()
                 {
-                    var percentiles = new SortedDictionary<int, (string Name, double? Value, ValueDirectionChange Direction)>();
+                    var percentiles = new SortedDictionary<int, (string Name, double? Value, ValueDirectionChange? Direction)>();
                     for (var traceIndex = 0; traceIndex < traces.Count; traceIndex++)
                     {
                         var trace = traces[traceIndex];
-                        percentiles.Add(trace.Percentile!.Value, (trace.Name, trace.Values[i], GetDirectionChange(valueDiffs[traceIndex])));
+                        ValueDirectionChange? direction = trace.Values[i] is not null ? GetDirectionChange(valueDiffs[traceIndex]) : null;
+                        percentiles.Add(trace.Percentile!.Value, (trace.Name, trace.Values[i], direction));
                     }
 
                     return new HistogramMetricView
@@ -210,7 +217,7 @@ public partial class MetricTable : ChartBase
             var endTime = (i != newMetrics.Count - 1) ? current.DateTime : (DateTimeOffset?)null;
             var startTime = (i > 0) ? newMetrics.GetKeyAtIndex(i - 1) : (DateTimeOffset?)null;
 
-            var currentExemplars = exemplars.Where(e => (e.Start >= startTime || startTime == null) && (e.Start < endTime || endTime == null)).ToList();
+            var currentExemplars = exemplars.Where(exemplar => IsExemplarInInterval(exemplar, startTime, endTime)).ToList();
             current.Exemplars.AddRange(currentExemplars);
         }
 
@@ -219,6 +226,12 @@ public partial class MetricTable : ChartBase
         var latestCurrentMetric = _metrics.Keys.OfType<DateTimeOffset?>().LastOrDefault();
         addedXValues = newMetrics.Keys.Where(newKey => newKey > latestCurrentMetric || latestCurrentMetric == null).ToHashSet();
         return newMetrics;
+    }
+
+    private static bool IsExemplarInInterval(ChartExemplar exemplar, DateTimeOffset? startTime, DateTimeOffset? endTime)
+    {
+        return (startTime is null || exemplar.Start >= startTime.Value) &&
+            (endTime is null || exemplar.Start < endTime.Value);
     }
 
     private static bool DoubleEquals(double? a, double? b)
@@ -238,16 +251,9 @@ public partial class MetricTable : ChartBase
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        // Check to see whether max item count should be set on every render.
-        // This is required because the data grid's virtualize component can be recreated on data change.
-        if (_dataGrid != null && FluentDataGridHelper<MetricViewBase>.TrySetMaxItemCount(_dataGrid, 10_000))
-        {
-            StateHasChanged();
-        }
-
         if (firstRender)
         {
-            _jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "/Components/Controls/Chart/MetricTable.razor.js");
+            _jsModule = await JS.InvokeAsync<IJSObjectReference>("import", $"/{Assets["Components/Controls/Chart/MetricTable.razor.js"]}");
         }
 
         await base.OnAfterRenderAsync(firstRender);
@@ -302,14 +308,7 @@ public partial class MetricTable : ChartBase
 
     public record HistogramMetricView : MetricViewBase
     {
-        public required SortedDictionary<int, (string Name, double? Value, ValueDirectionChange Direction)> Percentiles { get; init; }
-    }
-
-    public enum ValueDirectionChange
-    {
-        Up,
-        Down,
-        Constant
+        public required SortedDictionary<int, (string Name, double? Value, ValueDirectionChange? Direction)> Percentiles { get; init; }
     }
 
     private (Icon Icon, string Title)? GetIconAndTitleForDirection(ValueDirectionChange? directionChange)
@@ -327,4 +326,27 @@ public partial class MetricTable : ChartBase
     {
         return value is null ? string.Empty : value.Value.ToString("F3", CultureInfo.CurrentCulture);
     }
+}
+
+// Keep this outside the component: Blazor's component preservation includes nested types and
+// would otherwise retain Enum.GetValues(Type), which requires dynamic code under Native AOT.
+/// <summary>
+/// Describes how a metric value changed relative to its previous value.
+/// </summary>
+public enum ValueDirectionChange
+{
+    /// <summary>
+    /// The value increased.
+    /// </summary>
+    Up,
+
+    /// <summary>
+    /// The value decreased.
+    /// </summary>
+    Down,
+
+    /// <summary>
+    /// The value did not change.
+    /// </summary>
+    Constant
 }

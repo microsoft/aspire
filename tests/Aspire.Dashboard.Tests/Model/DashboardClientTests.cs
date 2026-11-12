@@ -3,16 +3,30 @@
 
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Net.WebSockets;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
+using System.Text;
+using System.Threading.Channels;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
+using Aspire.Dashboard.Terminal;
+using Aspire.Dashboard.Tests.Shared;
 using Aspire.Dashboard.Utils;
 using Aspire.DashboardService.Proto.V1;
 using Aspire.Tests;
+using Google.Protobuf;
 using Google.Protobuf.WellKnownTypes;
 using Grpc.Core;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.InternalTesting;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging.Testing;
 using Microsoft.Extensions.Options;
 using Semver;
@@ -23,11 +37,298 @@ namespace Aspire.Dashboard.Tests.Model;
 
 public sealed class DashboardClientTests(ITestOutputHelper testOutputHelper) : IDisposable
 {
+    [Fact]
+    public async Task TerminalStream_EndedBeforeHandshakeClosesWithCompletionStatusAndDisposesCall()
+    {
+        var channel = Channel.CreateUnbounded<TerminalServerFrame>();
+        channel.Writer.TryWrite(new TerminalServerFrame { Ended = true });
+        var disposed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var writes = new ConcurrentQueue<TerminalClientFrame>();
+        using var call = new AsyncDuplexStreamingCall<TerminalClientFrame, TerminalServerFrame>(
+            new ClientStreamWriter<TerminalClientFrame>
+            {
+                OnWrite = frame =>
+                {
+                    writes.Enqueue(frame);
+                    return Task.CompletedTask;
+                }
+            },
+            new AsyncStreamReader<TerminalServerFrame>(channel: channel.Reader),
+            Task.FromResult(new Metadata()),
+            () => Status.DefaultSuccess,
+            () => new Metadata(),
+            () => disposed.TrySetResult());
+        using var stream = new GrpcTerminalClientStream(call, "terminal");
+        var dashboardClient = new TestDashboardClient(attachTerminal: (_, _) => Task.FromResult<Stream>(stream));
+        var sessions = new TerminalViewSessionRegistry();
+        using var session = sessions.Create("/api/apphost-terminal?terminalId=terminal", readOnly: false);
+        using var host = await BuildTerminalTestHostAsync(dashboardClient, sessions);
+        var client = host.GetTestServer().CreateWebSocketClient();
+        client.ConfigureRequest = request => request.Headers.Origin = "https://dashboard.example.com";
+        using var socket = await client.ConnectAsync(
+            new Uri($"wss://dashboard.example.com/api/apphost-terminal?terminalId=terminal&viewId={session.Id}"), CancellationToken.None).DefaultTimeout();
+        var buffer = new byte[64];
+
+        Assert.True(stream.TerminalEnded);
+        await session.Ended.DefaultTimeout();
+        Assert.True(session.ReadOnly);
+        var handshakeWrites = writes.ToArray();
+        Assert.NotEmpty(handshakeWrites);
+        // Input already in flight must not reach the AppHost after authoritative completion.
+        await socket.SendAsync("""{"type":"input","text":"ignored"}"""u8.ToArray(), WebSocketMessageType.Text,
+            true, CancellationToken.None).DefaultTimeout();
+        var message = await socket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None).DefaultTimeout();
+        Assert.Equal(WebSocketMessageType.Close, message.MessageType);
+        Assert.Equal((WebSocketCloseStatus)4000, message.CloseStatus);
+        Assert.Equal("Terminal ended", message.CloseStatusDescription);
+        await socket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "Received", CancellationToken.None).DefaultTimeout();
+        await disposed.Task.DefaultTimeout();
+        Assert.Equal(handshakeWrites, writes);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task TerminalStream_EndedFrameIsDistinctFromTransportEof(bool ended)
+    {
+        using var call = new AsyncDuplexStreamingCall<TerminalClientFrame, TerminalServerFrame>(
+            new ClientStreamWriter<TerminalClientFrame>(),
+            new AsyncStreamReader<TerminalServerFrame>(
+            [
+                new TerminalServerFrame(),
+                new TerminalServerFrame { Data = ByteString.CopyFromUtf8("output") },
+                new TerminalServerFrame { Ended = ended }
+            ]),
+            Task.FromResult(new Metadata()),
+            () => Status.DefaultSuccess,
+            () => new Metadata(),
+            () => { });
+        using var stream = new GrpcTerminalClientStream(call, "terminal");
+        var buffer = new byte[3];
+
+        Assert.Equal(3, await stream.ReadAsync(buffer));
+        Assert.Equal("out"u8.ToArray(), buffer);
+        Assert.False(stream.TerminalEnded);
+        Assert.Equal(3, await stream.ReadAsync(buffer));
+        Assert.Equal("put"u8.ToArray(), buffer);
+        Assert.False(stream.TerminalEnded);
+        Assert.Equal(0, await stream.ReadAsync(buffer));
+        Assert.Equal(ended, stream.TerminalEnded);
+        Assert.Equal(0, await stream.ReadAsync(buffer));
+    }
+
+    [Fact]
+    public async Task TerminalStream_EndedBeforeHandshakeDoesNotWaitForMoreFrames()
+    {
+        var channel = Channel.CreateUnbounded<TerminalServerFrame>();
+        channel.Writer.TryWrite(new TerminalServerFrame { Ended = true });
+        using var call = new AsyncDuplexStreamingCall<TerminalClientFrame, TerminalServerFrame>(
+            new ClientStreamWriter<TerminalClientFrame>(),
+            new AsyncStreamReader<TerminalServerFrame>(channel: channel.Reader),
+            Task.FromResult(new Metadata()),
+            () => Status.DefaultSuccess,
+            () => new Metadata(),
+            () => { });
+        using var stream = new GrpcTerminalClientStream(call, "terminal");
+
+        // The server keeps the RPC open until the proxy consumes this status and disconnects.
+        Assert.Equal(0, await stream.ReadAsync(new byte[1]).AsTask().DefaultTimeout());
+        Assert.True(stream.TerminalEnded);
+    }
+
+    [Theory]
+    [InlineData(StatusCode.Unavailable)]
+    [InlineData(StatusCode.Cancelled)]
+    [InlineData(StatusCode.NotFound)]
+    public async Task TerminalStream_RpcReadFailurePreservesStatusAsStreamError(StatusCode statusCode)
+    {
+        var error = new RpcException(new Status(statusCode, "Terminal transport failed."));
+        var channel = Channel.CreateUnbounded<TerminalServerFrame>();
+        channel.Writer.TryComplete(error);
+        using var call = new AsyncDuplexStreamingCall<TerminalClientFrame, TerminalServerFrame>(
+            new ClientStreamWriter<TerminalClientFrame>(),
+            new AsyncStreamReader<TerminalServerFrame>(channel: channel.Reader),
+            Task.FromResult(new Metadata()),
+            () => Status.DefaultSuccess,
+            () => new Metadata(),
+            () => { });
+        using var stream = new GrpcTerminalClientStream(call, "terminal");
+
+        var exception = await Assert.ThrowsAsync<IOException>(() => stream.ReadAsync(new byte[1]).AsTask());
+
+        Assert.Same(error, exception.InnerException);
+        Assert.False(stream.TerminalEnded);
+    }
+
+    [Theory]
+    [InlineData(StatusCode.NotFound, true)]
+    [InlineData(StatusCode.FailedPrecondition, true)]
+    [InlineData(StatusCode.Unavailable, false)]
+    [InlineData(StatusCode.DeadlineExceeded, false)]
+    public async Task TerminalStream_HandshakeFailurePreservesPermanentAndTransientStatus(StatusCode statusCode, bool permanentFailure)
+    {
+        var channel = Channel.CreateUnbounded<TerminalServerFrame>();
+        channel.Writer.TryComplete(new RpcException(new Status(statusCode, "Terminal is unavailable.")));
+        var disposed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var call = new AsyncDuplexStreamingCall<TerminalClientFrame, TerminalServerFrame>(
+            new ClientStreamWriter<TerminalClientFrame> { OnWrite = _ => Task.CompletedTask },
+            new AsyncStreamReader<TerminalServerFrame>(channel: channel.Reader),
+            Task.FromResult(new Metadata()),
+            () => Status.DefaultSuccess,
+            () => new Metadata(),
+            () => disposed.TrySetResult());
+        using var stream = new GrpcTerminalClientStream(call, "terminal");
+        var dashboardClient = new TestDashboardClient(attachTerminal: (_, _) => Task.FromResult<Stream>(stream));
+        var sessions = new TerminalViewSessionRegistry();
+        using var session = sessions.Create("/api/apphost-terminal?terminalId=terminal", readOnly: false);
+        using var host = await BuildTerminalTestHostAsync(dashboardClient, sessions);
+        var client = host.GetTestServer().CreateWebSocketClient();
+        client.ConfigureRequest = request => request.Headers.Origin = "https://dashboard.example.com";
+        var uri = new Uri($"wss://dashboard.example.com/api/apphost-terminal?terminalId=terminal&viewId={session.Id}");
+
+        if (permanentFailure)
+        {
+            using var socket = await client.ConnectAsync(uri, CancellationToken.None).DefaultTimeout();
+            var message = await socket.ReceiveAsync(new ArraySegment<byte>(new byte[64]), CancellationToken.None).DefaultTimeout();
+
+            Assert.Equal(WebSocketMessageType.Close, message.MessageType);
+            Assert.Equal((WebSocketCloseStatus)4000, message.CloseStatus);
+            Assert.Equal("Terminal ended", message.CloseStatusDescription);
+            await session.Ended.DefaultTimeout();
+            Assert.True(session.ReadOnly);
+            await socket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "Received", CancellationToken.None).DefaultTimeout();
+        }
+        else
+        {
+            var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => client.ConnectAsync(uri, CancellationToken.None).DefaultTimeout());
+
+            Assert.Contains(StatusCodes.Status503ServiceUnavailable.ToString(System.Globalization.CultureInfo.InvariantCulture), exception.Message);
+            Assert.False(session.Ended.IsCompleted);
+            Assert.False(session.ReadOnly);
+        }
+
+        await disposed.Task.DefaultTimeout();
+        // The proxy classifies the RPC status; the stream never received an Ended frame.
+        Assert.False(stream.TerminalEnded);
+    }
+
+    private static Task<IHost> BuildTerminalTestHostAsync(IDashboardClient dashboardClient, TerminalViewSessionRegistry sessions)
+    {
+        return new HostBuilder()
+            .ConfigureWebHost(webBuilder => webBuilder
+                .UseTestServer()
+                .Configure(app =>
+                {
+                    app.UseWebSockets();
+                    app.Run(context =>
+                    {
+                        context.Request.Scheme = "https";
+                        context.Request.Host = new HostString("dashboard.example.com");
+                        return TerminalWebSocketProxy.HandleAppHostTerminalAsync(context, dashboardClient, sessions, NullLogger.Instance, "test");
+                    });
+                }))
+            .StartAsync();
+    }
+
     private readonly ILoggerFactory _loggerFactory = LoggerFactory.Create(builder =>
     {
         builder.AddXunit(testOutputHelper, LogLevel.Trace, DateTimeOffset.UtcNow);
         builder.SetMinimumLevel(LogLevel.Trace);
     });
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("test-password")]
+    public async Task FileCertificate_LoadsPkcs12WithPrivateKey(string? password)
+    {
+        using var key = ECDsa.Create();
+        var request = new CertificateRequest("CN=Dashboard client test", key, HashAlgorithmName.SHA256);
+        var now = DateTimeOffset.UtcNow;
+        using var certificate = request.CreateSelfSigned(now.AddDays(-1), now.AddDays(1));
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        X509Certificate2? loadedCertificate = null;
+        try
+        {
+            var path = Path.Combine(workspace.Path, "client.pfx");
+            File.WriteAllBytes(path, certificate.Export(X509ContentType.Pkcs12, password));
+
+            await using var client = CreateResourceServiceClient(
+                clientCertificate: new ResourceServiceClientCertificateOptions
+                {
+                    Source = DashboardClientCertificateSource.File,
+                    FilePath = path,
+                    Password = password
+                },
+                configureHttpHandler: handler =>
+                {
+                    Assert.NotNull(handler.SslOptions.ClientCertificates);
+                    loadedCertificate = Assert.IsType<X509Certificate2>(Assert.Single(handler.SslOptions.ClientCertificates.Cast<X509Certificate>()));
+                });
+
+            Assert.NotNull(loadedCertificate);
+            Assert.Equal(certificate.RawData, loadedCertificate.RawData);
+            Assert.True(loadedCertificate.HasPrivateKey);
+        }
+        finally
+        {
+            loadedCertificate?.Dispose();
+        }
+    }
+
+    [Theory]
+    [InlineData("der")]
+    [InlineData("pem")]
+    [InlineData("pkcs7")]
+    [InlineData("invalid")]
+    public void FileCertificate_RejectsNonPkcs12(string format)
+    {
+        using var certificate = TestCertificateLoader.GetTestCertificate();
+        var data = format switch
+        {
+            "der" => certificate.RawData,
+            "pem" => Encoding.UTF8.GetBytes(certificate.ExportCertificatePem()),
+            "pkcs7" => new X509Certificate2Collection(certificate).Export(X509ContentType.Pkcs7)!,
+            "invalid" => new byte[] { 1, 2, 3 },
+            _ => throw new InvalidOperationException()
+        };
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var path = Path.Combine(workspace.Path, "client.pfx");
+        File.WriteAllBytes(path, data);
+
+        Assert.ThrowsAny<CryptographicException>(() => CreateResourceServiceClient(
+            clientCertificate: new ResourceServiceClientCertificateOptions
+            {
+                Source = DashboardClientCertificateSource.File,
+                FilePath = path
+            }));
+    }
+
+    [Fact]
+    public void FileCertificate_IncorrectPassword()
+    {
+        Assert.ThrowsAny<CryptographicException>(() => CreateResourceServiceClient(
+            clientCertificate: new ResourceServiceClientCertificateOptions
+            {
+                Source = DashboardClientCertificateSource.File,
+                FilePath = TestCertificateLoader.TestCertificatePath,
+                Password = "incorrect-password"
+            }));
+    }
+
+    [Fact]
+    public void FileCertificate_MissingFile()
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var path = Path.Combine(workspace.Path, "missing.pfx");
+        var exception = Assert.Throws<CryptographicException>(() => CreateResourceServiceClient(
+            clientCertificate: new ResourceServiceClientCertificateOptions
+            {
+                Source = DashboardClientCertificateSource.File,
+                FilePath = path
+            }));
+        Assert.Equal(path, Assert.IsType<FileNotFoundException>(exception.InnerException).FileName);
+    }
 
     [Fact]
     public async Task SubscribeResources_OnCancel_ChannelRemoved()
@@ -174,6 +475,191 @@ public sealed class DashboardClientTests(ITestOutputHelper testOutputHelper) : I
         Assert.Equal("api", Assert.Single(repositoryWriter.LoadedConsoleLogs));
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task WhenResourcesReady_WaitsForInitialSnapshotPersistence(bool emptySnapshot)
+    {
+        var updates = Channel.CreateUnbounded<WatchResourcesUpdate>();
+        var persisting = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var persisted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var writer = new RecordingResourceRepositoryWriter
+        {
+            OnReplaceResourcesAsync = async _ =>
+            {
+                persisting.TrySetResult();
+                await persisted.Task;
+            }
+        };
+        await using var client = CreateResourceServiceClient(resourceRepositoryWriter: writer);
+        client.SetDashboardServiceClient(new MockDashboardServiceClient { ResourceUpdatesChannel = updates.Reader });
+        var ready = client.WhenResourcesReady;
+        await client.WhenConnected.DefaultTimeout();
+        var subscription = client.SubscribeResourcesAsync(CancellationToken.None);
+        Assert.False(ready.IsCompleted);
+        Assert.False(subscription.IsCompleted);
+
+        try
+        {
+            var initialData = new InitialResourceData();
+            if (!emptySnapshot)
+            {
+                initialData.Resources.Add(new Resource { Name = "shell", CreatedAt = Timestamp.FromDateTime(DateTime.UtcNow) });
+            }
+            await updates.Writer.WriteAsync(new WatchResourcesUpdate { InitialData = initialData });
+            await persisting.Task.DefaultTimeout();
+            Assert.False(ready.IsCompleted);
+            Assert.False(subscription.IsCompleted);
+
+            persisted.SetResult();
+            await ready.DefaultTimeout();
+            var (snapshot, _) = await subscription.DefaultTimeout();
+            Assert.Equal(emptySnapshot ? [] : ["shell"], snapshot.Select(r => r.Name));
+            Assert.Equal(emptySnapshot ? [] : ["shell"], client.GetResources().Select(r => r.Name));
+        }
+        finally
+        {
+            persisted.TrySetResult();
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task WhenResourcesReady_InteractionReconnectPreservesResourceReadiness(bool resourcesReceived)
+    {
+        var resources = Channel.CreateUnbounded<WatchResourcesUpdate>();
+        var firstInteractions = Channel.CreateUnbounded<WatchInteractionsResponseUpdate>();
+        var secondInteractions = Channel.CreateUnbounded<WatchInteractionsResponseUpdate>();
+        var disconnected = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var recovered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var interactionSubscriptions = 0;
+        var resourceSubscriptions = 0;
+        await using var client = CreateResourceServiceClient();
+        client.SetDashboardServiceClient(new MockDashboardServiceClient
+        {
+            ResourceUpdatesProvider = () =>
+            {
+                Interlocked.Increment(ref resourceSubscriptions);
+                return resources.Reader;
+            },
+            InteractionUpdatesProvider = () => Interlocked.Increment(ref interactionSubscriptions) == 1
+                ? firstInteractions.Reader : secondInteractions.Reader
+        });
+        client.ConnectionStateChanged += state =>
+        {
+            if (state == DashboardConnectionState.Disconnected)
+            {
+                disconnected.TrySetResult();
+            }
+            else if (state == DashboardConnectionState.Connected && disconnected.Task.IsCompleted)
+            {
+                recovered.TrySetResult();
+            }
+        };
+        var ready = client.WhenResourcesReady;
+        await client.WhenConnected.DefaultTimeout();
+        if (resourcesReceived)
+        {
+            await resources.Writer.WriteAsync(new WatchResourcesUpdate { InitialData = new InitialResourceData() });
+            await ready.DefaultTimeout();
+        }
+
+        firstInteractions.Writer.Complete(new RpcException(new Status(StatusCode.Unavailable, "Interaction stream disconnected")));
+        await disconnected.Task.DefaultTimeout();
+        Assert.Same(ready, client.WhenResourcesReady);
+        Assert.Equal(resourcesReceived, ready.IsCompleted);
+
+        await secondInteractions.Writer.WriteAsync(new WatchInteractionsResponseUpdate { InteractionId = 1 });
+        await recovered.Task.DefaultTimeout();
+        Assert.Same(ready, client.WhenResourcesReady);
+        Assert.Equal(resourcesReceived, ready.IsCompleted);
+        if (!resourcesReceived)
+        {
+            await resources.Writer.WriteAsync(new WatchResourcesUpdate { InitialData = new InitialResourceData() });
+        }
+        await ready.DefaultTimeout();
+        var (snapshot, _) = await client.SubscribeResourcesAsync(CancellationToken.None).DefaultTimeout();
+        Assert.Empty(snapshot);
+        Assert.Equal(1, Volatile.Read(ref resourceSubscriptions));
+        Assert.Equal(2, Volatile.Read(ref interactionSubscriptions));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task WhenResourcesReady_ResourceReconnectWaitsForPersistedSnapshot(bool failStream)
+    {
+        var first = Channel.CreateUnbounded<WatchResourcesUpdate>();
+        var second = Channel.CreateUnbounded<WatchResourcesUpdate>();
+        var third = Channel.CreateUnbounded<WatchResourcesUpdate>();
+        var subscriptionsStarted = Channel.CreateUnbounded<int>();
+        var persisting = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var persisted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var subscriptionCount = 0;
+        var snapshotCount = 0;
+        var writer = new RecordingResourceRepositoryWriter
+        {
+            OnReplaceResourcesAsync = async _ =>
+            {
+                if (Interlocked.Increment(ref snapshotCount) == 2)
+                {
+                    persisting.TrySetResult();
+                    await persisted.Task;
+                }
+            }
+        };
+        await using var client = CreateResourceServiceClient(resourceRepositoryWriter: writer);
+        client.SetDashboardServiceClient(new MockDashboardServiceClient
+        {
+            ResourceUpdatesProvider = () =>
+            {
+                var attempt = Interlocked.Increment(ref subscriptionCount);
+                subscriptionsStarted.Writer.TryWrite(attempt);
+                return attempt switch
+                {
+                    1 => first.Reader,
+                    2 => second.Reader,
+                    _ => third.Reader
+                };
+            }
+        });
+        var ready = client.WhenResourcesReady;
+        Assert.Equal(1, await subscriptionsStarted.Reader.ReadAsync().AsTask().DefaultTimeout());
+        await first.Writer.WriteAsync(new WatchResourcesUpdate { InitialData = new InitialResourceData() });
+        await ready.DefaultTimeout();
+
+        try
+        {
+            first.Writer.Complete(failStream ? new RpcException(new Status(StatusCode.Unavailable, "Resource stream disconnected")) : null);
+            Assert.Equal(2, await subscriptionsStarted.Reader.ReadAsync().AsTask().DefaultTimeout());
+            var replacementReady = client.WhenResourcesReady;
+            Assert.NotSame(ready, replacementReady);
+            Assert.False(replacementReady.IsCompleted);
+            var subscription = client.SubscribeResourcesAsync(CancellationToken.None);
+            Assert.False(subscription.IsCompleted);
+
+            // A retry before its initial snapshot must retain the task that callers are already waiting on.
+            second.Writer.Complete(failStream ? new RpcException(new Status(StatusCode.Unavailable, "Resource stream disconnected again")) : null);
+            Assert.Equal(3, await subscriptionsStarted.Reader.ReadAsync().AsTask().DefaultTimeout());
+            Assert.Same(replacementReady, client.WhenResourcesReady);
+
+            await third.Writer.WriteAsync(new WatchResourcesUpdate { InitialData = new InitialResourceData() });
+            await persisting.Task.DefaultTimeout();
+            Assert.False(replacementReady.IsCompleted);
+            Assert.False(subscription.IsCompleted);
+
+            persisted.SetResult();
+            await replacementReady.DefaultTimeout();
+            var (snapshot, _) = await subscription.DefaultTimeout();
+            Assert.Empty(snapshot);
+        }
+        finally
+        {
+            persisted.TrySetResult();
+        }
+    }
+
     [Fact]
     public async Task SubscribeInteractions_OnCancel_ChannelRemoved()
     {
@@ -267,6 +753,21 @@ public sealed class DashboardClientTests(ITestOutputHelper testOutputHelper) : I
         await instance.WhenConnected.DefaultTimeout();
 
         await instance.InteractionWatchCompleteTask.DefaultTimeout();
+    }
+
+    [Theory]
+    [InlineData("", null, "Aspire")]
+    [InlineData(" \t", "Configured", "Configured")]
+    [InlineData("", " ", "Aspire")]
+    [InlineData("Service", "Configured", "Service")]
+    public async Task ApplicationName_ServiceNameFallsBackToConfiguredName(string serviceName, string? configuredName, string expected)
+    {
+        await using var instance = CreateResourceServiceClient(applicationName: configuredName);
+        instance.SetDashboardServiceClient(new MockDashboardServiceClient { ApplicationName = serviceName });
+
+        await instance.WhenConnected.DefaultTimeout();
+
+        Assert.Equal(expected, instance.ApplicationName);
     }
 
     [Fact]
@@ -434,8 +935,9 @@ public sealed class DashboardClientTests(ITestOutputHelper testOutputHelper) : I
             }
         };
 
-        // Trigger the connection. ConnectWithRetryAsync succeeds, then WatchResources starts failing.
-        await instance.WhenConnected.DefaultTimeout();
+        // Trigger the connection without awaiting it. The first watch failure can reset
+        // WhenConnected before the getter returns, leaving it waiting for a reconnect that never succeeds.
+        _ = instance.WhenConnected;
 
         // Wait for at least 3 Disconnected events to prove each retry fires a new event.
         // Without the Connecting transition between retries, only 1 Disconnected event would fire.
@@ -592,17 +1094,165 @@ public sealed class DashboardClientTests(ITestOutputHelper testOutputHelper) : I
         Assert.Equal(response.Message, response.ErrorMessage);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task SubscribeTerminals_StreamEnds_ResubscribesWithSnapshot(bool failStream)
+    {
+        var first = Channel.CreateUnbounded<WatchTerminalsUpdate>();
+        var second = Channel.CreateUnbounded<WatchTerminalsUpdate>();
+        var disposed = Channel.CreateUnbounded<bool>();
+        var subscriptions = 0;
+        var service = new MockDashboardServiceClient
+        {
+            ResourceUpdatesChannel = Channel.CreateUnbounded<WatchResourcesUpdate>().Reader,
+            TerminalUpdatesProvider = () => Interlocked.Increment(ref subscriptions) == 1 ? first.Reader : second.Reader,
+            OnTerminalWatchDisposed = () => disposed.Writer.TryWrite(true)
+        };
+        await using var client = CreateResourceServiceClient();
+        client.SetDashboardServiceClient(service);
+        await using var updates = client.SubscribeTerminalsAsync(CancellationToken.None).GetAsyncEnumerator();
+
+        var initial = new WatchTerminalsUpdate { Snapshot = new TerminalDescriptorList() };
+        await first.Writer.WriteAsync(initial);
+        Assert.True(await updates.MoveNextAsync().AsTask().DefaultTimeout());
+        Assert.Same(initial, updates.Current);
+
+        var recovery = new WatchTerminalsUpdate
+        {
+            Snapshot = new TerminalDescriptorList
+            {
+                Terminals = { new TerminalDescriptor { TerminalId = "recovered", Title = "Recovered" } },
+                ActivatedTerminalId = "recovered"
+            }
+        };
+        await first.Writer.WriteAsync(recovery);
+        Assert.True(await updates.MoveNextAsync().AsTask().DefaultTimeout());
+        Assert.Same(recovery, updates.Current);
+        Assert.Equal(1, Volatile.Read(ref subscriptions));
+
+        first.Writer.Complete(failStream ? new RpcException(new Status(StatusCode.Unavailable, "Disconnected")) : null);
+        var replacement = new WatchTerminalsUpdate
+        {
+            Snapshot = new TerminalDescriptorList
+            {
+                Terminals = { new TerminalDescriptor { TerminalId = "replacement", Title = "Replacement" } }
+            }
+        };
+        await second.Writer.WriteAsync(replacement);
+
+        Assert.True(await updates.MoveNextAsync().AsTask().DefaultTimeout());
+        Assert.Same(replacement, updates.Current);
+        Assert.Equal(2, Volatile.Read(ref subscriptions));
+        Assert.True(await disposed.Reader.ReadAsync().AsTask().DefaultTimeout());
+        await updates.DisposeAsync().DefaultTimeout();
+        Assert.True(await disposed.Reader.ReadAsync().AsTask().DefaultTimeout());
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task SubscribeTerminals_Cancellation_StopsActiveStreamOrRecovery(bool disposeClient, bool duringRecovery)
+    {
+        var channel = Channel.CreateUnbounded<WatchTerminalsUpdate>();
+        var streamDisposed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var service = new MockDashboardServiceClient
+        {
+            ResourceUpdatesChannel = Channel.CreateUnbounded<WatchResourcesUpdate>().Reader,
+            TerminalUpdatesProvider = () => channel.Reader,
+            OnTerminalWatchDisposed = () => streamDisposed.TrySetResult()
+        };
+        await using var client = CreateResourceServiceClient();
+        client.SetDashboardServiceClient(service);
+        using var cts = new CancellationTokenSource();
+        await using var updates = client.SubscribeTerminalsAsync(cts.Token).GetAsyncEnumerator();
+        await channel.Writer.WriteAsync(new WatchTerminalsUpdate { Snapshot = new TerminalDescriptorList() });
+        Assert.True(await updates.MoveNextAsync().AsTask().DefaultTimeout());
+
+        var next = updates.MoveNextAsync().AsTask();
+        if (duringRecovery)
+        {
+            channel.Writer.Complete();
+            await streamDisposed.Task.DefaultTimeout();
+        }
+
+        if (disposeClient)
+        {
+            await client.DisposeAsync().DefaultTimeout();
+        }
+        else
+        {
+            await cts.CancelAsync();
+        }
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => next).DefaultTimeout();
+        await streamDisposed.Task.DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task SubscribeTerminals_Cancellation_StopsConnectionWait()
+    {
+        await using var client = CreateResourceServiceClient();
+        client.SetDashboardServiceClient(new MockDashboardServiceClient { FailOnGetApplicationInformation = true });
+        using var cts = new CancellationTokenSource();
+        await using var updates = client.SubscribeTerminalsAsync(cts.Token).GetAsyncEnumerator();
+
+        var next = updates.MoveNextAsync().AsTask();
+        await cts.CancelAsync();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => next).DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task SubscribeTerminals_Unimplemented_CompletesWithoutRetry()
+    {
+        var channel = Channel.CreateUnbounded<WatchTerminalsUpdate>();
+        channel.Writer.Complete(new RpcException(new Status(StatusCode.Unimplemented, "Older AppHost")));
+        var subscriptions = 0;
+        await using var client = CreateResourceServiceClient();
+        client.SetDashboardServiceClient(new MockDashboardServiceClient
+        {
+            ResourceUpdatesChannel = Channel.CreateUnbounded<WatchResourcesUpdate>().Reader,
+            TerminalUpdatesProvider = () =>
+            {
+                Interlocked.Increment(ref subscriptions);
+                return channel.Reader;
+            }
+        });
+        await using var updates = client.SubscribeTerminalsAsync(CancellationToken.None).GetAsyncEnumerator();
+
+        Assert.False(await updates.MoveNextAsync().AsTask().DefaultTimeout());
+        Assert.Equal(1, Volatile.Read(ref subscriptions));
+    }
+
     private sealed class MockDashboardServiceClient : Aspire.DashboardService.Proto.V1.DashboardService.DashboardServiceClient
     {
         public bool FailOnWatchResources { get; init; }
         public bool FailOnGetApplicationInformation { get; init; }
         public bool FailOnExecuteResourceCommand { get; init; }
         public bool CancelExecuteResourceCommandOnCallCancellation { get; init; }
+        public string ApplicationName { get; init; } = "TestApplication";
         public string MinDashboardVersion { get; init; } = "";
         public IReadOnlyList<WatchResourceConsoleLogsUpdate> ConsoleLogUpdates { get; init; } = [];
         public IReadOnlyList<WatchResourcesUpdate> ResourceUpdates { get; init; } = [];
+        public ChannelReader<WatchResourcesUpdate>? ResourceUpdatesChannel { get; init; }
+        public Func<ChannelReader<WatchResourcesUpdate>>? ResourceUpdatesProvider { get; init; }
+        public Func<ChannelReader<WatchInteractionsResponseUpdate>>? InteractionUpdatesProvider { get; init; }
+        public Func<ChannelReader<WatchTerminalsUpdate>>? TerminalUpdatesProvider { get; init; }
+        public Action? OnTerminalWatchDisposed { get; init; }
         public Activity? ActivityOnGetApplicationInformation { get; private set; }
         private int _resourceUpdatesReturned;
+
+        public override AsyncServerStreamingCall<WatchTerminalsUpdate> WatchTerminals(WatchTerminalsRequest request, CallOptions options)
+        {
+            return new AsyncServerStreamingCall<WatchTerminalsUpdate>(
+                new AsyncStreamReader<WatchTerminalsUpdate>(channel: TerminalUpdatesProvider?.Invoke()),
+                Task.FromResult(new Metadata()),
+                () => Status.DefaultSuccess,
+                () => new Metadata(),
+                () => OnTerminalWatchDisposed?.Invoke());
+        }
 
         public override AsyncServerStreamingCall<WatchResourceConsoleLogsUpdate> WatchResourceConsoleLogs(WatchResourceConsoleLogsRequest request, CallOptions options)
         {
@@ -618,9 +1268,9 @@ public sealed class DashboardClientTests(ITestOutputHelper testOutputHelper) : I
         {
             return new AsyncDuplexStreamingCall<WatchInteractionsRequestUpdate, WatchInteractionsResponseUpdate>(
                 new ClientStreamWriter<WatchInteractionsRequestUpdate>(),
-                new AsyncStreamReader<WatchInteractionsResponseUpdate>(),
+                new AsyncStreamReader<WatchInteractionsResponseUpdate>(channel: InteractionUpdatesProvider?.Invoke()),
                 Task.FromResult(new Metadata()),
-                () => new Status(StatusCode.Unimplemented, "Unimplemented!"),
+                () => InteractionUpdatesProvider is null ? new Status(StatusCode.Unimplemented, "Unimplemented!") : Status.DefaultSuccess,
                 () => new Metadata(),
                 () => { });
         }
@@ -641,7 +1291,7 @@ public sealed class DashboardClientTests(ITestOutputHelper testOutputHelper) : I
             return new AsyncUnaryCall<ApplicationInformationResponse>(
                 Task.FromResult(new ApplicationInformationResponse
                 {
-                    ApplicationName = "TestApplication",
+                    ApplicationName = ApplicationName,
                     MinDashboardVersion = MinDashboardVersion
                 }),
                 Task.FromResult(new Metadata()),
@@ -701,7 +1351,9 @@ public sealed class DashboardClientTests(ITestOutputHelper testOutputHelper) : I
         {
             var reader = FailOnWatchResources
                 ? (IAsyncStreamReader<WatchResourcesUpdate>)new FailingAsyncStreamReader<WatchResourcesUpdate>()
-                : new AsyncStreamReader<WatchResourcesUpdate>(Interlocked.Exchange(ref _resourceUpdatesReturned, 1) == 0 ? ResourceUpdates : []);
+                : new AsyncStreamReader<WatchResourcesUpdate>(
+                    Interlocked.Exchange(ref _resourceUpdatesReturned, 1) == 0 ? ResourceUpdates : [],
+                    ResourceUpdatesProvider?.Invoke() ?? ResourceUpdatesChannel);
 
             return new AsyncServerStreamingCall<WatchResourcesUpdate>(
                 reader,
@@ -725,23 +1377,37 @@ public sealed class DashboardClientTests(ITestOutputHelper testOutputHelper) : I
     private sealed class AsyncStreamReader<T> : IAsyncStreamReader<T>
     {
         private readonly Queue<T> _items;
+        private readonly ChannelReader<T>? _channel;
 
-        public AsyncStreamReader(IEnumerable<T>? items = null)
+        public AsyncStreamReader(IEnumerable<T>? items = null, ChannelReader<T>? channel = null)
         {
             _items = new Queue<T>(items ?? []);
+            _channel = channel;
         }
 
         public T Current { get; private set; } = default!;
 
-        public Task<bool> MoveNext(CancellationToken cancellationToken)
+        public async Task<bool> MoveNext(CancellationToken cancellationToken)
         {
             if (_items.TryDequeue(out var item))
             {
                 Current = item;
-                return Task.FromResult(true);
+                return true;
             }
 
-            return Task.FromResult(false);
+            if (_channel is { } channel)
+            {
+                while (await channel.WaitToReadAsync(cancellationToken))
+                {
+                    if (channel.TryRead(out var update))
+                    {
+                        Current = update;
+                        return true;
+                    }
+                }
+            }
+
+            return false;
         }
     }
 
@@ -749,10 +1415,11 @@ public sealed class DashboardClientTests(ITestOutputHelper testOutputHelper) : I
     {
         public List<(string ResourceName, IReadOnlyList<ConsoleLogLine> LogLines)> ConsoleLogs { get; } = [];
         public List<string> LoadedConsoleLogs { get; } = [];
+        public Func<IReadOnlyList<Resource>, Task>? OnReplaceResourcesAsync { get; init; }
 
         public Task ReplaceResourcesAsync(IReadOnlyList<Resource> resources)
         {
-            return Task.CompletedTask;
+            return OnReplaceResourcesAsync?.Invoke(resources) ?? Task.CompletedTask;
         }
 
         public Task ApplyChangesAsync(IReadOnlyList<WatchResourcesChange> changes)
@@ -778,6 +1445,7 @@ public sealed class DashboardClientTests(ITestOutputHelper testOutputHelper) : I
     private sealed class ClientStreamWriter<T> : IClientStreamWriter<T>
     {
         public WriteOptions? WriteOptions { get; set; }
+        public Func<T, Task>? OnWrite { get; init; }
 
         public Task CompleteAsync()
         {
@@ -786,40 +1454,49 @@ public sealed class DashboardClientTests(ITestOutputHelper testOutputHelper) : I
 
         public Task WriteAsync(T message)
         {
-            throw new NotImplementedException();
+            return OnWrite?.Invoke(message) ?? throw new NotImplementedException();
+        }
+
+        public Task WriteAsync(T message, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return WriteAsync(message);
         }
     }
 
     private DashboardClient CreateResourceServiceClient(
         DashboardActivitySource? activitySource = null,
-        IResourceRepositoryWriter? resourceRepositoryWriter = null)
-    {
-        return CreateResourceServiceClient(_loggerFactory, activitySource, resourceRepositoryWriter);
-    }
-
-    private static DashboardClient CreateResourceServiceClient(
-        ILoggerFactory loggerFactory,
-        DashboardActivitySource? activitySource,
-        IResourceRepositoryWriter? resourceRepositoryWriter)
+        IResourceRepositoryWriter? resourceRepositoryWriter = null,
+        string? applicationName = null,
+        ResourceServiceClientCertificateOptions? clientCertificate = null,
+        Action<SocketsHttpHandler>? configureHttpHandler = null)
     {
         var options = new DashboardOptions
         {
+            ApplicationName = applicationName,
             ResourceServiceClient =
             {
                 AuthMode = ResourceClientAuthMode.Unsecured,
                 Url = "http://localhost:12345"
             }
         };
+        if (clientCertificate is not null)
+        {
+            options.ResourceServiceClient.AuthMode = ResourceClientAuthMode.Certificate;
+            options.ResourceServiceClient.ClientCertificate = clientCertificate;
+        }
+
         options.ResourceServiceClient.TryParseOptions(out _);
 
         return new DashboardClient(
             activitySource ?? new DashboardActivitySource(),
-            loggerFactory,
+            _loggerFactory,
             new ConfigurationManager(),
             Options.Create(options),
             new MockKnownPropertyLookup(),
             new TestStringLocalizer<DashboardResources>(),
-            resourceRepositoryWriter: resourceRepositoryWriter ?? new RecordingResourceRepositoryWriter());
+            resourceRepositoryWriter: resourceRepositoryWriter ?? new RecordingResourceRepositoryWriter(),
+            configureHttpHandler: configureHttpHandler);
     }
 
     public void Dispose()

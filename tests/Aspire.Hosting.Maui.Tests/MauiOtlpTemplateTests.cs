@@ -69,6 +69,37 @@ public class MauiOtlpTemplateTests(ITestOutputHelper outputHelper)
         Assert.DoesNotContain("}}", resourceAttrs);
     }
 
+    [Theory]
+    [InlineData("Windows", "net10.0-windows10.0.19041.0")]
+    [InlineData("Android", "net10.0-android")]
+    [InlineData("iOS", "net10.0-ios")]
+    [InlineData("MacCatalyst", "net10.0-maccatalyst")]
+    public async Task PlatformResource_UserResourceAttributes_KeepResolvedServiceInstanceId(string platform, string tfm)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
+        File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent(tfm));
+
+        var appBuilder = DistributedApplication.CreateBuilder();
+        var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
+
+        // The platform resource replaces the DCP template with a GUID before this value is applied, so the
+        // GUID is the id that has to be kept, not the template.
+        var platformResource = AddPlatformByName(maui, platform)
+            .WithEnvironment("OTEL_RESOURCE_ATTRIBUTES", "deployment.environment=dev");
+
+        var envVars = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            platformResource.Resource,
+            DistributedApplicationOperation.Run,
+            TestServiceProvider.Instance).DefaultTimeout();
+
+        const string expectedPrefix = "deployment.environment=dev,service.instance.id=";
+        var resourceAttrs = envVars["OTEL_RESOURCE_ATTRIBUTES"];
+        Assert.StartsWith(expectedPrefix, resourceAttrs);
+        Assert.True(Guid.TryParse(resourceAttrs[expectedPrefix.Length..], out _),
+            $"Expected a GUID service.instance.id, got '{resourceAttrs}'");
+    }
+
     [Fact]
     public async Task PlatformResource_HasOtelExporterEndpoint()
     {
@@ -90,7 +121,7 @@ public class MauiOtlpTemplateTests(ITestOutputHelper outputHelper)
             "Expected OTEL_EXPORTER_OTLP_ENDPOINT to be set on MAUI platform resource");
     }
 
-    private static IResourceBuilder<IResource> AddPlatformByName(
+    private static IResourceBuilder<ProjectResource> AddPlatformByName(
         IResourceBuilder<MauiProjectResource> maui, string platform)
     {
         return platform switch

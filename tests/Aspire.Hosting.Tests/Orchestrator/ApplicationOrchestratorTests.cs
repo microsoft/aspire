@@ -1,9 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREPIPELINES001
-#pragma warning disable ASPIREPIPELINES002
-
+#pragma warning disable CS0618 // Retain legacy project orchestration with synthetic metadata.
 using Aspire.Dashboard.Model;
 using Aspire.Hosting.Dashboard;
 using Aspire.Hosting.Dcp;
@@ -24,6 +22,558 @@ namespace Aspire.Hosting.Tests.Orchestrator;
 [Trait("Partition", "3")]
 public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
 {
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task UrlCallbackCannotWaitForUnfinishedBrowserOrigins(bool ownEndpoint)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var first = builder.AddExecutable("first", "unused", ".").WithHttpEndpoint();
+        var second = builder.AddExecutable("second", "unused", ".").WithHttpEndpoint();
+        var requested = ownEndpoint ? first : second;
+        first.WithUrls(async context =>
+        {
+            await Task.Yield();
+            await requested.GetEndpoint("http").BrowserOrigins.GetValueAsync(context.CancellationToken);
+        });
+        foreach (var resource in new[] { first, second })
+        {
+            var endpoint = resource.GetEndpoint("http").EndpointAnnotation;
+            endpoint.AllocatedEndpoint = new(endpoint, "localhost", 8080);
+        }
+        using var app = builder.Build();
+        var orchestrator = CreateOrchestrator(app.Services.GetRequiredService<DistributedApplicationModel>(), ResourceNotificationServiceTestHelpers.Create(),
+            applicationEventing: builder.Eventing);
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
+
+        await orchestrator.PublishEndpointsAllocatedAsync(
+            [new(first.Resource, app.Services), new(second.Resource, app.Services)],
+            builder.Eventing, EventDispatchBehavior.BlockingSequential, cts.Token).DefaultTimeout();
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await first.GetEndpoint("http").BrowserOrigins.GetValueAsync(cts.Token));
+        Assert.Equal(
+            $"The URL callback for resource 'first' cannot resolve browser origins for endpoint 'http' " +
+            $"on resource '{requested.Resource.Name}' before its URLs are finalized. Read browser origins after URL callbacks complete, " +
+            "for example in a ResourceEndpointsAllocatedEvent handler.", error.Message);
+        Assert.Equal("http://localhost:8080", await second.GetEndpoint("http").BrowserOrigins.GetValueAsync(cts.Token));
+    }
+
+    [Fact]
+    public async Task UrlCallbackCanReadAlreadyFinalizedBrowserOrigins()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var first = builder.AddExecutable("first", "unused", ".").WithHttpEndpoint()
+            .WithUrlForEndpoint("http", url => url.Url = "https://first.example/app");
+        var second = builder.AddExecutable("second", "unused", ".").WithHttpEndpoint();
+        string? observed = null;
+        second.WithUrls(async context =>
+        {
+            observed = await first.GetEndpoint("http").BrowserOrigins.GetValueAsync(context.CancellationToken);
+        });
+        foreach (var resource in new[] { first, second })
+        {
+            var endpoint = resource.GetEndpoint("http").EndpointAnnotation;
+            endpoint.AllocatedEndpoint = new(endpoint, "localhost", 8080);
+        }
+        using var app = builder.Build();
+        var orchestrator = CreateOrchestrator(app.Services.GetRequiredService<DistributedApplicationModel>(), ResourceNotificationServiceTestHelpers.Create(),
+            applicationEventing: builder.Eventing);
+
+        await orchestrator.PublishEndpointsAllocatedAsync(
+            [new(first.Resource, app.Services), new(second.Resource, app.Services)],
+            builder.Eventing, EventDispatchBehavior.BlockingSequential, default).DefaultTimeout();
+
+        Assert.Equal("https://first.example,http://localhost:8080", observed);
+        Assert.Equal("http://localhost:8080", await second.GetEndpoint("http").BrowserOrigins.GetValueAsync());
+    }
+
+    [Fact]
+    public async Task UrlCallbackScopeDoesNotLeakIntoOutlivingTasks()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var first = builder.AddExecutable("first", "unused", ".").WithHttpEndpoint();
+        var second = builder.AddExecutable("second", "unused", ".").WithHttpEndpoint();
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var readStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        Task<string?>? inheritedRead = null;
+        first.WithUrls(context =>
+        {
+            inheritedRead = Task.Run(async () =>
+            {
+                await release.Task.WaitAsync(context.CancellationToken);
+                var read = second.GetEndpoint("http").BrowserOrigins.GetValueAsync(context.CancellationToken).AsTask();
+                readStarted.SetResult();
+                return await read;
+            });
+        });
+        foreach (var resource in new[] { first, second })
+        {
+            var endpoint = resource.GetEndpoint("http").EndpointAnnotation;
+            endpoint.AllocatedEndpoint = new(endpoint, "localhost", 8080);
+        }
+        using var app = builder.Build();
+        var orchestrator = CreateOrchestrator(app.Services.GetRequiredService<DistributedApplicationModel>(), ResourceNotificationServiceTestHelpers.Create(),
+            applicationEventing: builder.Eventing);
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
+
+        await orchestrator.PublishEndpointsAllocatedAsync([new(first.Resource, app.Services)],
+            builder.Eventing, EventDispatchBehavior.BlockingSequential, cts.Token).DefaultTimeout();
+        release.SetResult();
+        await readStarted.Task.DefaultTimeout();
+        Assert.NotNull(inheritedRead);
+        Assert.False(inheritedRead.IsCompleted);
+
+        await orchestrator.PublishEndpointsAllocatedAsync([new(second.Resource, app.Services)],
+            builder.Eventing, EventDispatchBehavior.BlockingSequential, cts.Token).DefaultTimeout();
+
+        Assert.Equal("http://localhost:8080", await inheritedRead.DefaultTimeout());
+    }
+
+    [Fact]
+    public async Task UrlCallbackFailureDoesNotLeakScopeIntoOrdinaryResolution()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var resource = builder.AddExecutable("resource", "unused", ".").WithHttpEndpoint()
+            .WithUrls(_ => throw new InvalidOperationException("Callback failed."));
+        var other = builder.AddExecutable("other", "unused", ".").WithHttpEndpoint();
+        foreach (var item in new[] { resource, other })
+        {
+            var endpoint = item.GetEndpoint("http").EndpointAnnotation;
+            endpoint.AllocatedEndpoint = new(endpoint, "localhost", 8080);
+        }
+        using var app = builder.Build();
+        var orchestrator = CreateOrchestrator(app.Services.GetRequiredService<DistributedApplicationModel>(), ResourceNotificationServiceTestHelpers.Create(),
+            applicationEventing: builder.Eventing);
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
+
+        await orchestrator.PublishEndpointsAllocatedAsync([new(resource.Resource, app.Services)],
+            builder.Eventing, EventDispatchBehavior.BlockingSequential, cts.Token).DefaultTimeout();
+        var pending = other.GetEndpoint("http").BrowserOrigins.GetValueAsync(cts.Token).AsTask();
+        Assert.False(pending.IsCompleted);
+        await orchestrator.PublishEndpointsAllocatedAsync([new(other.Resource, app.Services)],
+            builder.Eventing, EventDispatchBehavior.BlockingSequential, cts.Token).DefaultTimeout();
+
+        Assert.Equal("http://localhost:8080", await pending.DefaultTimeout());
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task CodespacesProjectionFinalizesOriginsBeforeAllocationObservers(bool codespaces)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        builder.Configuration["CODESPACES"] = codespaces.ToString();
+        builder.Configuration["CODESPACE_NAME"] = "test-codespace";
+        builder.Configuration["GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN"] = "app.github.dev";
+        var frontend = builder.AddExecutable("frontend", "unused", ".").WithHttpEndpoint(targetPort: 8080)
+            .WithUrlForEndpoint("http", url => url.Url = "/path?x=1#fragment")
+            .WithUrlForEndpoint("http", _ => new() { Url = "http://localhost:8080/secondary", DisplayLocation = UrlDisplayLocation.DetailsOnly });
+        var endpoint = frontend.GetEndpoint("http");
+        endpoint.EndpointAnnotation.AllocatedEndpoint = new(endpoint.EndpointAnnotation, "localhost", 8080);
+        var containerAllocation = new AllocatedEndpoint(endpoint.EndpointAnnotation, "frontend.internal", 8080,
+            EndpointBindingMode.SingleAddress, networkId: KnownNetworkIdentifiers.DefaultAspireContainerNetwork);
+        endpoint.EndpointAnnotation.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, containerAllocation);
+        string? observed = null;
+        frontend.OnResourceEndpointsAllocated(async (_, _, ct) =>
+        {
+            observed = await endpoint.BrowserOrigins.GetValueAsync(ct);
+        });
+        using var app = builder.Build();
+        var origin = codespaces ? "https://test-codespace-8080.app.github.dev" : "http://localhost:8080";
+        var origins = codespaces ? $"{origin},http://localhost:8080" : origin;
+
+        await builder.Eventing.PublishResourceEndpointsAllocatedAsync(new(frontend.Resource, app.Services), default);
+
+        Assert.Equal(origins, observed);
+        Assert.Equal(origins, await endpoint.BrowserOrigins.GetValueAsync(default));
+        Assert.Equal("http://localhost:8080", endpoint.Url);
+        Assert.Same(containerAllocation, await endpoint.EndpointAnnotation.AllAllocatedEndpoints.GetAllocatedEndpointAsync(KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
+        Assert.Equal([$"{origin}/path?x=1#fragment", $"{origin}/secondary"],
+            frontend.Resource.Annotations.OfType<ResourceUrlAnnotation>().Select(url => url.Url));
+        Assert.True(app.ResourceNotifications.TryGetCurrentState(frontend.Resource.Name, out var state));
+        Assert.Equal([$"{origin}/path?x=1#fragment", $"{origin}/secondary"], state.Snapshot.Urls.Select(url => url.Url));
+    }
+
+    [Fact]
+    public async Task CodespacesProjectionPreservesCustomizedPublicOrigins()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        builder.Configuration["CODESPACES"] = "true";
+        builder.Configuration["CODESPACE_NAME"] = "test-codespace";
+        builder.Configuration["GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN"] = "app.github.dev";
+        var frontend = builder.AddExecutable("frontend", "unused", ".").WithHttpEndpoint(targetPort: 8080)
+            .WithUrlForEndpoint("http", url => url.Url = "https://custom.example/path?x=1#fragment")
+            .WithUrlForEndpoint("http", _ => new() { Url = "http://localhost:8080/secondary", DisplayLocation = UrlDisplayLocation.DetailsOnly });
+        var endpoint = frontend.GetEndpoint("http");
+        endpoint.EndpointAnnotation.AllocatedEndpoint = new(endpoint.EndpointAnnotation, "localhost", 8080);
+        using var app = builder.Build();
+
+        await builder.Eventing.PublishResourceEndpointsAllocatedAsync(new(frontend.Resource, app.Services), default);
+
+        Assert.Equal("https://custom.example,https://test-codespace-8080.app.github.dev,http://localhost:8080",
+            await endpoint.BrowserOrigins.GetValueAsync(default));
+        Assert.Equal(["https://custom.example/path?x=1#fragment", "https://test-codespace-8080.app.github.dev/secondary"],
+            frontend.Resource.Annotations.OfType<ResourceUrlAnnotation>().Select(url => url.Url));
+    }
+
+    [Theory]
+    [InlineData(EventDispatchBehavior.BlockingSequential)]
+    [InlineData(EventDispatchBehavior.BlockingConcurrent)]
+    [InlineData(EventDispatchBehavior.NonBlockingSequential)]
+    [InlineData(EventDispatchBehavior.NonBlockingConcurrent)]
+    public async Task BrowserUrlIsFinalizedBeforeAllocationEventHandlers(EventDispatchBehavior dispatchBehavior)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var callbackCount = 0;
+        var callbackEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var completeCallback = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var observed = new TaskCompletionSource<(bool Finalized, string? Origin)>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var frontend = builder.AddExecutable("frontend", "unused", ".").WithHttpEndpoint()
+            .WithUrls(async context =>
+            {
+                callbackEntered.SetResult();
+                await completeCallback.Task.WaitAsync(context.CancellationToken);
+                context.Urls[0].Url = "https://frontend.example/app";
+                Interlocked.Increment(ref callbackCount);
+            });
+        var browserEndpoint = frontend.GetEndpoint("http").BrowserOrigins;
+        frontend.OnResourceEndpointsAllocated(async (_, _, ct) =>
+        {
+            var finalized = Volatile.Read(ref callbackCount) == 1;
+            var origin = await browserEndpoint.GetValueAsync(ct);
+            observed.SetResult((finalized, origin));
+        });
+        var endpoint = frontend.GetEndpoint("http").EndpointAnnotation;
+        endpoint.AllocatedEndpoint = new(endpoint, "localhost", 8080);
+
+        using var app = builder.Build();
+        var orchestrator = CreateOrchestrator(app.Services.GetRequiredService<DistributedApplicationModel>(), ResourceNotificationServiceTestHelpers.Create(),
+            applicationEventing: builder.Eventing);
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
+
+        var publish = orchestrator.PublishEndpointsAllocatedAsync(
+            [new(frontend.Resource, app.Services)], builder.Eventing, dispatchBehavior, cts.Token);
+        try
+        {
+            await callbackEntered.Task.DefaultTimeout();
+            Assert.False(publish.IsCompleted);
+
+            Assert.False(observed.Task.IsCompleted);
+        }
+        finally
+        {
+            completeCallback.SetResult();
+        }
+        await publish.DefaultTimeout();
+
+        Assert.Equal((true, "https://frontend.example,http://localhost:8080"), await observed.Task.DefaultTimeout());
+        Assert.Equal(1, callbackCount);
+    }
+
+    [Theory]
+    [InlineData(null, "localhost", null, "http://localhost:8080")]
+    [InlineData("http://myapp-apphost.dev.localhost:18888", "localhost", null, "http://frontend-myapp.dev.localhost:8080")]
+    [InlineData(null, "custom.localhost", null, "http://custom.localhost:8080")]
+    [InlineData(null, "localhost", "/swagger?x=1#top", "http://localhost:8080")]
+    [InlineData(null, "localhost", "https://frontend.example:9443/swagger?x=1#top", "https://frontend.example:9443")]
+    [InlineData(null, "localhost", "https://frontend.example:443/swagger", "https://frontend.example")]
+    [InlineData(null, "localhost", "http://frontend.example:80/swagger", "http://frontend.example")]
+    [InlineData(null, "localhost", "http://[::1]:8081/swagger", "http://[::1]:8081")]
+    [InlineData(null, "localhost", "https://b\u00fccher.example/app?x=1#top", "https://xn--bcher-kva.example")]
+    [InlineData(null, "localhost", "HTTPS://XN--BCHER-KVA.EXAMPLE:443/app", "https://xn--bcher-kva.example")]
+    [InlineData(null, "localhost", "https://b\u00fccher.example:9443/app", "https://xn--bcher-kva.example:9443")]
+    [InlineData(null, "localhost", "https://[::1]:443/app", "https://[::1]")]
+    [InlineData(null, "localhost", "http://127.0.0.1:80/app", "http://127.0.0.1")]
+    [InlineData(null, "localhost", "https://reader@frontend.example/app?x=1#top", "https://frontend.example")]
+    public async Task BrowserUrlResolvesCustomizedOrigin(string? dashboardUrl, string targetHost, string? customUrl, string expectedOrigin)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var frontend = builder.AddExecutable("frontend", "unused", ".").WithHttpEndpoint();
+        if (customUrl is not null)
+        {
+            frontend.WithUrlForEndpoint("http", url => url.Url = customUrl);
+        }
+        var endpoint = frontend.GetEndpoint("http").EndpointAnnotation;
+        endpoint.TargetHost = targetHost;
+        endpoint.AllocatedEndpoint = new(endpoint, "localhost", 8080);
+        var containerAllocation = new AllocatedEndpoint(endpoint, "frontend.dev.internal", 5000,
+            EndpointBindingMode.SingleAddress, networkId: KnownNetworkIdentifiers.DefaultAspireContainerNetwork);
+        endpoint.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, containerAllocation);
+        var browserEndpoint = frontend.GetEndpoint("http").BrowserOrigins;
+        var backend = builder.AddContainer("backend", "unused")
+            .WithEnvironment("FRONTEND_ORIGIN", browserEndpoint)
+            .WithEnvironment("HOST_ENDPOINT", frontend.GetEndpoint("http", KnownNetworkIdentifiers.LocalhostNetwork))
+            .WithEnvironment("SERVICE_ENDPOINT", frontend.GetEndpoint("http"));
+
+        using var app = builder.Build();
+        var notifications = ResourceNotificationServiceTestHelpers.Create();
+        var orchestrator = CreateOrchestrator(app.Services.GetRequiredService<DistributedApplicationModel>(), notifications,
+            applicationEventing: builder.Eventing, dashboardOptions: new() { DashboardUrl = dashboardUrl });
+
+        var pendingOrigin = browserEndpoint.GetValueAsync();
+        Assert.False(pendingOrigin.IsCompleted);
+
+        await orchestrator.PublishEndpointsAllocatedAsync([new(frontend.Resource, app.Services)], builder.Eventing, EventDispatchBehavior.BlockingSequential, default);
+
+        var expectedOrigins = expectedOrigin == "http://localhost:8080"
+            ? expectedOrigin : $"{expectedOrigin},http://localhost:8080";
+        Assert.Equal(expectedOrigins, await pendingOrigin.DefaultTimeout());
+        Assert.Equal(expectedOrigins, await browserEndpoint.GetValueAsync());
+        Assert.Equal("http://localhost:8080", frontend.GetEndpoint("http").Url);
+        Assert.Same(containerAllocation, await endpoint.AllAllocatedEndpoints.GetAllocatedEndpointAsync(KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
+        var environment = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(backend.Resource, DistributedApplicationOperation.Run, app.Services).DefaultTimeout();
+        Assert.Equal(expectedOrigins, environment["FRONTEND_ORIGIN"]);
+        Assert.Equal("http://localhost:8080", environment["HOST_ENDPOINT"]);
+        Assert.Equal("http://frontend.dev.internal:5000", environment["SERVICE_ENDPOINT"]);
+        var primaryUrl = frontend.Resource.Annotations.OfType<ResourceUrlAnnotation>().First();
+        if (customUrl is not null)
+        {
+            Assert.Equal(customUrl.StartsWith('/') ? $"http://localhost:8080{customUrl}" : customUrl, primaryUrl.Url);
+        }
+        else
+        {
+            Assert.Equal(expectedOrigin, new Uri(primaryUrl.Url).GetLeftPart(UriPartial.Authority));
+        }
+    }
+
+    [Fact]
+    public async Task BrowserUrlsUseDisplayOrderAndExcludeCrossResourceLinks()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var frontend = builder.AddExecutable("frontend", "unused", ".")
+            .WithHttpEndpoint()
+            .WithUrlForEndpoint("http", url => url.Url = "https://frontend.example/app")
+            .WithUrlForEndpoint("http", _ => new() { Url = "https://frontend.example/swagger" })
+            .WithUrlForEndpoint("http", _ => new() { Url = "https://admin.example", DisplayOrder = 1000 })
+            .WithUrls(context => context.Urls.Reverse());
+        var manager = builder.AddExecutable("manager", "unused", ".")
+            .WithUrlForEndpoint(frontend.GetEndpoint("http"), url => url.Url = "https://manager.example/admin");
+        var endpoint = frontend.GetEndpoint("http").EndpointAnnotation;
+        endpoint.AllocatedEndpoint = new(endpoint, "localhost", 8080);
+
+        using var app = builder.Build();
+        var orchestrator = CreateOrchestrator(app.Services.GetRequiredService<DistributedApplicationModel>(), ResourceNotificationServiceTestHelpers.Create(),
+            applicationEventing: builder.Eventing);
+
+        await orchestrator.PublishEndpointsAllocatedAsync([new(frontend.Resource, app.Services)], builder.Eventing, EventDispatchBehavior.BlockingSequential, default);
+        await orchestrator.PublishEndpointsAllocatedAsync([new(manager.Resource, app.Services)], builder.Eventing, EventDispatchBehavior.BlockingSequential, default);
+
+        Assert.Equal("https://admin.example,https://frontend.example,http://localhost:8080", await frontend.GetEndpoint("http").BrowserOrigins.GetValueAsync());
+        Assert.Equal("https://manager.example/admin", Assert.Single(manager.Resource.Annotations.OfType<ResourceUrlAnnotation>()).Url);
+    }
+
+    [Fact]
+    public async Task BrowserUrlWaitsForUrlCallbackCompletion()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var callbackEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var completeCallback = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var frontend = builder.AddExecutable("frontend", "unused", ".").WithHttpEndpoint()
+            .WithUrls(async context =>
+            {
+                callbackEntered.SetResult();
+                await completeCallback.Task;
+                context.Urls[0].Url = "https://frontend.example/app";
+            });
+        var endpoint = frontend.GetEndpoint("http").EndpointAnnotation;
+        endpoint.AllocatedEndpoint = new(endpoint, "localhost", 8080);
+
+        using var app = builder.Build();
+        var orchestrator = CreateOrchestrator(app.Services.GetRequiredService<DistributedApplicationModel>(), ResourceNotificationServiceTestHelpers.Create(),
+            applicationEventing: builder.Eventing);
+
+        var pendingOrigin = frontend.GetEndpoint("http").BrowserOrigins.GetValueAsync();
+        var publish = orchestrator.PublishEndpointsAllocatedAsync([new(frontend.Resource, app.Services)], builder.Eventing, EventDispatchBehavior.BlockingSequential, default);
+        await callbackEntered.Task.DefaultTimeout();
+        try
+        {
+            Assert.False(pendingOrigin.IsCompleted);
+        }
+        finally
+        {
+            completeCallback.SetResult();
+        }
+        await publish.DefaultTimeout();
+
+        Assert.Equal("https://frontend.example,http://localhost:8080", await pendingOrigin.DefaultTimeout());
+    }
+
+    [Fact]
+    public async Task BrowserUrlsUseReplacementAnnotations()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var frontend = builder.AddExecutable("frontend", "unused", ".").WithHttpEndpoint()
+            .WithUrls(context =>
+            {
+                var original = context.Urls[0];
+                context.Urls[0] = new ResourceUrlAnnotation
+                {
+                    Endpoint = original.Endpoint,
+                    Url = "https://frontend.example/app",
+                    DisplayOrder = 10
+                };
+            });
+        var endpoint = frontend.GetEndpoint("http").EndpointAnnotation;
+        endpoint.AllocatedEndpoint = new(endpoint, "localhost", 8080);
+        using var app = builder.Build();
+        var orchestrator = CreateOrchestrator(app.Services.GetRequiredService<DistributedApplicationModel>(), ResourceNotificationServiceTestHelpers.Create(),
+            applicationEventing: builder.Eventing);
+
+        await orchestrator.PublishEndpointsAllocatedAsync([new(frontend.Resource, app.Services)], builder.Eventing, EventDispatchBehavior.BlockingSequential, default);
+
+        var origins = frontend.GetEndpoint("http").BrowserOrigins;
+        Assert.Equal("https://frontend.example,http://localhost:8080", await origins.GetValueAsync());
+        Assert.Equal("http://localhost:8080", frontend.GetEndpoint("http").Url);
+    }
+
+    [Fact]
+    public async Task BrowserUrlCallbackFailureCompletesWaiters()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var frontend = builder.AddExecutable("frontend", "unused", ".").WithHttpEndpoint();
+        var browserEndpoint = frontend.GetEndpoint("http").BrowserOrigins;
+        frontend.WithUrls(_ => throw new InvalidOperationException("URL customization failed."));
+        var endpoint = frontend.GetEndpoint("http").EndpointAnnotation;
+        endpoint.AllocatedEndpoint = new(endpoint, "localhost", 8080);
+
+        using var app = builder.Build();
+        var orchestrator = CreateOrchestrator(app.Services.GetRequiredService<DistributedApplicationModel>(), ResourceNotificationServiceTestHelpers.Create(),
+            applicationEventing: builder.Eventing);
+
+        var pendingOrigin = browserEndpoint.GetValueAsync();
+        await orchestrator.PublishEndpointsAllocatedAsync([new(frontend.Resource, app.Services)], builder.Eventing, EventDispatchBehavior.BlockingSequential, default).DefaultTimeout();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () => await pendingOrigin.DefaultTimeout());
+        Assert.Equal("URL customization failed.", exception.Message);
+        Assert.Equal("http://localhost:8080", frontend.GetEndpoint("http").Url);
+    }
+
+    [Theory]
+    [InlineData("mailto:frontend@example.com")]
+    [InlineData("swagger")]
+    public async Task InvalidBrowserOriginPreservesDashboardLinks(string invalidUrl)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var frontend = builder.AddExecutable("frontend", "unused", ".").WithHttpEndpoint()
+            .WithUrlForEndpoint("http", url => url.Url = invalidUrl)
+            .WithHttpsEndpoint()
+            .WithUrlForEndpoint("https", url => url.Url = "https://frontend.example/home");
+        var endpoint = frontend.GetEndpoint("http").EndpointAnnotation;
+        endpoint.AllocatedEndpoint = new(endpoint, "localhost", 8080);
+        var httpsEndpoint = frontend.GetEndpoint("https").EndpointAnnotation;
+        httpsEndpoint.AllocatedEndpoint = new(httpsEndpoint, "localhost", 8443);
+
+        using var app = builder.Build();
+        var orchestrator = CreateOrchestrator(app.Services.GetRequiredService<DistributedApplicationModel>(), ResourceNotificationServiceTestHelpers.Create(),
+            applicationEventing: builder.Eventing);
+
+        await orchestrator.PublishEndpointsAllocatedAsync([new(frontend.Resource, app.Services)], builder.Eventing, EventDispatchBehavior.BlockingSequential, default);
+
+        Assert.Equal("http://localhost:8080", await frontend.GetEndpoint("http").BrowserOrigins.GetValueAsync().DefaultTimeout());
+        Assert.Equal("https://frontend.example,https://localhost:8443", await frontend.GetEndpoint("https").BrowserOrigins.GetValueAsync().DefaultTimeout());
+        Assert.Equal([invalidUrl, "https://frontend.example/home"],
+            frontend.Resource.Annotations.OfType<ResourceUrlAnnotation>().Select(url => url.Url));
+    }
+
+    [Fact]
+    public async Task BrowserOriginsRetainAllocatedEndpointWhenDisplayLinksAreRemoved()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var frontend = builder.AddExecutable("frontend", "unused", ".").WithHttpEndpoint()
+            .WithUrls(context => context.Urls.Clear());
+        var endpoint = frontend.GetEndpoint("http").EndpointAnnotation;
+        endpoint.AllocatedEndpoint = new(endpoint, "localhost", 8080);
+
+        using var app = builder.Build();
+        var orchestrator = CreateOrchestrator(app.Services.GetRequiredService<DistributedApplicationModel>(), ResourceNotificationServiceTestHelpers.Create(),
+            applicationEventing: builder.Eventing);
+
+        await orchestrator.PublishEndpointsAllocatedAsync([new(frontend.Resource, app.Services)], builder.Eventing, EventDispatchBehavior.BlockingSequential, default);
+
+        Assert.Equal("http://localhost:8080", await frontend.GetEndpoint("http").BrowserOrigins.GetValueAsync());
+        Assert.Empty(frontend.Resource.Annotations.OfType<ResourceUrlAnnotation>());
+    }
+
+    [Fact]
+    public async Task BrowserUrlCanRecoverFromUrlCallbackFailure()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var failCallback = true;
+        var frontend = builder.AddExecutable("frontend", "unused", ".").WithHttpEndpoint()
+            .WithUrls(context =>
+            {
+                if (failCallback)
+                {
+                    throw new InvalidOperationException("URL customization failed.");
+                }
+                context.Urls[0].Url = "https://frontend.example/app";
+            });
+        var endpoint = frontend.GetEndpoint("http").EndpointAnnotation;
+        endpoint.AllocatedEndpoint = new(endpoint, "localhost", 8080);
+        var browserEndpoint = frontend.GetEndpoint("http").BrowserOrigins;
+
+        using var app = builder.Build();
+        var orchestrator = CreateOrchestrator(app.Services.GetRequiredService<DistributedApplicationModel>(), ResourceNotificationServiceTestHelpers.Create(),
+            applicationEventing: builder.Eventing);
+
+        await orchestrator.PublishEndpointsAllocatedAsync([new(frontend.Resource, app.Services)], builder.Eventing, EventDispatchBehavior.BlockingSequential, default);
+        await Assert.ThrowsAsync<InvalidOperationException>(async () => await browserEndpoint.GetValueAsync());
+
+        failCallback = false;
+        await orchestrator.PublishEndpointsAllocatedAsync([new(frontend.Resource, app.Services)], builder.Eventing, EventDispatchBehavior.BlockingSequential, default);
+
+        Assert.Equal("https://frontend.example,http://localhost:8080", await browserEndpoint.GetValueAsync());
+    }
+
+    [Theory]
+    [InlineData("Waiting")]
+    [InlineData("Starting")]
+    [InlineData("Running")]
+    public async Task ResourceStoppedEventIsNotRepeatedWhenHandlerChangesSnapshotState(string snapshotState)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var resource = builder.AddExecutable("resource", "unused", ".");
+        var events = new DcpExecutorEvents();
+        var notifications = ResourceNotificationServiceTestHelpers.Create();
+        var stoppedCount = 0;
+
+        resource.OnResourceStopped(async (_, @event, _) =>
+        {
+            Interlocked.Increment(ref stoppedCount);
+            Assert.Equal(KnownResourceStates.Finished, @event.ResourceEvent.Snapshot.State?.Text);
+            Assert.Equal(0, @event.ResourceEvent.Snapshot.ExitCode);
+            await notifications.PublishUpdateAsync(resource.Resource, resource.Resource.Name,
+                snapshot => snapshot with { State = snapshotState });
+        });
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var orchestrator = CreateOrchestrator(model, notificationService: notifications, dcpEvents: events, applicationEventing: builder.Eventing);
+        await orchestrator.RunApplicationAsync();
+
+        await PublishStateAsync(null, null);
+        await PublishStateAsync(KnownResourceStates.Running, null);
+        await PublishStateAsync(KnownResourceStates.Finished, KnownResourceStates.Running);
+        Assert.Equal(1, stoppedCount);
+
+        await PublishStateAsync(KnownResourceStates.Finished, KnownResourceStates.Finished);
+        Assert.Equal(1, stoppedCount);
+
+        await PublishStateAsync(KnownResourceStates.Exited, KnownResourceStates.Finished);
+        await PublishStateAsync(KnownResourceStates.FailedToStart, KnownResourceStates.Exited);
+        Assert.Equal(1, stoppedCount);
+
+        await PublishStateAsync(KnownResourceStates.Running, KnownResourceStates.FailedToStart);
+        await PublishStateAsync(KnownResourceStates.Finished, KnownResourceStates.Running);
+        Assert.Equal(2, stoppedCount);
+
+        Task PublishStateAsync(string? state, string? previousState) => events.PublishAsync(new OnResourceChangedContext(
+            CancellationToken.None, KnownResourceTypes.Executable, resource.Resource, resource.Resource.Name,
+            new ResourceStatus(state, null, null), previousState,
+            snapshot => snapshot with { State = state is not null ? new(state, null) : snapshot.State, ExitCode = state == KnownResourceStates.Finished ? 0 : null }));
+    }
+
     [Fact]
     public async Task ParentPropertySetOnChildResource()
     {
@@ -1158,7 +1708,8 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
             options ?? new DistributedApplicationOptions(),
             new ServiceCollection().BuildServiceProvider(),
             new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build(),
-            new TestInteractionFileUploadStore());
+            new TestInteractionFileUploadStore(),
+            new InteractionServiceConsumerState());
     }
 
     private sealed class MockDeploymentStateManager : IDeploymentStateManager
@@ -1311,6 +1862,7 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
             parentContainer.Resource,
             "parent-container-dcp",
             new ResourceStatus(KnownResourceStates.FailedToStart, null, null),
+            PreviousState: null,
             snapshot => snapshot with { State = KnownResourceStates.FailedToStart }));
 
         // Check final states
@@ -1358,6 +1910,7 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
             parentContainer.Resource,
             "parent-container-dcp",
             new ResourceStatus(KnownResourceStates.FailedToStart, null, null),
+            PreviousState: null,
             snapshot => snapshot with { State = KnownResourceStates.FailedToStart }));
 
         // Check final states
@@ -1548,3 +2101,4 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
         }
     }
 }
+#pragma warning restore CS0618

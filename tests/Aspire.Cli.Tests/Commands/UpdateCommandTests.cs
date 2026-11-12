@@ -361,7 +361,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
 
         // Act
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("update --apphost AppHost.csproj");
+        var result = command.Parse("update --apphost AppHost.csproj --channel stable");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
@@ -373,10 +373,62 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task UpdateCommand_GuestRegenerationFailureStopsBeforeMigrationsAndSelfUpdate()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHost = new FileInfo(Path.Combine(workspace.Path, "apphost.ts"));
+        await File.WriteAllTextAsync(appHost.FullName, "// test apphost");
+        var configPath = Path.Combine(workspace.Path, AspireConfigFile.FileName);
+        const string originalConfig = """{ "sdk": { "version": "0.9.0" }, "packages": { "Aspire.Hosting": "0.9.0" } }""";
+        await File.WriteAllTextAsync(configPath, originalConfig);
+        var migration = new TestMigration("after-update", 100, descriptor: null);
+        var interaction = new TestInteractionService();
+        var message = string.Format(UpdateCommandStrings.FailedToRegenerateSdkAfterUpdateFormat, appHost.FullName);
+        var serverProject = new FakeFailingAppHostServerProject(workspace.Path);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => new TestProjectLocator
+            {
+                UseOrFindAppHostProjectFileAsyncCallback = (_, _, _) => Task.FromResult<FileInfo?>(appHost)
+            };
+            options.AppHostProjectFactory = sp => ActivatorUtilities.CreateInstance<AppHostProjectFactory>(sp);
+            options.InteractionServiceFactory = _ => interaction;
+            options.PackagingServiceFactory = _ => new TestPackagingService
+            {
+                GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>(
+                    [CreatePackageChannelWithGuestSdkVersion("1.0.0", cliDownloadBaseUrl: "https://example.test/aspire")])
+            };
+            options.CliUpdateNotifierFactory = _ => new TestCliUpdateNotifier
+            {
+                IsUpdateAvailableCallback = () => true
+            };
+        });
+        services.AddSingleton<IAppHostServerProjectFactory>(new TestAppHostServerProjectFactory
+        {
+            CreateAsyncCallback = (_, _) => Task.FromResult<IAppHostServerProject>(serverProject)
+        });
+        services.AddSingleton<IMigration>(migration);
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+
+        var exitCode = await command.Parse("update --apphost apphost.ts --channel stable --migrate --yes")
+            .InvokeAsync().DefaultTimeout();
+
+        Assert.Equal("stable", serverProject.RequestedChannel);
+        Assert.Equal(CliExitCodes.FailedToUpgradeProject, exitCode);
+        Assert.Equal(["Failed to prepare AppHost server.", message], interaction.DisplayedErrors);
+        Assert.Equal(originalConfig, await File.ReadAllTextAsync(configPath));
+        Assert.Null(migration.DetectedContext);
+        Assert.False(migration.ApplyInvoked);
+        Assert.Empty(interaction.BooleanPromptCalls);
+        Assert.Empty(interaction.DisplayedSuccess);
+    }
+
+    [Fact]
     public async Task UpdateCommand_GuestProject_WhenTargetSdkNewerThanCli_PromptsForCliUpdateBeforeProjectUpdateAndSkipsWhenAccepted()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        const string processPath = "/home/test/.dotnet/tools/.store/aspire.cli/9.4.0/aspire.cli.linux-x64/9.4.0/tools/net10.0/linux-x64/aspire";
+        const string processPath = "/home/test/.dotnet/tools/.store/aspire.cli/9.4.0/aspire.cli.linux-x64/9.4.0/tools/any/linux-x64/aspire";
         var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts");
         File.WriteAllText(appHostPath, "// test apphost");
 
@@ -550,7 +602,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
     public async Task UpdateCommand_WhenProjectUpdatedSuccessfullyAndRunningAsDotnetTool_DisplaysDotnetToolUpdateCommand()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        const string processPath = "/home/test/.dotnet/tools/.store/aspire.cli/9.4.0/aspire.cli.linux-x64/9.4.0/tools/net10.0/linux-x64/aspire";
+        const string processPath = "/home/test/.dotnet/tools/.store/aspire.cli/9.4.0/aspire.cli.linux-x64/9.4.0/tools/any/linux-x64/aspire";
         var interactionService = new TestInteractionService()
         {
             ConfirmCallback = (_, _) => true
@@ -614,7 +666,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
 
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("update --apphost AppHost.csproj");
+        var result = command.Parse("update --apphost AppHost.csproj --channel stable");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
@@ -693,7 +745,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
 
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("update --apphost AppHost.csproj");
+        var result = command.Parse("update --apphost AppHost.csproj --channel stable");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
@@ -770,7 +822,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
 
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("update --apphost AppHost.csproj");
+        var result = command.Parse("update --apphost AppHost.csproj --channel stable");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
@@ -930,7 +982,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
 
         // Act
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("update --apphost AppHost.csproj");
+        var result = command.Parse("update --apphost AppHost.csproj --channel pr-12658");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
@@ -1003,7 +1055,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("update --apphost AppHost.csproj");
+        var result = command.Parse("update --apphost AppHost.csproj --channel pr-12658");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
@@ -1151,7 +1203,8 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
                         NullLogger.Instance,
                         configureGlobalPackagesFolder: false,
                         cliDownloadBaseUrl: null);
-                    return Task.FromResult<IEnumerable<PackageChannel>>(new[] { prChannel });
+                    return Task.FromResult<IEnumerable<PackageChannel>>(
+                        [PackageChannel.CreateImplicitChannel(new FakeNuGetPackageCache(), new TestFeatures(), NullLogger.Instance), prChannel]);
                 }
             };
         });
@@ -1278,7 +1331,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
 
         var commandLine = entryPoint switch
         {
-            NixSelfUpdateEntryPoint.AfterProjectUpdate => "update --apphost AppHost.csproj",
+            NixSelfUpdateEntryPoint.AfterProjectUpdate => "update --apphost AppHost.csproj --channel stable",
             NixSelfUpdateEntryPoint.NoProjectFound => "update",
             NixSelfUpdateEntryPoint.BeforeGuestProjectUpdate => "update --apphost apphost.ts",
             _ => throw new InvalidOperationException($"Unexpected entry point: {entryPoint}")
@@ -1936,6 +1989,10 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
             };
 
             options.InteractionServiceFactory = _ => wrappedService;
+            options.AppHostProjectFactory = _ => new TestAppHostProjectFactory
+            {
+                LanguageId = KnownLanguageId.TypeScript
+            };
 
             options.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner();
 
@@ -2035,7 +2092,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         var localConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
         File.WriteAllText(localConfigPath, """{ "channel": "staging" }""");
 
-        var (exitCode, updatedWithChannel, promptInvoked) = await RunUpdateAndCaptureChannelAsync(
+        var (exitCode, updatedWithChannel, promptInvoked) = await RunGuestUpdateAndCaptureChannelAsync(
             workspace,
             updateArgs: "update");
 
@@ -2056,7 +2113,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         var globalSettingsPath = Path.Combine(globalDir, "settings.global.json");
         File.WriteAllText(globalSettingsPath, """{ "channel": "staging" }""");
 
-        var (exitCode, updatedWithChannel, promptInvoked) = await RunUpdateAndCaptureChannelAsync(
+        var (exitCode, updatedWithChannel, promptInvoked) = await RunGuestUpdateAndCaptureChannelAsync(
             workspace,
             updateArgs: "update");
 
@@ -2074,7 +2131,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         var localConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
         File.WriteAllText(localConfigPath, """{ "channel": "staging" }""");
 
-        var (exitCode, updatedWithChannel, promptInvoked) = await RunUpdateAndCaptureChannelAsync(
+        var (exitCode, updatedWithChannel, promptInvoked) = await RunGuestUpdateAndCaptureChannelAsync(
             workspace,
             updateArgs: "update --channel daily");
 
@@ -2096,7 +2153,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         var localConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
         File.WriteAllText(localConfigPath, """{ "channel": "staging" }""");
 
-        var (exitCode, updatedWithChannel, promptInvoked) = await RunUpdateAndCaptureChannelAsync(
+        var (exitCode, updatedWithChannel, promptInvoked) = await RunGuestUpdateAndCaptureChannelAsync(
             workspace,
             updateArgs: "update");
 
@@ -2117,7 +2174,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         Directory.CreateDirectory(globalDir);
         File.WriteAllText(Path.Combine(globalDir, "settings.global.json"), """{ "channel": "staging" }""");
 
-        var (exitCode, updatedWithChannel, promptInvoked) = await RunUpdateAndCaptureChannelAsync(
+        var (exitCode, updatedWithChannel, promptInvoked) = await RunGuestUpdateAndCaptureChannelAsync(
             workspace,
             updateArgs: "update");
 
@@ -2148,6 +2205,10 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
             };
 
             options.InteractionServiceFactory = _ => new TestInteractionService();
+            options.AppHostProjectFactory = _ => new TestAppHostProjectFactory
+            {
+                LanguageId = KnownLanguageId.TypeScript
+            };
 
             options.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner();
 
@@ -2176,8 +2237,10 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.FailedToUpgradeProject, exitCode);
     }
 
-    [Fact]
-    public async Task UpdateCommand_ChannelStagingRequestedButPackagingServiceReportsUnavailable_SurfacesStagingReason()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task UpdateCommand_ChannelStagingRequestedButPackagingServiceReportsUnavailable_SurfacesStagingReason(bool channelFromConfig)
     {
         // Regression: https://github.com/microsoft/aspire/issues/16652
         // When `aspire update --channel staging` is run on a daily/local/pr-N CLI, the packaging
@@ -2186,6 +2249,11 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         // "No channel found matching 'staging'" message — the generic message hides the actual
         // recovery action (set overrideStagingFeed or install a staging CLI) from the user.
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        if (channelFromConfig)
+        {
+            await File.WriteAllTextAsync(
+                Path.Combine(workspace.Path, AspireConfigFile.FileName), """{ "channel": "staging" }""");
+        }
 
         const string unavailableReason = "FAKE staging unavailable reason (identity=daily)";
 
@@ -2229,16 +2297,17 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("update --channel staging");
+        var result = command.Parse(channelFromConfig ? "update" : "update --channel staging");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.FailedToUpgradeProject, exitCode);
 
         Assert.NotNull(capturedInteractionService);
-        var errorText = string.Join("\n", capturedInteractionService!.DisplayedErrors);
-        Assert.Contains(unavailableReason, errorText);
-        Assert.DoesNotContain("No channel found matching", errorText);
+        var expectedError = channelFromConfig
+            ? string.Format(UpdateCommandStrings.ConfiguredChannelNotFoundFormat, "staging", unavailableReason)
+            : unavailableReason;
+        Assert.Equal(expectedError, Assert.Single(capturedInteractionService.DisplayedErrors));
     }
 
     [Fact]
@@ -2253,7 +2322,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         var projectConfigPath = Path.Combine(projectDirectory.FullName, AspireConfigFile.FileName);
         File.WriteAllText(projectConfigPath, """{ "channel": "staging" }""");
 
-        var (exitCode, updatedWithChannel, promptInvoked) = await RunUpdateAndCaptureChannelAsync(
+        var (exitCode, updatedWithChannel, promptInvoked) = await RunGuestUpdateAndCaptureChannelAsync(
             workspace,
             updateArgs: $"update --apphost {Path.Combine(projectDirectory.FullName, "AppHost.csproj")}",
             projectDirectory: projectDirectory);
@@ -2278,7 +2347,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
 
         var projectDirectory = Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, "elsewhere"));
 
-        var (exitCode, updatedWithChannel, promptInvoked) = await RunUpdateAndCaptureChannelAsync(
+        var (exitCode, updatedWithChannel, promptInvoked) = await RunGuestUpdateAndCaptureChannelAsync(
             workspace,
             updateArgs: $"update --apphost {Path.Combine(projectDirectory.FullName, "AppHost.csproj")}",
             projectDirectory: projectDirectory);
@@ -2305,7 +2374,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
             Path.Combine(projectDirectory.FullName, AspireConfigFile.FileName),
             """{ "channel": "staging" }""");
 
-        var (exitCode, updatedWithChannel, promptInvoked) = await RunUpdateAndCaptureChannelAsync(
+        var (exitCode, updatedWithChannel, promptInvoked) = await RunGuestUpdateAndCaptureChannelAsync(
             workspace,
             updateArgs: $"update --apphost {Path.Combine(projectDirectory.FullName, "AppHost.csproj")}",
             projectDirectory: projectDirectory);
@@ -2335,7 +2404,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
             Path.Combine(projectDirectory.FullName, AspireConfigFile.FileName),
             """{ "language": "csharp" }""");
 
-        var (exitCode, updatedWithChannel, promptInvoked) = await RunUpdateAndCaptureChannelAsync(
+        var (exitCode, updatedWithChannel, promptInvoked) = await RunGuestUpdateAndCaptureChannelAsync(
             workspace,
             updateArgs: $"update --apphost {Path.Combine(projectDirectory.FullName, "AppHost.csproj")}",
             projectDirectory: projectDirectory);
@@ -2359,7 +2428,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         var hivesDir = workspace.CreateDirectory(".aspire").CreateSubdirectory("hives");
         hivesDir.CreateSubdirectory("pr-12345");
 
-        var (exitCode, updatedWithChannel, promptInvoked) = await RunUpdateAndCaptureChannelAsync(
+        var (exitCode, updatedWithChannel, promptInvoked) = await RunGuestUpdateAndCaptureChannelAsync(
             workspace,
             updateArgs: "update --channel daily");
 
@@ -2383,7 +2452,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
             Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName),
             """{ "channel": "staging" }""");
 
-        var (exitCode, updatedWithChannel, promptInvoked) = await RunUpdateAndCaptureChannelAsync(
+        var (exitCode, updatedWithChannel, promptInvoked) = await RunGuestUpdateAndCaptureChannelAsync(
             workspace,
             updateArgs: "update");
 
@@ -2432,6 +2501,11 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
             };
 
             options.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner();
+            options.AppHostProjectFactory = _ => new TestAppHostProjectFactory
+            {
+                LanguageId = KnownLanguageId.TypeScript,
+                UpdatePackagesAsyncCallback = (_, _) => Task.FromResult(new UpdatePackagesResult())
+            };
 
             options.ProjectUpdaterFactory = _ => new TestProjectUpdater()
             {
@@ -2541,7 +2615,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
     }
 
     // ------------------------------------------------------------------
-    // Identity-channel fallback contract: when no channel is supplied on
+    // Non-C# identity-channel fallback: when no channel is supplied on
     // the command line and neither the per-project nor the global
     // "channel" config pins one, `aspire update` falls back to the
     // running CLI's identity channel (the value baked into the assembly
@@ -2562,7 +2636,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
     // identity.
     // ------------------------------------------------------------------
     [Fact]
-    public async Task UpdateCommand_WhenStagingIdentityRegistersChannel_UsesStagingForUnpinnedProject()
+    public async Task UpdateCommand_CSharp_StagingIdentityDoesNotSelectRegisteredStagingChannel()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
@@ -2622,12 +2696,12 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);
-        Assert.False(promptForSelectionInvoked, "Staging identity should resolve through the registered staging channel without prompting.");
-        Assert.Equal(PackageChannelNames.Staging, updatedWithChannel);
+        Assert.False(promptForSelectionInvoked);
+        Assert.Equal(PackageChannelNames.Default, updatedWithChannel);
     }
 
     [Fact]
-    public async Task UpdateCommand_WhenAppHostOutsideLaunchDirectoryConfiguresStaging_UsesStagingFromRealPackagingService()
+    public async Task UpdateCommand_CSharp_OutsideLaunchDirectoryUsesProjectConfiguredChannel()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectDirectory = Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, "elsewhere"));
@@ -2636,6 +2710,9 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         File.WriteAllText(
             Path.Combine(projectDirectory.FullName, AspireConfigFile.FileName),
             """{ "channel": "staging" }""");
+        File.WriteAllText(
+            Path.Combine(workspace.Path, AspireConfigFile.FileName),
+            """{ "channel": "daily" }""");
 
         var promptForSelectionInvoked = false;
         var updatedWithChannel = string.Empty;
@@ -2675,7 +2752,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);
-        Assert.False(promptForSelectionInvoked, "Project-local staging config should resolve without falling through to channel selection.");
+        Assert.False(promptForSelectionInvoked);
         Assert.Equal(PackageChannelNames.Staging, updatedWithChannel);
     }
 
@@ -2694,7 +2771,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         var hivesDir = workspace.CreateDirectory(".aspire").CreateSubdirectory("hives");
         hivesDir.CreateSubdirectory("pr-12345");
 
-        var (exitCode, updatedWithChannel, promptInvoked) = await RunUpdateAndCaptureChannelAsync(
+        var (exitCode, updatedWithChannel, promptInvoked) = await RunGuestUpdateAndCaptureChannelAsync(
             workspace,
             updateArgs: "update",
             identityChannel: identityChannel);
@@ -2716,7 +2793,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         var hivesDir = workspace.CreateDirectory(".aspire").CreateSubdirectory("hives");
         hivesDir.CreateSubdirectory("pr-12345");
 
-        var (exitCode, _, promptInvoked) = await RunUpdateAndCaptureChannelAsync(
+        var (exitCode, _, promptInvoked) = await RunGuestUpdateAndCaptureChannelAsync(
             workspace,
             updateArgs: "update",
             identityChannel: PackageChannelNames.Local,
@@ -2737,7 +2814,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         var hivesDir = workspace.CreateDirectory(".aspire").CreateSubdirectory("hives");
         hivesDir.CreateSubdirectory("pr-12345");
 
-        var (exitCode, _, promptInvoked) = await RunUpdateAndCaptureChannelAsync(
+        var (exitCode, _, promptInvoked) = await RunGuestUpdateAndCaptureChannelAsync(
             workspace,
             updateArgs: "update",
             identityChannel: "pr-99999");
@@ -2757,7 +2834,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         var hivesDir = workspace.CreateDirectory(".aspire").CreateSubdirectory("hives");
         hivesDir.CreateSubdirectory("pr-12345");
 
-        var (exitCode, updatedWithChannel, promptInvoked) = await RunUpdateAndCaptureChannelAsync(
+        var (exitCode, updatedWithChannel, promptInvoked) = await RunGuestUpdateAndCaptureChannelAsync(
             workspace,
             updateArgs: "update --channel staging",
             identityChannel: PackageChannelNames.Daily);
@@ -2781,7 +2858,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
             Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName),
             """{ "channel": "staging" }""");
 
-        var (exitCode, updatedWithChannel, promptInvoked) = await RunUpdateAndCaptureChannelAsync(
+        var (exitCode, updatedWithChannel, promptInvoked) = await RunGuestUpdateAndCaptureChannelAsync(
             workspace,
             updateArgs: "update",
             identityChannel: PackageChannelNames.Daily);
@@ -2791,20 +2868,204 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal("staging", updatedWithChannel);
     }
 
-    private Task<(int ExitCode, string UpdatedWithChannel, bool PromptInvoked)> RunUpdateAndCaptureChannelAsync(
+    [Theory]
+    [InlineData(null, "update --channel daily", "local", "daily", true)]
+    [InlineData("daily", "update --channel daily", "local", "daily", true)]
+    [InlineData("DAILY", "update --channel daily", "local", "daily", true)]
+    [InlineData("daily", "update --channel DAILY", "local", "daily", true)]
+    [InlineData("staging", "update --channel daily", "local", "daily", true)]
+    [InlineData("daily", "update --quality daily", "local", "daily", true)]
+    [InlineData("staging", "update --quality daily", "local", "daily", true)]
+    [InlineData("daily", "update --channel default", "local", "default", true)]
+    [InlineData("daily", "update", "staging", "daily", true)]
+    [InlineData("DAILY", "update", "local", "daily", true)]
+    [InlineData("stable", "update", "daily", "stable", true)]
+    [InlineData("default", "update", "daily", "default", true)]
+    [InlineData(null, "update", "local", "default", false)]
+    [InlineData(null, "update", "daily", "default", false)]
+    [InlineData("", "update", "daily", "default", false)]
+    [InlineData(" ", "update", "daily", "default", false)]
+    public async Task UpdateCommand_CSharp_ExplicitOptionsOverrideConfiguredChannel(
+        string? configuredChannel, string arguments, string identityChannel, string expectedChannel, bool hasExplicitChannel)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        if (configuredChannel is not null)
+        {
+            await File.WriteAllTextAsync(
+                Path.Combine(workspace.Path, AspireConfigFile.FileName),
+                JsonSerializer.Serialize(new { channel = configuredChannel }));
+        }
+
+        var (exitCode, context, promptInvoked, _) = await RunUpdateAndCaptureContextAsync(
+            workspace, arguments, workspace.WorkspaceRoot, identityChannel, includeLocalInChannels: false,
+            selectedChannelName: null, KnownLanguageId.CSharp, "AppHost.csproj");
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.NotNull(context);
+        Assert.Equal(expectedChannel, context.Channel.Name);
+        Assert.Equal(hasExplicitChannel, context.HasExplicitChannel);
+        Assert.False(promptInvoked);
+    }
+
+    [Theory]
+    [InlineData("parent", "daily")]
+    [InlineData("parent", "staging")]
+    [InlineData("global", "daily")]
+    [InlineData("global", "staging")]
+    public async Task UpdateCommand_CSharp_ExplicitOptionOverridesInheritedConfiguration(
+        string configScope, string selectedChannel)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var projectDirectory = workspace.CreateDirectory("nested");
+        var configPath = configScope == "parent"
+            ? Path.Combine(workspace.Path, AspireConfigFile.FileName)
+            : Path.Combine(workspace.Path, ".aspire", "settings.global.json");
+        await File.WriteAllTextAsync(configPath, """{ "channel": "daily" }""");
+
+        var (exitCode, context, _, _) = await RunUpdateAndCaptureContextAsync(
+            workspace,
+            $"update --apphost {Path.Combine(projectDirectory.FullName, "AppHost.csproj")} --channel {selectedChannel}",
+            projectDirectory, identityChannel: "local", includeLocalInChannels: false, selectedChannelName: null,
+            KnownLanguageId.CSharp, "AppHost.csproj");
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.NotNull(context);
+        Assert.Equal(selectedChannel, context.Channel.Name);
+        Assert.True(context.HasExplicitChannel);
+    }
+
+    [Theory]
+    [InlineData("AppHost.csproj", "local")]
+    [InlineData("AppHost.csproj", "daily")]
+    [InlineData("AppHost.csproj", "staging")]
+    [InlineData("AppHost.csproj", "pr-12345")]
+    [InlineData("apphost.cs", "local")]
+    [InlineData("apphost.cs", "daily")]
+    [InlineData("apphost.cs", "staging")]
+    [InlineData("apphost.cs", "pr-12345")]
+    public async Task UpdateCommand_CSharpWithoutSelectedChannel_IgnoresHivesAndIdentity(
+        string fileName, string identityChannel)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        workspace.CreateDirectory(".aspire").CreateSubdirectory("hives").CreateSubdirectory("pr-12345");
+        var projectDirectory = workspace.CreateDirectory("nested");
+
+        var (exitCode, context, promptInvoked, _) = await RunUpdateAndCaptureContextAsync(
+            workspace, $"update --apphost {Path.Combine(projectDirectory.FullName, fileName)}", projectDirectory, identityChannel,
+            includeLocalInChannels: true, selectedChannelName: "daily", KnownLanguageId.CSharp, fileName);
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.NotNull(context);
+        Assert.Equal("default", context.Channel.Name);
+        Assert.False(context.HasExplicitChannel);
+        Assert.False(promptInvoked);
+    }
+
+    [Theory]
+    [InlineData("AppHost.csproj", "project")]
+    [InlineData("AppHost.csproj", "parent")]
+    [InlineData("AppHost.csproj", "legacy")]
+    [InlineData("AppHost.csproj", "global")]
+    [InlineData("apphost.cs", "project")]
+    [InlineData("apphost.cs", "parent")]
+    [InlineData("apphost.cs", "legacy")]
+    [InlineData("apphost.cs", "global")]
+    public async Task UpdateCommand_CSharp_ConfiguredChannelOverridesIdentityAndHives(string fileName, string configScope)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        workspace.CreateDirectory(".aspire").CreateSubdirectory("hives").CreateSubdirectory("pr-12345");
+        var projectDirectory = workspace.CreateDirectory("nested");
+        var configPath = configScope switch
+        {
+            "project" => Path.Combine(projectDirectory.FullName, AspireConfigFile.FileName),
+            "parent" => Path.Combine(workspace.Path, AspireConfigFile.FileName),
+            "legacy" => Path.Combine(workspace.Path, ".aspire", "settings.json"),
+            _ => Path.Combine(workspace.Path, ".aspire", "settings.global.json")
+        };
+        await File.WriteAllTextAsync(configPath, """{ "channel": "staging" }""");
+        if (configScope != "global")
+        {
+            await File.WriteAllTextAsync(
+                Path.Combine(workspace.Path, ".aspire", "settings.global.json"), """{ "channel": "daily" }""");
+        }
+
+        var (exitCode, context, promptInvoked, _) = await RunUpdateAndCaptureContextAsync(
+            workspace, $"update --apphost {Path.Combine(projectDirectory.FullName, fileName)}", projectDirectory,
+            identityChannel: "pr-12345", includeLocalInChannels: true, selectedChannelName: "daily", KnownLanguageId.CSharp, fileName);
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.NotNull(context);
+        Assert.Equal("staging", context.Channel.Name);
+        Assert.True(context.HasExplicitChannel);
+        Assert.False(promptInvoked);
+    }
+
+    [Theory]
+    [InlineData(KnownLanguageId.CSharp, "daily", "update", true)]
+    [InlineData(KnownLanguageId.CSharp, "stable", "update", false)]
+    [InlineData(KnownLanguageId.CSharp, "STABLE", "update", false)]
+    [InlineData(KnownLanguageId.CSharp, "daily", "update --channel staging", false)]
+    [InlineData(KnownLanguageId.CSharp, "daily", "update --quality staging", false)]
+    [InlineData(KnownLanguageId.TypeScript, "daily", "update", true)]
+    [InlineData(KnownLanguageId.TypeScript, "stable", "update", false)]
+    [InlineData(KnownLanguageId.TypeScript, "STABLE", "update", false)]
+    [InlineData(KnownLanguageId.TypeScript, "daily", "update --channel staging", false)]
+    [InlineData(KnownLanguageId.TypeScript, "daily", "update --quality staging", false)]
+    public async Task UpdateCommand_ConfiguredNonStableChannel_DisplaysMessage(
+        string languageId, string configuredChannel, string arguments, bool expectMessage)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        await File.WriteAllTextAsync(Path.Combine(workspace.Path, AspireConfigFile.FileName),
+            JsonSerializer.Serialize(new { channel = configuredChannel }));
+
+        var (exitCode, context, _, interaction) = await RunUpdateAndCaptureContextAsync(
+            workspace, arguments, workspace.WorkspaceRoot, identityChannel: "local", includeLocalInChannels: false,
+            selectedChannelName: null, languageId, languageId == KnownLanguageId.CSharp ? "AppHost.csproj" : "apphost.mts");
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.NotNull(context);
+        string[] expectedMessages = expectMessage
+            ? [string.Format(UpdateCommandStrings.UsingConfiguredChannelFormat, context.Channel.Name)]
+            : [];
+        Assert.Equal(expectedMessages, interaction.DisplayedMessages.Select(message => message.Message));
+    }
+
+    [Theory]
+    [InlineData(KnownLanguageId.CSharp)]
+    [InlineData(KnownLanguageId.TypeScript)]
+    public async Task UpdateCommand_UnknownConfiguredChannel_ReportsConfigurationError(string languageId)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        await File.WriteAllTextAsync(
+            Path.Combine(workspace.Path, AspireConfigFile.FileName), """{ "channel": "unknown-channel" }""");
+
+        var (exitCode, context, promptInvoked, interaction) = await RunUpdateAndCaptureContextAsync(
+            workspace, "update", workspace.WorkspaceRoot, identityChannel: "daily", includeLocalInChannels: false,
+            selectedChannelName: null, languageId, languageId == KnownLanguageId.CSharp ? "AppHost.csproj" : "apphost.mts");
+
+        Assert.Equal(CliExitCodes.FailedToUpgradeProject, exitCode);
+        Assert.Null(context);
+        Assert.False(promptInvoked);
+        var reason = string.Format(UpdateCommandStrings.NoChannelFoundMatching, "unknown-channel", "default, stable, staging, daily");
+        Assert.Equal(
+            string.Format(UpdateCommandStrings.ConfiguredChannelNotFoundFormat, "unknown-channel", reason),
+            Assert.Single(interaction.DisplayedErrors));
+    }
+
+    private Task<(int ExitCode, string UpdatedWithChannel, bool PromptInvoked)> RunGuestUpdateAndCaptureChannelAsync(
         TemporaryWorkspace workspace,
         string updateArgs)
     {
-        return RunUpdateAndCaptureChannelAsync(workspace, updateArgs, projectDirectory: workspace.WorkspaceRoot);
+        return RunGuestUpdateAndCaptureChannelAsync(workspace, updateArgs, projectDirectory: workspace.WorkspaceRoot);
     }
 
-    private Task<(int ExitCode, string UpdatedWithChannel, bool PromptInvoked)> RunUpdateAndCaptureChannelAsync(
+    private Task<(int ExitCode, string UpdatedWithChannel, bool PromptInvoked)> RunGuestUpdateAndCaptureChannelAsync(
         TemporaryWorkspace workspace,
         string updateArgs,
         string identityChannel,
         bool includeLocalInChannels = false)
     {
-        return RunUpdateAndCaptureChannelAsync(
+        return RunGuestUpdateAndCaptureChannelAsync(
             workspace,
             updateArgs,
             projectDirectory: workspace.WorkspaceRoot,
@@ -2812,15 +3073,42 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
             includeLocalInChannels: includeLocalInChannels);
     }
 
-    private async Task<(int ExitCode, string UpdatedWithChannel, bool PromptInvoked)> RunUpdateAndCaptureChannelAsync(
+    private async Task<(int ExitCode, string UpdatedWithChannel, bool PromptInvoked)> RunGuestUpdateAndCaptureChannelAsync(
         TemporaryWorkspace workspace,
         string updateArgs,
         DirectoryInfo projectDirectory,
         string identityChannel = "local",
         bool includeLocalInChannels = false)
     {
+        var (exitCode, context, promptInvoked, _) = await RunUpdateAndCaptureContextAsync(
+            workspace, updateArgs, projectDirectory, identityChannel, includeLocalInChannels,
+            selectedChannelName: null, KnownLanguageId.TypeScript, "apphost.mts");
+        return (exitCode, context?.Channel.Name ?? string.Empty, promptInvoked);
+    }
+
+    private async Task<(int ExitCode, UpdatePackagesContext? Context, bool PromptInvoked, TestInteractionService Interaction)> RunUpdateAndCaptureContextAsync(
+        TemporaryWorkspace workspace,
+        string updateArgs,
+        DirectoryInfo projectDirectory,
+        string identityChannel,
+        bool includeLocalInChannels,
+        string? selectedChannelName,
+        string languageId,
+        string appHostFileName)
+    {
         var promptForSelectionInvoked = false;
-        var updatedWithChannel = string.Empty;
+        UpdatePackagesContext? capturedContext = null;
+        var packagingService = new TestPackagingService();
+        var interaction = new TestInteractionService
+        {
+            PromptForSelectionCallback = (prompt, choices, formatter, ct) =>
+            {
+                promptForSelectionInvoked = true;
+                return selectedChannelName is null
+                    ? choices.Cast<PackageChannel>().First()
+                    : choices.Cast<PackageChannel>().Single(channel => channel.Name == selectedChannelName);
+            }
+        };
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -2830,39 +3118,38 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
             {
                 UseOrFindAppHostProjectFileAsyncCallback = (projectFile, _, _) =>
                 {
-                    return Task.FromResult<FileInfo?>(new FileInfo(Path.Combine(projectDirectory.FullName, "AppHost.csproj")));
+                    return Task.FromResult<FileInfo?>(new FileInfo(Path.Combine(projectDirectory.FullName, appHostFileName)));
                 }
             };
 
-            options.InteractionServiceFactory = _ => new TestInteractionService()
-            {
-                PromptForSelectionCallback = (prompt, choices, formatter, ct) =>
-                {
-                    promptForSelectionInvoked = true;
-                    return choices.Cast<object>().First();
-                }
-            };
+            options.InteractionServiceFactory = _ => interaction;
 
             options.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner();
 
-            options.ProjectUpdaterFactory = _ => new TestProjectUpdater()
+            options.AppHostProjectFactory = _ => new TestAppHostProjectFactory()
             {
-                UpdateProjectAsyncCallback = (context, cancellationToken) =>
+                LanguageId = languageId,
+                CanHandleCallback = _ => true,
+                UpdatePackagesAsyncCallback = (context, cancellationToken) =>
                 {
-                    updatedWithChannel = context.Channel.Name;
-                    return Task.FromResult(new ProjectUpdateResult { UpdatedApplied = false });
+                    capturedContext = context;
+                    return Task.FromResult(new UpdatePackagesResult { UpdatesApplied = false });
                 }
             };
 
-            options.PackagingServiceFactory = _ => new TestPackagingService()
+            options.PackagingServiceFactory = _ =>
             {
-                GetChannelsAsyncCallback = (ct) =>
+                packagingService.GetChannelsAsyncCallback = (ct) =>
                 {
+                    Assert.False(languageId == KnownLanguageId.CSharp &&
+                        string.IsNullOrWhiteSpace(packagingService.LastRequestedChannelName),
+                        "Unqualified C# updates must not enumerate identity or hive feeds.");
                     var fakeCache = new FakeNuGetPackageCache();
                     var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures(), NullLogger.Instance);
+                    var stableChannel = PackageChannel.CreateExplicitChannel("stable", PackageChannelQuality.Stable, mappings: null, fakeCache, new TestFeatures(), NullLogger.Instance);
                     var stagingChannel = PackageChannel.CreateExplicitChannel("staging", PackageChannelQuality.Stable, mappings: null, fakeCache, new TestFeatures(), NullLogger.Instance);
                     var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, mappings: null, fakeCache, new TestFeatures(), NullLogger.Instance);
-                    var channels = new List<PackageChannel> { implicitChannel, stagingChannel, dailyChannel };
+                    var channels = new List<PackageChannel> { implicitChannel, stableChannel, stagingChannel, dailyChannel };
 
                     // Optional pr-* and local channels for identity-channel tests. Production
                     // PackagingService enumerates pr-* hives from disk; we register them here
@@ -2885,7 +3172,8 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
                     }
 
                     return Task.FromResult<IEnumerable<PackageChannel>>(channels);
-                }
+                };
+                return packagingService;
             };
         });
 
@@ -2895,7 +3183,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse(updateArgs);
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        return (exitCode, updatedWithChannel, promptForSelectionInvoked);
+        return (exitCode, capturedContext, promptForSelectionInvoked, interaction);
     }
 
     [Fact]
@@ -3350,7 +3638,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
             "aspire.cli.linux-x64",
             "9.4.0",
             "tools",
-            "net10.0",
+            "any",
             "linux-x64",
             GetAspireExecutableName());
 
@@ -3522,8 +3810,8 @@ internal sealed class CancellationTrackingInteractionService : IInteractionServi
     public Task<T> ShowStatusAsync<T>(string statusText, Func<Task<T>> action, KnownEmoji? emoji = null, bool allowMarkup = false) => _innerService.ShowStatusAsync(statusText, action, emoji, allowMarkup);
     public Task<T> ShowDynamicStatusAsync<T>(string initialStatusText, Func<Action<string>, Task<T>> action, KnownEmoji? emoji = null) => _innerService.ShowDynamicStatusAsync(initialStatusText, action, emoji);
     public void ShowStatus(string statusText, Action action, KnownEmoji? emoji = null, bool allowMarkup = false) => _innerService.ShowStatus(statusText, action, emoji, allowMarkup);
-    public Task<string> PromptForStringAsync(string promptText, Func<string, ValidationResult>? validator = null, bool isSecret = false, bool required = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default) 
-        => _innerService.PromptForStringAsync(promptText, validator, isSecret, required, binding, cancellationToken);
+    public Task<string> PromptForStringAsync(string promptText, Func<string, ValidationResult>? validator = null, bool isSecret = false, bool required = false, PromptBinding<string?>? binding = null, bool logResponse = true, CancellationToken cancellationToken = default)
+        => _innerService.PromptForStringAsync(promptText, validator, isSecret, required, binding, logResponse, cancellationToken);
     public Task<string> PromptForFilePathAsync(string promptText, Func<string, ValidationResult>? validator = null, bool directory = false, bool required = false, PromptBinding<string?>? binding = null, bool retryOnValidationFailure = false, CancellationToken cancellationToken = default)
         => _innerService.PromptForFilePathAsync(promptText, validator, directory, required, binding, retryOnValidationFailure, cancellationToken);
     public Task<bool> PromptConfirmAsync(string promptText, PromptBinding<bool>? binding = null, CancellationToken cancellationToken = default) 

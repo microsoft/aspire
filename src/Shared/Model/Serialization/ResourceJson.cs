@@ -30,6 +30,11 @@ internal sealed class ResourceJson
     public string? ResourceType { get; set; }
 
     /// <summary>
+    /// The human-readable resource type label, independent of the technical resource type.
+    /// </summary>
+    public string? ResourceTypeDisplayName { get; set; }
+
+    /// <summary>
     /// The unique identifier of the resource.
     /// </summary>
     public string? Uid { get; set; }

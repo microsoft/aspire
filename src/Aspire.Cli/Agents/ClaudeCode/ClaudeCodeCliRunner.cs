@@ -27,31 +27,20 @@ internal sealed class ClaudeCodeCliRunner(ILogger<ClaudeCodeCliRunner> logger) :
 
         try
         {
-            var startInfo = new ProcessStartInfo(executablePath, "--version")
+            var result = await Process.RunAndCaptureTextAsync(new ProcessStartInfo(executablePath, "--version")
             {
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
-                UseShellExecute = false,
                 CreateNoWindow = true
-            };
+            }, cancellationToken).ConfigureAwait(false);
 
-            using var process = new Process { StartInfo = startInfo };
-
-            process.Start();
-
-            var outputTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
-            var errorTask = process.StandardError.ReadToEndAsync(cancellationToken);
-
-            await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
-
-            if (process.ExitCode != 0)
+            if (result.ExitStatus.ExitCode != 0)
             {
-                var errorOutput = await errorTask.ConfigureAwait(false);
-                logger.LogDebug("Claude Code CLI returned non-zero exit code {ExitCode}: {Error}", process.ExitCode, errorOutput.Trim());
+                logger.LogDebug("Claude Code CLI returned non-zero exit code {ExitCode}: {Error}", result.ExitStatus.ExitCode, result.StandardError.Trim());
                 return null;
             }
 
-            var output = await outputTask.ConfigureAwait(false);
+            var output = result.StandardOutput;
             var versionString = output.Trim();
 
             if (string.IsNullOrEmpty(versionString))

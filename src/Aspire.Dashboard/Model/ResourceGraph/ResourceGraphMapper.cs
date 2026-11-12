@@ -12,6 +12,18 @@ namespace Aspire.Dashboard.Model.ResourceGraph;
 
 public static class ResourceGraphMapper
 {
+    // The text of the game's DOM controls. What the game draws on its canvas stays in English: its bitmap font only has ASCII.
+    internal static GraphGameStringsDto GetGameStrings(IStringLocalizer<Aspire.Dashboard.Resources.Resources> loc) => new(
+        Instructions: loc[nameof(Aspire.Dashboard.Resources.Resources.ResourceGraphGameInstructions)].Value,
+        Exit: loc[nameof(Aspire.Dashboard.Resources.Resources.ResourceGraphGameExit)].Value,
+        ExitLabel: loc[nameof(Aspire.Dashboard.Resources.Resources.ResourceGraphGameExitLabel)].Value,
+        SoundOn: loc[nameof(Aspire.Dashboard.Resources.Resources.ResourceGraphGameSoundOn)].Value,
+        SoundOff: loc[nameof(Aspire.Dashboard.Resources.Resources.ResourceGraphGameSoundOff)].Value,
+        ModeNormal: loc[nameof(Aspire.Dashboard.Resources.Resources.ResourceGraphGameModeNormal)].Value,
+        ModeHardCore: loc[nameof(Aspire.Dashboard.Resources.Resources.ResourceGraphGameModeHardCore)].Value,
+        HardCoreWarning: loc[nameof(Aspire.Dashboard.Resources.Resources.ResourceGraphGameHardCoreWarning)].Value,
+        HardCoreStopped: loc[nameof(Aspire.Dashboard.Resources.Resources.ResourceGraphGameHardCoreStopped)].Value);
+
     public static ResourceDto MapResource(ResourceViewModel r, IEnumerable<ResourceViewModel> graphResources, IDictionary<string, ResourceViewModel> resourcesByName, IStringLocalizer<Columns> columnsLoc, bool showHiddenResources, IconResolver iconResolver)
     {
         var resolvedNames = new List<string>();
@@ -52,7 +64,7 @@ public static class ResourceGraphMapper
             {
                 Path = icon,
                 Color = color,
-                Tooltip = r.ResourceType
+                Tooltip = r.ResourceTypeDisplayName
             },
             StateIcon = new IconDto
             {
@@ -62,7 +74,10 @@ public static class ResourceGraphMapper
             },
             ReferencedNames = resolvedNames.Distinct().OrderBy(n => n).ToImmutableArray(),
             EndpointUrl = r.IsParameter ? null : endpoint?.Url,
-            EndpointText = resolvedEndpointText
+            EndpointText = resolvedEndpointText,
+            // Resources marked hidden are included only while "Show hidden resources" is enabled.
+            // Preserve that distinction for graph rendering, where there is no row treatment.
+            IsHidden = r.IsResourceHidden(showHiddenResources: false)
         };
 
         return dto;

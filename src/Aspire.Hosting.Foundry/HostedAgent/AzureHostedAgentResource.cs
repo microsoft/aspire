@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIRECONNECTIONSTRINGS001 // Connection-string reference metadata is experimental.
+
 using System.Globalization;
 using System.IO.Hashing;
 using System.Text;
@@ -112,7 +114,7 @@ public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
         var def = new HostedAgentConfiguration(imageName)
         {
             // ProcessEnvironmentVariableValuesAsync does not resolve values properly in the deploy context
-            EnvironmentVariables = await GetResolvedEnvironmentVariablesAsync(context.ExecutionContext, this, Target, context.Logger, context.CancellationToken).ConfigureAwait(false),
+            EnvironmentVariables = await GetResolvedEnvironmentVariablesAsync(context.ExecutionContext, this, context.Logger, context.CancellationToken).ConfigureAwait(false),
         };
         if (Configure is not null)
         {
@@ -163,73 +165,77 @@ public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
             throw new InvalidOperationException($"Project '{project.Name}' does not have a valid connection string.");
         }
         var def = await ToHostedAgentConfigurationAsync(context).ConfigureAwait(false);
-        var options = def.ToProjectsAgentVersionCreationOptions(Target.Name);
-
         var projectClient = new AIProjectClient(new Uri(projectEndpoint), credential);
-        var result = await projectClient.AgentAdministrationClient.CreateAgentVersionAsync(
-            Name,
-            options,
-            cancellationToken: context.CancellationToken
-        ).ConfigureAwait(false);
-
-        await UpdateAgentEndpointProtocolsAsync(projectClient.AgentAdministrationClient, def, context.CancellationToken).ConfigureAwait(false);
+        var version = await CreateAgentVersionAsync(projectClient.AgentAdministrationClient, def, context.CancellationToken).ConfigureAwait(false);
 
         // Foundry should do this automatically in the future.
-        await AssignFoundryRoleToAgentIdentityAsync(context, project, result.Value, provisioningContext).ConfigureAwait(false);
+        await AssignFoundryRoleToAgentIdentityAsync(context, project, version, provisioningContext).ConfigureAwait(false);
 
-        return result.Value;
+        return version;
     }
 
-    private async Task UpdateAgentEndpointProtocolsAsync(AgentAdministrationClient agentsClient, HostedAgentConfiguration configuration, CancellationToken cancellationToken)
+    internal async Task<ProjectsAgentVersion> CreateAgentVersionAsync(AgentAdministrationClient agentsClient, HostedAgentConfiguration configuration, CancellationToken cancellationToken)
     {
-        var endpointProtocols = GetAgentEndpointProtocols(configuration.ProtocolVersions);
-        if (endpointProtocols.Count == 0)
+        var options = configuration.ToProjectsAgentVersionCreationOptions(Target.Name);
+        // Validate endpoint protocols before persisting a version, so invalid local configuration
+        // cannot leave a remote version behind after the deployment reports failure.
+        var endpoint = new AgentEndpointConfiguration
         {
-            return;
-        }
+            ProtocolConfiguration = GetAgentEndpointProtocolConfiguration(configuration.ProtocolVersions)
+        };
 
-        var endpoint = new AgentEndpoint();
-        foreach (var protocol in endpointProtocols)
-        {
-            endpoint.Protocols.Add(protocol);
-        }
+        var result = await agentsClient.CreateAgentVersionAsync(
+            Name,
+            options,
+            cancellationToken: cancellationToken).ConfigureAwait(false);
 
         // Creating a hosted-agent version does not update the endpoint's advertised protocols;
         // keep routing in sync so endpoint-scoped invocations can reach the selected version.
-        await agentsClient.PatchAgentObjectAsync(
+        await agentsClient.PatchAgentAsync(
             Name,
             new PatchAgentOptions
             {
                 AgentEndpoint = endpoint
             },
             cancellationToken).ConfigureAwait(false);
+
+        return result.Value;
     }
 
-    internal static IReadOnlyList<AgentEndpointProtocol> GetAgentEndpointProtocols(IEnumerable<ProtocolVersionRecord> protocolVersions)
+    internal static ProtocolConfiguration GetAgentEndpointProtocolConfiguration(IEnumerable<ProtocolVersionRecord> protocolVersions)
     {
-        var endpointProtocols = new List<AgentEndpointProtocol>();
+        // The 3.x SDK advertises protocols as configuration objects rather than a string list.
+        var configuration = new ProtocolConfiguration();
 
         foreach (var protocolVersion in protocolVersions)
         {
-            var endpointProtocol = ToAgentEndpointProtocol(protocolVersion.Protocol);
-            if (!endpointProtocols.Contains(endpointProtocol))
+            switch (protocolVersion.Protocol.ToString())
             {
-                endpointProtocols.Add(endpointProtocol);
+                case "activity_protocol":
+                case "activity":
+                    configuration.Activity ??= new();
+                    break;
+                case "invocations":
+                    configuration.Invocations ??= new();
+                    break;
+                case "responses":
+                    configuration.Responses ??= new();
+                    break;
+                case "a2a":
+                    configuration.A2a ??= new();
+                    break;
+                case "mcp":
+                    configuration.Mcp ??= new();
+                    break;
+                case "invocations_ws":
+                    configuration.InvocationsWs ??= new();
+                    break;
+                default:
+                    throw new NotSupportedException($"Foundry hosted agent endpoint protocol '{protocolVersion.Protocol}' is not supported.");
             }
         }
 
-        return endpointProtocols;
-    }
-
-    private static AgentEndpointProtocol ToAgentEndpointProtocol(ProjectsAgentProtocol protocol)
-    {
-        return protocol.ToString() switch
-        {
-            "activity_protocol" => AgentEndpointProtocol.Activity,
-            "invocations" => AgentEndpointProtocol.Invocations,
-            "responses" => AgentEndpointProtocol.Responses,
-            var value => new AgentEndpointProtocol(value)
-        };
+        return configuration;
     }
 
     private async Task AssignFoundryRoleToAgentIdentityAsync(
@@ -298,14 +304,14 @@ public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
     internal static async Task<Dictionary<string, string>> GetResolvedEnvironmentVariablesAsync(
         DistributedApplicationExecutionContext context,
         AzureHostedAgentResource hostedAgent,
-        IResource resource,
         ILogger logger,
         CancellationToken cancellationToken)
     {
+        var target = hostedAgent.Target;
         var collectedEnvVars = new Dictionary<string, object>();
-        if (resource.TryGetEnvironmentVariables(out var callbacks))
+        if (target.TryGetEnvironmentVariables(out var callbacks))
         {
-            var envContext = new EnvironmentCallbackContext(context, resource, collectedEnvVars, cancellationToken)
+            var envContext = new EnvironmentCallbackContext(context, target, collectedEnvVars, cancellationToken)
             {
                 Logger = logger
             };
@@ -315,6 +321,9 @@ public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
                 await callback.Callback(envContext).ConfigureAwait(false);
             }
         }
+
+        ProjectPortableConnectionStringAliases(collectedEnvVars);
+
         var resolvedEnvVars = new Dictionary<string, string>();
         foreach (var (key, value) in collectedEnvVars)
         {
@@ -323,7 +332,7 @@ public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
                 // Foundry injects platform-owned variables such as PORT itself. Some Aspire resource
                 // types use these variables to model local/container startup, but forwarding them in
                 // the hosted-agent definition causes Foundry to reject the version payload.
-                logger.LogDebug("Environment variable '{Key}' for resource '{Name}' is reserved by Foundry Hosted Agents and will be skipped.", key, resource.Name);
+                logger.LogDebug("Environment variable '{Key}' for resource '{Name}' is reserved by Foundry Hosted Agents and will be skipped.", key, target.Name);
                 continue;
             }
 
@@ -332,7 +341,7 @@ public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
                 // Endpoint target-port variables model how a local process or container binds. Foundry
                 // hosted agents own the container port contract during deployment, and their endpoint
                 // resolver intentionally does not support EndpointProperty.TargetPort.
-                logger.LogDebug("Environment variable '{Key}' for resource '{Name}' references the hosted agent target port and will be skipped.", key, resource.Name);
+                logger.LogDebug("Environment variable '{Key}' for resource '{Name}' references the hosted agent target port and will be skipped.", key, target.Name);
                 continue;
             }
 
@@ -345,17 +354,38 @@ public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
                     resolvedEnvVars[key] = s;
                     break;
                 case IValueProvider provider:
-                    resolvedEnvVars[key] = await ResolveValueProviderAsync(provider, context, hostedAgent, resource, key, cancellationToken).ConfigureAwait(false) ?? string.Empty;
+                    resolvedEnvVars[key] = await ResolveValueProviderAsync(provider, context, hostedAgent, target, key, cancellationToken).ConfigureAwait(false) ?? string.Empty;
                     break;
                 case IFormattable f:
                     resolvedEnvVars[key] = f.ToString(null, CultureInfo.InvariantCulture);
                     break;
                 default:
-                    logger.LogWarning("Environment variable '{Key}' for resource '{Name}' has unknown value of type '{type}' and will be skipped.", key, resource.Name, value.GetType().FullName);
+                    logger.LogWarning("Environment variable '{Key}' for resource '{Name}' has unknown value of type '{type}' and will be skipped.", key, target.Name, value.GetType().FullName);
                     break;
             }
         }
         return resolvedEnvVars;
+    }
+
+    private static void ProjectPortableConnectionStringAliases(Dictionary<string, object> environmentVariables)
+    {
+        // Snapshot the references before projecting aliases in the same dictionary.
+        foreach (var reference in environmentVariables.Values.OfType<ConnectionStringReference>().Distinct().ToArray())
+        {
+            if (reference.EnvironmentVariableNames is not { } names ||
+                string.Equals(names.OriginalName, names.PortableName, StringComparison.OrdinalIgnoreCase) ||
+                !environmentVariables.ContainsKey(names.PortableName))
+            {
+                continue;
+            }
+
+            // Foundry Hosted Agents accept only letters, digits, and underscores. Deploy only the
+            // portable generated alias, preserving any later override of the original alias.
+            if (environmentVariables.Remove(names.OriginalName, out var originalValue))
+            {
+                environmentVariables[names.PortableName] = originalValue;
+            }
+        }
     }
 
     private static bool IsHostedAgentTargetPortValue(object? value, AzureHostedAgentResource hostedAgent)
@@ -397,7 +427,7 @@ public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
                 case ReferenceExpression referenceExpression:
                     return await ResolveReferenceExpressionAsync(referenceExpression, context, hostedAgent, resource, environmentVariableName, cancellationToken).ConfigureAwait(false);
                 case ConnectionStringReference connectionStringReference:
-                    var connectionString = await ResolveReferenceExpressionAsync(connectionStringReference.Resource.ConnectionStringExpression, context, hostedAgent, resource, environmentVariableName, cancellationToken).ConfigureAwait(false);
+                    var connectionString = await ResolveReferenceExpressionAsync(connectionStringReference.ConnectionStringExpression, context, hostedAgent, resource, environmentVariableName, cancellationToken).ConfigureAwait(false);
                     if (string.IsNullOrEmpty(connectionString) && !connectionStringReference.Optional)
                     {
                         throw new DistributedApplicationException($"The connection string for the resource '{connectionStringReference.Resource.Name}' is not available.");

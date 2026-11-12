@@ -110,6 +110,12 @@ If discovery finds no AppHost candidates, the stream emits no lines. The stream 
 
 ### `aspire ps`
 
+`--output <default|snapshot>` selects the output mode; `--format` selects the
+encoding. Omitting `--output` is equivalent to `--output default` and preserves
+the existing table, JSON array, and follow-mode delta output described below.
+`--output snapshot` requires `--follow --format json` and selects the
+[full snapshot stream](#snapshot-output) for monitoring tools.
+
 `aspire ps --format json` lists running AppHosts:
 
 ```json
@@ -134,7 +140,180 @@ If discovery finds no AppHost candidates, the stream emits no lines. The stream 
 {"appHostPath":"/path/to/MyApp.AppHost/MyApp.AppHost.csproj","appHostPid":12345,"status":"stopped"}
 ```
 
+Unchanged backchannel-connection notifications do not refetch AppHost metadata or
+dashboard URLs. A genuinely changed connection set is enriched again, including
+a replacement connection for the same AppHost path and PID. Identical serialized
+AppHost records are still omitted from the default follow stream.
+
+#### Snapshot output
+
+`--output snapshot` is a public, opt-in stream for tools that need complete
+AppHost lists, process identities, aggregate resource health, and liveness
+notifications. The native tray companion is one consumer; the mode is not
+tray-specific. It does not change the default output formats.
+
+```bash
+aspire ps --output snapshot --follow --format json --non-interactive --nologo
+```
+
+Messages retain an in-band `version` field (currently `1`); no command-line
+protocol version is needed. Consumers should reject unsupported versions and
+ignore additional fields in supported versions. The shared DTOs,
+source-generated JSON context, and limits are defined in
+`src/Shared/TrayCliProtocol.cs`.
+
+Only protocol messages appear on stdout, as compact newline-delimited JSON.
+Diagnostics go to stderr; progress, banners, and update notifications do not
+appear on stdout. Unknown output modes and invalid arguments exit nonzero.
+Help and parser failures, and invalid `ps` invocations, may produce no protocol
+message. Consumers must reject missing or malformed responses rather than parse
+diagnostic text.
+
+##### Discovery stream
+
+`ps` requires both `--follow` and `--format json`. Discovery is read-only: it
+does not collect orphaned AppHosts, prune sockets, or create discovery directories.
+The first message is a complete snapshot **after initial discovery finishes**,
+including an empty list when there are no AppHosts:
+
+```json
+{"version":1,"type":"snapshot","appHosts":[]}
+{"version":1,"type":"snapshot","appHosts":[{"appHostPath":"/absolute/path/apphost.cs","appHostPid":12345,"processStartTimeUnixMilliseconds":1789250000000,"dashboardUrl":"http://localhost:18888/login?t=token","health":"healthy"}]}
+{"version":1,"type":"heartbeat"}
+{"version":1,"type":"snapshot","appHosts":[]}
+```
+
+Each snapshot replaces the previous list; removal is represented by absence, not
+a `stopped` delta. Lists are ordered by ordinal path, PID, start time, then dashboard
+URL. Identical snapshots are suppressed. Discovery polls once per second, and a
+capacity-one, latest-wins queue coalesces changes when the consumer is slow.
+The initial snapshot is never coalesced away. Heartbeats are emitted every ten
+seconds after the first snapshot and do not modify the consumer's state.
+
+`processStartTimeUnixMilliseconds` is the stable process lifetime read from the
+operating system using `ProcessStartTimeHelper`. It is omitted when unavailable;
+such a row can be displayed and its dashboard opened, but it must not enable Stop.
+`dashboardUrl` is optional. Lookups run with at most eight concurrent RPCs, a
+two-second deadline per lookup, and a five-second enrichment budget per snapshot.
+Timed-out, failed, or not-yet-started lookups leave the URL unavailable without
+removing the AppHost or failing discovery. Cancellation stops outstanding waits;
+it does not disconnect or stop AppHosts. An RPC that has not acknowledged cancellation
+retains its concurrency slot across snapshots, and is not retried while outstanding.
+Paths and PIDs identify AppHosts, not launcher CLI
+processes. Dashboard URLs may contain login tokens and should not be logged.
+
+`health` is an additive, optional field in protocol version 1. Known values are
+`healthy`, `warning`, and `unhealthy`. Missing or unrecognized values mean **unknown**,
+not healthy, so older producers remain compatible. Health does not change the
+AppHost's process identity.
+
+The CLI maintains one resource snapshot subscription per discovered AppHost
+lifetime, using the existing backchannel snapshot watcher and its version
+reconciliation. Resource transitions publish complete snapshots without waiting
+for discovery changes. They use the same latest-wins output queue, and do not
+initiate dashboard URL lookups or poll individual AppHosts for resource health.
+
+The aggregate uses visible resources, excluding both the hidden flag and legacy
+`Hidden` state. Successfully completed jobs and resources without a lifetime
+(no state or `Active`, with no health reports) are neutral. Failed starts, unhealthy
+runtimes, nonzero terminal exit codes, error state styles, and failed health checks
+produce `unhealthy`. Waiting, starting, building, stopping, not-started resources,
+missing parameter values, degraded health, and pending initial checks produce
+`warning`. A failed check takes precedence over another pending check. Running
+resources with healthy checks, or no registered checks as in the dashboard, are
+healthy; all applicable resources must be healthy for the aggregate to be healthy.
+An empty or entirely non-applicable resource set is unknown.
+
+Health is unknown until the initial resource load completes, and becomes unknown
+again if the resource stream ends or fails. Resource-stream failures are logged
+without removing a still-discovered AppHost or failing discovery. Removed or
+replaced AppHosts cancel their subscriptions; a new connection never inherits
+the previous lifetime's health.
+
+A discovery failure is not an empty snapshot. It emits a terminal error and exits
+nonzero. Exceeding 1,000 AppHosts or 1,048,576 UTF-16 characters per serialized
+message also emits a terminal error rather than truncating the list:
+
+```json
+{"version":1,"type":"error","errorCode":"discovery_failed"}
+{"version":1,"type":"error","errorCode":"limit_exceeded"}
+```
+
+The producer cancels and observes its watcher when stdout closes or cancellation
+is requested. Heartbeat writes detect a disconnected consumer even if the AppHost
+list has not changed. Consumer disconnect is normal completion (exit code 0), not
+a discovery error; it does not emit an error message or the failure-log notice.
+An already-detected discovery or limit failure still exits nonzero if writing its
+terminal error encounters a closed pipe.
+End-of-file ends the stream; there is no `complete` message. If monitoring must
+continue, restart discovery and replace state with the next initial snapshot.
+Treat a stream without an initial snapshot as unavailable, not as an empty list.
+
+### Experimental exact stop response
+
+The native tray's lifetime-guarded stop mode remains a separate experimental,
+hidden protocol. `--output` is a `ps` option, not a `stop` option.
+
+```bash
+aspire stop --protocol-version 1 --format json --apphost /absolute/path/apphost.cs --pid 12345 --started-at 1789250000000 --non-interactive --nologo
+```
+
+The protocol requires `--apphost` with an absolute file path, a positive AppHost
+`--pid`, and a positive `--started-at` Unix-millisecond value copied from the
+selected snapshot. `--all` and `--force` are forbidden. Directories are not
+searched; the full path and PID must match exactly (case-insensitive paths only
+on Windows).
+
+Supplying `--started-at` without `--protocol-version 1 --format json` is rejected
+before discovery or any stop RPC. A lifetime-guarded request never falls back to
+legacy PID-only stopping when the version or format is missing or unsupported.
+
+After selecting one live connection, the CLI re-reads the process's stable
+lifetime and requires exact equality with `--started-at` before sending any RPC.
+It retains that original connection through shutdown: no re-selection, process
+tree escalation, launcher termination, sibling batching, or persistent cleanup.
+Success is reported only after the connection-bound stop request succeeds and
+exit of that lifetime is verified within the existing ten-second shutdown budget.
+
+Exactly one result is emitted for an executed stop request, with `exitCode` equal
+to the process exit code:
+
+```json
+{"version":1,"outcome":"stopped","exitCode":0}
+```
+
+| Outcome | Meaning |
+| ------- | ------- |
+| `stopped` | The selected AppHost lifetime exited successfully. |
+| `not_found` | No live connection matches the requested full path and PID. |
+| `ambiguous` | More than one connection matches; nothing is stopped. |
+| `identity_mismatch` | The PID belongs to a different process lifetime; no RPC is sent. |
+| `identity_unavailable` | The stable lifetime cannot be read; no RPC is sent. |
+| `stop_failed` | Discovery, RPC, or shutdown verification failed, or the request was cancelled. |
+| `invalid_request` | Required arguments are missing/invalid, incompatible flags were supplied, or the version is unsupported. |
+
+Every outcome other than `stopped` has a nonzero exit code. Without
+`--protocol-version`, existing `stop --pid` behavior is unchanged.
+
 ### `aspire describe`
+
+The standard table's **Type** column shows the resource's type display name, such as
+`Redis` or `PostgreSQL Server`. Integrations supply defaults from their resource classes;
+`.WithResourceTypeDisplayName("ASP.NET Core")` overrides the label for an individual resource.
+Resources without a specific label, and older AppHosts that do not supply this metadata,
+fall back to the technical resource type. This is presentation metadata only: it does not
+change resource identity, service discovery, or OpenTelemetry's `service.name`.
+
+`aspire resources` is an alias for `aspire describe`. Use `--format mermaid` to export a resource graph snapshot directly to stdout:
+
+```bash
+aspire resources --format mermaid >> file.txt
+aspire describe --format mermaid > resources.mmd
+```
+
+The output is an unfenced `flowchart LR` diagram with deterministic node identifiers, escaped resource labels, and directed relationships. Hidden resources are excluded unless `--include-hidden` is supplied or a specific resource is requested. Parameters, endpoints, configuration values, and resource state are not exported. References outside the selected resource set and self-references are omitted. Replicas appear as separate nodes.
+
+Progress and informational messages go to stderr, so redirection captures only Mermaid source. When no AppHost is running, the command preserves the existing successful empty-result behavior and writes no diagram. `--follow` is not supported with Mermaid output; each invocation captures one snapshot. Appending multiple invocations with `>>` produces multiple diagrams, not a merged diagram.
 
 `aspire describe --format json` emits a snapshot wrapper with one or more resources:
 
@@ -145,6 +324,7 @@ If discovery finds no AppHost candidates, the stream emits no lines. The stream 
       "name": "api",
       "displayName": "api",
       "resourceType": "Project",
+      "resourceTypeDisplayName": "ASP.NET Core",
       "state": "Running",
       "stateStyle": "success",
       "healthStatus": "Healthy",
@@ -171,8 +351,8 @@ If discovery finds no AppHost candidates, the stream emits no lines. The stream 
 `aspire describe --format json --follow` emits NDJSON. Each line is a resource object, not the snapshot wrapper:
 
 ```json
-{"name":"api","displayName":"api","resourceType":"Project","state":"Starting","stateStyle":"info"}
-{"name":"api","displayName":"api","resourceType":"Project","state":"Running","stateStyle":"success","healthStatus":"Healthy"}
+{"name":"api","displayName":"api","resourceType":"Project","resourceTypeDisplayName":"ASP.NET Core","state":"Starting","stateStyle":"info"}
+{"name":"api","displayName":"api","resourceType":"Project","resourceTypeDisplayName":"ASP.NET Core","state":"Running","stateStyle":"success","healthStatus":"Healthy"}
 ```
 
 #### Resource fields
@@ -184,6 +364,7 @@ If discovery finds no AppHost candidates, the stream emits no lines. The stream 
 | `name` | Stable resource name. |
 | `displayName` | User-facing resource name. |
 | `resourceType` | Resource type, such as `Project`, `Container`, or `Executable`. |
+| `resourceTypeDisplayName` | Human-readable type label, such as `Redis` or `PostgreSQL Server`. Falls back to `resourceType` when no label is supplied. Not a stable discriminator for behavior. |
 | `uid` | Resource unique ID, when available. |
 | `state` | Current resource state. |
 | `stateStyle` | UI style hint for the state. |
@@ -197,10 +378,24 @@ If discovery finds no AppHost candidates, the stream emits no lines. The stream 
 | `relationships` | Related resources as `{ "type": "...", "resourceName": "..." }`. |
 | `urls` | Endpoint objects with `name`, `displayName`, `url`, and `isInternal`. |
 | `volumes` | Volume objects with `source`, `target`, `mountType`, and `isReadOnly`. |
-| `properties` | Resource properties keyed by property name. |
+| `properties` | Resource properties keyed by property name. Common debug-related keys include `project.path`, `project.launchProfile`, `project.launchCommand`, `project.configuration`, `project.targetFramework`, `project.targetPath`, `project.useAppHost`, and `resource.launchConfigurationType`. For current AppHosts, `project.launchCommand` is `run`, `watch`, `ide`, `direct`, or `null` when a .NET project launch command cannot be classified. |
 | `environment` | Environment variables keyed by variable name. |
 | `healthReports` | Health report objects keyed by report name. |
 | `commands` | Resource command metadata keyed by command name. |
+
+For recognized IDE-managed .NET project launches, `project.launchCommand` is `ide`. In that mode,
+`executable.pid`, when present, identifies the application process rather than a `dotnet run` or
+`dotnet watch` launcher.
+
+For coordinated .NET projects launched directly through the SDK's `RunCommand`,
+`project.launchCommand` is `direct` and `resource.launchConfigurationType` is
+`project-with-external-build.v1`. The executable can be a native apphost or `dotnet exec`,
+and `executable.pid` identifies the application itself. `project.configuration`, when present,
+comes from the coordinated build rather than application arguments. `project.targetPath` is the
+authoritative MSBuild `TargetPath` produced with the coordinated build inputs, and
+`project.useAppHost` is `true` or `false` according to the corresponding MSBuild property.
+Debugger clients must verify that the reported process matches this authoritative project output
+before attaching.
 
 ## Logs
 
@@ -367,6 +562,8 @@ If discovery finds no AppHost candidates, the stream emits no lines. The stream 
 
 ### `aspire docs api`
 
+The `language` field in `aspire docs api` output is one of `csharp`, `typescript`, or `go`.
+
 `aspire docs api list <scope> --format json` emits an array of API items:
 
 ```json
@@ -434,6 +631,12 @@ If discovery finds no AppHost candidates, the stream emits no lines. The stream 
 
 ### `aspire secret list`
 
+Secret commands accept `--environment` / `-e`, defaulting to `Development`. Names contain 1-80 ASCII letters, digits, hyphens, or underscores and must start with a letter or digit. Dots, path separators, whitespace, and Windows reserved device names (`CON`, `PRN`, `AUX`, `NUL`, `COM1`-`COM9`, and `LPT1`-`LPT9`) are rejected. For example, use `prod-eu`, not `prod/eu`.
+
+Environment names are case-insensitive. Subsequent commands reuse an existing file regardless of the requested casing, preserving the filename's spelling for display. The same resolution applies when Hosting loads secrets for the final AppHost environment.
+
+These restrictions apply to secret commands, not to existing AppHost environment names. Run and deployment commands with names such as `QA.EU` or `Local Development` continue to work, but do not automatically select an Aspire secrets file. Existing configuration inputs remain available. Set `ASPIRE_SECRETS_FILE` to an explicit JSON file path to load and persist Aspire secrets for such environments; explicit file selection takes precedence over automatic environment-file selection.
+
 `aspire secret list --format json` emits a JSON object whose property names are secret keys and whose values are secret values:
 
 ```json
@@ -445,7 +648,9 @@ If discovery finds no AppHost candidates, the stream emits no lines. The stream 
 
 The JSON form includes secret values. Do not redirect it to logs or files unless that destination is allowed to contain secrets.
 
-`aspire secret get <key>` emits the secret value as raw text on stdout. `aspire secret path` emits the user-secrets file path as raw text on stdout.
+`aspire secret list --all --format json` groups the same secret objects by environment name. `--all` cannot be combined with `--environment`.
+
+`aspire secret get <key>` emits the secret value as raw text on stdout. `aspire secret path` emits the Aspire environment secrets file path as raw text on stdout, without loading, importing, or migrating secrets. It can therefore locate the environment store even when its JSON is malformed. If a data operation encounters malformed JSON in an environment store, legacy user-secrets file, or migration source, it fails with the affected file path and one-based line and byte position so the file can be repaired. Invalid JSON is not automatically escaped or overwritten; a connection string containing `server\sql` must be stored in JSON as `"server\\sql"`.
 
 ### `aspire doctor`
 
@@ -538,6 +743,8 @@ The `devtools` category surfaces development-tooling recommendations. The `vscod
 
 The `isolated-launch.v1` capability indicates that `aspire run` accepts the `--isolated` option.
 
+The `agent-mcp.v1` capability indicates that `aspire agent mcp` is supported. Tooling gates automatic MCP server registration on this capability being advertised explicitly: a CLI that omits it — including one old enough not to emit `capabilities` at all — is never handed the command.
+
 ## MCP tooling
 
 ### `aspire mcp tools`
@@ -611,6 +818,8 @@ The top-level arrays are:
 | `exportedValues` | Exported constants or structured values. |
 | `diagnostics` | Errors, warnings, and informational diagnostics from capability discovery. |
 
+Each entry in `capabilities` includes an `isExperimental` boolean indicating whether the callable API is experimental. It is `true` when `System.Diagnostics.CodeAnalysis.ExperimentalAttribute` applies to the member (including a property accessor), an enclosing type, its module, or its assembly; otherwise it is `false` (the default). Consumers of older output that omits this field should treat it as `false`.
+
 `aspire sdk dump --format ci` emits a stable text format intended for diffs rather than JSON parsing.
 
 ### `aspire sdk export`
@@ -618,3 +827,21 @@ The top-level arrays are:
 `aspire sdk export --package Name@Version --language typescript` restores the exact integration package version and writes one canonical JSON document to standard output. `Aspire.Hosting` can only be exported at the CLI's SDK version. The selected language's code-generation package cannot be exported because it supplies the generator instead of an integration API surface. Omit `--package` to export `Aspire.Hosting` at the running CLI's SDK version. Diagnostics are written to standard error.
 
 The top-level fields are `schemaVersion`, `language`, `generator`, `package`, `modules`, and `declarations`. The language exporter owns the schema; the CLI passes it through without reshaping it.
+
+TypeScript (`--language typescript`) and Go (`--language go`) ship exporters. The Go exporter projects through the same code paths as the Go SDK generator, so every `declaration` is the Go the generator emits, including the surface that is written by hand rather than discovered from capabilities: `Build()` on the builder, the `Get`, `Required`, `Value`, and `RequiredValue` helpers on interaction input collections, `Err()` on every handle, `ToMap()` on options and DTO structs, and the runtime types. Go `modules[].items[]` have kind `function`, `interface`, `augmentation`, `dto`, `options`, `enum`, `variable`, or `type`; an `augmentation` lists the members a package adds to a type that another package declares. Capability-backed members carry `capabilityId`, and members that the generator writes itself are marked `synthesized`. The top-level `declarations` hold the Go fragments that signatures refer to. Go names are resolved over the exported package and the types it references, not over a whole app host. When an app host combines integrations whose names collide, the generated SDK can qualify a name that this reference gives bare, and an `options` struct that several packages could share is documented by each package under its own `typeId`. The `Any<Type>` interfaces, which accept a handle type or any type derived from it, follow the same rule: one exists only when the set holds a type derived from its base, so a signature here can name a handle interface where an app host that includes the derived type's integration accepts `Any<Type>`.
+
+Go field and constant members include `type` (the declared Go type) and `optional` (a boolean), additive to schema version 1. This includes DTO fields, options fields, runtime fields, enum constants, and exported value leaves. DTO optionality comes from ATS property metadata: neither a pointer type nor the generated `omitempty` tag alone means the property can be omitted. Options fields are optional; constants and exported value leaves are not. Consumers do not need to parse `declaration` to recover these values.
+
+For example, an options field is exported as:
+
+```json
+{
+  "id": "WithPersistenceOptions.Mode",
+  "kind": "field",
+  "name": "Mode",
+  "declaration": "Mode *TestPersistenceMode `json:\"mode,omitempty\"`",
+  "jsonName": "mode",
+  "type": "*TestPersistenceMode",
+  "optional": true
+}
+```

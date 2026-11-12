@@ -1,5 +1,6 @@
 ﻿@using Aspire.Dashboard.Components.Resize
 @inject IStringLocalizer<Resources.Routes> Loc
+@inject NavigationManager NavigationManager
 
 <BrowserDimensionWatcher @bind-ViewportInformation="@_viewportInformation" />
 
@@ -14,17 +15,32 @@
     <Router AppAssembly="@typeof(App).Assembly">
         <Found Context="routeData">
             <!-- AuthorizeRouteView protects pages from being accessed when authorization is required -->
-            <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(Layout.MainLayout)" />
+            <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@GetDefaultLayout(routeData)" />
         </Found>
         <NotFound>
             <PageTitle>@Loc[nameof(Resources.Routes.NotFoundPageTitle)]</PageTitle>
-            <LayoutView Layout="@typeof(Layout.MainLayout)">
-                <Aspire.Dashboard.Components.Pages.NotFound />
-            </LayoutView>
+            @if (DashboardExperienceComponents.TryGetLegacyNotFound(
+                NavigationManager,
+                out var legacyLayout,
+                out var legacyNotFound))
+            {
+                <LayoutView Layout="@legacyLayout">
+                    <DynamicComponent Type="@legacyNotFound" />
+                </LayoutView>
+            }
+            else
+            {
+                <LayoutView Layout="@typeof(Layout.MainLayout)">
+                    <Aspire.Dashboard.Components.Pages.NotFound />
+                </LayoutView>
+            }
         </NotFound>
     </Router>
 </CascadingValue>
 
 @code {
     private ViewportInformation? _viewportInformation;
+
+    private static Type GetDefaultLayout(RouteData routeData) =>
+        DashboardExperienceComponents.GetDefaultLayout(routeData.PageType);
 }

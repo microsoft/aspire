@@ -409,7 +409,7 @@ public partial class FilterDialog : IAsyncDisposable
 
     private async Task OpenDatePickerAsync()
     {
-        _jsModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./Components/Dialogs/FilterDialog.razor.js");
+        _jsModule ??= await JS.InvokeAsync<IJSObjectReference>("import", $"./{Assets["Components/Dialogs/FilterDialog.razor.js"]}");
         await _jsModule.InvokeVoidAsync("showPicker", _datePickerInput);
     }
 

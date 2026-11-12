@@ -16,6 +16,7 @@
   <ItemGroup>
     <AspireProjectOrPackageReference Include="Aspire.Hosting.SqlServer" />
     <AspireProjectOrPackageReference Include="Aspire.Hosting.AppHost" />
+    <AspireProjectOrPackageReference Include="Aspire.Hosting.Dotnet" />
 
     <ProjectReference Include="..\ParameterEndToEnd.ApiService\ParameterEndToEnd.ApiService.csproj" />
   </ItemGroup>

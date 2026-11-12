@@ -58,6 +58,7 @@ In your AppHost project, install the `Aspire.Hosting.Keycloak` library with [NuG
 
 ```dotnetcli
 dotnet add package Aspire.Hosting.Keycloak
+dotnet add package Aspire.Hosting.Dotnet
 ```
 
 Then, in the _AppHost.cs_ file of `AppHost`, register a Keycloak server and consume the connection using the following methods:
@@ -65,10 +66,10 @@ Then, in the _AppHost.cs_ file of `AppHost`, register a Keycloak server and cons
 ```csharp
 var keycloak = builder.AddKeycloak("keycloak", 8080);
 
-var apiService = builder.AddProject<Projects.Keycloak_ApiService>("apiservice")
+var apiService = builder.AddDotnetProject("apiservice", "../Keycloak.ApiService/Keycloak.ApiService.csproj")
                         .WithReference(keycloak);
 
-builder.AddProject<Projects.Keycloak_Web>("webfrontend")
+builder.AddDotnetProject("webfrontend", "../Keycloak.Web/Keycloak.Web.csproj")
        .WithExternalHttpEndpoints()
        .WithReference(keycloak)
        .WithReference(apiService);

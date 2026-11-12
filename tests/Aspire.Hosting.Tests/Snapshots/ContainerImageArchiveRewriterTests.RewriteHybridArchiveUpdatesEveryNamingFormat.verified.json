@@ -1,0 +1,36 @@
+﻿{
+  "manifest.json": [
+    {
+      "Config": "config.json",
+      "RepoTags": [
+        "docker.io/library/widget:configured"
+      ],
+      "Layers": [
+        "layer.tar"
+      ]
+    }
+  ],
+  "repositories": {
+    "widget": {
+      "configured": "layer-id"
+    }
+  },
+  "index.json": {
+    "schemaVersion": 2,
+    "manifests": [
+      {
+        "mediaType": "application/vnd.docker.distribution.manifest.v2+json",
+        "digest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "size": 456,
+        "annotations": {
+          "org.opencontainers.image.ref.name": "configured",
+          "io.containerd.image.name": "docker.io/library/widget:configured"
+        },
+        "platform": {
+          "architecture": "arm64",
+          "os": "linux"
+        }
+      }
+    ]
+  }
+}

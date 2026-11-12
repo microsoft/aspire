@@ -8,7 +8,6 @@ using Spectre.Console;
 
 using Aspire.Cli.Bundles;
 using Aspire.Cli.Commands.Sdk;
-using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
@@ -99,6 +98,58 @@ internal sealed class RootCommand : BaseRootCommand
         Hidden = true
     };
 
+    internal static IReadOnlyList<Option> GlobalOptions { get; } =
+    [
+        DebugOption, DebugLevelOption, NonInteractiveOption, NoLogoOption, BannerOption,
+        WaitForDebuggerOption, CliWaitForDebuggerOption, CaptureProfileOption,
+        CaptureProfileOutputOption, CaptureProfileDelayOption, s_logFileOption
+    ];
+
+    internal static bool MatchesCommandPath(string[] args, params string[] commandPath)
+    {
+        var commandIndex = 0;
+        // Inspect real option arities before services exist. For example, the value in
+        // "--log-file template" is not a command, while "--nologo template" is.
+        for (var index = 0; index < args.Length; index++)
+        {
+            var token = args[index];
+            var separator = token.IndexOfAny(['=', ':']);
+            var name = separator < 0 ? token : token[..separator];
+            if (name is CommonOptionNames.Version or CommonOptionNames.VersionShort or
+                CommonOptionNames.Help or CommonOptionNames.HelpShort or CommonOptionNames.HelpAlt or
+                CommonOptionNames.HelpSlash or CommonOptionNames.HelpAltSlash)
+            {
+                continue;
+            }
+            if (!token.StartsWith('-'))
+            {
+                if (commandIndex >= commandPath.Length || token != commandPath[commandIndex++])
+                {
+                    return false;
+                }
+                if (commandIndex == commandPath.Length)
+                {
+                    return true;
+                }
+                continue;
+            }
+
+            var option = GlobalOptions.Append(StartDebugSessionOption)
+                .FirstOrDefault(option => option.Name == name || option.Aliases.Contains(name));
+            if (option is null)
+            {
+                return false;
+            }
+            if (separator < 0 && option.Arity.MaximumNumberOfValues > 0 &&
+                (option is not Option<bool> || index + 1 < args.Length && bool.TryParse(args[index + 1], out _)))
+            {
+                index++;
+            }
+        }
+
+        return false;
+    }
+
     /// <summary>
     /// Global options that should be passed through to child CLI processes when spawning.
     /// Add new global options here to ensure they are forwarded during detached mode execution.
@@ -156,6 +207,8 @@ internal sealed class RootCommand : BaseRootCommand
         DestroyCommand destroyCommand,
         DoCommand doCommand,
         ConfigCommand configCommand,
+        TemplateManagementCommand templateManagementCommand,
+        CompletionsCommand completionsCommand,
         CacheCommand cacheCommand,
         CertificatesCommand certificatesCommand,
         DoctorCommand doctorCommand,
@@ -165,6 +218,7 @@ internal sealed class RootCommand : BaseRootCommand
         TelemetryCommand telemetryCommand,
         ExportCommand exportCommand,
         DashboardCommand dashboardCommand,
+        TrayCommand trayCommand,
         DocsCommand docsCommand,
         SecretCommand secretCommand,
         SdkCommand sdkCommand,
@@ -176,28 +230,20 @@ internal sealed class RootCommand : BaseRootCommand
         ExtensionInternalCommand extensionInternalCommand,
         IBundleService bundleService,
         IInteractionService interactionService,
-        IFeatures features,
         IAnsiConsole ansiConsole,
         CliExecutionContext executionContext)
         : base(RootCommandStrings.Description)
     {
         _ansiConsole = ansiConsole;
 
-        Options.Add(DebugOption);
-        Options.Add(DebugLevelOption);
-        Options.Add(NonInteractiveOption);
-        Options.Add(NoLogoOption);
-        Options.Add(BannerOption);
-        Options.Add(WaitForDebuggerOption);
-        Options.Add(CliWaitForDebuggerOption);
+        foreach (var option in GlobalOptions)
+        {
+            Options.Add(option);
+        }
         if (ExtensionHelper.IsExtensionHost(interactionService, out _, out _))
         {
             Options.Add(StartDebugSessionOption);
         }
-        Options.Add(CaptureProfileOption);
-        Options.Add(CaptureProfileOutputOption);
-        Options.Add(CaptureProfileDelayOption);
-        Options.Add(s_logFileOption);
 
         // Handle standalone 'aspire' or 'aspire --banner' (no subcommand)
         this.SetAction((Func<ParseResult, CancellationToken, Task<int>>)((context, cancellationToken) =>
@@ -228,15 +274,12 @@ internal sealed class RootCommand : BaseRootCommand
         Subcommands.Add(describeCommand);
         Subcommands.Add(logsCommand);
         Subcommands.Add(integrationCommand);
-        // 'aspire terminal' is hidden behind a feature flag while WithTerminal() is experimental.
-        // Toggle with `aspire config set features.terminalCommandsEnabled true`.
-        if (features.IsFeatureEnabled(KnownFeatures.TerminalCommandsEnabled, defaultValue: false))
-        {
-            Subcommands.Add(terminalCommand);
-        }
+        Subcommands.Add(terminalCommand);
         Subcommands.Add(addCommand);
         Subcommands.Add(publishCommand);
         Subcommands.Add(configCommand);
+        Subcommands.Add(templateManagementCommand);
+        Subcommands.Add(completionsCommand);
         Subcommands.Add(cacheCommand);
         Subcommands.Add(certificatesCommand);
         Subcommands.Add(doctorCommand);
@@ -251,6 +294,7 @@ internal sealed class RootCommand : BaseRootCommand
         Subcommands.Add(exportCommand);
         Subcommands.Add(docsCommand);
         Subcommands.Add(dashboardCommand);
+        Subcommands.Add(trayCommand);
         Subcommands.Add(secretCommand);
 
 #if DEBUG

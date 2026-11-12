@@ -36,6 +36,10 @@ suite('appHostLanguage.summarizeAppHostLanguages', () => {
         assert.strictEqual(summarizeAppHostLanguages([c('rust'), c('Rust'), c('rust/cargo')]), 'rust');
     });
 
+    test('returns go when every candidate is Go', () => {
+        assert.strictEqual(summarizeAppHostLanguages([c('go'), c('Go'), c('go/modules')]), 'go');
+    });
+
     test('returns polyglot for a mix of csharp and typescript', () => {
         assert.strictEqual(summarizeAppHostLanguages([c('csharp'), c('typescript')]), 'polyglot');
     });
@@ -44,6 +48,12 @@ suite('appHostLanguage.summarizeAppHostLanguages', () => {
         assert.strictEqual(summarizeAppHostLanguages([c('csharp'), c('rust')]), 'polyglot');
         assert.strictEqual(summarizeAppHostLanguages([c('typescript'), c('rust')]), 'polyglot');
         assert.strictEqual(summarizeAppHostLanguages([c('java'), c('rust')]), 'polyglot');
+    });
+
+    test('returns polyglot when Go is mixed with another known language', () => {
+        assert.strictEqual(summarizeAppHostLanguages([c('csharp'), c('go')]), 'polyglot');
+        assert.strictEqual(summarizeAppHostLanguages([c('typescript'), c('go')]), 'polyglot');
+        assert.strictEqual(summarizeAppHostLanguages([c('rust'), c('go')]), 'polyglot');
     });
 
     test('returns polyglot when an unknown language is mixed with a known one', () => {
@@ -91,6 +101,11 @@ suite('appHostLanguage.classifyAppHostPath', () => {
         assert.strictEqual(classifyAppHostPath('/abs/path/apphost.rs'), 'rust');
     });
 
+    test('classifies Go source files', () => {
+        assert.strictEqual(classifyAppHostPath('/abs/path/apphost.go'), 'go');
+        assert.strictEqual(classifyAppHostPath('C:\\repos\\app\\apphost.go'), 'go');
+    });
+
     test('returns unknown for unrecognized file extensions and directories', () => {
         assert.strictEqual(classifyAppHostPath('/repo/apphost.py'), 'unknown');
         assert.strictEqual(classifyAppHostPath('/repo/apphost'), 'unknown');
@@ -100,6 +115,7 @@ suite('appHostLanguage.classifyAppHostPath', () => {
         assert.strictEqual(classifyAppHostPath('APPHOST.CSPROJ'), 'csharp');
         assert.strictEqual(classifyAppHostPath('AppHost.TS'), 'typescript');
         assert.strictEqual(classifyAppHostPath('AppHost.RS'), 'rust');
+        assert.strictEqual(classifyAppHostPath('AppHost.GO'), 'go');
         assert.strictEqual(classifyAppHostPath('/abs/path/AppHost.java'), 'java');
     });
 });
@@ -169,6 +185,19 @@ suite('appHostLanguage.classifyAppHostDirectory', () => {
         const dir = makeTempDir();
         writeFileSync(join(dir, 'apphost.rs'), 'fn main() {}');
         assert.strictEqual(await classifyAppHostDirectory(dir), 'rust');
+    });
+
+    test('classifies directory containing an apphost.go as go', async () => {
+        const dir = makeTempDir();
+        writeFileSync(join(dir, 'apphost.go'), 'package main');
+        assert.strictEqual(await classifyAppHostDirectory(dir), 'go');
+    });
+
+    test('does not classify an ordinary Go module without an AppHost as go', async () => {
+        const dir = makeTempDir();
+        writeFileSync(join(dir, 'go.mod'), 'module example.com/app');
+        writeFileSync(join(dir, 'main.go'), 'package main');
+        assert.strictEqual(await classifyAppHostDirectory(dir), 'unknown');
     });
 
     test('classifies directory containing an AppHost.java as java', async () => {

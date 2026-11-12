@@ -4,9 +4,10 @@
     "language": "java"
   },
   "features": {
-    "experimentalPolyglot:java": true
+    "experimentalPolyglotJava": true
   },
   "packages": {
-    "Aspire.Hosting.Azure.WebPubSub": ""
+    "Aspire.Hosting.Azure.WebPubSub": "",
+    "Aspire.Hosting.Azure.Provisioning.WebPubSub": ""
   }
 }

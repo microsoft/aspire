@@ -4,6 +4,7 @@
 using System.ClientModel;
 using System.ClientModel.Primitives;
 using System.IO.Hashing;
+using System.Reflection;
 using System.Text.Json;
 using Azure.AI.Projects.Agents;
 
@@ -106,7 +107,9 @@ internal sealed class FoundryToolboxDeploymentDefinition
             }
         }
 
-        var configurationHash = ComputeConfigurationHash(description, tools, metadata);
+        var hostingVersion = typeof(FoundryToolboxDeploymentDefinition).Assembly
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()!.InformationalVersion;
+        var configurationHash = ComputeConfigurationHash(description, tools, metadata, hostingVersion);
         return new(name, description, tools, metadata, configurationHash);
     }
 
@@ -122,15 +125,20 @@ internal sealed class FoundryToolboxDeploymentDefinition
         return metadata;
     }
 
-    private static string ComputeConfigurationHash(
+    internal static string ComputeConfigurationHash(
         string description,
         IReadOnlyList<ResolvedFoundryToolboxTool> tools,
-        IReadOnlyDictionary<string, string> metadata)
+        IReadOnlyDictionary<string, string> metadata,
+        string hostingVersion)
     {
         using var stream = new MemoryStream();
         using (var writer = new Utf8JsonWriter(stream))
         {
             writer.WriteStartObject();
+            // Older SDKs could persist different tool fields despite the same intended configuration.
+            // Include the complete build identity (e.g. 17.0.0-preview.1+commit) so integration upgrades
+            // refresh those immutable versions. See https://github.com/microsoft/aspire/issues/20778.
+            writer.WriteString("hostingVersion", hostingVersion);
             writer.WriteString("description", description);
             writer.WriteStartObject("metadata");
             foreach (var item in metadata.OrderBy(item => item.Key, StringComparer.Ordinal))
@@ -154,7 +162,7 @@ internal sealed class FoundryToolboxDeploymentDefinition
 
 internal sealed record ResolvedFoundryToolboxTool(
     string Name,
-    ProjectsAgentTool Tool,
+    ToolboxTool Tool,
     string CanonicalConfiguration,
     string? McpServerLabel = null);
 
@@ -194,7 +202,7 @@ internal sealed class AzureFoundryToolboxAdministration(
         try
         {
             toolbox = await ExecuteWithProjectReadinessRetryAsync(
-                async token => (await toolboxes.GetToolboxAsync(name, token).ConfigureAwait(false)).Value,
+                async token => (await toolboxes.GetAsync(name, token).ConfigureAwait(false)).Value,
                 cancellationToken).ConfigureAwait(false);
         }
         catch (ClientResultException ex) when (ex.Status == 404 && !IsProjectEndpointNotReady(ex))
@@ -206,7 +214,7 @@ internal sealed class AzureFoundryToolboxAdministration(
             async token =>
             {
                 var result = new List<FoundryToolboxVersionState>();
-                await foreach (var version in toolboxes.GetToolboxVersionsAsync(
+                await foreach (var version in toolboxes.GetVersionsAsync(
                     name,
                     cancellationToken: token).ConfigureAwait(false))
                 {
@@ -223,7 +231,7 @@ internal sealed class AzureFoundryToolboxAdministration(
             string.Equals(version.Version, toolbox.DefaultVersion, StringComparison.Ordinal)))
         {
             var defaultVersion = await ExecuteWithProjectReadinessRetryAsync(
-                async token => (await toolboxes.GetToolboxVersionAsync(
+                async token => (await toolboxes.GetVersionAsync(
                     name,
                     toolbox.DefaultVersion,
                     token).ConfigureAwait(false)).Value,
@@ -243,11 +251,12 @@ internal sealed class AzureFoundryToolboxAdministration(
         return ExecuteWithProjectReadinessRetryAsync(
             async token =>
             {
-                var result = await toolboxes.CreateToolboxVersionAsync(
+                var result = await toolboxes.CreateVersionAsync(
                     definition.Name,
                     definition.Tools.Select(tool => tool.Tool),
                     definition.Description,
                     definition.CreateDeploymentMetadata(),
+                    skills: null,
                     policies: null,
                     token).ConfigureAwait(false);
                 return result.Value.Version;
@@ -267,7 +276,7 @@ internal sealed class AzureFoundryToolboxAdministration(
                 {
                     CancellationToken = token
                 };
-                await toolboxes.UpdateToolboxAsync(name, version, options).ConfigureAwait(false);
+                await toolboxes.UpdateDefaultVersionAsync(name, version, options).ConfigureAwait(false);
                 return true;
             },
             cancellationToken).ConfigureAwait(false);

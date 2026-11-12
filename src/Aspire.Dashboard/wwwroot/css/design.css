@@ -14,6 +14,8 @@
     src: url("../fonts/geist/GeistMono-Variable.woff2") format("woff2");
 }
 
+/* Literal weights, not the --aspire-font-weight-* tokens: var() is invalid in an @font-face descriptor, and the faces
+   would all register at one weight, so every Poppins heading would render with the last file, 700. */
 @font-face {
     font-family: "Poppins";
     font-style: normal;
@@ -38,16 +40,60 @@
     src: url("../fonts/poppins/latin-700-normal.woff2") format("woff2");
 }
 
+.card-header-icon {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: var(--aspire-radius-medium);
+    background: var(--colorBrandBackground2);
+    color: var(--colorBrandForeground2);
+}
+
 :root {
     color-scheme: light;
     --aspire-font-sans: "Geist", "Segoe UI Variable", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
     --aspire-font-mono: "Cascadia Mono", "Geist Mono", Consolas, ui-monospace, "Courier New", monospace;
     --aspire-font-display: "Poppins", var(--aspire-font-sans);
+    --aspire-brand-hover-brightness: 1.1;
     --fontFamilyBase: var(--aspire-font-sans);
     --fontFamilyMonospace: var(--aspire-font-mono);
     --aspire-control-height: 28px;
-    --aspire-control-radius: 6px;
-    --aspire-popup-radius: 10px;
+    /* Corner radii: small for controls, chips and rows; medium for cards and panels; large for popups and
+       dialogs; round for pills and dots. Use these instead of pixel values. */
+    --aspire-radius-small: 4px;
+    --aspire-radius-medium: 8px;
+    --aspire-radius-large: 12px;
+    --aspire-radius-round: 9999px;
+    --aspire-control-radius: var(--aspire-radius-small);
+    --aspire-popup-radius: var(--aspire-radius-large);
+    /* Spacing on a 4px scale. 2px is allowed as a hairline step between an icon and its label. */
+    --aspire-space-1: 4px;
+    --aspire-space-2: 8px;
+    --aspire-space-3: 12px;
+    --aspire-space-4: 16px;
+    --aspire-space-5: 20px;
+    --aspire-space-6: 24px;
+    /* Type: six sizes and two weights. Caption for counts and badges; secondary for row details, columns and
+       timestamps; body for text and controls; large for standalone names and summary values; heading for section and
+       dialog titles; title for the page title and big numbers. Use these instead of pixel values. */
+    --aspire-font-size-caption: 11px;
+    --aspire-font-size-secondary: 12px;
+    --aspire-font-size-body: 13px;
+    --aspire-font-size-large: 14px;
+    --aspire-font-size-heading: 16px;
+    --aspire-font-size-title: 20px;
+    --aspire-font-weight-regular: 400;
+    --aspire-font-weight-semibold: 600;
+    /* Fluent's controls (buttons, inputs, menus, tabs) size their text with its type ramp. Its base sizes are mapped
+       onto the scale above so a Fluent button reads at the same size as the text around it. */
+    --fontSizeBase100: var(--aspire-font-size-caption);
+    --fontSizeBase200: var(--aspire-font-size-secondary);
+    --fontSizeBase300: var(--aspire-font-size-body);
+    --fontWeightMedium: var(--aspire-font-weight-semibold);
+    --fontWeightBold: var(--aspire-font-weight-semibold);
     --disabled-opacity: 0.3;
 
     --aspire-page-background: #f7f7f7;
@@ -58,12 +104,16 @@
     --colorNeutralBackground3: #ebebeb;
     --colorNeutralBackground4: var(--aspire-shell-background);
     --colorNeutralForeground1: #1a1a1a;
-    --colorNeutralForeground3: #717171;
+    /* The one secondary grey. #666666 keeps 4.5:1 on every light surface it sits on, down to a hovered muted row
+       (#e5e5e5); #717171 fell to 4.1:1 on the grey (#ebebeb) behind rows that are unavailable on the current tab. */
+    --colorNeutralForeground3: #666666;
     --colorNeutralStroke1: #d2d2d2;
     --colorNeutralStroke2: #d2d2d2;
     --colorNeutralStroke3: #e5e5e5;
     --aspire-button-hover-border: #c2c2c2;
     --aspire-link-button-pressed-background: #efefef;
+    --run-select-hover-background: color-mix(in srgb, var(--colorNeutralBackground3) 50%, var(--aspire-page-background));
+    --run-select-pressed-background: color-mix(in srgb, var(--colorNeutralBackground3) 80%, var(--aspire-page-background));
     --colorBrandBackground: #512bd4;
     --colorBrandBackgroundHover: #7455dd;
     --colorBrandBackgroundPressed: #512bd4;
@@ -115,12 +165,16 @@
     --log-critical: #F8ECEB;
     --log-error: #F8ECEB;
     --log-warning: #FBF3DD;
-    --info: #717171 !important;
-    --warning: #E85E36 !important;
-    --success: #108310 !important;
-    --error: #BC2F32 !important;
-    --foreground-subtext-rest: #5D5D5D;
-    --foreground-settings-text: var(--foreground-subtext-rest);
+    /* One set of status colours: --success, --warning and --error are older names for the --aspire-status-*
+       colours below. Fluent UI's script sets its own --success, --warning, --error and --info on :root at runtime,
+       after this stylesheet loads, hence !important. */
+    --info: var(--colorNeutralForeground3) !important;
+    --warning: var(--aspire-status-warning) !important;
+    --success: var(--aspire-status-success) !important;
+    --error: var(--aspire-status-error) !important;
+    /* One secondary grey: the older subtext names point at it. */
+    --foreground-subtext-rest: var(--colorNeutralForeground3);
+    --foreground-settings-text: var(--colorNeutralForeground3);
     --error-ui-foreground-color: #131313;
     --error-ui-accent-foreground-color: #1d00d0;
     --highlight-bg: #fffbdd;
@@ -136,9 +190,11 @@
     --codeblock-header-background-color: color-mix(in srgb, var(--colorNeutralForeground1) 4%, var(--colorNeutralBackground2));
     --codeblock-border-color: var(--colorNeutralStroke1);
 
-    --aspire-status-success: #2DA44E;
-    --aspire-status-error: #D13438;
-    --aspire-status-warning: #E8890C;
+    /* Each status colour has at least 4.5:1 contrast on the page, control, hover and selected backgrounds,
+       so it works for text as well as dots and icons. The dark theme's values below meet the same bar. */
+    --aspire-status-success: #14752F;
+    --aspire-status-error: #BC2F32;
+    --aspire-status-warning: #B54708;
     --messagebar-success-background-color: color-mix(in srgb, var(--aspire-status-success) 8%, var(--colorNeutralBackground1));
     --messagebar-success-border-color: color-mix(in srgb, var(--aspire-status-success) 40%, var(--colorNeutralBackground1));
     --messagebar-error-background-color: color-mix(in srgb, var(--aspire-status-error) 8%, var(--colorNeutralBackground1));
@@ -243,6 +299,7 @@
 
 [data-theme="dark"] {
     color-scheme: dark;
+    --aspire-brand-hover-brightness: 0.9;
     --aspire-page-background: #221e2d;
     --aspire-shell-background: #000000;
     --aspire-control-background: #2d2937;
@@ -250,16 +307,19 @@
     --colorNeutralBackground2: var(--aspire-page-background);
     --colorNeutralBackground3: #312e3c;
     --colorNeutralBackground4: var(--aspire-shell-background);
+    --colorNeutralBackgroundDisabled: var(--colorNeutralBackground1);
     --datagrid-hover-color: var(--colorNeutralBackground1);
     --datagrid-border-color: #363241;
     --colorNeutralForeground1: #ffffff;
-    --colorNeutralForeground3: #8c8894;
+    --colorNeutralForeground3: #96929e;
     --colorNeutralForegroundOnBrand: #000000;
     --colorNeutralStroke1: #494553;
     --colorNeutralStroke2: #494553;
     --colorNeutralStroke3: #312e3c;
     --aspire-button-hover-border: #5c5865;
     --aspire-link-button-pressed-background: #2d2937;
+    --run-select-hover-background: var(--colorNeutralBackground3);
+    --run-select-pressed-background: var(--colorNeutralBackground3);
     --colorBrandBackground: #b9aaee;
     --colorBrandBackgroundHover: #dcd5f6;
     --colorBrandBackgroundPressed: #b9aaee;
@@ -284,18 +344,18 @@
     --aspire-dropdown-option-selected-background: #44404e;
     --aspire-dropdown-option-selected-hover-background: #3f3c4a;
     --accent-button-background: var(--colorBrandBackground);
-    --accent-button-foreground: color-mix(in srgb, #512bd4 85%, #000000);
+    --accent-button-foreground: #211047;
     --accent-button-hover-background: color-mix(in srgb, var(--colorBrandBackground) 90%, #000000);
-    --accent-button-hover-foreground: color-mix(in srgb, #512bd4 65%, #000000);
+    --accent-button-hover-foreground: #211047;
     --accent-button-pressed-background: color-mix(in srgb, var(--colorBrandBackground) 85%, #000000);
-    --accent-button-pressed-foreground: color-mix(in srgb, #512bd4 55%, #000000);
+    --accent-button-pressed-foreground: #211047;
 
     --log-critical: #493634;
     --log-error: #493634;
     --log-warning: #3F3A2B;
-    --foreground-subtext-rest: #9E9E9E;
-    --foreground-settings-text: #A8A8A8;
-    --error: #E10B11 !important;
+    --aspire-status-success: #56D364;
+    --aspire-status-error: #FF938A;
+    --aspire-status-warning: #DDA840;
     --error-ui-foreground-color: #000000;
     --error-ui-accent-foreground-color: #512bd4;
     --highlight-bg: #fff4ce;

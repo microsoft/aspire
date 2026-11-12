@@ -4,6 +4,9 @@ This project was bootstrapped with [Create React App](https://github.com/faceboo
 
 ## Available Scripts
 
+The project supports Node.js 20.12 and later. Keep `webpack-dev-server` on the
+5.x line: version 6 requires Node.js 22.15 or later.
+
 In the project directory, you can run:
 
 ### `npm start`

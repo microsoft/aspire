@@ -18,6 +18,7 @@ on:
       - 'eng/scripts/get-aspire-cli-pr.sh'
       - 'tests/Shared/Docker/Dockerfile.e2e'
       - 'tests/Shared/Docker/Dockerfile.e2e-polyglot-base'
+      - 'tests/Shared/Docker/Dockerfile.e2e-polyglot-go'
       - 'tests/Shared/Docker/Dockerfile.e2e-polyglot-java'
       - 'tests/Shared/Docker/NuGet.DotnetTool.config'
       - 'tests/Shared/Docker/configure-ubuntu-apt-mirror.sh'
@@ -29,7 +30,7 @@ concurrency:
 jobs:
   warm_cli_e2e_image_cache:
     name: Warm CLI E2E image cache
-    if: ${{ github.repository_owner == 'microsoft' }}
+    if: ${{ github.repository == 'microsoft/aspire' }}
     uses: ./.github/workflows/build-cli-e2e-image.yml
     with:
       includePolyglotImages: true

@@ -20,6 +20,19 @@ namespace Aspire.Cli.Tests.Projects;
 public class DotNetBasedAppHostServerScaffoldCacheTests(ITestOutputHelper outputHelper)
 {
     [Fact]
+    public async Task CreateProjectFiles_ExcludesBuildArtifacts_FromDefaultItems()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var project = CreateProject(workspace.Path);
+
+        await project.CreateProjectFilesAsync([IntegrationReference.FromPackage("Aspire.Hosting", "13.1.0")]);
+
+        var document = System.Xml.Linq.XDocument.Load(project.GetProjectFilePath());
+        var excludes = document.Root!.Element("PropertyGroup")!.Element("DefaultItemExcludes");
+        Assert.Equal("$(DefaultItemExcludes);build/**", excludes?.Value);
+    }
+
+    [Fact]
     public async Task CreateProjectFiles_PreservesRestoreArtifacts_WhenScaffoldContentUnchanged()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -137,6 +150,37 @@ public class DotNetBasedAppHostServerScaffoldCacheTests(ITestOutputHelper output
         Assert.False(File.Exists(assetsPath),
             "obj/project.assets.json survived even though the project reference was retargeted.");
         Assert.Contains(secondProject, await File.ReadAllTextAsync(csprojPath));
+    }
+
+    [Fact]
+    public async Task CreateProjectFiles_InvalidatesScaffold_WhenIntegrationHostEntryPointChanges()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appPath = workspace.WorkspaceRoot.FullName;
+        var project = CreateProject(appPath);
+        var firstHost = Path.Combine(appPath, "first", "host.ts");
+        var secondHost = Path.Combine(appPath, "second", "host.ts");
+
+        await project.CreateProjectFilesAsync([IntegrationReference.FromNpm("@test/integration", firstHost)]);
+        var assetsPath = SeedRestoreArtifacts(project);
+        var appSettingsPath = Path.Combine(project.ProjectModelPath, "appsettings.json");
+        var firstSettings = await File.ReadAllTextAsync(appSettingsPath);
+        var timestamp = File.GetLastWriteTimeUtc(appSettingsPath);
+
+        await project.CreateProjectFilesAsync([IntegrationReference.FromNpm("@test/integration", firstHost)]);
+
+        Assert.True(File.Exists(assetsPath));
+        Assert.Equal(timestamp, File.GetLastWriteTimeUtc(appSettingsPath));
+        Assert.Equal(firstSettings, await File.ReadAllTextAsync(appSettingsPath));
+
+        await project.CreateProjectFilesAsync([IntegrationReference.FromNpm("@test/integration", secondHost)]);
+
+        Assert.False(File.Exists(assetsPath));
+        using var settings = System.Text.Json.JsonDocument.Parse(await File.ReadAllTextAsync(appSettingsPath));
+        Assert.True(settings.RootElement.GetProperty("ASPIRE_INTEGRATION_HOSTS_ENABLED").GetBoolean());
+        var host = Assert.Single(settings.RootElement.GetProperty("IntegrationHosts").EnumerateArray());
+        Assert.Equal("@test/integration", host.GetProperty("PackageName").GetString());
+        Assert.Equal(secondHost, host.GetProperty("HostEntryPoint").GetString());
     }
 
     /// <summary>

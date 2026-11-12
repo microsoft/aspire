@@ -3,12 +3,12 @@ param location string = resourceGroup().location
 
 resource frontdoor 'Microsoft.Cdn/profiles@2025-06-01' = {
   name: take('frontdoor-${uniqueString(resourceGroup().id)}', 260)
+  tags: {
+    'aspire-resource-name': 'frontdoor'
+  }
   location: 'Global'
   sku: {
     name: 'Standard_AzureFrontDoor'
-  }
-  tags: {
-    'aspire-resource-name': 'frontdoor'
   }
 }
 

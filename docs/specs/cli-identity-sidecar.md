@@ -72,7 +72,7 @@ All five new fields are **optional**. When absent, the resolver falls back to th
 
 #### `nugetServiceIndexOverride`
 
-The `nugetServiceIndexOverride` field replaces the `https://api.nuget.org/v3/index.json` URL that the CLI writes into newly-generated `NuGet.config` files (via `aspire init`, `aspire new`, and any other config-emitting path). When set, every emission point that would otherwise hard-code `api.nuget.org` instead writes the override URL. **The override only affects URLs the CLI *writes*; it never rewrites URLs the CLI *reads* from existing user configs.** That asymmetry is intentional — the override exists to let a Test Bench session (see #17824) point the CLI at a local NuGet proxy (see #17823) without touching the customer's `NuGet.config` that's actually under test.
+The `nugetServiceIndexOverride` field supplies an explicit `Aspire*` integration source for the stable channel. Without it, stable resolves integrations through ambient NuGet configuration and declares no source mappings. The override does not become an all-packages default or replace the integration feeds of daily, staging, or local/PR channels. **It never rewrites URLs read from existing user configs.** This lets a Test Bench session (see #17824) select a local NuGet proxy (see #17823) for stable integrations without taking ownership of the customer's default package routing.
 
 The CLI exposes the override on demand via a small API on `CliExecutionContext`:
 
@@ -85,13 +85,15 @@ The CLI exposes the override on demand via a small API on `CliExecutionContext`:
 public string? NuGetServiceIndexOverride { get; }
 ```
 
-Call sites that today emit `api.nuget.org` directly (`NuGetConfigMerger`, `TemplateNuGetConfigService`, etc.) consult this property; when it returns non-null, the emitted config carries the override URL. When null, the existing canonical URL is used. This is the bytes-side half of the identity story tracked separately in #17823; the API and the sidecar/env plumbing land **now** so that #17823's proxy work has a stable consumer surface to slot into.
+Explicit source-override policy composition does not append NuGet.org or this property as a default source. Shared configuration writing materializes the selected integration policy for temporary overlays and persisted template configuration. Existing ambient source definitions are not rewritten.
 
 #### `packages`
 
 The `packages` field points the CLI at a **flat directory of `.nupkg` files** (for example `artifacts/packages/Release/Shipping`). When set, the CLI synthesizes a package channel — named after the resolved identity channel — that maps `Aspire*` package globs to this directory (everything else resolves from nuget.org). This synthesized channel **replaces** any same-named built-in, discovered-hive, or PR-install channel, so the CLI resolves Aspire packages from the directory while still presenting the emulated channel/version/commit identity. It is exposed on `CliExecutionContext` as `IdentityPackagesDirectory` (a `DirectoryInfo?`, null when no override is active) — distinct from the existing `PackagesDirectory`, which is the restore cache.
 
 This lets a locally built CLI test against packages it just built (or against a PR's CI-built packages staged into a directory) without copying them into a hive. It pairs with `ASPIRE_CLI_CHANNEL` for the "PR build identity + locally built packages" and "released repro with a CLI+hosting fix spanning packages" scenarios (see the `cli-channel-debugging` skill for the full matrix).
+
+For an existing C# AppHost, `aspire update` without a command-line or configured channel uses current native NuGet configuration and does not enumerate identity or hive feeds. Applying a synthesized package channel requires an explicit `--channel` or legacy `--quality` option, or an Aspire channel setting from project or global configuration. Explicit options take precedence over configuration; feeds are persisted only when the desired policy differs, and unsafe changes are rejected in either case. See [shared policy previews and .NET persistence](polyglot-integration-restore.md#shared-policy-previews-and-net-persistence).
 
 **Cleanliness guardrail (fail-fast).** A flat directory has no "latest stable vs latest prerelease" semantics: if the same `Aspire*` package id appears with more than one version, NuGet would silently resolve the highest and mask the intended version. The CLI therefore **fails fast** at channel-resolution time when the directory is missing, or when any `Aspire*` package id carries more than one distinct version anywhere under the directory (the check recurses, matching how local package discovery walks subdirectories), with a diagnostic listing the conflicting ids and versions (e.g. `Aspire.Hosting (13.4.1, 13.4.2)`). Only `Aspire*` packages are checked because the synthesized channel only routes those to the directory. This is intentional friction — `localhive.sh` accumulates auto-versioned builds in `Shipping`, so the directory must be cleaned (or freshly packed) before it can be used as an override.
 
@@ -104,7 +106,7 @@ Each identity field is resolved **independently** so you can override one and in
 3. **Terminal fallback**:
    - `channel` → `local`.
    - `version` and `commit` → the value read from `AssemblyInformationalVersion` (still stamped by Arcade for every assembly; this is not stamping we control or intend to remove).
-   - `nugetServiceIndexOverride` → `null` (no override; callers use the canonical `https://api.nuget.org/v3/index.json`).
+   - `nugetServiceIndexOverride` → `null` (no override; stable uses ambient integration sources).
    - `packages` → `null` (no override; the CLI uses its normal channel/hive package sources).
 
 The resolver distinguishes four outcomes per field, each surfaced in `aspire doctor --self`: `from-env`, `from-sidecar`, `from-assembly-fallback`, `defaulted-to-local`. This makes "is my override actually taking effect?" trivially debuggable and prevents the soft-fallback class of bug the critique flagged (a missing installer write silently looking healthy because the resolver fell back to a baked value).
@@ -225,7 +227,7 @@ The matrix:
 Three things to call out:
 
 1. **The csproj `<AspireCliChannel>local</AspireCliChannel>` default can stay** as a no-op — it costs nothing and keeps `dotnet build` producing a binary whose assembly metadata reads sensibly when inspected. What changes is that CI stops *overriding* it for non-dotnet-tool publish paths.
-2. **`dotnet run --project src/Aspire.Cli` continues to find no sidecar**, because the project's `bin/Debug/net10.0/` directory is not an install directory and nothing writes a sidecar there. This is correct: a `dotnet run` invocation is not an installed CLI and should resolve `local`.
+2. **`dotnet run --project src/Aspire.Cli` continues to find no sidecar**, because the project's `bin/Debug/net11.0/` directory is not an install directory and nothing writes a sidecar there. This is correct: a `dotnet run` invocation is not an installed CLI and should resolve `local`.
 3. **The validation patterns become available in the `dotnet run` loop too.** Want to reproduce a customer's stable-channel bug while iterating on `src/Aspire.Cli`?
 
    ```bash
@@ -313,7 +315,7 @@ A user reports an issue against `aspire 13.4.0` (stable, commit `abc123`). Today
 ASPIRE_CLI_CHANNEL=stable \
 ASPIRE_CLI_VERSION=13.4.0 \
 ASPIRE_CLI_COMMIT=abc123 \
-  ./artifacts/bin/Aspire.Cli/Debug/net10.0/aspire init
+  ./artifacts/bin/Aspire.Cli/Debug/net11.0/aspire init
 ```
 
 The dev binary now runs every identity-conditional code path under the reported identity. Reproduction is a single command on the developer's machine, against the in-tree source code, with debugger attached.
@@ -466,4 +468,4 @@ The resolver and call-site migration land together; the test plan reflects that.
 
 - `EmulatedReleasedBuildTests` (C# + TS): emulate the latest **shipped stable**; assert no `NuGet.config` is dropped (stable packages live on nuget.org) and the AppHost SDK is pinned stable-shaped.
 - `EmulatedStagingBuildTests` (C# + TS): emulate the latest **staging** build (discovered darc commit); assert a `NuGet.config` mapping `Aspire*` to the SHA-specific darc feed is dropped and `aspire add` resolves the staging version.
-- `EmulatedLocalReleaseBuildTests` (C# + TS): the **all-local "future release"** row. Build a stable-shaped archive with `localhive --version <X.Y.Z> --archive`, emulate `stable` with `ASPIRE_CLI_PACKAGES` pointed at the extracted hive, and assert `aspire new`/`aspire add` resolve the future-only version (e.g. `13.5.0`) **from the local hive** — proving the resolution fix (override honored under any emulated channel name). Registers the hive as an ambient NuGet source for buildability. Skips unless the CLI was installed from a stable-shaped `LocalHive` archive, so it adds zero default-CI cost (relying on `--ignore-exit-code 8` in `eng/Testing.props` for the all-skipped class job).
+- `EmulatedLocalReleaseBuildTests` (C# + TS): the **all-local "future release"** row. Build a stable-shaped archive with `localhive --version <X.Y.Z> --archive`, emulate `stable` with `ASPIRE_CLI_PACKAGES` pointed at the extracted hive, and assert `aspire new`/`aspire add` resolve the future-only version (e.g. `13.5.0`) **from the local hive** — proving the resolution fix (override honored under any emulated channel name). Registers the hive as an ambient NuGet source for buildability. Skips unless the CLI was installed from a stable-shaped `LocalHive` archive, so it adds zero default-CI cost (relying on `--ignore-exit-code 8` in `eng/Testing.targets` for the all-skipped class job).

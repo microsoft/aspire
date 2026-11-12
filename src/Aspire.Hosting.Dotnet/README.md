@@ -1,12 +1,8 @@
-# .NET / C# app hosting integration
+# .NET app hosting integration
 
-Use this integration to model, configure, and orchestrate C# projects and file-based C# apps
-(added **by path**) in an Aspire solution. It is the C# peer of `Aspire.Hosting.Go`,
+Use this integration to model, configure, and orchestrate SDK-style C#, F#, and Visual Basic
+projects and file-based C# apps (added **by path**) in an Aspire solution. It is the .NET peer of `Aspire.Hosting.Go`,
 `Aspire.Hosting.Python`, and `Aspire.Hosting.JavaScript`.
-
-> [!NOTE]
-> `AddDotnetProject` is experimental and is exposed under the `ASPIREDOTNETPROJECT001` diagnostic.
-> Its API surface may change in future releases.
 
 ## Getting started
 
@@ -25,8 +21,10 @@ aspire add Aspire.Hosting.Dotnet
 
 ## Usage example
 
-In the AppHost, add a C# app resource by path. The path can point at a project file (`.csproj`),
-a directory containing a single `.csproj`, or a file-based app (`.cs`):
+In the AppHost, add a .NET app resource by path. The path can point at an SDK-style project
+file (`.csproj`, `.fsproj`, or `.vbproj`), a directory containing exactly one supported project
+in total, or a file-based C# app (`.cs`). Paths are relative to the AppHost directory, not the
+shell's working directory; replace the example paths with your actual service paths.
 
 **C#**
 
@@ -56,30 +54,148 @@ await builder.build().run();
 
 Before resources start, Aspire collects projects with compatible SDK and environment contexts into
 generated MSBuild traversal projects under the AppHost's intermediate output. Build groups run serially, while projects within
-each traversal group can build in parallel. File-based apps use serialized direct builds so their
-`#:project` references cannot build shared outputs concurrently. Launch-profile and `WithEnvironment`
-values are runtime configuration and do not prevent projects from sharing a traversal build. Each
-traditional project is then launched with the `RunCommand` and `RunArguments` resolved from the
-already-built project, so runtime environment variables cannot change which output is selected.
-File-based apps launch with `dotnet run --file <path> --no-build` after their direct build; uncoordinated
-file-based launches use `--no-cache` instead. Start and Restart reuse the coordinated output, matching
-project-based resources. Use the Rebuild command after source changes to rebuild and restart the resource.
+each traversal group share one NuGet graph restore and can build in parallel. Outside legacy project-only IDE
+sessions, file-based apps use serialized direct builds so their `#:project` references cannot build shared
+outputs concurrently. Launch-profile and `WithEnvironment` values are runtime configuration and do not
+prevent projects from sharing a traversal build. Each traditional project is then launched with the
+`RunCommand` and `RunArguments` resolved from the already-built project, so runtime environment variables
+cannot change which output is selected. File-based apps launch with `dotnet run --file <path> --no-build`
+after their direct build; uncoordinated file-based launches use `--no-cache` instead. Start and Restart reuse
+the coordinated output, matching project-based resources. Use the Rebuild command after source changes to
+rebuild and restart the resource.
+
+Legacy project-only IDE sessions keep the existing file-app launch path. File apps wait for the final
+coordinated project prebuild, preventing overlap with that prebuild, but separate file apps are not mutually
+serialized and can still race when sharing `#:project` outputs. In capability-less Visual Studio sessions,
+`WaitForStart` only waits for the `dotnet run` process to start, not for its implicit build to finish.
+To avoid shared-output races, run outside the legacy IDE session (for example, with `aspire run`) or use an
+external-build-capable IDE so Aspire coordinates file-app builds. Within a legacy session, configure an
+application-readiness health check on the preceding app and use `WaitFor` on the next app; the check must
+only pass after the preceding app has finished building. Without such a check, `WaitFor` does not provide
+a build-completion barrier either.
 
 Endpoints, environment variables, and service discovery are configured from the project's
-`launchSettings.json` and Kestrel configuration, matching `AddProject<T>`.
+`launchSettings.json` and Kestrel configuration. V2 VB services prefer
+`My Project/launchSettings.json`, falling back to `Properties/launchSettings.json`.
+Legacy service-profile discovery is unchanged.
+
+### Migrating from AddProject or AddCSharpApp
+
+All six legacy `AddProject` overloads, `AddCSharpApp`, and their polyglot exports are obsolete.
+Add this integration and use `AddDotnetProject` / `addDotnetProject` with the actual project path,
+not a guessed conversion of a generated `Projects.*` name. The extension methods are in
+`Aspire.Hosting`; explicitly typed resources also need `using Aspire.Hosting.Dotnet`.
+
+The new API returns `IResourceBuilder<DotnetProjectResource>`, not a
+`ProjectResource` / `CSharpAppResource` builder. Update returns, stored values, generic definitions,
+explicit generic calls, and model queries separately. Ordinary concrete `WithReplicas`,
+`DisableForwardedHeaders`, `WithEndpointsInEnvironment`, and `GetProjectMetadata` calls are stable;
+shared integration-authoring seams remain experimental.
+
+Use the canonical [AddProject migration guide](../../docs/migrate-from-addproject.md) for all six
+overload mappings, C#/polyglot null differences, compile-correct typed/fluent examples,
+build ownership, EF, composition, and retained legacy exceptions. Existing legacy calls keep
+their launch/publishing behavior; Functions and MAUI migrate separately.
+
+F#/VB support covers SDK-style project files, not scripts or old project systems. The new
+service/AppHost watcher is not implemented. Rebuild and non-watch debugging do not imply
+`aspire run --watch` support.
+
+### Restoring projects individually
+
+Coordinated project builds restore all projects in a compatible group together, without introducing
+solution-specific MSBuild properties. This avoids repeatedly restoring overlapping project graphs.
+Like solution-level restore, it does not invoke each root project's `Restore` target separately.
+Custom targets attached directly to that target, such as `BeforeTargets="Restore"` or
+`AfterTargets="Restore"`, therefore do not run for each project.
+
+Individual restore is a supported alternative for projects that depend on those hooks.
+Set `Aspire:Dotnet:RestoreProjectsIndividually` to `true` in the **AppHost's configuration**.
+For example, set `Aspire__Dotnet__RestoreProjectsIndividually=true` in the
+environment before starting the AppHost, or add the following to its `appsettings.json`:
+
+```json
+{
+  "Aspire": {
+    "Dotnet": {
+      "RestoreProjectsIndividually": true
+    }
+  }
+}
+```
+
+The setting defaults to `false` and is read when the build plan is created. It applies to every
+generated traversal in that AppHost; it is not a resource runtime environment variable. With
+individual restore, each root project's restore runs serially while builds remain parallel.
+
+A traversal also uses the per-project restore path when the selected NuGet restore targets are
+unavailable or its top-level MSBuild context enables `RestoreUseStaticGraphEvaluation`. NuGet's
+static restore requires a restore-capable entry project, which the generated SDK-less traversal is
+not. The reason for selecting individual restore is reported in the build resource's logs. Restore
+failures are not retried using another strategy.
+
+Direct builds for file-based apps and project-specific build environments, individual Rebuild
+commands, and publishing are unchanged.
+
+### Select a launch profile
+
+Configure a .NET service's launch profile independently of the AppHost language:
+
+**C#**
+
+```csharp
+builder.AddDotnetProject("api", "../api/api.csproj",
+    options => options.LaunchProfileName = "https");
+```
+
+**TypeScript**
+
+```typescript
+await builder.addDotnetProject("api", "../api/api.csproj", {
+    launchProfileName: "https"
+});
+```
+
+Omitting the options, or leaving `launchProfileName` null, selects the default profile.
+Set `excludeLaunchProfile: true` to disable profiles; this takes precedence over a supplied
+profile name. Set `excludeKestrelEndpoints: true` to stop deriving model endpoints from Kestrel
+configuration; this does not rewrite or disable the service's own Kestrel configuration.
+The corresponding C# `ProjectResourceOptions` properties have the same behavior.
+
+When migrating the obsolete C# string overload, `launchProfileName: null` instead meant
+**disable profiles**: translate it to `options => options.ExcludeLaunchProfile = true`.
+Legacy polyglot omitted/null arguments mean default options, not profile exclusion.
+See the [migration guide](../../docs/migrate-from-addproject.md#c-launch-profiles-null-is-not-always-the-default).
+
+The plain-data `DotnetProjectOptions` input is specific to the polyglot `addDotnetProject` API.
+It does not change the shared `ProjectResourceOptions` handle used by the legacy polyglot
+`addProject` and `addCSharpApp` APIs.
 
 ### Configure the build environment
 
-Use `WithBuildEnvironment` when an environment variable must affect MSBuild evaluation for a `.csproj`
-resource. File-based `.cs` apps do not support build-only environment variables and are rejected when
+Use `WithBuildEnvironment` when an environment variable must affect MSBuild evaluation for an SDK-style
+`.csproj`, `.fsproj`, or `.vbproj` resource. File-based `.cs` apps do not support build-only environment variables and are rejected when
 `WithBuildEnvironment` is called. Projects with build-specific environment variables use serialized direct
 builds instead of a shared traversal build. Build environment variables are not added to the launched process;
-configure the same variable with `WithEnvironment` as well when it is needed at runtime.
+configure the same variable with `WithEnvironment` as well when it is needed at runtime. The same build-only
+values are applied when the project is published through the .NET SDK container targets.
 
-Do not use `WithBuildEnvironment` for secrets. Aspire carries these values in IDE launch metadata and
-process environments. Protected temporary MSBuild response files preserve global-property semantics
-without exposing values in process command lines, but values can appear in build diagnostics and are
-not a general-purpose secret transport.
+IDE debugging with `WithBuildEnvironment` requires a launcher that advertises
+`project-with-external-build.v1` and consumes the coordinated build context. Aspire rejects legacy
+project-only IDE sessions because those launchers cannot reliably locate customized build output.
+
+Container publishing rejects build environment properties that can redirect the artifact tracked by Aspire:
+`ContainerRepository`, `ContainerImageTag`, `ContainerImageTags`, `ContainerRegistry`,
+`ContainerImageName`, `PublishImageTag`, `AutoGenerateImageTag`, `RegistryUrl`,
+`ContainerArchiveOutputPath`, `ContainerImageFormat`, `LocalRegistry`, `RuntimeIdentifier`,
+`RuntimeIdentifiers`, `ContainerRuntimeIdentifier`, and `ContainerRuntimeIdentifiers`. Configure
+supported image identity, destination, format, and target platform settings with
+`WithContainerBuildOptions` instead.
+
+Do not use `WithBuildEnvironment` for secrets. Aspire carries these values in build process environments
+and, for external-build-capable IDEs, launch metadata. Protected temporary MSBuild response files
+preserve global-property semantics without exposing values in process command lines, but values can
+appear in build diagnostics and are not a general-purpose secret transport.
 
 **C#**
 
@@ -96,21 +212,79 @@ await builder
     .withBuildEnvironment("BUILD_FLAVOR", "custom");
 ```
 
+### EF Core operations
+
+EF Core migration operations wait for the coordinated build in run mode, without waiting for the application
+to start. However, `dotnet-ef` does not receive `WithBuildEnvironment` customizations as MSBuild global properties.
+The EF integration warns once per requested operation and continues, including when generating publish scripts
+or bundles. EF may use suitable output, select different or stale output, or fail because the expected output
+is missing. Ordinary run-mode EF commands retain `--no-build`; publish-time script and bundle generation
+allow EF to build the participating projects.
+
+Where equivalent, use shared project-file or `Directory.Build.props` settings so the coordinated build and EF
+evaluate the same values. Runtime `WithEnvironment` is not an equivalent workaround. See the
+[EF Core integration guidance](../Aspire.Hosting.EntityFrameworkCore/README.md#coordinated-builds-and-custom-build-inputs)
+for the remaining compatibility risk.
+
 ## Publishing
 
-Automatic project publishing for `DotnetProjectResource` is not currently supported. A plain
-`DotnetProjectResource` causes `aspire publish` and `aspire deploy` to fail with an actionable error
-instead of emitting an `executable.v0` manifest containing machine-local paths.
+Resources created with `AddDotnetProject` participate in the same .NET SDK container publishing pipeline as
+legacy project resources. Project files, directories containing a single supported project file, and file-based
+C# apps are emitted as project resources in the Aspire manifest and can be deployed through supported compute
+environments.
 
-Use one of these alternatives:
+Constructing `DotnetProjectResource` directly does not supply metadata, SDK publishing, or registration
+with the coordinated-build planner. Use the factory and compose annotations/configuration rather than
+subclassing to obtain those behaviors.
 
-- Use `AddProject<TProject>(...)` for a project referenced by a C# AppHost.
-- Use `AddCSharpApp(...)` or `addCSharpApp(...)` for a path-based project or file-based app that
-  should use standard .NET project publishing.
-- Call `PublishAsDockerFile(...)` or `publishAsDockerFile(...)` to configure container publishing
-  explicitly.
-- Call `ExcludeFromManifest()` or `excludeFromManifest()` when the resource is intentionally
-  available only during local orchestration.
+File-based apps preserve the .NET SDK's publishing defaults, including Native AOT. Native AOT cannot compile
+across operating systems, so publishing a file-based app from Windows or macOS to a Linux container can fail.
+To publish a framework-dependent container instead, add this directive to the C# file:
+
+```csharp
+#:property PublishAot=false
+```
+
+Alternatively, run publishing on the target operating system to retain Native AOT. Aspire reports focused
+guidance when it detects this cross-operating-system failure.
+
+### Archive output paths
+
+Set `Destination` to `ContainerImageDestination.Archive` in `WithContainerBuildOptions` to save an SDK-built
+image as an archive. An archive-only SDK build does not require Docker or Podman to be running; layering files
+from another container still requires a container runtime. Docker supports layered archives in Docker format
+because the layering build must use Docker's local image store before `docker image save` exports the result.
+Use Podman when container-file layering must produce an OCI-format archive.
+
+Layered archive publishing uses private temporary image tags and does not overwrite or delete an existing
+local image with the configured destination name and tag. The archive still contains that configured image
+identity. Temporary images are cleaned up after publishing, including when a build fails or is canceled.
+
+For .NET SDK publishing, a non-existent `OutputPath` with any filename extension is an explicit archive
+filename. This includes custom extensions such as `image.custom`, not only `.tar` or `.tar.gz`. A path without
+an extension is interpreted as a directory. End a dotted directory path with the platform's directory separator
+to make its intent explicit, for example `artifacts.v1\` on Windows. Prefer an explicit archive filename when
+configuring output consumed by other tools.
+
+These are the .NET SDK's path conventions; Dockerfile/container-runtime publishing has its own output
+conventions. See the [SDK archive publishing documentation](https://learn.microsoft.com/dotnet/core/containers/sdk-publish#publish-net-app-to-a-tarball).
+
+### Other publishing options
+
+Call `PublishAsDockerFile(...)` or `publishAsDockerFile(...)` to use an explicit Dockerfile instead of .NET SDK
+container publishing. Call `ExcludeFromManifest()` or `excludeFromManifest()` when the resource is intentionally
+available only during local orchestration.
+
+## Migrating from legacy project resources
+
+Start with the [AddProject migration guide](../../docs/migrate-from-addproject.md).
+For C# and TypeScript AppHosts targeting a version that includes Project V2, the
+[`aspire-project-v2-migration` agent skill](https://github.com/microsoft/aspire-skills/tree/main/skills/aspire-project-v2-migration)
+assesses existing project resources and proposes a migration for approval before editing.
+It preserves supported resource configuration and identifies unsupported patterns. Its inventory must
+be updated separately for SDK-style F#/VB support, stable consumer APIs, and retained Functions, MAUI,
+custom-metadata/subtype, and external-build exceptions; an installed skill may predate those changes.
+It does not upgrade the AppHost's Aspire version.
 
 ## Additional documentation
 

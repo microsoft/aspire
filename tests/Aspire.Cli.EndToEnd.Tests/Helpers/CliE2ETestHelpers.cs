@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using System.Formats.Tar;
+using System.IO.Compression;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -25,9 +27,39 @@ internal static class CliE2ETestHelpers
     internal const string RequirePolyglotImageEnvironmentVariableName = "ASPIRE_E2E_REQUIRE_POLYGLOT_IMAGE";
     internal const string PolyglotJavaImageEnvironmentVariableName = "ASPIRE_E2E_POLYGLOT_JAVA_IMAGE";
     internal const string RequirePolyglotJavaImageEnvironmentVariableName = "ASPIRE_E2E_REQUIRE_POLYGLOT_JAVA_IMAGE";
+    internal const string PolyglotGoImageEnvironmentVariableName = "ASPIRE_E2E_POLYGLOT_GO_IMAGE";
+    internal const string RequirePolyglotGoImageEnvironmentVariableName = "ASPIRE_E2E_REQUIRE_POLYGLOT_GO_IMAGE";
     internal const string CliVersionOutputDirEnvironmentVariableName = "ASPIRE_E2E_CLI_VERSION_OUTPUT_DIR";
     internal const string ContainerCliVersionOutputDir = "/tmp/aspire-cli-versions";
     private static readonly Regex s_commitShaPattern = new("^[0-9a-fA-F]{40}$", RegexOptions.Compiled);
+
+    internal static string GetAppHostVersion(string content)
+    {
+        string? version;
+        if (content.TrimStart().StartsWith('<'))
+        {
+            var project = XDocument.Parse(content);
+            version = project.Descendants("PackageReference")
+                .Where(reference => string.Equals(reference.Attribute("Include")?.Value, "Aspire.Hosting.AppHost", StringComparison.OrdinalIgnoreCase))
+                .Select(reference => reference.Attribute("Version")?.Value)
+                .FirstOrDefault();
+            if (string.IsNullOrWhiteSpace(version))
+            {
+                var sdk = project.Root?.Attribute("Sdk")?.Value;
+                const string prefix = "Aspire.AppHost.Sdk/";
+                version = sdk?.StartsWith(prefix, StringComparison.Ordinal) == true ? sdk[prefix.Length..] : null;
+            }
+        }
+        else
+        {
+            var match = Regex.Match(content, @"(?m)^[ \t]*#:[ \t]*(?:package[ \t]+Aspire\.Hosting\.AppHost|sdk[ \t]+Aspire\.AppHost\.Sdk)@(?<version>[^ \t\r\n]+)[ \t]*\r?$");
+            version = match.Success ? match.Groups["version"].Value : null;
+        }
+
+        return !string.IsNullOrWhiteSpace(version)
+            ? version
+            : throw new InvalidOperationException("Could not find an explicit AppHost package or retained SDK version.");
+    }
 
     /// <summary>
     /// Gets whether the tests are running in CI (GitHub Actions) vs locally.
@@ -140,8 +172,9 @@ internal static class CliE2ETestHelpers
     /// <returns>A <see cref="TerminalRun"/> that ensures diagnostics capture and clean exit on disposal.</returns>
     internal static TerminalRun StartRun(Hex1bTerminal terminal, TemporaryWorkspace workspace, Hex1bTerminalAutomator automator, SequenceCounter counter, ITestOutputHelper output, CancellationToken cancellationToken)
     {
-        var pendingRun = terminal.RunAsync(cancellationToken);
-        return new TerminalRun(pendingRun, automator, counter, workspace, output);
+        var runCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var pendingRun = terminal.RunAsync(runCancellation.Token);
+        return new TerminalRun(pendingRun, runCancellation, automator, counter, workspace, output);
     }
 
     /// <summary>
@@ -163,6 +196,11 @@ internal static class CliE2ETestHelpers
         /// Docker + Node.js + Java (no .NET SDK). For Java polyglot AppHost tests.
         /// </summary>
         PolyglotJava,
+
+        /// <summary>
+        /// Docker + Node.js + Go (no .NET SDK). For Go polyglot AppHost tests.
+        /// </summary>
+        PolyglotGo,
     }
 
     private const string PolyglotBaseImageName = "aspire-e2e-polyglot-base";
@@ -202,7 +240,8 @@ internal static class CliE2ETestHelpers
         var dockerfilePath = GetDockerfilePath(repoRoot, variant);
         var prebuiltImageName = GetPrebuiltImageName(variant);
 
-        if (variant is DockerfileVariant.PolyglotJava && prebuiltImageName is null)
+        // The Java and Go variants extend the shared polyglot base image, which must exist locally before their Dockerfiles build.
+        if (variant is (DockerfileVariant.PolyglotJava or DockerfileVariant.PolyglotGo) && prebuiltImageName is null)
         {
             EnsurePolyglotBaseImage(repoRoot, output);
         }
@@ -304,6 +343,11 @@ internal static class CliE2ETestHelpers
             throw new InvalidOperationException($"{PolyglotJavaImageEnvironmentVariableName} must be set when the prebuilt CLI E2E Java image is required.");
         }
 
+        if (variant is DockerfileVariant.PolyglotGo && IsPolyglotGoImageRequired())
+        {
+            throw new InvalidOperationException($"{PolyglotGoImageEnvironmentVariableName} must be set when the prebuilt CLI E2E Go image is required.");
+        }
+
         options.DockerfilePath = GetDockerfilePath(repoRoot, variant);
         options.BuildContext = repoRoot;
     }
@@ -315,6 +359,7 @@ internal static class CliE2ETestHelpers
             DockerfileVariant.DotNet => DotNetImageEnvironmentVariableName,
             DockerfileVariant.Polyglot => PolyglotImageEnvironmentVariableName,
             DockerfileVariant.PolyglotJava => PolyglotJavaImageEnvironmentVariableName,
+            DockerfileVariant.PolyglotGo => PolyglotGoImageEnvironmentVariableName,
             _ => throw new ArgumentOutOfRangeException(nameof(variant)),
         };
 
@@ -329,6 +374,7 @@ internal static class CliE2ETestHelpers
             DockerfileVariant.DotNet => "Dockerfile.e2e",
             DockerfileVariant.Polyglot => "Dockerfile.e2e-polyglot-base",
             DockerfileVariant.PolyglotJava => "Dockerfile.e2e-polyglot-java",
+            DockerfileVariant.PolyglotGo => "Dockerfile.e2e-polyglot-go",
             _ => throw new ArgumentOutOfRangeException(nameof(variant)),
         };
 
@@ -348,6 +394,11 @@ internal static class CliE2ETestHelpers
     private static bool IsPolyglotJavaImageRequired()
     {
         return IsImageRequired(RequirePolyglotJavaImageEnvironmentVariableName);
+    }
+
+    private static bool IsPolyglotGoImageRequired()
+    {
+        return IsImageRequired(RequirePolyglotGoImageEnvironmentVariableName);
     }
 
     private static bool IsImageRequired(string environmentVariableName)
@@ -1106,6 +1157,35 @@ internal static class CliE2ETestHelpers
         }
 
         return bestRaw;
+    }
+
+    internal static string? TryGetStableAspireVersionFromArchive(string archivePath)
+    {
+        using var archive = File.OpenRead(archivePath);
+        using var gzip = new GZipStream(archive, CompressionMode.Decompress);
+        using var tar = new TarReader(gzip);
+
+        // Local-hive entries look like "hives/local/packages/Aspire.Hosting.17.0.99.nupkg".
+        // Some tar writers prefix entries with "./"; prerelease packages must not enable this lane.
+        var stablePackageRegex = new Regex(@"^(?:\./)?hives/local/packages/Aspire\.Hosting\.(?<version>\d+\.\d+\.\d+)\.nupkg$", RegexOptions.IgnoreCase);
+        Version? bestVersion = null;
+        while (tar.GetNextEntry() is { } entry)
+        {
+            if (entry.EntryType is not (TarEntryType.RegularFile or TarEntryType.V7RegularFile))
+            {
+                continue;
+            }
+
+            var match = stablePackageRegex.Match(entry.Name);
+            if (match.Success &&
+                Version.TryParse(match.Groups["version"].Value, out var version) &&
+                (bestVersion is null || version > bestVersion))
+            {
+                bestVersion = version;
+            }
+        }
+
+        return bestVersion?.ToString();
     }
 
     internal static void WriteLocalChannelSettings(string projectRoot, string sdkVersion)

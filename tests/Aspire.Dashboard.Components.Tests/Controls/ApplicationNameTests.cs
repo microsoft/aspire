@@ -25,7 +25,7 @@ public class ApplicationNameTests : DashboardTestContext
         AddDashboardClientServices();
 
         // Act
-        var cut = RenderComponent<ApplicationName>();
+        var cut = Render<ApplicationName>();
 
         // Assert
         cut.MarkupMatches("Aspire");
@@ -38,7 +38,7 @@ public class ApplicationNameTests : DashboardTestContext
         AddDashboardClientServices();
 
         // Act
-        var cut = RenderComponent<ApplicationName>(builder =>
+        var cut = Render<ApplicationName>(builder =>
         {
             builder.Add(p => p.ResourceName, "{0} traces");
             builder.Add(p => p.Loc, new TestStringLocalizer<string>());
@@ -58,7 +58,7 @@ public class ApplicationNameTests : DashboardTestContext
         Services.AddSingleton<IDashboardClient>(new TestDashboardClient(applicationName: "<marquee>An HTML title!</marquee>"));
 
         // Act
-        var cut = RenderComponent<ApplicationName>();
+        var cut = Render<ApplicationName>();
 
         // Assert
         cut.MarkupMatches("&lt;marquee&gt;An HTML title!&lt;/marquee&gt;");

@@ -17,7 +17,7 @@ namespace Aspire.TerminalHost;
 /// The OTLP exporter wiring in <see cref="TerminalHostApp.RunAsync(string[], System.Threading.CancellationToken)"/>
 /// only attaches when <c>ASPIRE_TERMINAL_HOST_TELEMETRY_ENABLED</c> is <c>true</c> and
 /// <c>OTEL_EXPORTER_OTLP_ENDPOINT</c> is set. The Aspire AppHost configures these for each
-/// <c>TerminalHostResource</c> when <c>TerminalOptions.ShowTerminalHost</c> is enabled.
+/// <c>TerminalHostResource</c>, independently of its dashboard visibility.
 /// Standalone diagnostic runs must also explicitly enable telemetry and configure an endpoint.
 /// </para>
 /// <para>

@@ -53,16 +53,16 @@ namespace Aspire.Hosting
 
     public static partial class AzureVirtualNetworkExtensions
     {
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addAzureVirtualNetwork dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addAzureVirtualNetwork dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureVirtualNetworkResource> AddAzureVirtualNetwork(this IDistributedApplicationBuilder builder, string name, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> addressPrefix) { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addAzureVirtualNetwork dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addAzureVirtualNetwork dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureVirtualNetworkResource> AddAzureVirtualNetwork(this IDistributedApplicationBuilder builder, string name, string? addressPrefix = null) { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addSubnet dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addSubnet dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureSubnetResource> AddSubnet(this ApplicationModel.IResourceBuilder<Azure.AzureVirtualNetworkResource> builder, string name, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> addressPrefix, string? subnetName = null) { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addSubnet dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addSubnet dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureSubnetResource> AddSubnet(this ApplicationModel.IResourceBuilder<Azure.AzureVirtualNetworkResource> builder, string name, string addressPrefix, string? subnetName = null) { throw null; }
 
         [AspireExport]

@@ -6,12 +6,12 @@ using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Azure.Tests;
 
-public class AzureCosmosDBContainerConnectionPropertiesTests
+public class AzureCosmosDBContainerConnectionPropertiesTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public void AzureCosmosDBContainerResourceGetConnectionPropertiesReturnsExpectedValues()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var cosmosdb = builder.AddAzureCosmosDB("cosmosdb");
         var database = cosmosdb.AddCosmosDatabase("database", "mydb");
         var container = database.AddContainer("container", "/id", "mycontainer");
@@ -41,7 +41,7 @@ public class AzureCosmosDBContainerConnectionPropertiesTests
     [Fact]
     public void AzureCosmosDBContainerResourceWithAccessKeyAuthenticationGetConnectionPropertiesReturnsExpectedValues()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var cosmosdb = builder.AddAzureCosmosDB("cosmosdb").WithAccessKeyAuthentication();
         var database = cosmosdb.AddCosmosDatabase("database", "mydb");
         var container = database.AddContainer("container", "/id", "mycontainer");
@@ -83,7 +83,7 @@ public class AzureCosmosDBContainerConnectionPropertiesTests
     [InlineData(true)]
     public void AzureCosmosDBContainerResourceEmulatorGetConnectionPropertiesReturnsExpectedValues(bool useClassic)
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var cosmosdb = builder.AddAzureCosmosDB("cosmosdb");
         cosmosdb = useClassic ? cosmosdb.RunAsClassicEmulator() : cosmosdb.RunAsEmulator();
         var database = cosmosdb.AddCosmosDatabase("database", "mydb");

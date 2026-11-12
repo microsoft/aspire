@@ -1,5 +1,6 @@
 import path from "path";
-import { ExecutableLaunchConfiguration, EnvVar, LaunchOptions, AspireResourceExtendedDebugConfiguration, AspireExtendedDebugConfiguration, AspireResourceDebugSession, isProjectLaunchConfiguration } from "../dcp/types";
+import * as vscode from 'vscode';
+import { ExecutableLaunchConfiguration, EnvVar, LaunchOptions, AspireResourceExtendedDebugConfiguration, AspireExtendedDebugConfiguration, AspireResourceDebugSession, getLaunchConfigurationExecutablePaths, getLaunchConfigurationTargetPath, isProjectLaunchConfiguration } from "../dcp/types";
 import { debugProject, runProject } from "../loc/strings";
 import { getEnvironmentForChildProcess, mergeEnvs } from "../utils/environment";
 import { extensionLogOutputChannel } from "../utils/logging";
@@ -8,7 +9,7 @@ import { isAzureFunctionsExtensionInstalled, isBunInstalled, isCsharpInstalled, 
 import { pythonDebuggerExtension } from "./languages/python";
 import { nodeDebuggerExtension } from "./languages/node";
 import { browserDebuggerExtension } from "./languages/browser";
-import { azureFunctionsDebuggerExtension } from "./languages/azureFunctions";
+import { azureFunctionsDebuggerExtension, azureFunctionsNodeDebuggerExtension } from "./languages/azureFunctions";
 import { goDebuggerExtension } from "./languages/go";
 import { createDefaultRustDebuggerExtension } from "./languages/rust";
 import { bunDebuggerExtension } from "./languages/bun";
@@ -43,6 +44,28 @@ export async function createDebugSessionConfiguration(debugSessionConfig: Aspire
     return (await prepareDebugSession(debugSessionConfig, launchConfig, args, env, launchOptions, debuggerExtension)).debugConfiguration;
 }
 
+export function applyDebuggerConfigurationOverrides(
+    configuration: vscode.DebugConfiguration,
+    debugSessionConfig: AspireExtendedDebugConfiguration | undefined,
+    launchConfigurationType: string,
+    isApphost: boolean): void {
+    if (!debugSessionConfig?.debuggers) {
+        return;
+    }
+
+    if (isApphost && debugSessionConfig.debuggers['apphost']) {
+        Object.assign(configuration, debugSessionConfig.debuggers['apphost']);
+    }
+
+    if (isProjectLaunchConfiguration({ type: launchConfigurationType }) && debugSessionConfig.debuggers['project']) {
+        Object.assign(configuration, debugSessionConfig.debuggers['project']);
+    }
+
+    if (launchConfigurationType !== 'project' && debugSessionConfig.debuggers[launchConfigurationType]) {
+        Object.assign(configuration, debugSessionConfig.debuggers[launchConfigurationType]);
+    }
+}
+
 export async function prepareDebugSession(debugSessionConfig: AspireExtendedDebugConfiguration, launchConfig: ExecutableLaunchConfiguration, args: string[] | undefined, env: EnvVar[], launchOptions: LaunchOptions, debuggerExtension: ResourceDebuggerExtension): Promise<PreparedDebugSession> {
     if (debuggerExtension === null) {
         extensionLogOutputChannel.warn(`Unknown type: ${launchConfig.type}.`);
@@ -68,22 +91,7 @@ export async function prepareDebugSession(debugSessionConfig: AspireExtendedDebu
         isApphost: launchOptions.isApphost
     };
 
-    if (debugSessionConfig.debuggers) {
-        // 1. Check if this is the apphost
-        if (launchOptions.isApphost && debugSessionConfig.debuggers['apphost']) {
-            Object.assign(configuration, debugSessionConfig.debuggers['apphost']);
-        }
-
-        // 2. Both project wire contracts use the established project debugger settings.
-        if (isProjectLaunchConfiguration(launchConfig) && debugSessionConfig.debuggers['project']) {
-            Object.assign(configuration, debugSessionConfig.debuggers['project']);
-        }
-
-        // 3. Allow an exact resource-type entry to override the shared project settings.
-        if (launchConfig.type !== 'project' && debugSessionConfig.debuggers[launchConfig.type]) {
-            Object.assign(configuration, debugSessionConfig.debuggers[launchConfig.type]);
-        }
-    }
+    applyDebuggerConfigurationOverrides(configuration, debugSessionConfig, launchConfig.type, launchOptions.isApphost);
 
     // These fields identify and control the Aspire run, so workspace debugger settings cannot
     // override them. `resourceType` also lets lifecycle code distinguish browser sessions from
@@ -96,6 +104,17 @@ export async function prepareDebugSession(debugSessionConfig: AspireExtendedDebu
     let alreadyStartedSession: AlreadyStartedResourceDebugSession | undefined;
     if (debuggerExtension.createDebugSessionConfigurationCallback) {
         alreadyStartedSession = await debuggerExtension.createDebugSessionConfigurationCallback(launchConfig, args, env, launchOptions, configuration) ?? undefined;
+    }
+
+    // Debugger-specific callbacks can replace `program` with an output binary,
+    // runtime executable, or package-manager command. Keep the source target and
+    // resource executable identity from DCP's typed launch metadata so editor
+    // assistance never has to inspect the final debug configuration or infer
+    // identity from free-form args/environment.
+    configuration.targetPath = getLaunchConfigurationTargetPath(launchConfig);
+    const resourceExecutablePaths = getLaunchConfigurationExecutablePaths(launchConfig);
+    if (resourceExecutablePaths.length > 0) {
+        configuration.resourceExecutablePaths = resourceExecutablePaths;
     }
 
     return {
@@ -114,6 +133,8 @@ export function getResourceDebuggerExtensions(platform: NodeJS.Platform = proces
             extensions.push(azureFunctionsDebuggerExtension);
         }
     }
+
+    extensions.push(azureFunctionsNodeDebuggerExtension);
 
     if (isPythonInstalled()) {
         extensions.push(pythonDebuggerExtension);

@@ -82,10 +82,28 @@ public static class DashboardEndpointsBuilder
             }
             requestCulture ??= new RequestCulture(newLanguage.Name, newLanguage.Name);
 
+            var cookieOptions = new CookieOptions
+            {
+                Expires = DateTimeOffset.UtcNow.AddYears(1), // consistent with theme cookie expiry
+                // The culture cookie is only read on the server by the request localization middleware.
+                HttpOnly = true,
+                SameSite = SameSiteMode.Lax
+            };
+
+            // Only mark the cookie Secure when the request was made over HTTPS. The dashboard is commonly served over
+            // plain HTTP, e.g. http://localhost or a standalone container on http://host:18888. Browsers silently drop
+            // Secure cookies set from a non-localhost HTTP origin, which would break language selection.
+            // IsHttps honors X-Forwarded-Proto when forwarded headers are enabled, so cookies set behind a
+            // TLS-terminating reverse proxy are also Secure. This matches the dashboard auth cookies (SameAsRequest).
+            if (httpContext.Request.IsHttps)
+            {
+                cookieOptions.Secure = true;
+            }
+
             httpContext.Response.Cookies.Append(
                 CookieRequestCultureProvider.DefaultCookieName,
                 CookieRequestCultureProvider.MakeCookieValue(requestCulture),
-                new CookieOptions { Expires = DateTimeOffset.UtcNow.AddYears(1) }); // consistent with theme cookie expiry
+                cookieOptions);
 
             return Results.LocalRedirect(redirectUrl);
         }).SkipStatusCodePages();

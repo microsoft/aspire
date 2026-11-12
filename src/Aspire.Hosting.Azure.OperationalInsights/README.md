@@ -14,6 +14,7 @@ From your AppHost directory, add the `Aspire.Hosting.Azure.OperationalInsights` 
 
 ```bash
 aspire add Aspire.Hosting.Azure.OperationalInsights
+aspire add Aspire.Hosting.Dotnet
 ```
 
 ## Configure Azure Provisioning for local development
@@ -38,7 +39,7 @@ In the AppHost, add an Azure Log Analytics workspace and pass the workspace ID v
 ```csharp
 var laws = builder.AddAzureLogAnalyticsWorkspace("laws");
 
-var myService = builder.AddProject<Projects.MyService>()
+var myService = builder.AddDotnetProject("myservice", "../MyService/MyService.csproj")
                        .WithEnvironment("LOG_ANALYTICS_WORKSPACE_ID", $"{laws.WorkspaceId}");
 ```
 

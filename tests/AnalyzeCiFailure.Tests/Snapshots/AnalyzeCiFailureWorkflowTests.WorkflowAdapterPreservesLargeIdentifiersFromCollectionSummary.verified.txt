@@ -1,0 +1,7 @@
+﻿run_id=9007199254740993
+run_attempt=2
+run_scope=pull-request
+pr_numbers=9007199254740995
+has_work=true
+analysis_ready=true
+collection_status=ready

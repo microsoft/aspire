@@ -1,4 +1,3 @@
-#pragma warning disable ASPIREPIPELINES001
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
@@ -12,6 +11,9 @@ namespace Aspire.Hosting.Yarp;
 /// </summary>
 public class YarpResource : ContainerResource, IResourceWithServiceDiscovery, IContainerFilesDestinationResource
 {
+    /// <inheritdoc/>
+    public override string ResourceTypeDisplayName => "YARP";
+
     internal List<YarpRoute> Routes { get; } = [];
 
     internal List<YarpCluster> Clusters { get; } = [];

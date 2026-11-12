@@ -6,7 +6,7 @@ using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Azure.Tests.PublicApiTests;
 
-public class SignalRPublicApiTests
+public class SignalRPublicApiTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public void CtorAzureSignalREmulatorResourceShouldThrowWhenInnerResourceIsNull()
@@ -46,7 +46,7 @@ public class SignalRPublicApiTests
     [InlineData(1, true)]
     public void AddAzureSignalRShouldThrowWhenBuilderIsNullOrEmpty(int overrideIndex, bool isNull)
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var name = isNull ? null! : string.Empty;
         var serviceMode = new AzureSignalRServiceMode();
 

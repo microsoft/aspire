@@ -3,187 +3,182 @@
 
 using Aspire.SelectTests;
 using Aspire.TestUtilities;
-using Microsoft.Extensions.FileSystemGlobbing;
-using System.Text.Json;
+using System.Runtime.CompilerServices;
 using Xunit;
 using YamlDotNet.RepresentationModel;
 
 namespace Infrastructure.Tests.TestTriggerMap;
 
 /// <summary>
-/// Keeps the curated <c>eng/github-ci/test-trigger-map.yml</c> honest against repo reality.
-/// The map is hand-maintained, so these tests fail loudly when a project/job is renamed
-/// or removed, when a curated path is typo'd, or when a new source project is added that
-/// no rule maps to.
+/// Exercises curated trigger-map routing through the production selector with repository inputs.
 /// </summary>
+[Collection("GraphAffectedProjects")] // MSBuildLocator registers process-wide; keep graph use serialized.
 public sealed class TestTriggerMapTests
 {
-    private static readonly TestTriggerMap s_map = TestTriggerMap.Load(RepoRoot.Path);
-
-    // Repo-relative, '/'-separated tracked file paths (git ls-files). Source of truth for
-    // "does this glob match a real file" and "what source projects exist". Loaded once.
-    private static readonly IReadOnlyList<string> s_trackedFiles = LoadTrackedFiles();
-
-    // job:cli-starter-validation resolves to one tests.yml job per platform, all calling the same
-    // reusable workflow and all gated on the same run_cli_starter_validation boolean. Listed once so
-    // the existence check and the per-job gate binding below cannot drift from each other.
-    private static readonly string[] s_cliStarterValidationJobIds =
-    [
-        "cli_starter_validation_linux_x64",
-        "cli_starter_validation_linux_arm64",
-        "cli_starter_validation_windows_x64",
-        "cli_starter_validation_windows_arm64",
-        "cli_starter_validation_macos_x64",
-        "cli_starter_validation_macos_arm64",
-    ];
-
-    [Fact]
-    public void MapLoadsWithExpectedVersion()
+    [Theory]
+    [InlineData("Aspire.Hosting.CodeGeneration.Go")]
+    [InlineData("Aspire.Hosting.Go")]
+    [InlineData("Aspire.Hosting.Redis")]
+    public void GoStarterRuntimePackagesSelectRealRunnerValidation(string project)
     {
-        Assert.Equal(1, s_map.Version);
+        var result = SelectWithRealMap($"src/{project}/{project}.csproj", project);
+
+        Assert.False(result.SelectsAll);
+        Assert.Empty(result.UnmatchedFiles);
+        Assert.Contains("job:cli-starter-validation", result.Jobs);
     }
 
     [Fact]
-    public void ExtensionUnitWorkflowChangesSelectUnitAndE2eJobs()
+    public void IndependentNativeWorkflowSelectsInfrastructureWithoutExtraJobs()
     {
-        const string workflow = ".github/workflows/extension-unit-tests.yml";
-        var targets = s_map.PathRules
-            .Where(rule => rule.Paths.Any(path => TestTriggerMap.GlobMatches(path, workflow)))
-            .SelectMany(rule => rule.Targets)
-            .ToHashSet(StringComparer.Ordinal);
+        var result = SelectWithRealMap(".github/workflows/native-hosting-validation.yml");
 
-        Assert.Contains("job:extension-unit", targets);
-        Assert.Contains("job:extension-e2e", targets);
+        Assert.False(result.SelectsAll);
+        Assert.Empty(result.UnmatchedFiles);
+        Assert.Equal(["Infrastructure.Tests"], result.TestProjects);
+        Assert.Empty(result.Jobs);
+    }
+
+    [Theory]
+    [InlineData("tests/Aspire.Dashboard.Playwright.Tests/Integration/Playwright/Pages/ResourcesTests.cs", "Aspire.Dashboard.Playwright.Tests")]
+    [InlineData("tests/Aspire.EndToEnd.Tests/IntegrationTests.cs", "Aspire.EndToEnd.Tests")]
+    public void OuterloopTestSourcesSelectTheirOwnProjectWithoutExtraJobs(string path, string project)
+    {
+        var result = SelectWithRealMap(path);
+
+        Assert.False(result.SelectsAll);
+        Assert.Empty(result.UnmatchedFiles);
+        Assert.Equal([project], result.TestProjects);
+        Assert.Empty(result.Jobs);
     }
 
     [Fact]
-    public void ExtensionE2eProjectAndPathRulesCoverTheSameConsumers()
+    public void AppHostServerV2SelectsItsBundleConsumers()
     {
-        var affectedProjects = Assert.Single(
-            s_map.AffectedProjectRules,
-            rule => rule.Targets.Contains("job:extension-e2e", StringComparer.Ordinal))
-            .Projects
-            .Select(project => $"src/{project}/**");
-        var directPaths = Assert.Single(
-            s_map.PathRules,
-            rule => rule.Targets.Contains("job:extension-e2e", StringComparer.Ordinal)
-                && rule.Paths.Contains("extension/**", StringComparer.Ordinal))
-            .Paths
-            .Where(path => path.StartsWith("src/", StringComparison.Ordinal));
+        var result = SelectWithRealMap("src/Aspire.Hosting.Native.Server/Program.cs", "Aspire.Hosting.Native.Server");
 
-        Assert.Equal(
-            affectedProjects.Order(StringComparer.Ordinal),
-            directPaths.Order(StringComparer.Ordinal));
+        Assert.False(result.SelectsAll);
+        Assert.Contains("Aspire.Cli.EndToEnd.Tests", result.TestProjects);
+        Assert.Contains("job:cli-starter-validation", result.Jobs);
+        Assert.Contains("job:extension-e2e", result.Jobs);
+        Assert.Contains("job:winget-installer", result.Jobs);
+        Assert.Contains("job:homebrew-installer", result.Jobs);
+    }
+
+    [Theory]
+    [InlineData("tools/AnalyzeCiFailure/Program.cs")]
+    [InlineData("tools/AnalyzeCiFailure/Directory.Build.props")]
+    [InlineData("tools/AnalyzeCiFailure/Directory.Build.targets")]
+    [InlineData("tools/AnalyzeCiFailure/Directory.Packages.props")]
+    [InlineData("tools/AnalyzeCiFailure/GitHubWorkflowCommands.cs")]
+    [InlineData("tools/AnalyzeCiFailure/WorkflowRunEvidenceCollector.cs")]
+    [InlineData("tools/AnalyzeCiFailure/IssueRendering.cs")]
+    [InlineData("tools/AnalyzeCiFailure/Templates/CommentCodeIssue.md.tmpl")]
+    public void AnalysisValidatorInputsSelectDedicatedTests(string path)
+    {
+        var result = SelectWithRealMap(path);
+
+        Assert.False(result.SelectsAll);
+        Assert.Empty(result.UnmatchedFiles);
+        Assert.Equal(["AnalyzeCiFailure.Tests"], result.TestProjects);
+        Assert.Empty(result.Jobs);
+    }
+
+    [Theory]
+    [InlineData(".github/workflows/analyze-ci-failure.md")]
+    [InlineData(".github/workflows/analyze-ci-failure.lock.yml")]
+    [InlineData(".github/workflows/analyze-ci-failure/prepare-report-templates.js")]
+    public void AnalyzerReportingInputsSelectScriptBehaviorTests(string path)
+    {
+        var result = SelectWithRealMap(path);
+
+        Assert.False(result.SelectsAll);
+        Assert.Empty(result.UnmatchedFiles);
+        Assert.Contains("Infrastructure.Tests", result.TestProjects);
+        if (path.EndsWith(".md", StringComparison.Ordinal) || path.EndsWith(".yml", StringComparison.Ordinal))
+        {
+            Assert.Contains("AnalyzeCiFailure.Tests", result.TestProjects);
+        }
+        Assert.Empty(result.Jobs);
+    }
+
+    [Theory]
+    [InlineData("eng/scripts/generate-template-cgmanifest.ps1")]
+    public void TemplateManifestInputsSelectInfrastructureCoverage(string path)
+    {
+        var result = SelectWithRealMap(path);
+
+        Assert.False(result.SelectsAll);
+        Assert.Equal(["Infrastructure.Tests"], result.TestProjects);
+        Assert.Empty(result.Jobs);
     }
 
     [Fact]
-    public void RulesAreWellFormed()
+    public void TemplateManifestBuildTargetSelectsInfrastructureCoverage()
     {
-        // Structural hygiene: a path rule with no globs, or globs but no targets, is dead weight
-        // that silently selects nothing. (Overlapping globs ACROSS path_rules are expected and
-        // fine -- one path may map to several targets via several rules -- so there is no
-        // duplicate-glob check here.)
-        var problems = new List<string>();
+        var result = SelectWithRealMap("src/Aspire.ProjectTemplates/Aspire.ProjectTemplates.csproj");
 
-        foreach (var rule in s_map.PathRules)
-        {
-            var label = rule.Paths.Count > 0 ? rule.Paths[0] : "(no paths)";
-            if (rule.Paths.Count == 0 || rule.Paths.Any(string.IsNullOrWhiteSpace))
-            {
-                problems.Add($"rule '{label}' has an empty path glob");
-            }
-            if (rule.Targets.Count == 0 || rule.Targets.Any(string.IsNullOrWhiteSpace))
-            {
-                problems.Add($"rule '{label}' has no targets");
-            }
-        }
-
-        // conventions: each entry needs a pattern with a <name> placeholder and a target that also
-        // carries <name> (so the capture is actually substituted). Duplicate patterns are slips.
-        foreach (var convention in s_map.Conventions)
-        {
-            if (string.IsNullOrWhiteSpace(convention.Pattern) || !convention.Pattern.Contains("<name>", StringComparison.Ordinal))
-            {
-                problems.Add($"conventions entry '{convention.Pattern}' has no <name> placeholder");
-            }
-            if (string.IsNullOrWhiteSpace(convention.Target) || !convention.Target.Contains("<name>", StringComparison.Ordinal))
-            {
-                problems.Add($"conventions pattern '{convention.Pattern}' has a target that does not substitute <name>");
-            }
-        }
-
-        var dupeConventionPatterns = s_map.Conventions
-            .GroupBy(c => c.Pattern, StringComparer.Ordinal)
-            .Where(g => g.Count() > 1).Select(g => g.Key).Order(StringComparer.Ordinal).ToList();
-        if (dupeConventionPatterns.Count > 0)
-        {
-            problems.Add($"duplicate conventions patterns: {string.Join(", ", dupeConventionPatterns)}");
-        }
-
-        // ignore globs must be non-empty.
-        if (s_map.Ignore.Any(string.IsNullOrWhiteSpace))
-        {
-            problems.Add("an ignore glob is empty");
-        }
-
-        // derived_targets: each entry needs at least one test: trigger and at least one target.
-        foreach (var derived in s_map.DerivedTargets)
-        {
-            if (derived.Tests.Count == 0 || derived.Tests.Any(t => string.IsNullOrWhiteSpace(t) || !t.StartsWith("test:", StringComparison.Ordinal)))
-            {
-                problems.Add($"derived_targets entry has an invalid/empty tests list: [{string.Join(", ", derived.Tests)}]");
-            }
-            if (derived.Targets.Count == 0 || derived.Targets.Any(string.IsNullOrWhiteSpace))
-            {
-                problems.Add($"derived_targets entry [{string.Join(", ", derived.Tests)}] has no targets");
-            }
-        }
-
-        // affected_project_rules: each entry needs at least one project name glob and at least one target.
-        foreach (var rule in s_map.AffectedProjectRules)
-        {
-            var label = rule.Projects.Count > 0 ? rule.Projects[0] : "(no projects)";
-            if (rule.Projects.Count == 0 || rule.Projects.Any(string.IsNullOrWhiteSpace))
-            {
-                problems.Add($"affected_project_rules entry '{label}' has an empty project glob");
-            }
-            if (rule.Targets.Count == 0 || rule.Targets.Any(string.IsNullOrWhiteSpace))
-            {
-                problems.Add($"affected_project_rules entry '{label}' has no targets");
-            }
-        }
-
-        Assert.True(problems.Count == 0, string.Join("; ", problems));
+        Assert.False(result.SelectsAll);
+        Assert.Contains("Infrastructure.Tests", result.TestProjects);
     }
 
-    [Fact]
-    public void EverySourceProjectIsReachableByLayer1OrACuratedRule()
+    [Theory]
+    [InlineData("src/Aspire.Dashboard/Aspire.Dashboard.csproj")]
+    [InlineData("src/Aspire.Cli/Resources/NewResource.resx")]
+    [InlineData("src/Aspire.Hosting.Testing/Properties/NewResource.resx")]
+    public void ResourceMetadataInputsSelectInfrastructureTests(string path)
     {
-        // The graph closure is owned by the Layer 1 graph (GraphAffectedProjects), which discovers
-        // projects from Aspire.slnx. So a src project is "covered" if it is in the solution (∴ Layer 1 sees it)
-        // OR matched by a curated glob (the deliberately out-of-slnx ones — e.g. the template
-        // placeholders that crash discovery — are covered by loose_file_deps). A new src project
-        // that is neither in the solution nor curated would silently never run any test, so it
-        // must fail here.
-        var inSolution = LoadSolutionProjectPaths();
+        var result = SelectWithRealMap(path);
 
-        var selecting = new Matcher(StringComparison.Ordinal);
-        foreach (var glob in s_map.AllSelectingGlobs())
-        {
-            selecting.AddInclude(glob);
-        }
-        var curatedCovered = selecting.Match(s_trackedFiles).Files
-            .Select(f => f.Path)
-            .ToHashSet(StringComparer.Ordinal);
+        Assert.False(result.SelectsAll);
+        Assert.Empty(result.UnmatchedFiles);
+        Assert.Contains("Infrastructure.Tests", result.TestProjects);
+    }
 
-        var uncovered = s_trackedFiles
-            .Where(f => f.StartsWith("src/", StringComparison.Ordinal) && f.EndsWith(".csproj", StringComparison.Ordinal))
-            .Where(csproj => !inSolution.Contains(csproj) && !curatedCovered.Contains(csproj))
-            .Order(StringComparer.Ordinal)
-            .ToList();
+    [Theory]
+    [InlineData("src/Aspire.Dashboard/Resources/NewResource.Designer.cs")]
+    [InlineData("src/Aspire.Dashboard/Resources/xlf/NewResource.fr.xlf")]
+    [InlineData("src/Aspire.Dashboard/Components/NewComponent.razor")]
+    public void InputsNotReadByResourceMetadataTestsKeepExistingSelection(string path)
+    {
+        var result = SelectWithRealMap(path, "Aspire.Dashboard");
 
-        Assert.True(uncovered.Count == 0,
-            $"src projects neither in Aspire.slnx nor matched by a curated rule: {string.Join(", ", uncovered)}");
+        Assert.False(result.SelectsAll);
+        Assert.Empty(result.UnmatchedFiles);
+        Assert.Equal(["Aspire.Templates.Tests"], result.TestProjects);
+    }
+
+    [Theory]
+    [InlineData(".github/workflows/auto-rerun-transient-ci-failures.js")]
+    [InlineData(".github/workflows/auto-rerun-transient-ci-failures.yml")]
+    [InlineData(".github/workflows/auto-rerun/common.js")]
+    [InlineData(".github/workflows/auto-rerun/github.js")]
+    [InlineData(".github/workflows/auto-rerun/rerun-main.js")]
+    [InlineData(".github/workflows/auto-rerun/rerun-pull-request.js")]
+    public void AutoRerunWorkflowInputsReachInfrastructureTests(string path)
+    {
+        var result = SelectWithRealMap(path);
+
+        Assert.False(result.SelectsAll);
+        Assert.Empty(result.UnmatchedFiles);
+        Assert.Contains("Infrastructure.Tests", result.TestProjects);
+    }
+
+    [Theory]
+    [InlineData(true, "Aspire.Hosting.Go", "GoHostingExtensions.cs")]
+    [InlineData(false, "Aspire.Hosting.Go", "GoHostingExtensions.cs")]
+    [InlineData(true, "Aspire.Hosting.CodeGeneration.Go", "GoLanguageSupport.cs")]
+    [InlineData(false, "Aspire.Hosting.CodeGeneration.Go", "GoLanguageSupport.cs")]
+    public void GoRuntimeChangesSelectExtensionE2e(bool hasAffectedProject, string project, string fileName)
+    {
+        var path = $"src/{project}/{fileName}";
+        var result = hasAffectedProject
+            ? SelectWithRealMap(path, project)
+            : SelectWithRealMap(path);
+
+        Assert.False(result.SelectsAll);
+        Assert.Empty(result.UnmatchedFiles);
+        Assert.Contains("job:extension-e2e", result.Jobs);
     }
 
     // Repo-relative '/'-separated project paths listed in Aspire.slnx (the Layer 1 graph root).
@@ -196,198 +191,51 @@ public sealed class TestTriggerMapTests
             .ToHashSet(StringComparer.Ordinal);
     }
 
-    [Fact]
-    public void EveryTestProjectIsInTheSolutionSoLayer1CanSelectIt()
-    {
-        // A matrix test project that is NOT in Aspire.slnx is invisible to Layer 1 (the graph only
-        // walks the solution), so a change to a production dependency could never fan into it --
-        // it would silently never run in enforcing mode. Require every tests/<Name>/<Name>.csproj to
-        // be in the solution. (This invariant is what the Infrastructure.Tests / Aspire.Hosting.Maui
-        // .Tests additions satisfied; before them, both were silent Layer-1 blind spots.) Add to the
-        // allow-list only for a project deliberately kept out of PR CI, with a reason.
-        var allowList = new HashSet<string>(StringComparer.Ordinal)
-        {
-            // (none today)
-        };
-
-        var inSolution = LoadSolutionProjectPaths();
-        var testsRoot = Path.Combine(RepoRoot.Path, "tests");
-
-        var missing = Directory.EnumerateDirectories(testsRoot)
-            .Select(Path.GetFileName)
-            .Where(name => !string.IsNullOrEmpty(name))
-            .Select(name => $"tests/{name}/{name}.csproj")
-            .Where(rel => File.Exists(Path.Combine(RepoRoot.Path, rel)))
-            .Where(rel => !inSolution.Contains(rel) && !allowList.Contains(rel))
-            .Order(StringComparer.Ordinal)
-            .ToList();
-
-        Assert.True(missing.Count == 0,
-            $"test projects not in Aspire.slnx (Layer 1 cannot select them, so a production-dependency " +
-            $"change would silently skip their tests): {string.Join(", ", missing)}");
-    }
-
-    [Fact]
-    public void EveryAffectedProjectRuleGlobMatchesASolutionProject()
-    {
-        // affected_project_rules key off the affected PROJECT set (Layer 1), matched by project-name
-        // glob. Layer 1 can only ever report a project that is in Aspire.slnx, so a project glob
-        // that matches no solution project name would silently select nothing — assert each matches
-        // at least one. Project Name == the .csproj base name (what Layer 1 emits).
-        var solutionProjectNames = LoadSolutionProjectPaths()
-            .Select(p => Path.GetFileNameWithoutExtension(p))
-            .ToHashSet(StringComparer.Ordinal);
-
-        var dead = s_map.AffectedProjectRules
-            .SelectMany(r => r.Projects)
-            .Distinct(StringComparer.Ordinal)
-            .Where(pattern => !solutionProjectNames.Any(name =>
-                System.IO.Enumeration.FileSystemName.MatchesSimpleExpression(pattern, name, ignoreCase: false)))
-            .Order(StringComparer.Ordinal)
-            .ToList();
-
-        Assert.True(dead.Count == 0,
-            $"affected_project_rules globs matching no project in Aspire.slnx: {string.Join(", ", dead)}");
-    }
-
-    [Fact]
-    public void EveryGlobMatchesAtLeastOneTrackedFile()
-    {
-        // Every rule glob (catch-all, path-rule paths, convention patterns, ignore globs) must match
-        // a real, git-tracked file. A typo'd path or a renamed/removed source folder would otherwise
-        // sit in the map selecting nothing — a silent hole the selector can't see.
-        var globs = s_map.AllSelectingGlobs()
-            .Distinct(StringComparer.Ordinal)
-            .Order(StringComparer.Ordinal)
-            .ToList();
-
-        var deadGlobs = globs.Where(g => !GlobMatchesAnyTrackedFile(g)).ToList();
-
-        Assert.True(deadGlobs.Count == 0, $"globs matching no tracked file: {string.Join(", ", deadGlobs)}");
-    }
-
-    private static bool GlobMatchesAnyTrackedFile(string glob)
-    {
-        var matcher = new Matcher(StringComparison.Ordinal);
-        matcher.AddInclude(glob);
-        return matcher.Match(s_trackedFiles).HasMatches;
-    }
-
-    private static IReadOnlyList<string> LoadTrackedFiles()
-    {
-        var output = GitCli.Run(RepoRoot.Path, "ls-files");
-        return output.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-    }
-
-    [Fact]
-    public void GroupsResolveToValidTargets()
-    {
-        // Named groups (e.g. CLI_BUNDLE) expand into concrete test:/job: targets by a consumer.
-        // Each member must be a well-formed test: or job: target (existence is covered by
-        // EveryTestTargetNamesAnExistingTestProject / EveryJobTargetMapsToAnExistingWorkflowOrJob,
-        // which include group members). The real map keeps groups flat (no nesting); the selector
-        // engine supports recursive expansion, exercised by the synthetic acceptance tests.
-        foreach (var (name, members) in s_map.Groups)
-        {
-            Assert.True(members.Count > 0, $"group {name} is empty");
-
-            var bad = members.Where(m => !m.StartsWith("test:", StringComparison.Ordinal) && !m.StartsWith("job:", StringComparison.Ordinal))
-                .Order(StringComparer.Ordinal).ToList();
-            Assert.True(bad.Count == 0, $"group {name} has members that are neither test: nor job:: {string.Join(", ", bad)}");
-
-            var dupes = members.GroupBy(m => m, StringComparer.Ordinal)
-                .Where(g => g.Count() > 1).Select(g => g.Key).Order(StringComparer.Ordinal).ToList();
-            Assert.True(dupes.Count == 0, $"group {name} has duplicate members: {string.Join(", ", dupes)}");
-        }
-
-        // Every group-like token used as a target (uppercase, not test:/job:) is either the
-        // ALL sentinel or a defined group — so a typo'd group reference fails loudly.
-        var undefined = s_map.AllReferencedTargets()
-            .Where(t => !t.StartsWith("test:", StringComparison.Ordinal) && !t.StartsWith("job:", StringComparison.Ordinal))
-            .Where(t => t != "ALL" && !s_map.Groups.ContainsKey(t))
-            .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList();
-        Assert.True(undefined.Count == 0, $"undefined group references: {string.Join(", ", undefined)}");
-    }
-
-    [Fact]
-    public void EveryJobTargetMapsToAnExistingWorkflowOrJob()
-    {
-        // The job: vocabulary is small and curated, and must exactly match the targets referenced by
-        // the map. Each token resolves either to a standalone workflow file or to job id(s) in
-        // tests.yml (see the Target vocabulary table in test-trigger-map.md). Assert the map references
-        // only known jobs, and that the thing each one points at still exists — so a renamed/removed
-        // workflow or job fails loudly.
-        var workflowsDir = Path.Combine(RepoRoot.Path, ".github", "workflows");
-        var testsYml = File.ReadAllText(Path.Combine(workflowsDir, "tests.yml"));
-
-        bool WorkflowExists(string file) => File.Exists(Path.Combine(workflowsDir, file));
-        bool JobExists(string id) => testsYml.Contains($"\n  {id}:", StringComparison.Ordinal);
-
-        // job: target -> predicate that its evidence still exists.
-        var expected = new Dictionary<string, Func<bool>>(StringComparer.Ordinal)
-        {
-            ["job:polyglot"] = () => WorkflowExists("polyglot-validation.yml") && JobExists("polyglot_validation"),
-            ["job:typescript-sdk"] = () => WorkflowExists("typescript-sdk-tests.yml") && JobExists("typescript_sdk_tests"),
-            ["job:typescript-api-compat"] = () => WorkflowExists("typescript-api-compat.yml") && JobExists("typescript_api_compat"),
-            ["job:extension-unit"] = () => JobExists("extension_tests_win") && JobExists("extension_bootstrap_linux"),
-            ["job:extension-e2e"] = () => WorkflowExists("extension-e2e-tests.yml"),
-            ["job:winget-installer"] = () => JobExists("prepare_winget_installer_artifacts"),
-            ["job:homebrew-installer"] = () => JobExists("prepare_homebrew_installer_artifacts"),
-            ["job:nix-package"] = () => JobExists("nix_package"),
-            ["job:cli-starter-validation"] = () => WorkflowExists("cli-starter-validation.yml")
-                && s_cliStarterValidationJobIds.All(JobExists),
-            ["job:deployment-e2e"] = () => WorkflowExists("deployment-tests.yml"),
-        };
-
-        var referenced = s_map.AllReferencedTargets()
-            .Where(t => t.StartsWith("job:", StringComparison.Ordinal))
-            .ToHashSet(StringComparer.Ordinal);
-
-        var unknown = referenced.Where(j => !expected.ContainsKey(j)).Order(StringComparer.Ordinal).ToList();
-        Assert.True(unknown.Count == 0, $"job: targets not in the known vocabulary: {string.Join(", ", unknown)}");
-
-        var unreferenced = expected.Keys.Except(referenced).Order(StringComparer.Ordinal).ToList();
-        Assert.True(unreferenced.Count == 0, $"known job: targets not referenced by the map: {string.Join(", ", unreferenced)}");
-
-        var broken = expected.Where(kvp => referenced.Contains(kvp.Key) && !kvp.Value())
-            .Select(kvp => kvp.Key).Order(StringComparer.Ordinal).ToList();
-        Assert.True(broken.Count == 0, $"job: targets whose workflow/job no longer exists: {string.Join(", ", broken)}");
-    }
-
-    [Fact]
-    public void DocumentedJobTargetVocabularyMatchesReferencedMapJobs()
-    {
-        var referenced = s_map.AllReferencedTargets()
-            .Where(t => t.StartsWith("job:", StringComparison.Ordinal))
-            .ToHashSet(StringComparer.Ordinal);
-
-        var documentation = File.ReadAllText(Path.Combine(RepoRoot.Path, "docs", "ci", "test-trigger-map.md"));
-        var targetVocabulary = TextBetween(documentation, "## Target vocabulary", "## Rule categories");
-        var documented = System.Text.RegularExpressions.Regex
-            .Matches(targetVocabulary, @"^\| `(job:[a-z0-9-]+)` \|", System.Text.RegularExpressions.RegexOptions.Multiline)
-            .Select(match => match.Groups[1].Value)
-            .ToHashSet(StringComparer.Ordinal);
-
-        var map = File.ReadAllText(Path.Combine(RepoRoot.Path, "eng", "github-ci", "test-trigger-map.yml"));
-        var mapVocabulary = TextBetween(map, "# Target vocabulary:", "version: 1");
-        var documentedInMap = System.Text.RegularExpressions.Regex
-            .Matches(mapVocabulary, @"^#\s+(job:[a-z0-9-]+)\s+", System.Text.RegularExpressions.RegexOptions.Multiline)
-            .Select(match => match.Groups[1].Value)
-            .ToHashSet(StringComparer.Ordinal);
-
-        Assert.Equal(referenced.Order(StringComparer.Ordinal), documented.Order(StringComparer.Ordinal));
-        Assert.Equal(referenced.Order(StringComparer.Ordinal), documentedInMap.Order(StringComparer.Ordinal));
-    }
-
     public static TheoryData<string, string[]> AuditedLoosePathCases => new()
     {
+        {
+            "eng/github-ci/resolve-comparison-base.sh",
+            ["test:Infrastructure.Tests"]
+        },
+        {
+            "eng/scripts/pack-cli-npm-package.ps1",
+            ["test:Aspire.Cli.Tests", "test:Infrastructure.Tests"]
+        },
+        {
+            "eng/scripts/pack-cli-npm-package.pointer.README.md",
+            ["test:Infrastructure.Tests"]
+        },
+        {
+            "tools/CreateFailingTestIssue/Program.cs",
+            ["test:Infrastructure.Tests"]
+        },
+        {
+            "tools/CreateFailingTestIssue/CreateFailingTestIssue.csproj",
+            ["test:Infrastructure.Tests"]
+        },
         {
             ".github/workflows/prepare-installer-artifacts.yml",
             ["test:Infrastructure.Tests", "job:winget-installer", "job:homebrew-installer"]
         },
         {
+            ".github/actionlint.yaml",
+            ["test:Infrastructure.Tests"]
+        },
+        {
+            ".github/actionlint-version.json",
+            ["test:Infrastructure.Tests"]
+        },
+        {
             ".github/scripts/assert-extension-e2e-bridge-vsix.ps1",
-            ["job:extension-unit"]
+            ["job:extension-e2e"]
+        },
+        {
+            ".github/workflows/extension-unit-tests.yml",
+            ["test:Infrastructure.Tests", "job:extension-unit"]
+        },
+        {
+            ".github/workflows/extension-e2e-tests.yml",
+            ["test:Infrastructure.Tests", "job:extension-unit", "job:extension-e2e"]
         },
         {
             ".vscode/launch.json",
@@ -399,11 +247,7 @@ public sealed class TestTriggerMapTests
         },
         {
             "eng/test-retry-patterns.json",
-            ["test:Infrastructure.Tests"]
-        },
-        {
-            "eng/scripts/aspire-skills-bundle.common.ps1",
-            ["test:Infrastructure.Tests"]
+            ["test:AnalyzeCiFailure.Tests", "test:Infrastructure.Tests"]
         },
         {
             "eng/scripts/smoke-installed-cli.ps1",
@@ -417,7 +261,29 @@ public sealed class TestTriggerMapTests
             // These paths do not exist intentionally: they prove new packaging inputs stay covered
             // without requiring this test to enumerate every current RID-specific project.
             "eng/dashboardpack/future-package-input.targets",
-            ["test:Aspire.Cli.EndToEnd.Tests", "test:Aspire.Hosting.Sdk.Tests", "test:Aspire.Templates.Tests", "job:extension-e2e"]
+            [
+                "test:Aspire.Hosting.Sdk.Tests",
+                "test:Aspire.Templates.Tests",
+                "test:Aspire.Cli.EndToEnd.Tests",
+                "job:cli-starter-validation",
+                "job:extension-e2e",
+                "job:homebrew-installer",
+                "job:native-dashboard-validation",
+                "job:winget-installer"
+            ]
+        },
+        {
+            "eng/dashboardpack/Sdk.targets",
+            [
+                "test:Aspire.Hosting.Sdk.Tests",
+                "test:Aspire.Templates.Tests",
+                "test:Aspire.Cli.EndToEnd.Tests",
+                "job:cli-starter-validation",
+                "job:extension-e2e",
+                "job:homebrew-installer",
+                "job:native-dashboard-validation",
+                "job:winget-installer"
+            ]
         },
         {
             "eng/dcppack/future-package-input.targets",
@@ -492,6 +358,46 @@ public sealed class TestTriggerMapTests
             ["job:cli-starter-validation"]
         },
         {
+            "eng/scripts/test-native-dashboard.ps1",
+            ["job:native-dashboard-validation"]
+        },
+        {
+            "eng/scripts/test-native-tray.ps1",
+            ["test:Infrastructure.Tests"]
+        },
+        {
+            "eng/scripts/verify-native-dashboard-warnings.ps1",
+            ["test:Aspire.Cli.EndToEnd.Tests", "test:Aspire.Templates.Tests", "test:Infrastructure.Tests", "job:cli-starter-validation", "job:native-dashboard-validation", "job:extension-e2e", "job:homebrew-installer", "job:polyglot", "job:winget-installer"]
+        },
+        {
+            ".github/workflows/native-dashboard-validation.yml",
+            ["test:Infrastructure.Tests", "job:native-dashboard-validation"]
+        },
+        {
+            "tests/Aspire.Dashboard.Tests/Aspire.Dashboard.Tests.csproj",
+            ["test:Aspire.Dashboard.Tests", "job:native-dashboard-validation"]
+        },
+        {
+            "tests/Aspire.Dashboard.Playwright.Tests/Integration/Playwright/NativeAotDashboardTests.cs",
+            ["test:Aspire.Dashboard.Playwright.Tests", "job:native-dashboard-validation"]
+        },
+        {
+            "tests/Aspire.Dashboard.Tests/Integration/NativeAotDashboardTests.cs",
+            ["test:Aspire.Dashboard.Tests", "job:native-dashboard-validation"]
+        },
+        {
+            "tests/Aspire.Dashboard.Playwright.Tests/Integration/Playwright/Infrastructure/PlaywrightFixture.cs",
+            ["test:Aspire.Dashboard.Playwright.Tests", "job:native-dashboard-validation"]
+        },
+        {
+            "tests/Aspire.Dashboard.Playwright.Tests/Aspire.Dashboard.Playwright.Tests.csproj",
+            ["test:Aspire.Dashboard.Playwright.Tests", "job:native-dashboard-validation"]
+        },
+        {
+            "tests/Shared/Playwright/Playwright.targets",
+            ["test:Aspire.Dashboard.Playwright.Tests", "test:Aspire.Templates.Tests", "job:native-dashboard-validation"]
+        },
+        {
             "eng/scripts/get-aspire-cli-pr.ps1",
             [
                 "test:Aspire.Acquisition.Tests",
@@ -520,15 +426,67 @@ public sealed class TestTriggerMapTests
         },
         {
             "tools/CreateLayout/Program.cs",
-            ["test:Aspire.Cli.EndToEnd.Tests", "job:cli-starter-validation", "job:extension-e2e", "job:winget-installer", "job:homebrew-installer"]
+            ["test:Aspire.Cli.EndToEnd.Tests", "test:Infrastructure.Tests", "job:cli-starter-validation", "job:extension-e2e", "job:winget-installer", "job:homebrew-installer"]
         },
         {
             "eng/Bundle.proj",
-            ["test:Aspire.Cli.EndToEnd.Tests", "job:cli-starter-validation", "job:extension-e2e", "job:winget-installer", "job:homebrew-installer"]
+            ["test:Aspire.Cli.EndToEnd.Tests", "test:Aspire.Templates.Tests", "test:Infrastructure.Tests", "job:cli-starter-validation", "job:native-dashboard-validation", "job:extension-e2e", "job:homebrew-installer", "job:polyglot", "job:winget-installer"]
+        },
+        {
+            "tools/CreateLayout/verify-tray-payload.sh",
+            ["test:Aspire.Cli.EndToEnd.Tests", "test:Infrastructure.Tests", "job:cli-starter-validation", "job:extension-e2e", "job:winget-installer", "job:homebrew-installer"]
+        },
+        {
+            "tools/CreateLayout/verify-windows-tray-payload.ps1",
+            ["test:Aspire.Cli.EndToEnd.Tests", "test:Infrastructure.Tests", "job:cli-starter-validation", "job:extension-e2e", "job:winget-installer", "job:homebrew-installer"]
+        },
+        {
+            "tools/CreateLayout/verify-linux-tray-payload.sh",
+            ["test:Aspire.Cli.EndToEnd.Tests", "test:Infrastructure.Tests", "job:cli-starter-validation", "job:extension-e2e", "job:winget-installer", "job:homebrew-installer"]
+        },
+        {
+            "src/Aspire.Tray/Windows/publish.ps1",
+            ["test:Aspire.Cli.EndToEnd.Tests", "test:Infrastructure.Tests", "job:cli-starter-validation", "job:extension-e2e", "job:winget-installer", "job:homebrew-installer"]
         },
         {
             "playground/JavaSpringBoot/JavaSpringBoot.AppHost.Java/aspire.config.json",
             ["test:Aspire.Playground.Tests", "job:extension-e2e"]
+        },
+        {
+            "playground/TsIntegrationSpike/deno-api/deno.json",
+            ["test:Aspire.Playground.Tests", "job:polyglot", "job:typescript-sdk"]
+        },
+        {
+            "playground/TsIntegrationSpike/deno-integration/integration.ts",
+            ["test:Aspire.Playground.Tests", "job:polyglot", "job:typescript-sdk"]
+        },
+        {
+            "playground/TsIntegrationSpike/kafka-integration/host-runtime.ts",
+            ["test:Aspire.Playground.Tests", "test:Aspire.Cli.EndToEnd.Tests", "job:polyglot", "job:typescript-sdk"]
+        },
+        {
+            "playground/TsIntegrationSpike/aspire.config.json",
+            ["test:Aspire.Playground.Tests", "job:polyglot"]
+        },
+        {
+            "playground/TsKafkaLib/packages/aspire-kafka/src/index.ts",
+            ["test:Aspire.Playground.Tests", "job:polyglot"]
+        },
+        {
+            "playground/TsKafkaLib/app/tsconfig.json",
+            ["test:Aspire.Playground.Tests", "job:polyglot"]
+        },
+        {
+            "src/Aspire.Hosting.Nuxt/src/integration.ts",
+            ["job:polyglot", "job:typescript-sdk"]
+        },
+        {
+            "playground/NuxtApp/web/app/app.vue",
+            ["test:Aspire.Playground.Tests", "job:polyglot"]
+        },
+        {
+            "playground/NuxtApp/verify.mjs",
+            ["test:Aspire.Playground.Tests", "job:polyglot", "job:typescript-sdk"]
         },
         {
             ".gitignore",
@@ -549,6 +507,23 @@ public sealed class TestTriggerMapTests
             .Concat(result.Jobs)
             .Order(StringComparer.Ordinal);
         Assert.Equal(expectedTargets.Order(StringComparer.Ordinal), actualTargets);
+    }
+
+    [Theory]
+    [InlineData("src/Aspire.Hosting.CodeGeneration.TypeScript/Resources/integration-host.mts")]
+    [InlineData("src/Aspire.Hosting.CodeGeneration.TypeScript/Resources/transport.mts")]
+    [InlineData("src/Aspire.Hosting.CodeGeneration.TypeScript/Resources/base.mts")]
+    [InlineData("src/Aspire.Hosting.CodeGeneration.TypeScript/Resources/package.json")]
+    public void IntegrationRuntimeResourcesSelectLifetimeE2eConsumer(string path)
+    {
+        var result = SelectWithRealMap(path, "Aspire.Hosting.CodeGeneration.TypeScript");
+
+        Assert.False(result.SelectsAll);
+        Assert.Empty(result.UnmatchedFiles);
+        Assert.Contains("Aspire.Cli.EndToEnd.Tests", result.TestProjects);
+        Assert.Contains(result.TestCauses["Aspire.Cli.EndToEnd.Tests"],
+            cause => cause.Kind == CauseKind.PathRule && cause.Trigger == path);
+        Assert.Contains("job:typescript-sdk", result.Jobs);
     }
 
     [Fact]
@@ -584,11 +559,86 @@ public sealed class TestTriggerMapTests
     }
 
     [Theory]
-    [InlineData(".gitattributes")]
+    [InlineData(".config/dotnet-tools.json")]
+    [InlineData(".mcp.json")]
+    [InlineData("src/Aspire.Dashboard/Components/Controls/TerminalTitle.razor.js")]
+    [InlineData("src/Aspire.Dashboard/Components/Layout/TerminalDock.razor.js")]
+    [InlineData("src/Aspire.Dashboard/Components/Layout/ResourcesLayout.razor.js")]
+    [InlineData("src/Aspire.Dashboard/wwwroot/js/app-terminalwindow.js")]
+    [InlineData("tests/Aspire.Dashboard.Components.Tests/JavaScript/TerminalWindow.test.mjs")]
+    [InlineData("tests/Aspire.Dashboard.Components.Tests/JavaScript/TerminalTitle.test.mjs")]
+    [InlineData("tests/Aspire.Dashboard.Components.Tests/JavaScript/TerminalDock.test.mjs")]
+    [InlineData("src/Aspire.Dashboard/wwwroot/js/app-resourcegraph.js")]
+    [InlineData("tests/Aspire.Dashboard.Components.Tests/JavaScript/ResourceGraph.test.mjs")]
+    [InlineData("src/Aspire.Dashboard/wwwroot/js/app-resourcegraph-game.js")]
+    [InlineData("tests/Aspire.Dashboard.Components.Tests/JavaScript/ResourceGraphGame.test.mjs")]
+    [InlineData("src/Aspire.Dashboard/wwwroot/js/app-dashboard-experience.js")]
+    [InlineData("tests/Aspire.Dashboard.Components.Tests/JavaScript/DashboardExperience.test.mjs")]
+    public void DashboardScriptInputsSelectInfrastructureTests(string path)
+    {
+        var result = SelectWithRealMap(path);
+
+        Assert.False(result.SelectsAll);
+        Assert.Empty(result.UnmatchedFiles);
+        // Infrastructure executes the scripts in addition to the consumers attributed by the project graph.
+        Assert.Contains("Infrastructure.Tests", result.TestProjects);
+    }
+
+    [Theory]
     [InlineData("eng/scripts/gha-testreport.ps1")]
     [InlineData("eng/scripts/split-test-projects-for-ci.ps1")]
     [InlineData("tools/ExtractTestPartitions/Program.cs")]
+    [InlineData("NuGet.config")]
     public void BroadCiInputHasAnExplicitRunAllRule(string path)
+    {
+        var result = SelectWithRealMap(path);
+
+        Assert.True(result.SelectsAll);
+        Assert.Empty(result.UnmatchedFiles);
+    }
+
+    [Fact]
+    public void GitAttributesLineEndingRulesRunTheFullMatrix()
+    {
+        var result = SelectWithRealMap(".gitattributes");
+
+        Assert.True(result.SelectsAll);
+        Assert.Empty(result.UnmatchedFiles);
+    }
+
+    [Fact]
+    public void SolutionEditRunsTheFullMatrix()
+    {
+        var soloEdit = SelectWithRealMap("Aspire.slnx");
+
+        Assert.True(soloEdit.SelectsAll);
+        Assert.Empty(soloEdit.UnmatchedFiles);
+
+        // A project removed from the solution takes its files with it; nothing at head owns them, so the
+        // run-all fallback still fires on the deleted project itself.
+        var removal = SelectWithRealMap("src/Aspire.Hosting.Retired/Aspire.Hosting.Retired.csproj");
+
+        Assert.True(removal.SelectsAll);
+    }
+
+    [Theory]
+    [InlineData("eng/common/BuildConfiguration/build-configuration.json")]
+    [InlineData("eng/common/loc/P22DotNetHtmlLocalization.lss")]
+    [InlineData("eng/common/generate-locproject.ps1")]
+    [InlineData("eng/common/native/NativeAotSupported.props")]
+    public void EngCommonInputsRunTheFullMatrix(string path)
+    {
+        var result = SelectWithRealMap(path);
+
+        Assert.True(result.SelectsAll);
+        Assert.Empty(result.UnmatchedFiles);
+    }
+
+    [Theory]
+    [InlineData("eng/common/templates/jobs/jobs.yml")]
+    [InlineData("eng/common/templates-official/jobs/jobs.yml")]
+    [InlineData("eng/common/core-templates/jobs/jobs.yml")]
+    public void EngCommonPipelineTemplatesAlsoRunTheFullMatrix(string path)
     {
         var result = SelectWithRealMap(path);
 
@@ -599,10 +649,7 @@ public sealed class TestTriggerMapTests
     [Theory]
     [InlineData("eng/scripts/verify-cli-npm-package.ps1")]
     [InlineData("eng/scripts/verify-cli-tool-nupkg.ps1")]
-    [InlineData("eng/scripts/stabilization-smoke-init-restore.sh")]
     [InlineData("eng/generate-catalog.ps1")]
-    [InlineData("eng/scripts/update-aspire-skills-bundle.ps1")]
-    [InlineData("eng/scripts/verify-aspire-skills-bundle.ps1")]
     public void PathHandledOutsideSelectorDoesNotForceTestSelection(string path)
     {
         var result = SelectWithRealMap(path);
@@ -610,6 +657,44 @@ public sealed class TestTriggerMapTests
         Assert.False(result.SelectsAll);
         Assert.Empty(result.UnmatchedFiles);
         Assert.Empty(result.TestProjects);
+        Assert.Empty(result.Jobs);
+    }
+
+    [Fact]
+    public void StabilizationSmokeScriptSelectsItsWrapperCoverage()
+    {
+        var result = SelectWithRealMap("eng/scripts/stabilization-smoke-init-restore.sh");
+
+        Assert.False(result.SelectsAll);
+        Assert.Empty(result.UnmatchedFiles);
+        Assert.Equal(["Infrastructure.Tests"], result.TestProjects);
+        Assert.Empty(result.Jobs);
+    }
+
+    [Theory]
+    [InlineData("src/Aspire.Hosting.Dotnet/Aspire.Hosting.Dotnet.csproj", "Aspire.Hosting.Dotnet")]
+    [InlineData("src/Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.csproj", "Aspire.Hosting.Foundry")]
+    public void DeploymentE2eIsSelectedWhenRuntimeHostingDependencyIsAffected(string path, string affectedProject)
+    {
+        var result = SelectWithRealMap(path, affectedProject);
+
+        Assert.False(result.SelectsAll);
+        Assert.Empty(result.UnmatchedFiles);
+        Assert.Contains("job:deployment-e2e", result.Jobs);
+        Assert.Contains(result.JobCauses["job:deployment-e2e"], cause =>
+            cause.Kind == CauseKind.AffectedProject && cause.Trigger == affectedProject);
+    }
+
+    [Fact]
+    public void DeploymentE2eIsNotSelectedForFoundryTestOnlyChange()
+    {
+        var result = SelectWithRealMap(
+            "tests/Aspire.Hosting.Foundry.Tests/Aspire.Hosting.Foundry.Tests.csproj",
+            "Aspire.Hosting.Foundry.Tests");
+
+        Assert.False(result.SelectsAll);
+        Assert.Empty(result.UnmatchedFiles);
+        Assert.Equal("Aspire.Hosting.Foundry.Tests", Assert.Single(result.TestProjects));
         Assert.Empty(result.Jobs);
     }
 
@@ -621,6 +706,7 @@ public sealed class TestTriggerMapTests
     [InlineData("src/Aspire.Hosting.CodeGeneration.TypeScript/TypeScriptApiProjector.cs", "Aspire.Hosting.CodeGeneration.TypeScript")]
     [InlineData("src/Aspire.Hosting.AppHost/Aspire.Hosting.AppHost.csproj", "Aspire.Hosting.AppHost")]
     [InlineData("src/Aspire.Hosting.PostgreSQL/PostgresBuilderExtensions.cs", "Aspire.Hosting.PostgreSQL")]
+    [InlineData("src/Aspire.Hosting.Dotnet/DotnetProjectResourceBuilderExtensions.cs", "Aspire.Hosting.Dotnet")]
     public void CliStarterValidationRunsWhenStarterRuntimeDependencyIsAffected(string path, string affectedProject)
     {
         var result = SelectWithRealMap(path, affectedProject);
@@ -655,6 +741,19 @@ public sealed class TestTriggerMapTests
         Assert.Contains("Aspire.Cli.EndToEnd.Tests", result.TestProjects);
     }
 
+    [Theory]
+    [InlineData("src/Aspire.ProjectTemplates/templates/aspire-starter/.template.config/aspirecli.host.json")]
+    [InlineData("src/Aspire.ProjectTemplates/templates/aspire-apphost/.template.config/dotnetcli.host.json")]
+    [InlineData("src/Aspire.ProjectTemplates/templates/future-template/.template.config/template.json")]
+    [InlineData("src/Aspire.ProjectTemplates/templates/aspire-starter/Aspire-StarterApplication.1.AppHost/Properties/launchSettings.json")]
+    public void LocalTemplateSourcesRunCliUnitCoverage(string path)
+    {
+        var result = SelectWithRealMap(path);
+
+        Assert.False(result.SelectsAll);
+        Assert.Contains("Aspire.Cli.Tests", result.TestProjects);
+    }
+
     [Fact]
     public void CliBundleConsumersRunWhenCreateLayoutIsAffected()
     {
@@ -670,6 +769,52 @@ public sealed class TestTriggerMapTests
             result.Jobs.Order(StringComparer.Ordinal));
     }
 
+    [Theory]
+    [InlineData("eng/Bundle.proj")]
+    [InlineData("eng/scripts/verify-native-dashboard-warnings.ps1")]
+    [InlineData("eng/aspire-managed-entitlements.plist")]
+    public void SharedBundlePhasesSelectRegularRuntimePackageConsumers(string path)
+    {
+        var result = SelectWithRealMap(path);
+
+        Assert.False(result.SelectsAll);
+        Assert.Empty(result.UnmatchedFiles);
+        Assert.Equal(
+            ["Aspire.Cli.EndToEnd.Tests", "Aspire.Templates.Tests", "Infrastructure.Tests"],
+            result.TestProjects.Order(StringComparer.Ordinal));
+        Assert.Contains(result.TestCauses["Aspire.Templates.Tests"],
+            cause => cause.Kind == CauseKind.PathRule && cause.Trigger == path);
+        Assert.Equal(
+            ["job:cli-starter-validation", "job:extension-e2e", "job:homebrew-installer", "job:native-dashboard-validation", "job:polyglot", "job:winget-installer"],
+            result.Jobs.Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public void CliBundleConsumersRunWhenStandaloneTerminalHostIsAffected()
+    {
+        var result = SelectWithRealMap("src/Aspire.TerminalHost/Program.cs", "Aspire.TerminalHost");
+
+        Assert.False(result.SelectsAll);
+        Assert.Contains("Aspire.Cli.EndToEnd.Tests", result.TestProjects);
+        Assert.Equal(
+            ["job:cli-starter-validation", "job:extension-e2e", "job:homebrew-installer", "job:winget-installer"],
+            result.Jobs.Order(StringComparer.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("Aspire.Cli", "Aspire.Cli.EndToEnd.Tests")]
+    [InlineData("Aspire.TerminalHost", "Aspire.Cli.EndToEnd.Tests")]
+    [InlineData("Aspire.Dashboard", "Aspire.Templates.Tests")]
+    public void TerminalPipelinePublishSettingsRunTheirInfrastructureCoverage(string projectName, string consumerProject)
+    {
+        var result = SelectWithRealMap(
+            $"src/{projectName}/{projectName}.csproj", projectName);
+
+        Assert.False(result.SelectsAll);
+        Assert.Contains("Infrastructure.Tests", result.TestProjects);
+        Assert.Contains(consumerProject, result.TestProjects);
+    }
+
     [Fact]
     public void DashboardChangesRunTemplatesTestsThatStartAppHosts()
     {
@@ -679,21 +824,47 @@ public sealed class TestTriggerMapTests
 
         Assert.False(result.SelectsAll);
         Assert.Contains("Aspire.Templates.Tests", result.TestProjects);
+        Assert.Contains("job:native-dashboard-validation", result.Jobs);
+    }
+
+    [Fact]
+    public void DotnetProjectResourceChangesRunGeneratedAppHostConsumers()
+    {
+        var result = SelectWithRealMap("src/Aspire.Hosting.Dotnet/Aspire.Hosting.Dotnet.csproj", "Aspire.Hosting.Dotnet");
+
+        Assert.False(result.SelectsAll);
+        Assert.Contains("Aspire.Templates.Tests", result.TestProjects);
+        Assert.Contains("Aspire.Cli.EndToEnd.Tests", result.TestProjects);
+        Assert.Contains("Aspire.EndToEnd.Tests", result.TestProjects);
+        Assert.Contains("job:extension-e2e", result.Jobs);
+        Assert.Contains("job:cli-starter-validation", result.Jobs);
+    }
+
+    [Fact]
+    public void DotnetProjectResourceChangesRunGeneratedAppHostConsumersWithoutProjectGraph()
+    {
+        var result = SelectWithRealMap("src/Aspire.Hosting.Dotnet/Aspire.Hosting.Dotnet.csproj");
+
+        Assert.False(result.SelectsAll);
+        Assert.Contains("Aspire.Templates.Tests", result.TestProjects);
+        Assert.Contains("Aspire.Cli.EndToEnd.Tests", result.TestProjects);
+        Assert.Contains("job:extension-e2e", result.Jobs);
+        Assert.Contains("job:cli-starter-validation", result.Jobs);
     }
 
     [Fact]
     public void CliStarterValidationDoesNotRunForUnrelatedHostingIntegrationChange()
     {
         var result = SelectWithRealMap(
-            "src/Aspire.Hosting.Redis/RedisBuilderExtensions.cs",
-            "Aspire.Hosting.Redis",
-            "Aspire.Hosting.Redis.Tests",
+            "src/Aspire.Hosting.RabbitMQ/RabbitMQBuilderExtensions.cs",
+            "Aspire.Hosting.RabbitMQ",
+            "Aspire.Hosting.RabbitMQ.Tests",
             "Aspire.Hosting.Tests");
 
         Assert.False(result.SelectsAll);
         Assert.False(
             result.Jobs.Contains("job:cli-starter-validation", StringComparer.Ordinal),
-            "Aggregate tests selected by Redis changes must not pull in all six starter-validation jobs.");
+            "Aggregate tests selected by RabbitMQ changes must not pull in all six starter-validation jobs.");
     }
 
     [Fact]
@@ -717,11 +888,71 @@ public sealed class TestTriggerMapTests
 
         Assert.False(result.SelectsAll);
         Assert.Equal(
-            ["Aspire.Cli.EndToEnd.Tests", "Aspire.Templates.Tests"],
+            ["Aspire.Cli.EndToEnd.Tests", "Aspire.Cli.Tests", "Aspire.Templates.Tests"],
             result.TestProjects.Order(StringComparer.Ordinal));
         Assert.Equal(
             ["job:deployment-e2e", "job:homebrew-installer", "job:winget-installer"],
             result.Jobs.Order(StringComparer.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("src/Aspire.Hosting.Go/Aspire.Hosting.Go.csproj", "Aspire.Hosting.Go")]
+    [InlineData("src/Aspire.Hosting.JavaScript/Aspire.Hosting.JavaScript.csproj", "Aspire.Hosting.JavaScript")]
+    [InlineData("src/Aspire.Hosting.Python/Aspire.Hosting.Python.csproj", "Aspire.Hosting.Python")]
+    public void DefaultHostingPackageProjectsSelectCliStablePackageGuard(string path, string affectedProject)
+    {
+        var result = SelectWithRealMap(path, affectedProject);
+
+        Assert.False(result.SelectsAll);
+        Assert.Empty(result.UnmatchedFiles);
+        Assert.Contains("Aspire.Cli.Tests", result.TestProjects);
+        Assert.Contains(result.TestCauses["Aspire.Cli.Tests"],
+            cause => cause.Kind == CauseKind.PathRule && cause.Trigger == path);
+    }
+
+    [Theory]
+    [InlineData("src/Aspire.ProjectTemplates/templates/aspire-ts-cs-starter/frontend/package.json")]
+    [InlineData("src/Aspire.ProjectTemplates/templates/aspire-ts-cs-starter/frontend/package-lock.json")]
+    public void ProjectTemplateFrontendDependencyInputsRunCliSecurityGuards(string path)
+    {
+        var result = SelectWithRealMap(path);
+
+        Assert.False(result.SelectsAll);
+        Assert.Equal(
+            ["Aspire.Cli.EndToEnd.Tests", "Aspire.Cli.Tests", "Aspire.Templates.Tests"],
+            result.TestProjects.Order(StringComparer.Ordinal));
+        Assert.Equal(
+            ["job:deployment-e2e", "job:homebrew-installer", "job:winget-installer"],
+            result.Jobs.Order(StringComparer.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("tests/Aspire.Cli.EndToEnd.Tests/Fixtures/JsPublish/nextjs/.npmrc")]
+    [InlineData("tests/Aspire.Cli.EndToEnd.Tests/Fixtures/JsPublish/npmscript/.npmrc")]
+    public void JsPublishFixtureNpmrcRunsCliPublicRegistryGuard(string path)
+    {
+        var result = SelectWithRealMap(path, "Aspire.Cli.EndToEnd.Tests");
+
+        Assert.False(result.SelectsAll);
+        Assert.Contains("Aspire.Cli.EndToEnd.Tests", result.TestProjects);
+        Assert.Contains("Aspire.Cli.Tests", result.TestProjects);
+        Assert.Contains(result.TestCauses["Aspire.Cli.Tests"],
+            cause => cause.Kind == CauseKind.PathRule && cause.Trigger == path);
+    }
+
+    [Theory]
+    [InlineData("src/Aspire.Hosting.CodeGeneration.Go/AtsGoCodeGenerator.cs", "Aspire.Hosting.CodeGeneration.Go")]
+    [InlineData("src/Aspire.Hosting.CodeGeneration.Go/GoLanguageSupport.cs", "Aspire.Hosting.CodeGeneration.Go")]
+    [InlineData("src/Aspire.Hosting.Go/GoVersionDetector.cs", "Aspire.Hosting.Go")]
+    public void GoVersionInputsSelectCliMinimumGoVersionGuard(string path, string affectedProject)
+    {
+        var result = SelectWithRealMap(path, affectedProject);
+
+        Assert.False(result.SelectsAll);
+        Assert.Empty(result.UnmatchedFiles);
+        Assert.Contains("Aspire.Cli.Tests", result.TestProjects);
+        Assert.Contains(result.TestCauses["Aspire.Cli.Tests"],
+            cause => cause.Kind == CauseKind.PathRule && cause.Trigger == path);
     }
 
     [Fact]
@@ -752,121 +983,62 @@ public sealed class TestTriggerMapTests
     }
 
     [Fact]
-    public void SetupForTestsSelectionOutputsAreConsistentWithMap()
+    public void BuildPackagesWorkflowSelectsOnlyNuGetArtifactConsumers()
     {
-        // The non-.NET job gates flow: SelectTests emits a `selection` JSON object keyed run_<job>
-        // (job:winget-installer -> run_winget_installer); tests.yml's setup_for_tests unpacks each via
-        // fromJSON(steps.select_tests.outputs.selection).run_<job> into a job output; and each gated job
-        // reads needs.setup_for_tests.outputs.run_<job> == 'true'. A name that drifts anywhere in that
-        // chain silently empties the output, the if: reads false, and the job NEVER RUNS behind a green
-        // check -- the under-selection selective CI must never do. Pin the set-level invariants against
-        // the real workflow + real map (per-job correctness is EachGatedJobConditionUsesItsOwnSelectionBoolean).
-        var testsYml = File.ReadAllText(Path.Combine(RepoRoot.Path, ".github", "workflows", "tests.yml"));
+        var result = SelectWithRealMap(".github/workflows/build-packages.yml");
 
-        // Outputs setup_for_tests unpacks from the selection object, e.g.
-        //   run_polyglot: ${{ fromJSON(steps.select_tests.outputs.selection).run_polyglot }}
-        var declared = System.Text.RegularExpressions.Regex
-            .Matches(testsYml, @"fromJSON\(steps\.select_tests\.outputs\.selection\)\.(run_[a-z0-9_]+)")
-            .Select(m => m.Groups[1].Value)
-            .ToHashSet(StringComparer.Ordinal);
-
-        // run_<job> outputs consumed by a gate, e.g. needs.setup_for_tests.outputs.run_polyglot.
-        var consumed = System.Text.RegularExpressions.Regex
-            .Matches(testsYml, @"needs\.setup_for_tests\.outputs\.(run_[a-z0-9_]+)")
-            .Select(m => m.Groups[1].Value)
-            .ToHashSet(StringComparer.Ordinal);
-
-        // run_<job> keys SelectTests can actually emit, derived from the real map's job: vocabulary --
-        // mirrors Program.WriteJobBooleans ("run_" + token without "job:", '-' -> '_').
-        var emittable = s_map.AllReferencedTargets()
-            .Where(t => t.StartsWith("job:", StringComparison.Ordinal))
-            .Select(t => "run_" + t["job:".Length..].Replace('-', '_'))
-            .ToHashSet(StringComparer.Ordinal);
-        var expectedAdvisoryJobs = s_map.AllReferencedTargets()
-            .Where(t => t.StartsWith("job:", StringComparison.Ordinal))
-            .Where(t => !declared.Contains("run_" + t["job:".Length..].Replace('-', '_')))
-            .ToHashSet(StringComparer.Ordinal);
-        var advisoryJobField = typeof(Selection).GetField(
-            "s_advisoryJobTargets",
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
-        Assert.NotNull(advisoryJobField);
-        var configuredAdvisoryJobs = Assert.IsAssignableFrom<IReadOnlyDictionary<string, string>>(
-            advisoryJobField.GetValue(null));
-
-        // Sanity: the regexes actually matched, so a pattern slip can't make the asserts vacuously pass.
-        Assert.Contains("run_winget_installer", declared);
-        Assert.Contains("run_winget_installer", consumed);
+        Assert.False(result.SelectsAll);
+        Assert.Empty(result.UnmatchedFiles);
         Assert.Equal(
-            expectedAdvisoryJobs.Order(StringComparer.Ordinal),
-            configuredAdvisoryJobs.Keys.Order(StringComparer.Ordinal));
-
-        // Finding 1: every unpacked output is a key the tool emits. A typo'd fromJSON property or a
-        // renamed/removed map token leaves the output permanently empty (job silently skipped).
-        var declaredNotEmittable = declared.Except(emittable).Order(StringComparer.Ordinal).ToList();
-        Assert.True(declaredNotEmittable.Count == 0,
-            $"setup_for_tests unpacks selection keys SelectTests never emits (no matching job: in the map): {string.Join(", ", declaredNotEmittable)}");
-
-        // Finding 2: every gate reads an output setup_for_tests declares. A new gated job whose if:
-        // references run_<job> but whose unpack line was forgotten reads an empty output -> never runs.
-        var consumedNotDeclared = consumed.Except(declared).Order(StringComparer.Ordinal).ToList();
-        Assert.True(consumedNotDeclared.Count == 0,
-            $"job if: conditions read run_* outputs that setup_for_tests never unpacks: {string.Join(", ", consumedNotDeclared)}");
-
-        // Dead output: a run_* setup_for_tests exposes that no gate reads is a leftover (or a job wired
-        // to the wrong var). Every unpacked output must gate at least one job.
-        var declaredUnused = declared.Except(consumed).Order(StringComparer.Ordinal).ToList();
-        Assert.True(declaredUnused.Count == 0,
-            $"setup_for_tests unpacks run_* outputs that no job if: consumes: {string.Join(", ", declaredUnused)}");
+            ["Aspire.Cli.EndToEnd.Tests", "Aspire.Templates.Tests", "Infrastructure.Tests"],
+            result.TestProjects.Order(StringComparer.Ordinal));
+        Assert.Equal(
+            ["job:cli-starter-validation", "job:extension-e2e", "job:homebrew-installer", "job:polyglot", "job:winget-installer"],
+            result.Jobs.Order(StringComparer.Ordinal));
     }
 
     [Fact]
-    public void EachGatedJobConditionUsesItsOwnSelectionBoolean()
+    public void BuildCliNativeArchivesWorkflowSelectsOnlyCliArchiveConsumers()
     {
-        // The set-level test above proves the run_* names line up, but not that each job gates on ITS
-        // OWN boolean. The names are uniform (job:winget-installer -> run_winget_installer), so a
-        // copy-paste leaving a job reading a sibling's var (e.g. the WinGet prep job on
-        // run_homebrew_installer) passes every set check yet runs the wrong job for a change. Pin the
-        // job-id -> run_<job> binding for the tests.yml jobs each gated job: token resolves to.
-        //
-        // This list is hand-maintained intent (like EveryJobTargetResolvesToExistingWorkflowOrJob's
-        // job-id mapping): a new gated job must be added here too. The check is substring containment,
-        // so it catches a job NOT referencing its own var; it intentionally tolerates extra vars -- the
-        // extension jobs additionally OR-in run_extension_e2e because extension_e2e_tests needs the
-        // VSIX and the corepack bootstrap they produce.
-        var testsYml = File.ReadAllText(Path.Combine(RepoRoot.Path, ".github", "workflows", "tests.yml"));
+        var result = SelectWithRealMap(".github/workflows/build-cli-native-archives.yml");
 
-        var bindings = new[]
+        Assert.False(result.SelectsAll);
+        Assert.Empty(result.UnmatchedFiles);
+        Assert.Equal(
+            ["Aspire.Cli.EndToEnd.Tests", "Aspire.Templates.Tests", "Infrastructure.Tests"],
+            result.TestProjects.Order(StringComparer.Ordinal));
+        Assert.Equal(
+            ["job:cli-starter-validation", "job:extension-e2e", "job:homebrew-installer", "job:native-dashboard-validation", "job:polyglot", "job:winget-installer"],
+            result.Jobs.Order(StringComparer.Ordinal));
+    }
+
+    [Theory]
+    [InlineData(".github/workflows/build-packages.yml")]
+    [InlineData(".github/workflows/build-cli-native-archives.yml")]
+    public void ArtifactProducerWorkflowSelectsEveryArtifactConsumingTestProject(string path)
+    {
+        // The narrowed routing above is only safe while the producer consumer groups still list every test
+        // project that consumes a produced artifact in regular PR CI. Those projects declare artifact
+        // consumption via RequiresNugets / RequiresCliArchive (read by eng/testing/CITestsProperties.props
+        // into the runsheet, which is what puts them in the tests_requires_nugets_* /
+        // tests_requires_cli_archive buckets that depend on the producer jobs). Adding a new regular-PR
+        // consumer without updating the group would silently stop running it for producer-workflow changes
+        // -- exactly the under-selection selective CI must never do.
+        var consumers = LoadArtifactConsumingTestProjects()
+            .Order(StringComparer.Ordinal)
+            .ToList();
+
+        Assert.NotEmpty(consumers);
+
+        var result = SelectWithRealMap(path);
+        foreach (var consumer in consumers)
         {
-            ("polyglot_validation", "run_polyglot"),
-            ("typescript_sdk_tests", "run_typescript_sdk"),
-            ("typescript_api_compat", "run_typescript_api_compat"),
-            ("extension_tests_win", "run_extension_unit"),
-            ("extension_bootstrap_linux", "run_extension_unit"),
-            ("extension_e2e_tests", "run_extension_e2e"),
-            ("prepare_winget_installer_artifacts", "run_winget_installer"),
-            ("prepare_homebrew_installer_artifacts", "run_homebrew_installer"),
-            ("nix_package", "run_nix_package"),
+            Assert.Contains(consumer, result.TestProjects, StringComparer.Ordinal);
         }
-        .Concat(s_cliStarterValidationJobIds.Select(jobId => (jobId, "run_cli_starter_validation")))
-        .ToArray();
-
-        var wrong = new List<string>();
-        foreach (var (jobId, runVar) in bindings)
-        {
-            var block = JobBlock(testsYml, jobId);
-            Assert.True(block is not null, $"job '{jobId}' not found in tests.yml");
-            if (!block!.Contains($"needs.setup_for_tests.outputs.{runVar}", StringComparison.Ordinal))
-            {
-                wrong.Add($"{jobId} (expected {runVar})");
-            }
-        }
-
-        Assert.True(wrong.Count == 0,
-            $"gated jobs whose if: does not reference their own selection boolean: {string.Join("; ", wrong)}");
     }
 
     [Fact]
-    public void CliStarterValidationArchivePathsMatchConsumedWorkflowRids()
+    public void ArtifactProducerWorkflowSelectsEverySelectorGatedArtifactConsumingJob()
     {
         var workflow = new YamlStream();
         using (var reader = new StringReader(File.ReadAllText(Path.Combine(RepoRoot.Path, ".github", "workflows", "tests.yml"))))
@@ -876,225 +1048,70 @@ public sealed class TestTriggerMapTests
 
         var root = Assert.IsType<YamlMappingNode>(workflow.Documents[0].RootNode);
         var jobs = Assert.IsType<YamlMappingNode>(root.Children[new YamlScalarNode("jobs")]);
-        var expectedArchivePaths = new List<string>();
+        var packageSelectedJobs = SelectWithRealMap(".github/workflows/build-packages.yml").Jobs.ToHashSet(StringComparer.Ordinal);
+        var cliArchiveSelectedJobs = SelectWithRealMap(".github/workflows/build-cli-native-archives.yml").Jobs.ToHashSet(StringComparer.Ordinal);
 
-        foreach (var jobId in s_cliStarterValidationJobIds)
+        var packageConsumerTargets = ArtifactConsumingWorkflowJobTargets(jobs, "build_packages").ToList();
+        var cliArchiveConsumerTargets = ArtifactConsumingWorkflowJobTargets(jobs, "build_cli_archive_").ToList();
+        Assert.Contains(packageConsumerTargets, target => target.WorkflowJobId == "polyglot_validation");
+        Assert.Contains(packageConsumerTargets, target => target.WorkflowJobId == "extension_e2e_tests");
+        Assert.Contains(packageConsumerTargets, target => target.WorkflowJobId == "prepare_winget_installer_artifacts");
+        Assert.Contains(cliArchiveConsumerTargets, target => target.WorkflowJobId == "native_dashboard_validation_linux_x64");
+        Assert.DoesNotContain(packageSelectedJobs, job => job == "job:native-dashboard-validation");
+
+        foreach (var (workflowJobId, target) in packageConsumerTargets)
         {
-            var starterJob = Assert.IsType<YamlMappingNode>(jobs.Children[new YamlScalarNode(jobId)]);
-            var needs = Assert.IsType<YamlSequenceNode>(starterJob.Children[new YamlScalarNode("needs")]);
-            var archiveJobId = Assert.Single(
-                needs.Children.OfType<YamlScalarNode>(),
-                node => node.Value?.StartsWith("build_cli_archive_", StringComparison.Ordinal) is true).Value;
-            Assert.NotNull(archiveJobId);
-
-            var archiveJob = Assert.IsType<YamlMappingNode>(jobs.Children[new YamlScalarNode(archiveJobId)]);
-            Assert.Equal("./.github/workflows/build-cli-native-archives.yml", archiveJob.Children[new YamlScalarNode("uses")].ToString());
-            var inputs = Assert.IsType<YamlMappingNode>(archiveJob.Children[new YamlScalarNode("with")]);
-            var targetsJson = Assert.IsType<YamlScalarNode>(inputs.Children[new YamlScalarNode("targets")]).Value;
-            Assert.False(string.IsNullOrWhiteSpace(targetsJson), $"CLI archive build job '{archiveJobId}' has no targets input.");
-
-            using var targets = JsonDocument.Parse(targetsJson);
-            var target = Assert.Single(targets.RootElement.EnumerateArray());
-            Assert.True(target.TryGetProperty("rids", out var rid), $"CLI archive build job '{archiveJobId}' has no RID target.");
-            var ridValue = rid.GetString();
-            Assert.False(string.IsNullOrWhiteSpace(ridValue), $"CLI archive build job '{archiveJobId}' has an empty RID target.");
-
-            expectedArchivePaths.Add($"eng/clipack/Aspire.Cli.{ridValue}.csproj");
+            Assert.True(
+                packageSelectedJobs.Contains(target),
+                $"{workflowJobId} consumes build_packages artifacts, so {target} must be selected.");
         }
 
-        var archiveRule = Assert.Single(
-            s_map.PathRules,
-            rule => rule.Targets.Contains("job:cli-starter-validation", StringComparer.Ordinal)
-                && rule.Paths.Contains("eng/clipack/Common.projitems", StringComparer.Ordinal));
-
-        Assert.Equal(
-            expectedArchivePaths.Order(StringComparer.Ordinal),
-            archiveRule.Paths
-                .Where(path => path != "eng/clipack/Common.projitems")
-                .Order(StringComparer.Ordinal));
+        foreach (var (workflowJobId, target) in cliArchiveConsumerTargets)
+        {
+            Assert.True(
+                cliArchiveSelectedJobs.Contains(target),
+                $"{workflowJobId} consumes build_cli_archive_* artifacts, so {target} must be selected.");
+        }
     }
 
     [Theory]
-    [InlineData("tests_requires_cli_archive", "test:Aspire.Cli.EndToEnd.Tests")]
-    [InlineData("extension_e2e_tests", "job:extension-e2e")]
-    public void CliArchivePathsMatchWorkflowDependencies(string workflowJobId, string target)
+    [InlineData(".github/actions/check-changed-files/action.yml", false, new[] { "Infrastructure.Tests" }, new string[] { })]
+    [InlineData(".github/actions/select-tests/action.yml", false, new[] { "Infrastructure.Tests" }, new string[] { })]
+    [InlineData(".github/actions/setup-deno/action.yml", false, new[] { "Aspire.Hosting.JavaScript.Tests" }, new[] { "job:extension-e2e" })]
+    [InlineData(".github/actions/unlock-macos-keychain/action.yml", true, new string[] { }, new string[] { })]
+    public void LocalActionRoutingMatchesItsRegularPrCiConsumers(
+        string path,
+        bool selectsAll,
+        string[] expectedTestProjects,
+        string[] expectedJobs)
     {
-        var expectedArchivePaths = ArchiveRidsRequiredByJob(workflowJobId)
-            .Select(rid => $"eng/clipack/Aspire.Cli.{rid}.csproj")
-            .Order(StringComparer.Ordinal);
-        var archiveRule = Assert.Single(
-            s_map.PathRules,
-            rule => rule.Targets.Contains(target, StringComparer.Ordinal)
-                && rule.Paths.Contains("eng/clipack/Common.projitems", StringComparer.Ordinal));
+        var result = SelectWithRealMap(path);
 
-        Assert.Equal(
-            expectedArchivePaths,
-            archiveRule.Paths
-                .Where(path => path != "eng/clipack/Common.projitems")
-                .Order(StringComparer.Ordinal));
-    }
+        Assert.Equal(selectsAll, result.SelectsAll);
+        Assert.Empty(result.UnmatchedFiles);
 
-    [Fact]
-    public void ExtensionE2eWorkflowRidsMatchArchiveDependencies()
-    {
-        var workflow = new YamlStream();
-        using (var reader = new StringReader(File.ReadAllText(
-            Path.Combine(RepoRoot.Path, ".github", "workflows", "extension-e2e-tests.yml"))))
+        if (!selectsAll)
         {
-            workflow.Load(reader);
-        }
-
-        var root = Assert.IsType<YamlMappingNode>(workflow.Documents[0].RootNode);
-        var jobs = Assert.IsType<YamlMappingNode>(root.Children[new YamlScalarNode("jobs")]);
-        var extensionE2e = Assert.IsType<YamlMappingNode>(jobs.Children[new YamlScalarNode("extension_e2e")]);
-        var strategy = Assert.IsType<YamlMappingNode>(extensionE2e.Children[new YamlScalarNode("strategy")]);
-        var matrix = Assert.IsType<YamlMappingNode>(strategy.Children[new YamlScalarNode("matrix")]);
-        var include = Assert.IsType<YamlSequenceNode>(matrix.Children[new YamlScalarNode("include")]);
-        var consumedRids = include.Children
-            .Select(node => Assert.IsType<YamlMappingNode>(node).Children[new YamlScalarNode("rid")].ToString())
-            .Distinct(StringComparer.Ordinal)
-            .Order(StringComparer.Ordinal);
-
-        Assert.Equal(
-            consumedRids,
-            ArchiveRidsRequiredByJob("extension_e2e_tests").Order(StringComparer.Ordinal));
-    }
-
-    [Fact]
-    public void CliStarterValidationSkipChecksAreRequiredOnlyWhenSelected()
-    {
-        var testsYml = File.ReadAllText(Path.Combine(RepoRoot.Path, ".github", "workflows", "tests.yml"));
-        var resultsBlock = JobBlock(testsYml, "results");
-        Assert.NotNull(resultsBlock);
-        var normalizedResultsBlock = System.Text.RegularExpressions.Regex.Replace(resultsBlock, @"\s+", " ");
-        const string selectionGuard = "needs.setup_for_tests.outputs.run_cli_starter_validation == 'true'";
-        var groupedSkipCheck =
-            $"({selectionGuard} && ({string.Join(
-                " || ",
-                s_cliStarterValidationJobIds.Select(jobId => $"needs.{jobId}.result == 'skipped'"))}))";
-
-        Assert.Contains(groupedSkipCheck, normalizedResultsBlock, StringComparison.Ordinal);
-        Assert.Equal(1, normalizedResultsBlock.Split(selectionGuard, StringSplitOptions.None).Length - 1);
-    }
-
-    [Fact]
-    public void EveryTestTargetNamesAnExistingTestProject()
-    {
-        // test:<X> means the matrix project tests/<X> (run-tests.yml entry). A rename or
-        // removal that the curated map misses would silently stop selecting that project,
-        // so require tests/<X>/<X>.csproj to exist on disk.
-        var missing = s_map.AllReferencedTargets()
-            .Where(t => t.StartsWith("test:", StringComparison.Ordinal))
-            .Select(t => t["test:".Length..])
-            .Distinct(StringComparer.Ordinal)
-            .Where(name => !File.Exists(Path.Combine(RepoRoot.Path, "tests", name, $"{name}.csproj")))
-            .Order(StringComparer.Ordinal)
-            .ToList();
-
-        Assert.True(missing.Count == 0, $"test: targets with no tests/<X>/<X>.csproj: {string.Join(", ", missing)}");
-    }
-
-    [Fact]
-    public void PrefilterPatternsFileExists()
-    {
-        // The prefilter reads its pattern list from this file at runtime (SSOT with the ci.yml skip
-        // gate). A typo'd path would make ChangedFileFilter.Create throw at runtime; pin it here.
-        Assert.NotNull(s_map.Prefilter);
-        Assert.False(string.IsNullOrWhiteSpace(s_map.Prefilter!.PatternsFile));
-        Assert.True(File.Exists(Path.Combine(RepoRoot.Path, s_map.Prefilter.PatternsFile!)),
-            $"prefilter.patterns_file does not exist: {s_map.Prefilter.PatternsFile}");
-    }
-
-    [Fact]
-    public void PrefilterKeepRoutedGlobsAreLiveAndCoverSelectorRoutedDirs()
-    {
-        // keep_routed are the carve-outs: files the patterns file lists but the selector routes to a
-        // target, so they must NOT be dropped. Each must match a real file (catch typos), and the two
-        // selector-routed dirs must be covered so a workflow/pipeline change still runs Infrastructure
-        // .Tests in a mixed PR.
-        Assert.NotNull(s_map.Prefilter);
-        var keepRouted = s_map.Prefilter!.KeepRouted;
-
-        var dead = keepRouted.Where(g => !GlobMatchesAnyTrackedFile(g)).Order(StringComparer.Ordinal).ToList();
-        Assert.True(dead.Count == 0, $"prefilter.keep_routed globs matching no tracked file: {string.Join(", ", dead)}");
-
-        foreach (var required in new[] { ".github/workflows/**", "eng/pipelines/**" })
-        {
-            Assert.Contains(required, keepRouted);
+            Assert.Equal(expectedTestProjects.Order(StringComparer.Ordinal), result.TestProjects.Order(StringComparer.Ordinal));
+            Assert.Equal(expectedJobs.Order(StringComparer.Ordinal), result.Jobs.Order(StringComparer.Ordinal));
         }
     }
 
     [Fact]
-    public void EveryTestsSharedFileIsCsAttributedOrRoutedToAllOrExcluded()
+    public void EnumerateTestsActionSelectsManagedTestProjectsButNotNonDotnetJobs()
     {
-        // tests/Shared has both link-compiled *.cs (Layer 1 attributes them precisely, so the run-all
-        // fallback treats them as owned — they need no curated rule) and non-source build/fixture infra
-        // (props/targets/packages/Docker/Playwright/certs -> ALL). A tests/Shared file that is NEITHER a
-        // *.cs NOR matched by an ALL path rule NOR a doc (excluded by the prefilter) would silently select
-        // no targeted work: it is not under a project dir (so directory containment can't attribute a
-        // loose file there) and would force the run-all fallback. Pin the invariant so a new file type
-        // added under tests/Shared can't quietly expand to ALL. (.md files are dropped by the prefilter's
-        // **.md.)
-        var allGlobs = s_map.PathRules
-            .Where(r => r.Targets.Contains("ALL", StringComparer.Ordinal))
-            .SelectMany(r => r.Paths)
-            .ToList();
-
-        bool RoutedToAll(string file) => allGlobs.Any(g => TestTriggerMap.GlobMatches(g, file));
-
-        var orphaned = s_trackedFiles
-            .Where(f => f.StartsWith("tests/Shared/", StringComparison.Ordinal))
-            .Where(f => !f.EndsWith(".cs", StringComparison.Ordinal))
-            .Where(f => !f.EndsWith(".md", StringComparison.Ordinal))
-            .Where(f => !RoutedToAll(f))
+        var result = SelectWithRealMap(".github/actions/enumerate-tests/action.yml");
+        var expectedTestProjects = LoadSolutionProjectPaths()
+            .Where(projectPath => projectPath.StartsWith("tests/", StringComparison.Ordinal))
+            .Select(projectPath => Path.GetFileNameWithoutExtension(projectPath)!)
+            .Where(name => name.EndsWith(".Tests", StringComparison.Ordinal))
             .Order(StringComparer.Ordinal)
-            .ToList();
+            .ToArray();
 
-        Assert.True(orphaned.Count == 0,
-            $"tests/Shared files that are neither *.cs (Layer 1-attributed), *.md (prefiltered), nor routed " +
-            $"to ALL (they would silently select nothing): {string.Join(", ", orphaned)}");
-    }
-
-    [Fact]
-    public void EveryLocalActionUsedByAWorkflowIsRoutedToAll()
-    {
-        // A local composite action (.github/actions/<name>) is not a project, so Layer 1 never attributes
-        // a change to it. An action that no path rule matches therefore forces the run-all fallback, but
-        // its CI-wide impact should be explicit rather than appearing as an unattributed audit warning.
-        // The map routes .github/actions/** -> ALL to cover this; pin the invariant so a new action
-        // referenced from a workflow can't lose that explicit ownership if the rule is narrowed.
-        // Failure mode: drop the .github/actions/** ALL rule and this goes red.
-        var allGlobs = s_map.PathRules
-            .Where(r => r.Targets.Contains("ALL", StringComparer.Ordinal))
-            .SelectMany(r => r.Paths)
-            .ToList();
-
-        bool RoutedToAll(string file) => allGlobs.Any(g => TestTriggerMap.GlobMatches(g, file));
-
-        // `uses: ./.github/actions/<name>` (with optional surrounding quotes / a trailing @ref) names a
-        // local composite action whose definition lives at .github/actions/<name>/action.yml.
-        var usesLocalAction = new System.Text.RegularExpressions.Regex(
-            @"uses:\s*['""]?\./\.github/actions/(?<name>[^\s'""@]+)",
-            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-
-        var workflowsDir = Path.Combine(RepoRoot.Path, ".github", "workflows");
-        var referencedActions = Directory.EnumerateFiles(workflowsDir, "*.yml")
-            .SelectMany(f => usesLocalAction.Matches(File.ReadAllText(f)).Select(m => m.Groups["name"].Value))
-            .Distinct(StringComparer.Ordinal)
-            .ToList();
-
-        // Sanity: the scan finds the actions we know are referenced, so a regex slip can't make this
-        // assertion vacuously pass.
-        Assert.Contains("enumerate-tests", referencedActions);
-
-        var unrouted = referencedActions
-            .Where(name => !RoutedToAll($".github/actions/{name}/action.yml"))
-            .Order(StringComparer.Ordinal)
-            .ToList();
-
-        Assert.True(unrouted.Count == 0,
-            $"local actions referenced by a workflow but not routed to ALL (a change to them would select " +
-            $"ALL only through the unattributed fallback): {string.Join(", ", unrouted)}");
+        Assert.False(result.SelectsAll);
+        Assert.Empty(result.UnmatchedFiles);
+        Assert.Equal(expectedTestProjects, result.TestProjects.Order(StringComparer.Ordinal));
+        Assert.Empty(result.Jobs);
     }
 
     private static SelectionResult SelectWithRealMap(string path, params string[] layer1Affected)
@@ -1123,86 +1140,110 @@ public sealed class TestTriggerMapTests
         return selector.Select([path], layer1Affected, new SelectorOptions());
     }
 
-    private static IReadOnlyList<string> ArchiveRidsRequiredByJob(string jobId)
+    private static IEnumerable<(string WorkflowJobId, string Target)> ArtifactConsumingWorkflowJobTargets(YamlMappingNode jobs, string producerPrefix)
     {
-        // Resolve workflow dependencies shaped as:
-        //   extension_e2e_tests:
-        //     needs: [..., build_cli_archive_linux]
-        //   build_cli_archive_linux:
-        //     with:
-        //       targets: '[{"os":"ubuntu-latest","runner":"8-core-ubuntu-latest","rids":"linux-x64"}]'
-        var workflow = new YamlStream();
-        using (var reader = new StringReader(File.ReadAllText(
-            Path.Combine(RepoRoot.Path, ".github", "workflows", "tests.yml"))))
+        foreach (var (jobIdNode, jobNode) in jobs.Children)
         {
-            workflow.Load(reader);
-        }
-
-        var root = Assert.IsType<YamlMappingNode>(workflow.Documents[0].RootNode);
-        var jobs = Assert.IsType<YamlMappingNode>(root.Children[new YamlScalarNode("jobs")]);
-        var job = Assert.IsType<YamlMappingNode>(jobs.Children[new YamlScalarNode(jobId)]);
-        var needs = Assert.IsType<YamlSequenceNode>(job.Children[new YamlScalarNode("needs")]);
-        var archiveJobs = needs.Children
-            .OfType<YamlScalarNode>()
-            .Select(node => node.Value)
-            .Where(value => !string.IsNullOrWhiteSpace(value))
-            .Select(value => (
-                Id: value!,
-                Job: Assert.IsType<YamlMappingNode>(jobs.Children[new YamlScalarNode(value!)])))
-            .Where(entry => entry.Job.Children.TryGetValue(new YamlScalarNode("uses"), out var uses)
-                && uses.ToString() == "./.github/workflows/build-cli-native-archives.yml")
-            .ToList();
-        Assert.NotEmpty(archiveJobs);
-
-        var rids = new List<string>();
-        foreach (var (archiveJobId, archiveJob) in archiveJobs)
-        {
-            var inputs = Assert.IsType<YamlMappingNode>(archiveJob.Children[new YamlScalarNode("with")]);
-            var targetsJson = Assert.IsType<YamlScalarNode>(inputs.Children[new YamlScalarNode("targets")]).Value;
-            Assert.False(string.IsNullOrWhiteSpace(targetsJson), $"CLI archive build job '{archiveJobId}' has no targets input.");
-
-            using var targets = JsonDocument.Parse(targetsJson);
-            foreach (var target in targets.RootElement.EnumerateArray())
+            var jobId = Assert.IsType<YamlScalarNode>(jobIdNode).Value;
+            Assert.False(string.IsNullOrWhiteSpace(jobId), "tests.yml contains a job with an empty id.");
+            var job = Assert.IsType<YamlMappingNode>(jobNode);
+            if (jobId == "results")
             {
-                Assert.True(target.TryGetProperty("rids", out var rid), $"CLI archive build job '{archiveJobId}' has no RID target.");
-                var ridValue = rid.GetString();
-                Assert.False(string.IsNullOrWhiteSpace(ridValue), $"CLI archive build job '{archiveJobId}' has an empty RID target.");
-                rids.Add(ridValue);
+                continue;
+            }
+
+            if (!DependsOnArtifactProducer(job, producerPrefix)
+                || !job.Children.TryGetValue(new YamlScalarNode("if"), out var ifNode))
+            {
+                continue;
+            }
+
+            var runVars = System.Text.RegularExpressions.Regex
+                .Matches(ifNode.ToString(), @"needs\.setup_for_tests\.outputs\.(run_[a-z0-9_]+)")
+                .Select(match => match.Groups[1].Value)
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+
+            foreach (var runVar in runVars)
+            {
+                yield return (jobId!, "job:" + runVar["run_".Length..].Replace('_', '-'));
             }
         }
-
-        return rids.Distinct(StringComparer.Ordinal).ToList();
     }
 
-    private static string TextBetween(string text, string startMarker, string endMarker)
+    private static bool DependsOnArtifactProducer(YamlMappingNode job, string producerPrefix)
     {
-        var start = text.IndexOf(startMarker, StringComparison.Ordinal);
-        Assert.True(start >= 0, $"Start marker not found: {startMarker}");
-
-        var end = text.IndexOf(endMarker, start + startMarker.Length, StringComparison.Ordinal);
-        Assert.True(end >= 0, $"End marker not found after {startMarker}: {endMarker}");
-
-        return text[start..end];
-    }
-
-    // Text of a top-level tests.yml job block: from "\n  <id>:" up to the next line indented exactly
-    // two spaces that starts a new key (the next job), or end of file. Top-level jobs sit at two-space
-    // indent and everything inside a job is indented further, so a two-space `word:` reliably delimits
-    // the block. Returns null when the job id is absent.
-    private static string? JobBlock(string workflow, string jobId)
-    {
-        var marker = $"\n  {jobId}:";
-        var start = workflow.IndexOf(marker, StringComparison.Ordinal);
-        if (start < 0)
+        if (!job.Children.TryGetValue(new YamlScalarNode("needs"), out var needsNode))
         {
-            return null;
+            return false;
         }
 
-        var next = System.Text.RegularExpressions.Regex.Match(
-            workflow[(start + marker.Length)..],
-            @"\n  [A-Za-z0-9_]+:");
-        return next.Success
-            ? workflow.Substring(start, marker.Length + next.Index)
-            : workflow[start..];
+        return needsNode switch
+        {
+            YamlScalarNode scalar => IsArtifactProducer(scalar.Value, producerPrefix),
+            YamlSequenceNode sequence => sequence.Children
+                .OfType<YamlScalarNode>()
+                .Any(node => IsArtifactProducer(node.Value, producerPrefix)),
+            _ => false
+        };
+
+        static bool IsArtifactProducer(string? jobId, string producerPrefix) =>
+            producerPrefix == "build_packages"
+                ? jobId == producerPrefix
+                : jobId?.StartsWith(producerPrefix, StringComparison.Ordinal) is true;
     }
+
+    private static IEnumerable<string> LoadArtifactConsumingTestProjects()
+    {
+        GraphAffectedProjects.EnsureMSBuildRegistered();
+
+        var solutionPath = Path.Combine(RepoRoot.Path, "Aspire.slnx");
+        return LoadArtifactConsumingTestProjectsCore(solutionPath);
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static IEnumerable<string> LoadArtifactConsumingTestProjectsCore(string solutionPath)
+    {
+        return LoadArtifactConsumingTestProjectMetadata(solutionPath)
+            .Where(project => !project.SkipTests)
+            .Select(project => project.Name);
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static IEnumerable<ArtifactConsumingTestProject> LoadArtifactConsumingTestProjectMetadata(string solutionPath)
+    {
+        var graph = GraphAffectedProjects.BuildGraph(
+            RepoRoot.Path,
+            solutionPath,
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["IsGitHubActionsRunner"] = "true",
+                ["IsGithubPullRequest"] = "true",
+                ["RunOuterloopTests"] = "false",
+                ["RunQuarantinedTests"] = "false",
+            });
+
+        return graph.ProjectNodes
+            .Where(node => IsMatrixTestProject(node.ProjectInstance.FullPath))
+            .Where(node =>
+                IsTrue(node.ProjectInstance.GetPropertyValue("RequiresNugets"))
+                || IsTrue(node.ProjectInstance.GetPropertyValue("RequiresCliArchive")))
+            .Select(node => new ArtifactConsumingTestProject(
+                Path.GetFileNameWithoutExtension(node.ProjectInstance.FullPath)!,
+                IsTrue(node.ProjectInstance.GetPropertyValue("SkipTests"))))
+            .GroupBy(project => project.Name, StringComparer.Ordinal)
+            .Select(group => group.First());
+    }
+
+    private sealed record ArtifactConsumingTestProject(string Name, bool SkipTests);
+
+    private static bool IsMatrixTestProject(string projectPath)
+    {
+        var relativePath = Path.GetRelativePath(RepoRoot.Path, projectPath).Replace('\\', '/');
+        return relativePath.StartsWith("tests/", StringComparison.Ordinal)
+            && Path.GetFileNameWithoutExtension(relativePath).EndsWith(".Tests", StringComparison.Ordinal);
+    }
+
+    private static bool IsTrue(string value) =>
+        string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
 }

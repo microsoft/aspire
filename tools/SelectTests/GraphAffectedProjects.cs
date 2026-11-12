@@ -229,7 +229,7 @@ internal static class GraphAffectedProjects
         static string NameOf(string projectPath) => Path.GetFileNameWithoutExtension(projectPath);
     }
 
-    private static ProjectGraph BuildGraph(string repoRoot, string solutionPath)
+    internal static ProjectGraph BuildGraph(string repoRoot, string solutionPath, IReadOnlyDictionary<string, string>? additionalGlobalProperties = null)
     {
         // Mirror the global properties the solution build evaluates with so the graph nodes match the
         // real build's project instances (and so .slnx solution-folder/config resolution succeeds).
@@ -242,6 +242,14 @@ internal static class GraphAffectedProjects
             ["SolutionFileName"] = Path.GetFileName(solutionPath),
             ["SolutionName"] = Path.GetFileNameWithoutExtension(solutionPath),
         };
+
+        if (additionalGlobalProperties is not null)
+        {
+            foreach (var (name, value) in additionalGlobalProperties)
+            {
+                globalProperties[name] = value;
+            }
+        }
 
         return new ProjectGraph(solutionPath, globalProperties);
     }

@@ -8,6 +8,11 @@ const builder = await createBuilder();
 // === Azure Container App Environment ===
 // Test addAzureContainerAppEnvironment factory method
 const env = await builder.addAzureContainerAppEnvironment("myenv");
+await env.configureInfrastructure(async infrastructure => {
+    const environment = await infrastructure.getContainerAppManagedEnvironment();
+    await environment.isZoneRedundant.set(false);
+    const _zoneRedundant = await environment.isZoneRedundant.get();
+});
 
 // Test fluent chaining on AzureContainerAppEnvironmentResource
 await env
@@ -23,6 +28,14 @@ await env2.withDashboard();
 // Test withHttpsUpgrade with no args (uses default)
 await env2.withHttpsUpgrade();
 
+// Test internal load-balancer configuration across AppContainers and Azure.Network.
+const vnet = await builder.addAzureVirtualNetwork("vnet");
+const subnet = await vnet.addSubnet("app-subnet", "10.0.0.0/23");
+await subnet.withServiceDelegation("Microsoft.App/environments");
+const internalEnv = await builder.addAzureContainerAppEnvironment("internal-env");
+await internalEnv.withDelegatedSubnet(subnet);
+await internalEnv.withInternalLoadBalancer(vnet);
+
 // === WithAzureLogAnalyticsWorkspace ===
 // Test withAzureLogAnalyticsWorkspace with a Log Analytics Workspace resource
 const laws = await builder.addAzureLogAnalyticsWorkspace("laws");
@@ -34,9 +47,17 @@ const certificateName = await builder.addParameter("certificateName");
 // === PublishAsAzureContainerApp ===
 // Test publishAsAzureContainerApp on a container resource with callback
 const web = await builder.addContainer("web", "myregistry/web:latest");
-await web.publishAsAzureContainerApp(async (_infrastructure, app) => {
+await web.publishAsAzureContainerApp(async (infrastructure, app) => {
     await app.configureCustomDomain(customDomain, certificateName);
     await app.configureScale({ minReplicas: 1 });
+    const provisionedApp = await infrastructure.getContainerAppByIdentifier("web");
+    await provisionedApp.workloadProfileName.set("consumption");
+    const _workloadProfile = await provisionedApp.workloadProfileName.get();
+    // Outbound addresses are service outputs, not writable configuration.
+    const outboundAddresses = await provisionedApp.outboundIPAddressList();
+    if (await outboundAddresses.count() !== 0) {
+        throw new Error("Unprovisioned container app outbound address list should be empty");
+    }
 });
 
 // Test publishAsAzureContainerAppJob on an executable resource
@@ -51,7 +72,11 @@ await worker.publishAsAzureContainerAppJob();
 // Test publishAsAzureContainerAppJob (with callback)
 const processor = await builder.addContainer("processor", "myregistry/processor:latest");
 await processor.publishAsAzureContainerAppJob({
-    configure: async (_infrastructure, job) => {
+    configure: async (infrastructure, job) => {
+        const provisionedJob = await infrastructure.getContainerAppJobByIdentifier("processor");
+        const configuration = await provisionedJob.configuration.get();
+        await configuration.replicaTimeout.set(300);
+        const _replicaTimeout = await configuration.replicaTimeout.get();
         await job.bicepIdentifier.set("processorJob");
     }
 });

@@ -1,13 +1,16 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREDOTNETPROJECT001, ASPIREEXTENSION001, ASPIREPIPELINES001
+#pragma warning disable ASPIREEXTENSION001, ASPIREPROJECTS001
 
 using System.Globalization;
 using System.Runtime.CompilerServices;
+using System.Text.RegularExpressions;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Utils;
+using Aspire.Shared.ConsoleLogs;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -17,34 +20,50 @@ namespace Aspire.Hosting.Dotnet;
 /// <summary>
 /// Configures coordinated initial builds for path-based .NET resources.
 /// </summary>
-internal static class DotnetProjectBuildCoordinator
+internal static partial class DotnetProjectBuildCoordinator
 {
+    private const int MaxReportedBuildOutputLines = 20;
+    private const int MaxReportedBuildOutputLineLength = 1000;
+    private static readonly TimeSpan s_buildOutputReadTimeout = TimeSpan.FromSeconds(10);
+    private static readonly ConditionalWeakTable<IResource, BuildFailureState> s_buildFailures = new();
+
     private static readonly ConditionalWeakTable<IDistributedApplicationBuilder, CoordinatorState> s_states = new();
 
     internal const string BuildResourceName = "__dotnet-project-build";
     private const string DebugSessionPortConfigurationKey = "DEBUG_SESSION_PORT";
     private const string DebugSessionInfoConfigurationKey = "DEBUG_SESSION_INFO";
     private const string AspireStorePathConfigurationKey = "Aspire:Store:Path";
+    private const string RestoreProjectsIndividuallyConfigurationKey = "Aspire:Dotnet:RestoreProjectsIndividually";
 
     public static CoordinatorState? Prepare(
         IDistributedApplicationBuilder builder,
         DotnetProjectMetadata projectMetadata)
     {
-        if (!builder.ExecutionContext.IsRunMode || !ShouldCoordinateBuild(builder))
+        var coordinationMode = GetBuildCoordinationMode(builder);
+        // Coordinated builds are only needed in run mode. The build-only IDE compatibility path applies only to
+        // project files; file-based apps retain their existing launch behavior.
+        if (!builder.ExecutionContext.IsRunMode ||
+            (coordinationMode == BuildCoordinationMode.BuildOnly && !IsProjectFile(projectMetadata.ProjectPath)))
         {
             return null;
         }
 
-        var state = s_states.GetValue(builder, static builder => new CoordinatorState(builder));
+        var state = s_states.GetValue(
+            builder,
+            builder => new CoordinatorState(builder, coordinationMode));
         if (IsSupportedPath(projectMetadata.ProjectPath))
         {
-            projectMetadata.SuppressBuild = true;
+            projectMetadata.SuppressBuild = state.SuppressIdeBuild;
             if (IsProjectFile(projectMetadata.ProjectPath))
             {
                 projectMetadata.SetProjectPath(state.AddProject(projectMetadata.ProjectPath, projectMetadata.BuildConfiguration));
             }
             else
             {
+                // The SDK folds case, but not Unicode normalization, in file-app cache keys:
+                // https://github.com/dotnet/dotnet/blob/820230c386/src/sdk/src/Cli/Microsoft.DotNet.FileBasedPrograms/Sha256Hasher.cs#L27-L28
+                // Keep the direct build, launch, and rebuilder on the same path spelling.
+                projectMetadata.SetProjectPath(DotnetProjectBuildResource.ResolveBuildPathCasing(projectMetadata.ProjectPath));
                 state.EnsureBuildResource(projectMetadata.BuildConfiguration);
             }
         }
@@ -62,6 +81,9 @@ internal static class DotnetProjectBuildCoordinator
         }
 
         state.AddResource(resourceBuilder.Resource);
+        resourceBuilder.WithAnnotation(new DotnetProgramBuildCompletionAnnotation(
+            (services, cancellationToken) =>
+                state.WaitForBuildCompletionAsync(resourceBuilder.Resource, services, cancellationToken)));
 
         // Preserve the eagerly visible dependency used by model tests and tooling. BeforeStart replaces
         // the build plan after all resource environment callbacks and SDK roots are known, then adds the
@@ -110,6 +132,9 @@ internal static class DotnetProjectBuildCoordinator
             .WithIconName("CodeCsRectangle")
             .ExcludeFromManifest()
             .WithHiddenOnCompletion(0);
+
+        BeginBuildAttemptOnResourceStart(builder, buildResource);
+        ReportBuildFailureOnResourceStopped(builder, buildResource);
 
         return buildResource;
     }
@@ -175,63 +200,258 @@ internal static class DotnetProjectBuildCoordinator
 
     private static async Task WaitForSuccessfulBuildAsync(
         IServiceProvider services,
-        DotnetProjectBuildResource buildResource,
+        IResource buildResource,
         CancellationToken cancellationToken)
     {
         var notificationService = services.GetRequiredService<ResourceNotificationService>();
-        var buildEvent = await notificationService.WaitForResourceAsync(
-            buildResource.Name,
-            resourceEvent => IsSettledBuildSnapshot(resourceEvent.Snapshot),
-            cancellationToken).ConfigureAwait(false);
-
-        if (buildEvent.Snapshot.State?.Text == KnownResourceStates.FailedToStart ||
-            buildEvent.Snapshot.ExitCode is not 0)
+        var failureState = s_buildFailures.GetValue(buildResource, static _ => new BuildFailureState());
+        while (true)
         {
-            var exitCode = buildEvent.Snapshot.ExitCode?.ToString(CultureInfo.InvariantCulture) ?? "unavailable";
-            throw new DistributedApplicationException(
-                $"The coordinated .NET build failed with exit code {exitCode}. See resource '{buildResource.Name}' for build output.");
+            var attempt = failureState.Attempt;
+            var buildEvent = await notificationService.WaitForResourceAsync(
+                buildResource.Name,
+                resourceEvent => IsSettledBuildSnapshot(resourceEvent.Snapshot),
+                cancellationToken).ConfigureAwait(false);
+
+            if (buildEvent.Snapshot.State?.Text != KnownResourceStates.FailedToStart &&
+                buildEvent.Snapshot.ExitCode is 0)
+            {
+                if (failureState.IsCurrentAttempt(attempt))
+                {
+                    return;
+                }
+
+                continue;
+            }
+
+            var messageTask = failureState.GetFailureMessage(attempt, services, buildResource, buildEvent.Snapshot);
+            if (messageTask is null)
+            {
+                // A start raced with the terminal-state wait. Do not cache an old snapshot as the new attempt's failure.
+                continue;
+            }
+
+            var message = await messageTask.WaitAsync(cancellationToken).ConfigureAwait(false);
+            throw new DistributedApplicationException(message);
         }
     }
+
+    private static Action BeginBuildAttemptOnResourceStart(IDistributedApplicationBuilder builder, IResource resource)
+    {
+        var subscription = builder.Eventing.Subscribe<BeforeResourceStartedEvent>(
+            resource,
+            static (@event, _) =>
+            {
+                s_buildFailures.GetValue(@event.Resource, static _ => new BuildFailureState()).BeginAttempt();
+                return Task.CompletedTask;
+            });
+        return () => builder.Eventing.Unsubscribe(subscription);
+    }
+
+    // Dependents report the failure when their wait observes it, but an explicit-start resource with no dependents never
+    // waits. Start the shared per-attempt report when the build itself settles so the AppHost log still gets the summary.
+    private static void ReportBuildFailureOnResourceStopped(IDistributedApplicationBuilder builder, IResource resource)
+    {
+        builder.Eventing.Subscribe<ResourceStoppedEvent>(
+            resource,
+            static (@event, _) =>
+            {
+                var failureState = s_buildFailures.GetValue(@event.Resource, static _ => new BuildFailureState());
+                // An earlier stopped handler can restart the build. The orchestrator publishes Starting before
+                // BeforeResourceStartedEvent advances the attempt, so read the attempt first and then the current
+                // snapshot: a restart is then either visible as a non-terminal state or the snapshot is already the
+                // new attempt's result. Never attribute this event's (possibly stale) snapshot to a later attempt.
+                var attempt = failureState.Attempt;
+                if (@event.Services.GetRequiredService<ResourceNotificationService>()
+                        .TryGetCurrentState(@event.ResourceEvent.ResourceId, out var current) &&
+                    IsFailedBuildSnapshot(current.Snapshot))
+                {
+                    // Do not block event dispatch on reading the build output; waiters share the same cached task.
+                    failureState.GetFailureMessage(attempt, @event.Services, @event.Resource, current.Snapshot);
+                }
+
+                return Task.CompletedTask;
+            });
+    }
+
+    private static async Task<string> ReportBuildFailureAsync(
+        IServiceProvider services,
+        IResource buildResource,
+        CustomResourceSnapshot snapshot)
+    {
+        var exitCode = snapshot.ExitCode?.ToString(CultureInfo.InvariantCulture) ?? "unavailable";
+        var message = $"The coordinated .NET build failed with exit code {exitCode}. See resource '{buildResource.Name}' for build output.";
+        var buildOutput = await GetBuildFailureOutputAsync(services, buildResource).ConfigureAwait(false);
+        if (buildOutput.Count > 0)
+        {
+            message += Environment.NewLine + string.Join(Environment.NewLine, buildOutput);
+        }
+
+        services.GetService<ILoggerFactory>()?
+            .CreateLogger(typeof(DotnetProjectBuildCoordinator))
+            .LogError("{Message}", message);
+        return message;
+    }
+
+    private static async Task<IReadOnlyList<string>> GetBuildFailureOutputAsync(
+        IServiceProvider services,
+        IResource buildResource)
+    {
+        var resourceLoggerService = services.GetService<ResourceLoggerService>();
+        if (resourceLoggerService is null)
+        {
+            return [];
+        }
+
+        var errors = new List<string>();
+        // Stdout, stderr, startup and system streams are read concurrently, so delivery order is not chronological.
+        // Keep the newest lines by their DCP timestamp, using delivery order for equal or missing timestamps.
+        var tail = new SortedSet<BuildOutputLine>();
+        long sequence = 0;
+        var applicationStopping = services.GetService<IHostApplicationLifetime>()?.ApplicationStopping ?? CancellationToken.None;
+        using var readCancellation = CancellationTokenSource.CreateLinkedTokenSource(applicationStopping);
+        readCancellation.CancelAfter(s_buildOutputReadTimeout);
+        try
+        {
+            // Completed DCP process output is stored independently of live log forwarding; no subscriber is needed.
+            // https://github.com/microsoft/dcp/blob/v0.27.2/internal/exerunners/process_executable_runner.go#L207-L220
+            await foreach (var batch in resourceLoggerService.GetAllAsync(buildResource)
+                .WithCancellation(readCancellation.Token)
+                .ConfigureAwait(false))
+            {
+                foreach (var logLine in batch)
+                {
+                    // Stored DCP lines are prefixed with their timestamp, for example:
+                    //   2026-11-02T22:12:48.9230608Z Program.cs(3,1): error CS0103: ...
+                    // Lines without a parsable timestamp are treated as newer than every timestamped line.
+                    DateTimeOffset? timestamp = null;
+                    var content = logLine.Content;
+                    if (TimestampParser.TryParseConsoleTimestamp(content, out var timestampResult))
+                    {
+                        content = timestampResult.Value.ModifiedText;
+                        timestamp = timestampResult.Value.Timestamp;
+                    }
+
+                    content = content.TrimEnd();
+                    if (content.Length == 0)
+                    {
+                        continue;
+                    }
+
+                    if (content.Length > MaxReportedBuildOutputLineLength)
+                    {
+                        content = content[..MaxReportedBuildOutputLineLength];
+                    }
+
+                    if (errors.Count < MaxReportedBuildOutputLines &&
+                        MsBuildErrorRegex().IsMatch(content) &&
+                        !errors.Contains(content, StringComparer.Ordinal))
+                    {
+                        errors.Add(content);
+                    }
+
+                    tail.Add(new BuildOutputLine(timestamp?.UtcDateTime ?? DateTime.MaxValue, sequence++, content));
+                    if (tail.Count > MaxReportedBuildOutputLines)
+                    {
+                        tail.Remove(tail.Min);
+                    }
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // The build output is best-effort diagnostics; report whatever was read before the timeout or shutdown.
+        }
+        catch (Exception ex)
+        {
+            // Reading the build output must never replace the build failure itself.
+            services.GetService<ILoggerFactory>()?
+                .CreateLogger(typeof(DotnetProjectBuildCoordinator))
+                .LogDebug(ex, "Failed to read the output of .NET build resource '{ResourceName}'.", buildResource.Name);
+        }
+
+        return errors.Count > 0 ? errors : [.. tail.Select(static line => line.Content)];
+    }
+
+    // Matches MSBuild canonical error lines such as "File.cs(1,2): error CS1002: ..." or "MSBUILD : error MSB1009: ...".
+    [GeneratedRegex(@"(^|\s|:)error(\s+[A-Za-z]+\d+)?\s*:", RegexOptions.CultureInvariant)]
+    private static partial Regex MsBuildErrorRegex();
 
     internal static bool IsSettledBuildSnapshot(CustomResourceSnapshot snapshot) =>
         snapshot.State?.Text == KnownResourceStates.FailedToStart ||
         (KnownResourceStates.TerminalStates.Contains(snapshot.State?.Text) &&
          snapshot.ExitCode is not null);
 
+    private static bool IsFailedBuildSnapshot(CustomResourceSnapshot snapshot) =>
+        IsSettledBuildSnapshot(snapshot) &&
+        (snapshot.State?.Text == KnownResourceStates.FailedToStart || snapshot.ExitCode is not 0);
+
     private static bool IsProjectFile(string path) =>
-        path.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase);
+        ProjectPathResolver.IsSupportedDotnetProjectFile(path);
 
     private static bool IsSupportedPath(string path) =>
         IsProjectFile(path) || path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase);
 
-    private static bool ShouldCoordinateBuild(IDistributedApplicationBuilder builder)
+    private static BuildCoordinationMode GetBuildCoordinationMode(IDistributedApplicationBuilder builder)
     {
         if (string.IsNullOrEmpty(builder.Configuration[DebugSessionPortConfigurationKey]))
         {
-            return true;
+            return BuildCoordinationMode.BuildAndSuppress;
         }
 
-        return DebugSessionInfoParser.TryGetSupportedLaunchConfigurations(
+        // A launcher without a valid capability payload cannot opt into the external-build contract. Visual Studio's
+        // F5 build covers the startup project's MSBuild dependencies, but path-based project resources are
+        // intentionally not ProjectReference items. Build those projects before sending the unchanged legacy
+        // "project" request so Visual Studio has output to launch, while keeping IDE build suppression disabled.
+        // See https://github.com/microsoft/aspire/issues/21865.
+        if (!DebugSessionInfoParser.TryGetSupportedLaunchConfigurations(
                 builder.Configuration[DebugSessionInfoConfigurationKey],
                 out var supportedLaunchConfigurations)
-            && supportedLaunchConfigurations?.Contains(
-                KnownLaunchConfigurationTypes.ProjectWithExternalBuild) is true;
+            || supportedLaunchConfigurations is null)
+        {
+            return BuildCoordinationMode.BuildOnly;
+        }
+
+        // The IDE honors coordinated-build values and build suppression.
+        if (supportedLaunchConfigurations.Contains(KnownLaunchConfigurationTypes.ProjectWithExternalBuild))
+        {
+            return BuildCoordinationMode.BuildAndSuppress;
+        }
+
+        // The ordinary "project" capability says that an IDE can launch a project, not that it builds the project
+        // before launch. Prebuild while preserving the legacy launch payload and leaving IDE build suppression
+        // disabled. An IDE without "project" support runs the resource as a process and needs the fully coordinated
+        // external-build path, including suppression of the implicit `dotnet run` build.
+        return supportedLaunchConfigurations.Contains(KnownLaunchConfigurationTypes.Project)
+            ? BuildCoordinationMode.BuildOnly
+            : BuildCoordinationMode.BuildAndSuppress;
+    }
+
+    internal enum BuildCoordinationMode
+    {
+        BuildOnly,
+        BuildAndSuppress
     }
 
     internal sealed class CoordinatorState : IDisposable
     {
         private readonly IDistributedApplicationBuilder _builder;
+        private readonly BuildCoordinationMode _coordinationMode;
+        private readonly object _materializationLock = new();
         private readonly List<ResourceRegistration> _registrations = [];
         private readonly List<DotnetProjectBuildResource> _ownedBuildResources = [];
         private readonly List<SharedBuildEnvironment> _sharedBuildEnvironments = [];
         private readonly Dictionary<DotnetProjectResource, Action> _eagerDependencyRollbacks =
             new(ReferenceEqualityComparer.Instance);
         private bool _materialized;
+        private bool _materializationInProgress;
         private bool _disposed;
+        private TaskCompletionSource _materializationCompletion = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        public CoordinatorState(IDistributedApplicationBuilder builder)
+        internal CoordinatorState(IDistributedApplicationBuilder builder, BuildCoordinationMode coordinationMode)
         {
             _builder = builder;
+            _coordinationMode = coordinationMode;
             builder.Services.AddSingleton(_ => this);
             builder.Pipeline.WithFinalAction(
                 WellKnownPipelineSteps.BeforeStart,
@@ -239,6 +459,8 @@ internal static class DotnetProjectBuildCoordinator
                     .GetRequiredService<CoordinatorState>()
                     .MaterializeBuildPlan(stepContext.Model, stepContext.Services));
         }
+
+        public bool SuppressIdeBuild => _coordinationMode == BuildCoordinationMode.BuildAndSuppress;
 
         public IReadOnlyList<DotnetProjectResource> Resources =>
             _registrations.Select(registration => registration.Resource).ToArray();
@@ -264,18 +486,47 @@ internal static class DotnetProjectBuildCoordinator
             _registrations.Add(new ResourceRegistration(resource));
         }
 
-        public Task WaitForBuildCompletionAsync(
+        public async Task WaitForBuildCompletionAsync(
             DotnetProjectResource resource,
             IServiceProvider services,
             CancellationToken cancellationToken)
         {
-            ObjectDisposedException.ThrowIf(_disposed, this);
+            Task materializationTask;
+            lock (_materializationLock)
+            {
+                ObjectDisposedException.ThrowIf(_disposed, this);
+                materializationTask = _materializationCompletion.Task;
+            }
+
+            // BeforeStartEvent subscribers can request build output before the BeforeStart pipeline's final
+            // action creates the plan. Waiting here must not block that event or depend on application readiness.
+            await materializationTask.WaitAsync(cancellationToken).ConfigureAwait(false);
 
             var registration = _registrations.Single(
                 registration => ReferenceEquals(registration.Resource, resource));
-            var finalBuildResource = registration.FinalBuildResource ?? throw new InvalidOperationException(
-                $"The coordinated build plan for .NET project resource '{resource.Name}' has not been materialized.");
-            return WaitForSuccessfulBuildAsync(services, finalBuildResource, cancellationToken);
+            if (registration.FinalBuildResource is { } finalBuildResource)
+            {
+                // Do not cache this wait: another command can arrive during a later build attempt.
+                await WaitForSuccessfulBuildAsync(services, finalBuildResource, cancellationToken).ConfigureAwait(false);
+
+                // The initial build barrier stays finished when the project's separate rebuilder runs.
+                // Once that resource has been used, its latest attempt must also succeed before consumers
+                // can use the output. Do not wait on a dormant, explicitly started rebuilder.
+                var model = services.GetRequiredService<DistributedApplicationModel>();
+                var notifications = services.GetRequiredService<ResourceNotificationService>();
+                if (FindRebuilder(model, resource) is { } rebuilder &&
+                    notifications.TryGetCurrentState(rebuilder.Name, out var rebuildEvent) &&
+                    rebuildEvent.Snapshot.State?.Text is { } state &&
+                    (state == KnownResourceStates.Starting ||
+                     state == KnownResourceStates.Running ||
+                     state == KnownResourceStates.Waiting ||
+                     state == KnownResourceStates.Building ||
+                     state == KnownResourceStates.Stopping ||
+                     KnownResourceStates.TerminalStates.Contains(state)))
+                {
+                    await WaitForSuccessfulBuildAsync(services, rebuilder, cancellationToken).ConfigureAwait(false);
+                }
+            }
         }
 
         public void AddEagerBuildDependencies()
@@ -304,12 +555,17 @@ internal static class DotnetProjectBuildCoordinator
 
         public void Dispose()
         {
-            if (_disposed)
+            lock (_materializationLock)
             {
-                return;
+                if (_disposed)
+                {
+                    return;
+                }
+
+                _disposed = true;
+                _materializationCompletion.TrySetCanceled();
             }
 
-            _disposed = true;
             RemoveEagerBuildDependencies(_registrations.Select(registration => registration.Resource));
             foreach (var buildResource in _ownedBuildResources)
             {
@@ -325,9 +581,57 @@ internal static class DotnetProjectBuildCoordinator
             DistributedApplicationModel model,
             IServiceProvider services)
         {
+            TaskCompletionSource completion;
+            lock (_materializationLock)
+            {
+                ObjectDisposedException.ThrowIf(_disposed, this);
+                completion = _materializationCompletion;
+                if (_materializationInProgress)
+                {
+                    return completion.Task;
+                }
+
+                _materializationInProgress = true;
+            }
+
+            // Consumers must remain able to capture this attempt while the synchronous model mutation runs.
+            try
+            {
+                MaterializeBuildPlanCore(model, services);
+            }
+            catch (Exception ex)
+            {
+                lock (_materializationLock)
+                {
+                    _materializationInProgress = false;
+                    if (!_disposed)
+                    {
+                        // Existing consumers observe this failed attempt; subsequent consumers can await a retry.
+                        _materializationCompletion = new(TaskCreationOptions.RunContinuationsAsynchronously);
+                    }
+
+                    completion.TrySetException(ex);
+                }
+
+                throw;
+            }
+
+            lock (_materializationLock)
+            {
+                _materializationInProgress = false;
+                completion.TrySetResult();
+            }
+
+            return Task.CompletedTask;
+        }
+
+        private void MaterializeBuildPlanCore(
+            DistributedApplicationModel model,
+            IServiceProvider services)
+        {
             if (_materialized)
             {
-                return Task.CompletedTask;
+                return;
             }
 
             var activeResources = model.Resources.ToHashSet(ReferenceEqualityComparer.Instance);
@@ -365,6 +669,18 @@ internal static class DotnetProjectBuildCoordinator
                 .Where(entry => File.Exists(entry.Metadata.ProjectPath))
                 .ToArray();
 
+            if (_coordinationMode == BuildCoordinationMode.BuildOnly &&
+                buildEntries.FirstOrDefault(entry => GetBuildEnvironmentCallbacks(entry).Any()) is { } customizedEntry)
+            {
+                throw new DistributedApplicationException(
+                    $"The .NET project resource '{customizedEntry.Registration.Resource.Name}' uses " +
+                    $"WithBuildEnvironment, but Aspire can use only the legacy " +
+                    $"'{KnownLaunchConfigurationTypes.Project}' launch contract for the active IDE session and cannot " +
+                    $"reliably launch output produced with project-specific build settings. Use an IDE that advertises " +
+                    $"'{KnownLaunchConfigurationTypes.ProjectWithExternalBuild}', run the application outside this IDE, " +
+                    "or remove the build customization.");
+            }
+
             if (buildEntries.Length == 0)
             {
                 foreach (var missingEntry in missingBuildEntries)
@@ -384,24 +700,32 @@ internal static class DotnetProjectBuildCoordinator
                 }
 
                 _materialized = true;
-                return Task.CompletedTask;
+                return;
             }
 
-            var buildSteps = CreateBuildSteps(buildEntries);
+            var restoreProjectsIndividually = _builder.Configuration.GetValue<bool>(RestoreProjectsIndividuallyConfigurationKey);
             var applicationLifetime = services.GetRequiredService<IHostApplicationLifetime>();
             var primaryBuildResource = PrimaryBuildResource!;
             var originalPrimaryProjectPaths = primaryBuildResource.ProjectPaths;
             var originalPrimaryWorkingDirectory = primaryBuildResource.WorkingDirectory;
             var originalPrimaryBuildConfiguration = primaryBuildResource.BuildConfiguration;
+            var originalPrimaryRestoreProjectsIndividually = primaryBuildResource.RestoreProjectsIndividually;
             var rollbackActions = new Stack<Action>();
 
             try
             {
+                foreach (var entry in buildEntries)
+                {
+                    ReconcileFileAppPath(model, entry, rollbackActions);
+                }
+
+                var buildSteps = CreateBuildSteps(buildEntries);
                 rollbackActions.Push(() =>
                     primaryBuildResource.ConfigureTraversalBuild(
                         originalPrimaryProjectPaths,
                         originalPrimaryWorkingDirectory,
-                        originalPrimaryBuildConfiguration));
+                        originalPrimaryBuildConfiguration,
+                        originalPrimaryRestoreProjectsIndividually));
 
                 var buildResources = new List<DotnetProjectBuildResource>(buildSteps.Count);
                 for (var index = 0; index < buildSteps.Count; index++)
@@ -426,7 +750,8 @@ internal static class DotnetProjectBuildCoordinator
                         buildResource.ConfigureTraversalBuild(
                             step.Projects.Select(entry => entry.Metadata.ProjectPath),
                             step.WorkingDirectory,
-                            step.Configuration);
+                            step.Configuration,
+                            restoreProjectsIndividually);
                         rollbackActions.Push(ValidateMaterializedBuildCallbacks(buildResource, step.Projects));
                     }
                     else
@@ -473,10 +798,18 @@ internal static class DotnetProjectBuildCoordinator
 
                     foreach (var entry in step.Projects)
                     {
-                        var originalBuildWorkingDirectory = entry.Metadata.BuildWorkingDirectory;
-                        entry.Metadata.SetBuildWorkingDirectory(step.WorkingDirectory);
-                        rollbackActions.Push(() =>
-                            entry.Metadata.SetBuildWorkingDirectory(originalBuildWorkingDirectory));
+                        if (FindRebuilder(model, entry.Registration.Resource) is { } rebuilder)
+                        {
+                            rollbackActions.Push(BeginBuildAttemptOnResourceStart(_builder, rebuilder));
+                        }
+
+                        if (SuppressIdeBuild)
+                        {
+                            var originalBuildWorkingDirectory = entry.Metadata.BuildWorkingDirectory;
+                            entry.Metadata.SetBuildWorkingDirectory(step.WorkingDirectory);
+                            rollbackActions.Push(() =>
+                                entry.Metadata.SetBuildWorkingDirectory(originalBuildWorkingDirectory));
+                        }
                     }
 
                     buildResource.RegisterForShutdown(applicationLifetime);
@@ -505,6 +838,25 @@ internal static class DotnetProjectBuildCoordinator
                             registration.FinalBuildResource = originalFinalBuildResource);
 
                         if (AddBuildDependency(_builder, resource, finalBuildResource) is { } rollback)
+                        {
+                            rollbackActions.Push(rollback);
+                        }
+                    }
+                }
+
+                if (_coordinationMode == BuildCoordinationMode.BuildOnly)
+                {
+                    foreach (var fileApp in model.Resources.OfType<DotnetProjectResource>())
+                    {
+                        var metadata = fileApp.Annotations.OfType<IProjectMetadata>().SingleOrDefault();
+                        if (metadata is not { IsFileBasedApp: true } || !File.Exists(metadata.ProjectPath))
+                        {
+                            continue;
+                        }
+
+                        // Legacy IDE sessions keep file apps on their existing launch path. Order that implicit build
+                        // after the coordinated project build because #:project references can share bin/obj outputs.
+                        if (AddBuildDependency(_builder, fileApp, finalBuildResource) is { } rollback)
                         {
                             rollbackActions.Push(rollback);
                         }
@@ -546,8 +898,45 @@ internal static class DotnetProjectBuildCoordinator
 
                 throw;
             }
+        }
 
-            return Task.CompletedTask;
+        // Prepare resolves a file app's spelling at registration, but the file may not exist yet; then only its existing
+        // ancestors are resolved. Resolve again now that it exists so the direct build, `run --file --no-build`, the
+        // rebuilder, and their default working directories use one spelling and therefore one SDK cache entry.
+        private static void ReconcileFileAppPath(
+            DistributedApplicationModel model,
+            ProjectEntry entry,
+            Stack<Action> rollbackActions)
+        {
+            var originalPath = entry.Metadata.ProjectPath;
+            if (IsProjectFile(originalPath))
+            {
+                return;
+            }
+
+            var resolvedPath = DotnetProjectBuildResource.ResolveBuildPathCasing(originalPath);
+            if (resolvedPath.Equals(originalPath, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            entry.Metadata.SetProjectPath(resolvedPath);
+            rollbackActions.Push(() => entry.Metadata.SetProjectPath(originalPath));
+
+            var originalDirectory = Path.GetDirectoryName(originalPath);
+            var resolvedDirectory = Path.GetDirectoryName(resolvedPath)!;
+            IResource?[] launchResources = [entry.Registration.Resource, FindRebuilder(model, entry.Registration.Resource)];
+            foreach (var resource in launchResources)
+            {
+                // Explicit or SDK-selected working directories belong to the caller; only move the registration default.
+                if (resource?.Annotations.OfType<ExecutableAnnotation>().LastOrDefault() is { } executable &&
+                    !executable.WorkingDirectoryExplicitlySet &&
+                    string.Equals(executable.WorkingDirectory, originalDirectory, StringComparison.Ordinal))
+                {
+                    executable.WorkingDirectory = resolvedDirectory;
+                    rollbackActions.Push(() => executable.WorkingDirectory = originalDirectory!);
+                }
+            }
         }
 
         private void RemoveEagerBuildDependencies(IEnumerable<DotnetProjectResource> resources)
@@ -772,8 +1161,9 @@ internal static class DotnetProjectBuildCoordinator
         /// Owns the single evaluation of a project's build-only environment callbacks.
         /// </summary>
         /// <remarks>
-        /// The coordinated build resource, the project rebuilder, and the IDE launch configuration must all see the
-        /// same build variables. Letting each consumer evaluate the callbacks would run them several times and allow
+        /// The coordinated build resource and project rebuilder must see the same build variables. External-build IDE
+        /// launch configurations consume the same snapshot; legacy IDE launch configurations retain their unchanged
+        /// payload. Letting each applicable consumer evaluate the callbacks would run them several times and allow
         /// whichever consumer evaluates first to decide the build inputs.
         /// </remarks>
         private sealed class SharedBuildEnvironment : IDisposable
@@ -1305,6 +1695,66 @@ internal static class DotnetProjectBuildCoordinator
             public bool IsAbandoned { get; set; }
 
             public bool CleanupScheduled { get; set; }
+        }
+    }
+
+    private readonly record struct BuildOutputLine(DateTime Timestamp, long Sequence, string Content) : IComparable<BuildOutputLine>
+    {
+        public int CompareTo(BuildOutputLine other) =>
+            Timestamp.CompareTo(other.Timestamp) is var result and not 0 ? result : Sequence.CompareTo(other.Sequence);
+    }
+
+    private sealed class BuildFailureState
+    {
+        private readonly object _lock = new();
+        private long _attempt;
+        private Lazy<Task<string>>? _message;
+
+        public long Attempt
+        {
+            get
+            {
+                lock (_lock)
+                {
+                    return _attempt;
+                }
+            }
+        }
+
+        public void BeginAttempt()
+        {
+            lock (_lock)
+            {
+                _attempt++;
+                _message = null;
+            }
+        }
+
+        public bool IsCurrentAttempt(long attempt)
+        {
+            lock (_lock)
+            {
+                return attempt == _attempt;
+            }
+        }
+
+        public Task<string>? GetFailureMessage(
+            long attempt,
+            IServiceProvider services,
+            IResource resource,
+            CustomResourceSnapshot snapshot)
+        {
+            lock (_lock)
+            {
+                if (attempt != _attempt)
+                {
+                    return null;
+                }
+
+                // Metadata updates replace snapshots without starting a new build.
+                _message ??= new(() => ReportBuildFailureAsync(services, resource, snapshot));
+                return _message.Value;
+            }
         }
     }
 }

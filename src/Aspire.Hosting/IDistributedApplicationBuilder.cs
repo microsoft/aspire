@@ -1,11 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREPIPELINES001
-#pragma warning disable ASPIREFILESYSTEM001
-#pragma warning disable ASPIREUSERSECRETS001
-
-using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
@@ -36,7 +31,7 @@ namespace Aspire.Hosting;
 /// <para>
 /// This example shows a distributed application that contains a .NET project (InventoryService) that uses
 /// a Redis cache and a PostgreSQL database. The builder is created using the <see cref="DistributedApplication.CreateBuilder(string[])"/>
-/// method.
+/// method. Adding the .NET project requires the <c>Aspire.Hosting.Dotnet</c> package.
 /// </para>
 /// <para>
 /// The <see href="https://learn.microsoft.com/dotnet/api/aspire.hosting.redisbuilderextensions.addredis">AddRedis</see>
@@ -49,9 +44,9 @@ namespace Aspire.Hosting;
 /// var builder = DistributedApplication.CreateBuilder(args);
 /// var cache = builder.AddRedis("cache");
 /// var inventoryDatabase = builder.AddPostgres("postgres").AddDatabase("inventory");
-/// builder.AddProject&lt;Projects.InventoryService&gt;("inventoryservice")
+/// builder.AddDotnetProject("inventoryservice", "../InventoryService/InventoryService.csproj")
 ///        .WithReference(cache)
-///        .WithReference(inventory);
+///        .WithReference(inventoryDatabase);
 /// builder.Build().Run();
 /// </code>
 /// </example>
@@ -143,7 +138,6 @@ public interface IDistributedApplicationBuilder
     /// The pipeline allows adding custom deployment steps that execute during the deploy process.
     /// Steps can declare dependencies on other steps to control execution order.
     /// </remarks>
-    [Experimental("ASPIREPIPELINES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public IDistributedApplicationPipeline Pipeline { get; }
 
     /// <summary>
@@ -160,7 +154,6 @@ public interface IDistributedApplicationBuilder
     /// consistent directory management across the application.
     /// </para>
     /// </remarks>
-    [Experimental("ASPIREFILESYSTEM001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public IFileSystemService FileSystemService => throw new NotImplementedException();
 
     /// <summary>
@@ -172,7 +165,6 @@ public interface IDistributedApplicationBuilder
     /// used by Aspire, enabling testability and consistent secret management.
     /// </para>
     /// </remarks>
-    [Experimental("ASPIREUSERSECRETS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public IUserSecretsManager UserSecretsManager => throw new NotImplementedException();
 
     /// <summary>

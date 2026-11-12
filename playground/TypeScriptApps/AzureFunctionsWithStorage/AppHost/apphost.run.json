@@ -1,0 +1,9 @@
+{
+  "profiles": {
+    "https": {
+      "applicationUrl": "https://localhost:10445;http://localhost:41445",
+      "environmentVariables": {
+      }
+    }
+  }
+}

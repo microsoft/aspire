@@ -266,16 +266,9 @@ public sealed class KubernetesGatewayTlsDeploymentTests(ITestOutputHelper output
 
             var content = File.ReadAllText(appHostFilePath);
 
-            // The starter template doesn't assign webfrontend to a variable.
-            // Insert "var webfrontend = " before the AddProject("webfrontend") call.
-            content = content.Replace(
-                "builder.AddProject<Projects.",
-                "var __proj__ = builder.AddProject<Projects.");
-            // The apiService line already has "var apiService = " so it became
-            // "var apiService = var __proj__ = ..." — fix it back:
-            content = content.Replace("var apiService = var __proj__ = ", "var apiService = ");
-            // Rename the webfrontend capture to the actual name:
-            content = content.Replace("var __proj__ = ", "var webfrontend = ");
+            content = DotnetProjectDeploymentHelpers.ReplaceExactlyOnce(content,
+                "builder.AddDotnetProject(\"webfrontend\",",
+                "var webfrontend = builder.AddDotnetProject(\"webfrontend\",");
 
             var buildRunPattern = "builder.Build().Run();";
             var replacement = $$"""
@@ -305,11 +298,11 @@ var gateway = k8s.AddGateway("ingress")
 builder.Build().Run();
 """;
 
-            content = content.Replace(buildRunPattern, replacement);
+            content = DotnetProjectDeploymentHelpers.ReplaceExactlyOnce(content, buildRunPattern, replacement);
 
             // Add required pragmas and using directive at the top of the file
-            var topOfFile = "#pragma warning disable ASPIREPIPELINES001\n#pragma warning disable ASPIRECOMPUTE003\nusing Aspire.Hosting.Kubernetes;\n";
-            if (!content.Contains("#pragma warning disable ASPIREPIPELINES001"))
+            var topOfFile = "#pragma warning disable ASPIRECOMPUTE003\nusing Aspire.Hosting.Kubernetes;\n";
+            if (!content.Contains(topOfFile))
             {
                 content = topOfFile + content;
             }
@@ -343,7 +336,7 @@ builder.Build().Run();
             output.WriteLine("Step 9: Running aspire deploy...");
             await auto.TypeAsync("aspire deploy");
             await auto.EnterAsync();
-            await auto.WaitForPipelineSuccessAsync(timeout: TimeSpan.FromMinutes(15));
+            await auto.WaitForPipelineSuccessAsync(timeout: TimeSpan.FromMinutes(15), counter: counter);
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 
             // ===== PHASE 4: Verify Gateway TLS =====

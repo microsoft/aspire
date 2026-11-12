@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net11.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <IsShipping>false</IsShipping>
+    <IsAspirePolyglotCompatible>false</IsAspirePolyglotCompatible>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Contracts/NativeIntegrations.Contracts.csproj" />
+  </ItemGroup>
+</Project>

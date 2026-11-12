@@ -3,7 +3,10 @@
 
 using System.Text.Json.Nodes;
 using Aspire.Cli.Agents;
+using Aspire.Cli.Agents.ClaudeCode;
+using Aspire.Cli.Agents.Copilot;
 using Aspire.Cli.Agents.Hooks;
+using Aspire.Cli.Agents.OpenCode;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -19,9 +22,9 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
         var home = workspace.CreateDirectory("home");
         var configurator = CreateConfigurator(workspace, home);
 
-        var result = await configurator.ConfigureAsync([AgentClientKind.CopilotCli], CancellationToken.None).DefaultTimeout();
+        var result = await configurator.ConfigureAsync(AgentEnvironment.CopilotCli, CancellationToken.None).DefaultTimeout();
 
-        Assert.Contains(AgentClientKind.CopilotCli, result.ConfiguredClients);
+        Assert.Equal(AgentEnvironment.CopilotCli, result.ConfiguredEnvironments);
         Assert.Empty(result.Skipped);
 
         var hookFile = Path.Combine(home.FullName, ".copilot", "hooks", "aspire-telemetry.json");
@@ -32,29 +35,54 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
 
         var entry = root["hooks"]!["postToolUse"]!.AsArray()[0]!.AsObject();
         Assert.Equal("command", (string)entry["type"]!);
+        Assert.False(entry.ContainsKey("matcher"));
         Assert.Equal(30, (int)entry["timeoutSec"]!);
-        Assert.Contains("track-telemetry.sh", (string)entry["bash"]!);
-        Assert.StartsWith("bash ", (string)entry["bash"]!);
-        Assert.Contains("track-telemetry.ps1", (string)entry["powershell"]!);
-        Assert.Contains("-File ", (string)entry["powershell"]!);
-        // Copilot CLI requires PowerShell 7+ on Windows, so the hook must invoke pwsh, not Windows PowerShell.
-        Assert.StartsWith("pwsh ", (string)entry["powershell"]!);
+        var (command, args) = AgentTelemetryHook.GetCommand("--hook");
+        Assert.Equal(command, (string)entry["exec"]!);
+        Assert.Equal(args, entry["args"]!.AsArray().Select(arg => (string)arg!));
+        Assert.False(entry.ContainsKey("bash"));
+        Assert.False(entry.ContainsKey("powershell"));
     }
 
     [Fact]
-    public async Task ConfigureAsync_PrefersCopilotAppWhenAppAndCliAreDetected()
+    public async Task ConfigureAsync_RegistersSharedCopilotHookOnceWhenAppAndCliAreDetected()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var home = workspace.CreateDirectory("home");
         var configurator = CreateConfigurator(workspace, home);
-
         var result = await configurator.ConfigureAsync(
-            [AgentClientKind.CopilotCli, AgentClientKind.CopilotApp],
+            AgentEnvironment.CopilotCli | AgentEnvironment.CopilotApp | AgentEnvironment.ClaudeCode |
+            AgentEnvironment.VsCode | AgentEnvironment.OpenCode,
             CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal([AgentClientKind.CopilotApp], result.ConfiguredClients);
+        Assert.Equal(AgentEnvironment.CopilotApp | AgentEnvironment.ClaudeCode, result.ConfiguredEnvironments);
         Assert.Empty(result.Skipped);
         Assert.True(File.Exists(Path.Combine(home.FullName, ".copilot", "hooks", "aspire-telemetry.json")));
+        Assert.True(File.Exists(Path.Combine(home.FullName, ".claude", "settings.json")));
+    }
+
+    [Fact]
+    public async Task ConfigureAsync_ConfiguresClaudeWhenCopilotHookWriteFails()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var home = workspace.CreateDirectory("home");
+        var copilotHome = Path.Combine(workspace.WorkspaceRoot.FullName, "copilot-home-file");
+        await File.WriteAllTextAsync(copilotHome, "not a directory").DefaultTimeout();
+        var configurator = CreateConfigurator(workspace, home, new Dictionary<string, string?>
+        {
+            ["COPILOT_HOME"] = copilotHome,
+        });
+
+        var result = await configurator.ConfigureAsync(
+            AgentEnvironment.CopilotApp | AgentEnvironment.CopilotCli | AgentEnvironment.ClaudeCode,
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(AgentEnvironment.ClaudeCode, result.ConfiguredEnvironments);
+        var skip = Assert.Single(result.Skipped);
+        Assert.Equal(AgentEnvironment.CopilotApp, skip.Environment);
+        Assert.Equal(TelemetryHookSkipReason.WriteFailed, skip.Reason);
+        Assert.True(File.Exists(Path.Combine(home.FullName, ".claude", "settings.json")));
+        Assert.Equal("not a directory", await File.ReadAllTextAsync(copilotHome).DefaultTimeout());
     }
 
     [Fact]
@@ -68,7 +96,7 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
             ["COPILOT_HOME"] = copilotHome.FullName,
         });
 
-        await configurator.ConfigureAsync([AgentClientKind.CopilotCli], CancellationToken.None).DefaultTimeout();
+        await configurator.ConfigureAsync(AgentEnvironment.CopilotCli, CancellationToken.None).DefaultTimeout();
 
         Assert.True(File.Exists(Path.Combine(copilotHome.FullName, "hooks", "aspire-telemetry.json")));
         Assert.False(Directory.Exists(Path.Combine(home.FullName, ".copilot")));
@@ -81,34 +109,23 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
         var home = workspace.CreateDirectory("home");
         var configurator = CreateConfigurator(workspace, home);
 
-        var result = await configurator.ConfigureAsync([AgentClientKind.ClaudeCode], CancellationToken.None).DefaultTimeout();
+        var result = await configurator.ConfigureAsync(AgentEnvironment.ClaudeCode, CancellationToken.None).DefaultTimeout();
 
-        Assert.Contains(AgentClientKind.ClaudeCode, result.ConfiguredClients);
+        Assert.Equal(AgentEnvironment.ClaudeCode, result.ConfiguredEnvironments);
         Assert.Empty(result.Skipped);
 
         var postToolUse = await ReadClaudePostToolUseAsync(home).DefaultTimeout();
         var ourGroups = CountAspireGroups(postToolUse);
         Assert.Equal(1, ourGroups);
+        Assert.Contains(postToolUse, group => (string?)group?["matcher"] == "*");
 
         var entry = FindAspireHook(postToolUse);
         Assert.Equal("command", (string)entry["type"]!);
         Assert.Equal(30, (int)entry["timeout"]!);
 
-        // Claude uses exec form (command + args): the executable is spawned directly and the script path is
-        // a discrete argument, not part of a shell command string.
-        var execCommand = (string)entry["command"]!;
-        var args = entry["args"]!.AsArray().Select(a => (string)a!).ToArray();
-        if (OperatingSystem.IsWindows())
-        {
-            Assert.Equal("pwsh", execCommand);
-            Assert.Contains("-File", args);
-            Assert.Contains(args, a => a.EndsWith("track-telemetry.ps1", StringComparison.OrdinalIgnoreCase));
-        }
-        else
-        {
-            Assert.Equal("bash", execCommand);
-            Assert.Contains(args, a => a.EndsWith("track-telemetry.sh", StringComparison.OrdinalIgnoreCase));
-        }
+        var (command, args) = AgentTelemetryHook.GetCommand("--hook");
+        Assert.Equal(command, (string)entry["command"]!);
+        Assert.Equal(args, entry["args"]!.AsArray().Select(arg => (string)arg!));
     }
 
     [Fact]
@@ -118,8 +135,8 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
         var home = workspace.CreateDirectory("home");
         var configurator = CreateConfigurator(workspace, home);
 
-        await configurator.ConfigureAsync([AgentClientKind.ClaudeCode], CancellationToken.None).DefaultTimeout();
-        await configurator.ConfigureAsync([AgentClientKind.ClaudeCode], CancellationToken.None).DefaultTimeout();
+        await configurator.ConfigureAsync(AgentEnvironment.ClaudeCode, CancellationToken.None).DefaultTimeout();
+        await configurator.ConfigureAsync(AgentEnvironment.ClaudeCode, CancellationToken.None).DefaultTimeout();
 
         var postToolUse = await ReadClaudePostToolUseAsync(home).DefaultTimeout();
         Assert.Equal(1, CountAspireGroups(postToolUse));
@@ -154,7 +171,7 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
         await File.WriteAllTextAsync(settingsPath, existing.ToJsonString()).DefaultTimeout();
 
         var configurator = CreateConfigurator(workspace, home);
-        await configurator.ConfigureAsync([AgentClientKind.ClaudeCode], CancellationToken.None).DefaultTimeout();
+        await configurator.ConfigureAsync(AgentEnvironment.ClaudeCode, CancellationToken.None).DefaultTimeout();
 
         var root = JsonNode.Parse(await File.ReadAllTextAsync(settingsPath).DefaultTimeout())!.AsObject();
         Assert.Equal("claude-opus", (string)root["model"]!);
@@ -165,7 +182,33 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task ConfigureAsync_SkipsClaude_WhenSettingsAreMalformed()
+    public async Task ConfigureAsync_ReplacesLegacyScriptButPreservesSharedGroup()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var home = workspace.CreateDirectory("home");
+        var claude = Directory.CreateDirectory(Path.Combine(home.FullName, ".claude"));
+        await File.WriteAllTextAsync(Path.Combine(claude.FullName, "settings.json"),
+            """{"hooks":{"PostToolUse":[{"matcher":"*","hooks":[{"type":"command","command":"pwsh","args":["-File","old/track-telemetry.ps1"]},{"type":"command","command":"echo keep"}]}]}}""");
+        var configurator = CreateConfigurator(workspace, home);
+
+        await configurator.ConfigureAsync(AgentEnvironment.ClaudeCode, CancellationToken.None);
+        await configurator.ConfigureAsync(AgentEnvironment.ClaudeCode, CancellationToken.None);
+
+        var groups = await ReadClaudePostToolUseAsync(home);
+        Assert.Equal(2, groups.Count);
+        Assert.Contains(groups, group => GroupContainsCommand(group, "echo keep"));
+        Assert.Equal(1, CountAspireGroups(groups));
+        Assert.Equal(AgentTelemetryHook.GetCommand("--hook").Args,
+            FindAspireHook(groups)["args"]!.AsArray().Select(arg => (string)arg!));
+    }
+
+    [Theory]
+    [InlineData((int)AgentEnvironment.ClaudeCode, (int)AgentEnvironment.None)]
+    [InlineData(
+        (int)(AgentEnvironment.CopilotApp | AgentEnvironment.CopilotCli | AgentEnvironment.ClaudeCode),
+        (int)AgentEnvironment.CopilotApp)]
+    public async Task ConfigureAsync_SkipsClaude_WhenSettingsAreMalformed(
+        int detectedEnvironments, int expectedEnvironments)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var home = workspace.CreateDirectory("home");
@@ -175,12 +218,60 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
         await File.WriteAllTextAsync(settingsPath, malformed).DefaultTimeout();
 
         var configurator = CreateConfigurator(workspace, home);
-        var result = await configurator.ConfigureAsync([AgentClientKind.ClaudeCode], CancellationToken.None).DefaultTimeout();
+        var result = await configurator.ConfigureAsync((AgentEnvironment)detectedEnvironments, CancellationToken.None).DefaultTimeout();
 
-        Assert.DoesNotContain(AgentClientKind.ClaudeCode, result.ConfiguredClients);
-        Assert.Contains(result.Skipped, s => s.Client == AgentClientKind.ClaudeCode && s.Reason == TelemetryHookSkipReason.MalformedConfig);
+        Assert.Equal((AgentEnvironment)expectedEnvironments, result.ConfiguredEnvironments);
+        var skip = Assert.Single(result.Skipped);
+        Assert.Equal(AgentEnvironment.ClaudeCode, skip.Environment);
+        Assert.Equal(TelemetryHookSkipReason.MalformedConfig, skip.Reason);
         // The malformed file must be left untouched, never clobbered.
         Assert.Equal(malformed, await File.ReadAllTextAsync(settingsPath).DefaultTimeout());
+    }
+
+    [Theory]
+    [InlineData("notaspire.dll", false)]
+    [InlineData("aspire.dll", true)]
+    [InlineData("ASPIRE.DLL", true)]
+    public async Task ConfigureAsync_MigratesOnlyExactManagedAspireAssembly(string assemblyName, bool shouldReplace)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var home = workspace.CreateDirectory("home");
+        var claude = Directory.CreateDirectory(Path.Combine(home.FullName, ".claude"));
+        // Include a rooted host path: when the current CLI itself uses dotnet, matching that host
+        // must not bypass validation of the assembly argument.
+        var host = string.Equals(Path.GetFileNameWithoutExtension(Environment.ProcessPath), "dotnet", StringComparison.OrdinalIgnoreCase)
+            ? Environment.ProcessPath!
+            : Path.Combine(workspace.Path, OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet");
+        var existingHook = new JsonObject
+        {
+            ["type"] = "command",
+            ["command"] = host,
+            ["args"] = new JsonArray(Path.Combine(workspace.Path, assemblyName), "agent", "telemetry", "--hook")
+        };
+        var settings = new JsonObject
+        {
+            ["hooks"] = new JsonObject
+            {
+                ["PostToolUse"] = new JsonArray(new JsonObject
+                {
+                    ["matcher"] = "*",
+                    ["hooks"] = new JsonArray(existingHook)
+                })
+            }
+        };
+        await File.WriteAllTextAsync(Path.Combine(claude.FullName, "settings.json"), settings.ToJsonString());
+        var configurator = CreateConfigurator(workspace, home);
+
+        await configurator.ConfigureAsync(AgentEnvironment.ClaudeCode, CancellationToken.None);
+        await configurator.ConfigureAsync(AgentEnvironment.ClaudeCode, CancellationToken.None);
+
+        var groups = await ReadClaudePostToolUseAsync(home);
+        var hooks = groups.SelectMany(group => group!["hooks"]!.AsArray()).ToArray();
+        Assert.Equal(shouldReplace ? 1 : 2, hooks.Length);
+        Assert.Equal(!shouldReplace, hooks.Any(hook => JsonNode.DeepEquals(hook, existingHook)));
+        var (command, args) = AgentTelemetryHook.GetCommand("--hook");
+        Assert.Single(hooks, hook => (string?)hook!["command"] == command
+            && hook["args"]!.AsArray().Select(arg => (string)arg!).SequenceEqual(args));
     }
 
     [Fact]
@@ -194,9 +285,9 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
         await File.WriteAllTextAsync(settingsPath, unexpected).DefaultTimeout();
 
         var configurator = CreateConfigurator(workspace, home);
-        var result = await configurator.ConfigureAsync([AgentClientKind.ClaudeCode], CancellationToken.None).DefaultTimeout();
+        var result = await configurator.ConfigureAsync(AgentEnvironment.ClaudeCode, CancellationToken.None).DefaultTimeout();
 
-        Assert.Contains(result.Skipped, s => s.Client == AgentClientKind.ClaudeCode && s.Reason == TelemetryHookSkipReason.UnexpectedConfigShape);
+        Assert.Contains(result.Skipped, s => s.Environment == AgentEnvironment.ClaudeCode && s.Reason == TelemetryHookSkipReason.UnexpectedConfigShape);
         Assert.Equal(unexpected, await File.ReadAllTextAsync(settingsPath).DefaultTimeout());
     }
 
@@ -214,24 +305,23 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
         await File.WriteAllTextAsync(settingsPath, nonObjectRoot).DefaultTimeout();
 
         var configurator = CreateConfigurator(workspace, home);
-        var result = await configurator.ConfigureAsync([AgentClientKind.ClaudeCode], CancellationToken.None).DefaultTimeout();
+        var result = await configurator.ConfigureAsync(AgentEnvironment.ClaudeCode, CancellationToken.None).DefaultTimeout();
 
-        Assert.Contains(result.Skipped, s => s.Client == AgentClientKind.ClaudeCode && s.Reason == TelemetryHookSkipReason.UnexpectedConfigShape);
+        Assert.Contains(result.Skipped, s => s.Environment == AgentEnvironment.ClaudeCode && s.Reason == TelemetryHookSkipReason.UnexpectedConfigShape);
         Assert.Equal(nonObjectRoot, await File.ReadAllTextAsync(settingsPath).DefaultTimeout());
     }
 
-    [Fact]
-    public async Task ConfigureAsync_IsNoOp_ForUnsupportedClients()
+    [Theory]
+    [InlineData((int)AgentEnvironment.None)]
+    [InlineData((int)(AgentEnvironment.VsCode | AgentEnvironment.OpenCode))]
+    public async Task ConfigureAsync_IsNoOp_ForUnsupportedClients(int detectedEnvironments)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var home = workspace.CreateDirectory("home");
         var configurator = CreateConfigurator(workspace, home);
+        var result = await configurator.ConfigureAsync((AgentEnvironment)detectedEnvironments, CancellationToken.None).DefaultTimeout();
 
-        var result = await configurator.ConfigureAsync(
-            [AgentClientKind.VsCode, AgentClientKind.OpenCode],
-            CancellationToken.None).DefaultTimeout();
-
-        Assert.Empty(result.ConfiguredClients);
+        Assert.Equal(AgentEnvironment.None, result.ConfiguredEnvironments);
         Assert.Empty(result.Skipped);
         // Nothing is materialized when no supported client is present.
         Assert.False(Directory.Exists(Path.Combine(home.FullName, ".aspire", "hooks")));
@@ -262,7 +352,7 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
                 || (ho["args"] is JsonArray args && args.Any(JsonValueHasTelemetryScript)));
 
     private static bool JsonValueHasTelemetryScript(JsonNode? node)
-        => node is JsonValue v && v.ToString().Contains("track-telemetry", StringComparison.OrdinalIgnoreCase);
+        => node is JsonValue v && (v.ToString().Contains("track-telemetry", StringComparison.OrdinalIgnoreCase) || v.ToString() == "--hook");
 
     private static bool GroupContainsCommand(JsonNode? group, string command)
         => group is JsonObject obj
@@ -300,6 +390,11 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
             homeDirectory: home);
         var environment = new TestEnvironment(environmentVariables);
         var installer = new TelemetryHookInstaller(executionContext, NullLogger<TelemetryHookInstaller>.Instance);
-        return new TelemetryHookConfigurator(installer, executionContext, environment, NullLogger<TelemetryHookConfigurator>.Instance);
+        return new TelemetryHookConfigurator(installer,
+        [
+            new CopilotAgentClient(executionContext, environment, NullLogger<CopilotAgentClient>.Instance),
+            new ClaudeCodeAgentClient(executionContext, environment, NullLogger<ClaudeCodeAgentClient>.Instance),
+            new OpenCodeAgentClient(executionContext, environment)
+        ]);
     }
 }

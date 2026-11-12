@@ -2,10 +2,11 @@ import * as assert from 'assert';
 import * as fs from 'fs';
 import * as path from 'path';
 import type { AspireExtensionE2EControlCommand } from '../types/extensionApi';
+import type { ExecutableLaunchConfiguration } from '../dcp/types';
 import { getCommandInvocationCount, getDebugLaunchCount, isSamePath, waitForCommandOutcome, waitForDebugLaunch, waitForDebugSessionStartup, waitForExtensionState, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForRunningAppHost, waitForSelectedWorkspaceAppHost, waitForWorkspaceAppHost } from './helpers/assertions';
-import { createEmptyAppHostProject, createExternalSingleFileAppHost, executeE2eControlCommand, getGeneratedAppHostPath, getGeneratedProjectRoot, isProcessAlive, removeExternalSingleFileAppHost, removeGeneratedProject, restoreWorkspaceAppHostConfig, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setDebugLaunchSuppressedForE2E, stopAppHostIfRunning, stopPrimaryAppHostIfRunning, waitForKnownProcessExit, writeFileWithRetry, writeWorkspaceAppHostConfigForPath } from './helpers/fixtures';
-import { getPrimaryAppHostProjectPath, getWorkspaceRoot } from './helpers/paths';
-import { chooseActiveQuickPick, executeCommandFromPalette, openAspireView, waitForEditorTitle, waitForNotificationMessage } from './helpers/vscode';
+import { createEmptyAppHostProject, createExternalSingleFileAppHost, executeE2eControlCommand, isProcessAlive, removeExternalSingleFileAppHost, restoreWorkspaceAppHostConfig, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setDebugLaunchSuppressedForE2E, stopAppHostIfRunning, stopPrimaryAppHostIfRunning, waitForKnownProcessExit, writeFileWithRetry, writeWorkspaceAppHostConfigForPath } from './helpers/fixtures';
+import { getPrimaryAppHostProjectPath, getRunRoot, getWorkspaceRoot } from './helpers/paths';
+import { chooseActiveQuickPick, dismissAllNotifications, executeCommandFromPalette, openAspireView, waitForEditorTitle, waitForNotificationMessage } from './helpers/vscode';
 
 interface DebugSessionProcessInfo {
     appHostPath?: string;
@@ -16,7 +17,8 @@ interface DebugSessionProcessInfo {
 suite('Aspire extension edge case E2E', function () {
     this.timeout(240000);
     let externalAppHostPath: string | undefined;
-    let debuggerInstallHintProjectName: string | undefined;
+    let debuggerInstallHintAppHostPath: string | undefined;
+    let debuggerInstallHintFixtureIndex = 0;
 
     teardown(async () => {
         await runE2eTeardown([
@@ -24,22 +26,17 @@ suite('Aspire extension edge case E2E', function () {
             () => setDebugLaunchSuppressedForE2E(false),
             () => restoreWorkspaceCliPath(),
             () => externalAppHostPath ? stopAppHostIfRunning(externalAppHostPath) : undefined,
-            () => debuggerInstallHintProjectName ? stopAppHostIfRunning(getGeneratedAppHostPath(debuggerInstallHintProjectName)) : undefined,
-            () => debuggerInstallHintProjectName ? restoreWorkspaceAppHostConfig() : undefined,
+            () => debuggerInstallHintAppHostPath ? stopAppHostIfRunning(debuggerInstallHintAppHostPath) : undefined,
+            () => debuggerInstallHintAppHostPath ? restoreWorkspaceAppHostConfig() : undefined,
             () => executeE2eControlCommand({ name: 'closeAllEditors' }),
             () => {
                 removeExternalSingleFileAppHost();
                 externalAppHostPath = undefined;
             },
+            // The debugger install hint fixture is not deleted here: run-e2e.js removes the run root
+            // after VS Code and the detached DCP that still holds the fixture directory have exited.
             () => {
-                if (!debuggerInstallHintProjectName) {
-                    return undefined;
-                }
-
-                const projectName = debuggerInstallHintProjectName;
-                return removeGeneratedProject(projectName).then(() => {
-                    debuggerInstallHintProjectName = undefined;
-                });
+                debuggerInstallHintAppHostPath = undefined;
             },
             () => stopPrimaryAppHostIfRunning(),
         ], 'Edge case E2E teardown failed.');
@@ -75,6 +72,17 @@ suite('Aspire extension edge case E2E', function () {
             executeE2eControlCommand({ name: 'publishAppHost' }),
             /publishAppHost requires appHostPath/);
         assert.strictEqual(getDebugLaunchCount(), beforePublishLaunch);
+
+        await assert.rejects(
+            executeE2eControlCommand({
+                name: 'createResourceDebugConfiguration',
+                launchConfig: {
+                    type: 'browser',
+                    browser: 'safari',
+                    url: 'https://top-secret.invalid',
+                } as ExecutableLaunchConfiguration,
+            }),
+            /E2E control command failed\./);
     });
 
     test('keeps CLI-independent settings commands available when the CLI is unavailable', async () => {
@@ -83,7 +91,9 @@ suite('Aspire extension edge case E2E', function () {
         await setCliUnavailableForE2E(true);
 
         const settingsBefore = getCommandInvocationCount('aspire-vscode.settings');
-        await executeE2eControlCommand({ name: 'executeAspireCommand', commandId: 'aspire-vscode.settings' });
+        // The first Settings editor open in a window can take well over the 10s control wait on
+        // Windows runners, so the command outcome wait owns completion.
+        await executeE2eControlCommand({ name: 'executeAspireCommand', commandId: 'aspire-vscode.settings' }, { waitFor: 'started' });
         await waitForCommandOutcome('aspire-vscode.settings', 'success', 60000, settingsBefore);
 
         const launchJsonPath = path.join(getWorkspaceRoot(), '.vscode', 'launch.json');
@@ -123,7 +133,7 @@ suite('Aspire extension edge case E2E', function () {
             60000);
     });
 
-    test('keeps an external single-file AppHost followed while its tab is backgrounded', async () => {
+    test('keeps background AppHost tabs followed while another AppHost editor is visible', async () => {
         const appHostPath = createExternalSingleFileAppHost();
         externalAppHostPath = appHostPath;
         await openAspireView();
@@ -167,9 +177,16 @@ suite('Aspire extension edge case E2E', function () {
         const installedDebuggerTypes = (debuggerExtensions.result as Array<{ resourceType: string }>).map(extension => extension.resourceType);
         assert.ok(!installedDebuggerTypes.includes('python'), 'The clean E2E host must not have the Python debugger extension installed.');
 
-        debuggerInstallHintProjectName = 'DebuggerInstallHintApp';
-        const appHostPath = getGeneratedAppHostPath(debuggerInstallHintProjectName);
-        await createEmptyAppHostProject(debuggerInstallHintProjectName);
+        // The AppHost starts DCP with --detach in the AppHost directory, and DCP can outlive a
+        // successful `aspire stop` while it cleans up. Windows then keeps that directory busy, so
+        // an in-session delete fails with EBUSY. Keep the fixture outside the workspace under the
+        // runner-owned root, which run-e2e.js removes after every process in the session has exited.
+        const runRoot = getRunRoot();
+        assert.ok(runRoot, 'ASPIRE_EXTENSION_E2E_RUN_ROOT is required to isolate the debugger install hint fixture.');
+        const projectRoot = path.join(runRoot, `.e2e-debugger-install-hint-${++debuggerInstallHintFixtureIndex}`, 'DebuggerInstallHintApp');
+        const appHostPath = path.join(projectRoot, 'apphost.cs');
+        debuggerInstallHintAppHostPath = appHostPath;
+        await createEmptyAppHostProject('DebuggerInstallHintApp', projectRoot);
 
         // This scenario does not exercise dashboard transport security. Use the generated HTTP
         // profile so clean test machines do not need an ambient ASP.NET Core developer certificate.
@@ -179,7 +196,7 @@ suite('Aspire extension edge case E2E', function () {
         runSettings.profiles = { http: runSettings.profiles.http };
         writeFileWithRetry(runSettingsPath, JSON.stringify(runSettings, undefined, 2));
 
-        const pythonAppDirectory = path.join(getGeneratedProjectRoot(debuggerInstallHintProjectName), 'pythonapp');
+        const pythonAppDirectory = path.join(projectRoot, 'pythonapp');
         fs.mkdirSync(pythonAppDirectory, { recursive: true });
         writeFileWithRetry(path.join(pythonAppDirectory, 'app.py'), 'import time\n\nprint("ready", flush=True)\ntime.sleep(600)\n');
 
@@ -187,9 +204,6 @@ suite('Aspire extension edge case E2E', function () {
         writeFileWithRetry(
             appHostPath,
             appHostSource
-                // This scenario validates the Hosting and extension changes together. The local CLI
-                // bundle can predate the repo-built packages, which would omit the debugger metadata.
-                .replace('#:property AspireUseCliBundle=true', '#:property AspireUseCliBundle=false')
                 .replace(
                     'builder.Build().Run();',
                     `#pragma warning disable ASPIREEXTENSION001
@@ -208,17 +222,19 @@ builder.Build().Run();`));
         await executeE2eControlCommand({ name: 'runAppHost', appHostPath }, { waitFor: 'started' });
         await waitForCommandOutcome('aspire-vscode.runAppHost', 'success', 180000, runBefore);
 
-        const notification = await waitForNotificationMessage(
+        await waitForNotificationMessage(
             'Set up Python debugging support to debug resources in this app.',
             60000);
-        await notification.dismiss();
+        await dismissAllNotifications();
     });
 
     test('process-owner cleanup stops the owned CLI and AppHost process tree', async () => {
         await openAspireView();
         await waitForRepositoryIdle();
-        const discovered = await waitForWorkspaceAppHost();
-        const appHostPath = discovered.state.workspaceAppHostPath ?? getPrimaryAppHostProjectPath();
+        await waitForWorkspaceAppHost();
+        // The previous test selects a run-root AppHost; discovery can still select it while the
+        // restored workspace configuration propagates. This test targets the permanent fixture, not the selection.
+        const appHostPath = getPrimaryAppHostProjectPath();
 
         const beforeInvocation = getCommandInvocationCount('aspire-vscode.debugAppHost');
         await executeE2eControlCommand({ name: 'debugAppHost', appHostPath }, { waitFor: 'started' });

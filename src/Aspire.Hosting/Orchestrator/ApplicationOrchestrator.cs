@@ -9,6 +9,7 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dashboard;
 using Aspire.Hosting.Diagnostics;
 using Aspire.Hosting.Dcp;
+using Aspire.Hosting.Devcontainers.Codespaces;
 using Aspire.Hosting.Eventing;
 using Aspire.Hosting.Lifecycle;
 using Microsoft.Extensions.Configuration;
@@ -73,7 +74,6 @@ internal sealed class ApplicationOrchestrator
         dcpExecutorEvents.Subscribe<OnConnectionStringAvailableContext>(OnConnectionStringAvailable);
         dcpExecutorEvents.Subscribe<OnResourceFailedToStartContext>(OnResourceFailedToStart);
 
-        _eventing.Subscribe<ResourceEndpointsAllocatedEvent>(OnResourceEndpointsAllocated);
         _eventing.Subscribe<ConnectionStringAvailableEvent>(PublishConnectionStringValue);
         // Implement WaitFor functionality using BeforeResourceStartedEvent.
         _eventing.Subscribe<BeforeResourceStartedEvent>(WaitForInBeforeResourceStartedEvent);
@@ -198,11 +198,26 @@ internal sealed class ApplicationOrchestrator
         }
     }
 
-    private Task OnEndpointsAllocated(OnEndpointsAllocatedContext context)
+    private Task OnEndpointsAllocated(OnEndpointsAllocatedContext context) =>
+        PublishEndpointsAllocatedAsync(context.Events, _eventing, EventDispatchBehavior.BlockingSequential, context.CancellationToken);
+
+    internal async Task PublishEndpointsAllocatedAsync(
+        IReadOnlyList<ResourceEndpointsAllocatedEvent> events,
+        IDistributedApplicationEventing eventing,
+        EventDispatchBehavior dispatchBehavior,
+        CancellationToken cancellationToken)
     {
-        // Endpoint allocation can now complete after resource creation, so there is no longer a single
-        // app-wide point where all endpoints are guaranteed to be allocated.
-        return Task.CompletedTask;
+        // Initial DCP allocations form a batch: finalize every resource before observers can
+        // resolve another resource's browser origins from an allocation notification.
+        foreach (var endpointEvent in events)
+        {
+            await PublishResourceEndpointUrls(endpointEvent.Resource, cancellationToken).ConfigureAwait(false);
+        }
+
+        foreach (var endpointEvent in events)
+        {
+            await eventing.PublishAsync(endpointEvent, dispatchBehavior, cancellationToken).ConfigureAwait(false);
+        }
     }
 
     private async Task PublishResourceEndpointUrls(IResource resource, CancellationToken cancellationToken)
@@ -225,9 +240,7 @@ internal sealed class ApplicationOrchestrator
                 // Endpoint URLs are inactive (hidden in the dashboard) when published here. It is assumed they will get activated later when the endpoint is considered active
                 // by whatever allocated the endpoint in the first place, e.g. for resources controlled by DCP, when DCP detects the endpoint is listening.
                 IsInactive = url.Endpoint is not null,
-#pragma warning disable CS0618 // DisplayOrder is obsolete but must still be flowed for compatibility.
                 DisplayProperties = new(url.DisplayText ?? "", url.DisplayOrder ?? 0)
-#pragma warning restore CS0618
             });
         }
         return urls;
@@ -303,6 +316,7 @@ internal sealed class ApplicationOrchestrator
     private async Task ProcessResourceUrlCallbacks(IResource resource, CancellationToken cancellationToken)
     {
         var urls = new List<ResourceUrlAnnotation>();
+        var resourceEndpoints = resource.Annotations.OfType<EndpointAnnotation>().ToArray();
         EndpointAnnotation? primaryLaunchProfileEndpoint = null;
 
         try
@@ -462,7 +476,10 @@ internal sealed class ApplicationOrchestrator
                     {
                         _logger.LogTrace("Invoking URL callback '{CallbackIndex}' for resource '{ResourceName}'.", index, resource.Name);
                     }
-                    await callback.Callback(urlsCallbackContext).ConfigureAwait(false);
+                    using (new ResourceUrlsCallbackScope(resource))
+                    {
+                        await callback.Callback(urlsCallbackContext).ConfigureAwait(false);
+                    }
                     if (_logger.IsEnabled(LogLevel.Trace))
                     {
                         _logger.LogTrace("{UrlCount} URLs after callback '{CallbackIndex}' for resource '{ResourceName}'.", urlsCallbackContext.Urls.Count, index, resource.Name);
@@ -549,6 +566,37 @@ internal sealed class ApplicationOrchestrator
                 }
             }
 
+            if (_executionContext.IsRunMode && _serviceProvider.GetService<CodespacesUrlRewriter>() is { } codespacesRewriter)
+            {
+                foreach (var url in urls)
+                {
+                    // Details-only endpoint links still participate in browser-origin collections.
+                    // Project them too, so those collections never retain Codespace-local addresses.
+                    if ((url.Endpoint is not null || !url.IsInternal) &&
+                        codespacesRewriter.TryRewriteResourceUrl(url.Url, out var rewrittenUrl))
+                    {
+                        url.Url = rewrittenUrl;
+                    }
+                }
+            }
+
+            var resourceComparer = new ResourceNameComparer();
+            var browserUrls = urls
+                .Where(url => url.Endpoint is { } endpoint && resourceComparer.Equals(endpoint.Resource, resource))
+                .Select(url => (Annotation: url, Uri: GetBrowserUrl(url)))
+                .Where(url => url.Uri is not null)
+                .OrderBy(url => url.Annotation.DisplayLocation == UrlDisplayLocation.DetailsOnly)
+                .ThenByDescending(url => url.Annotation.DisplayOrder ?? 0)
+                .ThenByDescending(url => url.Uri!.Scheme == Uri.UriSchemeHttps)
+                .ToArray();
+            foreach (var endpoint in resourceEndpoints)
+            {
+                endpoint.BrowserUrlsSnapshot.SetValue(browserUrls
+                    .Where(url => string.Equals(url.Annotation.Endpoint!.EndpointName, endpoint.Name, StringComparisons.EndpointAnnotationName))
+                    .Select(url => url.Annotation)
+                    .ToArray());
+            }
+
             // Add URLs
             var count = 0;
             foreach (var url in urls)
@@ -567,25 +615,35 @@ internal sealed class ApplicationOrchestrator
         }
         catch (Exception ex)
         {
+            foreach (var endpoint in resourceEndpoints)
+            {
+                endpoint.BrowserUrlsSnapshot.SetException(ex);
+            }
+
             var resourceLogger = _loggerService.GetLogger(resource);
             resourceLogger.LogError(ex, "An error occurred while processing URLs for resource '{ResourceName}': {Message}", resource.Name, ex.Message);
         }
-    }
 
-    private async Task OnResourceEndpointsAllocated(ResourceEndpointsAllocatedEvent @event, CancellationToken cancellationToken)
-    {
-        await PublishResourceEndpointUrls(@event.Resource, cancellationToken).ConfigureAwait(false);
+        Uri? GetBrowserUrl(ResourceUrlAnnotation url)
+        {
+            if (!Uri.TryCreate(url.Url, UriKind.Absolute, out var uri))
+            {
+                _loggerService.GetLogger(resource).LogWarning(
+                    "URL '{Url}' for resource '{ResourceName}' is not absolute and cannot provide a browser origin.", url.Url, resource.Name);
+                return null;
+            }
+
+            if (uri.Scheme is not ("http" or "https"))
+            {
+                return null;
+            }
+
+            return uri;
+        }
     }
 
     private async Task OnResourceChanged(OnResourceChangedContext context)
     {
-        // Get the previous state before updating to detect transitions to stopped states
-        string? previousState = null;
-        if (_notificationService.TryGetCurrentState(context.DcpResourceName, out var previousResourceEvent))
-        {
-            previousState = previousResourceEvent.Snapshot.State?.Text;
-        }
-
         await _notificationService.PublishUpdateAsync(context.Resource, context.DcpResourceName, context.UpdateSnapshot).ConfigureAwait(false);
 
         if (context.ResourceType == KnownResourceTypes.Container)
@@ -593,13 +651,12 @@ internal sealed class ApplicationOrchestrator
             await SetChildResourceAsync(context.Resource, context.Status.State, context.Status.StartupTimestamp, context.Status.FinishedTimestamp).ConfigureAwait(false);
         }
 
-        // Check if the resource has transitioned to a terminal/stopped state
-        var currentState = context.Status.State;
-        if (currentState is not null &&
-            KnownResourceStates.TerminalStates.Contains(currentState) &&
-            previousState != currentState &&
-            (previousState is null ||
-            !KnownResourceStates.TerminalStates.Contains(previousState)))
+        // Use the previous DCP state from the context, not the published snapshot. A stopped handler
+        // can restart the resource and change the snapshot to Waiting or Starting while DCP still
+        // reports the same terminal state, which would otherwise fire another stopped event.
+        if (context.Status.State is { } state &&
+            KnownResourceStates.TerminalStates.Contains(state) &&
+            !KnownResourceStates.TerminalStates.Contains(context.PreviousState))
         {
             // Get the current state from notification service after the update
             if (_notificationService.TryGetCurrentState(context.DcpResourceName, out var currentResourceEvent))

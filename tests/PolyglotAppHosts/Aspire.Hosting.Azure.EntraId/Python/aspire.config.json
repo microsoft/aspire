@@ -1,0 +1,13 @@
+{
+  "appHost": {
+    "path": "apphost.py",
+    "language": "python"
+  },
+  "features": {
+    "experimentalPolyglotPython": true
+  },
+  "packages": {
+    "Aspire.Hosting.Azure.EntraId": "",
+    "Aspire.Hosting.Azure.Provisioning.EntraId": ""
+  }
+}

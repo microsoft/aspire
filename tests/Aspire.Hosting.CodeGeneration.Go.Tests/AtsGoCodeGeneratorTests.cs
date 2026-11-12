@@ -1,15 +1,21 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
+using System.IO.Pipes;
+using System.Net.Sockets;
 using System.Reflection;
+using System.Text.RegularExpressions;
 using System.Text.Json.Nodes;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.RemoteHost;
+using Aspire.TestUtilities;
 using Aspire.TypeSystem;
 using Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes;
 
 namespace Aspire.Hosting.CodeGeneration.Go.Tests;
 
+[RequiresTools(["gofmt"])]
 public class AtsGoCodeGeneratorTests
 {
     private readonly AtsGoCodeGenerator _generator = new();
@@ -33,13 +39,1791 @@ public class AtsGoCodeGeneratorTests
         var files = _generator.GenerateDistributedApplication(atsContext);
 
         // Assert
-        Assert.Contains("aspire.go", files.Keys);
-        Assert.Contains("transport.go", files.Keys);
-        Assert.Contains("base.go", files.Keys);
-        Assert.Contains("go.mod", files.Keys);
+        Assert.Equal(
+            ["go.mod", "transport.go", "base.go", "aspire.go"],
+            files.Keys);
 
-        await Verify(files["aspire.go"], extension: "go")
+        var generatedCode = string.Join(
+            "\n",
+            files.OrderBy(file => file.Key, StringComparer.Ordinal)
+                .Select(file => $"// ===== {file.Key} =====\n{file.Value}"));
+
+        await Verify(generatedCode, extension: "go")
             .UseFileName("AtsGeneratedAspire");
+    }
+
+    [Fact]
+    public void GenerateDistributedApplication_WritesFilesWithLfLineEndings()
+    {
+        var files = _generator.GenerateDistributedApplication(CreateContextFromTestAssembly());
+
+        // The files mix raw string literals, StringWriter output and embedded resources, which take the line endings
+        // of the machine that built or runs the generator (CRLF on Windows), while gofmt reports CRLF as a
+        // formatting difference.
+        Assert.Empty(files.Where(file => file.Value.Contains('\r')).Select(file => file.Key));
+    }
+
+    [Fact]
+    [RequiresTools(["go"])]
+    public async Task GeneratedTerminalDto_RoundTripsCallbackWireNames()
+    {
+        var directory = Directory.CreateTempSubdirectory();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(3));
+        try
+        {
+            var files = _generator.GenerateDistributedApplication(CreateContextFromBothAssemblies());
+            foreach (var (name, content) in files)
+            {
+                await File.WriteAllTextAsync(Path.Combine(directory.FullName, name), content, timeout.Token);
+            }
+            await File.WriteAllTextAsync(Path.Combine(directory.FullName, "terminal_test.go"), """
+                package aspire
+
+                import (
+                    "encoding/json"
+                    "reflect"
+                    "testing"
+                )
+
+                func TestTerminalDto(t *testing.T) {
+                    var payload map[string]any
+                    if err := json.Unmarshal([]byte(`{"p0":{"columns":132,"rows":50}}`), &payload); err != nil {
+                        t.Fatal(err)
+                    }
+                    options := callbackArg[*TerminalOptions]([]any{payload["p0"]}, 0)
+                    if options == nil || options.Columns != 132 || options.Rows != 50 {
+                        t.Fatalf("unexpected callback argument: %#v", options)
+                    }
+                    options.Columns = 200
+                    result := map[string]any{"p0": serializeValue(options)}
+                    expected := map[string]any{"p0": map[string]any{"columns": 200, "rows": 50}}
+                    if !reflect.DeepEqual(expected, result) {
+                        t.Fatalf("expected %#v, got %#v", expected, result)
+                    }
+                }
+                """, timeout.Token);
+            using var process = new Process
+            {
+                StartInfo = new ProcessStartInfo("go")
+                {
+                    WorkingDirectory = directory.FullName,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    ArgumentList = { "test", "-timeout", "30s", "-run", "^TestTerminalDto$", "." }
+                }
+            };
+            process.Start();
+            var stdout = process.StandardOutput.ReadToEndAsync(timeout.Token);
+            var stderr = process.StandardError.ReadToEndAsync(timeout.Token);
+            try
+            {
+                await process.WaitForExitAsync(timeout.Token);
+                Assert.True(process.ExitCode == 0, $"Go terminal callback test failed:{Environment.NewLine}{await stdout}{await stderr}");
+            }
+            finally
+            {
+                if (!process.HasExited)
+                {
+                    process.Kill(entireProcessTree: true);
+                    await process.WaitForExitAsync();
+                }
+            }
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    [RequiresTools(["go"])]
+    public async Task GeneratedTransport_SupportsDuplexCommunication()
+    {
+        var directory = Directory.CreateTempSubdirectory();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(3));
+        using var process = new Process();
+        try
+        {
+            var files = _generator.GenerateDistributedApplication(new AtsContext
+            {
+                Capabilities = [],
+                HandleTypes = [],
+                EnumTypes = [],
+                DtoTypes = []
+            });
+            foreach (var (name, content) in files)
+            {
+                await File.WriteAllTextAsync(Path.Combine(directory.FullName, name), content, timeout.Token);
+            }
+
+            await File.WriteAllTextAsync(Path.Combine(directory.FullName, "transport_test.go"), """
+                package aspire
+
+                import (
+                    "io"
+                    "os"
+                    "testing"
+                    "time"
+                )
+
+                func TestDuplexConnection(t *testing.T) {
+                    conn, err := openConnection(os.Getenv("TEST_SOCKET_PATH"), 5*time.Second)
+                    if err != nil {
+                        t.Fatal(err)
+                    }
+                    defer conn.Close()
+
+                    // Deadline support proves the Windows handle is pollable rather than
+                    // synchronous, without relying on which I/O goroutine runs first.
+                    deadlines, ok := conn.(interface { SetDeadline(time.Time) error })
+                    if !ok {
+                        t.Fatal("connection does not support deadlines")
+                    }
+                    if err := deadlines.SetDeadline(time.Now().Add(10*time.Second)); err != nil {
+                        t.Fatal(err)
+                    }
+
+                    received := make(chan error, 1)
+                    go func() {
+                        response := make([]byte, 4)
+                        _, err := io.ReadFull(conn, response)
+                        if err == nil && string(response) != "pong" {
+                            t.Errorf("expected pong, got %q", response)
+                        }
+                        received <- err
+                    }()
+                    if _, err := conn.Write([]byte("ping")); err != nil {
+                        t.Fatal(err)
+                    }
+                    if err := <-received; err != nil {
+                        t.Fatal(err)
+                    }
+
+                    // Closing a connection must release a pending background read.
+                    go func() {
+                        _, err := conn.Read(make([]byte, 1))
+                        received <- err
+                    }()
+                    if err := conn.Close(); err != nil {
+                        t.Fatal(err)
+                    }
+                    select {
+                    case err := <-received:
+                        if err == nil {
+                            t.Fatal("expected the read to fail after close")
+                        }
+                    case <-time.After(5*time.Second):
+                        t.Fatal("close did not unblock the reader")
+                    }
+                }
+                """, timeout.Token);
+
+            var socketPath = OperatingSystem.IsWindows()
+                ? $"aspire-go-{Guid.NewGuid():N}"
+                : Path.Combine(directory.FullName, "socket");
+            using var pipe = OperatingSystem.IsWindows()
+                ? new NamedPipeServerStream(socketPath, PipeDirection.InOut, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous)
+                : null;
+            using var socket = OperatingSystem.IsWindows()
+                ? null
+                : new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+            if (socket is not null)
+            {
+                socket.Bind(new UnixDomainSocketEndPoint(socketPath));
+                socket.Listen(1);
+            }
+
+            process.StartInfo = new ProcessStartInfo("go")
+            {
+                WorkingDirectory = directory.FullName,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                ArgumentList = { "test", "-timeout", "30s", "." },
+                Environment = { ["TEST_SOCKET_PATH"] = socketPath }
+            };
+            process.Start();
+            var stdout = process.StandardOutput.ReadToEndAsync(timeout.Token);
+            var stderr = process.StandardError.ReadToEndAsync(timeout.Token);
+            var exchange = ExchangeAsync();
+            try
+            {
+                await process.WaitForExitAsync(timeout.Token);
+                Assert.True(process.ExitCode == 0, $"Go transport test failed:{Environment.NewLine}{await stdout}{await stderr}");
+                await exchange;
+            }
+            finally
+            {
+                await timeout.CancelAsync();
+                if (!process.HasExited)
+                {
+                    process.Kill(entireProcessTree: true);
+                    await process.WaitForExitAsync();
+                }
+                await exchange.ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing | ConfigureAwaitOptions.ContinueOnCapturedContext);
+            }
+
+            async Task ExchangeAsync()
+            {
+                using var stream = pipe is not null
+                    ? await AcceptPipeAsync()
+                    : new NetworkStream(await socket!.AcceptAsync(timeout.Token), ownsSocket: true);
+                var request = new byte[4];
+                await stream.ReadExactlyAsync(request, timeout.Token);
+                Assert.Equal("ping"u8.ToArray(), request);
+                await stream.WriteAsync("pong"u8.ToArray(), timeout.Token);
+
+                // Keep the server connected until the client closes its pending read.
+                Assert.Equal(0, await stream.ReadAsync(new byte[1], timeout.Token));
+            }
+
+            async Task<Stream> AcceptPipeAsync()
+            {
+                await pipe!.WaitForConnectionAsync(timeout.Token);
+                return pipe;
+            }
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    [RequiresTools(["go"])]
+    public async Task GeneratedRuntime_PassesGoRuntimeHardeningTests()
+    {
+        var directory = Directory.CreateTempSubdirectory();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(3));
+        try
+        {
+            var files = _generator.GenerateDistributedApplication(CreateContextFromTestAssembly());
+            foreach (var (name, content) in files)
+            {
+                await File.WriteAllTextAsync(Path.Combine(directory.FullName, name), content, timeout.Token);
+            }
+
+            await File.WriteAllTextAsync(Path.Combine(directory.FullName, "transport_hardening_test.go"), """
+                package aspire
+
+                import (
+                    "bufio"
+                    "bytes"
+                    "context"
+                    "encoding/json"
+                    "errors"
+                    "fmt"
+                    "math"
+                    "net"
+                    "runtime"
+                    "strconv"
+                    "strings"
+                    "sync"
+                    "testing"
+                    "time"
+                )
+
+                // hostTimeout bounds one read or write by the fake host, so a stuck exchange fails
+                // quickly instead of waiting for the go test timeout. It is applied per operation:
+                // a single deadline set at construction would also cut off a long loop on a slow runner.
+                const hostTimeout = 10 * time.Second
+
+                // fakeHost is the AppHost end of an in-memory connection to a client.
+                type fakeHost struct {
+                    t      *testing.T
+                    peer   net.Conn
+                    reader *bufio.Reader
+                }
+
+                func newFakeHost(t *testing.T) (*client, *fakeHost) {
+                    t.Helper()
+                    c := newClient("")
+                    server, peer := net.Pipe()
+                    conn := newConnection(server, c, c.onConnectionClose)
+                    c.conn = conn
+                    conn.start()
+                    t.Cleanup(func() {
+                        c.disconnect()
+                        peer.Close()
+                    })
+                    return c, &fakeHost{t: t, peer: peer, reader: bufio.NewReader(peer)}
+                }
+
+                func (h *fakeHost) read() map[string]any {
+                    h.t.Helper()
+                    if err := h.peer.SetReadDeadline(time.Now().Add(hostTimeout)); err != nil {
+                        h.t.Fatal(err)
+                    }
+                    msg, err := readMessage(h.reader)
+                    if err != nil {
+                        h.t.Fatalf("reading from the client: %v", err)
+                    }
+                    return msg
+                }
+
+                func (h *fakeHost) write(msg map[string]any) {
+                    h.t.Helper()
+                    if err := h.peer.SetWriteDeadline(time.Now().Add(hostTimeout)); err != nil {
+                        h.t.Fatal(err)
+                    }
+                    if err := writeMessage(h.peer, msg); err != nil {
+                        h.t.Fatalf("writing to the client: %v", err)
+                    }
+                }
+
+                func callbackRequest(id int, callbackID string, args any) map[string]any {
+                    return map[string]any{"jsonrpc": "2.0", "id": id, "method": "invokeCallback", "params": []any{callbackID, args}}
+                }
+
+                func TestReadMessagePreservesIntegerBoundaries(t *testing.T) {
+                    cases := []struct {
+                        name    string
+                        payload string
+                        decode  func(any) error
+                    }{
+                        {
+                            name:    "int64 minimum",
+                            payload: `{"jsonrpc":"2.0","id":1,"result":-9223372036854775808}`,
+                            decode: func(raw any) error {
+                                value, err := decodeAs[int64](raw)
+                                if err == nil && value != math.MinInt64 {
+                                    return fmt.Errorf("got %d, want %d", value, int64(math.MinInt64))
+                                }
+                                return err
+                            },
+                        },
+                        {
+                            name:    "int64 maximum",
+                            payload: `{"jsonrpc":"2.0","id":1,"result":9223372036854775807}`,
+                            decode: func(raw any) error {
+                                value, err := decodeAs[int64](raw)
+                                if err == nil && value != math.MaxInt64 {
+                                    return fmt.Errorf("got %d, want %d", value, int64(math.MaxInt64))
+                                }
+                                return err
+                            },
+                        },
+                        {
+                            name:    "uint64 maximum",
+                            payload: `{"jsonrpc":"2.0","id":1,"result":18446744073709551615}`,
+                            decode: func(raw any) error {
+                                value, err := decodeAs[uint64](raw)
+                                if err == nil && value != math.MaxUint64 {
+                                    return fmt.Errorf("got %d, want %d", value, uint64(math.MaxUint64))
+                                }
+                                return err
+                            },
+                        },
+                    }
+
+                    for _, tc := range cases {
+                        t.Run(tc.name, func(t *testing.T) {
+                            var wire bytes.Buffer
+                            if err := writeMessageBody(&wire, []byte(tc.payload)); err != nil {
+                                t.Fatal(err)
+                            }
+                            message, err := readMessage(bufio.NewReader(&wire))
+                            if err != nil {
+                                t.Fatal(err)
+                            }
+                            if err := tc.decode(message["result"]); err != nil {
+                                t.Fatal(err)
+                            }
+                        })
+                    }
+                }
+
+                func TestUntypedNumbersRoundTripAsNumbers(t *testing.T) {
+                    const payload = `{"jsonrpc":"2.0","id":1,"result":{"nested":[9007199254740993,1.5]}}`
+                    var wire bytes.Buffer
+                    if err := writeMessageBody(&wire, []byte(payload)); err != nil {
+                        t.Fatal(err)
+                    }
+                    message, err := readMessage(bufio.NewReader(&wire))
+                    if err != nil {
+                        t.Fatal(err)
+                    }
+
+                    encoded, err := json.Marshal(serializeValue(message["result"]))
+                    if err != nil {
+                        t.Fatal(err)
+                    }
+                    if got, want := string(encoded), `{"nested":[9007199254740993,1.5]}`; got != want {
+                        t.Fatalf("got %s, want %s", got, want)
+                    }
+                }
+
+                func TestReadMessageRejectsTrailingJson(t *testing.T) {
+                    for _, payload := range []string{
+                        `{"jsonrpc":"2.0","id":1,"result":null}{}`,
+                        `{"jsonrpc":"2.0","id":1,"result":null}garbage`,
+                    } {
+                        var wire bytes.Buffer
+                        if err := writeMessageBody(&wire, []byte(payload)); err != nil {
+                            t.Fatal(err)
+                        }
+                        if message, err := readMessage(bufio.NewReader(&wire)); err == nil {
+                            t.Fatalf("readMessage accepted %q as %v", payload, message)
+                        }
+                    }
+                }
+
+                func TestPanickingCallbackIsAnsweredWithError(t *testing.T) {
+                    c, host := newFakeHost(t)
+                    var nilMap map[string]int
+                    cases := []struct {
+                        name     string
+                        callback func(...any) any
+                        want     string
+                    }{
+                        {"string", func(...any) any { panic("boom") }, "Callback execution failed: boom"},
+                        {"error", func(...any) any { panic(errors.New("bad input")) }, "Callback execution failed: bad input"},
+                        {"runtime error", func(...any) any { nilMap["k"] = 1; return nil }, "Callback execution failed: assignment to entry in nil map"},
+                        {"Goexit", func(...any) any { runtime.Goexit(); return nil }, "Callback execution failed: goroutine exited without returning"},
+                    }
+                    for i, tc := range cases {
+                        host.write(callbackRequest(i+1, c.registerCallback(tc.callback), nil))
+                        response := host.read()
+                        errObj, _ := response["error"].(map[string]any)
+                        responseID, validID := jsonRPCID(response["id"])
+                        if !validID || responseID != int64(i+1) || errObj == nil || response["result"] != nil {
+                            t.Fatalf("%s: got %v, want an error response", tc.name, response)
+                        }
+                        code, validCode := jsonRPCID(errObj["code"])
+                        if !validCode || code != -32603 || errObj["message"] != tc.want {
+                            t.Errorf("%s: got error %v, want code -32603 and message %q", tc.name, errObj, tc.want)
+                        }
+                    }
+
+                    healthy := c.registerCallback(func(...any) any { return "still alive" })
+                    host.write(callbackRequest(100, healthy, nil))
+                    if response := host.read(); response["result"] != "still alive" {
+                        t.Fatalf("callback after a panic: got %v", response)
+                    }
+                }
+
+                func TestCallbackWithMalformedHandleArgumentIsAnsweredWithError(t *testing.T) {
+                    c, host := newFakeHost(t)
+                    called := false
+                    id := c.registerCallback(func(...any) any { called = true; return nil })
+
+                    host.write(callbackRequest(1, id, map[string]any{"p0": map[string]any{"$handle": 1, "$type": nil}}))
+                    response := host.read()
+                    errObj, _ := response["error"].(map[string]any)
+                    message, _ := errObj["message"].(string)
+                    if !strings.Contains(message, "malformed handle") {
+                        t.Fatalf("got %v, want a malformed handle error", response)
+                    }
+                    if called {
+                        t.Fatal("the callback ran with a malformed argument")
+                    }
+                }
+
+                func TestCallbackWithInvalidTypedArgumentIsNotCalled(t *testing.T) {
+                    c, host := newFakeHost(t)
+                    for _, args := range []any{nil, map[string]any{"p0": "not a number"}} {
+                        called := false
+                        id := c.registerCallback(func(args ...any) any {
+                            value := callbackArg[int](args, 0)
+                            called = true
+                            return value
+                        })
+                        host.write(callbackRequest(1, id, args))
+                        response := host.read()
+                        errObj, _ := response["error"].(map[string]any)
+                        code, validCode := jsonRPCID(errObj["code"])
+                        if called || !validCode || code != -32602 {
+                            t.Fatalf("got %v, called=%v; want invalid params without calling user code", response, called)
+                        }
+                    }
+                }
+
+                func TestTokenBearingCallbackAcceptsTokenIdAndOmittedNone(t *testing.T) {
+                    for _, tc := range []struct {
+                        name      string
+                        args      any
+                        wantToken bool
+                    }{
+                        {"token ID", map[string]any{"p0": "ct_callback"}, true},
+                        {"CancellationToken.None", nil, false},
+                    } {
+                        t.Run(tc.name, func(t *testing.T) {
+                            c, host := newFakeHost(t)
+                            resource := newTestRedisResourceFromHandle(&handle{
+                                HandleID: "redis",
+                                TypeID:   "Aspire.Hosting.CodeGeneration.Go.Tests/TestRedisResource",
+                            }, c)
+                            received := make(chan *CancellationToken, 1)
+                            done := make(chan TestRedisResource, 1)
+                            go func() {
+                                done <- resource.WithCancellableOperation(func(token *CancellationToken) {
+                                    received <- token
+                                })
+                            }()
+
+                            invocation := host.read()
+                            params, _ := invocation["params"].([]any)
+                            capabilityArgs, _ := params[1].(map[string]any)
+                            callbackID, _ := capabilityArgs["operation"].(string)
+                            if callbackID == "" {
+                                t.Fatalf("missing callback ID in %v", invocation)
+                            }
+
+                            host.write(callbackRequest(2, callbackID, tc.args))
+                            if response := host.read(); response["result"] == nil && response["error"] != nil {
+                                t.Fatalf("callback failed: %v", response)
+                            }
+                            token := <-received
+                            if (token != nil) != tc.wantToken {
+                                t.Fatalf("got token %v, want token=%v", token, tc.wantToken)
+                            }
+                            if token != nil {
+                                token.Cancel()
+                                cancellation := host.read()
+                                cancellationParams, _ := cancellation["params"].([]any)
+                                if cancellation["method"] != "cancelToken" || len(cancellationParams) != 1 || cancellationParams[0] != "ct_callback" {
+                                    t.Fatalf("got %v, want cancellation for the callback token", cancellation)
+                                }
+                                host.write(map[string]any{"jsonrpc": "2.0", "id": cancellation["id"], "result": true})
+                            }
+
+                            host.write(map[string]any{"jsonrpc": "2.0", "id": invocation["id"], "result": nil})
+                            if result := <-done; result.Err() != nil {
+                                t.Fatal(result.Err())
+                            }
+                        })
+                    }
+                }
+
+                func TestUnencodableValuesDoNotDisconnect(t *testing.T) {
+                    c, host := newFakeHost(t)
+                    for _, value := range []any{math.NaN(), make(chan int)} {
+                        if _, err := c.sendRequest(context.Background(), "bad", []any{value}); err == nil {
+                            t.Fatal("unencodable request succeeded")
+                        }
+                        host.write(callbackRequest(1, c.registerCallback(func(...any) any { return value }), nil))
+                        response := host.read()
+                        errObj, _ := response["error"].(map[string]any)
+                        code, validCode := jsonRPCID(errObj["code"])
+                        if !validCode || code != -32603 {
+                            t.Fatalf("got %v, want a callback encoding error", response)
+                        }
+                    }
+                    done := make(chan error, 1)
+                    go func() { _, err := c.ping(context.Background()); done <- err }()
+                    request := host.read()
+                    host.write(map[string]any{"jsonrpc": "2.0", "id": request["id"], "result": "pong"})
+                    if err := <-done; err != nil {
+                        t.Fatal(err)
+                    }
+                }
+
+                func TestWrapperErrorIsConcurrentAndFirstErrorWins(t *testing.T) {
+                    wrapper := newHandleWrapperBase(&handle{HandleID: "h", TypeID: "Test/Type"}, nil)
+                    first := errors.New("first")
+                    wrapper.setErr(first)
+                    var wg sync.WaitGroup
+                    for range 100 {
+                        wg.Add(1)
+                        go func() {
+                            defer wg.Done()
+                            for range 100 {
+                                wrapper.setErr(errors.New("later"))
+                                if wrapper.Err() != first {
+                                    t.Error("lost the original error")
+                                }
+                            }
+                        }()
+                    }
+                    wg.Wait()
+                }
+
+                func TestCollectionToJSONKeepsResolutionError(t *testing.T) {
+                    want := errors.New("getter failed")
+                    parent := newErroredHandleWrapperBase(want, nil)
+                    list := newListWithGetter[string](parent, "Test/getList")
+                    dict := newDictWithGetter[string, string](parent, "Test/getDict")
+                    if list.ToJSON() != nil || list.Err() != want {
+                        t.Fatalf("list lost the error: %v", list.Err())
+                    }
+                    if dict.ToJSON() != nil || dict.Err() != want {
+                        t.Fatalf("dictionary lost the error: %v", dict.Err())
+                    }
+                    // A failure first encountered by ToJSON must also reach Err,
+                    // rather than only preserving an error already on the parent.
+                    c := newClient("")
+                    list = newListWithGetter[string](newHandleWrapperBase(&handle{}, c), "Test/getList")
+                    dict = newDictWithGetter[string, string](newHandleWrapperBase(&handle{}, c), "Test/getDict")
+                    if list.ToJSON() != nil || list.Err() == nil || list.Err().Error() != "not connected to AppHost" {
+                        t.Fatalf("list swallowed its getter failure: %v", list.Err())
+                    }
+                    if dict.ToJSON() != nil || dict.Err() == nil || dict.Err().Error() != "not connected to AppHost" {
+                        t.Fatalf("dictionary swallowed its getter failure: %v", dict.Err())
+                    }
+                }
+
+                func TestRegisterCancellationIDsAreUnique(t *testing.T) {
+                    c := newClient("")
+                    const count = 5000
+                    ids := make([]string, count)
+                    var wg sync.WaitGroup
+                    for i := range count {
+                        wg.Add(1)
+                        go func() {
+                            defer wg.Done()
+                            ids[i] = c.registerCancellation(NewCancellationToken())
+                        }()
+                    }
+                    wg.Wait()
+
+                    seen := make(map[string]bool, count)
+                    for _, id := range ids {
+                        if id == "" || seen[id] {
+                            t.Fatalf("cancellation ID %q is empty or was handed out twice", id)
+                        }
+                        seen[id] = true
+                    }
+                }
+
+                func TestCancellationNotifiesHostUntilCallReturns(t *testing.T) {
+                    c, host := newFakeHost(t)
+
+                    token := NewCancellationToken()
+                    id := c.registerCancellation(token)
+                    c.startCancellations(map[string]any{"cancellationToken": id})
+                    token.Cancel()
+                    request := host.read()
+                    params, _ := request["params"].([]any)
+                    if request["method"] != "cancelToken" || len(params) != 1 || params[0] != id {
+                        t.Fatalf("got %v, want a cancelToken request for %s", request, id)
+                    }
+                    host.write(map[string]any{"jsonrpc": "2.0", "id": request["id"], "result": true})
+
+                    // Once the capability call that carried the ID has returned, canceling
+                    // the token must no longer notify the host.
+                    token = NewCancellationToken()
+                    id = c.registerCancellation(token)
+                    done := make(chan error, 1)
+                    go func() {
+                        _, err := c.invokeCapability(context.Background(), "Test/capability", map[string]any{"cancellationToken": id})
+                        done <- err
+                    }()
+                    request = host.read()
+                    if request["method"] != "invokeCapability" {
+                        t.Fatalf("got %v, want an invokeCapability request", request)
+                    }
+                    host.write(map[string]any{"jsonrpc": "2.0", "id": request["id"], "result": nil})
+                    if err := <-done; err != nil {
+                        t.Fatal(err)
+                    }
+
+                    c.cancellationsMu.Lock()
+                    _, watching := c.cancellations[id]
+                    c.cancellationsMu.Unlock()
+                    if watching {
+                        t.Fatal("the cancellation watcher outlived the call")
+                    }
+
+                    token.Cancel()
+                    if err := host.peer.SetReadDeadline(time.Now().Add(200 * time.Millisecond)); err != nil {
+                        t.Fatal(err)
+                    }
+                    if msg, err := readMessage(host.reader); err == nil {
+                        t.Fatalf("the host received %v after the call returned", msg)
+                    }
+                }
+
+                func TestCancellationIsQueuedAfterItsInvocation(t *testing.T) {
+                    c, host := newFakeHost(t)
+                    token := NewCancellationToken()
+                    id := c.registerCancellation(token)
+                    token.Cancel()
+                    done := make(chan error, 1)
+                    go func() {
+                        _, err := c.invokeCapability(context.Background(), "Test/capability", map[string]any{"cancellationToken": id})
+                        done <- err
+                    }()
+                    request := host.read()
+                    if request["method"] != "invokeCapability" {
+                        t.Fatalf("cancellation overtook invocation: %v", request)
+                    }
+                    cancellation := host.read()
+                    if cancellation["method"] != "cancelToken" {
+                        t.Fatalf("expected cancellation after invocation, got %v", cancellation)
+                    }
+                    host.write(map[string]any{"jsonrpc": "2.0", "id": cancellation["id"], "result": true})
+                    host.write(map[string]any{"jsonrpc": "2.0", "id": request["id"], "result": nil})
+                    if err := <-done; err != nil {
+                        t.Fatal(err)
+                    }
+                }
+
+                func TestUnansweredCancellationIsBounded(t *testing.T) {
+                    c, host := newFakeHost(t)
+                    done := make(chan bool, 1)
+                    go func() { done <- c.cancelToken("ct_unanswered") }()
+                    request := host.read()
+                    if request["method"] != "cancelToken" {
+                        t.Fatalf("unexpected request: %v", request)
+                    }
+                    select {
+                    case result := <-done:
+                        if result {
+                            t.Fatal("unanswered cancellation succeeded")
+                        }
+                    case <-time.After(7 * time.Second):
+                        t.Fatal("unanswered cancellation did not time out")
+                    }
+                    c.mu.Lock()
+                    conn := c.conn
+                    c.mu.Unlock()
+                    conn.mu.Lock()
+                    pending := len(conn.pending)
+                    conn.mu.Unlock()
+                    if pending != 0 {
+                        t.Fatalf("%d unanswered cancellations still pending", pending)
+                    }
+                }
+
+                func TestCancellationDuringCallReturnsNotifiesHostAndReleasesRegistration(t *testing.T) {
+                    c, host := newFakeHost(t)
+
+                    // Like generated code, every call uses its token's own context, and the host
+                    // never answers the capability request, so only the cancellation can end a call.
+                    // The returning call races the watcher that notifies the host and only some
+                    // interleavings lose the notification, hence the repetitions.
+                    for i := range 2000 {
+                        token := NewCancellationToken()
+                        id := c.registerCancellation(token)
+                        done := make(chan error, 1)
+                        go func() {
+                            _, err := c.invokeCapability(token.Context(), "Test/capability", map[string]any{"cancellationToken": id})
+                            done <- err
+                        }()
+                        request := host.read()
+                        if request["method"] != "invokeCapability" {
+                            t.Fatalf("pass %d: got %v, want an invokeCapability request", i, request)
+                        }
+
+                        token.Cancel()
+                        select {
+                        case err := <-done:
+                            if !errors.Is(err, context.Canceled) {
+                                t.Fatalf("pass %d: got %v, want context.Canceled", i, err)
+                            }
+                        case <-time.After(5 * time.Second):
+                            t.Fatalf("pass %d: the call did not return after the token was canceled", i)
+                        }
+
+                        c.cancellationsMu.Lock()
+                        registered := len(c.cancellations)
+                        c.cancellationsMu.Unlock()
+                        if registered != 0 {
+                            t.Fatalf("pass %d: %d cancellation registrations outlived the call", i, registered)
+                        }
+
+                        if err := host.peer.SetReadDeadline(time.Now().Add(5 * time.Second)); err != nil {
+                            t.Fatal(err)
+                        }
+                        request, err := readMessage(host.reader)
+                        if err != nil {
+                            t.Fatalf("pass %d: the host was not told about the cancellation: %v", i, err)
+                        }
+                        params, _ := request["params"].([]any)
+                        if request["method"] != "cancelToken" || len(params) != 1 || params[0] != id {
+                            t.Fatalf("pass %d: got %v, want a cancelToken request for %s", i, request, id)
+                        }
+                        host.write(map[string]any{"jsonrpc": "2.0", "id": request["id"], "result": true})
+                    }
+                }
+
+                func TestReadMessageRejectsInvalidContentLength(t *testing.T) {
+                    for _, length := range []string{
+                        strconv.Itoa(maxMessageSize + 1),
+                        "9223372036854775807",
+                        "9223372036854775808",
+                        "-1",
+                        "0",
+                        "abc",
+                        "",
+                    } {
+                        var before, after runtime.MemStats
+                        runtime.ReadMemStats(&before)
+                        _, err := readMessage(bufio.NewReader(strings.NewReader("Content-Length: " + length + "\r\n\r\n{}")))
+                        runtime.ReadMemStats(&after)
+                        if err == nil {
+                            t.Errorf("Content-Length %q: expected an error", length)
+                        }
+                        if grown := after.TotalAlloc - before.TotalAlloc; grown > 1<<20 {
+                            t.Errorf("Content-Length %q: allocated %d bytes before rejecting the frame", length, grown)
+                        }
+                    }
+
+                    var frame bytes.Buffer
+                    if err := writeMessage(&frame, map[string]any{"jsonrpc": "2.0", "id": 1, "result": "ok"}); err != nil {
+                        t.Fatal(err)
+                    }
+                    msg, err := readMessage(bufio.NewReader(&frame))
+                    if err != nil || msg["result"] != "ok" {
+                        t.Fatalf("a valid frame: got %v, %v", msg, err)
+                    }
+                }
+
+                func TestReadMessageBoundsHeaders(t *testing.T) {
+                    for name, tc := range map[string]struct{ headers, want string }{
+                        "unterminated line": {strings.Repeat("x", maxHeaderSize + 1), "AppHost message headers exceed 8192 bytes"},
+                        "too many headers": {strings.Repeat("X: y\r\n", maxHeaderCount + 1), "AppHost message has more than 16 headers"},
+                        "total size": {strings.Repeat("X: " + strings.Repeat("y", 1020) + "\r\n", 9), "AppHost message headers exceed 8192 bytes"},
+                    } {
+                        if _, err := readMessage(bufio.NewReader(strings.NewReader(tc.headers + "\r\n{}"))); err == nil || err.Error() != tc.want {
+                            t.Errorf("%s: got %v, want %q", name, err, tc.want)
+                        }
+                    }
+                    // A long but valid line may span several reader buffers.
+                    headers := "X: " + strings.Repeat("y", 7000) + "\r\nContent-Length: 2\r\n\r\n{}"
+                    if _, err := readMessage(bufio.NewReaderSize(strings.NewReader(headers), 32)); err != nil {
+                        t.Fatalf("valid bounded headers rejected: %v", err)
+                    }
+                }
+
+                func TestWrapIfHandleRejectsMalformedHandle(t *testing.T) {
+                    c := newClient("")
+                    malformed := map[string]any{"$handle": float64(1), "$type": nil}
+                    for name, value := range map[string]any{
+                        "direct":   malformed,
+                        "in slice": []any{malformed},
+                        "in map":   map[string]any{"nested": malformed},
+                    } {
+                        if _, err := wrapIfHandle(value, c); err == nil {
+                            t.Errorf("%s: expected an error", name)
+                        }
+                    }
+
+                    wrapped, err := wrapIfHandle(map[string]any{"$handle": "h1", "$type": "Test/Type"}, c)
+                    if h, ok := wrapped.(*handle); err != nil || !ok || h.HandleID != "h1" || h.TypeID != "Test/Type" {
+                        t.Fatalf("a valid handle: got %v, %v", wrapped, err)
+                    }
+                }
+
+                func TestExtractResultKeepsErrorCodeAndData(t *testing.T) {
+                    // Decode through the wire format so the code arrives as float64, as it does from the host.
+                    var frame bytes.Buffer
+                    if err := writeMessage(&frame, map[string]any{
+                        "jsonrpc": "2.0",
+                        "id":      1,
+                        "error":   map[string]any{"code": -32601, "message": "Method not found", "data": map[string]any{"method": "nope"}},
+                    }); err != nil {
+                        t.Fatal(err)
+                    }
+                    response, err := readMessage(bufio.NewReader(&frame))
+                    if err != nil {
+                        t.Fatal(err)
+                    }
+
+                    _, err = extractResult(response)
+                    if err == nil || err.Error() != "Method not found" {
+                        t.Fatalf("got %v, want the message alone", err)
+                    }
+                    var coded interface{ Code() int }
+                    if !errors.As(err, &coded) || coded.Code() != -32601 {
+                        t.Fatalf("the code was not preserved: %v", err)
+                    }
+                    var withData interface{ Data() any }
+                    if !errors.As(err, &withData) {
+                        t.Fatalf("the data was not preserved: %v", err)
+                    }
+                    if data, _ := withData.Data().(map[string]any); data["method"] != "nope" {
+                        t.Fatalf("got data %v", withData.Data())
+                    }
+
+                    cases := []struct {
+                        name     string
+                        response map[string]any
+                        message  string
+                        code     int
+                    }{
+                        {"code from connection.close", map[string]any{"error": map[string]any{"code": -32000, "message": "connection closed"}}, "connection closed", -32000},
+                        {"missing message", map[string]any{"error": map[string]any{"code": float64(-32603)}}, "AppHost returned a JSON-RPC error (code -32603)", -32603},
+                        {"error is not an object", map[string]any{"error": "oops"}, "AppHost returned a JSON-RPC error (code 0)", 0},
+                    }
+                    for _, tc := range cases {
+                        _, err := extractResult(tc.response)
+                        if err == nil || err.Error() != tc.message {
+                            t.Errorf("%s: got %v, want %q", tc.name, err, tc.message)
+                        }
+                        if !errors.As(err, &coded) || coded.Code() != tc.code {
+                            t.Errorf("%s: got code %v, want %d", tc.name, coded, tc.code)
+                        }
+                    }
+
+                    if result, err := extractResult(map[string]any{"result": "ok"}); err != nil || result != "ok" {
+                        t.Errorf("success response: got %v, %v", result, err)
+                    }
+                }
+
+                func TestRequestErrorKeepsHostErrorCode(t *testing.T) {
+                    c, host := newFakeHost(t)
+                    done := make(chan error, 1)
+                    go func() {
+                        _, err := c.ping(context.Background())
+                        done <- err
+                    }()
+                    request := host.read()
+                    host.write(map[string]any{"jsonrpc": "2.0", "id": request["id"], "error": map[string]any{"code": -32601, "message": "Method not found"}})
+
+                    err := <-done
+                    var coded interface{ Code() int }
+                    if !errors.As(err, &coded) || coded.Code() != -32601 {
+                        t.Fatalf("got %v, want an error carrying code -32601", err)
+                    }
+                }
+                """, timeout.Token);
+
+            await File.WriteAllTextAsync(Path.Combine(directory.FullName, "decode_test.go"), """
+                package aspire
+
+                import (
+                    "encoding/json"
+                    "reflect"
+                    "strconv"
+                    "strings"
+                    "testing"
+                )
+
+                const decodeTestTypeID = "Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource"
+
+                // decodeTestResource stands in for a generated handle interface such as Resource.
+                type decodeTestResource interface {
+                    handleReference
+                }
+
+                // decodeTestWrapper stands in for the generated wrapper registered for decodeTestTypeID.
+                type decodeTestWrapper struct{ *resourceBuilderBase }
+
+                type decodeTestKey string
+
+                type decodeTestDto struct {
+                    Name  string `json:"name"`
+                    Count int    `json:"count"`
+                }
+
+                func newDecodeTestClient() *client {
+                    c := newClient("")
+                    c.registerHandleWrapper(decodeTestTypeID, func(h *handle, c *client) any {
+                        return &decodeTestWrapper{newResourceBuilderBase(h, c)}
+                    })
+                    return c
+                }
+
+                func decodeTestHandle(id string) string {
+                    return `{"$handle":"` + id + `","$type":"` + decodeTestTypeID + `"}`
+                }
+
+                func decodeTestHandles(ids ...string) string {
+                    handles := make([]string, len(ids))
+                    for i, id := range ids {
+                        handles[i] = decodeTestHandle(id)
+                    }
+                    return "[" + strings.Join(handles, ",") + "]"
+                }
+
+                // decodeTestIDs lists the handle ids of items in order, with <nil> for a nil item.
+                func decodeTestIDs(items []decodeTestResource) string {
+                    ids := make([]string, len(items))
+                    for i, item := range items {
+                        if item == nil {
+                            ids[i] = "<nil>"
+                            continue
+                        }
+                        ids[i] = item.getHandle().HandleID
+                    }
+                    return strings.Join(ids, ",")
+                }
+
+                // decodeWire takes a JSON-RPC result through the steps a capability result takes:
+                // parse it, wrap its handles, decode it into T.
+                func decodeWire[T any](t *testing.T, c *client, payload string) (T, error) {
+                    t.Helper()
+                    var raw any
+                    if err := json.Unmarshal([]byte(payload), &raw); err != nil {
+                        t.Fatal(err)
+                    }
+                    wrapped, err := wrapIfHandle(raw, c)
+                    if err != nil {
+                        t.Fatal(err)
+                    }
+                    return decodeAs[T](wrapped)
+                }
+
+                func decodeTestExpectError(t *testing.T, name string, err error, want ...string) {
+                    t.Helper()
+                    if err == nil {
+                        t.Errorf("%s: got no error, want one mentioning %q", name, want)
+                        return
+                    }
+                    for _, fragment := range want {
+                        if !strings.Contains(err.Error(), fragment) {
+                            t.Errorf("%s: error %q does not mention %q", name, err, fragment)
+                        }
+                    }
+                }
+
+                func TestDecodeListOfHandles(t *testing.T) {
+                    c := newDecodeTestClient()
+                    cases := []struct{ name, payload, ids string }{
+                        {"one handle", decodeTestHandles("1"), "1"},
+                        {"several handles", decodeTestHandles("1", "2", "3"), "1,2,3"},
+                        {"null element", "[" + decodeTestHandle("1") + ",null]", "1,<nil>"},
+                    }
+                    for _, tc := range cases {
+                        got, err := decodeWire[[]decodeTestResource](t, c, tc.payload)
+                        if err != nil {
+                            t.Errorf("%s: %v", tc.name, err)
+                            continue
+                        }
+                        if ids := decodeTestIDs(got); ids != tc.ids {
+                            t.Errorf("%s: got handles %s, want %s", tc.name, ids, tc.ids)
+                        }
+                        if _, ok := got[0].(*decodeTestWrapper); !ok {
+                            t.Errorf("%s: first element is %T, want the registered wrapper", tc.name, got[0])
+                        }
+                    }
+                }
+
+                func TestDecodeListsOfValues(t *testing.T) {
+                    c := newDecodeTestClient()
+
+                    dtos, err := decodeWire[[]decodeTestDto](t, c, `[{"name":"a","count":1},{"name":"b","count":2}]`)
+                    if err != nil || !reflect.DeepEqual(dtos, []decodeTestDto{{"a", 1}, {"b", 2}}) {
+                        t.Errorf("DTOs: got %v, %v", dtos, err)
+                    }
+
+                    pointers, err := decodeWire[[]*decodeTestDto](t, c, `[{"name":"a","count":1},null]`)
+                    if err != nil || !reflect.DeepEqual(pointers, []*decodeTestDto{{"a", 1}, nil}) {
+                        t.Errorf("DTO pointers: got %v, %v", pointers, err)
+                    }
+
+                    names, err := decodeWire[[]string](t, c, `["a","b"]`)
+                    if err != nil || !reflect.DeepEqual(names, []string{"a", "b"}) {
+                        t.Errorf("strings: got %v, %v", names, err)
+                    }
+
+                    numbers, err := decodeWire[[]int](t, c, `[1,2,3]`)
+                    if err != nil || !reflect.DeepEqual(numbers, []int{1, 2, 3}) {
+                        t.Errorf("ints: got %v, %v", numbers, err)
+                    }
+
+                    floats, err := decodeWire[[]float64](t, c, `[1.5,2]`)
+                    if err != nil || !reflect.DeepEqual(floats, []float64{1.5, 2}) {
+                        t.Errorf("floats: got %v, %v", floats, err)
+                    }
+
+                    mixed, err := decodeWire[[]any](t, c, "["+decodeTestHandle("1")+`,{"name":"a"},7,"x",null]`)
+                    if err != nil || len(mixed) != 5 {
+                        t.Fatalf("mixed list: got %v, %v", mixed, err)
+                    }
+                    if _, ok := mixed[0].(*decodeTestWrapper); !ok {
+                        t.Errorf("mixed list: first element is %T, want the registered wrapper", mixed[0])
+                    }
+                    if want := []any{map[string]any{"name": "a"}, float64(7), "x", nil}; !reflect.DeepEqual(mixed[1:], want) {
+                        t.Errorf("mixed list: got %v, want %v", mixed[1:], want)
+                    }
+                }
+
+                func TestDecodeEmptyList(t *testing.T) {
+                    c := newDecodeTestClient()
+
+                    list, err := decodeWire[[]decodeTestResource](t, c, `[]`)
+                    if err != nil || list == nil || len(list) != 0 {
+                        t.Errorf("empty list: got %#v, %v, want an empty slice", list, err)
+                    }
+
+                    entries, err := decodeWire[map[string]decodeTestResource](t, c, `{}`)
+                    if err != nil || entries == nil || len(entries) != 0 {
+                        t.Errorf("empty map: got %#v, %v, want an empty map", entries, err)
+                    }
+                }
+
+                func TestDecodeNilResult(t *testing.T) {
+                    if got, err := decodeAs[[]decodeTestResource](nil); got != nil || err != nil {
+                        t.Errorf("nil list: got %#v, %v, want nil", got, err)
+                    }
+                    if got, err := decodeAs[map[string]decodeTestResource](nil); got != nil || err != nil {
+                        t.Errorf("nil map: got %#v, %v, want nil", got, err)
+                    }
+
+                    // Typed nils are not nil interfaces, so they reach the element loop and must not panic.
+                    if got, err := decodeAs[[]decodeTestResource]([]any(nil)); err != nil || len(got) != 0 {
+                        t.Errorf("nil []any: got %#v, %v, want an empty list", got, err)
+                    }
+                    if got, err := decodeAs[map[string]decodeTestResource](map[string]any(nil)); err != nil || len(got) != 0 {
+                        t.Errorf("nil map[string]any: got %#v, %v, want an empty map", got, err)
+                    }
+                    if got, err := decodeAs[[]decodeTestResource]([]any{(*decodeTestWrapper)(nil)}); err != nil || len(got) != 1 {
+                        t.Errorf("nil wrapper element: got %#v, %v, want one element", got, err)
+                    }
+                }
+
+                func TestDecodeMapOfHandles(t *testing.T) {
+                    c := newDecodeTestClient()
+                    payload := `{"a":` + decodeTestHandle("1") + `,"b":` + decodeTestHandle("2") + `}`
+
+                    got, err := decodeWire[map[string]decodeTestResource](t, c, payload)
+                    if err != nil || len(got) != 2 {
+                        t.Fatalf("map of handles: got %v, %v", got, err)
+                    }
+                    for key, id := range map[string]string{"a": "1", "b": "2"} {
+                        if item, ok := got[key]; !ok || item.getHandle().HandleID != id {
+                            t.Errorf("map of handles: got %v for %q, want handle %s", item, key, id)
+                        }
+                    }
+
+                    named, err := decodeWire[map[decodeTestKey]decodeTestResource](t, c, payload)
+                    if err != nil || len(named) != 2 || named["a"] == nil || named["b"] == nil {
+                        t.Errorf("map with a named key type: got %v, %v", named, err)
+                    }
+
+                    dtos, err := decodeWire[map[string]decodeTestDto](t, c, `{"x":{"name":"a","count":1}}`)
+                    if err != nil || !reflect.DeepEqual(dtos, map[string]decodeTestDto{"x": {"a", 1}}) {
+                        t.Errorf("map of DTOs: got %v, %v", dtos, err)
+                    }
+
+                    counts, err := decodeWire[map[string]int](t, c, `{"x":1,"y":2}`)
+                    if err != nil || !reflect.DeepEqual(counts, map[string]int{"x": 1, "y": 2}) {
+                        t.Errorf("map of ints: got %v, %v", counts, err)
+                    }
+                }
+
+                func TestDecodeNestedLists(t *testing.T) {
+                    c := newDecodeTestClient()
+
+                    nested, err := decodeWire[[][]decodeTestResource](t, c, "["+decodeTestHandles("1", "2")+",[],"+decodeTestHandles("3")+"]")
+                    if err != nil || len(nested) != 3 || decodeTestIDs(nested[0]) != "1,2" || len(nested[1]) != 0 || decodeTestIDs(nested[2]) != "3" {
+                        t.Errorf("list of lists: got %v, %v", nested, err)
+                    }
+
+                    grouped, err := decodeWire[map[string][]decodeTestResource](t, c, `{"x":`+decodeTestHandles("1", "2")+`}`)
+                    if err != nil || decodeTestIDs(grouped["x"]) != "1,2" {
+                        t.Errorf("map of lists: got %v, %v", grouped, err)
+                    }
+
+                    maps, err := decodeWire[[]map[string]decodeTestResource](t, c, `[{"a":`+decodeTestHandle("1")+`}]`)
+                    if err != nil || len(maps) != 1 || maps[0]["a"] == nil {
+                        t.Errorf("list of maps: got %v, %v", maps, err)
+                    }
+                }
+
+                func TestDecodeNamesTheElementThatFailed(t *testing.T) {
+                    c := newDecodeTestClient()
+                    unregistered := `{"$handle":"9","$type":"Aspire.Hosting/Aspire.Hosting.Unregistered"}`
+
+                    _, err := decodeWire[[]decodeTestResource](t, c, "["+decodeTestHandle("1")+",7]")
+                    decodeTestExpectError(t, "number in a handle list", err, "element 1 of []aspire.decodeTestResource")
+
+                    _, err = decodeWire[[]decodeTestResource](t, c, "["+decodeTestHandle("1")+","+unregistered+"]")
+                    decodeTestExpectError(t, "handle without a wrapper", err, "element 1 of []aspire.decodeTestResource")
+
+                    _, err = decodeWire[[]string](t, c, `["a","b",3]`)
+                    decodeTestExpectError(t, "number in a string list", err, "element 2 of []string")
+
+                    _, err = decodeWire[map[string]decodeTestResource](t, c, `{"a":`+decodeTestHandle("1")+`,"b":7}`)
+                    decodeTestExpectError(t, "number in a handle map", err, `entry "b" of map[string]aspire.decodeTestResource`)
+
+                    _, err = decodeWire[[][]decodeTestResource](t, c, "["+decodeTestHandles("1")+",[7]]")
+                    decodeTestExpectError(t, "number in a nested list", err, "element 1 of [][]aspire.decodeTestResource", "element 0 of []aspire.decodeTestResource")
+
+                    _, err = decodeWire[[][]string](t, c, `[[["a"]]]`)
+                    decodeTestExpectError(t, "data nested deeper than the type", err, "element 0 of [][]string")
+                }
+
+                func TestDecodeSingleValuesAreUnchanged(t *testing.T) {
+                    c := newDecodeTestClient()
+
+                    resource, err := decodeWire[decodeTestResource](t, c, decodeTestHandle("1"))
+                    if err != nil || resource == nil || resource.getHandle().HandleID != "1" {
+                        t.Errorf("single handle: got %v, %v", resource, err)
+                    }
+
+                    dto, err := decodeWire[decodeTestDto](t, c, `{"name":"a","count":1}`)
+                    if err != nil || dto != (decodeTestDto{"a", 1}) {
+                        t.Errorf("DTO: got %v, %v", dto, err)
+                    }
+
+                    pointer, err := decodeWire[*decodeTestDto](t, c, `{"name":"a","count":1}`)
+                    if err != nil || pointer == nil || *pointer != (decodeTestDto{"a", 1}) {
+                        t.Errorf("DTO pointer: got %v, %v", pointer, err)
+                    }
+
+                    // A malformed DTO must fail rather than silently substitute zero-valued fields.
+                    if _, err := decodeWire[decodeTestDto](t, c, `{"name":5,"count":3}`); err == nil {
+                        t.Error("a DTO with a bad field decoded without an error")
+                    }
+
+                    // []byte arrives as a base64 string and a map with integer keys is not a string-keyed
+                    // map, so both keep the JSON round trip.
+                    data, err := decodeWire[[]byte](t, c, `"aGk="`)
+                    if err != nil || string(data) != "hi" {
+                        t.Errorf("bytes: got %q, %v", data, err)
+                    }
+                    byNumber, err := decodeWire[map[int]string](t, c, `{"1":"a"}`)
+                    if err != nil || !reflect.DeepEqual(byNumber, map[int]string{1: "a"}) {
+                        t.Errorf("map with integer keys: got %v, %v", byNumber, err)
+                    }
+
+                    if _, err := decodeWire[[]string](t, c, `"oops"`); err == nil {
+                        t.Error("a string decoded into a list without an error")
+                    }
+                    if _, err := decodeWire[map[string]string](t, c, `["a"]`); err == nil {
+                        t.Error("a list decoded into a map without an error")
+                    }
+                }
+
+                func TestDecodeListOfHandlesDoesNotRoundTripThroughJSON(t *testing.T) {
+                    c := newDecodeTestClient()
+                    ids := make([]string, 100)
+                    for i := range ids {
+                        ids[i] = strconv.Itoa(i)
+                    }
+                    var raw any
+                    if err := json.Unmarshal([]byte(decodeTestHandles(ids...)), &raw); err != nil {
+                        t.Fatal(err)
+                    }
+                    wrapped, err := wrapIfHandle(raw, c)
+                    if err != nil {
+                        t.Fatal(err)
+                    }
+
+                    allocs := testing.AllocsPerRun(10, func() {
+                        if _, err := decodeAs[[]decodeTestResource](wrapped); err != nil {
+                            t.Error(err)
+                        }
+                    })
+                    // Wrappers are assigned as they are, so the result slice is the only allocation that
+                    // grows with the list. Re-encoding each element would take hundreds.
+                    if allocs > 10 {
+                        t.Errorf("decoding 100 handles allocated %v times, want a handful", allocs)
+                    }
+                }
+                """, timeout.Token);
+
+            var startInfo = new ProcessStartInfo("go")
+            {
+                WorkingDirectory = directory.FullName,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                ArgumentList = { "test", "-timeout", "30s", "." }
+            };
+            EnableGoRaceDetection(startInfo);
+            using var process = Process.Start(startInfo)!;
+            var stdout = process.StandardOutput.ReadToEndAsync(timeout.Token);
+            var stderr = process.StandardError.ReadToEndAsync(timeout.Token);
+            try
+            {
+                await process.WaitForExitAsync(timeout.Token);
+                Assert.True(process.ExitCode == 0, $"Go runtime hardening test failed:{Environment.NewLine}{await stdout}{await stderr}");
+            }
+            finally
+            {
+                if (!process.HasExited)
+                {
+                    process.Kill(entireProcessTree: true);
+                    await process.WaitForExitAsync();
+                }
+            }
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    [RequiresTools(["go"])]
+    public async Task GeneratedRuntime_PassesGoTests()
+    {
+        var directory = Directory.CreateTempSubdirectory();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(3));
+        try
+        {
+            var files = _generator.GenerateDistributedApplication(CreateContextFromTestAssembly());
+            foreach (var (name, content) in files)
+            {
+                await File.WriteAllTextAsync(Path.Combine(directory.FullName, name), content, timeout.Token);
+            }
+
+            await File.WriteAllTextAsync(Path.Combine(directory.FullName, "runtime_test.go"), """
+                package aspire
+
+                import (
+                    "bufio"
+                    "bytes"
+                    "encoding/json"
+                    "errors"
+                    "fmt"
+                    "net"
+                    "reflect"
+                    "slices"
+                    "strconv"
+                    "strings"
+                    "sync"
+                    "testing"
+                )
+
+                func TestCallbackAndMainCanChainOnCapturedBuilder(t *testing.T) {
+                    c := newClient("")
+                    resource := newTestRedisResourceFromHandle(&handle{HandleID: "h", TypeID: "Test/Redis"}, c)
+                    callback := c.registerCallback(func(...any) any {
+                        resource.WithPersistence()
+                        resource.GetTags()
+                        return nil
+                    })
+                    var wg sync.WaitGroup
+                    wg.Add(1)
+                    go func() {
+                        defer wg.Done()
+                        for range 1000 {
+                            if _, err := c.invokeCallback(callback, nil); err != nil {
+                                t.Error(err)
+                            }
+                        }
+                    }()
+                    for range 1000 {
+                        resource.WithPersistence()
+                        resource.GetTags()
+                        resource.Err()
+                    }
+                    wg.Wait()
+                    if resource.Err() == nil {
+                        t.Fatal("the disconnected capability error was lost")
+                    }
+                }
+
+                func TestDeepUpdateKeepsCallback(t *testing.T) {
+                    calls := 0
+                    merged := deepUpdate(&WithOptionalCallbackOptions{}, &WithOptionalCallbackOptions{
+                        Callback: func(TestCallbackContext) { calls++ },
+                    })
+                    if merged.Callback == nil {
+                        t.Fatal("callback was dropped")
+                    }
+                    merged.Callback(nil)
+                    if calls != 1 {
+                        t.Fatalf("expected the callback to run once, ran %d times", calls)
+                    }
+                }
+
+                func TestDeepUpdateAcceptsNilCallback(t *testing.T) {
+                    merged := deepUpdate(&WithOptionalCallbackOptions{}, &WithOptionalCallbackOptions{})
+                    if merged.Callback != nil {
+                        t.Fatal("unexpected callback")
+                    }
+                }
+
+                func TestDeepUpdateKeepsCancellationToken(t *testing.T) {
+                    token := NewCancellationToken()
+                    merged := deepUpdate(&GetStatusAsyncOptions{}, &GetStatusAsyncOptions{CancellationToken: token})
+                    if merged.CancellationToken != token {
+                        t.Fatal("cancellation token was replaced")
+                    }
+                }
+
+                func TestDeepUpdateMergesNestedValuesWithoutModifyingInputs(t *testing.T) {
+                    dst := &TestNestedDto{Id: "dst", Config: &TestConfigDto{Name: "dst"}, Counts: map[string]int{"a": 1, "b": 2}}
+                    src := &TestNestedDto{Id: "src", Config: &TestConfigDto{Name: "src"}, Counts: map[string]int{"b": 3, "c": 4}}
+
+                    merged := deepUpdate(dst, src)
+
+                    want := &TestNestedDto{Id: "src", Config: &TestConfigDto{Name: "src"}, Counts: map[string]int{"a": 1, "b": 3, "c": 4}}
+                    if !reflect.DeepEqual(merged, want) {
+                        t.Fatalf("got %+v, want %+v", merged, want)
+                    }
+                    if len(dst.Counts) != 2 || len(src.Counts) != 2 || dst.Id != "dst" || dst.Config.Name != "dst" {
+                        t.Fatal("merge modified its inputs")
+                    }
+                }
+
+                type namedHandle interface{ Name() string }
+
+                type namedValue string
+
+                func (n namedValue) Name() string { return string(n) }
+
+                // workDto and nestedCallbackOptions mirror generated DTOs with callback
+                // properties and optional handle parameters, which the test types do not have.
+                type workDto struct {
+                    Label *string `json:"label,omitempty"`
+                    Work  func()  `json:"work,omitempty"`
+                }
+
+                type nestedCallbackOptions struct {
+                    Progress *workDto     `json:"progress,omitempty"`
+                    Handle   *namedHandle `json:"handle,omitempty"`
+                }
+
+                func TestDeepUpdateKeepsCallbacksAndHandlesInNestedValues(t *testing.T) {
+                    label := "step"
+                    ran := false
+                    var handle namedHandle = namedValue("resource")
+                    src := &nestedCallbackOptions{
+                        Progress: &workDto{Label: &label, Work: func() { ran = true }},
+                        Handle:   &handle,
+                    }
+
+                    merged := deepUpdate(&nestedCallbackOptions{Progress: &workDto{}}, src)
+
+                    merged.Progress.Work()
+                    if !ran || *merged.Progress.Label != label || (*merged.Handle).Name() != "resource" {
+                        t.Fatalf("nested callback or handle was lost: %+v", merged)
+                    }
+                }
+
+                // The client has no connection, so a value that passes the union guard fails later with
+                // a transport error, while a value that does not pass it fails with the guard's error.
+                func scalarFieldError(value any) error {
+                    resource := newTestRedisResourceFromHandle(&handle{HandleID: "1", TypeID: "type"}, newClient(""))
+                    resource.WithScalarField("spec.maxReplicaCount", value)
+                    return resource.Err()
+                }
+
+                func TestUnionGuardAcceptsEveryGoNumericType(t *testing.T) {
+                    values := []any{
+                        "text", true, 1.5, float32(1.5), 3, int8(3), int16(3), int32(3), int64(3),
+                        uint(3), uint8(3), uint16(3), uint32(3), uint64(3),
+                    }
+                    for _, value := range values {
+                        err := scalarFieldError(value)
+                        if err == nil || !strings.Contains(err.Error(), "not connected to AppHost") {
+                            t.Errorf("%T: got %v, want the transport error", value, err)
+                        }
+                    }
+                }
+
+                func TestUnionGuardAcceptsPreservedJSONNumber(t *testing.T) {
+                    var wire bytes.Buffer
+                    if err := writeMessageBody(&wire, []byte(`{"jsonrpc":"2.0","id":1,"result":9007199254740993}`)); err != nil {
+                        t.Fatal(err)
+                    }
+                    message, err := readMessage(bufio.NewReader(&wire))
+                    if err != nil {
+                        t.Fatal(err)
+                    }
+                    value, ok := message["result"].(json.Number)
+                    if !ok {
+                        t.Fatalf("result is %T, want json.Number", message["result"])
+                    }
+                    if err := scalarFieldError(value); err == nil || !strings.Contains(err.Error(), "not connected to AppHost") {
+                        t.Fatalf("got %v, want the transport error", err)
+                    }
+
+                    if err := scalarFieldError(json.Number("NaN")); err == nil || !strings.Contains(err.Error(), "invalid json.Number") {
+                        t.Fatalf("got %v, want an invalid json.Number error", err)
+                    }
+                }
+
+                func TestUnionGuardRejectsOtherTypes(t *testing.T) {
+                    for _, value := range []any{nil, []string{"a"}, map[string]any{"a": 1}} {
+                        err := scalarFieldError(value)
+                        if err == nil || !strings.Contains(err.Error(), "must be one of [string, float64, bool]") {
+                            t.Errorf("%T: got %v, want the guard error", value, err)
+                        }
+                    }
+                }
+
+                const (
+                    testRedisTypeID   = "Aspire.Hosting.CodeGeneration.Go.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestRedisResource"
+                    applicationTypeID = "application"
+                )
+
+                // connectChildErrorHost connects a client to an in-process AppHost that answers
+                // every capability call with a new handle, or with an error when the method (the
+                // part of the capability ID after the last "/") is in failing. The returned
+                // function lists the methods the AppHost has received, in order.
+                func connectChildErrorHost(t *testing.T, failing ...string) (*client, func() []string) {
+                    t.Helper()
+
+                    clientEnd, serverEnd := net.Pipe()
+                    c := newClient("")
+                    conn := newConnection(clientEnd, c, c.onConnectionClose)
+                    c.mu.Lock()
+                    c.conn = conn
+                    c.mu.Unlock()
+                    conn.start()
+                    registerWrappers(c)
+                    c.registerHandleWrapper(applicationTypeID, func(h *handle, c *client) any {
+                        return &distributedApplication{resourceBuilderBase: newResourceBuilderBase(h, c)}
+                    })
+                    t.Cleanup(func() {
+                        c.disconnect()
+                        serverEnd.Close()
+                    })
+
+                    var mu sync.Mutex
+                    var received []string
+                    go func() {
+                        reader := bufio.NewReader(serverEnd)
+                        for n := 1; ; n++ {
+                            request, err := readMessage(reader)
+                            if err != nil {
+                                return
+                            }
+                            capability := request["params"].([]any)[0].(string)
+                            method := capability[strings.LastIndex(capability, "/")+1:]
+                            mu.Lock()
+                            received = append(received, method)
+                            mu.Unlock()
+
+                            response := map[string]any{"jsonrpc": "2.0", "id": request["id"]}
+                            switch {
+                            case slices.Contains(failing, method):
+                                response["error"] = map[string]any{"message": fmt.Sprintf("%s failed (request %d)", method, n)}
+                            case method == "build":
+                                response["result"] = map[string]any{"$handle": "application", "$type": applicationTypeID}
+                            default:
+                                response["result"] = map[string]any{"$handle": strconv.Itoa(n), "$type": testRedisTypeID}
+                            }
+                            if writeMessage(serverEnd, response) != nil {
+                                return
+                            }
+                        }
+                    }()
+
+                    return c, func() []string {
+                        mu.Lock()
+                        defer mu.Unlock()
+                        return slices.Clone(received)
+                    }
+                }
+
+                func newBuilderOn(c *client) IDistributedApplicationBuilder {
+                    return newIDistributedApplicationBuilderFromHandle(&handle{HandleID: "0", TypeID: "builder"}, c)
+                }
+
+                func TestFailedChildErrorReachesBuilder(t *testing.T) {
+                    c, received := connectChildErrorHost(t, "addTestRedis")
+                    builder := newBuilderOn(c)
+
+                    cache := builder.AddTestRedis("cache")
+                    if cache.Err() == nil {
+                        t.Fatal("the failed AddTestRedis left no error on the child")
+                    }
+                    if !errors.Is(builder.Err(), cache.Err()) {
+                        t.Errorf("builder.Err() = %v, want the child's error %v", builder.Err(), cache.Err())
+                    }
+
+                    app, err := builder.Build()
+                    if app != nil || !errors.Is(err, cache.Err()) {
+                        t.Errorf("Build() = %v, %v; want nil and the child's error %v", app, err, cache.Err())
+                    }
+                    if got, want := received(), []string{"addTestRedis"}; !slices.Equal(got, want) {
+                        t.Errorf("the AppHost received %v, want %v (Build must not be sent)", got, want)
+                    }
+                }
+
+                func TestAllRecordedChildErrorsReachBuilder(t *testing.T) {
+                    c, received := connectChildErrorHost(t, "addTestRedis")
+                    builder := newBuilderOn(c)
+
+                    first := builder.AddTestRedis("first")
+                    second := builder.AddTestRedis("second")
+
+                    got := builder.Err()
+                    if !errors.Is(got, first.Err()) || !errors.Is(got, second.Err()) {
+                        t.Errorf("builder.Err() = %v, want both %v and %v", got, first.Err(), second.Err())
+                    }
+                    if want := first.Err().Error() + "\n" + second.Err().Error(); got.Error() != want {
+                        t.Errorf("builder.Err() = %q, want %q", got, want)
+                    }
+                    if _, err := builder.Build(); !errors.Is(err, first.Err()) || !errors.Is(err, second.Err()) {
+                        t.Errorf("Build() error = %v, want both %v and %v", err, first.Err(), second.Err())
+                    }
+                    if got, want := received(), []string{"addTestRedis", "addTestRedis"}; !slices.Equal(got, want) {
+                        t.Errorf("the AppHost received %v, want %v (Build must not be sent)", got, want)
+                    }
+                }
+
+                func TestFormatErrorIncludesEveryJoinedCapabilityError(t *testing.T) {
+                    first := &CapabilityError{err: atsError{
+                        Code:       "FIRST",
+                        Message:    "first failed",
+                        Capability: "addFirst",
+                    }}
+                    second := &CapabilityError{err: atsError{
+                        Code:       "SECOND",
+                        Message:    "second failed",
+                        Capability: "addSecond",
+                    }}
+
+                    got := FormatError(errors.Join(first, second))
+                    want := "Capability Error: first failed\n" +
+                        "  Code: FIRST\n" +
+                        "  Capability: addFirst\n" +
+                        "Capability Error: second failed\n" +
+                        "  Code: SECOND\n" +
+                        "  Capability: addSecond"
+                    if got != want {
+                        t.Errorf("FormatError() = %q, want %q", got, want)
+                    }
+                }
+
+                func TestFormatErrorIncludesJoinedCapabilityAndOrdinaryErrors(t *testing.T) {
+                    capability := &CapabilityError{err: atsError{
+                        Code:       "CAPABILITY",
+                        Message:    "capability failed",
+                        Capability: "addResource",
+                    }}
+                    ordinary := errors.New("ordinary failure")
+
+                    got := FormatError(errors.Join(capability, ordinary))
+                    want := "Capability Error: capability failed\n" +
+                        "  Code: CAPABILITY\n" +
+                        "  Capability: addResource\n" +
+                        "ordinary failure"
+                    if got != want {
+                        t.Errorf("FormatError() = %q, want %q", got, want)
+                    }
+                }
+
+                func TestFormatErrorPreservesOrdinaryMultiWrappedError(t *testing.T) {
+                    resourceErr := errors.New("resource failure")
+                    cleanupErr := errors.New("cleanup failure")
+                    joined := fmt.Errorf("deployment failed for cache: %w; cleanup failed: %w", resourceErr, cleanupErr)
+
+                    if got := FormatError(joined); got != joined.Error() {
+                        t.Errorf("FormatError() = %q, want %q", got, joined.Error())
+                    }
+                }
+
+                func TestPropagatedChildErrorIsNotRecordedAgain(t *testing.T) {
+                    c := newClient("")
+                    builder := newBuilderOn(c)
+
+                    failure := fmt.Errorf("child failed")
+                    newErroredHandleWrapperBase(failure, c)
+                    newPropagatedErroredResourceBuilder(failure, c)
+                    newPropagatedErroredResourceBuilder(failure, c)
+
+                    if got := builder.Err(); !errors.Is(got, failure) || got.Error() != failure.Error() {
+                        t.Errorf("builder.Err() = %v, want the original error %v", got, failure)
+                    }
+                }
+
+                func TestFailedWithCallOnChildReachesBuilder(t *testing.T) {
+                    c, _ := connectChildErrorHost(t, "withConnectionStringDirect")
+                    builder := newBuilderOn(c)
+
+                    cache := builder.AddTestRedis("cache")
+                    if builder.Err() != nil {
+                        t.Fatalf("builder.Err() = %v before any call failed", builder.Err())
+                    }
+
+                    cache.WithConnectionStringDirect("connection")
+                    if cache.Err() == nil || !errors.Is(builder.Err(), cache.Err()) {
+                        t.Errorf("builder.Err() = %v, want the child's error %v", builder.Err(), cache.Err())
+                    }
+                }
+
+                func TestBuildSucceedsWhenNoCallFailed(t *testing.T) {
+                    c, received := connectChildErrorHost(t)
+                    builder := newBuilderOn(c)
+
+                    builder.AddTestRedis("cache").WithConnectionStringDirect("connection")
+                    if builder.Err() != nil {
+                        t.Fatalf("builder.Err() = %v, want nil", builder.Err())
+                    }
+                    if _, err := builder.Build(); err != nil {
+                        t.Fatalf("Build() error = %v", err)
+                    }
+                    if got, want := received(), []string{"addTestRedis", "withConnectionStringDirect", "build"}; !slices.Equal(got, want) {
+                        t.Errorf("the AppHost received %v, want %v", got, want)
+                    }
+                }
+
+                func TestConcurrentChildErrorsAreAggregated(t *testing.T) {
+                    c := newClient("")
+                    builder := newBuilderOn(c)
+
+                    errs := make([]error, 64)
+                    var ready, done sync.WaitGroup
+                    ready.Add(1)
+                    done.Add(1)
+                    go func() {
+                        defer done.Done()
+                        ready.Wait()
+                        for range errs {
+                            _ = builder.Err()
+                        }
+                    }()
+                    for i := range errs {
+                        errs[i] = fmt.Errorf("error %d", i)
+                        done.Add(1)
+                        go func() {
+                            defer done.Done()
+                            ready.Wait()
+                            if i%2 == 0 {
+                                newHandleWrapperBase(&handle{HandleID: "1", TypeID: "type"}, c).setErr(errs[i])
+                            } else {
+                                newErroredHandleWrapperBase(errs[i], c)
+                            }
+                        }()
+                    }
+                    ready.Done()
+                    done.Wait()
+
+                    got := builder.Err()
+                    for _, err := range errs {
+                        if !errors.Is(got, err) {
+                            t.Errorf("builder.Err() = %v, want it to include %v", got, err)
+                        }
+                    }
+                    if gotLines := strings.Count(got.Error(), "\n") + 1; gotLines != len(errs) {
+                        t.Errorf("builder.Err() contains %d errors, want %d", gotLines, len(errs))
+                    }
+                }
+                """, timeout.Token);
+
+            var startInfo = new ProcessStartInfo("go")
+            {
+                WorkingDirectory = directory.FullName,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                ArgumentList = { "test", "-timeout", "30s", "." }
+            };
+            EnableGoRaceDetection(startInfo);
+            using var process = Process.Start(startInfo)!;
+            var stdout = process.StandardOutput.ReadToEndAsync(timeout.Token);
+            var stderr = process.StandardError.ReadToEndAsync(timeout.Token);
+            try
+            {
+                await process.WaitForExitAsync(timeout.Token);
+                Assert.True(process.ExitCode == 0, $"Go runtime test failed:{Environment.NewLine}{await stdout}{await stderr}");
+            }
+            finally
+            {
+                if (!process.HasExited)
+                {
+                    process.Kill(entireProcessTree: true);
+                    await process.WaitForExitAsync();
+                }
+            }
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
+    private static void EnableGoRaceDetection(ProcessStartInfo startInfo)
+    {
+        // Linux CI runners provide GCC; Go's race detector needs cgo and a C compiler.
+        // Keep ordinary runtime coverage on Windows, where that toolchain is not guaranteed.
+        if (OperatingSystem.IsLinux())
+        {
+            startInfo.ArgumentList.Insert(1, "-race");
+            startInfo.Environment["CGO_ENABLED"] = "1";
+        }
     }
 
     [Fact]
@@ -116,10 +1900,10 @@ public class AtsGoCodeGeneratorTests
         var aspireGo = files["aspire.go"];
 
         Assert.Contains("var TestConfigs = struct {", aspireGo);
-        Assert.Contains("Default *TestConfigDto", aspireGo);
+        Assert.Matches(@"Default\s+\*TestConfigDto", aspireGo);
         Assert.Contains("Profiles struct {", aspireGo);
-        Assert.Contains("Development *TestConfigDto", aspireGo);
-        Assert.Matches(@"Profiles struct \{\r?\n\t\tDevelopment \*TestConfigDto\r?\n\t\}\r?\n\tSecure \*TestConfigDto", aspireGo);
+        Assert.Matches(@"Development\s+\*TestConfigDto", aspireGo);
+        Assert.Matches(@"Profiles struct \{\r?\n\t\tDevelopment \*TestConfigDto\r?\n\t\}\r?\n\tSecure\s+\*TestConfigDto", aspireGo);
     }
 
     [Fact]
@@ -337,9 +2121,9 @@ public class AtsGoCodeGeneratorTests
         var files = _generator.GenerateDistributedApplication(atsContext);
         var aspireGo = files["aspire.go"];
 
-        Assert.Contains("if appHostFilePath, ok := resolved[\"AppHostFilePath\"].(string); !ok || appHostFilePath == \"\"", aspireGo);
+        Assert.Contains("if appHostFilePath, ok := resolved[\"appHostFilePath\"].(string); !ok || appHostFilePath == \"\"", aspireGo);
         Assert.Contains("os.Getenv(\"ASPIRE_APPHOST_FILEPATH\")", aspireGo);
-        Assert.Contains("resolved[\"AppHostFilePath\"] = appHostFilePath", aspireGo);
+        Assert.Contains("resolved[\"appHostFilePath\"] = appHostFilePath", aspireGo);
     }
 
     [Fact]
@@ -350,8 +2134,21 @@ public class AtsGoCodeGeneratorTests
         var files = _generator.GenerateDistributedApplication(atsContext);
         var aspireGo = files["aspire.go"];
 
-        Assert.Contains("if dashboardApplicationName, ok := resolved[\"DashboardApplicationName\"].(string); ok && dashboardApplicationName == \"\"", aspireGo);
-        Assert.Contains("delete(resolved, \"DashboardApplicationName\")", aspireGo);
+        Assert.Contains("if dashboardApplicationName, ok := resolved[\"dashboardApplicationName\"].(string); ok && dashboardApplicationName == \"\"", aspireGo);
+        Assert.Contains("delete(resolved, \"dashboardApplicationName\")", aspireGo);
+    }
+
+    [Fact]
+    public void GeneratedCode_CreateBuilderUsesFunctionalOptions()
+    {
+        var aspireGo = _generator.GenerateDistributedApplication(CreateContextFromBothAssemblies())["aspire.go"];
+
+        Assert.Contains("func CreateBuilder(options ...CreateBuilderOption)", aspireGo);
+        Assert.Contains("type CreateBuilderOption interface", aspireGo);
+        Assert.Contains("type CreateBuilderProjectDirectory string", aspireGo);
+        Assert.Contains("func (value CreateBuilderProjectDirectory) apply(options *CreateBuilderOptions)", aspireGo);
+        Assert.Contains("func (option *CreateBuilderOptions) apply(options *CreateBuilderOptions)", aspireGo);
+        Assert.DoesNotContain("func CreateBuilder(options ...*CreateBuilderOptions)", aspireGo);
     }
 
     [Fact]
@@ -368,13 +2165,342 @@ public class AtsGoCodeGeneratorTests
     }
 
     [Fact]
+    public void GeneratedCode_CallbackShimsBuildTheDeclaredResourceBuilderWrapper()
+    {
+        var atsContext = CreateContextFromBothAssemblies();
+
+        var files = _generator.GenerateDistributedApplication(atsContext);
+        var aspireGo = files["aspire.go"].ReplaceLineEndings("\n");
+        var shim = ExtractGeneratedMethod(
+            aspireGo,
+            "func (s *executableResource) PublishAsDockerFile(configure func(obj ContainerResource))");
+
+        Assert.Contains(
+            "cb(callbackHandleArg(s.client, args, 0, newContainerResourceFromHandle))",
+            shim,
+            StringComparison.Ordinal);
+        Assert.Contains("func callbackHandleArg[T any](", files["base.go"], StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [RequiresTools(["go"])]
+    public async Task GeneratedCallbacks_ReceiveResourceBuilderWrapper()
+    {
+        var directory = Directory.CreateTempSubdirectory();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(3));
+        using var process = new Process();
+        try
+        {
+            var files = _generator.GenerateDistributedApplication(CreateContextFromBothAssemblies());
+            foreach (var (name, content) in files)
+            {
+                await File.WriteAllTextAsync(Path.Combine(directory.FullName, name), content, timeout.Token);
+            }
+
+            await File.WriteAllTextAsync(Path.Combine(directory.FullName, "callback_test.go"), """
+                package aspire
+
+                import (
+                    "bufio"
+                    "net"
+                    "os"
+                    "testing"
+                )
+
+                // recordedCall is a capability invoked by the callback under test.
+                type recordedCall struct {
+                    capability string
+                    builder    any
+                }
+
+                // connectFakeAppHost connects a client to an in-memory AppHost. When the SDK
+                // invokes publishAsDockerFile, the AppHost calls the registered callback with a
+                // resource builder handle that carries callbackHandleType, and completes the
+                // capability once the callback returns. Every other capability is recorded and
+                // answered with its builder argument.
+                func connectFakeAppHost(t *testing.T, callbackHandleType string) (*client, <-chan recordedCall) {
+                    t.Helper()
+                    clientEnd, serverEnd := net.Pipe()
+                    c := newClient("")
+                    registerWrappers(c)
+                    conn := newConnection(clientEnd, c, c.onConnectionClose)
+                    c.mu.Lock()
+                    c.conn = conn
+                    c.mu.Unlock()
+                    conn.start()
+                    t.Cleanup(c.disconnect)
+
+                    calls := make(chan recordedCall, 8)
+                    go func() {
+                        defer serverEnd.Close()
+                        reader := bufio.NewReader(serverEnd)
+                        var publishID, publishBuilder any
+                        for {
+                            msg, err := readMessage(reader)
+                            if err != nil {
+                                return
+                            }
+                            if _, isRequest := msg["method"]; !isRequest {
+                                // The callback returned, so the capability that invoked it can complete.
+                                writeMessage(serverEnd, map[string]any{"jsonrpc": "2.0", "id": publishID, "result": publishBuilder})
+                                continue
+                            }
+                            params := msg["params"].([]any)
+                            capability := params[0].(string)
+                            args := params[1].(map[string]any)
+                            if capability != "Aspire.Hosting/publishAsDockerFile" {
+                                calls <- recordedCall{capability, args["builder"]}
+                                writeMessage(serverEnd, map[string]any{"jsonrpc": "2.0", "id": msg["id"], "result": args["builder"]})
+                                continue
+                            }
+                            publishID, publishBuilder = msg["id"], args["builder"]
+                            writeMessage(serverEnd, map[string]any{
+                                "jsonrpc": "2.0",
+                                "id":      1000,
+                                "method":  "invokeCallback",
+                                "params": []any{
+                                    args["configure"],
+                                    map[string]any{"p0": map[string]any{"$handle": "callback-resource", "$type": callbackHandleType}},
+                                },
+                            })
+                        }
+                    }()
+                    return c, calls
+                }
+
+                func TestCallbackReceivesResourceBuilderWrapper(t *testing.T) {
+                    // The AppHost marshals an IResourceBuilder<T> callback argument with its closed
+                    // generic CLR type as the $type, and no wrapper is registered under that id.
+                    // An argument whose $type is registered arrives already wrapped.
+                    handleTypes := map[string]string{
+                        "closed generic type": os.Getenv("TEST_RESOURCE_BUILDER_TYPE"),
+                        "registered type":     "Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource",
+                    }
+                    for name, handleType := range handleTypes {
+                        t.Run(name, func(t *testing.T) {
+                            if handleType == "" {
+                                t.Fatal("TEST_RESOURCE_BUILDER_TYPE is not set")
+                            }
+                            c, calls := connectFakeAppHost(t, handleType)
+                            root := newExecutableResourceFromHandle(&handle{
+                                HandleID: "root-resource",
+                                TypeID:   "Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecutableResource",
+                            }, c)
+
+                            received := make(chan ContainerResource, 1)
+                            root.PublishAsDockerFile(func(obj ContainerResource) {
+                                received <- obj
+                                if obj != nil {
+                                    obj.WithEntrypoint("/bin/app")
+                                }
+                            })
+                            if err := root.Err(); err != nil {
+                                t.Fatalf("PublishAsDockerFile failed: %v", err)
+                            }
+
+                            // PublishAsDockerFile returns only after the callback has returned.
+                            select {
+                            case obj := <-received:
+                                if obj == nil {
+                                    t.Fatal("the callback received a nil ContainerResource")
+                                }
+                            default:
+                                t.Fatal("the callback was not invoked")
+                            }
+                            select {
+                            case call := <-calls:
+                                builder, _ := call.builder.(map[string]any)
+                                if call.capability != "Aspire.Hosting/withEntrypoint" || builder["$handle"] != "callback-resource" {
+                                    t.Fatalf("unexpected follow-up call %s on %v", call.capability, call.builder)
+                                }
+                            default:
+                                t.Fatal("the callback wrapper did not invoke a capability")
+                            }
+                        })
+                    }
+                }
+                """, timeout.Token);
+
+            process.StartInfo = new ProcessStartInfo("go")
+            {
+                WorkingDirectory = directory.FullName,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                ArgumentList = { "test", "-timeout", "30s", "." },
+                // The same id the AppHost derives for an IResourceBuilder<T> callback parameter.
+                Environment = { ["TEST_RESOURCE_BUILDER_TYPE"] = AtsTypeMapping.DeriveTypeId(typeof(IResourceBuilder<ContainerResource>)) }
+            };
+            process.Start();
+            var stdout = process.StandardOutput.ReadToEndAsync(timeout.Token);
+            var stderr = process.StandardError.ReadToEndAsync(timeout.Token);
+            try
+            {
+                await process.WaitForExitAsync(timeout.Token);
+                Assert.True(process.ExitCode == 0, $"Go callback test failed:{Environment.NewLine}{await stdout}{await stderr}");
+            }
+            finally
+            {
+                if (!process.HasExited)
+                {
+                    process.Kill(entireProcessTree: true);
+                    await process.WaitForExitAsync();
+                }
+            }
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    [RequiresTools(["go"])]
+    public async Task GeneratedRuntime_DecodesResourcesTaggedWithTheDeclaredInterface()
+    {
+        var directory = Directory.CreateTempSubdirectory();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(3));
+        using var process = new Process();
+        try
+        {
+            var files = _generator.GenerateDistributedApplication(CreateContextFromBothAssemblies());
+            foreach (var (name, content) in files)
+            {
+                await File.WriteAllTextAsync(Path.Combine(directory.FullName, name), content, timeout.Token);
+            }
+
+            await File.WriteAllTextAsync(Path.Combine(directory.FullName, "declared_interface_test.go"), """
+                package aspire
+
+                import (
+                    "bufio"
+                    "net"
+                    "os"
+                    "testing"
+                )
+
+                // connectResourceHost connects a client to an in-memory AppHost that answers the
+                // capabilities returning resources. The AppHost tags each handle it returns with the
+                // type its capability declares, and Resource has no generated implementation.
+                func connectResourceHost(t *testing.T, resourceType string) *client {
+                    t.Helper()
+                    clientEnd, serverEnd := net.Pipe()
+                    c := newClient("")
+                    registerWrappers(c)
+                    conn := newConnection(clientEnd, c, c.onConnectionClose)
+                    c.mu.Lock()
+                    c.conn = conn
+                    c.mu.Unlock()
+                    conn.start()
+                    t.Cleanup(c.disconnect)
+
+                    resource := func(id string) map[string]any {
+                        return map[string]any{"$handle": id, "$type": resourceType}
+                    }
+                    go func() {
+                        defer serverEnd.Close()
+                        reader := bufio.NewReader(serverEnd)
+                        for {
+                            msg, err := readMessage(reader)
+                            if err != nil {
+                                return
+                            }
+                            reply := map[string]any{"jsonrpc": "2.0", "id": msg["id"]}
+                            params, _ := msg["params"].([]any)
+                            switch {
+                            case len(params) > 0 && params[0] == "Aspire.Hosting/getResources":
+                                reply["result"] = []any{resource("resource-1"), resource("resource-2")}
+                            case len(params) > 0 && params[0] == "Aspire.Hosting/findResourceByName":
+                                reply["result"] = resource("resource-1")
+                            default:
+                                reply["error"] = map[string]any{"code": -32601, "message": "unexpected request"}
+                            }
+                            writeMessage(serverEnd, reply)
+                        }
+                    }()
+                    return c
+                }
+
+                func newTestModel(t *testing.T) DistributedApplicationModel {
+                    t.Helper()
+                    resourceType := os.Getenv("TEST_RESOURCE_TYPE")
+                    if resourceType == "" {
+                        t.Fatal("TEST_RESOURCE_TYPE is not set")
+                    }
+                    return newDistributedApplicationModelFromHandle(&handle{
+                        HandleID: "model",
+                        TypeID:   "Aspire.Hosting/Aspire.Hosting.ApplicationModel.DistributedApplicationModel",
+                    }, connectResourceHost(t, resourceType))
+                }
+
+                func TestListOfResourcesDecodesIntoTheMarkerInterface(t *testing.T) {
+                    resources, err := newTestModel(t).GetResources()
+                    if err != nil {
+                        t.Fatalf("GetResources failed: %v", err)
+                    }
+                    if len(resources) != 2 {
+                        t.Fatalf("GetResources returned %d resources, want 2", len(resources))
+                    }
+                    for i, want := range []string{"resource-1", "resource-2"} {
+                        if resources[i] == nil || resources[i].getHandle().HandleID != want {
+                            t.Errorf("resource %d: got %v, want a wrapper for handle %s", i, resources[i], want)
+                        }
+                    }
+                }
+
+                func TestSingleResourceDecodesIntoTheMarkerInterface(t *testing.T) {
+                    model := newTestModel(t)
+                    found := model.FindResourceByName("api")
+                    if err := model.Err(); err != nil {
+                        t.Fatalf("FindResourceByName failed: %v", err)
+                    }
+                    if found == nil || found.getHandle().HandleID != "resource-1" {
+                        t.Fatalf("FindResourceByName returned %v, want a wrapper for handle resource-1", found)
+                    }
+                }
+                """, timeout.Token);
+
+            process.StartInfo = new ProcessStartInfo("go")
+            {
+                WorkingDirectory = directory.FullName,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                ArgumentList = { "test", "-timeout", "30s", "." },
+                // The same id the AppHost derives for the IResource type that GetResources declares.
+                Environment = { ["TEST_RESOURCE_TYPE"] = AtsTypeMapping.DeriveTypeId(typeof(IResource)) }
+            };
+            process.Start();
+            var stdout = process.StandardOutput.ReadToEndAsync(timeout.Token);
+            var stderr = process.StandardError.ReadToEndAsync(timeout.Token);
+            try
+            {
+                await process.WaitForExitAsync(timeout.Token);
+                Assert.True(process.ExitCode == 0, $"Go declared-interface test failed:{Environment.NewLine}{await stdout}{await stderr}");
+            }
+            finally
+            {
+                if (!process.HasExited)
+                {
+                    process.Kill(entireProcessTree: true);
+                    await process.WaitForExitAsync();
+                }
+            }
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
     public void GeneratedCode_RequiredNullablePrimitiveAndEnumSettersSendNullValues()
     {
         var atsContext = CreateContextFromBothAssemblies();
         var aspireGo = _generator.GenerateDistributedApplication(atsContext)["aspire.go"].ReplaceLineEndings("\n");
         var primitiveSetter = ExtractGeneratedMethod(
             aspireGo,
-            "func (s *endpointUpdateContext) SetPort(value *float64)");
+            "func (s *endpointUpdateContext) SetPort(value *int)");
         var enumSetter = ExtractGeneratedMethod(
             aspireGo,
             "func (s *containerBuildOptionsCallbackContext) SetDestination(value *ContainerImageDestination)");
@@ -408,10 +2534,9 @@ public class AtsGoCodeGeneratorTests
         var aspireGo = files["aspire.go"].ReplaceLineEndings("\n");
         var method = ExtractGeneratedMethod(aspireGo, signature);
 
-        Assert.Contains(
-            $"if {nilGuard} {{ reqArgs[\"{parameterName}\"] = serializeValue({parameterName}) }}",
-            method,
-            StringComparison.Ordinal);
+        Assert.Matches(
+            $@"if {Regex.Escape(nilGuard)} \{{\s+reqArgs\[""{parameterName}""\] = serializeValue\({parameterName}\)\s+\}}",
+            method);
         Assert.Contains("func isNil(value any) bool", files["base.go"], StringComparison.Ordinal);
     }
 
@@ -421,24 +2546,19 @@ public class AtsGoCodeGeneratorTests
         var atsContext = CreateContextFromBothAssemblies();
         var aspireGo = _generator.GenerateDistributedApplication(atsContext)["aspire.go"].ReplaceLineEndings("\n");
 
-        Assert.Contains(
-            "func (s *interactionInputCollection) Value(name string) (string, error) {\n" +
-            "\tinput, err := s.Get(name)\n" +
-            "\tif err != nil { return \"\", err }\n" +
-            "\tif input == nil || input.Value == nil { return \"\", nil }\n" +
-            "\treturn *input.Value, nil\n" +
-            "}",
+        var value = ExtractGeneratedMethod(
             aspireGo,
-            StringComparison.Ordinal);
-        Assert.Contains(
-            "func (s *interactionInputCollection) RequiredValue(name string) (string, error) {\n" +
-            "\tinput, err := s.Required(name)\n" +
-            "\tif err != nil { return \"\", err }\n" +
-            "\tif input.Value == nil { return \"\", nil }\n" +
-            "\treturn *input.Value, nil\n" +
-            "}",
+            "func (s *interactionInputCollection) Value(name string) (string, error)");
+        Assert.Contains("input, err := s.Get(name)", value, StringComparison.Ordinal);
+        Assert.Contains("if input == nil || input.Value == nil", value, StringComparison.Ordinal);
+        Assert.Contains("return *input.Value, nil", value, StringComparison.Ordinal);
+
+        var requiredValue = ExtractGeneratedMethod(
             aspireGo,
-            StringComparison.Ordinal);
+            "func (s *interactionInputCollection) RequiredValue(name string) (string, error)");
+        Assert.Contains("input, err := s.Required(name)", requiredValue, StringComparison.Ordinal);
+        Assert.Contains("if input.Value == nil", requiredValue, StringComparison.Ordinal);
+        Assert.Contains("return *input.Value, nil", requiredValue, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -478,38 +2598,204 @@ public class AtsGoCodeGeneratorTests
     }
 
     [Fact]
-    public void GeneratedCode_FlattensSingleOptionalDtoOptionsParameter()
+    public void GeneratedCode_UsesFunctionalOptionsForOptionalParameters()
     {
-        // WithHttpCommand has a single optional "options" DTO, so it flattens: the DTO is threaded
-        // directly instead of through a wrapper struct (issue #17664), matching the TypeScript output.
         var atsContext = CreateContextFromBothAssemblies();
 
         var files = _generator.GenerateDistributedApplication(atsContext);
         var aspireGo = files["aspire.go"];
 
-        // Signature threads the DTO directly; no wrapper struct is emitted.
-        Assert.Contains("WithHttpCommand(path string, displayName string, options ...*HttpCommandExportOptions)", aspireGo);
-
-        // The merged DTO is sent under the original "options" arg, but only when a non-nil option
-        // was merged, so an all-nil variadic omits the key (matching the old wrapper's ToMap()).
-        Assert.Contains("applied := false", aspireGo);
-        Assert.Contains("if applied { reqArgs[\"options\"] = serializeValue(merged) }", aspireGo);
+        Assert.Contains("WithHttpEndpoint(options ...WithHttpEndpointOption)", aspireGo);
+        Assert.Contains("type WithHttpEndpointOption interface", aspireGo);
+        Assert.Contains("type HttpEndpointPort int", aspireGo);
+        Assert.Contains("func (value HttpEndpointPort) apply(options *WithHttpEndpointOptions)", aspireGo);
+        Assert.Contains("type HttpEndpointIsProxied bool", aspireGo);
+        Assert.Contains("func (value HttpEndpointIsProxied) apply(options *WithHttpEndpointOptions)", aspireGo);
+        Assert.DoesNotContain("withHttpEndpointOptionFunc", aspireGo);
+        Assert.Contains("opt.apply(merged)", aspireGo);
     }
 
     [Fact]
-    public void GeneratedCode_DoesNotFlattenWhenOptionsCoexistsWithCancellationToken()
+    public void GeneratedCode_WrapsOptionalDtoAndCancellationTokenInFunctionalOptions()
     {
-        // PromptInput's only non-cancellation-token optional is the "options" DTO, but Go models a
-        // trailing cancellation token as another variadic element, so its single-variadic rule keeps
-        // the wrapper. TypeScript threads the token separately and would flatten this capability.
         var atsContext = CreateContextFromBothAssemblies();
 
         var files = _generator.GenerateDistributedApplication(atsContext);
         var aspireGo = files["aspire.go"];
 
-        Assert.Contains("PromptInput(title string, message string, input InteractionInputBuilder, options ...*PromptInputOptions)", aspireGo);
+        Assert.Contains("PromptInput(title string, message string, input InteractionInputBuilder, options ...PromptInputOption)", aspireGo);
         Assert.Contains("type PromptInputOptions struct", aspireGo);
-        Assert.Contains("Options *InteractionInputsDialogOptions `json:\"options,omitempty\"`", aspireGo);
+        Assert.Matches(@"Options\s+\*InteractionInputsDialogOptions `json:""options,omitempty""`", aspireGo);
+        Assert.Contains("func PromptInputOptionsValue(value *InteractionInputsDialogOptions) PromptInputOption", aspireGo);
+        Assert.Contains("func PromptInputCancellationToken(value *CancellationToken) PromptInputOption", aspireGo);
+    }
+
+    [Fact]
+    public void GeneratedCode_ReservesDistinctExportedOptionNames()
+    {
+        var stringType = new AtsTypeRef
+        {
+            TypeId = AtsConstants.String,
+            ClrType = typeof(string),
+            Category = AtsTypeCategory.Primitive
+        };
+        var int64Type = new AtsTypeRef
+        {
+            TypeId = AtsConstants.Number,
+            ClrType = typeof(long),
+            Category = AtsTypeCategory.Primitive
+        };
+        var voidType = new AtsTypeRef { TypeId = AtsConstants.Void, Category = AtsTypeCategory.Primitive };
+        var capabilities = new[]
+        {
+            new AtsCapabilityInfo
+            {
+                CapabilityId = "Tests/withFoo",
+                MethodName = "withFoo",
+                Parameters = [new AtsParameterInfo { Name = "barBaz", Type = stringType, IsOptional = true }],
+                ReturnType = voidType
+            },
+            new AtsCapabilityInfo
+            {
+                CapabilityId = "Tests/withFooBar",
+                MethodName = "withFooBar",
+                Parameters = [new AtsParameterInfo { Name = "baz", Type = stringType, IsOptional = true }],
+                ReturnType = voidType
+            },
+            new AtsCapabilityInfo
+            {
+                CapabilityId = "Tests/withInt64",
+                MethodName = "withInt64",
+                Parameters = [new AtsParameterInfo { Name = "ptr", Type = int64Type, IsOptional = true }],
+                ReturnType = voidType
+            }
+        };
+        var context = new AtsContext
+        {
+            Capabilities = capabilities,
+            HandleTypes = [],
+            DtoTypes =
+            [
+                new AtsDtoTypeInfo
+                {
+                    TypeId = "Tests/FooBarBaz",
+                    Name = "FooBarBaz",
+                    Properties = []
+                }
+            ],
+            EnumTypes = []
+        };
+
+        var aspireGo = new AtsGoCodeGenerator().GenerateDistributedApplication(context)["aspire.go"];
+        var optionTypes = Regex.Matches(aspireGo, @"(?m)^type (FooBarBaz\d+) string$")
+            .Select(match => match.Groups[1].Value)
+            .ToList();
+
+        Assert.Equal(2, optionTypes.Count);
+        Assert.Equal(2, optionTypes.Distinct(StringComparer.Ordinal).Count());
+        Assert.All(optionTypes, name => Assert.True(char.IsUpper(name[0])));
+        Assert.DoesNotContain("type Int64Ptr int64", aspireGo);
+        Assert.Contains("type Int64Ptr2 int64", aspireGo);
+    }
+
+    [Fact]
+    public void GeneratedCode_MapsClrNumericTypesAndOptionality()
+    {
+        var numericTypes = new (string Name, Type ClrType, string GoType)[]
+        {
+            ("Integer", typeof(int), "int"),
+            ("Long", typeof(long), "int64"),
+            ("Double", typeof(double), "float64"),
+            ("Float", typeof(float), "float32"),
+            ("Short", typeof(short), "int16"),
+            ("Byte", typeof(byte), "uint8"),
+            ("Decimal", typeof(decimal), "float64"),
+            ("UShort", typeof(ushort), "uint16"),
+            ("UInt", typeof(uint), "uint"),
+            ("ULong", typeof(ulong), "uint64"),
+            ("SByte", typeof(sbyte), "int8")
+        };
+        var atsContext = new AtsContext
+        {
+            Capabilities = [],
+            HandleTypes = [],
+            EnumTypes = [],
+            DtoTypes =
+            [
+                new AtsDtoTypeInfo
+                {
+                    TypeId = "Tests/NumericDto",
+                    Name = "NumericDto",
+                    Properties = numericTypes.Select(type => new AtsDtoPropertyInfo
+                    {
+                        Name = type.Name,
+                        Type = new AtsTypeRef
+                        {
+                            TypeId = AtsConstants.Number,
+                            ClrType = type.ClrType,
+                            Category = AtsTypeCategory.Primitive
+                        },
+                        IsOptional = type.Name == "Integer"
+                    }).ToList()
+                }
+            ]
+        };
+
+        var aspireGo = _generator.GenerateDistributedApplication(atsContext)["aspire.go"];
+
+        foreach (var (name, _, goType) in numericTypes)
+        {
+            var expectedType = name == "Integer" ? $"*{goType}" : goType;
+            Assert.Matches($@"{name}\s+{Regex.Escape(expectedType)}\b", aspireGo);
+        }
+    }
+
+    [Fact]
+    public void GeneratedCode_FiltersObsoleteSymbolsButKeepsRequiredWireTypes()
+    {
+        var context = CreateContextFromTestAssembly();
+        var obsoleteContext = Assert.Single(context.HandleTypes, type => type.ClrType == typeof(GoObsoleteContext));
+        var obsoleteDto = Assert.Single(context.DtoTypes, type => type.ClrType == typeof(GoObsoleteDto));
+        var obsoleteEnum = Assert.Single(context.EnumTypes, type => type.ClrType == typeof(GoObsoleteEnum));
+
+        Assert.False(obsoleteContext.IsObsolete);
+        Assert.True(Assert.Single(obsoleteDto.Properties, property => property.Name == "Legacy").IsObsolete);
+        Assert.True(Assert.Single(obsoleteEnum.ValueInfos, value => value.Name == "Legacy").IsObsolete);
+        Assert.Contains(context.Capabilities, capability => capability.MethodName == "getLegacyValue" && capability.IsObsolete);
+        Assert.Contains(context.ExportedValues, value => value.PathSegments[^1] == "LegacyValue" && value.IsObsolete);
+
+        var aspireGo = new AtsGoCodeGenerator().GenerateDistributedApplication(context)["aspire.go"];
+
+        Assert.Contains("type GoObsoleteDto struct", aspireGo);
+        Assert.Contains("Current string", aspireGo);
+        Assert.DoesNotContain("Legacy string", aspireGo);
+        Assert.Contains("type GoObsoleteEnum string", aspireGo);
+        Assert.Contains("GoObsoleteEnumCurrent", aspireGo);
+        Assert.DoesNotContain("GoObsoleteEnumLegacy", aspireGo);
+        Assert.DoesNotContain("GetLegacyValue", aspireGo);
+        Assert.DoesNotMatch(@"type GoObsoleteContext interface \{[^}]*\bLegacy\(\)", aspireGo);
+        Assert.DoesNotContain("LegacyValue", aspireGo);
+        Assert.DoesNotContain("type GoUnusedObsoleteDto struct", aspireGo);
+
+        // These obsolete types remain because active methods still use them on the wire.
+        Assert.Contains("type GoObsoleteWireDto struct", aspireGo);
+        Assert.Contains("type GoObsoleteWireHandle interface", aspireGo);
+        Assert.Contains("GetObsoleteWireDto() (*GoObsoleteWireDto, error)", aspireGo);
+        Assert.Contains("GetObsoleteWireHandle() GoObsoleteWireHandle", aspireGo);
+
+        var api = new AtsGoCodeGenerator().BuildApiModel(
+            context,
+            TestTypesAssemblyName,
+            "1.0.0",
+            [TestTypesAssemblyName],
+            CancellationToken.None);
+        var apiItems = api.Modules.Single().Items;
+        Assert.DoesNotContain(
+            apiItems.SelectMany(item => item.Members),
+            member => member.Name is "Legacy" or "GetLegacyValue" || member.Name.EndsWith("LegacyValue", StringComparison.Ordinal));
+        Assert.DoesNotContain(apiItems, item => item.Name == "GoUnusedObsoleteDto");
+        Assert.Contains(apiItems, item => item.Name == "GoObsoleteWireDto");
+        Assert.Contains(apiItems, item => item.Name == "GoObsoleteWireHandle");
     }
 
     private static List<AtsCapabilityInfo> ScanCapabilitiesFromTestAssembly()

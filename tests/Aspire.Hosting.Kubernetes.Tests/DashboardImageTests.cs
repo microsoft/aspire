@@ -7,19 +7,38 @@ namespace Aspire.Hosting.Kubernetes.Tests;
 
 public class DashboardImageTests
 {
+    [Fact]
+    public void Name_UsesCanonicalAspireNightlyRepository()
+    {
+        Assert.Equal("mcr.microsoft.com/aspire/nightly/dashboard", DashboardImage.Name);
+    }
+
     [Theory]
     // Informational version (SemVer with prerelease + build metadata) is preferred and reduced to major.minor.
     [InlineData("13.5.0-preview.1.25111.1+ad18db0213e9db8209bca0feb83fc801f34634f5", "13.5.0.0", "13.5")]
     [InlineData("13.5.0", "13.5.0.0", "13.5")]
     [InlineData("14.0.0-dev", "14.0.0.0", "14.0")]
+    [InlineData("17.0.0-preview.1+commit", "17.0.0.0", "17.0")]
+    [InlineData("17.0.0", "17.0.0.0", "17.0")]
     // Falls back to the 4-part assembly version when the informational version is missing.
     [InlineData(null, "13.5.0.0", "13.5")]
     [InlineData("", "9.2.1.0", "9.2")]
+    [InlineData(null, "17.0.0.0", "17.0")]
     // Falls back to the assembly version when the informational version is not parseable.
     [InlineData("not-a-version", "10.3.0.0", "10.3")]
     public void ResolveTag_ReturnsMajorMinor(string? informationalVersion, string? assemblyVersion, string expected)
     {
-        Assert.Equal(expected, DashboardImage.ResolveTag(informationalVersion, assemblyVersion));
+        Assert.Equal(expected, DashboardImage.ResolveTag(informationalVersion, assemblyVersion, imageTag: null));
+    }
+
+    [Theory]
+    [InlineData("18.0.0-preview.1+commit", "18.0.0.0", "17.0", "17.0")]
+    [InlineData("18.0.0", "18.0.0.0", "17.0", "17.0")]
+    [InlineData(null, null, "17.0", "17.0")]
+    [InlineData("17.0.0-preview.1", "17.0.0.0", "", "17.0")]
+    public void ResolveTag_PrefersBuildTimeImageTag(string? informationalVersion, string? assemblyVersion, string imageTag, string expected)
+    {
+        Assert.Equal(expected, DashboardImage.ResolveTag(informationalVersion, assemblyVersion, imageTag));
     }
 
     [Theory]
@@ -29,16 +48,12 @@ public class DashboardImageTests
     [InlineData("garbage", "also-garbage")]
     public void ResolveTag_WithoutParseableVersion_FallsBackToLatest(string? informationalVersion, string? assemblyVersion)
     {
-        Assert.Equal("latest", DashboardImage.ResolveTag(informationalVersion, assemblyVersion));
+        Assert.Equal("latest", DashboardImage.ResolveTag(informationalVersion, assemblyVersion, imageTag: null));
     }
 
     [Fact]
-    public void ResolveTag_FromRunningAssembly_MatchesPinnedImageName()
+    public void ResolveTag_FromRunningAssembly_UsesProductVersion()
     {
-        // The running assembly always carries a version, so a real tag (never "latest") is produced.
-        var tag = DashboardImage.ResolveTag();
-
-        Assert.NotEqual("latest", tag);
-        Assert.Matches(@"^\d+\.\d+$", tag);
+        Assert.Equal("17.0", DashboardImage.ResolveTag());
     }
 }

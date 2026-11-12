@@ -1,20 +1,52 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
+using System.IO.Hashing;
+using System.Runtime.CompilerServices;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
-using Aspire.Cli.Bundles;
 using Aspire.Cli.Configuration;
-using Aspire.Cli.Layout;
+using Aspire.Cli.DotNet;
+using Aspire.Cli.Packaging;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
+using Aspire.Hosting.Utils;
 using Aspire.Shared;
 using Microsoft.Extensions.Logging;
+using NuGet.ProjectModel;
+using NuGetPackage = Aspire.Shared.NuGetPackageCli;
 
 namespace Aspire.Cli.NuGet;
 
+internal sealed record NuGetSourceInfo(
+    string Name,
+    string Identity,
+    bool IsEnabled,
+    bool HasCredentials,
+    bool HasClientCertificates)
+{
+    public bool IsCliManaged { get; init; }
+    public bool IsIntegrationSource { get; init; }
+}
+
+internal sealed record NuGetPackageSourceMapping(
+    string SourceKey,
+    IReadOnlyList<string> Patterns);
+
+internal sealed record NuGetSettingsInfo(
+    IReadOnlyList<string> ConfigPaths,
+    string CacheIdentity,
+    IReadOnlyList<NuGetSourceInfo> Sources,
+    IReadOnlyList<string> SensitiveSourceValues,
+    IReadOnlyList<NuGetPackageSourceMapping> PackageSourceMappings,
+    IReadOnlyList<string> DisabledPackageSourceKeys,
+    IReadOnlyList<string> ReservedPackageSourceKeys,
+    byte[] SourceIdentityKey);
+
 /// <summary>
-/// Service for NuGet operations that works in bundle mode.
-/// Uses the NuGetHelper tool via the layout runtime.
+/// Restores integration packages and creates package probe manifests.
 /// </summary>
 internal interface INuGetService
 {
@@ -25,46 +57,48 @@ internal interface INuGetService
     /// <param name="targetFramework">The target framework.</param>
     /// <param name="runtimeIdentifier">The runtime identifier used to prefer runtime-specific assets in the generated layout.</param>
     /// <param name="sources">Additional NuGet sources.</param>
-    /// <param name="workingDirectory">Working directory for nuget.config discovery and for resolving the workspace-local restore cache. Required.</param>
-    /// <param name="nugetConfigPath">An explicit NuGet.config file to use during restore.</param>
+    /// <param name="workingDirectory">Working directory for NuGet.config discovery and for resolving the workspace-local restore cache.</param>
+    /// <param name="nugetConfigPaths">NuGet.config paths ordered from highest to lowest precedence.</param>
+    /// <param name="nugetSettingsCacheIdentity">The cache identity computed from NuGet's effective ambient settings.</param>
+    /// <param name="nugetConfigOverlayCacheIdentity">A stable cache identity for an invocation-scoped overlay.</param>
+    /// <param name="additionalSensitiveSources">Additional source values that must be redacted from restore output.</param>
+    /// <param name="globalPackagesFolderOverride">An optional global packages folder override.</param>
     /// <param name="ct">Cancellation token.</param>
-    /// <returns>Path to the package probe manifest.</returns>
+    /// <returns>The path to the package probe manifest.</returns>
     Task<string> RestorePackagesAsync(
         IEnumerable<(string Id, string Version)> packages,
         string workingDirectory,
         string targetFramework = "net10.0",
         string? runtimeIdentifier = null,
         IEnumerable<string>? sources = null,
-        string? nugetConfigPath = null,
+        IReadOnlyList<string>? nugetConfigPaths = null,
+        string? nugetSettingsCacheIdentity = null,
+        string? nugetConfigOverlayCacheIdentity = null,
+        IEnumerable<string>? additionalSensitiveSources = null,
+        string? globalPackagesFolderOverride = null,
         CancellationToken ct = default);
 }
 
 /// <summary>
-/// NuGet service implementation that uses the bundle's NuGetHelper tool.
+/// Orchestrates NuGet configuration and in-process package restore with reusable restore caches.
 /// </summary>
 internal sealed class BundleNuGetService : INuGetService
 {
-    private readonly ILayoutDiscovery _layoutDiscovery;
-    private readonly LayoutProcessRunner _layoutProcessRunner;
-    private readonly IFeatures _features;
-    private readonly IEnvironment _environment;
     private readonly ILogger<BundleNuGetService> _logger;
-    private readonly IBundleService? _bundleService;
+    private readonly INuGetClient _nuGetClient;
+    private readonly IConfigurationService _configurationService;
+
+    internal Func<byte[]> SourceIdentityKeyFactory { get; init; }
+        = static () => RandomNumberGenerator.GetBytes(NuGetSourceIdentity.KeySizeInBytes);
 
     public BundleNuGetService(
-        ILayoutDiscovery layoutDiscovery,
-        LayoutProcessRunner layoutProcessRunner,
-        IFeatures features,
-        IEnvironment environment,
         ILogger<BundleNuGetService> logger,
-        IBundleService? bundleService = null)
+        INuGetClient nuGetClient,
+        IConfigurationService configurationService)
     {
-        _layoutDiscovery = layoutDiscovery;
-        _layoutProcessRunner = layoutProcessRunner;
-        _features = features;
-        _environment = environment;
         _logger = logger;
-        _bundleService = bundleService;
+        _nuGetClient = nuGetClient;
+        _configurationService = configurationService;
     }
 
     public async Task<string> RestorePackagesAsync(
@@ -73,25 +107,14 @@ internal sealed class BundleNuGetService : INuGetService
         string targetFramework = "net10.0",
         string? runtimeIdentifier = null,
         IEnumerable<string>? sources = null,
-        string? nugetConfigPath = null,
+        IReadOnlyList<string>? nugetConfigPaths = null,
+        string? nugetSettingsCacheIdentity = null,
+        string? nugetConfigOverlayCacheIdentity = null,
+        IEnumerable<string>? additionalSensitiveSources = null,
+        string? globalPackagesFolderOverride = null,
         CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workingDirectory);
-
-        using var layoutLease = _bundleService is null
-            ? null
-            : await _bundleService.EnsureExtractedAndAcquireLayoutAsync("cli", "nuget-restore", ct).ConfigureAwait(false);
-        var layout = layoutLease?.Layout ?? _layoutDiscovery.DiscoverLayout();
-        if (layout is null)
-        {
-            throw new InvalidOperationException("Bundle layout not found. Cannot perform NuGet restore in bundle mode.");
-        }
-
-        var managedPath = layout.GetManagedPath();
-        if (managedPath is null || !File.Exists(managedPath))
-        {
-            throw new InvalidOperationException("aspire-managed not found in layout.");
-        }
 
         var packageList = packages.ToList();
         if (packageList.Count == 0)
@@ -99,167 +122,451 @@ internal sealed class BundleNuGetService : INuGetService
             throw new ArgumentException("At least one package is required", nameof(packages));
         }
 
-        // Compute a hash for the package set to create a unique restore location.
-        var packageHash = ComputePackageHash(packageList, targetFramework, runtimeIdentifier, managedPath, sources);
-        var restoreCacheDirectory = GetPackageRestoreCacheDirectory(workingDirectory);
-        var restoreDir = Path.Combine(restoreCacheDirectory, packageHash);
-        var objDir = Path.Combine(restoreDir, "obj");
-        var manifestPath = Path.Combine(restoreDir, IntegrationPackageProbeManifest.FileName);
-        var assetsPath = Path.Combine(objDir, "project.assets.json");
-        var lockPath = Path.Combine(restoreDir, "restore.lock");
+        var sourceList = sources?.ToArray();
+        var sensitiveSources = (sourceList ?? [])
+            .Concat(additionalSensitiveSources ?? [])
+            .Where(PackageSourceOverrideMappings.HasCredentialMaterial)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        var nugetConfigCacheIdentity = ComputeNuGetConfigCacheIdentity(
+            nugetSettingsCacheIdentity,
+            nugetConfigOverlayCacheIdentity);
+        var packageHash = ComputePackageHash(
+            packageList,
+            targetFramework,
+            runtimeIdentifier,
+            GetRestoreToolPath(),
+            sourceList,
+            nugetConfigCacheIdentity,
+            globalPackagesFolderOverride);
+        var restoreDirectory = Path.Combine(
+            GetPackageRestoreCacheDirectory(workingDirectory),
+            packageHash);
+        var objectDirectory = Path.Combine(restoreDirectory, "obj");
+        var manifestPath = Path.Combine(restoreDirectory, IntegrationPackageProbeManifest.FileName);
+        var lockPath = Path.Combine(restoreDirectory, "restore.lock");
 
-        // The package cache is shared by every AppHost in the workspace. Serialize the
-        // restore and manifest write so one process cannot start RemoteHost while another
-        // process is rewriting the same manifest or project.assets.json file.
+        // Reusable package caches are shared by every AppHost in the workspace and must remain
+        // serialized while their manifest or project.assets.json file is being written.
         using var fileLock = await FileLock.AcquireAsync(lockPath, ct).ConfigureAwait(false);
 
-        // Check if already restored after acquiring the lock because another process may
-        // have populated the shared cache while this process was waiting.
         if (File.Exists(manifestPath) && TryValidatePackageManifest(manifestPath, _logger))
         {
             _logger.LogDebug("Using cached package manifest at {Path}", manifestPath);
             return manifestPath;
         }
 
-        Directory.CreateDirectory(objDir);
+        Directory.CreateDirectory(objectDirectory);
+        _logger.LogDebug("Restoring {Count} integration packages in-process", packageList.Count);
 
-        // Step 1: Restore packages
-        // Prepend "nuget" subcommand for aspire-managed dispatch
-        var restoreArgs = new List<string>
+        try
         {
-            "nuget",
-            "restore",
-            "--output", objDir,
-            "--framework", targetFramework
-        };
-
-        if (!string.IsNullOrEmpty(runtimeIdentifier))
+            await _nuGetClient.RestoreAsync(
+                packageList,
+                targetFramework,
+                runtimeIdentifier,
+                objectDirectory,
+                sourceList ?? [],
+                nugetConfigPaths ?? [],
+                workingDirectory,
+                globalPackagesFolderOverride,
+                sensitiveSources,
+                ct).ConfigureAwait(false);
+        }
+        catch (NuGetOperationException ex)
         {
-            restoreArgs.Add("--runtime-identifier");
-            restoreArgs.Add(runtimeIdentifier);
+            var redactedOutput = PackageSourceRedactor.RedactOccurrences(ex.Output, sensitiveSources);
+            _logger.LogError("Package restore failed");
+            _logger.LogError("Package restore stderr: {Error}", redactedOutput);
+            throw new InvalidOperationException($"Package restore failed: {redactedOutput}", ex);
         }
 
-        foreach (var (id, version) in packageList)
+        try
         {
-            restoreArgs.Add("--package");
-            restoreArgs.Add($"{id},{version}");
+            await _nuGetClient.WriteManifestAsync(
+                Path.Combine(objectDirectory, LockFileFormat.AssetsFileName),
+                manifestPath,
+                targetFramework,
+                runtimeIdentifier,
+                ct).ConfigureAwait(false);
         }
-
-        if (sources is not null)
+        catch (NuGetOperationException ex)
         {
-            foreach (var source in sources)
-            {
-                restoreArgs.Add("--source");
-                restoreArgs.Add(source);
-            }
-        }
-
-        // Pass working directory for nuget.config discovery.
-        restoreArgs.Add("--working-dir");
-        restoreArgs.Add(workingDirectory);
-
-        if (!string.IsNullOrEmpty(nugetConfigPath))
-        {
-            restoreArgs.Add("--nuget-config");
-            restoreArgs.Add(nugetConfigPath);
-        }
-
-        // Enable verbose output for debugging
-        if (_logger.IsEnabled(LogLevel.Debug))
-        {
-            restoreArgs.Add("--verbose");
-        }
-
-        _logger.LogDebug("Restoring {Count} packages", packageList.Count);
-        _logger.LogDebug("aspire-managed path: {ManagedPath}", managedPath);
-        if (_logger.IsEnabled(LogLevel.Debug))
-        {
-            // Build a redacted copy of the args specifically for the log line so user-supplied
-            // credentialed feeds (e.g., `https://user:pat@host/v3/index.json`, SAS-token URLs) do
-            // not flow to the debug log alongside the rest of the restore invocation. The
-            // original `restoreArgs` list is still passed verbatim to the process below.
-            _logger.LogDebug("NuGet restore args: {Args}", string.Join(" ", BuildRedactedArgsForLog(restoreArgs)));
-        }
-
-        var environmentVariables = new Dictionary<string, string>();
-        NuGetSignatureVerificationEnabler.Apply(environmentVariables, _features, _environment);
-        layoutLease?.AddEnvironment(environmentVariables);
-
-        var (exitCode, output, error) = await _layoutProcessRunner.RunAsync(
-            managedPath,
-            restoreArgs,
-            environmentVariables: environmentVariables,
-            // A restore against a slow/unresponsive NuGet source can hang. LayoutProcessRunner uses this
-            // to bind the helper to the CLI's Windows kill-on-close job (and, on non-Windows, to instead
-            // arm the cooperative parent-liveness watchdog) so a hard-killed CLI cannot leak it.
-            killOnParentExit: true,
-            ct: ct);
-
-        // Log stderr at debug level for diagnostics
-        if (!string.IsNullOrWhiteSpace(error))
-        {
-            _logger.LogDebug("NuGetHelper restore stderr: {Error}", error);
-        }
-
-        if (exitCode != 0)
-        {
-            _logger.LogError("Package restore failed with exit code {ExitCode}", exitCode);
-            _logger.LogError("Package restore stderr: {Error}", error);
-            _logger.LogError("Package restore stdout: {Output}", output);
-            throw new InvalidOperationException($"Package restore failed: {error}");
-        }
-
-        // Step 2: Create package probe manifest
-        // Prepend "nuget" subcommand for aspire-managed dispatch
-        var manifestArgs = new List<string>
-        {
-            "nuget",
-            "manifest",
-            "--assets", assetsPath,
-            "--output", manifestPath,
-            "--framework", targetFramework
-        };
-
-        if (!string.IsNullOrEmpty(runtimeIdentifier))
-        {
-            manifestArgs.Add("--runtime-identifier");
-            manifestArgs.Add(runtimeIdentifier);
-        }
-
-        // Enable verbose output for debugging
-        if (_logger.IsEnabled(LogLevel.Debug))
-        {
-            manifestArgs.Add("--verbose");
-        }
-
-        _logger.LogDebug("Creating package manifest from {AssetsPath}", assetsPath);
-        _logger.LogDebug("NuGet manifest args: {Args}", string.Join(" ", manifestArgs));
-
-        (exitCode, output, error) = await _layoutProcessRunner.RunAsync(
-            managedPath,
-            manifestArgs,
-            environmentVariables: environmentVariables,
-            // Same rationale as the restore step above: keep this aspire-managed helper from outliving a
-            // hard-killed CLI (Windows kill-on-close job, or the cooperative watchdog on other hosts).
-            killOnParentExit: true,
-            ct: ct);
-
-        // Log stderr at debug level for diagnostics
-        if (!string.IsNullOrWhiteSpace(error))
-        {
-            _logger.LogDebug("NuGetHelper manifest stderr: {Error}", error);
-        }
-
-        if (exitCode != 0)
-        {
-            _logger.LogError("Manifest creation failed with exit code {ExitCode}", exitCode);
-            _logger.LogError("Manifest creation stderr: {Error}", error);
-            _logger.LogError("Manifest creation stdout: {Output}", output);
-            throw new InvalidOperationException($"Manifest creation failed: {error}");
+            _logger.LogError("Manifest creation failed");
+            _logger.LogError("Manifest creation stderr: {Error}", ex.Output);
+            throw new InvalidOperationException($"Manifest creation failed: {ex.Output}", ex);
         }
 
         _logger.LogDebug("Package manifest created at {Path}", manifestPath);
         return manifestPath;
+    }
+
+    internal NuGetSettingsInfo GetNuGetSettings(
+        string workingDirectory,
+        CancellationToken cancellationToken)
+        => GetNuGetSettings(workingDirectory, protectIntegrationSources: true, cancellationToken);
+
+    private NuGetSettingsInfo GetNuGetSettings(
+        string workingDirectory,
+        bool protectIntegrationSources,
+        CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workingDirectory);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var sourceIdentityKey = SourceIdentityKeyFactory();
+        if (sourceIdentityKey.Length != NuGetSourceIdentity.KeySizeInBytes)
+        {
+            throw new InvalidOperationException(
+                $"The NuGet source identity key must be {NuGetSourceIdentity.KeySizeInBytes} bytes.");
+        }
+
+        var settings = _nuGetClient.GetSettings(workingDirectory, sourceIdentityKey);
+        if (!protectIntegrationSources)
+        {
+            return settings;
+        }
+
+        var integrationSourceIdentities = IntegrationSourceConfiguration.GetConfiguredSources(
+                new DirectoryInfo(workingDirectory), new FileInfo(_configurationService.GetSettingsFilePath(isGlobal: true)))
+            .Select(source => NuGetSourceIdentity.Compute(source, sourceIdentityKey))
+            .ToHashSet(StringComparer.Ordinal);
+
+        var sources = settings.Sources.Select(source => source with
+        {
+            IsIntegrationSource = integrationSourceIdentities.Contains(source.Identity)
+        }).ToArray();
+        var protectedSourceKeys = sources.Where(static source => source.IsIntegrationSource)
+            .Select(static source => source.Name).Order(StringComparer.OrdinalIgnoreCase).ToArray();
+
+        return settings with
+        {
+            Sources = sources,
+            // Update transactions must notice changes to retention policy as well as NuGet.config.
+            CacheIdentity = protectedSourceKeys.Length == 0 ? settings.CacheIdentity :
+                CombineCacheIdentities(settings.CacheIdentity,
+                    JsonSerializer.Serialize(protectedSourceKeys, JsonSourceGenerationContext.Default.StringArray))
+        };
+    }
+
+    internal NuGetConfiguration BuildConfiguration(
+        DirectoryInfo workingDirectory,
+        string workloadId,
+        PackageMapping[]? selectedMappings,
+        bool restrictToSelectedSources,
+        bool overrideIntegrationSources,
+        string? packageScopedAppendSource = null,
+        bool hasAuthoritativeAspirePolicy = false,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(workingDirectory);
+        var settings = GetNuGetSettings(workingDirectory.FullName, protectIntegrationSources: !overrideIntegrationSources, cancellationToken);
+        selectedMappings = ResolvePackageMappings(workingDirectory, settings, selectedMappings);
+        return NuGetConfigurationBuilder.Build(
+            settings,
+            workloadId,
+            selectedMappings,
+            restrictToSelectedSources,
+            packageScopedAppendSource,
+            hasAuthoritativeAspirePolicy);
+    }
+
+    private static PackageMapping[]? ResolvePackageMappings(
+        DirectoryInfo workingDirectory, NuGetSettingsInfo settings, PackageMapping[]? selectedMappings)
+        => selectedMappings?
+            .Select(mapping => new PackageMapping(
+                mapping.PackageFilter,
+                PackageSourceIdentity.IsNamedSourceReference(mapping.Source) &&
+                settings.Sources.Any(source => string.Equals(source.Name, mapping.Source, StringComparison.OrdinalIgnoreCase))
+                    ? mapping.Source
+                    : PackageSourceOverrideMappings.ResolveForWorkingDirectory(mapping.Source, workingDirectory))
+            {
+                SourceKey = mapping.SourceKey
+            })
+            .ToArray();
+
+    internal bool IsPackageSourceMappingEnabled(DirectoryInfo workingDirectory, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(workingDirectory);
+        return GetNuGetSettings(workingDirectory.FullName, protectIntegrationSources: false, cancellationToken).PackageSourceMappings.Count > 0;
+    }
+
+    internal NuGetConfiguration BuildAppHostConfiguration(
+        DirectoryInfo workingDirectory,
+        string workloadId,
+        PackageMapping[]? selectedMappings,
+        bool overrideIntegrationSources,
+        CancellationToken cancellationToken)
+    {
+        var settings = GetNuGetSettings(workingDirectory.FullName, protectIntegrationSources: !overrideIntegrationSources, cancellationToken);
+        return DotNetAppHostNuGetConfigBuilder.Build(
+            settings, workloadId, ResolvePackageMappings(workingDirectory, settings, selectedMappings));
+    }
+
+    internal NuGetConfiguration BuildChannelConfiguration(
+        DirectoryInfo workingDirectory,
+        string workloadId,
+        PackageChannel? channel,
+        string? packageSourceOverride,
+        string? nugetServiceIndexOverride,
+        CancellationToken cancellationToken)
+    {
+        if (channel?.Name == PackageChannelNames.Stable &&
+            string.IsNullOrWhiteSpace(packageSourceOverride) &&
+            nugetServiceIndexOverride is null &&
+            (channel.Mappings ?? []).All(static mapping =>
+                PackageSourceIdentity.Comparer.Equals(mapping.Source, PackageSources.NuGetOrg)))
+        {
+            return DotNetAppHostNuGetConfigBuilder.BuildStable(
+                GetNuGetSettings(workingDirectory.FullName, cancellationToken), workloadId, channel);
+        }
+
+        var mappings = string.IsNullOrWhiteSpace(packageSourceOverride)
+            ? channel?.Mappings
+            : PackageSourceOverrideMappings.Create(packageSourceOverride, channel);
+        if (mappings is { Length: > 0 } && mappings.All(static mapping => mapping.PackageFilter == PackageMapping.AllPackages))
+        {
+            mappings = [.. mappings.Select(static mapping => new PackageMapping(
+                PackageSourceOverrideMappings.DefaultPackagePattern, mapping.Source))];
+        }
+        return BuildAppHostConfiguration(
+            workingDirectory,
+            workloadId,
+            mappings is { Length: > 0 } ? mappings : null,
+            overrideIntegrationSources: !string.IsNullOrWhiteSpace(packageSourceOverride),
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// Materializes the shared desired configuration without changing ambient configuration.
+    /// </summary>
+    internal async Task<NuGetPackageOperationConfiguration> CreateConfigurationPreviewAsync(
+        DirectoryInfo workingDirectory,
+        NuGetConfiguration configuration,
+        string? globalPackagesFolder,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(workingDirectory);
+        ArgumentNullException.ThrowIfNull(configuration);
+        var overlay = await WriteTemporaryOverlayAsync(
+            configuration,
+            new DirectoryInfo(Path.Combine(workingDirectory.FullName, ".aspire")),
+            globalPackagesFolder,
+            cancellationToken).ConfigureAwait(false);
+        return overlay is null
+            ? NuGetPackageOperationConfiguration.Ambient(workingDirectory, configuration.Settings.CacheIdentity)
+            : NuGetPackageOperationConfiguration.FromTemporaryOverlay(
+                workingDirectory,
+                overlay,
+                configuration.Settings.CacheIdentity);
+    }
+
+    internal string GetGlobalPackagesFolder(DirectoryInfo workingDirectory)
+        => _nuGetClient.GetGlobalPackagesFolder(workingDirectory.FullName);
+
+    /// <summary>
+    /// Acquires an exact package without reusing an asset-only restore manifest.
+    /// </summary>
+    internal async Task AcquirePackageAsync(
+        (string Id, string Version) package,
+        NuGetPackageOperationConfiguration configuration,
+        string globalPackagesFolder,
+        CancellationToken cancellationToken)
+    {
+        var directory = Directory.CreateTempSubdirectory("aspire-package-acquisition-");
+        try
+        {
+            var settings = GetNuGetSettings(configuration.EffectiveWorkingDirectory.FullName, protectIntegrationSources: false, cancellationToken);
+            await _nuGetClient.AcquirePackageAsync(
+                package, directory.FullName,
+                configuration.EffectiveWorkingDirectory.FullName, globalPackagesFolder,
+                settings.SensitiveSourceValues, cancellationToken);
+        }
+        catch (NuGetOperationException exception)
+        {
+            // Native NuGet diagnostics already redact the selected policy's sensitive sources.
+            _logger.LogError("Package acquisition failed: {Output}", exception.Output);
+            throw new InvalidOperationException($"Package acquisition failed: {exception.Output}", exception);
+        }
+        finally
+        {
+            try
+            {
+                directory.Delete(recursive: true);
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                _logger.LogWarning(exception, "Could not remove package acquisition directory {Directory}", directory.FullName);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Previews one configuration-file replacement in the caller's native hierarchy.
+    /// </summary>
+    internal async Task<NuGetPackageOperationConfiguration> CreateConfigurationPreviewAsync(
+        DirectoryInfo workingDirectory, FileInfo targetFile, FileInfo replacementFile,
+        CancellationToken cancellationToken)
+    {
+        var settings = GetNuGetSettings(workingDirectory.FullName, cancellationToken);
+        var paths = settings.ConfigPaths.ToList();
+        var targetPath = PathNormalizer.ResolveToFilesystemPath(targetFile.FullName);
+        var index = paths.FindIndex(path => string.Equals(
+            PathNormalizer.ResolveToFilesystemPath(path), targetPath, StringComparisons.FileSystemPath));
+        if (index >= 0)
+        {
+            paths[index] = replacementFile.FullName;
+        }
+        else
+        {
+            if (!IsAncestorDirectory(targetFile.DirectoryName!, workingDirectory.FullName))
+            {
+                throw new InvalidOperationException(
+                    $"NuGet configuration '{targetFile.FullName}' is not in the hierarchy of '{workingDirectory.FullName}'.");
+            }
+            index = paths.FindIndex(path =>
+                IsAncestorDirectory(Path.GetDirectoryName(path)!, targetFile.DirectoryName!) ||
+                !IsAncestorDirectory(Path.GetDirectoryName(path)!, workingDirectory.FullName));
+            paths.Insert(index < 0 ? paths.Count : index, replacementFile.FullName);
+        }
+
+        var overlay = await TemporaryNuGetConfigFile.CreateAsync(
+            new DirectoryInfo(Path.Combine(workingDirectory.FullName, ".aspire")),
+            path => _nuGetClient.WriteNuGetConfig(paths, path));
+        return NuGetPackageOperationConfiguration.FromTemporaryOverlay(
+            workingDirectory, overlay, settings.CacheIdentity);
+    }
+
+    internal static bool IsAncestorDirectory(string ancestor, string directory)
+    {
+        var relativePath = Path.GetRelativePath(
+            PathNormalizer.ResolveToFilesystemPath(ancestor), PathNormalizer.ResolveToFilesystemPath(directory));
+        return !Path.IsPathRooted(relativePath) && relativePath != ".." &&
+            !relativePath.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparisons.FileSystemPath);
+    }
+
+    internal async Task<NuGetPackageOperationConfiguration> CreatePackageOperationConfigurationAsync(
+        DirectoryInfo workingDirectory,
+        IReadOnlyList<PackageMapping>? mappings,
+        bool restrictToSelectedSources,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(workingDirectory);
+        if (restrictToSelectedSources && mappings is not { Count: > 0 })
+        {
+            throw new ArgumentException("Source-restricted discovery requires a selected source.", nameof(mappings));
+        }
+
+        // A channel's synthetic '*' fallback belongs to standalone configuration generation,
+        // not an inherited operation. Explicit-source operations retain their selected catch-all.
+        var selectedMappings = mappings?
+            .Where(mapping => restrictToSelectedSources || mapping.PackageFilter != PackageMapping.AllPackages)
+            .ToArray() ?? [];
+        var configuration = BuildConfiguration(
+            workingDirectory,
+            workloadId: "package-search",
+            selectedMappings.Length == 0 ? null : selectedMappings,
+            restrictToSelectedSources,
+            overrideIntegrationSources: restrictToSelectedSources,
+            hasAuthoritativeAspirePolicy: true,
+            cancellationToken: cancellationToken);
+
+        if (configuration.Overlay is null)
+        {
+            return NuGetPackageOperationConfiguration.Ambient(workingDirectory, configuration.Settings.CacheIdentity);
+        }
+
+        var temporaryConfig = await WriteTemporaryOverlayAsync(
+            configuration,
+            workingDirectory,
+            globalPackagesFolder: null,
+            cancellationToken).ConfigureAwait(false)
+            ?? throw new InvalidOperationException("The selected package mappings did not produce a NuGet policy overlay.");
+
+        return NuGetPackageOperationConfiguration.FromTemporaryOverlay(
+            workingDirectory,
+            temporaryConfig,
+            configuration.Settings.CacheIdentity);
+    }
+
+    internal IReadOnlyList<NuGetPackage> FilterPackageSearchResults(
+        IReadOnlyList<NuGetPackage> packages,
+        string? nugetConfigPath,
+        string workingDirectory,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return _nuGetClient.FilterPackageSearchResults(packages, nugetConfigPath, workingDirectory);
+    }
+
+    internal async Task<TemporaryNuGetConfigFile?> WriteTemporaryOverlayAsync(
+        NuGetConfiguration configuration,
+        DirectoryInfo? parentDirectory,
+        string? globalPackagesFolder,
+        CancellationToken cancellationToken)
+    {
+        if (configuration.Overlay is not { } overlay)
+        {
+            return null;
+        }
+
+        overlay = overlay with { GlobalPackagesFolder = globalPackagesFolder };
+        return parentDirectory is null
+            ? await TemporaryNuGetConfigFile.CreateAsync(
+                path => WriteNuGetConfig(overlay, path, cancellationToken)).ConfigureAwait(false)
+            : await TemporaryNuGetConfigFile.CreateAsync(
+                parentDirectory,
+                path => WriteNuGetConfig(overlay, path, cancellationToken)).ConfigureAwait(false);
+    }
+
+    internal void WriteNuGetConfig(
+        NuGetConfiguration configuration,
+        string outputPath,
+        string? globalPackagesFolder,
+        CancellationToken cancellationToken)
+    {
+        var overlay = configuration.Overlay
+            ?? throw new InvalidOperationException("The resolved configuration does not require a NuGet policy overlay.");
+        WriteNuGetConfig(overlay with { GlobalPackagesFolder = globalPackagesFolder }, outputPath, cancellationToken);
+    }
+
+    internal void WriteNuGetConfig(
+        NuGetConfigOverlay overlay,
+        string outputPath,
+        ReadOnlyMemory<byte>? originalContent,
+        bool omitRedundantDisabledSources,
+        IReadOnlyList<string> inheritedConfigPaths,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(overlay);
+        ArgumentException.ThrowIfNullOrWhiteSpace(outputPath);
+        cancellationToken.ThrowIfCancellationRequested();
+        _nuGetClient.WriteNuGetConfig(
+            overlay, outputPath, originalContent, omitRedundantDisabledSources, inheritedConfigPaths);
+    }
+
+    internal static string CombineCacheIdentities(string configurationIdentity, string overlayIdentity)
+    {
+        var builder = new StringBuilder();
+        foreach (var value in new[] { "SOURCE_POLICY", configurationIdentity, "OVERLAY", overlayIdentity })
+        {
+            builder.Append(value.Length);
+            builder.Append(':');
+            builder.Append(value);
+        }
+
+        return builder.ToString();
+    }
+
+    internal void WriteNuGetConfig(
+        NuGetConfigOverlay overlay,
+        string outputPath,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(overlay);
+        ArgumentException.ThrowIfNullOrWhiteSpace(outputPath);
+        cancellationToken.ThrowIfCancellationRequested();
+        _nuGetClient.WriteNuGetConfig(overlay, outputPath);
     }
 
     private static bool TryValidatePackageManifest(string manifestPath, ILogger logger)
@@ -276,72 +583,96 @@ internal sealed class BundleNuGetService : INuGetService
         }
     }
 
-    // Returns a redacted copy of the restore args suitable for debug logging. Replaces the value
-    // immediately following each `--source` token with the credential-safe form from
-    // PackageSourceRedactor. Built defensively to handle repeated `--source` flags and a missing
-    // trailing value at the end of the args list.
-    private static IReadOnlyList<string> BuildRedactedArgsForLog(IReadOnlyList<string> args)
+    /// <summary>
+    /// Gets the file containing the NuGet implementation that performs restores, for the restore cache key.
+    /// </summary>
+    /// <remarks>
+    /// Native AOT compiles the implementation into the executable. A managed launch such as <c>dotnet aspire.dll</c>
+    /// runs it from the CLI assembly instead, and <see cref="Environment.ProcessPath"/> is then the <c>dotnet</c> host,
+    /// which does not change when the CLI is updated.
+    /// </remarks>
+    internal static string? GetRestoreToolPath()
     {
-        var redacted = new List<string>(args.Count);
-        for (var i = 0; i < args.Count; i++)
+        if (!RuntimeFeature.IsDynamicCodeSupported)
         {
-            redacted.Add(args[i]);
-            if (string.Equals(args[i], "--source", StringComparison.Ordinal) && i + 1 < args.Count)
-            {
-                redacted.Add(PackageSourceRedactor.RedactForDisplay(args[++i]));
-            }
+            return Environment.ProcessPath;
         }
 
-        return redacted;
+        var assemblyPath = Path.Combine(AppContext.BaseDirectory, $"{typeof(BundleNuGetService).Assembly.GetName().Name}.dll");
+        return File.Exists(assemblyPath) ? assemblyPath : Environment.ProcessPath;
     }
 
     internal static string ComputePackageHash(
         List<(string Id, string Version)> packages,
         string tfm,
         string? runtimeIdentifier,
-        string? managedPath = null,
-        IEnumerable<string>? sources = null)
+        string? toolPath = null,
+        IEnumerable<string>? sources = null,
+        string? nugetConfigCacheIdentity = null,
+        string? nugetPackagesPath = null)
     {
-        var content = string.Join(";", packages.OrderBy(p => p.Id).Select(p => $"{p.Id}:{p.Version}"));
+        var content = string.Join(";", packages.OrderBy(package => package.Id).Select(package => $"{package.Id}:{package.Version}"));
         content += $";tfm:{tfm}";
         content += $";rid:{runtimeIdentifier ?? "<none>"}";
-        content += $";managed:{GetManagedToolFingerprint(managedPath)}";
+        content += $";tool:{GetToolFingerprint(toolPath)}";
         if (sources is not null)
         {
-            content += $";sources:{string.Join("|", sources.OrderBy(s => s, StringComparer.OrdinalIgnoreCase))}";
+            foreach (var source in sources.OrderBy(static source => source, StringComparer.OrdinalIgnoreCase))
+            {
+                content += $";source:{source.Length}:{source}";
+            }
+        }
+        if (nugetConfigCacheIdentity is not null)
+        {
+            content += $";config:{nugetConfigCacheIdentity}";
+        }
+        if (nugetPackagesPath is not null)
+        {
+            content += $";global-packages:{nugetPackagesPath.Length}:{nugetPackagesPath}";
         }
 
-        // Use SHA256 for stable hash across processes/runtimes
-        var hashBytes = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(content));
-        return Convert.ToHexString(hashBytes)[..16]; // Use first 16 chars (64 bits) for reasonable uniqueness
+        return XxHash3.HashToUInt64(Encoding.UTF8.GetBytes(content)).ToString("X16", CultureInfo.InvariantCulture);
     }
 
-    private static string GetManagedToolFingerprint(string? managedPath)
+    private static string? ComputeNuGetConfigCacheIdentity(
+        string? nugetSettingsCacheIdentity,
+        string? nugetConfigOverlayCacheIdentity)
     {
-        if (string.IsNullOrEmpty(managedPath))
+        if (nugetSettingsCacheIdentity is null && nugetConfigOverlayCacheIdentity is null)
+        {
+            return null;
+        }
+
+        var hash = new XxHash3();
+        if (nugetSettingsCacheIdentity is not null)
+        {
+            hash.Append("\0NUGET_SETTINGS\0"u8);
+            hash.Append(Encoding.UTF8.GetBytes(nugetSettingsCacheIdentity));
+        }
+        if (nugetConfigOverlayCacheIdentity is not null)
+        {
+            hash.Append("\0NUGET_CONFIG_OVERLAY\0"u8);
+            hash.Append(Encoding.UTF8.GetBytes(nugetConfigOverlayCacheIdentity));
+        }
+
+        return Convert.ToHexString(hash.GetCurrentHash());
+    }
+
+    private static string GetToolFingerprint(string? toolPath)
+    {
+        if (string.IsNullOrEmpty(toolPath))
         {
             return "<none>";
         }
 
         try
         {
-            var fileInfo = new FileInfo(managedPath);
-            if (!fileInfo.Exists)
-            {
-                return "<missing>";
-            }
-
-            return $"{fileInfo.Length}|{fileInfo.LastWriteTimeUtc.Ticks}";
+            var fileInfo = new FileInfo(toolPath);
+            return fileInfo.Exists
+                ? $"{fileInfo.Length}|{fileInfo.LastWriteTimeUtc.Ticks}"
+                : "<missing>";
         }
-        catch (IOException)
-        {
-            return "<error>";
-        }
-        catch (UnauthorizedAccessException)
-        {
-            return "<error>";
-        }
-        catch (NotSupportedException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException)
         {
             return "<error>";
         }

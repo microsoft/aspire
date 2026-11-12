@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>$(AllTargetFrameworks)</TargetFrameworks>
+  </PropertyGroup>
+  <ItemGroup>
+    <None Include="$(RepoRoot)src\Components\Aspire.Azure.AI.Projects\ConfigurationSchema.json" CopyToOutputDirectory="PreserveNewest" />
+    <Compile Include="..\Shared\FoundryClientTestHelpers.cs" Link="TestServices\FoundryClientTestHelpers.cs" />
+    <ProjectReference Include="..\..\src\Components\Aspire.Azure.AI.Projects\Aspire.Azure.AI.Projects.csproj" />
+    <ProjectReference Include="..\Aspire.Components.Common.TestUtilities\Aspire.Components.Common.TestUtilities.csproj" />
+  </ItemGroup>
+</Project>

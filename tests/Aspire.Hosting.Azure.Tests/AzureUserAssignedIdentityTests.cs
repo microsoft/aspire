@@ -1,5 +1,5 @@
-#pragma warning disable ASPIREAZURE001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-#pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning disable CS0618 // Retain legacy ProjectResource Azure publishing/provisioning contracts with synthetic metadata.
+#pragma warning disable ASPIREAZURE003 // ManagedIdentityRequiredAnnotation is experimental.
 
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
@@ -14,13 +14,13 @@ using static Aspire.Hosting.Utils.AzureManifestUtils;
 
 namespace Aspire.Hosting.Azure.Tests;
 
-public class AzureUserAssignedIdentityTests
+public class AzureUserAssignedIdentityTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public async Task AddAzureUserAssignedIdentity_GeneratesExpectedResourcesAndBicep()
     {
         // Arrange
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         builder.AddAzureUserAssignedIdentity("myidentity");
 
@@ -40,7 +40,7 @@ public class AzureUserAssignedIdentityTests
     [Fact]
     public async Task AddAzureUserAssignedIdentity_PublishAsExisting_Works()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         builder.AddAzureUserAssignedIdentity("myidentity")
                .PublishAsExisting("existingidentity", "my-rg");
@@ -58,7 +58,7 @@ public class AzureUserAssignedIdentityTests
     [Fact]
     public async Task AddAzureUserAssignedIdentity_WithRoleAssignments_Works()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         builder.AddAzureContainerAppEnvironment("cae");
 
@@ -99,10 +99,59 @@ public class AzureUserAssignedIdentityTests
     }
 
     [Fact]
+    public async Task ManagedIdentityRequiredAnnotation_CreatesIdentityWithoutRoleAssignments()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
+        builder.AddAzureContainerAppEnvironment("cae");
+        var project = builder.AddProject<TestProject>("myapp", launchProfileName: null)
+            .WithAnnotation(new ManagedIdentityRequiredAnnotation());
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var identity = Assert.Single(app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<AzureUserAssignedIdentityResource>());
+        Assert.Equal("myapp-identity", identity.Name);
+        var annotation = Assert.Single(project.Resource.Annotations.OfType<AppIdentityAnnotation>());
+        Assert.Same(identity, annotation.IdentityResource);
+    }
+
+    [Fact]
+    public async Task ManagedIdentityRequiredAnnotation_ReusesExplicitIdentity()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
+        builder.AddAzureContainerAppEnvironment("cae");
+        var identity = builder.AddAzureUserAssignedIdentity("myidentity");
+        var project = builder.AddProject<TestProject>("myapp", launchProfileName: null)
+            .WithAzureUserAssignedIdentity(identity)
+            .WithAnnotation(new ManagedIdentityRequiredAnnotation());
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var resource = Assert.Single(app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<AzureUserAssignedIdentityResource>());
+        Assert.Same(identity.Resource, resource);
+        var annotation = Assert.Single(project.Resource.Annotations.OfType<AppIdentityAnnotation>());
+        Assert.Same(identity.Resource, annotation.IdentityResource);
+    }
+
+    [Fact]
+    public async Task ComputeResourceWithoutManagedIdentityRequiredAnnotation_GetsNoIdentity()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
+        builder.AddAzureContainerAppEnvironment("cae");
+        builder.AddProject<TestProject>("myapp", launchProfileName: null);
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        Assert.Empty(app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<AzureUserAssignedIdentityResource>());
+    }
+
+    [Fact]
     public async Task WithAzureUserAssignedIdentity_Works()
     {
         // Arrange
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var env = builder.AddAzureContainerAppEnvironment("cae");
 
@@ -136,7 +185,7 @@ public class AzureUserAssignedIdentityTests
     public async Task WithAzureUserAssignedIdentity_WithRoleAssignments_Works()
     {
         // Arrange
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var env = builder.AddAzureContainerAppEnvironment("cae");
 
@@ -194,7 +243,7 @@ public class AzureUserAssignedIdentityTests
     public async Task WithAzureUserAssignedIdentity_WithRoleAssignments_AzureAppService_Works()
     {
         // Arrange
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var env = builder.AddAzureAppServiceEnvironment("appservice");
 
@@ -252,7 +301,7 @@ public class AzureUserAssignedIdentityTests
     public async Task WithAzureUserAssignedIdentity_NoEnvironment_ThrowsException()
     {
         // Arrange
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var storage = builder.AddAzureStorage("mystorage");
         var identity = builder.AddAzureUserAssignedIdentity("myidentity");
@@ -269,7 +318,7 @@ public class AzureUserAssignedIdentityTests
     public async Task WithAzureUserAssignedIdentity_WithRoleAssignments_MultipleProjects_Works()
     {
         // Arrange
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var env = builder.AddAzureContainerAppEnvironment("cae");
 
@@ -361,7 +410,7 @@ public class AzureUserAssignedIdentityTests
     [Fact]
     public async Task AddAsExistingResource_RespectsExistingAzureResourceAnnotation_ForAzureUserAssignedIdentityResource()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var existingName = builder.AddParameter("existing-identity-name");
         var existingResourceGroup = builder.AddParameter("existing-identity-rg");
 
@@ -384,3 +433,4 @@ public class AzureUserAssignedIdentityTests
         public string ProjectPath => "some-path";
     }
 }
+#pragma warning restore CS0618
