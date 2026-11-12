@@ -6,6 +6,7 @@ using System.CommandLine.Completions;
 using System.Diagnostics;
 using System.Globalization;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Aspire.Cli.Agents;
 using Aspire.Cli.Agents.AspireSkills;
 using Aspire.Cli.Agents.Copilot;
@@ -793,6 +794,31 @@ internal sealed class AgentInitCommand : BaseCommand
                 if (!client.UpdateMcpConfig(config, configFilePath, configureServer, scope).Added)
                 {
                     return true;
+                }
+            }
+        }
+        catch (Exception ex) when (IsUnreadableConfig(ex))
+        {
+        }
+
+        try
+        {
+            // Paths are enumerated lazily from directories that can change underneath us, so
+            // enumeration failures need the same best-effort handling as individual file reads.
+            foreach (var path in client.GetForwardedMcpConfigPaths(scope))
+            {
+                try
+                {
+                    var config = await McpConfigFileHelper.ReadConfigAsync(
+                        path, ConfigurationHelper.ParseOptions, new AgentConfiguration(), cancellationToken);
+                    if (McpConfigFileHelper.GetServerContainer(config, "servers", path)?["aspire"] is JsonObject)
+                    {
+                        return true;
+                    }
+                }
+                catch (Exception ex) when (IsUnreadableConfig(ex))
+                {
+                    // One unreadable file must not hide a valid registration in another.
                 }
             }
         }

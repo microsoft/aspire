@@ -1460,6 +1460,10 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
     [InlineData("claude", "malformed-mcp", false)]
     [InlineData("copilot", "duplicate-mcp", false)]
     [InlineData("claude", "none", false)]
+    [InlineData("copilot", "vscode-user-mcp", true)]
+    [InlineData("copilot", "vscode-profile-mcp", true)]
+    [InlineData("copilot", "vscode-user-mcp-servers-key-missing", false)]
+    [InlineData("copilot", "malformed-vscode-user-mcp", false)]
     public async Task AgentInit_ExistingAspireSetupWithoutSelection_RefreshesHook(string clientId, string existing, bool expectHook)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -1483,9 +1487,17 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
         var mcpPath = client.GetMcpConfigPath(AgentConfigurationScope.Global, workspace.WorkspaceRoot);
         var pluginPath = client.GetIntegrationConfigPath(AgentConfigurationScope.Global, workspace.WorkspaceRoot);
         const string aspireMcp = """{"mcpServers":{"aspire":{"command":"aspire","args":["agent","mcp"]}}}""";
+        var vsCodeUserDataRoot = OperatingSystem.IsWindows() ? Path.Combine(homeDirectory.FullName, "AppData", "Roaming")
+            : OperatingSystem.IsMacOS() ? Path.Combine(homeDirectory.FullName, "Library", "Application Support")
+            : Path.Combine(homeDirectory.FullName, ".config");
+        var vsCodeUserMcpPath = Path.Combine(vsCodeUserDataRoot, "Code", "User", "mcp.json");
         const string nullPlugins = """{"enabledPlugins":null}""";
         (string Path, string Content)[] files = existing switch
         {
+            "vscode-user-mcp" => [(vsCodeUserMcpPath, """{"servers":{"aspire":{"type":"stdio","command":"aspire","args":["agent","mcp"]}}}""")],
+            "vscode-profile-mcp" => [(Path.Combine(vsCodeUserDataRoot, "Code - Insiders", "User", "profiles", "1a2b3c", "mcp.json"), """{"servers":{"aspire":{"type":"stdio","command":"aspire","args":["agent","mcp"]}}}""")],
+            "vscode-user-mcp-servers-key-missing" => [(vsCodeUserMcpPath, aspireMcp)],
+            "malformed-vscode-user-mcp" => [(vsCodeUserMcpPath, "{broken")],
             "mcp" => [(mcpPath, aspireMcp)],
             "malformed-mcp" => [(mcpPath, "{broken")],
             "duplicate-mcp" => [(mcpPath, """{"mcpServers":{},"mcpServers":{}}""")],
@@ -1538,6 +1550,38 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
             $"agent init --agents claude --scope {scope.ToString().ToLowerInvariant()} --skills none --mcp=false");
         Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
         Assert.Equal(["claude"], hooks.SelectedClientIds);
+    }
+
+    [Theory]
+    [InlineData("global", true)]
+    [InlineData("project", false)]
+    public async Task AgentInit_NothingSelectedWithVsCodeUserMcp_RespectsScope(string scope, bool expectHook)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var homeDirectory = workspace.CreateDirectory("fake-home");
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(workspace.WorkspaceRoot, homeDirectory: homeDirectory);
+        var hooks = new TestTelemetryHookConfigurator();
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => executionContext;
+            options.TelemetryHookConfiguratorFactory = _ => hooks;
+        });
+        services.AddSingleton<IEnvironment>(new TestEnvironment());
+        using var provider = services.BuildServiceProvider();
+
+        var userDataRoot = OperatingSystem.IsWindows() ? Path.Combine(homeDirectory.FullName, "AppData", "Roaming")
+            : OperatingSystem.IsMacOS() ? Path.Combine(homeDirectory.FullName, "Library", "Application Support")
+            : Path.Combine(homeDirectory.FullName, ".config");
+        var mcpPath = Path.Combine(userDataRoot, "Code", "User", "mcp.json");
+        const string config = """{"servers":{"aspire":{"type":"stdio","command":"aspire","args":["agent","mcp"]}}}""";
+        Directory.CreateDirectory(Path.GetDirectoryName(mcpPath)!);
+        await File.WriteAllTextAsync(mcpPath, config);
+
+        var result = provider.GetRequiredService<RootCommand>().Parse(
+            $"agent init --agents copilot --scope {scope} --skills none --mcp=false");
+        Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
+        Assert.Equal(expectHook ? ["copilot"] : [], hooks.SelectedClientIds);
+        Assert.Equal(config, await File.ReadAllTextAsync(mcpPath));
     }
 
     [Fact]

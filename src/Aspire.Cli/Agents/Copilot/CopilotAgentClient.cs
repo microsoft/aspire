@@ -95,6 +95,38 @@ internal sealed class CopilotAgentClient(
         }
     }
 
+    public IEnumerable<string> GetForwardedMcpConfigPaths(AgentConfigurationScope scope)
+    {
+        if (scope is not AgentConfigurationScope.Global)
+        {
+            yield break;
+        }
+
+        // VS Code forwards user-profile MCP servers to the Copilot harness. The default profile
+        // stores them in User/mcp.json and named profiles in User/profiles/<id>/mcp.json:
+        // https://code.visualstudio.com/docs/agents/reference/mcp-configuration
+        var home = context.HomeDirectory.FullName;
+        var userDataRoot = environment.IsWindows()
+            ? AgentPath.GetOverride("APPDATA", context, environment) ?? Path.Combine(home, "AppData", "Roaming")
+            : environment.IsMacOS()
+                ? Path.Combine(home, "Library", "Application Support")
+                : AgentPath.GetOverride("XDG_CONFIG_HOME", context, environment) ?? Path.Combine(home, ".config");
+        foreach (var product in new[] { "Code", "Code - Insiders" })
+        {
+            var userDirectory = Path.Combine(userDataRoot, product, "User");
+            yield return Path.Combine(userDirectory, "mcp.json");
+
+            var profilesDirectory = new DirectoryInfo(Path.Combine(userDirectory, "profiles"));
+            if (profilesDirectory.Exists)
+            {
+                foreach (var profile in profilesDirectory.EnumerateDirectories("*", new EnumerationOptions { IgnoreInaccessible = true }))
+                {
+                    yield return Path.Combine(profile.FullName, "mcp.json");
+                }
+            }
+        }
+    }
+
     public async Task<(JsonObject Config, string Path)> ReadMcpConfigAsync(
         string configFilePath, DirectoryInfo workspaceRoot, AgentConfigurationScope scope,
         AgentConfiguration edit, CancellationToken cancellationToken)

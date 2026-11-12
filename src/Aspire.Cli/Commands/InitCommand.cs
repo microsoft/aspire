@@ -361,7 +361,6 @@ internal sealed class InitCommand : BaseCommand
         var aspireVersion = _executionContext.IdentitySdkVersion;
         var appHostContent = $$"""
             {{CliTemplateFactory.GetCSharpAppHostDirectives(aspireVersion)}}
-            #:property AspireUseCliBundle=true
 
             var builder = DistributedApplication.CreateBuilder(args);
 
