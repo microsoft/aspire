@@ -338,7 +338,8 @@ extends:
             ne(dependencies.build.outputs['Windows.computeChannel.installerChannel'], 'stable'),
             or(
               eq(variables['Build.SourceBranch'], 'refs/heads/main'),
-              startsWith(variables['Build.SourceBranch'], 'refs/heads/release/')
+              startsWith(variables['Build.SourceBranch'], 'refs/heads/release/'),
+              startsWith(variables['Build.SourceBranch'], 'refs/heads/internal/release/')
             )
           )
         )

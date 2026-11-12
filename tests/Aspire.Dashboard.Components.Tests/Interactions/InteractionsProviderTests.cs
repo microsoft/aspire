@@ -4,6 +4,7 @@
 using System.Threading.Channels;
 using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Components.Tests.Shared;
+using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Interaction;
 using Aspire.Dashboard.Telemetry;
@@ -15,6 +16,7 @@ using Bunit;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Xunit;
 
@@ -29,6 +31,39 @@ public partial class InteractionsProviderTests : DashboardTestContext
     public InteractionsProviderTests(ITestOutputHelper testOutputHelper)
     {
         _testOutputHelper = testOutputHelper;
+    }
+
+    [Theory]
+    [InlineData(FrontendAuthMode.BrowserToken)]
+    [InlineData(FrontendAuthMode.OpenIdConnect)]
+    public void Initialize_SecuredModeUnauthenticatedUser_Throws(FrontendAuthMode authMode)
+    {
+        var authorizationContext = this.AddAuthorization();
+        authorizationContext.SetNotAuthorized();
+        SetupInteractionProviderServices(new TestDashboardClient(isEnabled: true));
+        Services.GetRequiredService<IOptions<DashboardOptions>>().Value.Frontend.AuthMode = authMode;
+
+        var exception = Assert.Throws<InvalidOperationException>(() => Render<Components.Interactions.InteractionsProvider>());
+        Assert.Equal("Dashboard authentication is required, but the current user is not authenticated.", exception.Message);
+    }
+
+    [Theory]
+    [InlineData(FrontendAuthMode.BrowserToken)]
+    [InlineData(FrontendAuthMode.OpenIdConnect)]
+    public async Task Initialize_SecuredModeAuthenticatedUser_ProviderEnabledAsync(FrontendAuthMode authMode)
+    {
+        var authorizationContext = this.AddAuthorization();
+        authorizationContext.SetAuthorized("test-user");
+        var interactionsChannel = Channel.CreateUnbounded<WatchInteractionsResponseUpdate>();
+        var dashboardClient = new TestDashboardClient(isEnabled: true, interactionChannelProvider: () => interactionsChannel);
+        SetupInteractionProviderServices(dashboardClient);
+        Services.GetRequiredService<IOptions<DashboardOptions>>().Value.Frontend.AuthMode = authMode;
+
+        var cut = Render<Components.Interactions.InteractionsProvider>(builder => builder
+            .Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false)));
+
+        cut.WaitForAssertion(() => Assert.True(cut.Instance._enabled));
+        await cut.Instance.DisposeAsync().DefaultTimeout();
     }
 
     [Fact]

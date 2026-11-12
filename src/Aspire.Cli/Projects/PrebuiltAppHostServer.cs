@@ -446,6 +446,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
             noRestore,
             new ProcessInvocationOptions
             {
+                NoAutoResponse = true,
                 StandardOutputCallback = buildOutput.AppendOutput,
                 StandardErrorCallback = buildOutput.AppendError,
                 EnvironmentVariableFilter = name =>

@@ -499,6 +499,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
 
         var options = new ProcessInvocationOptions
         {
+            NoAutoResponse = true,
             StandardOutputCallback = outputCollector.AppendOutput,
             StandardErrorCallback = outputCollector.AppendError
         };
