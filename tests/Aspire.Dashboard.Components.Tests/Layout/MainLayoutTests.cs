@@ -58,20 +58,49 @@ public partial class MainLayoutTests : DashboardTestContext
     [Theory]
     [InlineData(".logo")]
     [InlineData(".application-name")]
-    public async Task Logo_OpensAllResourcesOverviewWithoutRestoringSelection(string selector)
+    public async Task Logo_OpensHomeWithoutRestoringSelection(string selector)
     {
         var stored = new Dictionary<string, object?>();
         SetupMainLayoutServices(
             sessionStorage: new TestSessionStorage { OnSetAsync = (key, value) => stored[key] = value },
             dashboardClient: new TestDashboardClient(isEnabled: true, resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
         var navigationManager = Services.GetRequiredService<NavigationManager>();
+        navigationManager.NavigateTo("/traces/resource/api");
         var cut = Render<MainLayout>(builder => builder.Add(p => p.ViewportInformation,
             new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false)));
 
         await cut.InvokeAsync(() => cut.Find($"header {selector}").Click());
 
-        Assert.Equal(DashboardUrls.ResourceListUrl(), "/" + navigationManager.ToBaseRelativePath(navigationManager.Uri));
+        // Home is the table of every resource, at its own URL, not the overview at /resources.
+        Assert.Equal(DashboardUrls.HomeUrl(), "/" + navigationManager.ToBaseRelativePath(navigationManager.Uri));
         Assert.Empty(Assert.IsType<List<string>>(stored[BrowserStorageKeys.LastSelectedResources]));
+    }
+
+    [Theory]
+    [InlineData("/", true)]
+    [InlineData("/?unrelated=value", true)]
+    [InlineData("/resources", false)]
+    [InlineData("/traces/resource/api", false)]
+    public void Brand_IsTheHomeButtonAndShowsWhenHomeIsCurrent(string url, bool expectCurrent)
+    {
+        SetupMainLayoutServices(dashboardClient: new TestDashboardClient(isEnabled: true,
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        Services.GetRequiredService<NavigationManager>().NavigateTo(url);
+        var cut = Render<MainLayout>(builder => builder.Add(p => p.ViewportInformation,
+            new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false)));
+
+        // The logo and the name are one lockup, with a house after the name that says where they go.
+        var brand = cut.Find("header .header-brand .brand-home");
+        Assert.Equal(["/", "/"], brand.QuerySelectorAll("a").Select(link => link.GetAttribute("href")));
+        Assert.Single(brand.QuerySelectorAll("a.application-name .application-home-icon"));
+        // While home is showing, the lockup is marked current, which fills the house in.
+        Assert.Equal(expectCurrent, brand.ClassList.Contains("current"));
+        Assert.Equal(expectCurrent ? "page" : null, brand.QuerySelector("a.application-name")!.GetAttribute("aria-current"));
+        // The full name is the link's tooltip, so keyboard focus shows it as well as the pointer when it's truncated. It's
+        // below the link, which can span the list's column, so it doesn't cover the first tab.
+        var link = brand.QuerySelector("a.application-name")!;
+        Assert.False(string.IsNullOrEmpty(link.GetAttribute("data-tooltip")));
+        Assert.Equal("below", link.GetAttribute("data-tooltip-positioning"));
     }
 
     [Theory]

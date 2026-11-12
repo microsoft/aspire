@@ -343,6 +343,7 @@
     <div class="resources-layout @(showCollapsedPane ? "pane-collapsed" : string.Empty) @(_isPaneFullCanvas ? "pane-full-canvas" : string.Empty) @(_animatePaneTransition ? "pane-motion-enabled" : string.Empty) @(_isPaneSelectionReveal ? "pane-selection-reveal" : string.Empty) @(!isDesktop && _isDrawerOpen ? "drawer-open" : string.Empty)"
          data-pane-location="@_lastLocation"
          data-pane-interactions-ready="@(_isOrderingRegistered ? "true" : "false")"
+         data-home-pending="@(_homeNavigation is not null ? "true" : null)"
          style="@GetLayoutStyle()"
          @ref="_layoutElement">
         @* A single header keeps section subscriptions stable across viewport changes. *@
@@ -372,12 +373,9 @@
                             <SectionOutlet SectionName="@TabToolbarSectionName" />
                         </div>
                     }
-                    @* The full resource table lives on the Overview tab, the dashboard's home. The data tabs don't close
-                       into it: their own back links (such as "Traces" on a trace) and the tabs cover navigation there. *@
-                    @if (isDesktop && !IsDataTab && DetailParentUrl is { } parentUrl)
-                    {
-                        <DetailPageCloseButton ParentUrl="@parentUrl" OnClose="@(() => CloseDetailAsync(parentUrl))" ClosesOnEscape="true" />
-                    }
+                    @* No page has a close button. A tab's content is a page, scoped by the list beside it, not a
+                       pane over the table: the table is the home page, reached from the brand at the top of the
+                       list's column. Only drill-ins inside a page, such as a span's details, close. *@
                 </div>
             }
             else if (_isPaneFullCanvas)
@@ -472,7 +470,8 @@
 
 @code {
     // The resource overview shows highlighted commands with labels; the resource list shows icons and a menu.
-    // Parameters in the full-page list show only their Set parameter command. Menus are built when opened.
+    // Parameters in the full-page list show only their Set parameter command as a button, and the rest in their menu.
+    // Menus are built when opened.
     internal RenderFragment RenderResourceActions(ResourceViewModel resource, bool showLabels, ResourceGridViewModel? row, DisplayedUrl? primaryUrl = null) => __builder =>
     {
         var resourceName = GetResourceName(resource);
@@ -532,17 +531,16 @@
                                   Disabled="@IsCommandDisabled(resource, command)" />
                 }
             }
-            @if (showLabels || !_isPaneFullCanvas || !resource.IsParameter)
-            {
-                <AspireMenuButton ButtonAppearance="@(showLabels ? ButtonAppearance.Default : ButtonAppearance.Transparent)"
-                                  ButtonClass="@(showLabels ? null : "resource-row-action")"
-                                  Icon="@(new Icons.Regular.Size16.MoreHorizontal())"
-                                  IconColor="Color.Custom"
-                                  IconCustomColor="currentColor"
-                                  ItemsProvider="@handlers.MenuItems"
-                                  data-tooltip-positioning="@(!showLabels ? "above" : null)"
-                                  Title="@string.Format(CultureInfo.CurrentCulture, Loc[nameof(Dashboard.Resources.Layout.ResourcePaneResourceActions)], resourceName)" />
-            }
+            @* Every row has its menu, parameters included: it holds what the row's buttons don't, such as Delete
+               parameter, and a row without it looks broken beside the others. *@
+            <AspireMenuButton ButtonAppearance="@(showLabels ? ButtonAppearance.Default : ButtonAppearance.Transparent)"
+                              ButtonClass="@(showLabels ? null : "resource-row-action")"
+                              Icon="@(new Icons.Regular.Size16.MoreHorizontal())"
+                              IconColor="Color.Custom"
+                              IconCustomColor="currentColor"
+                              ItemsProvider="@handlers.MenuItems"
+                              data-tooltip-positioning="@(!showLabels ? "above" : null)"
+                              Title="@string.Format(CultureInfo.CurrentCulture, Loc[nameof(Dashboard.Resources.Layout.ResourcePaneResourceActions)], resourceName)" />
             @if (!showLabels && toggleLast)
             {
                 RenderRowToggleSlot(__builder);
