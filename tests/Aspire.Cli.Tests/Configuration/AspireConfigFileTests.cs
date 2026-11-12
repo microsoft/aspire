@@ -691,6 +691,31 @@ public class AspireConfigFileTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void Load_IgnoresNestedFeatureEntries()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        File.WriteAllText(configPath, """
+            {
+              "features": {
+                "stagingChannelEnabled": "true",
+                "experimentalPolyglot": { "go": "true" },
+                "legacyList": [ true ],
+                "showAllTemplates": false
+              }
+            }
+            """);
+
+        var result = AspireConfigFile.Load(workspace.WorkspaceRoot.FullName);
+
+        Assert.NotNull(result?.Features);
+        Assert.Equal(
+            [new("showAllTemplates", false), new("stagingChannelEnabled", true)],
+            result.Features.OrderBy(f => f.Key, StringComparer.Ordinal));
+    }
+
+    [Fact]
     public void Save_Load_RoundTrips_WithFeatures()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
