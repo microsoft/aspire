@@ -3,7 +3,7 @@ Aspire Environment Check
 ========================
 
 Environment
-  🚨 Found outdated copies of Aspire skills.
+  🚨 Found static copies of Aspire skills.
        Run 'aspire agent init' to configure skill sources and remove these copies.
        Files:
          .agents/skills/aspire

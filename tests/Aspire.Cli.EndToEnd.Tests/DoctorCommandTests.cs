@@ -65,7 +65,7 @@ public sealed class DoctorCommandTests(ITestOutputHelper output)
         var text = await File.ReadAllTextAsync(
             Path.Combine(workspace.Path, "doctor-skills.txt"), TestContext.Current.CancellationToken);
         string[] expectedFiles = [".agents/skills/aspire", "~/.agents/skills/aspire"];
-        Assert.Contains("Found outdated copies of Aspire skills.", text, StringComparison.Ordinal);
+        Assert.Contains("Found static copies of Aspire skills.", text, StringComparison.Ordinal);
         var lines = text.Split('\n', StringSplitOptions.TrimEntries);
         Assert.All(expectedFiles, file => Assert.Contains(file, lines));
 

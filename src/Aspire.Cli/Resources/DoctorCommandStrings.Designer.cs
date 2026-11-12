@@ -115,7 +115,7 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Found outdated copies of Aspire skills..
+        ///   Looks up a localized string similar to Found static copies of Aspire skills..
         /// </summary>
         internal static string AspireSkillsMessage {
             get {
