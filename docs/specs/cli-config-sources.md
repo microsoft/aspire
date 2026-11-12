@@ -105,7 +105,7 @@ Read more about this configuration source
 
 Only use sources you trust. Content from these sources can run code on your machine.
 
-Use configuration from this source? [Y/n]:
+Create app using configuration from this source? [Y/n]:
 ```
 
 The explanation precedes the source details, which use an aligned two-column
@@ -114,6 +114,12 @@ AppHost and dashboard summaries. When a README URL is available,
 **Read more about this configuration source** is a Spectre.Console hyperlink.
 Terminals without hyperlink support show the label and URL as plain text.
 The standard yes/no confirmation defaults to **Yes** when Enter is pressed.
+The confirmation describes the current command's action: `aspire new` asks
+**Create app using configuration from this source?**, `aspire init` asks
+**Initialize Aspire using configuration from this source?**, `aspire update`
+asks **Update app to use configuration from this source?**, and
+`aspire template source list` asks
+**Include template sources from this configuration source?**
 
 The source trust warning appears at most once per CLI command, shared across
 configuration, template, integration, and skill sources. Source explanations,

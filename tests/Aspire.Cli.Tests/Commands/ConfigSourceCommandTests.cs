@@ -710,7 +710,7 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
         {
             ConfirmCallback = (prompt, _) =>
             {
-                Assert.Equal(ConfigSourceStrings.UseSourcePrompt, prompt);
+                Assert.Equal(ConfigSourceStrings.UpdateUseSourcePrompt, prompt);
                 prompts++;
                 return accepted;
             }
