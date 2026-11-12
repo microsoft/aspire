@@ -204,11 +204,6 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         Directory.CreateDirectory(Path.GetDirectoryName(localSkillPath)!);
         const string localSkillContent = "My customized Aspire instructions.";
         await File.WriteAllTextAsync(localSkillPath, localSkillContent);
-        string[] expectedWarnings =
-        [
-            "Copied Aspire skills were found. Configured skill sources replace them, so the copies are no longer recommended.",
-            ".agents/skills/aspire"
-        ];
 
         // Accept agents before choosing independent assets and project scope.
         await auto.TypeAsync("aspire agent init");
@@ -231,17 +226,6 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         // here leaves MCP unconfigured.
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("Where should skills and tools be installed?", timeout: TimeSpan.FromSeconds(30));
-        await auto.EnterAsync();
-        // Copies are reported once the scope is known, and removing them defaults to Yes.
-        const string removePrompt = "Remove the copied Aspire skills listed above after configuring skill sources?";
-        await auto.WaitUntilTextAsync(removePrompt, timeout: TimeSpan.FromSeconds(30));
-        var removeScreen = auto.CreateSnapshot().GetScreenText();
-        foreach (var warning in expectedWarnings)
-        {
-            Assert.Contains(warning, removeScreen);
-            Assert.True(removeScreen.IndexOf(warning, StringComparison.Ordinal) <
-                removeScreen.IndexOf(removePrompt, StringComparison.Ordinal));
-        }
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("Removed copied Aspire skill '.agents/skills/aspire'.", timeout: TimeSpan.FromSeconds(30));
         await auto.WaitUntilTextAsync("configuration complete", timeout: TimeSpan.FromSeconds(30));

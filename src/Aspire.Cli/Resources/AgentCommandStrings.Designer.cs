@@ -223,7 +223,7 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Agent assets from configured skill sources.
+        ///   Looks up a localized string similar to Agent assets from configured skill sources (also removes static copies of Aspire skills).
         /// </summary>
         internal static string InitCommand_AspireSkillChoice {
             get {
@@ -403,25 +403,6 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Ignore Aspire skills copied by older CLI versions instead of reporting and removing them.
-        /// </summary>
-        internal static string InitCommand_IgnoreSkillCopiesOptionDescription {
-            get {
-                return ResourceManager.GetString("InitCommand_IgnoreSkillCopiesOptionDescription", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Copied Aspire skills were found. Configured skill sources replace them, so the copies are no longer recommended.
-        ///{0}.
-        /// </summary>
-        internal static string InitCommand_LocalSkillsConflict {
-            get {
-                return ResourceManager.GetString("InitCommand_LocalSkillsConflict", resourceCulture);
-            }
-        }
-        
-        /// <summary>
         ///   Looks up a localized string similar to {0} ({1}).
         /// </summary>
         internal static string InitCommand_LocationWithAgents {
@@ -494,15 +475,6 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Remove the copied Aspire skills listed above after configuring skill sources?.
-        /// </summary>
-        internal static string InitCommand_RemoveSkillCopiesPrompt {
-            get {
-                return ResourceManager.GetString("InitCommand_RemoveSkillCopiesPrompt", resourceCulture);
-            }
-        }
-        
-        /// <summary>
         ///   Looks up a localized string similar to Could not remove copied Aspire skill &apos;{0}&apos;: {1}.
         /// </summary>
         internal static string InitCommand_RemoveSkillCopyFailed {
@@ -564,6 +536,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("InitCommand_SharedLocationNotice", resourceCulture);
             }
         }
+        
         
         /// <summary>
         ///   Looks up a localized string similar to It is reached through a linked folder that may be shared. Remove it manually if it is no longer needed..

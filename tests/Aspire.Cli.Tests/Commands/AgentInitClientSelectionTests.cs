@@ -457,11 +457,6 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
         await AgentConfigurationTestContext.WriteAsync(skillPath, skill);
         var prompts = new List<string>();
         var warnings = new List<string>();
-        var expectedWarnings = new[]
-        {
-            string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_LocalSkillsConflict,
-                "  .agents/skills/aspire")
-        };
         var interaction = new TestInteractionService
         {
             DisplayMessageCallback = (emoji, message, _) =>
@@ -471,7 +466,7 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
                     warnings.Add(message);
                 }
             },
-            PromptForSelectionsCallback = (prompt, choices, _, _) =>
+            PromptForSelectionsCallback = (prompt, choices, formatter, _) =>
             {
                 prompts.Add(prompt);
                 if (prompt == AgentCommandStrings.InitCommand_SelectAgentsPrompt)
@@ -481,6 +476,7 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
                 Assert.Equal(AgentCommandStrings.InitCommand_SelectSkills, prompt);
                 Assert.Empty(warnings);
                 Assert.Equal(["aspire", "playwright-cli"], choices.Cast<string>());
+                Assert.Equal($"aspire — {AgentCommandStrings.InitCommand_AspireSkillChoice}", formatter("aspire"));
                 return ["aspire"];
             },
             ConfirmCallback = (prompt, _) =>
@@ -499,7 +495,6 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
                         "Global (In your home directory, available across all projects)"
                     ],
                     choices.Cast<object>().Select(formatter));
-                // The copies warning depends on the chosen scope, so it follows the scope prompt.
                 Assert.Empty(warnings);
                 Assert.Empty(homeDirectory.GetFileSystemInfos());
                 return AgentConfigurationScope.Global;
@@ -518,11 +513,10 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
         Assert.Equal(
             [AgentCommandStrings.InitCommand_SelectAgentsPrompt, AgentCommandStrings.InitCommand_SelectSkills,
-                AgentCommandStrings.InitCommand_ConfigureMcpServerPrompt, AgentCommandStrings.InitCommand_SelectScopePrompt,
-                AgentCommandStrings.InitCommand_RemoveSkillCopiesPrompt],
+                AgentCommandStrings.InitCommand_ConfigureMcpServerPrompt, AgentCommandStrings.InitCommand_SelectScopePrompt],
             prompts);
-        Assert.Equal(expectedWarnings, warnings);
-        Assert.Equal(skill, await File.ReadAllTextAsync(skillPath));
+        Assert.Empty(warnings);
+        Assert.False(Directory.Exists(Path.GetDirectoryName(skillPath)));
         var copilot = provider.GetServices<IAgentClient>().Single(client =>
             string.Equals(client.Id, "copilot", StringComparisons.AgentClientId));
         Assert.True(copilot.HasIntegrationRegistration(
@@ -1394,7 +1388,7 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
     [InlineData("copied")]
     [InlineData("shared")]
     [InlineData("malformed")]
-    public async Task ExistingSources_WarnForCopiedSkillsButStopForInvalidSettings(string existing)
+    public async Task ExistingSources_RemoveCopiedSkillsButStopForInvalidSettings(string existing)
     {
         using var context = new AgentConfigurationTestContext(outputHelper);
         var hasCopiedSkills = existing is "copied" or "shared";
@@ -1435,15 +1429,10 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
         if (hasCopiedSkills)
         {
             Assert.Empty(interaction.DisplayedErrors);
-            Assert.Contains(interaction.DisplayedMessages, message => message.Emoji.Equals(KnownEmojis.PoliceCarLight) &&
-                message.Message == string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_LocalSkillsConflict,
-                    string.Join(System.Environment.NewLine,
-                        $"  {projectDirectory}/skills/aspire-init",
-                        "  ~/.agents/skills/aspire")));
             foreach (var removed in new[] { "~/.agents/skills/aspire", $"{projectDirectory}/skills/aspire-init" })
             {
-                Assert.Contains(interaction.DisplayedMessages, message => message.Emoji.Equals(KnownEmojis.CheckMarkButton) &&
-                    message.Message == string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_RemovedSkillCopy, removed));
+                Assert.Contains(interaction.DisplayedMessages, message => message.Emoji.Equals(KnownEmojis.Robot) &&
+                    message.Message.Contains($"{Environment.NewLine}  [dim]{string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_RemovedSkillCopy, removed)}[/]", StringComparison.Ordinal));
             }
             Assert.False(Directory.Exists(Path.GetDirectoryName(path)));
             Assert.False(Directory.Exists(Path.GetDirectoryName(projectSkillPath)));

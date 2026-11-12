@@ -88,8 +88,8 @@
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_AspireSkillChoice">
-        <source>Agent assets from configured skill sources</source>
-        <target state="new">Agent assets from configured skill sources</target>
+        <source>Agent assets from configured skill sources (also removes static copies of Aspire skills)</source>
+        <target state="new">Agent assets from configured skill sources (also removes static copies of Aspire skills)</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_ConfigurationTarget">
@@ -149,11 +149,6 @@
         <target state="needs-review-translation">Globalne (Zainstaluj w katalogu macierzystym; dostępne we wszystkich projektach)</target>
         <note />
       </trans-unit>
-      <trans-unit id="InitCommand_IgnoreSkillCopiesOptionDescription">
-        <source>Ignore Aspire skills copied by older CLI versions instead of reporting and removing them</source>
-        <target state="new">Ignore Aspire skills copied by older CLI versions instead of reporting and removing them</target>
-        <note />
-      </trans-unit>
       <trans-unit id="InitCommand_InstallationLocations">
         <source>Installation locations:</source>
         <target state="translated">Lokalizacje instalacji:</target>
@@ -194,13 +189,6 @@
         <target state="new">Invalid skill/tool selection '{0}'. Use {1}, '{2}', or '{3}'.</target>
         <note />
       </trans-unit>
-      <trans-unit id="InitCommand_LocalSkillsConflict">
-        <source>Copied Aspire skills were found. Configured skill sources replace them, so the copies are no longer recommended.
-{0}</source>
-        <target state="new">Copied Aspire skills were found. Configured skill sources replace them, so the copies are no longer recommended.
-{0}</target>
-        <note>{0} lists the copied skill directories, one per line.</note>
-      </trans-unit>
       <trans-unit id="InitCommand_LocationWithAgents">
         <source>{0} ({1})</source>
         <target state="new">{0} ({1})</target>
@@ -234,11 +222,6 @@
       <trans-unit id="InitCommand_ProjectScope">
         <source>This project (In your workspace, ready to commit with your project)</source>
         <target state="needs-review-translation">Project (zainstaluj w katalogu głównym obszaru roboczego; zatwierdzone w projekcie)</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="InitCommand_RemoveSkillCopiesPrompt">
-        <source>Remove the copied Aspire skills listed above after configuring skill sources?</source>
-        <target state="new">Remove the copied Aspire skills listed above after configuring skill sources?</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_RemoveSkillCopyFailed">

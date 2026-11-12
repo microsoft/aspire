@@ -115,6 +115,15 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Found outdated copies of Aspire skills..
+        /// </summary>
+        internal static string AspireSkillsMessage {
+            get {
+                return ResourceManager.GetString("AspireSkillsMessage", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to  (channel: {0}).
         /// </summary>
         internal static string ChannelSuffixFormat {

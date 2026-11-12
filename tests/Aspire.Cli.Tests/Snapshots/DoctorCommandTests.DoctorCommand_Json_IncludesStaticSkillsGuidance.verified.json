@@ -1,8 +1,8 @@
 ﻿{
-      "category": "apphost",
+      "category": "environment",
       "name": "aspire-skill-sources",
       "status": "warning",
-      "message": "Copied Aspire skills were found. Configured skill sources replace them, so the copies are no longer recommended.",
+      "message": "Found outdated copies of Aspire skills.",
       "fix": "Run 'aspire agent init' to configure skill sources and remove these copies.",
       "files": [
         ".agents/skills/aspire",

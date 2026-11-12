@@ -32,6 +32,11 @@
         <target state="new">Run 'aspire agent init' to configure skill sources and remove these copies.</target>
         <note />
       </trans-unit>
+      <trans-unit id="AspireSkillsMessage">
+        <source>Found outdated copies of Aspire skills.</source>
+        <target state="new">Found outdated copies of Aspire skills.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ChannelSuffixFormat">
         <source> (channel: {0})</source>
         <target state="translated"> (kanál: {0})</target>
