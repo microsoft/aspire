@@ -1,21 +1,22 @@
 {
   "area": "CLI",
-  "areaEmoji": "\ud83d\udcbb",
+  "areaEmoji": "💻",
   "backport": false,
   "breaking": false,
   "changeType": "New features",
   "communityContributors": [],
-  "description": "`aspire new` and `aspire init` can now propose a Git-hosted configuration source; accepted sources copy allowlisted settings into `aspire.config.json` and are saved as a `configSource` binding, with advisory update checks. `aspire update` can offer adoption of an available source (opt-out is saved in project settings, and `--use-config-source` controls it in automation), and sources are limited to project-local settings, ignoring global bindings.",
+  "description": "`aspire new` and `aspire init` can now propose a Git-hosted configuration source; accepted sources copy allowlisted settings into `aspire.config.json` and are saved as a `configSource` binding, with advisory update checks. `aspire update` can offer adoption of an available source (opt-out is saved in project settings, and `--use-config-source` controls it in automation), and sources are limited to project-local settings, ignoring global bindings. Git output is now logged and the Git operation timeout allows time for browser sign-in or MFA, with access help shown when acquisition fails.",
   "docsPrs": [],
   "docsRequired": true,
-  "emoji": "\ud83d\udd17",
+  "emoji": "🔗",
   "firstMergedAt": "2026-10-26T06:23:50Z",
-  "lastMergedAt": "2026-11-02T09:59:35Z",
+  "lastMergedAt": "2026-11-12T06:28:39Z",
   "name": "Project-bound Git configuration sources",
   "owner": "JamesNK",
   "prs": [
     20805,
     21678,
-    21679
+    21679,
+    22143
   ]
 }

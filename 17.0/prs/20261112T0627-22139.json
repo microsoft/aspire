@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Backport; Kubernetes template overwrite fix",
+  "mergedAt": "2026-11-12T06:27:54Z",
+  "number": 22139,
+  "runDate": "2026-11-12T12:10:00Z",
+  "status": "included",
+  "title": "[release/17.0] Don't overwrite Kubernetes templates when objects share a name"
+}

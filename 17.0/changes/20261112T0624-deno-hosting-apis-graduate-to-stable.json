@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The Deno hosting APIs no longer require suppressing `ASPIREDENO001`; they are now stable with the same functionality and signatures.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🦕",
+  "firstMergedAt": "2026-11-12T06:24:20Z",
+  "lastMergedAt": "2026-11-12T06:24:20Z",
+  "name": "Deno hosting APIs graduate to stable",
+  "owner": "maddymontaquila",
+  "prs": [
+    22159
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Kubernetes publish no longer overwrites a generated template (such as the Service) when another object shares its name, preventing Helm upgrades from removing the Service.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "☸️",
+  "firstMergedAt": "2026-11-12T06:27:54Z",
+  "lastMergedAt": "2026-11-12T06:27:54Z",
+  "name": "Kubernetes templates no longer overwritten when objects share a name",
+  "owner": "davidfowl",
+  "prs": [
+    22139
+  ]
+}
