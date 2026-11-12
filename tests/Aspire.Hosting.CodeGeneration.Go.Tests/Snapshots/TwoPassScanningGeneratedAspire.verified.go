@@ -34066,6 +34066,25 @@ func (s *loggerFactory) CreateLogger(categoryName string) Logger {
 type ParameterResource interface {
 	handleReference
 
+	// AsOptional marks the parameter resource as optional.
+	//
+	// Optional parameters that do not have values are not prompted for during run
+	// or publish operations. When referenced as environment variables or other
+	// value providers, unset optional parameters resolve to nil. The manifest
+	// publisher does not currently support optional parameters and throws a
+	// DistributedApplicationException.
+	//
+	// Returns: The configured resource builder.
+	AsOptional() ParameterResource
+
+	// AsRequired marks the parameter resource as required.
+	//
+	// Parameters are required by default. Use this method to make a parameter
+	// required again after it was marked with AsOptional.
+	//
+	// Returns: The configured resource builder.
+	AsRequired() ParameterResource
+
 	// CreateExecutionConfiguration creates an execution configuration builder for
 	// the specified resource.
 	//
@@ -34420,17 +34439,6 @@ type ParameterResource interface {
 	// WithNestedConfig configures with nested DTO
 	WithNestedConfig(config *TestNestedDto) ParameterResource
 
-	// WithOptional marks the parameter resource as optional.
-	//
-	// Optional parameters that do not have values are not prompted for during run
-	// or publish operations. When referenced as environment variables or other
-	// value providers, unset optional parameters resolve to nil. The manifest
-	// publisher does not currently support optional parameters and throws a
-	// DistributedApplicationException.
-	//
-	// Returns: The configured resource builder.
-	WithOptional() ParameterResource
-
 	// WithOptionalCallback configures with optional callback
 	//
 	// Parameters:
@@ -34514,14 +34522,6 @@ type ParameterResource interface {
 	//
 	// Returns: A resource builder.
 	WithRelationship(resourceBuilder Resource, type_ string) ParameterResource
-
-	// WithRequired sets whether the parameter resource requires a value.
-	//
-	// Parameters:
-	//   - options: Optional parameters; see [WithRequiredOption].
-	//
-	// Returns: The configured resource builder.
-	WithRequired(options ...WithRequiredOption) ParameterResource
 
 	// WithRequiredCommand declares that a resource requires a specific
 	// command/executable to be available on the local machine PATH before it can
@@ -34681,6 +34681,36 @@ type parameterResource struct {
 // newParameterResourceFromHandle wraps an existing handle as ParameterResource.
 func newParameterResourceFromHandle(h *handle, c *client) ParameterResource {
 	return &parameterResource{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// AsOptional marks the parameter resource as optional.
+func (s *parameterResource) AsOptional() ParameterResource {
+	if s.Err() != nil {
+		return s
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/asOptional", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
+}
+
+// AsRequired marks the parameter resource as required.
+func (s *parameterResource) AsRequired() ParameterResource {
+	if s.Err() != nil {
+		return s
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/asRequired", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
 }
 
 // CreateExecutionConfiguration creates an execution configuration builder for
@@ -35612,21 +35642,6 @@ func (s *parameterResource) WithNestedConfig(config *TestNestedDto) ParameterRes
 	return s
 }
 
-// WithOptional marks the parameter resource as optional.
-func (s *parameterResource) WithOptional() ParameterResource {
-	if s.Err() != nil {
-		return s
-	}
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withOptional", reqArgs); err != nil {
-		s.setErr(err)
-	}
-	return s
-}
-
 // WithOptionalCallback configures with optional callback
 func (s *parameterResource) WithOptionalCallback(options ...WithOptionalCallbackOption) ParameterResource {
 	if s.Err() != nil {
@@ -35841,32 +35856,6 @@ func (s *parameterResource) WithRelationship(resourceBuilder Resource, type_ str
 	reqArgs["resourceBuilder"] = serializeValue(resourceBuilder)
 	reqArgs["type"] = serializeValue(type_)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withBuilderRelationship", reqArgs); err != nil {
-		s.setErr(err)
-	}
-	return s
-}
-
-// WithRequired sets whether the parameter resource requires a value.
-func (s *parameterResource) WithRequired(options ...WithRequiredOption) ParameterResource {
-	if s.Err() != nil {
-		return s
-	}
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	if len(options) > 0 {
-		merged := &WithRequiredOptions{}
-		for _, opt := range options {
-			if opt != nil {
-				opt.apply(merged)
-			}
-		}
-		for k, v := range merged.ToMap() {
-			reqArgs[k] = v
-		}
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withRequired", reqArgs); err != nil {
 		s.setErr(err)
 	}
 	return s
@@ -53705,42 +53694,6 @@ func (o *WithDescriptionOptions) ToMap() map[string]any {
 	}
 	if o.EnableMarkdown != nil {
 		m["enableMarkdown"] = serializeValue(o.EnableMarkdown)
-	}
-	return m
-}
-
-// WithRequiredOptions carries optional parameters for WithRequired.
-type WithRequiredOptions struct {
-	// Required is a value indicating whether the parameter must have a value before
-	// it can be resolved.
-	Required *bool `json:"required,omitempty"`
-}
-
-// WithRequiredOption configures WithRequired.
-type WithRequiredOption interface {
-	apply(*WithRequiredOptions)
-}
-
-func (option *WithRequiredOptions) apply(options *WithRequiredOptions) {
-	if option != nil {
-		*options = *deepUpdate(options, option)
-	}
-}
-
-// RequiredRequired sets Required for WithRequired.
-type RequiredRequired bool
-
-func (value RequiredRequired) apply(options *WithRequiredOptions) {
-	options.Required = (*bool)(&value)
-}
-
-func (o *WithRequiredOptions) ToMap() map[string]any {
-	m := map[string]any{}
-	if o == nil {
-		return m
-	}
-	if o.Required != nil {
-		m["required"] = serializeValue(o.Required)
 	}
 	return m
 }

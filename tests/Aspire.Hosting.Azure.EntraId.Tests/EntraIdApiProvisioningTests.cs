@@ -243,7 +243,7 @@ public class EntraIdApiProvisioningTests(ITestOutputHelper outputHelper)
     public void WithApplicationIdUri_DefaultThrowsWithoutClearingTheUriOfAnExistingRegistration()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
-        var existing = builder.AddExistingEntraApplication("existing-api", TenantId, ClientId)
+        var existing = builder.AddExistingEntraIdApplication("existing-api", TenantId, ClientId)
             .WithApplicationIdUri("api://contoso-orders");
 
         var exception = Assert.Throws<InvalidOperationException>(existing.WithApplicationIdUri);
@@ -340,7 +340,7 @@ public class EntraIdApiProvisioningTests(ITestOutputHelper outputHelper)
         using var builder = TestDistributedApplicationBuilder.Create();
         var contoso = EntraIdApi.FromApplicationId("Contoso API", "99998888-aaaa-7777-bbbb-6666cccc5555", "api://contoso");
         var profileOnly = EntraIdApi.FromApplicationId("Profile API", "11110000-aaaa-7777-bbbb-6666cccc5555", "api://profile");
-        var web = builder.AddExistingEntraApplication("entra-web", TenantId, ClientId)
+        var web = builder.AddExistingEntraIdApplication("entra-web", TenantId, ClientId)
             .WithApiPermissions(EntraIdApi.MicrosoftGraph, EntraIdApiPermission.Delegated("openid"), EntraIdApiPermission.Delegated("User.Read"))
             .WithApiPermissions(contoso, EntraIdApiPermission.Delegated("profile", Guid.NewGuid()), EntraIdApiPermission.Delegated("email", Guid.NewGuid()))
             .WithApiPermissions(profileOnly, EntraIdApiPermission.Delegated("offline_access", Guid.NewGuid()));
@@ -362,7 +362,7 @@ public class EntraIdApiProvisioningTests(ITestOutputHelper outputHelper)
         var graph = EntraIdApi.FromApplicationId(
             "Microsoft Graph", "00000003-0000-0000-c000-000000000000", "https://graph.microsoft.us", "https://graph.microsoft.us/v1.0");
         var contoso = EntraIdApi.FromApplicationId("Contoso API", "99998888-aaaa-7777-bbbb-6666cccc5555", "api://contoso");
-        var web = builder.AddExistingEntraApplication("entra-web", TenantId, ClientId)
+        var web = builder.AddExistingEntraIdApplication("entra-web", TenantId, ClientId)
             .WithApiPermissions(graph, EntraIdApiPermission.Delegated("User.Read", new Guid("e1fe6dd8-ba31-4d61-89e7-88639da4683d")))
             .WithApiPermissions(contoso, EntraIdApiPermission.Delegated("items.read", Guid.NewGuid()));
         var project = builder.AddResource(new ProjectResource("web")).WithReference(web);
@@ -437,10 +437,10 @@ public class EntraIdApiProvisioningTests(ITestOutputHelper outputHelper)
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var clientIdParameter = builder.AddParameter("api-client-id");
-        var existingApi = builder.AddExistingEntraApplication("existing-api", builder.AddParameter("api-tenant-id"), clientIdParameter)
+        var existingApi = builder.AddExistingEntraIdApplication("existing-api", builder.AddParameter("api-tenant-id"), clientIdParameter)
             .WithApplicationIdUri("api://contoso-orders")
             .WithScope("orders.read", "Read orders.", scope => scope.Id = Guid.Parse("11112222-aaaa-3333-bbbb-4444cccc5555"));
-        var literalApi = builder.AddExistingEntraApplication("literal-api", TenantId, ClientId)
+        var literalApi = builder.AddExistingEntraIdApplication("literal-api", TenantId, ClientId)
             .WithScope("items.read", "Read items.", scope => scope.Id = Guid.Parse("22223333-aaaa-4444-bbbb-5555cccc6666"));
         var web = builder.AddEntraIdApplication("entra-web")
             .WithApiPermissions(existingApi, "orders.read")
@@ -454,7 +454,7 @@ public class EntraIdApiProvisioningTests(ITestOutputHelper outputHelper)
     public void ExistingApplication_ExposedApiIsConfigurationOnly()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
-        var existingApi = builder.AddExistingEntraApplication("existing-api", TenantId, ClientId)
+        var existingApi = builder.AddExistingEntraIdApplication("existing-api", TenantId, ClientId)
             .WithApplicationIdUri("api://contoso-orders")
             .WithScope("orders.read", "Read orders.", scope => scope.Id = Guid.NewGuid());
 
@@ -466,7 +466,7 @@ public class EntraIdApiProvisioningTests(ITestOutputHelper outputHelper)
     public void WithApiPermissions_ExistingApiScopeIdCanBeSetAfterTheDeclaration()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
-        var existingApi = builder.AddExistingEntraApplication("existing-api", TenantId, ClientId)
+        var existingApi = builder.AddExistingEntraIdApplication("existing-api", TenantId, ClientId)
             .WithScope("orders.read", "Read orders.");
         var web = builder.AddEntraIdApplication("entra-web");
 
@@ -541,10 +541,10 @@ public class EntraIdApiProvisioningTests(ITestOutputHelper outputHelper)
     public void ScopeDisabledAfterItWasDeclared_IsRejectedForAnExistingApi()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
-        var existingApi = builder.AddExistingEntraApplication("existing-api", TenantId, ClientId)
+        var existingApi = builder.AddExistingEntraIdApplication("existing-api", TenantId, ClientId)
             .WithApplicationIdUri("api://contoso-items")
             .WithScope("items.read", "Read items.", scope => scope.Id = Guid.NewGuid());
-        var web = builder.AddExistingEntraApplication("entra-web", TenantId, ClientId)
+        var web = builder.AddExistingEntraIdApplication("entra-web", TenantId, ClientId)
             .WithApiPermissions(existingApi, "items.read");
 
         web.Resource.ValidateApiAccess();
@@ -668,7 +668,7 @@ public class EntraIdApiProvisioningTests(ITestOutputHelper outputHelper)
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var web = builder.AddEntraIdApplication("entra-web");
-        var existingClient = builder.AddExistingEntraApplication("existing-client", TenantId, ClientId);
+        var existingClient = builder.AddExistingEntraIdApplication("existing-client", TenantId, ClientId);
         var api = builder.AddEntraIdApplication("entra-api")
             .WithScope("access_as_user", ScopeDescription)
             .WithScope("other", "Another scope.")
@@ -731,7 +731,7 @@ public class EntraIdApiProvisioningTests(ITestOutputHelper outputHelper)
     public async Task ExistingRegistrationsDoNotCreateDependencyCycles()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
-        var existingWeb = builder.AddExistingEntraApplication("existing-web", TenantId, ClientId);
+        var existingWeb = builder.AddExistingEntraIdApplication("existing-web", TenantId, ClientId);
         var api = builder.AddEntraIdApplication("entra-api")
             .WithScope("access_as_user", ScopeDescription)
             .WithPreAuthorizedApplication(existingWeb, "access_as_user");
@@ -747,9 +747,9 @@ public class EntraIdApiProvisioningTests(ITestOutputHelper outputHelper)
         using var builder = TestDistributedApplicationBuilder.Create();
         var created = builder.AddEntraIdApplication("created-api").WithScope("access_as_user", ScopeDescription);
         var custom = builder.AddEntraIdApplication("custom-api").WithApplicationIdUri("api://contoso-orders").WithScope("orders.read", "Read orders.");
-        var existing = builder.AddExistingEntraApplication("existing-api", TenantId, ClientId).WithApplicationIdUri("api://existing");
+        var existing = builder.AddExistingEntraIdApplication("existing-api", TenantId, ClientId).WithApplicationIdUri("api://existing");
         existing.WithScope("items.read", "Read items.", scope => scope.Id = Guid.NewGuid());
-        var existingWithoutUri = builder.AddExistingEntraApplication("no-uri-api", TenantId, ClientId);
+        var existingWithoutUri = builder.AddExistingEntraIdApplication("no-uri-api", TenantId, ClientId);
         existingWithoutUri.WithScope("items.read", "Read items.", scope => scope.Id = Guid.NewGuid());
 
         Assert.Equal("{created-api.outputs.applicationIdUri}/access_as_user", created.Resource.GetScopeUri("access_as_user").ValueExpression);
@@ -820,7 +820,7 @@ public class EntraIdApiProvisioningTests(ITestOutputHelper outputHelper)
     public async Task WithReference_FlowsFirstPartyApiPermissionsAsDelegatedAndAppOnlyEntries()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
-        var web = builder.AddExistingEntraApplication("entra-web", TenantId, ClientId)
+        var web = builder.AddExistingEntraIdApplication("entra-web", TenantId, ClientId)
             .WithApiPermissions(
                 EntraIdApi.MicrosoftGraph,
                 EntraIdApiPermission.Delegated("openid"),
@@ -860,10 +860,10 @@ public class EntraIdApiProvisioningTests(ITestOutputHelper outputHelper)
     public async Task WithReference_FlowsScopesOfExistingApisUsingTheirConfiguredApplicationIdUri()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
-        var orders = builder.AddExistingEntraApplication("orders-entra", TenantId, ClientId)
+        var orders = builder.AddExistingEntraIdApplication("orders-entra", TenantId, ClientId)
             .WithApplicationIdUri("api://contoso-orders")
             .WithScope("orders.read", "Read orders.", scope => scope.Id = Guid.NewGuid());
-        var items = builder.AddExistingEntraApplication("items-entra", TenantId, ClientId)
+        var items = builder.AddExistingEntraIdApplication("items-entra", TenantId, ClientId)
             .WithApplicationIdUri("https://contoso.onmicrosoft.com/items")
             .WithScope("items.read", "Read items.", scope => scope.Id = Guid.NewGuid());
         var web = builder.AddEntraIdApplication("entra-web")
@@ -887,9 +887,9 @@ public class EntraIdApiProvisioningTests(ITestOutputHelper outputHelper)
     public async Task WithReference_RejectsAnExistingApiWithoutAnApplicationIdUri()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
-        var existingApi = builder.AddExistingEntraApplication("without-uri", TenantId, ClientId)
+        var existingApi = builder.AddExistingEntraIdApplication("without-uri", TenantId, ClientId)
             .WithScope("items.read", "Read items.", scope => scope.Id = Guid.NewGuid());
-        var web = builder.AddExistingEntraApplication("entra-web", TenantId, ClientId)
+        var web = builder.AddExistingEntraIdApplication("entra-web", TenantId, ClientId)
             .WithApiPermissions(existingApi, "items.read");
 
         // An existing registration can use any URI, so a made-up api://{clientId} would only fail later, as a token error.
@@ -916,8 +916,8 @@ public class EntraIdApiProvisioningTests(ITestOutputHelper outputHelper)
         using var builder = TestDistributedApplicationBuilder.Create();
         var api = builder.AddEntraIdApplication("api-entra").WithScope("access_as_user", ScopeDescription);
         var created = builder.AddEntraIdApplication("created-web");
-        var existing = builder.AddExistingEntraApplication("existing-web", TenantId, ClientId);
-        var existingWithoutDeclarations = builder.AddExistingEntraApplication("existing-other", TenantId, ClientId);
+        var existing = builder.AddExistingEntraIdApplication("existing-web", TenantId, ClientId);
+        var existingWithoutDeclarations = builder.AddExistingEntraIdApplication("existing-other", TenantId, ClientId);
 
         // A registration that declares nothing has nothing to validate, and an existing one keeps no pipeline steps.
         Assert.Empty(existing.Resource.Annotations.OfType<PipelineStepAnnotation>());
@@ -971,13 +971,13 @@ public class EntraIdApiProvisioningTests(ITestOutputHelper outputHelper)
     public async Task ValidateApiAccess_ReferencingTheApisFromDifferentResourcesIsAllowed()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
-        var orders = builder.AddExistingEntraApplication("orders-entra", TenantId, ClientId)
+        var orders = builder.AddExistingEntraIdApplication("orders-entra", TenantId, ClientId)
             .WithApplicationIdUri("api://orders").WithScope("orders.read", "Read orders.", s => s.Id = Guid.NewGuid());
-        var items = builder.AddExistingEntraApplication("items-entra", TenantId, ClientId)
+        var items = builder.AddExistingEntraIdApplication("items-entra", TenantId, ClientId)
             .WithApplicationIdUri("api://items").WithScope("items.read", "Read items.", s => s.Id = Guid.NewGuid());
         builder.AddResource(new ProjectResource("orders-svc")).WithReference(orders);
         builder.AddResource(new ProjectResource("items-svc")).WithReference(items);
-        var web = builder.AddExistingEntraApplication("web-entra", TenantId, ClientId)
+        var web = builder.AddExistingEntraIdApplication("web-entra", TenantId, ClientId)
             .WithApiPermissions(orders, "orders.read")
             .WithApiPermissions(items, "items.read");
         var project = builder.AddResource(new ProjectResource("web")).WithReference(web);
@@ -1003,7 +1003,7 @@ public class EntraIdApiProvisioningTests(ITestOutputHelper outputHelper)
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var contoso = EntraIdApi.FromApplicationId("Contoso API", "99998888-aaaa-7777-bbbb-6666cccc5555", "https://contoso.onmicrosoft.com/orders");
-        var web = builder.AddExistingEntraApplication("entra-web", TenantId, ClientId)
+        var web = builder.AddExistingEntraIdApplication("entra-web", TenantId, ClientId)
             .WithApiPermissions(contoso, EntraIdApiPermission.Delegated("Orders.Read", Guid.NewGuid()), EntraIdApiPermission.Application("Orders.Sync", Guid.NewGuid()));
         var project = builder.AddResource(new ProjectResource("web")).WithReference(web);
 
@@ -1017,7 +1017,7 @@ public class EntraIdApiProvisioningTests(ITestOutputHelper outputHelper)
     public async Task WithReference_FlowsOnlyEnabledExposedScopesToTheApi()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
-        var api = builder.AddExistingEntraApplication("entra-api", TenantId, ClientId)
+        var api = builder.AddExistingEntraIdApplication("entra-api", TenantId, ClientId)
             .WithScope("access_as_user", ScopeDescription, scope => scope.Id = Guid.NewGuid())
             .WithScope("retired", "Retired.", scope => { scope.Id = Guid.NewGuid(); scope.IsEnabled = false; })
             .WithScope("other", "Another scope.", scope => scope.Id = Guid.NewGuid());
@@ -1036,7 +1036,7 @@ public class EntraIdApiProvisioningTests(ITestOutputHelper outputHelper)
     public async Task WithReference_WithoutDeclarationsOrScopesAddsNoApiConfiguration()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
-        var web = builder.AddExistingEntraApplication("entra-web", TenantId, ClientId);
+        var web = builder.AddExistingEntraIdApplication("entra-web", TenantId, ClientId);
         var project = builder.AddResource(new ProjectResource("web")).WithReference(web);
 
         var env = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(project.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance);
@@ -1051,7 +1051,7 @@ public class EntraIdApiProvisioningTests(ITestOutputHelper outputHelper)
         var first = EntraIdApi.FromApplicationId("My API", "99998888-aaaa-7777-bbbb-6666cccc5555", "api://my-api");
         var second = EntraIdApi.FromApplicationId("MyAPI", "11110000-aaaa-7777-bbbb-6666cccc5555", "api://my-api-2");
         var permission = EntraIdApiPermission.Delegated("Read", Guid.NewGuid());
-        var web = builder.AddExistingEntraApplication("entra-web", TenantId, ClientId)
+        var web = builder.AddExistingEntraIdApplication("entra-web", TenantId, ClientId)
             .WithApiPermissions(first, permission)
             .WithApiPermissions(second, permission);
         var project = builder.AddResource(new ProjectResource("web")).WithReference(web);
@@ -1068,7 +1068,7 @@ public class EntraIdApiProvisioningTests(ITestOutputHelper outputHelper)
         var first = EntraIdApi.FromApplicationId("My API", "99998888-aaaa-7777-bbbb-6666cccc5555", "api://my-api");
         var second = EntraIdApi.FromApplicationId("Other API", "11110000-aaaa-7777-bbbb-6666cccc5555", "https://contoso.onmicrosoft.com/other/");
         var permission = EntraIdApiPermission.Delegated("Read", Guid.NewGuid());
-        var web = builder.AddExistingEntraApplication("entra-web", TenantId, ClientId)
+        var web = builder.AddExistingEntraIdApplication("entra-web", TenantId, ClientId)
             .WithApiPermissions(first, permission)
             .WithApiPermissions(second, permission, EntraIdApiPermission.Application("Read.All", Guid.NewGuid()));
         var project = builder.AddResource(new ProjectResource("web")).WithReference(web);
@@ -1085,10 +1085,10 @@ public class EntraIdApiProvisioningTests(ITestOutputHelper outputHelper)
     public async Task WithReference_NamesDownstreamApisAfterTheResourcesThatReferenceTheApi()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
-        var apiEntra = builder.AddExistingEntraApplication("apiservice-entra", TenantId, ClientId)
+        var apiEntra = builder.AddExistingEntraIdApplication("apiservice-entra", TenantId, ClientId)
             .WithApplicationIdUri(ApiUri)
             .WithScope("access_as_user", ScopeDescription, scope => scope.Id = Guid.NewGuid());
-        var webEntra = builder.AddExistingEntraApplication("webfrontend-entra", TenantId, ClientId)
+        var webEntra = builder.AddExistingEntraIdApplication("webfrontend-entra", TenantId, ClientId)
             .WithApiPermissions(apiEntra, "access_as_user");
 
         // The consumers are read when the environment is resolved, so the order of the calls doesn't matter.
@@ -1107,10 +1107,10 @@ public class EntraIdApiProvisioningTests(ITestOutputHelper outputHelper)
     public async Task WithReference_FallsBackToTheApiRegistrationNameWhenNothingReferencesIt()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
-        var apiEntra = builder.AddExistingEntraApplication("apiservice-entra", TenantId, ClientId)
+        var apiEntra = builder.AddExistingEntraIdApplication("apiservice-entra", TenantId, ClientId)
             .WithApplicationIdUri(ApiUri)
             .WithScope("access_as_user", ScopeDescription, scope => scope.Id = Guid.NewGuid());
-        var webEntra = builder.AddExistingEntraApplication("webfrontend-entra", TenantId, ClientId)
+        var webEntra = builder.AddExistingEntraIdApplication("webfrontend-entra", TenantId, ClientId)
             .WithApiPermissions(apiEntra, "access_as_user");
         var webFrontend = builder.AddResource(new ProjectResource("webfrontend")).WithReference(webEntra);
 
@@ -1125,10 +1125,10 @@ public class EntraIdApiProvisioningTests(ITestOutputHelper outputHelper)
     public async Task WithReference_UsesTheDownstreamApisPrefix(string prefix, string expected)
     {
         using var builder = TestDistributedApplicationBuilder.Create();
-        var apiEntra = builder.AddExistingEntraApplication("apiservice-entra", TenantId, ClientId)
+        var apiEntra = builder.AddExistingEntraIdApplication("apiservice-entra", TenantId, ClientId)
             .WithApplicationIdUri(ApiUri)
             .WithScope("access_as_user", ScopeDescription, scope => scope.Id = Guid.NewGuid());
-        var webEntra = builder.AddExistingEntraApplication("webfrontend-entra", TenantId, ClientId)
+        var webEntra = builder.AddExistingEntraIdApplication("webfrontend-entra", TenantId, ClientId)
             .WithApiPermissions(apiEntra, "access_as_user");
         builder.AddResource(new ProjectResource("apiservice")).WithReference(apiEntra);
         var webFrontend = builder.AddResource(new ProjectResource("webfrontend"))
@@ -1145,10 +1145,10 @@ public class EntraIdApiProvisioningTests(ITestOutputHelper outputHelper)
     public async Task WithReference_UsesTheDownstreamApisPrefixForOtherLanguages()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
-        var apiEntra = builder.AddExistingEntraApplication("apiservice-entra", TenantId, ClientId)
+        var apiEntra = builder.AddExistingEntraIdApplication("apiservice-entra", TenantId, ClientId)
             .WithApplicationIdUri(ApiUri)
             .WithScope("access_as_user", ScopeDescription, scope => scope.Id = Guid.NewGuid());
-        var webEntra = builder.AddExistingEntraApplication("webfrontend-entra", TenantId, ClientId)
+        var webEntra = builder.AddExistingEntraIdApplication("webfrontend-entra", TenantId, ClientId)
             .WithApiPermissions(apiEntra, "access_as_user");
         builder.AddContainer("api-container", "myimage").WithReference(apiEntra);
         var worker = builder.AddContainer("worker", "myimage").WithReference(webEntra, "ENTRA", "MyApis");
@@ -1165,7 +1165,7 @@ public class EntraIdApiProvisioningTests(ITestOutputHelper outputHelper)
     public void WithReference_RejectsAnEmptyDownstreamApisPrefix()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
-        var webEntra = builder.AddExistingEntraApplication("webfrontend-entra", TenantId, ClientId);
+        var webEntra = builder.AddExistingEntraIdApplication("webfrontend-entra", TenantId, ClientId);
         var project = builder.AddResource(new ProjectResource("webfrontend"));
 
         Assert.Throws<ArgumentException>(() => project.WithReference(webEntra, connectionName: null, downstreamApisPrefix: ""));
@@ -1176,12 +1176,12 @@ public class EntraIdApiProvisioningTests(ITestOutputHelper outputHelper)
     public async Task BeforeStart_FailsWhenTwoApiRegistrationsAreReferencedByTheSameResource()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
-        var orders = builder.AddExistingEntraApplication("orders-entra", TenantId, ClientId)
+        var orders = builder.AddExistingEntraIdApplication("orders-entra", TenantId, ClientId)
             .WithApplicationIdUri("api://orders").WithScope("orders.read", "Read orders.", s => s.Id = Guid.NewGuid());
-        var items = builder.AddExistingEntraApplication("items-entra", TenantId, ClientId)
+        var items = builder.AddExistingEntraIdApplication("items-entra", TenantId, ClientId)
             .WithApplicationIdUri("api://items").WithScope("items.read", "Read items.", s => s.Id = Guid.NewGuid());
         builder.AddResource(new ProjectResource("gateway")).WithReference(orders, "Orders").WithReference(items, "Items");
-        var web = builder.AddExistingEntraApplication("web-entra", TenantId, ClientId)
+        var web = builder.AddExistingEntraIdApplication("web-entra", TenantId, ClientId)
             .WithApiPermissions(orders, "orders.read")
             .WithApiPermissions(items, "items.read");
         builder.AddResource(new ProjectResource("web")).WithReference(web);
@@ -1198,9 +1198,9 @@ public class EntraIdApiProvisioningTests(ITestOutputHelper outputHelper)
     public async Task BeforeStart_FailsWhenAnExistingApiHasNoApplicationIdUri()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
-        var api = builder.AddExistingEntraApplication("items-entra", TenantId, ClientId)
+        var api = builder.AddExistingEntraIdApplication("items-entra", TenantId, ClientId)
             .WithScope("items.read", "Read items.", s => s.Id = Guid.NewGuid());
-        var web = builder.AddExistingEntraApplication("web-entra", TenantId, ClientId)
+        var web = builder.AddExistingEntraIdApplication("web-entra", TenantId, ClientId)
             .WithApiPermissions(api, "items.read");
         builder.AddResource(new ProjectResource("web")).WithReference(web);
 
@@ -1214,10 +1214,10 @@ public class EntraIdApiProvisioningTests(ITestOutputHelper outputHelper)
     public async Task BeforeStart_SucceedsWhenTheDeclaredApisAreValid()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
-        var api = builder.AddExistingEntraApplication("items-entra", TenantId, ClientId)
+        var api = builder.AddExistingEntraIdApplication("items-entra", TenantId, ClientId)
             .WithApplicationIdUri("api://items").WithScope("items.read", "Read items.", s => s.Id = Guid.NewGuid());
         builder.AddResource(new ProjectResource("items-svc")).WithReference(api);
-        var web = builder.AddExistingEntraApplication("web-entra", TenantId, ClientId)
+        var web = builder.AddExistingEntraIdApplication("web-entra", TenantId, ClientId)
             .WithApiPermissions(api, "items.read")
             .WithApiPermissions(EntraIdApi.MicrosoftGraph, EntraIdApiPermission.Delegated("User.Read"));
         builder.AddResource(new ProjectResource("web")).WithReference(web);
@@ -1357,7 +1357,7 @@ public class EntraIdApiProvisioningTests(ITestOutputHelper outputHelper)
     public void Symbols_SameRegistrationAsApiAndPreAuthorizedClientSharesOneParameter()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
-        var shared = builder.AddExistingEntraApplication("shared", builder.AddParameter("shared-tenant-id"), builder.AddParameter("shared-client-id"))
+        var shared = builder.AddExistingEntraIdApplication("shared", builder.AddParameter("shared-tenant-id"), builder.AddParameter("shared-client-id"))
             .WithApplicationIdUri("api://shared")
             .WithScope("read", "Read", scope => scope.Id = Guid.NewGuid());
         var registration = builder.AddEntraIdApplication("registration")
@@ -1386,14 +1386,14 @@ public class EntraIdApiProvisioningTests(ITestOutputHelper outputHelper)
 
     private static (IResourceBuilder<EntraIdApplicationResource> First, IResourceBuilder<EntraIdApplicationResource> Second) AddTwoClientsOfOneApi(IDistributedApplicationBuilder builder)
     {
-        var api = builder.AddExistingEntraApplication("apiservice-entra", TenantId, ClientId)
+        var api = builder.AddExistingEntraIdApplication("apiservice-entra", TenantId, ClientId)
             .WithApplicationIdUri(ApiUri)
             .WithScope("read", "Read", scope => scope.Id = Guid.NewGuid())
             .WithScope("write", "Write", scope => scope.Id = Guid.NewGuid());
         builder.AddResource(new ProjectResource("apiservice")).WithReference(api);
 
-        var first = builder.AddExistingEntraApplication("web-a", TenantId, ClientId).WithApiPermissions(api, "read", "write");
-        var second = builder.AddExistingEntraApplication("web-b", TenantId, ClientId).WithApiPermissions(api, "read");
+        var first = builder.AddExistingEntraIdApplication("web-a", TenantId, ClientId).WithApiPermissions(api, "read", "write");
+        var second = builder.AddExistingEntraIdApplication("web-b", TenantId, ClientId).WithApiPermissions(api, "read");
         return (first, second);
     }
 
@@ -1439,10 +1439,10 @@ public class EntraIdApiProvisioningTests(ITestOutputHelper outputHelper)
 
     private static IResourceBuilder<EntraIdApplicationResource> AddClientOfTwoApisNamedAfterTheirConsumers(IDistributedApplicationBuilder builder)
     {
-        var firstApi = builder.AddExistingEntraApplication("first-api", TenantId, ClientId)
+        var firstApi = builder.AddExistingEntraIdApplication("first-api", TenantId, ClientId)
             .WithApplicationIdUri("api://first")
             .WithScope("read", "Read", scope => scope.Id = Guid.NewGuid());
-        var secondApi = builder.AddExistingEntraApplication("second-api", TenantId, ClientId)
+        var secondApi = builder.AddExistingEntraIdApplication("second-api", TenantId, ClientId)
             .WithApplicationIdUri("api://second")
             .WithScope("read", "Read", scope => scope.Id = Guid.NewGuid());
 
@@ -1450,7 +1450,7 @@ public class EntraIdApiProvisioningTests(ITestOutputHelper outputHelper)
         // environment variables of a non-.NET resource they are both ORDERS_API.
         builder.AddResource(new ProjectResource("orders-api")).WithReference(firstApi);
         builder.AddResource(new ProjectResource("ordersApi")).WithReference(secondApi);
-        return builder.AddExistingEntraApplication("web", TenantId, ClientId)
+        return builder.AddExistingEntraIdApplication("web", TenantId, ClientId)
             .WithApiPermissions(firstApi, "read")
             .WithApiPermissions(secondApi, "read");
     }
@@ -1588,7 +1588,7 @@ public class EntraIdApiProvisioningTests(ITestOutputHelper outputHelper)
         using var builder = TestDistributedApplicationBuilder.Create();
         var firstId = Guid.Parse("11112222-aaaa-3333-bbbb-4444cccc5555");
         var secondId = Guid.Parse("22223333-aaaa-4444-bbbb-5555cccc6666");
-        var existingApi = builder.AddExistingEntraApplication("existing-api", TenantId, ClientId)
+        var existingApi = builder.AddExistingEntraIdApplication("existing-api", TenantId, ClientId)
             .WithApplicationIdUri("api://contoso-orders")
             .WithScope("orders.read", "Read orders.", scope => scope.Id = firstId);
         var web = builder.AddEntraIdApplication("entra-web").WithApiPermissions(existingApi, "orders.read");
@@ -1604,7 +1604,7 @@ public class EntraIdApiProvisioningTests(ITestOutputHelper outputHelper)
     public void ScopeId_AnExistingScopeThatLosesItsIdIsReportedWhenTheTemplateIsGenerated()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
-        var existingApi = builder.AddExistingEntraApplication("existing-api", TenantId, ClientId)
+        var existingApi = builder.AddExistingEntraIdApplication("existing-api", TenantId, ClientId)
             .WithApplicationIdUri("api://contoso-orders")
             .WithScope("orders.read", "Read orders.", scope => scope.Id = Guid.NewGuid());
         var web = builder.AddEntraIdApplication("entra-web").WithApiPermissions(existingApi, "orders.read");
