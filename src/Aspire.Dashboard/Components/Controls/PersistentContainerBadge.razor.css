@@ -10,7 +10,7 @@
     width: 18px;
     height: 10px;
     box-sizing: border-box;
-    border-radius: 2px;
+    border-radius: var(--aspire-radius-small);
     background: var(--colorNeutralBackground1);
     color: var(--colorNeutralForeground1);
 }

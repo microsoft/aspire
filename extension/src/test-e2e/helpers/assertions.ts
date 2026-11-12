@@ -3,7 +3,7 @@ import * as http from 'http';
 import * as https from 'https';
 import * as path from 'path';
 import type { AspireAppHostState as AppHostState, AspireDebugSessionState, AspireExtensionE2EControlStatus as ExtensionE2EControlStatus, AspireExtensionE2EStateFile as ExtensionE2EStateFile, AspireExtensionE2ETaskProcessEvent as TaskProcessEvent, AspireExtensionStateSnapshot as ExtensionStateSnapshot, AspireResourceState as ResourceState } from '../../types/extensionApi';
-import { getControlFilePath, getPrimaryAppHostProjectPath, getRunId, getStateFilePath, getWorkspaceRoot } from './paths';
+import { getControlFilePath, getDevCertPath, getPrimaryAppHostProjectPath, getRunId, getStateFilePath, getWorkspaceRoot } from './paths';
 
 type CommandInvocation = ExtensionE2EStateFile['commandInvocations'][number];
 type BrowserDebugSession = ExtensionE2EStateFile['browserDebugSessions'][number];
@@ -608,7 +608,7 @@ function getUrlText(url: string, redirectLimit = 5, cookies: string[] = []): Pro
             });
         };
         const request = parsed.protocol === 'https:'
-            ? https.get(parsed, { headers, rejectUnauthorized: false }, handleResponse)
+            ? https.get(parsed, { headers, ca: readTrustedDevCertificate() }, handleResponse)
             : http.get(parsed, { headers }, handleResponse);
 
         request.on('error', reject);
@@ -616,6 +616,18 @@ function getUrlText(url: string, redirectLimit = 5, cookies: string[] = []): Pro
             request.destroy(new Error('request timed out'));
         });
     });
+}
+
+/**
+ * The Dashboard and HTTPS resource endpoints in the E2E AppHost are served with the ASP.NET Core
+ * development certificate, which clean machines and hosted runners do not trust. Trust exactly that
+ * certificate instead of turning verification off: chain and host name checks still run, so a server
+ * presenting any other certificate is rejected. The runner exports the public PEM before launch; when
+ * it is unavailable the default trust store applies.
+ */
+function readTrustedDevCertificate(): Buffer | undefined {
+    const certificatePath = getDevCertPath();
+    return certificatePath === undefined ? undefined : fs.readFileSync(certificatePath);
 }
 
 function sanitizeUrlForDiagnostics(url: string): string {

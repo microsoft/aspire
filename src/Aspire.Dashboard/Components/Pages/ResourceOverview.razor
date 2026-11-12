@@ -20,7 +20,7 @@
                              Options="@PanelOptions"
                              Value="@_hideEmptyPanels"
                              ValueChanged="@SetHideEmptyPanelsAsync"
-                             ShowLabel="true"
+                             ShowLabel="false"
                              ShowCurrentLabel="false" />
         </div>
     </StableSectionContent>
@@ -93,7 +93,7 @@
         var showMetrics = isInstrumented && (!_telemetryLoaded || _telemetry is { Instruments.Count: > 0 });
         var consoleLines = GetConsoleLines();
         var showEndpoints = urls.Count > 0;
-        var showTerminal = ResourceSelectHelpers.HasUsableTerminal(resource);
+        var showTerminal = CanShowTerminal(resource);
         var showConsole = !showTerminal;
         var showOverviewTerminal = showTerminal && (IsTerminalFocused || !TerminalDockState.IsResourceOpen(resource.Name));
         var properties = GetVisibleProperties();
@@ -211,6 +211,11 @@
                         var url = group.Primary;
                         var label = url.DisplayName is { } displayName && url.Name == "-" ? displayName : url.Name;
                         var maskedUrl = DashboardUIHelpers.MaskUrlForDisplay(url.OriginalUrlString);
+                        // The endpoint's other address (usually its localhost one) is in the tooltip rather than on a line
+                        // of its own, so each endpoint is listed once. Tooltips also show on keyboard focus.
+                        var addressTooltip = group.Secondary is { } secondary
+                            ? Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewEndpointAlsoAt), maskedUrl, DashboardUIHelpers.MaskUrlForDisplay(secondary.OriginalUrlString)].Value
+                            : maskedUrl;
                         <li class="overview-endpoint">
                             <span class="overview-list-label" data-tooltip="@label">@label</span>
                             <div class="overview-endpoint-addresses">
@@ -220,16 +225,11 @@
                                 }
                                 @if (url.Url is not null)
                                 {
-                                    <a class="overview-endpoint-address overview-mono" href="@url.Url" data-tooltip="@maskedUrl" target="_blank" rel="noreferrer noopener">@maskedUrl</a>
+                                    <a class="overview-endpoint-address overview-mono" href="@url.Url" data-tooltip="@addressTooltip" target="_blank" rel="noreferrer noopener">@maskedUrl</a>
                                 }
                                 else
                                 {
-                                    <span class="overview-endpoint-address overview-mono" data-tooltip="@maskedUrl" tabindex="0">@maskedUrl</span>
-                                }
-                                @if (group.Secondary is { } secondary)
-                                {
-                                    var maskedSecondaryUrl = DashboardUIHelpers.MaskUrlForDisplay(secondary.OriginalUrlString);
-                                    <span class="overview-endpoint-address overview-muted overview-mono" data-tooltip="@maskedSecondaryUrl" tabindex="0">@maskedSecondaryUrl</span>
+                                    <span class="overview-endpoint-address overview-mono" data-tooltip="@addressTooltip" tabindex="0">@maskedUrl</span>
                                 }
                             </div>
                             @if (url.IsInternal)

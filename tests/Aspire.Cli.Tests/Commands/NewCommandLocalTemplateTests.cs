@@ -1447,8 +1447,10 @@ public partial class NewCommandLocalTemplateTests(ITestOutputHelper outputHelper
             Directory.CreateDirectory(Path.Combine(destination.FullName, ".git"));
             await CreateTemplateAsync(workspace, Path.GetRelativePath(workspace.Path, Path.Combine(destination.FullName, "template")));
         });
+        var source = new TemplateSource("template", "-repository", pinnedCommit ? TestGitCommandRunner.DefaultCommitSha : "main");
+        var fetchSource = $"-repository ({SharedCommandStrings.SourceGitPath}: template, {SharedCommandStrings.SourceRef}: {source.RepositoryRef})";
         var fetchMessage = $"[blue]{string.Format(interactive ? SharedCommandStrings.FetchingSourceWithAuthentication : SharedCommandStrings.FetchingSource,
-            SharedCommandStrings.GitFetchTemplates)}[/]";
+            SharedCommandStrings.GitFetchTemplates, fetchSource)}[/]";
         interaction.DisplayMessageCallback = (emoji, message, consoleOverride) =>
         {
             if (message == fetchMessage)
@@ -1466,7 +1468,6 @@ public partial class NewCommandLocalTemplateTests(ITestOutputHelper outputHelper
         services.AddSingleton<IGitCommandRunner>(gitCommands);
         using var provider = services.BuildServiceProvider();
         var templates = provider.GetRequiredService<ITemplateProvider>();
-        var source = new TemplateSource("template", "-repository", pinnedCommit ? TestGitCommandRunner.DefaultCommitSha : "main");
 
         var first = Assert.Single(await templates.GetTemplatesAsync(source));
         var cached = Assert.Single(await templates.GetTemplatesAsync(source));
@@ -1745,7 +1746,10 @@ public partial class NewCommandLocalTemplateTests(ITestOutputHelper outputHelper
                 arguments.AddRange(["--template-repository-ref", reference]);
             }
 
-            var exitCode = await provider.GetRequiredService<RootCommand>().Parse(arguments.ToArray()).InvokeAsync().DefaultTimeout();
+            // Fresh checkouts run real git init/fetch/checkout, which take 23-27s on loaded Windows
+            // runners. The product bounds each Git phase at two minutes, so a 30s hang guard is too tight.
+            var exitCode = await provider.GetRequiredService<RootCommand>().Parse(arguments.ToArray()).InvokeAsync()
+                .DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
             outputHelper.WriteLine($"[{DateTimeOffset.UtcNow:O}] Generation '{label}' returned {exitCode} after {stopwatch.Elapsed}.");
 
             Assert.Equal(CliExitCodes.Success, exitCode);

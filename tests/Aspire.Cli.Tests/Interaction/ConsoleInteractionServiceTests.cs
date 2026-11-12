@@ -102,7 +102,7 @@ public class ConsoleInteractionServiceTests(ITestOutputHelper outputHelper)
             packages.Add(("postgres", new() { Id = "Aspire.Hosting.Postgres", Version = "2.0.0", Source = "https://example.test/other" }, implicitChannel));
         }
 
-        var selected = await new AddCommandPrompter(interaction).PromptForIntegrationAsync(packages, CancellationToken.None);
+        var selected = await new AddCommandPrompter(interaction, CreateExecutionContext()).PromptForIntegrationAsync(packages, CancellationToken.None);
 
         Assert.Equal("Aspire.Hosting.Redis", selected.Package.Id);
         await Verify(output.ToString(), "txt").UseParameters(customSource, multipleSources).ScrubLinesWithReplace(line => line.TrimEnd());
@@ -119,7 +119,6 @@ public class ConsoleInteractionServiceTests(ITestOutputHelper outputHelper)
         var console = CreateSelectionConsole(output, []);
         console.Profile.Width = width;
         var executionContext = CreateExecutionContext();
-        executionContext.TryMarkSourceTrustWarningDisplayed();
         var interaction = CreateInteractionService(console, executionContext);
         interaction.DisplayTemplateSources(
         [
@@ -129,10 +128,38 @@ public class ConsoleInteractionServiceTests(ITestOutputHelper outputHelper)
             ("third", new TemplateSource(".\\", "https://example.test/third.git", null)),
             ("local", new TemplateSource("C:\\Templates\\Company [local]", null, null))
         ], executionContext);
-        interaction.DisplayGitFetchNotice(SharedCommandStrings.GitFetchTemplates, mayPromptForAuthentication: false);
+        interaction.DisplayTemplateGitFetchNotice("https://example.test/templates.git",
+            nonDefaultGitValues ? "templates/[team]" : ".",
+            nonDefaultGitValues ? "release/[team]" : null, mayPromptForAuthentication: false);
 
         Assert.False(executionContext.TryMarkSourceTrustWarningDisplayed());
         await Verify(output.ToString(), "txt").UseParameters(nonDefaultGitValues, width).ScrubLinesWithReplace(line => line.TrimEnd());
+    }
+
+    [Theory]
+    [InlineData(".", null, "https://example.test/templates.git")]
+    [InlineData("./", "HEAD", "https://example.test/templates.git")]
+    [InlineData(".\\", null, "https://example.test/templates.git")]
+    [InlineData("templates/[team]", "release/[team]", "https://example.test/templates.git")]
+    [InlineData(".", null, "https://user:password@example.test/templates.git?token=secret#fragment")]
+    public void TemplateGitFetchNotice_IdentifiesSourceWithoutExposingUrlCredentials(string path, string? reference, string repository)
+    {
+        var interaction = new TestInteractionService();
+        const string displayedRepository = "https://example.test/templates.git";
+        var source = repository == displayedRepository ? displayedRepository : "https://***@example.test/templates.git";
+        if (path == "templates/[team]")
+        {
+            source += $" ({SharedCommandStrings.SourceGitPath}: {path}, {SharedCommandStrings.SourceRef}: {reference})";
+        }
+
+        interaction.DisplayTemplateGitFetchNotice(repository, path, reference, mayPromptForAuthentication: true);
+
+        var message = Assert.Single(interaction.DisplayedMessages);
+        var expected = string.Format(System.Globalization.CultureInfo.CurrentCulture, SharedCommandStrings.FetchingSourceWithAuthentication,
+            SharedCommandStrings.GitFetchTemplates, source);
+        Assert.Equal($"[blue]{expected.EscapeMarkup()}[/]", message.Message);
+        Assert.Equal(KnownEmojis.InboxTray, message.Emoji);
+        Assert.Equal(ConsoleOutput.Error, message.ConsoleOverride);
     }
 
     [Fact]
@@ -187,7 +214,7 @@ public class ConsoleInteractionServiceTests(ITestOutputHelper outputHelper)
             ("redis", new() { Id = "Aspire.Hosting.Redis", Version = "2.0.0", Source = source }, dailyChannel)
         ];
 
-        var selected = await new AddCommandPrompter(interaction).PromptForIntegrationVersionAsync(packages, "daily", CancellationToken.None);
+        var selected = await new AddCommandPrompter(interaction, CreateExecutionContext()).PromptForIntegrationVersionAsync(packages, "daily", CancellationToken.None);
 
         Assert.Same(dailyChannel, selected.Channel);
         Assert.Equal("2.0.0", selected.Package.Version);
@@ -1554,13 +1581,33 @@ public class ConsoleInteractionServiceTests(ITestOutputHelper outputHelper)
         var interactionService = CreateInteractionService(console);
 
         var executionContext = CreateExecutionContext();
-        interactionService.DisplaySourceTrustWarning(executionContext);
-        interactionService.DisplaySourceTrustWarning(executionContext);
+        Assert.True(interactionService.DisplaySourceTrustWarning(executionContext));
+        Assert.False(interactionService.DisplaySourceTrustWarning(executionContext));
 
         var expected = enableColor
             ? $"\u001b[91m\U0001F6A8\u001b[0m \u001b[93m{SharedCommandStrings.SourceTrustWarning}\u001b[0m"
             : $"\U0001F6A8 {SharedCommandStrings.SourceTrustWarning}";
         Assert.Equal(expected, output.ToString().TrimEnd());
+    }
+
+    [Fact]
+    public void DisplayTemplateSources_DoesNotRepeatSourceTrustWarning()
+    {
+        var interaction = new TestInteractionService();
+        var executionContext = CreateExecutionContext();
+
+        interaction.DisplaySourceTrustWarning(executionContext);
+        interaction.DisplayTemplateSources(
+            [("first", new TemplateSource(".", "https://example.test/first.git", null))], executionContext);
+        interaction.DisplayTemplateSources(
+            [("second", new TemplateSource(".", "https://example.test/second.git", null))], executionContext);
+        interaction.DisplaySourceTrustWarning(executionContext);
+
+        Assert.Equal(
+            [$"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]",
+                NewCommandStrings.TemplateSourceExplanation, NewCommandStrings.TemplateSourceExplanation],
+            interaction.DisplayedMessages.Select(message => message.Message));
+        Assert.Equal(2, interaction.DisplayedRenderables.Count);
     }
 
     [Fact]

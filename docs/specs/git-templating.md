@@ -274,16 +274,23 @@ GIT_NAMESPACE
 GIT_SHALLOW_FILE
 ```
 
-Authentication settings are not removed by this filter. Arguments, stdout, and
-raw stderr diagnostics are suppressed from process logging because they can
-contain private repository information or credentials. The runner classifies
-failures and exposes localized messages through `GitFailure`; callers translate
-them into command errors.
+Authentication settings are not removed by this filter. All Git stdout and stderr
+are recorded in the CLI log at debug level as they are read, including partial
+output before cancellation. Arguments and exception details remain excluded from
+process diagnostics. Git output can contain private repository information,
+configuration-file contents, or credentials emitted by Git or its helpers; review
+logs before sharing them. Output is not copied into exception messages or telemetry.
+The runner classifies failures and exposes localized messages through `GitFailure`;
+callers translate them into command errors.
 
-The template factory owns separate two-minute deadlines for ref resolution and
-checkout acquisition. Initialization, fetching, checkout, and verification share
-one deadline within a checkout operation. Caller cancellation remains cancellation;
-expiry of the factory's Git deadline becomes a classified timeout.
+The template factory uses the same five-minute Git timeout as configuration
+sources, with separate deadlines for ref resolution and checkout acquisition.
+The overall budget allows time for browser sign-in, MFA, and other
+credential-helper interaction because Git does not expose a portable signal
+distinguishing authentication waits from other work. Initialization, fetching,
+checkout, and verification share one deadline within a checkout operation.
+Caller cancellation remains cancellation; expiry of the factory's Git deadline
+becomes a classified timeout.
 
 ## Template parameters and generation
 

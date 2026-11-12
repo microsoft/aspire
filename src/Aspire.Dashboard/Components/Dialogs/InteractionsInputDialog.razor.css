@@ -6,13 +6,13 @@
     display: grid !important;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     align-items: stretch !important;
-    gap: 12px;
+    gap: var(--aspire-space-3);
 }
 
 .interaction-input-dialog .interaction-input {
     padding: 14px;
     border: 1px solid var(--colorNeutralStroke2);
-    border-radius: 10px;
+    border-radius: var(--aspire-radius-medium);
     background: var(--colorNeutralBackground2);
 }
 
@@ -50,7 +50,7 @@
 .interaction-input-dialog .interaction-input ::deep .uploaded-files-list {
     display: flex;
     flex-direction: column;
-    row-gap: 4px;
+    row-gap: var(--aspire-space-1);
 }
 
 .interaction-input-dialog .interaction-input ::deep .input-description {
@@ -60,7 +60,7 @@
 .interaction-input-dialog .interaction-input ::deep .input-description,
 .interaction-input-dialog .interaction-input ::deep .input-description p {
     color: var(--foreground-settings-text);
-    font-size: var(--fontSizeBase200);
+    font-size: var(--aspire-font-size-secondary);
 }
 
 .interaction-input-dialog .interaction-input ::deep .input-description p,

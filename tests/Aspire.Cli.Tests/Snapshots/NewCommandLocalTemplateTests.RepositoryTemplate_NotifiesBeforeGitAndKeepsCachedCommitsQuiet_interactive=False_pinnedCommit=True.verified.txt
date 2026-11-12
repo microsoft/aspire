@@ -1,2 +1,2 @@
 ﻿[yellow]Only use sources you trust. Content from these sources can run code on your machine.[/]
-[blue]Fetching templates using Git...[/]
+[blue]Fetching templates from -repository (Git path: template, Git ref: 0123456789abcdef0123456789abcdef01234567) using Git...[/]

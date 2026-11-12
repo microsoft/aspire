@@ -367,7 +367,7 @@ internal sealed class NewCommand : BaseCommand
             var packageSource = parseResult.GetValue(s_sourceOption);
             if (packageSource is not null && !PackageSourceIdentity.Comparer.Equals(packageSource, PackageSources.NuGetOrg))
             {
-                InteractionService.DisplaySourceTrustWarning();
+                InteractionService.DisplaySourceTrustWarning(ExecutionContext);
             }
             return (await _prompter.PromptForTemplateAsync(templatesForPrompt, cancellationToken), false);
         }

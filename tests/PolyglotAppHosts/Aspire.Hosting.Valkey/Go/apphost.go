@@ -14,7 +14,7 @@ func main() {
 
 	password := builder.AddParameter("valkey-password", &aspire.AddParameterOptions{Secret: aspire.BoolPtr(true)})
 	valkey := builder.AddValkey("cache", &aspire.AddValkeyOptions{
-		Port:     aspire.Float64Ptr(6380),
+		Port:     aspire.IntPtr(6380),
 		Password: &password,
 	})
 
@@ -22,7 +22,7 @@ func main() {
 	valkey.WithDataBindMount(".", &aspire.WithDataBindMountOptions{IsReadOnly: aspire.BoolPtr(true)})
 	valkey.WithPersistence(&aspire.WithPersistenceOptions{
 		Interval:             aspire.Float64Ptr(100000000),
-		KeysChangedThreshold: aspire.Float64Ptr(1),
+		KeysChangedThreshold: aspire.Int64Ptr(1),
 	})
 	if err = valkey.Err(); err != nil {
 		log.Fatal(aspire.FormatError(err))

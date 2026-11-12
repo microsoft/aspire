@@ -39,15 +39,21 @@ internal static partial class DotnetProjectBuildCoordinator
         IDistributedApplicationBuilder builder,
         DotnetProjectMetadata projectMetadata)
     {
-        if (!builder.ExecutionContext.IsRunMode || !ShouldCoordinateBuild(builder))
+        var coordinationMode = GetBuildCoordinationMode(builder);
+        // Coordinated builds are only needed in run mode. The build-only IDE compatibility path applies only to
+        // project files; file-based apps retain their existing launch behavior.
+        if (!builder.ExecutionContext.IsRunMode ||
+            (coordinationMode == BuildCoordinationMode.BuildOnly && !IsProjectFile(projectMetadata.ProjectPath)))
         {
             return null;
         }
 
-        var state = s_states.GetValue(builder, static builder => new CoordinatorState(builder));
+        var state = s_states.GetValue(
+            builder,
+            builder => new CoordinatorState(builder, coordinationMode));
         if (IsSupportedPath(projectMetadata.ProjectPath))
         {
-            projectMetadata.SuppressBuild = true;
+            projectMetadata.SuppressBuild = state.SuppressIdeBuild;
             if (IsProjectFile(projectMetadata.ProjectPath))
             {
                 projectMetadata.SetProjectPath(state.AddProject(projectMetadata.ProjectPath, projectMetadata.BuildConfiguration));
@@ -386,40 +392,51 @@ internal static partial class DotnetProjectBuildCoordinator
     private static bool IsSupportedPath(string path) =>
         IsProjectFile(path) || path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase);
 
-    private static bool ShouldCoordinateBuild(IDistributedApplicationBuilder builder)
+    private static BuildCoordinationMode GetBuildCoordinationMode(IDistributedApplicationBuilder builder)
     {
         if (string.IsNullOrEmpty(builder.Configuration[DebugSessionPortConfigurationKey]))
         {
-            return true;
+            return BuildCoordinationMode.BuildAndSuppress;
         }
 
-        // Visual Studio does not send DEBUG_SESSION_INFO. It builds and launches loaded projects itself.
+        // A launcher without a valid capability payload cannot opt into the external-build contract. Visual Studio's
+        // F5 build covers the startup project's MSBuild dependencies, but path-based project resources are
+        // intentionally not ProjectReference items. Build those projects before sending the unchanged legacy
+        // "project" request so Visual Studio has output to launch, while keeping IDE build suppression disabled.
+        // See https://github.com/microsoft/aspire/issues/21865.
         if (!DebugSessionInfoParser.TryGetSupportedLaunchConfigurations(
                 builder.Configuration[DebugSessionInfoConfigurationKey],
                 out var supportedLaunchConfigurations)
             || supportedLaunchConfigurations is null)
         {
-            return false;
+            return BuildCoordinationMode.BuildOnly;
         }
 
         // The IDE honors coordinated-build values and build suppression.
         if (supportedLaunchConfigurations.Contains(KnownLaunchConfigurationTypes.ProjectWithExternalBuild))
         {
-            return true;
+            return BuildCoordinationMode.BuildAndSuppress;
         }
 
-        // An IDE that advertises an explicit capability list without "project" (for example VS Code without the
-        // C# extension) cannot launch project resources, so DCP runs them as processes exactly as it does outside
-        // an IDE. Without the coordinated build each process runs its own implicit `dotnet run` restore and build,
-        // and resources that share a project build it concurrently: one build can fail on files the other holds
-        // open in obj/ (for example rjsmrazor.dswa.cache.json), and that resource exits right after starting.
-        // Only an IDE that advertises "project" without the external-build capability owns the build itself.
-        return !supportedLaunchConfigurations.Contains(KnownLaunchConfigurationTypes.Project);
+        // The ordinary "project" capability says that an IDE can launch a project, not that it builds the project
+        // before launch. Prebuild while preserving the legacy launch payload and leaving IDE build suppression
+        // disabled. An IDE without "project" support runs the resource as a process and needs the fully coordinated
+        // external-build path, including suppression of the implicit `dotnet run` build.
+        return supportedLaunchConfigurations.Contains(KnownLaunchConfigurationTypes.Project)
+            ? BuildCoordinationMode.BuildOnly
+            : BuildCoordinationMode.BuildAndSuppress;
+    }
+
+    internal enum BuildCoordinationMode
+    {
+        BuildOnly,
+        BuildAndSuppress
     }
 
     internal sealed class CoordinatorState : IDisposable
     {
         private readonly IDistributedApplicationBuilder _builder;
+        private readonly BuildCoordinationMode _coordinationMode;
         private readonly object _materializationLock = new();
         private readonly List<ResourceRegistration> _registrations = [];
         private readonly List<DotnetProjectBuildResource> _ownedBuildResources = [];
@@ -431,9 +448,10 @@ internal static partial class DotnetProjectBuildCoordinator
         private bool _disposed;
         private TaskCompletionSource _materializationCompletion = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        public CoordinatorState(IDistributedApplicationBuilder builder)
+        internal CoordinatorState(IDistributedApplicationBuilder builder, BuildCoordinationMode coordinationMode)
         {
             _builder = builder;
+            _coordinationMode = coordinationMode;
             builder.Services.AddSingleton(_ => this);
             builder.Pipeline.WithFinalAction(
                 WellKnownPipelineSteps.BeforeStart,
@@ -441,6 +459,8 @@ internal static partial class DotnetProjectBuildCoordinator
                     .GetRequiredService<CoordinatorState>()
                     .MaterializeBuildPlan(stepContext.Model, stepContext.Services));
         }
+
+        public bool SuppressIdeBuild => _coordinationMode == BuildCoordinationMode.BuildAndSuppress;
 
         public IReadOnlyList<DotnetProjectResource> Resources =>
             _registrations.Select(registration => registration.Resource).ToArray();
@@ -649,6 +669,18 @@ internal static partial class DotnetProjectBuildCoordinator
                 .Where(entry => File.Exists(entry.Metadata.ProjectPath))
                 .ToArray();
 
+            if (_coordinationMode == BuildCoordinationMode.BuildOnly &&
+                buildEntries.FirstOrDefault(entry => GetBuildEnvironmentCallbacks(entry).Any()) is { } customizedEntry)
+            {
+                throw new DistributedApplicationException(
+                    $"The .NET project resource '{customizedEntry.Registration.Resource.Name}' uses " +
+                    $"WithBuildEnvironment, but Aspire can use only the legacy " +
+                    $"'{KnownLaunchConfigurationTypes.Project}' launch contract for the active IDE session and cannot " +
+                    $"reliably launch output produced with project-specific build settings. Use an IDE that advertises " +
+                    $"'{KnownLaunchConfigurationTypes.ProjectWithExternalBuild}', run the application outside this IDE, " +
+                    "or remove the build customization.");
+            }
+
             if (buildEntries.Length == 0)
             {
                 foreach (var missingEntry in missingBuildEntries)
@@ -771,10 +803,13 @@ internal static partial class DotnetProjectBuildCoordinator
                             rollbackActions.Push(BeginBuildAttemptOnResourceStart(_builder, rebuilder));
                         }
 
-                        var originalBuildWorkingDirectory = entry.Metadata.BuildWorkingDirectory;
-                        entry.Metadata.SetBuildWorkingDirectory(step.WorkingDirectory);
-                        rollbackActions.Push(() =>
-                            entry.Metadata.SetBuildWorkingDirectory(originalBuildWorkingDirectory));
+                        if (SuppressIdeBuild)
+                        {
+                            var originalBuildWorkingDirectory = entry.Metadata.BuildWorkingDirectory;
+                            entry.Metadata.SetBuildWorkingDirectory(step.WorkingDirectory);
+                            rollbackActions.Push(() =>
+                                entry.Metadata.SetBuildWorkingDirectory(originalBuildWorkingDirectory));
+                        }
                     }
 
                     buildResource.RegisterForShutdown(applicationLifetime);
@@ -803,6 +838,25 @@ internal static partial class DotnetProjectBuildCoordinator
                             registration.FinalBuildResource = originalFinalBuildResource);
 
                         if (AddBuildDependency(_builder, resource, finalBuildResource) is { } rollback)
+                        {
+                            rollbackActions.Push(rollback);
+                        }
+                    }
+                }
+
+                if (_coordinationMode == BuildCoordinationMode.BuildOnly)
+                {
+                    foreach (var fileApp in model.Resources.OfType<DotnetProjectResource>())
+                    {
+                        var metadata = fileApp.Annotations.OfType<IProjectMetadata>().SingleOrDefault();
+                        if (metadata is not { IsFileBasedApp: true } || !File.Exists(metadata.ProjectPath))
+                        {
+                            continue;
+                        }
+
+                        // Legacy IDE sessions keep file apps on their existing launch path. Order that implicit build
+                        // after the coordinated project build because #:project references can share bin/obj outputs.
+                        if (AddBuildDependency(_builder, fileApp, finalBuildResource) is { } rollback)
                         {
                             rollbackActions.Push(rollback);
                         }
@@ -1107,8 +1161,9 @@ internal static partial class DotnetProjectBuildCoordinator
         /// Owns the single evaluation of a project's build-only environment callbacks.
         /// </summary>
         /// <remarks>
-        /// The coordinated build resource, the project rebuilder, and the IDE launch configuration must all see the
-        /// same build variables. Letting each consumer evaluate the callbacks would run them several times and allow
+        /// The coordinated build resource and project rebuilder must see the same build variables. External-build IDE
+        /// launch configurations consume the same snapshot; legacy IDE launch configurations retain their unchanged
+        /// payload. Letting each applicable consumer evaluate the callbacks would run them several times and allow
         /// whichever consumer evaluates first to decide the build inputs.
         /// </remarks>
         private sealed class SharedBuildEnvironment : IDisposable

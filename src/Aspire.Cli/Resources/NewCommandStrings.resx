@@ -121,17 +121,11 @@
   <data name="TemplateRepositoryOptionDescription" xml:space="preserve">
     <value>Clone a Git repository containing templates; --template-path is relative to its root</value>
   </data>
-  <data name="CloningTemplateRepository" xml:space="preserve">
-    <value>Cloning template repository...</value>
-  </data>
   <data name="TemplateRepositoryRefOptionDescription" xml:space="preserve">
     <value>Template repository branch, tag, or full commit SHA (requires --template-repository; defaults to the remote HEAD)</value>
   </data>
   <data name="TemplateRepositoryRefRequiresRepository" xml:space="preserve">
     <value>--template-repository-ref requires --template-repository and a non-empty ref value.</value>
-  </data>
-  <data name="ResolvingTemplateRepository" xml:space="preserve">
-    <value>Resolving template repository ref...</value>
   </data>
   <data name="TemplateRepositoryRefNotFound" xml:space="preserve">
     <value>Could not resolve template repository ref '{0}' to a commit SHA. Specify a branch, tag, or full commit SHA.</value>

@@ -47,7 +47,7 @@ func main() {
 	container := builder.AddContainer("api", "mcr.microsoft.com/dotnet/samples:aspnetapp").
 		WithHttpEndpoint(&aspire.WithHttpEndpointOptions{
 			Name:       aspire.StringPtr("http"),
-			TargetPort: aspire.Float64Ptr(8080),
+			TargetPort: aspire.IntPtr(8080),
 		})
 	if container.Err() != nil {
 		log.Fatal(aspire.FormatError(container.Err()))
@@ -56,7 +56,7 @@ func main() {
 	executable := builder.AddExecutable("worker", "dotnet", ".", []string{"--info"}).
 		WithHttpEndpoint(&aspire.WithHttpEndpointOptions{
 			Name:       aspire.StringPtr("http"),
-			TargetPort: aspire.Float64Ptr(8081),
+			TargetPort: aspire.IntPtr(8081),
 		})
 	if executable.Err() != nil {
 		log.Fatal(aspire.FormatError(executable.Err()))
@@ -68,7 +68,6 @@ func main() {
 	if fileBicep.Err() != nil {
 		log.Fatal(aspire.FormatError(fileBicep.Err()))
 	}
-	_ = fileBicep.PublishAsConnectionString()
 	_ = fileBicep.ClearDefaultRoleAssignments()
 	_, _ = fileBicep.GetBicepIdentifier()
 	_, _ = fileBicep.IsExisting()
@@ -97,7 +96,6 @@ output inlineUrl string = 'https://inline.example.com'
 	if inlineBicep.Err() != nil {
 		log.Fatal(aspire.FormatError(inlineBicep.Err()))
 	}
-	_ = inlineBicep.PublishAsConnectionString()
 	_ = inlineBicep.ClearDefaultRoleAssignments()
 	_, _ = inlineBicep.GetBicepIdentifier()
 	_, _ = inlineBicep.IsExisting()
@@ -141,7 +139,6 @@ output inlineUrl string = 'https://inline.example.com'
 	infra.WithParameter("fromOutput", &aspire.WithParameterOptions{Value: infrastructureOutput})
 	infra.WithParameter("fromExpression", &aspire.WithParameterOptions{Value: aspire.RefExpr("https://{0}", endpoint)})
 	infra.WithParameter("fromEndpoint", &aspire.WithParameterOptions{Value: endpoint})
-	_ = infra.PublishAsConnectionString()
 	_ = infra.ClearDefaultRoleAssignments()
 	_, _ = infra.GetBicepIdentifier()
 	_, _ = infra.IsExisting()
@@ -180,7 +177,6 @@ output inlineUrl string = 'https://inline.example.com'
 	identity.WithParameter("identityFromOutput", &aspire.WithParameterOptions{Value: infrastructureOutput})
 	identity.WithParameter("identityFromExpression", &aspire.WithParameterOptions{Value: aspire.RefExpr("{0}", location)})
 	identity.WithParameter("identityFromEndpoint", &aspire.WithParameterOptions{Value: endpoint})
-	_ = identity.PublishAsConnectionString()
 	_ = identity.ClearDefaultRoleAssignments()
 	_, _ = identity.IsExisting()
 	_ = identity.RunAsExisting("identity-existing", &aspire.RunAsExistingOptions{ResourceGroup: "rg-identity"})

@@ -16,4 +16,5 @@
          [1mPath[0m:  C:\Templates\Company [local]
 
 🚨 Only use sources you trust. Content from these sources can run code on your machine.
-📥 Fetching templates using Git...
+📥 Fetching templates from https://example.test/templates.git (Git path: templates/[team], Git ref: release/[team])
+   using Git...

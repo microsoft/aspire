@@ -28,6 +28,7 @@ import * as workspaceModule from '../utils/workspace';
 import { AspireAppHostTreeProvider } from '../views/AspireAppHostTreeProvider';
 import { EndpointUrlItem, ResourceItem } from '../views/treeItems/resourceItems';
 
+import { withScopedFakeTimers } from './helpers/scopedFakeTimers';
 import { createMockExtension, createWorkspaceFolder, removeDirectorySafely } from './testHelpers';
 
 function createLaunchService(): AppHostLaunchService {
@@ -59,8 +60,7 @@ suite('E2E state file bridge', () => {
     });
 
     for (const debugType of ['coreclr', 'go'] as const) {
-        test(`waits for ${debugType} breakpoint removal and target progress before detaching`, async () => {
-            const clock = sandbox.useFakeTimers({ shouldClearNativeTimers: true });
+        test(`waits for ${debugType} breakpoint removal and target progress before detaching`, () => withScopedFakeTimers(async clock => {
             const sourcePath = path.join(runRoot, 'source.txt');
             const appHostPath = path.join(runRoot, 'AppHost.csproj');
             fs.writeFileSync(sourcePath, 'breakpoint source');
@@ -96,6 +96,7 @@ suite('E2E state file bridge', () => {
                 }, 10);
             });
             sandbox.stub(vscode.debug, 'addBreakpoints');
+            const executeCommand = sandbox.stub(vscode.commands, 'executeCommand').resolves(undefined);
             const session = createDebugSession('attach-proof', debugType, 'Attached worker', { request: 'attach' });
             let continueAccepted = false;
             let targetResponded = false;
@@ -114,6 +115,10 @@ suite('E2E state file bridge', () => {
                 assert.strictEqual(stopped, session);
                 assert.strictEqual(removeBreakpoints.called, true);
                 assert.strictEqual(targetResponded, true, 'An accepted continue request is not proof of target progress.');
+                assert.deepStrictEqual(
+                    executeCommand.getCalls().map(call => call.args),
+                    [['workbench.view.extension.aspire-panel']],
+                    'The Aspire view must be shown before detaching.');
                 detached = true;
                 terminateListener?.(session);
             });
@@ -183,7 +188,7 @@ suite('E2E state file bridge', () => {
             assert.strictEqual(proof.sessionTerminated, true);
             assert.strictEqual(stopDebugging.callCount, 1);
             assert.strictEqual(customRequest.withArgs('continue').callCount, 1);
-        });
+        }));
     }
 
     for (const route of [
@@ -529,8 +534,7 @@ suite('E2E state file bridge', () => {
         assert.strictEqual(isBrowserDebugSessionType('coreclr'), false);
     });
 
-    test('waits for the browser command to be enabled before starting the managed proof', async () => {
-        const clock = sandbox.useFakeTimers({ shouldClearNativeTimers: true });
+    test('waits for the browser command to be enabled before starting the managed proof', () => withScopedFakeTimers(async clock => {
         const harness = createBlazorProofHarness(sandbox);
         harness.setBrowserCommandState('Disabled');
         const pending = dispatchControlCommand(
@@ -542,10 +546,9 @@ suite('E2E state file bridge', () => {
         await clock.tickAsync(500);
         await pending;
         assert.deepStrictEqual(harness.executedResourceCommands, ['debug-in-browser', 'stop-browser-debug']);
-    });
+    }));
 
-    test('reports an unavailable browser command instead of waiting for a nonexistent session', async () => {
-        const clock = sandbox.useFakeTimers({ shouldClearNativeTimers: true });
+    test('reports an unavailable browser command instead of waiting for a nonexistent session', () => withScopedFakeTimers(async clock => {
         const harness = createBlazorProofHarness(sandbox);
         harness.setBrowserCommandState('Disabled');
         const pending = captureError(() => dispatchControlCommand(
@@ -554,7 +557,7 @@ suite('E2E state file bridge', () => {
 
         assert.match((await pending).message, /enabled 'debug-in-browser' command/);
         assert.deepStrictEqual(harness.executedResourceCommands, []);
-    });
+    }));
 
     test('isolates consecutive Blazor proofs from a profile lock left by the previous browser', async () => {
         const profiles: string[] = [];
@@ -805,26 +808,58 @@ suite('E2E state file bridge', () => {
         });
     }
 
-    test('accepts target disconnection during Page.close only after all proof sessions terminate', async () => {
+    // js-debug v1.117.0's CDP proxy forwards Page.close with sendOrDie. When the page session ends
+    // first, it replies with this error and keeps the client socket open.
+    const targetClosedReply = '{"id":1,"error":{"code":0,"message":"Connection is closed"}}';
+
+    for (const disconnection of ['socket close', 'target-closed reply'] as const) {
+        test(`accepts target disconnection (${disconnection}) during Page.close only after all proof sessions terminate`, async () => {
+            const harness = createBlazorProofHarness(sandbox, { closeMode: 'natural' });
+            harness.cdpSocket.send.callsFake(() => {
+                harness.terminateAllSessions();
+                if (disconnection === 'socket close') {
+                    harness.cdpSocket.readyState = WebSocket.CLOSED;
+                    harness.cdpSocket.emit('close');
+                }
+                else {
+                    harness.cdpSocket.emit('message', Buffer.from(targetClosedReply));
+                }
+            });
+
+            const proof = await dispatchControlCommand(
+                harness.command, harness.repository, harness.launchService, harness.provider, harness.terminalProvider) as Record<string, any>;
+
+            assert.strictEqual(proof.commandStateAfterStop.state, 'Enabled');
+            assert.strictEqual(harness.stopDebugging.called, false);
+            assert.strictEqual(harness.cdpSocket.terminate.called, disconnection === 'target-closed reply');
+            assert.deepStrictEqual(harness.cdpSocket.eventNames(), []);
+        });
+    }
+
+    test('rejects a target-closed Page.close reply while a proof session remains active', async () => {
+        const clock = sandbox.useFakeTimers({ shouldClearNativeTimers: true });
         const harness = createBlazorProofHarness(sandbox, { closeMode: 'natural' });
         harness.cdpSocket.send.callsFake(() => {
-            harness.terminateAllSessions();
-            harness.cdpSocket.readyState = WebSocket.CLOSED;
-            harness.cdpSocket.emit('close');
+            harness.terminateSession('root');
+            harness.terminateSession('browser');
+            harness.setBrowserCommandState('Enabled');
+            harness.cdpSocket.emit('message', Buffer.from(targetClosedReply));
         });
 
-        const proof = await dispatchControlCommand(
-            harness.command, harness.repository, harness.launchService, harness.provider, harness.terminalProvider) as Record<string, any>;
+        const failure = captureError(() => dispatchControlCommand(
+            harness.command, harness.repository, harness.launchService, harness.provider, harness.terminalProvider));
+        await clock.tickAsync(1100);
+        const error = await failure;
+        const diagnostics = JSON.parse(error.message.split('\nDiagnostics:\n')[1]);
 
-        assert.strictEqual(proof.commandStateAfterStop.state, 'Enabled');
-        assert.strictEqual(harness.stopDebugging.called, false);
-        assert.strictEqual(harness.cdpSocket.terminate.called, false);
+        assert.match(error.message, /'debug-in-browser' to be enabled after natural browser close/);
+        assert.deepStrictEqual(diagnostics.activeSessionIds, ['managed']);
+        assert.strictEqual(harness.stopDebugging.callCount, 1);
         assert.deepStrictEqual(harness.cdpSocket.eventNames(), []);
     });
 
     for (const remainingSession of ['root', 'browser', 'managed']) {
-        test(`rejects acknowledged natural close while the ${remainingSession} session remains active`, async () => {
-            const clock = sandbox.useFakeTimers({ shouldClearNativeTimers: true });
+        test(`rejects acknowledged natural close while the ${remainingSession} session remains active`, () => withScopedFakeTimers(async clock => {
             const harness = createBlazorProofHarness(sandbox, { closeMode: 'natural' });
             harness.cdpSocket.send.callsFake(() => {
                 for (const sessionId of ['root', 'browser', 'managed']) {
@@ -851,11 +886,10 @@ suite('E2E state file bridge', () => {
             assert.strictEqual(harness.stopDebugging.firstCall.args[0]?.id, remainingSession);
             assert.strictEqual(harness.cdpSocket.terminate.calledOnce, true);
             assert.deepStrictEqual(harness.cdpSocket.eventNames(), []);
-        });
+        }));
     }
 
-    test('requires command reset even after every proof session terminates naturally', async () => {
-        const clock = sandbox.useFakeTimers({ shouldClearNativeTimers: true });
+    test('requires command reset even after every proof session terminates naturally', () => withScopedFakeTimers(async clock => {
         const harness = createBlazorProofHarness(sandbox, { closeMode: 'natural' });
         harness.cdpSocket.send.callsFake(() => {
             harness.terminateAllSessions();
@@ -873,7 +907,7 @@ suite('E2E state file bridge', () => {
         assert.strictEqual(diagnostics.commandStateAfterClose.state, 'Disabled');
         assert.strictEqual(harness.stopDebugging.called, false);
         assert.deepStrictEqual(harness.cdpSocket.eventNames(), []);
-    });
+    }));
 
     for (const failureKind of ['cdp', 'transport', 'send', 'malformed'] as const) {
         test(`cleans up natural-close transport and sessions after a ${failureKind} failure`, async () => {
@@ -926,8 +960,7 @@ suite('E2E state file bridge', () => {
     });
 
     for (const phase of ['connection', 'response'] as const) {
-        test(`bounds the natural-close ${phase} and releases its socket on timeout`, async () => {
-            const clock = sandbox.useFakeTimers({ shouldClearNativeTimers: true });
+        test(`bounds the natural-close ${phase} and releases its socket on timeout`, () => withScopedFakeTimers(async clock => {
             const harness = createBlazorProofHarness(sandbox, { closeMode: 'natural' });
             if (phase === 'connection') {
                 harness.createCdpSocket.callsFake(() => harness.cdpSocket as unknown as WebSocket);
@@ -950,11 +983,42 @@ suite('E2E state file bridge', () => {
             assert.deepStrictEqual(harness.cdpSocket.eventNames(), []);
             assert.strictEqual(harness.stopDebugging.callCount, 3);
             assert.strictEqual(clock.countTimers(), 0);
-        });
+        }));
     }
 
-    test('bounds the CDP proxy request without opening a socket after its deadline', async () => {
-        const clock = sandbox.useFakeTimers({ shouldClearNativeTimers: true });
+    test('does not count extension host timers scheduled while the natural-close connection times out', async () => {
+        // Bridge-level repro of the original flake in the natural-close connection test above; the helper's
+        // own isolation guarantees are covered in scopedFakeTimers.test.ts. The extension host runs other
+        // callbacks while clock.tickAsync() yields. On Windows CI one of them scheduled a timer that was
+        // still pending when the wait ended, and countTimers() reported it as the proof's own leaked timer.
+        // Model that with a host timer due after the ticked window.
+        let hostTimer: NodeJS.Timeout | undefined;
+        const hostCallbackRan = new Promise<void>(resolve => setImmediate(() => {
+            hostTimer = setTimeout(() => undefined, 5000);
+            resolve();
+        }));
+        try {
+            await withScopedFakeTimers(async clock => {
+                const harness = createBlazorProofHarness(sandbox, { closeMode: 'natural' });
+                harness.createCdpSocket.callsFake(() => harness.cdpSocket as unknown as WebSocket);
+
+                const failure = captureError(() => dispatchControlCommand(
+                    harness.command, harness.repository, harness.launchService, harness.provider, harness.terminalProvider));
+                await clock.tickAsync(1100);
+                const error = await failure;
+                await hostCallbackRan;
+
+                assert.match(error.message, /waiting for browser CDP connection/);
+                assert.strictEqual(harness.cdpSocket.terminate.calledOnce, true);
+                assert.strictEqual(clock.countTimers(), 0);
+            });
+        }
+        finally {
+            clearTimeout(hostTimer);
+        }
+    });
+
+    test('bounds the CDP proxy request without opening a socket after its deadline', () => withScopedFakeTimers(async clock => {
         const harness = createBlazorProofHarness(sandbox, { closeMode: 'natural' });
         let resolveProxy!: (proxy: { host: string; port: number; path: string }) => void;
         harness.executeCommand.withArgs('extension.js-debug.requestCDPProxy', 'browser').returns(
@@ -971,7 +1035,7 @@ suite('E2E state file bridge', () => {
         assert.strictEqual(harness.createCdpSocket.called, false);
         assert.strictEqual(harness.stopDebugging.callCount, 3);
         assert.strictEqual(clock.countTimers(), 0);
-    });
+    }));
 
     for (const proxy of [undefined, { host: '127.0.0.1', port: 9222 }, { host: '127.0.0.1', port: '9222', path: '/proxy' }]) {
         test(`rejects an incomplete CDP proxy endpoint ${JSON.stringify(proxy)}`, async () => {
@@ -1085,8 +1149,7 @@ suite('E2E state file bridge', () => {
         assert.strictEqual(harness.stopDebugging.callCount, 3);
     });
 
-    test('finishes failed proof cleanup when an adapter never acknowledges stop', async () => {
-        const clock = sandbox.useFakeTimers({ shouldClearNativeTimers: true });
+    test('finishes failed proof cleanup when an adapter never acknowledges stop', () => withScopedFakeTimers(async clock => {
         const harness = createBlazorProofHarness(sandbox, { breakpointResponseSuccess: false });
         harness.stopDebugging.callsFake(() => new Promise<void>(() => undefined));
         let failure: Error | undefined;
@@ -1106,7 +1169,7 @@ suite('E2E state file bridge', () => {
         assert.strictEqual(harness.terminateListenerDispose.calledOnce, true);
         assert.strictEqual(harness.trackerDispose.calledOnce, true);
         await completion;
-    });
+    }));
 
     test('requires a breakpoint stopped event with a stack frame at the requested source and line', async () => {
         const harness = createBlazorProofHarness(sandbox, { stackSourcePath: '/repo/client/Pages/Other.razor' });

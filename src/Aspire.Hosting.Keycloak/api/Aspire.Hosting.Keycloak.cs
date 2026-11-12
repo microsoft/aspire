@@ -25,10 +25,10 @@ namespace Aspire.Hosting
         [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.KeycloakResource> WithEnabledFeatures(this ApplicationModel.IResourceBuilder<ApplicationModel.KeycloakResource> builder, params string[] features) { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withOtlpExporter dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withOtlpExporter dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.KeycloakResource> WithOtlpExporter(this ApplicationModel.IResourceBuilder<ApplicationModel.KeycloakResource> builder, OtlpProtocol protocol) { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withOtlpExporter dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withOtlpExporter dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.KeycloakResource> WithOtlpExporter(this ApplicationModel.IResourceBuilder<ApplicationModel.KeycloakResource> builder) { throw null; }
 
         [System.Obsolete("Use WithRealmImport(string import) instead.")]

@@ -3,11 +3,12 @@
 
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
+using Aspire.Hosting.Pipelines;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 
-namespace Aspire.Hosting.Pipelines;
+namespace Aspire.Hosting;
 
 /// <summary>
 /// Extensions for detecting stale generated pipeline output.

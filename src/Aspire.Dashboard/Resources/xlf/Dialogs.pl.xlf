@@ -1083,11 +1083,6 @@ Więcej informacji o używaniu agentów AI z pulpitem nawigacyjnym, w tym o konf
         <target state="new">Compact</target>
         <note />
       </trans-unit>
-      <trans-unit id="SettingsDialogResourceListDensitySpacious">
-        <source>Spacious</source>
-        <target state="new">Spacious</target>
-        <note />
-      </trans-unit>
       <trans-unit id="SettingsDialogSystemTheme">
         <source>System</source>
         <target state="translated">System</target>

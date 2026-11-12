@@ -426,7 +426,7 @@ internal sealed class CliServiceCollectionTestOptions
         return new ConsoleEnvironment(outConsole, errorConsole, TextReader.Null);
     };
 
-    private static IAnsiConsole CreateAnsiConsole(TextWriter textWriter, bool ansi = true)
+    internal static IAnsiConsole CreateAnsiConsole(TextWriter textWriter, bool ansi = true)
     {
         var settings = new AnsiConsoleSettings()
         {
@@ -466,7 +466,7 @@ internal sealed class CliServiceCollectionTestOptions
     public Func<IServiceProvider, IAddCommandPrompter> AddCommandPrompterFactory { get; set; } = (IServiceProvider serviceProvider) =>
     {
         var interactionService = serviceProvider.GetRequiredService<IInteractionService>();
-        return new AddCommandPrompter(interactionService);
+        return new AddCommandPrompter(interactionService, serviceProvider.GetRequiredService<CliExecutionContext>());
     };
 
     public Func<IServiceProvider, IPublishCommandPrompter> PublishCommandPrompterFactory { get; set; } = (IServiceProvider serviceProvider) =>

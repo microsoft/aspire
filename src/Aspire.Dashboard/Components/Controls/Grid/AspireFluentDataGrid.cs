@@ -10,7 +10,8 @@ using Microsoft.Extensions.Localization;
 namespace Aspire.Dashboard.Components.Controls.Grid;
 
 [CascadingTypeParameter(nameof(TGridItem))]
-public class AspireFluentDataGrid<TGridItem> : FluentDataGrid<TGridItem>
+// Derives from DisposalSafeFluentDataGrid for the Fluent UI workaround it carries.
+public class AspireFluentDataGrid<TGridItem> : DisposalSafeFluentDataGrid<TGridItem>
 {
     public AspireFluentDataGrid(LibraryConfiguration configuration) : base(configuration)
     {

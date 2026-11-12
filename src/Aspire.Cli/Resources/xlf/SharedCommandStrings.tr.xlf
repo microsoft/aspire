@@ -23,14 +23,14 @@
         <note />
       </trans-unit>
       <trans-unit id="FetchingSource">
-        <source>Fetching {0} using Git...</source>
-        <target state="new">Fetching {0} using Git...</target>
-        <note>{0} is the localized content being fetched, such as "configuration source" or "templates".</note>
+        <source>Fetching {0} from {1} using Git...</source>
+        <target state="new">Fetching {0} from {1} using Git...</target>
+        <note>{0} is the localized content being fetched, such as "configuration source" or "templates". {1} is the Git repository, optionally followed by its path and ref.</note>
       </trans-unit>
       <trans-unit id="FetchingSourceWithAuthentication">
-        <source>Fetching {0} using Git. Git may prompt you to authenticate.</source>
-        <target state="new">Fetching {0} using Git. Git may prompt you to authenticate.</target>
-        <note>{0} is the localized content being fetched, such as "configuration source" or "templates".</note>
+        <source>Fetching {0} from {1} using Git. Git may prompt you to authenticate.</source>
+        <target state="new">Fetching {0} from {1} using Git. Git may prompt you to authenticate.</target>
+        <note>{0} is the localized content being fetched, such as "configuration source" or "templates". {1} is the Git repository, optionally followed by its path and ref.</note>
       </trans-unit>
       <trans-unit id="FormatOptionDescription">
         <source>Output format for detached AppHost results</source>

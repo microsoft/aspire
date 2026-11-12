@@ -74,18 +74,41 @@ internal static class ConsoleHelpers
 
         interactionService.DisplayMessage(KnownEmojis.Information, NewCommandStrings.TemplateSourceExplanation);
         interactionService.DisplaySourceDetails(details);
-        // The inventory includes its warning; avoid repeating it during Git acquisition.
-        executionContext.TryMarkSourceTrustWarningDisplayed();
-        interactionService.DisplaySourceTrustWarning();
+        interactionService.DisplaySourceTrustWarning(executionContext);
     }
 
-    public static void DisplayGitFetchNotice(this IInteractionService interactionService, string content, bool mayPromptForAuthentication)
+    public static void DisplayTemplateGitFetchNotice(this IInteractionService interactionService,
+        string repository, string path, string? reference, bool mayPromptForAuthentication)
+    {
+        var source = PackageSourceRedactor.RedactForDisplay(repository);
+        List<string> qualifiers = [];
+        if (path is not ("." or "./" or ".\\"))
+        {
+            qualifiers.Add($"{SharedCommandStrings.SourceGitPath}: {path}");
+        }
+        if (reference is not null and not "HEAD")
+        {
+            qualifiers.Add($"{SharedCommandStrings.SourceRef}: {reference}");
+        }
+        if (qualifiers.Count > 0)
+        {
+            source += $" ({string.Join(", ", qualifiers)})";
+        }
+
+        // Identify the source before Git can prompt for credentials. With basic auth,
+        // an ambiguous prompt could send a user's password to the wrong Git server,
+        // where that server could log it.
+        interactionService.DisplayGitFetchNotice(
+            SharedCommandStrings.GitFetchTemplates, source, mayPromptForAuthentication);
+    }
+
+    public static void DisplayGitFetchNotice(this IInteractionService interactionService, string content, string source, bool mayPromptForAuthentication)
     {
         var message = mayPromptForAuthentication
             ? SharedCommandStrings.FetchingSourceWithAuthentication
             : SharedCommandStrings.FetchingSource;
         interactionService.DisplayMessage(KnownEmojis.InboxTray,
-            $"[blue]{string.Format(CultureInfo.CurrentCulture, message, content).EscapeMarkup()}[/]",
+            $"[blue]{string.Format(CultureInfo.CurrentCulture, message, content, source).EscapeMarkup()}[/]",
             allowMarkup: true,
             consoleOverride: ConsoleOutput.Error);
     }
@@ -103,21 +126,15 @@ internal static class ConsoleHelpers
         return label;
     }
 
-    public static void DisplaySourceTrustWarning(this IInteractionService interactionService, CliExecutionContext executionContext)
+    public static bool DisplaySourceTrustWarning(this IInteractionService interactionService, CliExecutionContext executionContext)
     {
-        // An init source can lead straight into Git template discovery in "aspire new".
-        // Share the warning across both paths for this invocation, without skipping either consent prompt.
         if (!executionContext.TryMarkSourceTrustWarningDisplayed())
         {
-            return;
+            return false;
         }
 
-        interactionService.DisplaySourceTrustWarning();
-    }
-
-    public static void DisplaySourceTrustWarning(this IInteractionService interactionService)
-    {
         interactionService.DisplayMessage(KnownEmojis.PoliceCarLight, $"[yellow]{SharedCommandStrings.SourceTrustWarning.EscapeMarkup()}[/]", allowMarkup: true, consoleOverride: ConsoleOutput.Error);
+        return true;
     }
 
     public static void DisplayNuGetSearchLimitWarning(this IInteractionService interactionService)

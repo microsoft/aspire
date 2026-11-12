@@ -16,7 +16,7 @@ func main() {
 	adminPassword := builder.AddParameter("keycloak-admin-password", &aspire.AddParameterOptions{Secret: aspire.BoolPtr(true)})
 
 	keycloak := builder.AddKeycloak("keycloak", &aspire.AddKeycloakOptions{
-		Port:          aspire.Float64Ptr(8080),
+		Port:          aspire.IntPtr(8080),
 		AdminUsername: &adminUsername,
 		AdminPassword: &adminPassword,
 	})

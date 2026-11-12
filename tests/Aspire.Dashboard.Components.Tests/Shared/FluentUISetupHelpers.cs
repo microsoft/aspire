@@ -52,8 +52,8 @@ internal static class FluentUISetupHelpers
     public static void SetupFluentOverflow(BunitContext context)
     {
         var overflowModule = context.JSInterop.SetupModule(GetFluentFile("./_content/Microsoft.FluentUI.AspNetCore.Components/Components/Overflow/FluentOverflow.razor.js"));
-        overflowModule.SetupVoid("fluentOverflowInitialize", _ => true);
-        overflowModule.SetupVoid("fluentOverflowDispose", _ => true);
+        overflowModule.SetupVoid("fluentOverflowInitialize", _ => true).SetVoidResult();
+        overflowModule.SetupVoid("fluentOverflowDispose", _ => true).SetVoidResult();
     }
 
     public static void SetupFluentAnchor(BunitContext context)
@@ -64,9 +64,9 @@ internal static class FluentUISetupHelpers
     public static void SetupFluentAnchoredRegion(BunitContext context)
     {
         var module = context.JSInterop.SetupModule(GetFluentFile("./_content/Microsoft.FluentUI.AspNetCore.Components/Components/AnchoredRegion/FluentAnchoredRegion.razor.js"));
-        module.SetupVoid("goToNextFocusableElement", _ => true);
-        module.SetupVoid("initializeKeyboardNavigation", _ => true);
-        module.SetupVoid("removeKeyboardNavigation", _ => true);
+        module.SetupVoid("goToNextFocusableElement", _ => true).SetVoidResult();
+        module.SetupVoid("initializeKeyboardNavigation", _ => true).SetVoidResult();
+        module.SetupVoid("removeKeyboardNavigation", _ => true).SetVoidResult();
     }
 
     public static void SetupFluentDivider(BunitContext context)
@@ -161,8 +161,16 @@ internal static class FluentUISetupHelpers
         bool readOnly,
         Func<ITelemetryRepositoryWriter, Task> seed)
     {
-        context.Services.AddSingleton(new TelemetryRepositoryConfiguration(readOnly));
+        AddTelemetryRepositoryConfiguration(context.Services, readOnly);
+        await SeedTelemetryRepositoryAsync(context, seed);
+    }
 
+    // For setups that build the service provider before seeding, which is too late to add services.
+    public static void AddTelemetryRepositoryConfiguration(IServiceCollection services, bool readOnly) =>
+        services.AddSingleton(new TelemetryRepositoryConfiguration(readOnly));
+
+    public static async Task SeedTelemetryRepositoryAsync(BunitContext context, Func<ITelemetryRepositoryWriter, Task> seed)
+    {
         var databasePath = Path.Combine(context.Services.GetRequiredService<TemporaryWorkspace>().Path, "dashboard.db");
         var loggerFactory = context.Services.GetRequiredService<ILoggerFactory>();
         var options = context.Services.GetRequiredService<IOptions<DashboardOptions>>();
@@ -195,7 +203,7 @@ internal static class FluentUISetupHelpers
         context.JSInterop.SetupVoid("Microsoft.FluentUI.Blazor.Utilities.Attributes.copyToShadow", _ => true);
         context.JSInterop.SetupVoid("Blazor.theme.setThemeMode", _ => true);
         var tooltipModule = context.JSInterop.SetupModule("./_content/Microsoft.FluentUI.AspNetCore.Components/Components/Tooltip/FluentTooltip.razor.js");
-        tooltipModule.SetupVoid("Microsoft.FluentUI.Blazor.Tooltip.FluentTooltipInitialize", _ => true);
+        tooltipModule.SetupVoid("Microsoft.FluentUI.Blazor.Tooltip.FluentTooltipInitialize", _ => true).SetVoidResult();
         context.Services.AddLocalization();
         context.Services.AddSingleton<BrowserTimeProvider>(browserTimeProvider ?? new TestTimeProvider());
         context.Services.AddSingleton(TimeProvider.System);

@@ -118,12 +118,12 @@
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <data name="FetchingSource" xml:space="preserve">
-    <value>Fetching {0} using Git...</value>
-    <comment>{0} is the localized content being fetched, such as "configuration source" or "templates".</comment>
+    <value>Fetching {0} from {1} using Git...</value>
+    <comment>{0} is the localized content being fetched, such as "configuration source" or "templates". {1} is the Git repository, optionally followed by its path and ref.</comment>
   </data>
   <data name="FetchingSourceWithAuthentication" xml:space="preserve">
-    <value>Fetching {0} using Git. Git may prompt you to authenticate.</value>
-    <comment>{0} is the localized content being fetched, such as "configuration source" or "templates".</comment>
+    <value>Fetching {0} from {1} using Git. Git may prompt you to authenticate.</value>
+    <comment>{0} is the localized content being fetched, such as "configuration source" or "templates". {1} is the Git repository, optionally followed by its path and ref.</comment>
   </data>
   <data name="GitFetchConfigurationSource" xml:space="preserve">
     <value>configuration source</value>

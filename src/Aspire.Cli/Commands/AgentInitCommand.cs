@@ -437,8 +437,10 @@ internal sealed class AgentInitCommand : BaseCommand
                 {
                     InteractionService.DisplayMessage(KnownEmojis.Information, AgentCommandStrings.InitCommand_SkillSourcesExplanation);
                     InteractionService.DisplaySourceDetails(sourceDetails);
-                    InteractionService.DisplaySourceTrustWarning();
-                    InteractionService.DisplayEmptyLine();
+                    if (InteractionService.DisplaySourceTrustWarning(ExecutionContext))
+                    {
+                        InteractionService.DisplayEmptyLine();
+                    }
                 }
 
                 var local = LocalAspireSkills.Find(ExecutionContext.WorkingDirectory, workspaceRoot,

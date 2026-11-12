@@ -3,6 +3,7 @@ package aspire
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -99,36 +100,50 @@ func FormatError(err error) string {
 		return ""
 	}
 	var capErr *CapabilityError
-	if errors.As(err, &capErr) {
+	if !errors.As(err, &capErr) {
+		return err.Error()
+	}
+	if joined, ok := err.(interface{ Unwrap() []error }); ok {
 		var b strings.Builder
-		b.WriteString("Capability Error: ")
-		b.WriteString(capErr.Message())
-		if code := capErr.Code(); code != "" {
-			b.WriteString("\n  Code: ")
-			b.WriteString(code)
-		}
-		if cap := capErr.Capability(); cap != "" {
-			b.WriteString("\n  Capability: ")
-			b.WriteString(cap)
-		}
-		if capErr.err.Details != nil {
-			d := capErr.err.Details
-			if d.Parameter != nil {
-				b.WriteString("\n  Parameter: ")
-				b.WriteString(*d.Parameter)
+		for _, child := range joined.Unwrap() {
+			formatted := FormatError(child)
+			if formatted == "" {
+				continue
 			}
-			if d.Expected != nil {
-				b.WriteString("\n  Expected: ")
-				b.WriteString(*d.Expected)
+			if b.Len() > 0 {
+				b.WriteByte('\n')
 			}
-			if d.Actual != nil {
-				b.WriteString("\n  Actual: ")
-				b.WriteString(*d.Actual)
-			}
+			b.WriteString(formatted)
 		}
 		return b.String()
 	}
-	return err.Error()
+	var b strings.Builder
+	b.WriteString("Capability Error: ")
+	b.WriteString(capErr.Message())
+	if code := capErr.Code(); code != "" {
+		b.WriteString("\n  Code: ")
+		b.WriteString(code)
+	}
+	if cap := capErr.Capability(); cap != "" {
+		b.WriteString("\n  Capability: ")
+		b.WriteString(cap)
+	}
+	if capErr.err.Details != nil {
+		d := capErr.err.Details
+		if d.Parameter != nil {
+			b.WriteString("\n  Parameter: ")
+			b.WriteString(*d.Parameter)
+		}
+		if d.Expected != nil {
+			b.WriteString("\n  Expected: ")
+			b.WriteString(*d.Expected)
+		}
+		if d.Actual != nil {
+			b.WriteString("\n  Actual: ")
+			b.WriteString(*d.Actual)
+		}
+	}
+	return b.String()
 }
 
 // CancellationToken wraps a context.Context to provide cooperative cancellation.
@@ -598,6 +613,10 @@ type client struct {
 	cancellationsMu     sync.Mutex
 	cancellations       map[string]*cancellationRegistration
 	cancellationCounter atomic.Int64
+
+	// errMu guards errs.
+	errMu sync.Mutex
+	errs  []error
 }
 
 type cancellationRegistration struct {
@@ -613,6 +632,28 @@ func newClient(socketPath string) *client {
 		callbacks:     make(map[string]func(...any) any),
 		cancellations: make(map[string]*cancellationRegistration),
 	}
+}
+
+// recordErr remembers an error owned by a handle of this client, so the builder
+// can surface failures that only ever reached child handles.
+// It is safe to call concurrently and on a nil client.
+func (c *client) recordErr(err error) {
+	if c == nil || err == nil {
+		return
+	}
+	c.errMu.Lock()
+	defer c.errMu.Unlock()
+	c.errs = append(c.errs, err)
+}
+
+// combinedError returns every error passed to recordErr.
+func (c *client) combinedError() error {
+	if c == nil {
+		return nil
+	}
+	c.errMu.Lock()
+	defer c.errMu.Unlock()
+	return errors.Join(c.errs...)
 }
 
 // registerHandleWrapper registers a factory for wrapping handles of a specific
@@ -947,9 +988,13 @@ func extractResult(response map[string]any) (any, error) {
 	if errObj, hasErr := response["error"]; hasErr {
 		errMap, _ := errObj.(map[string]any)
 		rpcErr := &rpcError{message: getString(errMap, "message"), data: errMap["data"]}
-		// A decoded response carries the code as float64; the error that
+		// A decoded response carries the code as json.Number; the error that
 		// connection.close synthesizes for pending requests carries an int.
 		switch code := errMap["code"].(type) {
+		case json.Number:
+			if parsed, err := code.Int64(); err == nil {
+				rpcErr.code = int(parsed)
+			}
 		case float64:
 			rpcErr.code = int(code)
 		case int:
@@ -1039,8 +1084,19 @@ func readMessage(reader *bufio.Reader) (map[string]any, error) {
 		return nil, err
 	}
 
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	// Preserve integer tokens until decodeAs knows the generated target type. Decoding through float64
+	// first would lose precision for signed and unsigned 64-bit values above 2^53.
+	decoder.UseNumber()
 	var message map[string]any
-	if err := json.Unmarshal(body, &message); err != nil {
+	if err := decoder.Decode(&message); err != nil {
+		return nil, err
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); err != io.EOF {
+		if err == nil {
+			return nil, errors.New("AppHost message body contains multiple JSON values")
+		}
 		return nil, err
 	}
 	return message, nil
