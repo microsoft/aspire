@@ -183,8 +183,19 @@ internal sealed partial class CliTemplateFactory
     internal static string GetCSharpAppHostDirectives(string aspireVersion)
     {
         // The Dotnet integration and package-only AppHosts ship in Aspire 17.
-        return SemVersion.Parse(aspireVersion, SemVersionStyles.Strict).Major >= 17
+        var version = SemVersion.Parse(aspireVersion, SemVersionStyles.Strict);
+        var directives = version.Major >= 17
             ? $"#:package Aspire.Hosting.AppHost@{aspireVersion}\n#:package Aspire.Hosting.Dotnet@{aspireVersion}"
             : $"#:sdk Aspire.AppHost.Sdk@{aspireVersion}";
+
+        // Earlier SDKs and some 17.0 previews defaulted away from the CLI bundle.
+        // Keep the opt-in for all 17.0 previews because PR builds are not ordered by package version.
+        if (version.Major < 17 ||
+            (version.Major == 17 && version.Minor == 0 && version.Patch == 0 && version.IsPrerelease))
+        {
+            directives += "\n#:property AspireUseCliBundle=true";
+        }
+
+        return directives;
     }
 }
