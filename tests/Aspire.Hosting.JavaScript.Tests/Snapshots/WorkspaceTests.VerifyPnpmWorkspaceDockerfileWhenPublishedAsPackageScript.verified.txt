@@ -5,7 +5,7 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/api/package.json ./packages/api/package.json
 RUN --mount=type=cache,target=/pnpm/store pnpm install --frozen-lockfile
 COPY . .
-RUN pnpm --filter api^... run --if-present build
+RUN pnpm --filter 'api^...' run --if-present build
 RUN pnpm --filter api run build
 RUN pnpm --filter api deploy --prod /deploy
 

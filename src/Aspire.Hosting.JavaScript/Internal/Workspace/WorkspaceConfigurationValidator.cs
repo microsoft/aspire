@@ -137,6 +137,7 @@ internal static class WorkspaceConfigurationValidator
             }
 
             ValidateAppScripts(app, root, nameToDir[projectName], projectName, isPublishMode, diagnostics);
+            ValidateBuildDependencies(app, root, projectName, memberNames, nameToDir, isPublishMode, diagnostics);
         }
 
         ThrowIfAny(workspace.Name, diagnostics);
@@ -289,6 +290,57 @@ internal static class WorkspaceConfigurationValidator
                 diagnostics.Add(
                     $"Workspace member '{projectName}' references script '{script}' but '{packageJsonPath}' does not declare 'scripts.{script}'. " +
                     $"Declared scripts: {(declaredScripts.Count == 0 ? "(none)" : string.Join(", ", declaredScripts.OrderBy(s => s, StringComparer.Ordinal)))}.");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Checks the members declared via <c>WithBuildDependencies</c>/<c>WithBuildDependency</c>. Unknown names are
+    /// reported in every mode so a typo surfaces on <c>aspire run</c> instead of only when a Dockerfile build
+    /// fails. Script existence is checked in publish mode only, because dependency builds only execute in the
+    /// generated Dockerfile.
+    /// </summary>
+    private static void ValidateBuildDependencies(
+        JavaScriptAppResource app,
+        string root,
+        string projectName,
+        HashSet<string> memberNames,
+        Dictionary<string, string> nameToDir,
+        bool isPublishMode,
+        List<string> diagnostics)
+    {
+        if (!app.TryGetAnnotationsOfType<JavaScriptBuildDependencyAnnotation>(out var dependencies))
+        {
+            return;
+        }
+
+        foreach (var dependency in dependencies)
+        {
+            if (!memberNames.Contains(dependency.WorkspaceProjectName))
+            {
+                diagnostics.Add(
+                    $"Workspace member '{projectName}' declares build dependency '{dependency.WorkspaceProjectName}', which is not a declared workspace member of '{root}'. " +
+                    $"Declared members: {(memberNames.Count == 0 ? "(none)" : string.Join(", ", memberNames.OrderBy(n => n, StringComparer.Ordinal)))}.");
+                continue;
+            }
+
+            if (!isPublishMode)
+            {
+                continue;
+            }
+
+            var script = dependency.ResolveScriptName(app);
+            var packageJsonPath = Path.Combine(root, nameToDir[dependency.WorkspaceProjectName].Replace('/', Path.DirectorySeparatorChar), "package.json");
+            var declaredScripts = ReadScriptNames(packageJsonPath) ?? [];
+
+            // Unlike the app's own scripts, a dependency with no "scripts" block at all is still an error: the
+            // dependency was declared explicitly, and the generated `run <script>` would fail the image build.
+            if (!declaredScripts.Contains(script))
+            {
+                diagnostics.Add(
+                    $"Workspace member '{projectName}' declares build dependency '{dependency.WorkspaceProjectName}' with script '{script}', but '{packageJsonPath}' does not declare 'scripts.{script}'. " +
+                    $"Declared scripts: {(declaredScripts.Count == 0 ? "(none)" : string.Join(", ", declaredScripts.OrderBy(s => s, StringComparer.Ordinal)))}. " +
+                    "Use WithBuildDependency(name, scriptName) to run a different script in this dependency.");
             }
         }
     }
