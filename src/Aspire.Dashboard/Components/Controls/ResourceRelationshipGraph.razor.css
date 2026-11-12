@@ -5,7 +5,7 @@
     margin: auto;
     overflow: visible;
     font-family: inherit;
-    font-size: var(--aspire-font-size-secondary);
+    font-size: var(--aspire-font-size-caption);
 }
 
 .relationship-graph-edge {

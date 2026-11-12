@@ -556,7 +556,7 @@
                 }
                 else
                 {
-                    <ResourceRelationshipGraph Resource="@(new RelationshipGraphNode(resourceName, resource.ResourceTypeDisplayName, Url: null))"
+                    <ResourceRelationshipGraph Resource="@GetGraphNode(resource, resource.ResourceTypeDisplayName, isCenter: true)"
                                                Incoming="@GetGraphNodes(relatedResources, incoming: true)"
                                                Outgoing="@GetGraphNodes(relatedResources, incoming: false)" />
                 }
