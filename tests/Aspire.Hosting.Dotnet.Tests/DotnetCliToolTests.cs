@@ -168,7 +168,7 @@ public class DotnetCliToolTests(ITestOutputHelper testOutputHelper)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var tool = builder.AddDotnetCliTool("tool", "package").WithToolVersion("1.2.3").WithArgs("--help");
-        var manifest = await ManifestUtils.GetManifest(tool.Resource);
+        var manifest = await ManifestUtils.GetManifest(tool.Resource, builder.AppHostDirectory);
 
         await Verify(manifest.ToString(), "json");
     }
@@ -231,18 +231,15 @@ public class DotnetCliToolTests(ITestOutputHelper testOutputHelper)
         using var app = builder.Build();
         await app.StartAsync(cancellationSource.Token);
 
-        await app.ResourceNotifications.WaitForResourceAsync(
+        var terminalEvent = await app.ResourceNotifications.WaitForResourceAsync(
             resource.Resource.Name,
-            KnownResourceStates.Running,
-            cancellationSource.Token);
-        var terminalState = await app.ResourceNotifications.WaitForResourceAsync(
-            resource.Resource.Name,
-            KnownResourceStates.TerminalStates,
+            resourceEvent =>
+                KnownResourceStates.TerminalStates.Contains(resourceEvent.Snapshot.State?.Text) &&
+                resourceEvent.Snapshot.ExitCode is not null,
             cancellationSource.Token);
 
-        Assert.Equal(KnownResourceStates.Finished, terminalState);
-        Assert.True(app.ResourceNotifications.TryGetCurrentState(resource.Resource.Name, out var resourceState));
-        Assert.Equal(0, resourceState.Snapshot.ExitCode);
+        Assert.Equal(KnownResourceStates.Finished, terminalEvent.Snapshot.State?.Text);
+        Assert.Equal(0, Assert.IsType<int>(terminalEvent.Snapshot.ExitCode));
     }
 
     [Fact]
@@ -259,18 +256,15 @@ public class DotnetCliToolTests(ITestOutputHelper testOutputHelper)
         using var app = builder.Build();
         await app.StartAsync(cancellationSource.Token);
 
-        await app.ResourceNotifications.WaitForResourceAsync(
+        var terminalEvent = await app.ResourceNotifications.WaitForResourceAsync(
             resource.Resource.Name,
-            KnownResourceStates.Running,
-            cancellationSource.Token);
-        var terminalState = await app.ResourceNotifications.WaitForResourceAsync(
-            resource.Resource.Name,
-            KnownResourceStates.TerminalStates,
+            resourceEvent =>
+                KnownResourceStates.TerminalStates.Contains(resourceEvent.Snapshot.State?.Text) &&
+                resourceEvent.Snapshot.ExitCode is not null,
             cancellationSource.Token);
 
-        Assert.Equal(KnownResourceStates.Finished, terminalState);
-        Assert.True(app.ResourceNotifications.TryGetCurrentState(resource.Resource.Name, out var resourceState));
-        Assert.NotEqual(0, resourceState.Snapshot.ExitCode);
+        Assert.Equal(KnownResourceStates.Finished, terminalEvent.Snapshot.State?.Text);
+        Assert.NotEqual(0, Assert.IsType<int>(terminalEvent.Snapshot.ExitCode));
     }
 
     private sealed class CustomCliToolResource(string name, string packageId) : DotnetCliToolResource(name, packageId);
