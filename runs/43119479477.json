@@ -1,0 +1,52 @@
+{
+  "run_id": 43119479477,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/43119479477",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-12T00:28:57Z",
+  "verdict": "transient-infra",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 22172,
+    "title": "Target release/17.0 in scheduled API and ATS diff workflows",
+    "author": "eerhardt",
+    "state": "closed",
+    "head_branch": "eerhardt-api-diffs-release-17-0",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/22172",
+    "merged_at": "2026-11-11T23:23:38Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "9bc7ff4d0315b692cfc3c62bce21a26224da60b3",
+    "failed_sha": "f4e1cb3cc946f19ed0a4346a6746e706e8ab5dd2",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "f4e1cb3cc946f19ed0a4346a6746e706e8ab5dd2",
+        "message": "Target release/17.0 in scheduled API and ATS diff workflows (#22172) ## Description Aspire 13.6 has shipped, and its API and ATS baselines are now on main (#22152). The scheduled `generate-api-diffs.yml` and `generate-ats-diffs.yml` workflows still open daily review PRs against `release/13.6`, though. This PR changes their scheduled matrix to target the active `release/17.0` branch so the 17.0 baseline PRs get generated. Changes: - `.github/workflows/generate-api-diffs.yml`: scheduled matrix is ",
+        "html_url": "https://github.com/microsoft/aspire/commit/f4e1cb3cc946f19ed0a4346a6746e706e8ab5dd2",
+        "pull_request": {
+          "number": 22172,
+          "title": "Target release/17.0 in scheduled API and ATS diff workflows",
+          "url": "https://github.com/microsoft/aspire/pull/22172",
+          "merged_at": "2026-11-11T23:23:38Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (windows-latest)",
+      "id": 130859931662,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/43119479477/job/130859931662",
+      "classification": "transient-infra",
+      "reason": "Hosted runner lost communication with the server; no test failures observed.",
+      "failed_steps": []
+    }
+  ],
+  "failed_tests": [],
+  "causes": [
+    "hosted-runner-lost-communication-windows-template-tests"
+  ]
+}
