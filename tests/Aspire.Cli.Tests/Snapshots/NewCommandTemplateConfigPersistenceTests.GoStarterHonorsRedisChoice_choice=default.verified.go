@@ -12,34 +12,27 @@ func main() {
 		log.Fatal(aspire.FormatError(err))
 	}
 
-	// The Go HTTP API. WithModTidy runs "go mod tidy" before launching so that
-	// go.sum is always up to date. Aspire injects:
-	//   - "OTEL_EXPORTER_OTLP_*" env vars (via WithOtlpExporter) so traces,
-	//     metrics, and logs flow to the Aspire dashboard.
-	api := builder.AddGoApp("api", "./api").
+	// Keep Go modules current and send traces, metrics, and logs to the dashboard.
+	app := builder.AddGoApp("app", "./api").
 		WithModTidy().
-		WithHttpEndpoint(&aspire.WithHttpEndpointOptions{Env: aspire.StringPtr("PORT")}).
+		WithHttpEndpoint(aspire.HttpEndpointEnv("PORT")).
+		WithHttpHealthCheck(aspire.HttpHealthCheckPath("/health")).
 		WithExternalHttpEndpoints().
 		WithOtlpExporter()
-	resources := []aspire.Resource{api}
 
-	// WithReference injects ConnectionStrings__cache for read-through caching.
-	cache := builder.AddRedis("cache")
-	api.WithReference(cache).WaitFor(cache)
-	resources = append(resources, cache)
+	// Reference the app for Vite proxying and wait until it is healthy.
+	frontend := builder.AddViteApp("frontend", "./frontend", nil).
+		WithReference(app).
+		WaitFor(app)
 
-	// Each call records its failure on the handle that it returns, so check every resource.
-	for _, resource := range resources {
-		if err := resource.Err(); err != nil {
-			log.Fatal(aspire.FormatError(err))
-		}
-	}
+	// Bundle the frontend into the app container for same-origin production serving.
+	app.PublishWithContainerFiles(frontend, "./static")
 
-	app, err := builder.Build()
+	application, err := builder.Build()
 	if err != nil {
 		log.Fatal(aspire.FormatError(err))
 	}
-	if err := app.Run(); err != nil {
+	if err := application.Run(); err != nil {
 		log.Fatal(aspire.FormatError(err))
 	}
 }
