@@ -45,6 +45,7 @@ public sealed class SingleFileAppHostInitDotnetRunTests(ITestOutputHelper output
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);
+        await auto.RunCommandAsync("unset AspireUseCliBundle", counter);
 
         // Run aspire init without --language so the interactive language prompt is shown,
         // then accept the default '> C#' selection.
@@ -70,10 +71,18 @@ public sealed class SingleFileAppHostInitDotnetRunTests(ITestOutputHelper output
         Assert.True(File.Exists(appHostCs), $"Expected apphost.cs to exist at: {appHostCs}");
         Assert.True(File.Exists(aspireConfigJson), $"Expected aspire.config.json to exist at: {aspireConfigJson}");
         var appHostSource = File.ReadAllText(appHostCs);
-        Assert.StartsWith("#:package Aspire.Hosting.AppHost@", appHostSource);
-        Assert.Contains("#:package Aspire.Hosting.Dotnet@", appHostSource);
-        Assert.DoesNotContain("#:sdk Aspire.AppHost.Sdk@", appHostSource);
-        Assert.Contains("#:property AspireUseCliBundle=true", appHostSource);
+        var version = CliE2ETestHelpers.GetAppHostVersion(appHostSource);
+        var expected = $$"""
+            #:package Aspire.Hosting.AppHost@{{version}}
+            #:package Aspire.Hosting.Dotnet@{{version}}
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            // The aspireify skill will wire up your projects here.
+
+            builder.Build().Run();
+            """;
+        Assert.Equal(expected.ReplaceLineEndings("\n"), appHostSource.ReplaceLineEndings("\n").TrimEnd('\n'));
         Assert.True(
             File.Exists(appHostRunJson),
             $"Expected apphost.run.json to exist at: {appHostRunJson}. "

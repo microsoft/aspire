@@ -100,6 +100,8 @@ jobs:
   native_hosting:
     name: Native AOT, generated SDK, Docker, DCP, CLI and Dashboard
     # Playwright 1.58.2 cannot install Chromium dependencies on Ubuntu 26.04.
+    # Restore ubuntu-latest once the harness's Playwright version supports its image:
+    # https://github.com/microsoft/aspire/issues/22216
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     steps:
