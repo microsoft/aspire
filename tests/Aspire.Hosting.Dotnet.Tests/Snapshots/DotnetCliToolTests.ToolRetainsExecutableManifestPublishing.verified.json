@@ -1,6 +1,6 @@
 ﻿{
   "type": "executable.v0",
-  "workingDirectory": "../../../../../tests/Aspire.Hosting.TestUtilities",
+  "workingDirectory": ".",
   "command": "dotnet",
   "args": [
     "tool",
