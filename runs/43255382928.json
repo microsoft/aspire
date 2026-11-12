@@ -1,0 +1,120 @@
+{
+  "run_id": 43255382928,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/43255382928",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-12T16:43:57Z",
+  "verdict": "main-repository-breakage",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 22192,
+    "title": "Fix resource graph overview padding",
+    "author": "JamesNK",
+    "state": "closed",
+    "head_branch": "fix/dashboard-resource-graph-padding",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/22192",
+    "merged_at": "2026-11-12T16:08:21Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "f4e1cb3cc946f19ed0a4346a6746e706e8ab5dd2",
+    "failed_sha": "6d76fc78e296ea99a9505a8de3dfae579086fa5a",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "0cf88071093b6fd39fc846cef6f66f107bd4725d",
+        "message": "Align resource endpoint details and link display names (#22134)",
+        "html_url": "https://github.com/microsoft/aspire/commit/0cf88071093b6fd39fc846cef6f66f107bd4725d",
+        "pull_request": {
+          "number": 22134,
+          "title": "Align resource endpoint details and link display names",
+          "url": "https://github.com/microsoft/aspire/pull/22134",
+          "merged_at": "2026-11-12T01:41:35Z"
+        }
+      },
+      {
+        "sha": "21814a556215db3d7813ed0520c0f25cf7190b3b",
+        "message": "Use smaller labels and more text width in relationship graphs (#22137)",
+        "html_url": "https://github.com/microsoft/aspire/commit/21814a556215db3d7813ed0520c0f25cf7190b3b",
+        "pull_request": {
+          "number": 22137,
+          "title": "Use smaller labels and more text width in relationship graphs",
+          "url": "https://github.com/microsoft/aspire/pull/22137",
+          "merged_at": "2026-11-12T01:41:56Z"
+        }
+      },
+      {
+        "sha": "8df3ff00148a064a7d1700976ca6192fc2297721",
+        "message": "Unify dashboard telemetry footer counts and pause indicators (#22149)",
+        "html_url": "https://github.com/microsoft/aspire/commit/8df3ff00148a064a7d1700976ca6192fc2297721",
+        "pull_request": {
+          "number": 22149,
+          "title": "Unify dashboard telemetry footer counts and pause indicators",
+          "url": "https://github.com/microsoft/aspire/pull/22149",
+          "merged_at": "2026-11-12T01:42:17Z"
+        }
+      },
+      {
+        "sha": "5675e24dadd26f00c061e602a27ebe6905fe9e79",
+        "message": "Use standard font sizes in the resource selector (#22135)",
+        "html_url": "https://github.com/microsoft/aspire/commit/5675e24dadd26f00c061e602a27ebe6905fe9e79",
+        "pull_request": {
+          "number": 22135,
+          "title": "Use standard font sizes in the resource selector",
+          "url": "https://github.com/microsoft/aspire/pull/22135",
+          "merged_at": "2026-11-12T02:34:30Z"
+        }
+      },
+      {
+        "sha": "33704f84fcd250516a4681ebfa278c213bbdc7d1",
+        "message": "Right-align metadata and actions in the compact resource sidebar (#22136)",
+        "html_url": "https://github.com/microsoft/aspire/commit/33704f84fcd250516a4681ebfa278c213bbdc7d1",
+        "pull_request": {
+          "number": 22136,
+          "title": "Right-align metadata and actions in the compact resource sidebar",
+          "url": "https://github.com/microsoft/aspire/pull/22136",
+          "merged_at": "2026-11-12T02:34:49Z"
+        }
+      },
+      {
+        "sha": "0ae5148bb355bb4cda003b83e7d55cafaecbb5ba",
+        "message": "Fix dashboard SVG tooltips and restore rich trace previews (#22138)",
+        "html_url": "https://github.com/microsoft/aspire/commit/0ae5148bb355bb4cda003b83e7d55cafaecbb5ba",
+        "pull_request": {
+          "number": 22138,
+          "title": "Fix dashboard SVG tooltips and restore rich trace previews",
+          "url": "https://github.com/microsoft/aspire/pull/22138",
+          "merged_at": "2026-11-12T02:47:34Z"
+        }
+      },
+      {
+        "sha": "6d76fc78e296ea99a9505a8de3dfae579086fa5a",
+        "message": "Fix resource graph overview padding (#22192)",
+        "html_url": "https://github.com/microsoft/aspire/commit/6d76fc78e296ea99a9505a8de3dfae579086fa5a",
+        "pull_request": {
+          "number": 22192,
+          "title": "Fix resource graph overview padding",
+          "url": "https://github.com/microsoft/aspire/pull/22192",
+          "merged_at": "2026-11-12T16:08:21Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Build native CLI archive (Windows) / Build CLI (win-x64)",
+      "id": 131312241552,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/43255382928/job/131312241552",
+      "classification": "main-repository-breakage",
+      "reason": "Windows native tray smoke step failed deterministically with exit code 1 after the build succeeded; no transient infrastructure evidence.",
+      "failed_steps": [
+        "Smoke Windows native tray"
+      ]
+    }
+  ],
+  "failed_tests": [],
+  "causes": [
+    "windows-native-tray-smoke-stop-no-request"
+  ]
+}
