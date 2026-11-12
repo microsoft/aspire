@@ -1,0 +1,76 @@
+{
+  "run_id": 43136337046,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/43136337046",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-12T02:44:58Z",
+  "verdict": "main-repository-breakage",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 22149,
+    "title": "Unify dashboard telemetry footer counts and pause indicators",
+    "author": "JamesNK",
+    "state": "closed",
+    "head_branch": "jamesnk/dashboard-telemetry-footer-consistency",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/22149",
+    "merged_at": "2026-11-12T01:42:17Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "f4e1cb3cc946f19ed0a4346a6746e706e8ab5dd2",
+    "failed_sha": "8df3ff00148a064a7d1700976ca6192fc2297721",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "0cf88071093b6fd39fc846cef6f66f107bd4725d",
+        "message": "Align resource endpoint details and link display names (#22134)",
+        "html_url": "https://github.com/microsoft/aspire/commit/0cf88071093b6fd39fc846cef6f66f107bd4725d",
+        "pull_request": {
+          "number": 22134,
+          "title": "Align resource endpoint details and link display names",
+          "url": "https://github.com/microsoft/aspire/pull/22134",
+          "merged_at": "2026-11-12T01:41:35Z"
+        }
+      },
+      {
+        "sha": "21814a556215db3d7813ed0520c0f25cf7190b3b",
+        "message": "Use smaller labels and more text width in relationship graphs (#22137)",
+        "html_url": "https://github.com/microsoft/aspire/commit/21814a556215db3d7813ed0520c0f25cf7190b3b",
+        "pull_request": {
+          "number": 22137,
+          "title": "Use smaller labels and more text width in relationship graphs",
+          "url": "https://github.com/microsoft/aspire/pull/22137",
+          "merged_at": "2026-11-12T01:41:56Z"
+        }
+      },
+      {
+        "sha": "8df3ff00148a064a7d1700976ca6192fc2297721",
+        "message": "Unify dashboard telemetry footer counts and pause indicators (#22149)",
+        "html_url": "https://github.com/microsoft/aspire/commit/8df3ff00148a064a7d1700976ca6192fc2297721",
+        "pull_request": {
+          "number": 22149,
+          "title": "Unify dashboard telemetry footer counts and pause indicators",
+          "url": "https://github.com/microsoft/aspire/pull/22149",
+          "merged_at": "2026-11-12T01:42:17Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, browser-debugger)",
+      "id": 130928011812,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/43136337046/job/130928011812",
+      "classification": "main-repository-breakage",
+      "reason": "Blazor browser-debugger E2E hook timed out waiting for resource 'standalone' Running; AppHost build output shows error CS0103 'DistributedApplication' does not exist.",
+      "failed_steps": [
+        "Run extension E2E tests"
+      ]
+    }
+  ],
+  "failed_tests": [],
+  "causes": [
+    "vscode-e2e-windows-browser-debugger-resource-running-timeout"
+  ]
+}
