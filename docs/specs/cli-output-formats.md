@@ -397,6 +397,79 @@ authoritative MSBuild `TargetPath` produced with the coordinated build inputs, a
 Debugger clients must verify that the reported process matches this authoritative project output
 before attaching.
 
+#### Launch-group snapshot
+
+`aspire describe --launch-groups` inspects the finalized launch-group plan from a
+running AppHost. The default output is a table. Use `--format json` for the
+machine-readable snapshot:
+
+```json
+{
+  "selectedGroup": "catalog",
+  "groups": [
+    "catalog",
+    "empty",
+    "shared"
+  ],
+  "resources": [
+    {
+      "name": "api",
+      "groups": [
+        "catalog",
+        "shared"
+      ],
+      "inheritedFrom": "frontend",
+      "explicitStart": false,
+      "exclusionReason": "None",
+      "buildType": "Initial"
+    },
+    {
+      "name": "worker",
+      "groups": [
+        "shared"
+      ],
+      "explicitStart": true,
+      "exclusionReason": "NotInSelectedGroup",
+      "buildType": "Deferred"
+    }
+  ]
+}
+```
+
+The top-level `groups` array contains every known group, including groups without
+resources. Resource `groups` are the effective memberships after inheritance.
+Groups, resource memberships, and resources are sorted case-insensitively with an
+ordinal tie-breaker.
+
+| Field | Description |
+| ----- | ----------- |
+| `selectedGroup` | Selected launch group. Omitted when no group is selected. |
+| `groups` | All known launch groups, including empty groups. |
+| `resources` | Finalized launch-group information for each resource, including hidden helpers. |
+
+Each resource has the following fields:
+
+| Field | Description |
+| ----- | ----------- |
+| `name` | Stable resource name. |
+| `groups` | Effective launch-group memberships. Empty when the resource has no memberships. |
+| `inheritedFrom` | Resource that supplied inherited memberships. Omitted for direct memberships or no memberships. |
+| `explicitStart` | Whether the resource was configured for explicit startup. |
+| `exclusionReason` | `None`, `NotInSelectedGroup` (excluded from automatic startup by the selected group), or `ExemptFromSelection` (keeps ordinary startup behavior instead of participating in group filtering). |
+| `buildType` | Coordinated build type: `NotCoordinated`, `Pending`, `Initial`, `InitialPersistent`, `InitialShared`, or `Deferred`. |
+
+`explicitStart` is independent of `exclusionReason`: a resource can require explicit
+startup and also be outside the selected group or exempt from group filtering.
+Exemption and exclusion by the selected group are mutually exclusive.
+
+This command reads metadata already captured by the running AppHost. It does not
+evaluate another application model, invoke environment or argument callbacks,
+start resources, or trigger deferred builds. An older AppHost without the
+`launch-groups.v1` capability fails as incompatible; JSON stdout remains empty.
+When no AppHost is running, the command keeps the existing successful empty-result
+behavior. A resource name, `--follow`, Mermaid output, `--include-hidden`, and
+`--include-disabled-commands` cannot be combined with `--launch-groups`.
+
 ## Logs
 
 ### `aspire logs`

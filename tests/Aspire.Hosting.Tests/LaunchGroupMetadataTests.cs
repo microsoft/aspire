@@ -3,6 +3,7 @@
 
 #pragma warning disable ASPIRELAUNCHGROUPS001 // Tests the experimental launch-group APIs.
 
+using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Orchestrator;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;

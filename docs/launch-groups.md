@@ -203,6 +203,37 @@ resource retains the selection. Restarting the AppHost process recomputes it;
 in-process hot reload does not rerun startup. Editing the configuration does not
 dynamically switch groups in an already running AppHost.
 
+## Inspecting groups from the CLI
+
+Start the AppHost with a group, then inspect its startup plan from another terminal:
+
+```bash
+aspire run --launch-group catalog
+```
+
+```bash
+aspire describe --launch-groups
+aspire describe --launch-groups --format json
+```
+
+The table shows the selected group, every known group (including configured empty
+groups), and each resource's effective memberships, inheritance source, startup
+decision, and build type. Explicit startup and exclusion are independent: a
+resource can require an explicit Start and also be outside the selected group.
+**Default startup** means the resource keeps its ordinary startup behavior, not
+that a passive child resource starts a process of its own.
+
+This is the finalized startup plan, not live resource state. Starting an excluded
+resource later does not rewrite the plan. Use ordinary `aspire describe` to see
+what is running now. Inspection reads the captured metadata without evaluating
+callbacks, starting resources, or triggering builds.
+
+The inspection includes hidden helpers, so `--include-hidden` is unnecessary and
+cannot be combined with `--launch-groups`. A resource name, `--follow`, Mermaid
+output, and `--include-disabled-commands` are also unsupported in this mode.
+An older AppHost reports that launch-group inspection is unsupported rather than
+falling back to the ordinary resource list.
+
 ## Inspecting groups in the Dashboard
 
 The Dashboard Resources page shows effective launch-group memberships and can
@@ -245,6 +276,26 @@ A resource waiting on a dependency remains Waiting until that dependency is read
 Internal deferred build resources are hidden from default resource lists before
 they start and after a successful build. They remain visible while building or
 after a failure. The excluded application resources remain visible and startable.
+
+### Finding failed-build logs
+
+In the Dashboard, open **Console logs** and select the build resource,
+`__dotnet-project-build` or a numbered variant, rather than the application.
+Enable **Show hidden resources** if needed. The AppHost's build-failure message
+names the exact resource to inspect.
+
+From the AppHost directory, find that resource and read its output:
+
+```bash
+aspire describe --include-hidden
+aspire logs <build-resource-name>
+```
+
+The full compiler output belongs to the build resource's console. The AppHost
+console contains the failure summary and bounded MSBuild diagnostics; compiler
+output is not copied into the application's console.
+
+### Build ownership
 
 Coordinator-owned output-writing builds are conservatively serialized. This includes
 initial builds, deferred cold-Start builds, and Rebuild commands, so separate build

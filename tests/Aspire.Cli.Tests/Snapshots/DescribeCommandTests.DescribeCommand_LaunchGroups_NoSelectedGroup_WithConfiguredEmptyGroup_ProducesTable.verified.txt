@@ -1,0 +1,5 @@
+﻿Selected launch group: -
+Launch groups: empty
+┌──────────┬────────┬────────────────┬─────────┬───────┐
+│ Resource │ Groups │ Inherited from │ Startup │ Build │
+└──────────┴────────┴────────────────┴─────────┴───────┘

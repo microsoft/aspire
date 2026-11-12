@@ -4,6 +4,7 @@
 #pragma warning disable ASPIRELAUNCHGROUPS001 // Internal use of launch-group annotations.
 
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Backchannel;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Orchestrator;
@@ -25,7 +26,7 @@ internal sealed class LaunchGroupMetadataService(ILogger<LaunchGroupMetadataServ
     private readonly HashSet<IResource> _generatedBuilds = new(ReferenceEqualityComparer.Instance);
     private string? _selectedGroup;
     private string[]? _groups;
-    private LaunchGroupMetadata? _information;
+    private GetLaunchGroupsResponse? _information;
 
     internal void CaptureSelection(IEnumerable<IResource> resources, string? selectedGroup, IEnumerable<string> groups)
     {
@@ -148,7 +149,7 @@ internal sealed class LaunchGroupMetadataService(ILogger<LaunchGroupMetadataServ
             })
             .ToArray();
 
-        _information = new LaunchGroupMetadata
+        _information = new GetLaunchGroupsResponse
         {
             SelectedGroup = _selectedGroup,
             Groups = groups,
@@ -184,10 +185,10 @@ internal sealed class LaunchGroupMetadataService(ILogger<LaunchGroupMetadataServ
         }
     }
 
-    internal LaunchGroupMetadata GetInformation() =>
+    internal GetLaunchGroupsResponse GetInformation() =>
         _information ?? throw new InvalidOperationException("Launch-group metadata is not available before the startup plan is finalized.");
 
-    internal LaunchGroupMetadata? GetInformationOrDefault() => _information;
+    internal GetLaunchGroupsResponse? GetInformationOrDefault() => _information;
 
     private static string[] SortGroups(IEnumerable<string> groups) => groups
         .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -206,50 +207,4 @@ internal sealed class LaunchGroupMetadataService(ILogger<LaunchGroupMetadataServ
         string? InheritedFrom,
         bool ExplicitStart,
         LaunchGroupExclusionReason ExclusionReason);
-}
-
-/// <summary>
-/// Describes the effective launch groups and startup decisions.
-/// </summary>
-internal sealed class LaunchGroupMetadata
-{
-    public string? SelectedGroup { get; init; }
-    public required string[] Groups { get; init; }
-    public required LaunchGroupResourceInfo[] Resources { get; init; }
-}
-
-/// <summary>
-/// Describes a resource's launch-group membership and startup decisions.
-/// </summary>
-internal sealed class LaunchGroupResourceInfo
-{
-    public required string Name { get; init; }
-    public required string[] Groups { get; init; }
-    public string? InheritedFrom { get; init; }
-    public bool ExplicitStart { get; init; }
-    public LaunchGroupExclusionReason ExclusionReason { get; init; }
-    public LaunchGroupBuildType BuildType { get; init; }
-}
-
-/// <summary>
-/// Describes why a resource is excluded by or exempt from launch-group selection.
-/// </summary>
-internal enum LaunchGroupExclusionReason
-{
-    None,
-    NotInSelectedGroup,
-    ExemptFromSelection
-}
-
-/// <summary>
-/// Describes how a coordinated project build participates in initial startup.
-/// </summary>
-internal enum LaunchGroupBuildType
-{
-    NotCoordinated,
-    Pending,
-    Initial,
-    InitialPersistent,
-    InitialShared,
-    Deferred
 }

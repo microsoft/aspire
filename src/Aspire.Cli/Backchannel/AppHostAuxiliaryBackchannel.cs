@@ -101,6 +101,9 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
     /// <inheritdoc />
     public bool SupportsResourceSnapshotVersionsV1 => _capabilities.Contains(AuxiliaryBackchannelCapabilities.ResourceSnapshotVersions_V1);
 
+    /// <inheritdoc />
+    public bool SupportsLaunchGroupsV1 => _capabilities.Contains(AuxiliaryBackchannelCapabilities.LaunchGroups_V1);
+
     /// <summary>
     /// Gets the JSON-RPC proxy for communicating with the AppHost.
     /// </summary>
@@ -391,6 +394,26 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
             _logger.LogDebug(ex, "WaitForAppHostReadyAsync RPC method not available on the remote AppHost. The AppHost may be running an older version.");
             return null;
         }
+    }
+
+    /// <inheritdoc />
+    public async Task<GetLaunchGroupsResponse?> GetLaunchGroupsAsync(CancellationToken cancellationToken = default)
+    {
+        if (!SupportsLaunchGroupsV1)
+        {
+            return null;
+        }
+
+        var rpc = EnsureConnected();
+
+        _logger.LogDebug("Getting launch-group metadata");
+
+        return await rpc.InvokeWithProfilingAsync<GetLaunchGroupsResponse>(
+            _profilingTelemetry,
+            "auxiliary",
+            "GetLaunchGroupsAsync",
+            [new GetLaunchGroupsRequest()],
+            cancellationToken).ConfigureAwait(false);
     }
 
     /// <inheritdoc />

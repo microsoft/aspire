@@ -16,6 +16,8 @@ namespace Aspire.Cli.Tests.TestServices;
 internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
 {
     private int _getResourceSnapshotsCallCount;
+    private int _getLaunchGroupsCallCount;
+    private int _getDashboardUrlsCallCount;
     private int _lastGetResourceSnapshotsIncludeHidden = -1;
     private int _disposeCallCount;
 
@@ -40,6 +42,7 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
     public bool SupportsV3 { get; set; }
     public bool SupportsTerminalsV1 { get; set; } = true;
     public bool SupportsResourceSnapshotVersionsV1 { get; set; }
+    public bool SupportsLaunchGroupsV1 { get; set; }
 
     /// <summary>
     /// Gets or sets the resource snapshots to return from GetResourceSnapshotsAsync and WatchResourceSnapshotsAsync.
@@ -60,6 +63,11 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
 
     public WaitForAppHostReadyResponse? WaitForAppHostReadyResponse { get; set; }
     public Func<CancellationToken, Task<WaitForAppHostReadyResponse?>>? WaitForAppHostReadyHandler { get; set; }
+
+    public GetLaunchGroupsResponse? LaunchGroupsResponse { get; set; }
+    public Func<CancellationToken, Task<GetLaunchGroupsResponse?>>? GetLaunchGroupsHandler { get; set; }
+    public int GetLaunchGroupsCallCount => Volatile.Read(ref _getLaunchGroupsCallCount);
+    public int GetDashboardUrlsCallCount => Volatile.Read(ref _getDashboardUrlsCallCount);
 
     /// <summary>
     /// Gets or sets the log lines to return from GetResourceLogsAsync.
@@ -128,6 +136,7 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
 
     public Task<DashboardUrlsState?> GetDashboardUrlsAsync(CancellationToken cancellationToken = default)
     {
+        Interlocked.Increment(ref _getDashboardUrlsCallCount);
         return GetDashboardUrlsHandler?.Invoke(cancellationToken) ?? Task.FromResult(DashboardUrlsState);
     }
 
@@ -172,6 +181,12 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
         }
 
         return Task.FromResult(WaitForAppHostReadyResponse);
+    }
+
+    public Task<GetLaunchGroupsResponse?> GetLaunchGroupsAsync(CancellationToken cancellationToken = default)
+    {
+        Interlocked.Increment(ref _getLaunchGroupsCallCount);
+        return GetLaunchGroupsHandler?.Invoke(cancellationToken) ?? Task.FromResult(LaunchGroupsResponse);
     }
 
     public Task<List<ResourceSnapshot>> GetResourceSnapshotsAsync(bool includeHidden, CancellationToken cancellationToken = default)

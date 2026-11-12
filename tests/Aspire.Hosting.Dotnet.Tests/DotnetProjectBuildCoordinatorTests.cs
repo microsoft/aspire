@@ -13,6 +13,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading.Channels;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Dcp;
 using Aspire.Hosting.Dcp.Model;
 using Aspire.Hosting.Dcp.Process;
