@@ -357,12 +357,9 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
                     });
                 if (restoreExitCode != 0)
                 {
-                    var restoreLines = restoreOutput.GetLines().ToArray();
-                    logger.LogDebug(
-                        "Validation restore for {Channel} channel update failed for project '{ProjectFile}' with exit code {ExitCode}. The update was not applied and the candidate changes will be rolled back. Restore output:{NewLine}{Output}",
-                        channel.Name, projectFile.FullName, restoreExitCode, Environment.NewLine,
-                        string.Join(Environment.NewLine, restoreLines.Select(static line => line.Line)));
-                    interactionService.DisplayLines(restoreLines);
+                    // Display native diagnostics like dotnet restore, but do not persist them in
+                    // CLI logs because they can contain credential-bearing package source URLs.
+                    interactionService.DisplayLines(restoreOutput.GetLines());
                     throw new ProjectUpdaterException(string.Format(CultureInfo.InvariantCulture, UpdateCommandStrings.FailedToRestoreAfterUpdateFormat, channel.Name, projectFile.FullName));
                 }
             }
