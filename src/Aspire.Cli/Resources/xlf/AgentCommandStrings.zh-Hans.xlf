@@ -88,8 +88,8 @@
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_AspireSkillChoice">
-        <source>Agent assets from configured skill sources (also removes static copies of Aspire skills)</source>
-        <target state="new">Agent assets from configured skill sources (also removes static copies of Aspire skills)</target>
+        <source>Agent assets from configured skill sources (also removes static copies of Aspire skills, if applicable)</source>
+        <target state="new">Agent assets from configured skill sources (also removes static copies of Aspire skills, if applicable)</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_ConfigurationTarget">

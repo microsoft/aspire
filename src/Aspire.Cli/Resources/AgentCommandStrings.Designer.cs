@@ -223,7 +223,7 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Agent assets from configured skill sources (also removes static copies of Aspire skills).
+        ///   Looks up a localized string similar to Agent assets from configured skill sources (also removes static copies of Aspire skills, if applicable).
         /// </summary>
         internal static string InitCommand_AspireSkillChoice {
             get {
