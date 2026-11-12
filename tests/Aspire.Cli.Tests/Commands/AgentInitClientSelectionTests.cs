@@ -1457,6 +1457,7 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
     [InlineData("claude", "null-plugin-value", false)]
     [InlineData("claude", "null-plugins-with-mcp", true)]
     [InlineData("claude", "malformed-mcp", false)]
+    [InlineData("copilot", "duplicate-mcp", false)]
     [InlineData("claude", "none", false)]
     public async Task AgentInit_ExistingAspireSetupWithoutSelection_RefreshesHook(string clientId, string existing, bool expectHook)
     {
@@ -1486,6 +1487,7 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
         {
             "mcp" => [(mcpPath, aspireMcp)],
             "malformed-mcp" => [(mcpPath, "{broken")],
+            "duplicate-mcp" => [(mcpPath, """{"mcpServers":{},"mcpServers":{}}""")],
             "plugin" => [(pluginPath, """{"enabledPlugins":{"aspire@aspire-skills":true}}""")],
             "disabled-plugin" => [(pluginPath, """{"enabledPlugins":{"aspire@aspire-skills":false}}""")],
             "null-plugins" => [(pluginPath, nullPlugins)],
