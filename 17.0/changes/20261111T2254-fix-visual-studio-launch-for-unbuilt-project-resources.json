@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "\ud83c\udfe0",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Visual Studio F5 on a clean Aspire application using AddDotnetProject now builds project resources before launch, instead of failing with a missing-executable 500 error; compile errors surface as diagnostics.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udee0\ufe0f",
+  "firstMergedAt": "2026-11-11T22:54:13Z",
+  "lastMergedAt": "2026-11-11T22:54:13Z",
+  "name": "Fix Visual Studio launch for unbuilt project resources",
+  "owner": "karolz-ms",
+  "prs": [
+    22174
+  ]
+}

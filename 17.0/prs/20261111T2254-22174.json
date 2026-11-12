@@ -1,0 +1,9 @@
+{
+  "author": "karolz-ms",
+  "comment": "Fix VS launch for unbuilt project resources",
+  "mergedAt": "2026-11-11T22:54:13Z",
+  "number": 22174,
+  "runDate": "2026-11-12T00:10:00Z",
+  "status": "included",
+  "title": "[release/17.0] Fix Visual Studio launch for unbuilt project resources"
+}

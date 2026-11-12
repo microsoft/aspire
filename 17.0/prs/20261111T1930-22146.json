@@ -1,0 +1,9 @@
+{
+  "author": "aspire-repo-bot",
+  "comment": "Dependency/servicing version bump backport",
+  "mergedAt": "2026-11-11T19:30:03Z",
+  "number": 22146,
+  "runDate": "2026-11-12T00:10:00Z",
+  "status": "excluded",
+  "title": "[release/17.0] Update .NET servicing dependencies and adopt .NET 11 GA"
+}

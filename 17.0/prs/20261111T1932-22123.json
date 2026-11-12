@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Go SDK hardening; grouped with Go callback panics entry",
+  "mergedAt": "2026-11-11T19:32:53Z",
+  "number": 22123,
+  "runDate": "2026-11-12T00:10:00Z",
+  "status": "included",
+  "title": "[release/17.0] Harden Go SDK runtime and complete typed API export metadata"
+}
