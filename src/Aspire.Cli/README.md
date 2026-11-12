@@ -107,11 +107,6 @@ environment-variable input is not a guarantee that the secret cannot be read.
 
 ### Updating .NET AppHosts
 
-Use `aspire update --channel <channel> --force` to skip the validation restore
-and persist the confirmed update even if restore would fail. Configuration
-conflicts still cause an error. `--force` does not bypass confirmation prompts
-or skip restore without an explicit channel (`--channel` or legacy `--quality`).
-
 `aspire update` preserves package-only AppHosts: it updates their
 `Aspire.Hosting.AppHost` reference without adding `Aspire.AppHost.Sdk`.
 SDK-based AppHosts remain supported, including C#, F#, and Visual Basic project
@@ -127,6 +122,11 @@ update instead of guessing which shared file to change.
 Automatic SDK rewrites are limited to unconditional declarations. Conditional
 SDK declarations that cannot be safely classified require an explicit version
 edit; source fallback does not guess whether their MSBuild conditions are active.
+
+Use `aspire update --channel <channel> --force` to skip the validation restore
+and persist the confirmed update even if restore would fail. Configuration
+conflicts still cause an error. `--force` does not bypass confirmation prompts
+or skip restore without an explicit channel (`--channel` or legacy `--quality`).
 
 ## Configured template sources
 
