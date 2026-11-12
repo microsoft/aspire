@@ -351,13 +351,15 @@ path_rules:
   - paths:
       - .github/workflows/cli-starter-validation.yml
       - eng/scripts/cli-starter-validation.ps1
+      - eng/scripts/stage-cli-starter-diagnostics.ps1
       - eng/scripts/get-aspire-cli-pr.ps1
     targets: [job:cli-starter-validation]
-    reason: the reusable workflow, PR installer, and scenario script implement starter validation
+    reason: the reusable workflow and its scripts implement starter validation
   - paths:
       - eng/scripts/cli-starter-validation.ps1
+      - eng/scripts/stage-cli-starter-diagnostics.ps1
     targets: [test:Infrastructure.Tests]
-    reason: starter validation script behavioral tests execute this loose input
+    reason: starter validation behavioral tests execute these loose inputs
   - paths:
       - .github/workflows/native-dashboard-validation.yml
       - eng/scripts/test-native-dashboard.ps1
