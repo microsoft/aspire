@@ -540,18 +540,23 @@ internal sealed class AgentInitCommand : BaseCommand
             cancellationToken.ThrowIfCancellationRequested();
             registrationResults = await AgentConfiguration.ApplyRemoteAsync(selectedClients, workspaceRoot, scope, skillSources, cancellationToken);
 
-            // Configured skill sources supersede copies left by older CLI versions. Keep the copies
-            // when registration failed so the agent is not left without Aspire skills. Project scope
-            // leaves user-level copies alone because other workspaces may still rely on them.
+            // Configured skill sources supersede copies left by older CLI versions, but registration
+            // can fail or change nothing (for example when all sources are disabled), so copies are
+            // kept unless every selected agent now has Aspire skills at this scope. Only copies at this
+            // scope in folders a selected agent reads are removed.
             // Removal runs before the results are displayed so removed copies are listed under the
-            // configured sources they were replaced by.
-            var (removedSkillCopies, skillCopyFailures) = registrationResults.Any(static result => result.Status is AgentConfigurationStatus.Failed)
-                ? ([], [])
-                : RemoveSkillCopies(LocalAspireSkills.Find(ExecutionContext.WorkingDirectory, workspaceRoot,
-                        ExecutionContext.HomeDirectory, cancellationToken)
-                    .Where(copy => scope is AgentConfigurationScope.Global || copy.Scope is AgentConfigurationScope.Project)
+            // configured sources that replaced them.
+            var canRemoveSkillCopies =
+                !registrationResults.Any(static result => result.Status is AgentConfigurationStatus.Failed) &&
+                selectedClients.All(client => HasAspireSkillsRegistration(client, workspaceRoot, scope, skillSources));
+            var skillCopiesToRemove = canRemoveSkillCopies
+                ? LocalAspireSkills.Find(ExecutionContext.WorkingDirectory, workspaceRoot, ExecutionContext.HomeDirectory, cancellationToken)
+                    .Where(copy => copy.Scope == scope && selectedClients.Any(client =>
+                        copy.Owners.Contains(client.Id, StringComparers.AgentClientId)))
                     .Select(copy => copy.Directory)
-                    .ToArray(), workspaceRoot);
+                    .ToArray()
+                : [];
+            var (removedSkillCopies, skillCopyFailures) = RemoveSkillCopies(skillCopiesToRemove, workspaceRoot);
             hasErrors |= DisplayRemoteConfigurationResults(registrationResults, removedSkillCopies, workspaceRoot);
             foreach (var failure in skillCopyFailures)
             {
@@ -981,6 +986,20 @@ internal sealed class AgentInitCommand : BaseCommand
         }
 
         return (removed, failures);
+    }
+
+    private static bool HasAspireSkillsRegistration(IAgentClient client, DirectoryInfo workspaceRoot,
+        AgentConfigurationScope scope, IReadOnlyList<SkillSource> sources)
+    {
+        try
+        {
+            return client.HasIntegrationRegistration(workspaceRoot, scope, sources);
+        }
+        catch (Exception ex) when (ex is JsonException or InvalidOperationException or IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            // Unreadable settings cannot prove the agent still has Aspire skills, so keep the copies.
+            return false;
+        }
     }
 
     // Discovery follows links, so a copy reached through a linked folder (for example

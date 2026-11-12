@@ -86,14 +86,14 @@ public class LocalAspireSkillsTests(ITestOutputHelper output) : IDisposable
     }
 
     [Fact]
-    public async Task Find_WorkspaceAtHomeReportsSharedLocationAsProject()
+    public async Task Find_WorkspaceAtHomeReportsSharedLocationUnderBothScopes()
     {
         var skill = Path.Combine(_context.Home.FullName, ".agents", "skills", "aspire");
         await AgentConfigurationTestContext.WriteAsync(Path.Combine(skill, "SKILL.md"), "shared");
 
         var result = Find(_context.Home, _context.Home);
 
-        Assert.Equal((skill, AgentConfigurationScope.Project), Assert.Single(result));
+        Assert.Equal([(skill, AgentConfigurationScope.Project), (skill, AgentConfigurationScope.Global)], result);
     }
 
     [Fact]
@@ -127,7 +127,9 @@ public class LocalAspireSkillsTests(ITestOutputHelper output) : IDisposable
     }
 
     private IReadOnlyList<(string Directory, AgentConfigurationScope Scope)> Find(DirectoryInfo working, DirectoryInfo workspaceRoot)
-        => LocalAspireSkills.Find(working, workspaceRoot, _context.Home, TestContext.Current.CancellationToken);
+        => LocalAspireSkills.Find(working, workspaceRoot, _context.Home, TestContext.Current.CancellationToken)
+            .Select(static copy => (copy.Directory, copy.Scope))
+            .ToArray();
 
     public void Dispose() => _context.Dispose();
 }

@@ -106,11 +106,11 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Run &apos;aspire agent init&apos; to configure skill sources and remove these copies..
+        ///   Looks up a localized string similar to Run &apos;{0}&apos; to configure skill sources and remove these copies..
         /// </summary>
-        internal static string AspireSkillsFix {
+        internal static string AspireSkillsFixFormat {
             get {
-                return ResourceManager.GetString("AspireSkillsFix", resourceCulture);
+                return ResourceManager.GetString("AspireSkillsFixFormat", resourceCulture);
             }
         }
         

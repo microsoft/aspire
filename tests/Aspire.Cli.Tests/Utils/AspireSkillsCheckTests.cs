@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.Agents;
 using Aspire.Cli.Tests.TestServices;
@@ -30,10 +31,28 @@ public class AspireSkillsCheckTests(ITestOutputHelper outputHelper) : IDisposabl
 
         Assert.Equal(AspireSkillsCheck.CheckName, result.Name);
         Assert.Equal(EnvironmentCheckStatus.Warning, result.Status);
-        Assert.Equal(DoctorCommandStrings.AspireSkillsFix, result.Fix);
+        Assert.Equal(
+            $"""
+            {string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.AspireSkillsFixFormat, "aspire agent init --agents claude --scope project")}
+            {string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.AspireSkillsFixFormat, "aspire agent init --agents copilot,opencode --scope global")}
+            """.ReplaceLineEndings("\n"),
+            result.Fix);
         Assert.Equal([".claude/skills/aspire-init", "~/.agents/skills/aspire"], result.Files);
         Assert.Equal("project guidance", await File.ReadAllTextAsync(project));
         Assert.Equal("user guidance", await File.ReadAllTextAsync(user));
+    }
+
+    [Fact]
+    public async Task CheckAsync_WorkspaceAtHome_ReportsSharedLocationOnce()
+    {
+        await AgentConfigurationTestContext.WriteAsync(
+            Path.Combine(_context.Home.FullName, ".agents", "skills", "aspire", "SKILL.md"), "shared guidance");
+        var check = new AspireSkillsCheck(new TestGitRepository(),
+            TestExecutionContextHelper.CreateExecutionContext(_context.Home, homeDirectory: _context.Home));
+
+        var result = Assert.Single(await check.CheckAsync(TestContext.Current.CancellationToken));
+
+        Assert.Equal([".agents/skills/aspire"], result.Files);
     }
 
     [Fact]

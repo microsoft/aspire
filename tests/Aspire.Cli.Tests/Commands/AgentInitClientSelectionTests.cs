@@ -516,7 +516,7 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
                 AgentCommandStrings.InitCommand_ConfigureMcpServerPrompt, AgentCommandStrings.InitCommand_SelectScopePrompt],
             prompts);
         Assert.Empty(warnings);
-        Assert.False(Directory.Exists(Path.GetDirectoryName(skillPath)));
+        Assert.Equal(skill, await File.ReadAllTextAsync(skillPath));
         var copilot = provider.GetServices<IAgentClient>().Single(client =>
             string.Equals(client.Id, "copilot", StringComparisons.AgentClientId));
         Assert.True(copilot.HasIntegrationRegistration(
@@ -1430,9 +1430,9 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
         {
             Assert.Empty(interaction.DisplayedErrors);
             Assert.Contains(interaction.DisplayedMessages, message => message.Emoji.Equals(KnownEmojis.Robot) &&
-                message.Message.EndsWith($"{Environment.NewLine}  [dim]{string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_RemovedSkillCopies, $"~/.agents/skills/aspire, {projectDirectory}/skills/aspire-init")}[/]", StringComparison.Ordinal));
+                message.Message.EndsWith($"{Environment.NewLine}  [dim]{string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_RemovedSkillCopies, "~/.agents/skills/aspire")}[/]", StringComparison.Ordinal));
             Assert.False(Directory.Exists(Path.GetDirectoryName(path)));
-            Assert.False(Directory.Exists(Path.GetDirectoryName(projectSkillPath)));
+            Assert.Equal(content, await File.ReadAllTextAsync(projectSkillPath));
             Assert.True(File.Exists(context.Copilot.GetIntegrationConfigPath(AgentConfigurationScope.Global, context.Project)));
             Assert.True(File.Exists(context.Copilot.GetMcpConfigPath(AgentConfigurationScope.Global, context.Project)));
             Assert.False(File.Exists(context.ClaudeCode.GetIntegrationConfigPath(AgentConfigurationScope.Global, context.Project)));

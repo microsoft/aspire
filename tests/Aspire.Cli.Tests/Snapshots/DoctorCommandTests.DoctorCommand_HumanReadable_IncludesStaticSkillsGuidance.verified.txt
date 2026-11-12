@@ -4,7 +4,8 @@ Aspire Environment Check
 
 Environment
   🚨 Found static copies of Aspire skills.
-       Run 'aspire agent init' to configure skill sources and remove these copies.
+       Run 'aspire agent init --agents copilot,opencode --scope project' to configure skill sources and remove these copies.
+       Run 'aspire agent init --agents copilot,opencode --scope global' to configure skill sources and remove these copies.
        Files:
          .agents/skills/aspire
          ~/.agents/skills/aspire

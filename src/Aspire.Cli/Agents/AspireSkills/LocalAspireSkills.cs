@@ -1,6 +1,10 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Cli.Agents.ClaudeCode;
+using Aspire.Cli.Agents.Copilot;
+using Aspire.Cli.Agents.OpenCode;
+
 namespace Aspire.Cli.Agents.AspireSkills;
 
 internal static class LocalAspireSkills
@@ -18,22 +22,23 @@ internal static class LocalAspireSkills
         "aspireify"
     ];
 
-    // The fixed locations older CLIs copied skills into (their --skill-location choices).
-    // Only these are probed: copies never went to agent-specific roots such as CLAUDE_CONFIG_DIR
-    // or OpenCode skills.paths, so reading those would inspect files the CLI never wrote.
-    private static readonly string[] s_projectSkillDirectories =
+    private static readonly string[] s_universalSkillOwners = [CopilotAgentClient.ClientId, OpenCodeAgentClient.ClientId];
+
+    // The locations older CLIs copied skills into, with the clients each was installed for.
+    // Agent-specific roots such as CLAUDE_CONFIG_DIR or OpenCode skills.paths never received copies.
+    private static readonly (string Directory, string[] Owners)[] s_projectSkillDirectories =
     [
-        AgentPath.UniversalSkillsDirectory,
-        Path.Combine(".claude", "skills"),
-        Path.Combine(".github", "skills"),
-        Path.Combine(".opencode", "skill")
+        (AgentPath.UniversalSkillsDirectory, s_universalSkillOwners),
+        (Path.Combine(".claude", "skills"), [ClaudeCodeAgentClient.ClientId]),
+        (Path.Combine(".github", "skills"), [CopilotAgentClient.ClientId]),
+        (Path.Combine(".opencode", "skill"), [OpenCodeAgentClient.ClientId])
     ];
 
     /// <summary>
-    /// Finds skill directories copied by older CLIs in the workspace (tagged <see cref="AgentConfigurationScope.Project"/>)
-    /// and in the user-level standard location (tagged <see cref="AgentConfigurationScope.Global"/>).
+    /// Finds skill directories copied by older CLIs in the workspace and in the user-level standard location,
+    /// with the IDs of the clients that read each one.
     /// </summary>
-    internal static IReadOnlyList<(string Directory, AgentConfigurationScope Scope)> Find(
+    internal static IReadOnlyList<(string Directory, AgentConfigurationScope Scope, string[] Owners)> Find(
         DirectoryInfo workingDirectory,
         DirectoryInfo workspaceRoot,
         DirectoryInfo homeDirectory,
@@ -45,14 +50,14 @@ internal static class LocalAspireSkills
         // Clamping to the workspace excludes sibling projects and unrelated current directories.
         // Older CLIs only installed user-level copies to the standard location.
         var candidates = AgentPath.ProjectDirectories(workingDirectory, workspaceRoot)
-            .SelectMany(root => s_projectSkillDirectories.Select(directory =>
-                (Path: Path.Combine(root.FullName, directory), Scope: AgentConfigurationScope.Project)))
-            .Append((Path: Path.Combine(homeDirectory.FullName, AgentPath.UniversalSkillsDirectory), Scope: AgentConfigurationScope.Global));
+            .SelectMany(root => s_projectSkillDirectories.Select(location =>
+                (Path: Path.Combine(root.FullName, location.Directory), Scope: AgentConfigurationScope.Project, location.Owners)))
+            .Append((Path: Path.Combine(homeDirectory.FullName, AgentPath.UniversalSkillsDirectory), Scope: AgentConfigurationScope.Global, Owners: s_universalSkillOwners));
 
-        // A workspace rooted at the home directory shares the user-level location; the first
-        // (project) match wins so project-scoped removal still covers it.
-        var found = new Dictionary<string, AgentConfigurationScope>(StringComparers.FileSystemPath);
-        foreach (var (skillsDirectory, scope) in candidates)
+        // A workspace rooted at the home directory shares the user-level location, so a copy there
+        // is reported under both scopes and removal at either scope covers it.
+        var found = new List<(string Directory, AgentConfigurationScope Scope, string[] Owners)>();
+        foreach (var (skillsDirectory, scope, owners) in candidates)
         {
             foreach (var name in s_legacySkillNames)
             {
@@ -65,14 +70,14 @@ internal static class LocalAspireSkills
                 var path = Path.GetFullPath(Path.Combine(skillsDirectory, name));
                 if (Directory.Exists(path))
                 {
-                    found.TryAdd(path, scope);
+                    found.Add((path, scope, owners));
                 }
             }
         }
 
         return found
-            .Select(entry => (Directory: entry.Key, Scope: entry.Value))
             .OrderBy(entry => entry.Directory, StringComparers.FileSystemPath)
+            .ThenBy(entry => entry.Scope)
             .ToArray();
     }
 }

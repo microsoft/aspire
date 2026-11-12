@@ -997,6 +997,8 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
     [InlineData("not-selected")]
     [InlineData("registration-failed")]
     [InlineData("project-scope")]
+    [InlineData("sources-disabled")]
+    [InlineData("opencode-without-catalog")]
     public async Task Remote_KeepsSkillCopiesWhenAspireSkillsAreNotInstalledAtTheirScope(string reason)
     {
         using var context = new AgentConfigurationTestContext(outputHelper);
@@ -1004,25 +1006,56 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             ".agents", "skills", "aspire", "SKILL.md");
         const string skill = "My customized Aspire instructions.";
         await AgentConfigurationTestContext.WriteAsync(skillPath, skill);
-        if (reason == "registration-failed")
+        var configPath = Path.Combine(context.Project.FullName, "aspire.config.json");
+        switch (reason)
         {
-            await AgentConfigurationTestContext.WriteAsync(
-                context.Copilot.GetIntegrationConfigPath(AgentConfigurationScope.Project, context.Project),
-                """{"enabledPlugins":{"aspire@aspire-skills":false}}""");
+            case "registration-failed":
+                await AgentConfigurationTestContext.WriteAsync(
+                    context.Copilot.GetIntegrationConfigPath(AgentConfigurationScope.Project, context.Project),
+                    """{"enabledPlugins":{"aspire@aspire-skills":false}}""");
+                break;
+            case "sources-disabled":
+                await AgentConfigurationTestContext.WriteAsync(configPath, """{"skillSources":{"default":{"enabled":false}}}""");
+                break;
+            case "opencode-without-catalog":
+                await AgentConfigurationTestContext.WriteAsync(configPath,
+                    """{"skillSources":{"default":{"enabled":false},"team":{"repository":"example/team"}}}""");
+                break;
         }
         var interaction = new TestInteractionService();
         using var provider = context.CreateServiceCollection(outputHelper, options =>
         {
             options.InteractionServiceFactory = _ => interaction;
         }).BuildServiceProvider();
+        var agents = reason == "opencode-without-catalog" ? "opencode" : "copilot";
         var skills = reason == "not-selected" ? "none" : "aspire";
 
-        var result = provider.GetRequiredService<RootCommand>().Parse($"agent init --agents copilot --scope project --skills {skills} --mcp=false");
+        var result = provider.GetRequiredService<RootCommand>().Parse($"agent init --agents {agents} --scope project --skills {skills} --mcp=false");
 
         Assert.Equal(reason == "registration-failed" ? CliExitCodes.InvalidCommand : CliExitCodes.Success,
             await result.InvokeAsync().DefaultTimeout());
         Assert.Equal(skill, await File.ReadAllTextAsync(skillPath));
         Assert.Equal(reason == "registration-failed" ? 1 : 0, interaction.DisplayedErrors.Count);
+    }
+
+    [Fact]
+    public async Task Remote_RemovesOnlySkillCopiesInFoldersTheSelectedAgentReads()
+    {
+        using var context = new AgentConfigurationTestContext(outputHelper);
+        string[] skillRoots = [".agents/skills", ".claude/skills", ".github/skills", ".opencode/skill"];
+        foreach (var skillRoot in skillRoots)
+        {
+            await AgentConfigurationTestContext.WriteAsync(
+                Path.Combine(context.Project.FullName, skillRoot, "aspire", "SKILL.md"), "My customized Aspire instructions.");
+        }
+        using var provider = context.CreateServiceCollection(outputHelper).BuildServiceProvider();
+
+        var result = provider.GetRequiredService<RootCommand>().Parse(
+            "agent init --agents copilot --scope project --skills aspire --mcp=false");
+
+        Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
+        Assert.Equal([".claude/skills", ".opencode/skill"],
+            skillRoots.Where(skillRoot => Directory.Exists(Path.Combine(context.Project.FullName, skillRoot, "aspire"))));
     }
 
     [Fact]

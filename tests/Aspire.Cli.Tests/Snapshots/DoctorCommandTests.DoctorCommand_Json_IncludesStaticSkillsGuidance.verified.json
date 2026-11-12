@@ -3,7 +3,7 @@
       "name": "aspire-skill-sources",
       "status": "warning",
       "message": "Found static copies of Aspire skills.",
-      "fix": "Run 'aspire agent init' to configure skill sources and remove these copies.",
+      "fix": "Run 'aspire agent init --agents copilot,opencode --scope project' to configure skill sources and remove these copies.\nRun 'aspire agent init --agents copilot,opencode --scope global' to configure skill sources and remove these copies.",
       "files": [
         ".agents/skills/aspire",
         "~/.agents/skills/aspire"

@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Agents;
 using Aspire.Cli.Agents.AspireSkills;
@@ -30,16 +31,30 @@ internal sealed class AspireSkillsCheck(
         if (skillCopies.Count > 0)
         {
             var displayPaths = skillCopies
-                .Select(copy => AgentPath.GetDisplayPath(copy.Directory, workspaceRoot, executionContext))
+                .Select(copy => copy.Directory)
+                .Distinct(StringComparers.FileSystemPath)
+                .Select(directory => AgentPath.GetDisplayPath(directory, workspaceRoot, executionContext))
                 .Order(StringComparer.Ordinal)
                 .ToArray();
+
+            // Init removes only copies at its scope that a selected agent reads, so each fix line
+            // names the agents for one scope.
+            var fix = string.Join('\n', skillCopies
+                .GroupBy(copy => copy.Scope)
+                .OrderBy(group => group.Key)
+                .Select(group =>
+                {
+                    var agents = string.Join(',', group.SelectMany(copy => copy.Owners).Distinct().Order(StringComparer.Ordinal));
+                    var command = $"aspire agent init --agents {agents} --scope {group.Key.ToString().ToLowerInvariant()}";
+                    return string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.AspireSkillsFixFormat, command);
+                }));
             results.Add(new EnvironmentCheckResult
             {
                 Category = EnvironmentCheckCategories.Environment,
                 Name = CheckName,
                 Status = EnvironmentCheckStatus.Warning,
                 Message = DoctorCommandStrings.AspireSkillsMessage,
-                Fix = DoctorCommandStrings.AspireSkillsFix,
+                Fix = fix,
                 Files = displayPaths,
                 Metadata = new JsonObject
                 {

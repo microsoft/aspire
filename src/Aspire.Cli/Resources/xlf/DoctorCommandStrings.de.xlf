@@ -27,10 +27,10 @@
         <target state="translated">Aspire</target>
         <note />
       </trans-unit>
-      <trans-unit id="AspireSkillsFix">
-        <source>Run 'aspire agent init' to configure skill sources and remove these copies.</source>
-        <target state="new">Run 'aspire agent init' to configure skill sources and remove these copies.</target>
-        <note />
+      <trans-unit id="AspireSkillsFixFormat">
+        <source>Run '{0}' to configure skill sources and remove these copies.</source>
+        <target state="new">Run '{0}' to configure skill sources and remove these copies.</target>
+        <note>{0} is the aspire agent init command (not localizable)</note>
       </trans-unit>
       <trans-unit id="AspireSkillsMessage">
         <source>Found static copies of Aspire skills.</source>

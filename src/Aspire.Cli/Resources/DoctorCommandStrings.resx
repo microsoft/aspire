@@ -390,8 +390,9 @@ The legacy file continues to work — this is a non-blocking warning.</value>
   <data name="AspireSkillsMessage" xml:space="preserve">
     <value>Found static copies of Aspire skills.</value>
   </data>
-  <data name="AspireSkillsFix" xml:space="preserve">
-    <value>Run 'aspire agent init' to configure skill sources and remove these copies.</value>
+  <data name="AspireSkillsFixFormat" xml:space="preserve">
+    <value>Run '{0}' to configure skill sources and remove these copies.</value>
+    <comment>{0} is the aspire agent init command (not localizable)</comment>
   </data>
   <data name="ContainerRuntimeExplicitSelectionSuffix" xml:space="preserve">
     <value> ← explicitly selected</value>
