@@ -1715,8 +1715,8 @@ public class AtsGoCodeGeneratorTests
 
                     want := FormatError(errors.Join(first, second))
                     wrapped := fmt.Errorf("building app: %w", fmt.Errorf("resources: %w", errors.Join(first, second)))
-                    if got := FormatError(wrapped); got != want {
-                        t.Errorf("FormatError() = %q, want %q", got, want)
+                    if got, wantWrapped := FormatError(wrapped), "building app: resources\n"+want; got != wantWrapped {
+                        t.Errorf("FormatError() = %q, want %q", got, wantWrapped)
                     }
                 }
 

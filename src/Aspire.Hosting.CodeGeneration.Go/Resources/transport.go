@@ -97,7 +97,8 @@ func (e *CapabilityError) Error() string      { return e.err.Error() }
 // Non-SDK errors are returned via err.Error() unchanged.
 //
 // Callers commonly add context with fmt.Errorf("...: %w", err); the joined
-// failures are still found underneath, and the added context is dropped.
+// failures are still found underneath, and the added context is printed on its
+// own line before them.
 func FormatError(err error) string {
 	if err == nil {
 		return ""
@@ -106,8 +107,14 @@ func FormatError(err error) string {
 	if !errors.As(err, &capErr) {
 		return err.Error()
 	}
-	if joined := findJoinedErrors(err); joined != nil {
+	if aggregate, joined := findJoinedErrors(err); joined != nil {
 		var b strings.Builder
+		// "building app: " + aggregate.Error() -> "building app"
+		if prefix, ok := strings.CutSuffix(err.Error(), aggregate.Error()); ok {
+			if prefix = strings.TrimSuffix(prefix, ": "); prefix != "" {
+				b.WriteString(prefix)
+			}
+		}
 		for _, child := range joined {
 			formatted := FormatError(child)
 			if formatted == "" {
@@ -150,19 +157,20 @@ func FormatError(err error) string {
 }
 
 // findJoinedErrors walks single-error wrappers (fmt.Errorf with one %w) down to
-// the first error that wraps several, such as the result of errors.Join.
-func findJoinedErrors(err error) []error {
+// the first error that wraps several, such as the result of errors.Join. It
+// returns that aggregate error and the errors it wraps.
+func findJoinedErrors(err error) (error, []error) {
 	for err != nil {
 		switch u := err.(type) {
 		case interface{ Unwrap() []error }:
-			return u.Unwrap()
+			return err, u.Unwrap()
 		case interface{ Unwrap() error }:
 			err = u.Unwrap()
 		default:
-			return nil
+			return nil, nil
 		}
 	}
-	return nil
+	return nil, nil
 }
 
 // CancellationToken wraps a context.Context to provide cooperative cancellation.
