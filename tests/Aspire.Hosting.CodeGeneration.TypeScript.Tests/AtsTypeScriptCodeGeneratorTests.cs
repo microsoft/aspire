@@ -2601,7 +2601,9 @@ public class AtsTypeScriptCodeGeneratorTests
         foreach (var capability in toolCapabilities)
         {
             var legacy = capability.CapabilityId.StartsWith("Aspire.Hosting/", StringComparison.Ordinal);
-            Assert.Equal(legacy, capability.IsObsolete);
+            Assert.Equal(
+                capability.CapabilityId == "Aspire.Hosting/addDotnetTool",
+                capability.IsObsolete);
             Assert.True(capability.IsExperimental);
             Assert.Equal(
                 legacy

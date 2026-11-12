@@ -69,9 +69,13 @@ public static class DotnetCliToolResourceExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="packageId">The package ID.</param>
     /// <returns>The same resource builder.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="builder"/> or <paramref name="packageId"/> is null.</exception>
+    /// <exception cref="ArgumentException"><paramref name="packageId"/> is empty or whitespace.</exception>
     [AspireExport]
     public static IResourceBuilder<T> WithToolPackage<T>(this IResourceBuilder<T> builder, string packageId) where T : DotnetCliToolResource
     {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrWhiteSpace(packageId);
         builder.Resource.ToolConfiguration?.PackageId = packageId;
         return builder;
     }
@@ -81,9 +85,13 @@ public static class DotnetCliToolResourceExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="version">The package version or range.</param>
     /// <returns>The same resource builder.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="builder"/> or <paramref name="version"/> is null.</exception>
+    /// <exception cref="ArgumentException"><paramref name="version"/> is empty or whitespace.</exception>
     [AspireExport]
     public static IResourceBuilder<T> WithToolVersion<T>(this IResourceBuilder<T> builder, string version) where T : DotnetCliToolResource
     {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrWhiteSpace(version);
         builder.Resource.ToolConfiguration?.Version = version;
         return builder;
     }
@@ -92,9 +100,11 @@ public static class DotnetCliToolResourceExtensions
     /// <typeparam name="T">The tool resource type.</typeparam>
     /// <param name="builder">The resource builder.</param>
     /// <returns>The same resource builder.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="builder"/> is null.</exception>
     [AspireExport]
     public static IResourceBuilder<T> WithToolPrerelease<T>(this IResourceBuilder<T> builder) where T : DotnetCliToolResource
     {
+        ArgumentNullException.ThrowIfNull(builder);
         builder.Resource.ToolConfiguration?.Prerelease = true;
         return builder;
     }
@@ -104,9 +114,13 @@ public static class DotnetCliToolResourceExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="source">The package source.</param>
     /// <returns>The same resource builder.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="builder"/> or <paramref name="source"/> is null.</exception>
+    /// <exception cref="ArgumentException"><paramref name="source"/> is empty or whitespace.</exception>
     [AspireExport]
     public static IResourceBuilder<T> WithToolSource<T>(this IResourceBuilder<T> builder, string source) where T : DotnetCliToolResource
     {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrWhiteSpace(source);
         builder.Resource.ToolConfiguration?.Sources.Add(source);
         return builder;
     }
@@ -116,9 +130,11 @@ public static class DotnetCliToolResourceExtensions
     /// <param name="builder">The resource builder.</param>
     /// <returns>The same resource builder.</returns>
     /// <remarks>Has no effect when no package sources are configured.</remarks>
+    /// <exception cref="ArgumentNullException"><paramref name="builder"/> is null.</exception>
     [AspireExport]
     public static IResourceBuilder<T> WithToolIgnoreExistingFeeds<T>(this IResourceBuilder<T> builder) where T : DotnetCliToolResource
     {
+        ArgumentNullException.ThrowIfNull(builder);
         builder.Resource.ToolConfiguration?.IgnoreExistingFeeds = true;
         return builder;
     }
@@ -127,9 +143,11 @@ public static class DotnetCliToolResourceExtensions
     /// <typeparam name="T">The tool resource type.</typeparam>
     /// <param name="builder">The resource builder.</param>
     /// <returns>The same resource builder.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="builder"/> is null.</exception>
     [AspireExport]
     public static IResourceBuilder<T> WithToolIgnoreFailedSources<T>(this IResourceBuilder<T> builder) where T : DotnetCliToolResource
     {
+        ArgumentNullException.ThrowIfNull(builder);
         builder.Resource.ToolConfiguration?.IgnoreFailedSources = true;
         return builder;
     }

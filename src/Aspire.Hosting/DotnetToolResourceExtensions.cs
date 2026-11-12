@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable CS0618 // Legacy configuration methods remain required by EF callbacks.
+
 using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
 using Microsoft.Extensions.DependencyInjection;
@@ -12,15 +14,14 @@ namespace Aspire.Hosting;
 /// Provides extension methods for adding Dotnet Tool resources to the application model.
 /// </summary>
 /// <remarks>
-/// These APIs remain available for existing C# binaries and generated clients.
-/// For new code, use <c>AddDotnetCliTool</c> from <c>Aspire.Hosting.Dotnet</c>.
+/// The <c>AddDotnetTool</c> factories remain available for existing C# binaries and generated clients.
+/// The <c>WithTool*</c> methods also remain supported by the legacy tool builder exposed through
+/// <c>AddEFMigrations</c>. For directly added tools, use <c>AddDotnetCliTool</c> from
+/// <c>Aspire.Hosting.Dotnet</c>.
 /// </remarks>
 [Experimental("ASPIREDOTNETTOOL", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-[Obsolete("Use AddDotnetCliTool and its configuration methods from the Aspire.Hosting.Dotnet package instead.")]
 public static class DotnetToolResourceExtensions
 {
-    internal const string ArgumentSeparator = DotnetToolHelpers.ArgumentSeparator;
-
     /// <summary>
     /// Adds a .NET tool resource to the application model.
     /// </summary>
@@ -74,7 +75,6 @@ public static class DotnetToolResourceExtensions
     /// <returns>The <see cref="IResourceBuilder{T}"/> for chaining.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
-    [Obsolete("Use WithToolPackage on a DotnetCliToolResource from the Aspire.Hosting.Dotnet package instead.")]
     public static IResourceBuilder<T> WithToolPackage<T>(this IResourceBuilder<T> builder, string packageId)
         where T : DotnetToolResource
     {
@@ -91,7 +91,6 @@ public static class DotnetToolResourceExtensions
     /// <returns>The <see cref="IResourceBuilder{T}"/> for chaining.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
-    [Obsolete("Use WithToolVersion on a DotnetCliToolResource from the Aspire.Hosting.Dotnet package instead.")]
     public static IResourceBuilder<T> WithToolVersion<T>(this IResourceBuilder<T> builder, string version)
         where T : DotnetToolResource
     {
@@ -107,7 +106,6 @@ public static class DotnetToolResourceExtensions
     /// <returns>The <see cref="IResourceBuilder{T}"/> for chaining.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
-    [Obsolete("Use WithToolPrerelease on a DotnetCliToolResource from the Aspire.Hosting.Dotnet package instead.")]
     public static IResourceBuilder<T> WithToolPrerelease<T>(this IResourceBuilder<T> builder)
         where T : DotnetToolResource
     {
@@ -124,7 +122,6 @@ public static class DotnetToolResourceExtensions
     /// <returns>The <see cref="IResourceBuilder{T}"/> for chaining.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
-    [Obsolete("Use WithToolSource on a DotnetCliToolResource from the Aspire.Hosting.Dotnet package instead.")]
     public static IResourceBuilder<T> WithToolSource<T>(this IResourceBuilder<T> builder, string source)
         where T : DotnetToolResource
     {
@@ -140,7 +137,6 @@ public static class DotnetToolResourceExtensions
     /// <returns>The <see cref="IResourceBuilder{T}"/> for chaining.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
-    [Obsolete("Use WithToolIgnoreExistingFeeds on a DotnetCliToolResource from the Aspire.Hosting.Dotnet package instead.")]
     public static IResourceBuilder<T> WithToolIgnoreExistingFeeds<T>(this IResourceBuilder<T> builder)
         where T : DotnetToolResource
     {
@@ -156,7 +152,6 @@ public static class DotnetToolResourceExtensions
     /// <returns>The <see cref="IResourceBuilder{T}"/> for chaining.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
-    [Obsolete("Use WithToolIgnoreFailedSources on a DotnetCliToolResource from the Aspire.Hosting.Dotnet package instead.")]
     public static IResourceBuilder<T> WithToolIgnoreFailedSources<T>(this IResourceBuilder<T> builder)
         where T : DotnetToolResource
     {
