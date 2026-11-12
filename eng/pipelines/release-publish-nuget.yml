@@ -1319,6 +1319,21 @@ extends:
                       exit 1
                     }
 
+                    if ("${{ parameters.DryRun }}" -eq "false") {
+                      $candidateVersion = $null
+                      if (-not [System.Management.Automation.SemanticVersion]::TryParse($validatedVersion, [ref] $candidateVersion)) {
+                        Write-Error "NpmValidatedExpectedVersion '$validatedVersion' is not a valid SemVer version."
+                        exit 1
+                      }
+
+                      # The operator's IsPrerelease flag can disagree with the source
+                      # package version. Do not publish a prerelease under npm's default tag.
+                      if (-not [string]::IsNullOrEmpty($candidateVersion.PreReleaseLabel)) {
+                        Write-Error "npm version '$validatedVersion' is a prerelease, but Aspire does not configure a non-latest dist-tag. Set SkipNpmRidPublish=true and SkipNpmPointerPublish=true, or run with DryRun=true."
+                        exit 1
+                      }
+                    }
+
                     $ridPackagesPath = "$(Pipeline.Workspace)/npm/rid-packages"
                     $pointerPackagePath = "$(Pipeline.Workspace)/npm/pointer-package"
                     $tarballs = @(Get-ChildItem -Path $ridPackagesPath -Filter "*.tgz" -File) + @(Get-ChildItem -Path $pointerPackagePath -Filter "*.tgz" -File)

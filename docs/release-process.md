@@ -117,7 +117,7 @@ Before starting a release:
    | Parameter | Description | Example |
    |-----------|-------------|---------|
    | `ReleaseVersion` | Override for the version label (used as `v<version>` tag). Leave as `auto` to derive from the source build's `release-version - *` tag, which is the normal case. Only set this when re-shipping under a corrected tag. | `auto` |
-   | `IsPrerelease` | `true` for preview releases. Non-dry-run npm publishing is blocked for prereleases until the MicroBuild npm publish path supports non-`latest` dist-tags. | `false` |
+   | `IsPrerelease` | `true` for preview releases. Non-dry-run npm publishing is blocked if this is `true` or the validated package version is a prerelease, until the npm publish path supports non-`latest` dist-tags. | `false` |
    | `DryRun` | Set `true` to test without publishing, promoting, tagging, or creating PRs. | `false` |
    | `GaChannelName` | Target GA channel. | `Aspire 9.x GA` |
 
