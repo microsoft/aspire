@@ -506,7 +506,7 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
     [InlineData("--channel daily")]
     [InlineData("--quality stable")]
     [InlineData("--nuget-config-dir .")]
-    [InlineData("--force")]
+    [InlineData("--dry-run")]
     public void UpdateConfigSource_RejectsIncompatibleOptions(string option)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

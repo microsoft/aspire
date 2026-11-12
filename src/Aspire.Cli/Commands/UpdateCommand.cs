@@ -62,9 +62,9 @@ internal sealed class UpdateCommand : BaseCommand
     {
         Description = UpdateCommandStrings.MigrateOptionDescription
     };
-    private static readonly Option<bool> s_forceOption = new("--force")
+    private static readonly Option<bool> s_dryRunOption = new("--dry-run")
     {
-        Description = UpdateCommandStrings.ForceOptionDescription
+        Description = UpdateCommandStrings.DryRunOptionDescription
     };
     private static readonly Option<string?> s_nugetConfigDirOption = new("--nuget-config-dir")
     {
@@ -108,10 +108,16 @@ internal sealed class UpdateCommand : BaseCommand
         Options.Add(ConfigSourceService.s_useSourceOption);
         Options.Add(s_yesOption);
         Options.Add(s_migrateOption);
-        Options.Add(s_forceOption);
+        Options.Add(s_dryRunOption);
         Options.Add(s_nugetConfigDirOption);
 
-        AddNonInteractiveRequiresYesValidator(this, s_yesOption);
+        Validators.Add(result =>
+        {
+            if (result.GetValue(RootCommand.NonInteractiveOption) && !result.GetValue(s_yesOption) && !result.GetValue(s_dryRunOption))
+            {
+                result.AddError(string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.NonInteractiveRequiresYesFormat, Name));
+            }
+        });
 
         // Customize description based on whether staging channel is enabled
         var isStagingEnabled = IsStagingChannelAvailable();
@@ -138,11 +144,17 @@ internal sealed class UpdateCommand : BaseCommand
         Validators.Add(result =>
         {
             if (result.GetValue(s_configSourceOption) &&
-                (result.GetValue(s_selfOption) || result.GetValue(s_migrateOption) || result.GetValue(s_forceOption)
+                (result.GetValue(s_selfOption) || result.GetValue(s_migrateOption) || result.GetValue(s_dryRunOption)
                 || result.GetResult(_channelOption) is not null || result.GetResult(_qualityOption) is not null
                 || result.GetResult(s_nugetConfigDirOption) is not null))
             {
                 result.AddError(ConfigSourceStrings.IncompatibleOptions);
+            }
+            if (result.GetValue(s_dryRunOption) && !result.GetValue(s_configSourceOption) &&
+                (result.GetValue(s_selfOption) || result.GetValue(s_migrateOption) ||
+                 string.IsNullOrWhiteSpace(result.GetValue(_channelOption) ?? result.GetValue(_qualityOption))))
+            {
+                result.AddError(UpdateCommandStrings.DryRunRequiresChannel);
             }
         });
     }
@@ -222,6 +234,7 @@ internal sealed class UpdateCommand : BaseCommand
         }
 
         var isSelfUpdate = parseResult.GetValue(s_selfOption);
+        var dryRun = parseResult.GetValue(s_dryRunOption);
 
         // If --self is specified, handle CLI self-update
         if (isSelfUpdate)
@@ -273,12 +286,12 @@ internal sealed class UpdateCommand : BaseCommand
             {
                 if (passedAppHostProjectFile is not null)
                 {
-                    projectFile = await _projectLocator.UseOrFindAppHostProjectFileAsync(passedAppHostProjectFile, createSettingsFile: true, cancellationToken);
+                    projectFile = await _projectLocator.UseOrFindAppHostProjectFileAsync(passedAppHostProjectFile, createSettingsFile: !dryRun, cancellationToken);
                 }
                 else
                 {
                     projectFile = await _projectLocator.GetAppHostFromSettingsAsync(cancellationToken)
-                        ?? await _projectLocator.UseOrFindAppHostProjectFileAsync(null, createSettingsFile: true, cancellationToken);
+                        ?? await _projectLocator.UseOrFindAppHostProjectFileAsync(null, createSettingsFile: !dryRun, cancellationToken);
                 }
             }
             catch (ProjectLocatorException ex) when (passedAppHostProjectFile is null && ex.FailureReason == ProjectLocatorFailureReason.NoProjectFileFound)
@@ -303,12 +316,16 @@ internal sealed class UpdateCommand : BaseCommand
                 return CommandResult.Failure(CliExitCodes.FailedToFindProject);
             }
 
-            if (projectFile is not null)
+            if (projectFile is not null && !dryRun)
             {
                 await ConfigSources.SelectForUpdateAsync(updateDirectory, parseResult, cancellationToken);
             }
 
             var project = projectFile is not null ? _projectFactory.GetProject(projectFile) : null;
+            if (dryRun && project?.LanguageId != KnownLanguageId.CSharp)
+            {
+                return CommandResult.Failure(CliExitCodes.InvalidCommand, UpdateCommandStrings.DryRunRequiresDotNet);
+            }
             var isProjectReferenceMode = project is not null && projectFile is not null && project.IsUsingProjectReferences(projectFile);
 
             // Non-C# updates retain explicit option, project-scoped configuration, CLI
@@ -433,6 +450,11 @@ internal sealed class UpdateCommand : BaseCommand
                 }
             }
 
+            if (dryRun && channel.Type != PackageChannelType.Explicit)
+            {
+                return CommandResult.Failure(CliExitCodes.InvalidCommand, UpdateCommandStrings.DryRunRequiresChannel);
+            }
+
             // Update packages using the appropriate project handler
             // The validator ensures --yes is required when --non-interactive is specified,
             // so by this point --yes is always explicitly provided in non-interactive mode.
@@ -454,19 +476,23 @@ internal sealed class UpdateCommand : BaseCommand
                 return cliUpdateResult;
             }
 
-            var toolUpdateStep = skipRepositoryToolUpdates ? null :
+            var toolUpdateStep = skipRepositoryToolUpdates || dryRun ? null :
                 await _repositoryToolUpdater.GetUpdateStepAsync(toolManifests, channel, cancellationToken);
             var updateContext = new UpdatePackagesContext
             {
                 AppHostFile = projectFile,
                 Channel = channel,
                 HasExplicitChannel = hasExplicitChannel,
-                Force = parseResult.GetValue(s_forceOption),
+                DryRun = dryRun,
                 ConfirmBinding = confirmBinding,
                 NuGetConfigDirBinding = PromptBinding.Create(parseResult, s_nugetConfigDirOption),
                 AdditionalUpdateSteps = toolUpdateStep is null ? [] : [toolUpdateStep]
             };
             await project.UpdatePackagesAsync(updateContext, cancellationToken);
+            if (dryRun)
+            {
+                return CommandResult.Success();
+            }
 
             // The package update may have moved the project onto a newer Aspire version whose
             // recommended conventions require an on-disk migration (e.g. apphost.ts -> apphost.mts).
@@ -534,7 +560,7 @@ internal sealed class UpdateCommand : BaseCommand
                 // does not have a launcher-provided command here; let it reach ExecuteSelfUpdateAsync
                 // where the Nix store guard can print Nix-specific guidance instead of writing to
                 // the read-only install path.
-                if (GetDotNetToolUpdateCommand() is null && GetNpmUpdateCommand() is null && _cliDownloader is not null)
+                if (!dryRun && GetDotNetToolUpdateCommand() is null && GetNpmUpdateCommand() is null && _cliDownloader is not null)
                 {
                     var shouldUpdateCli = await InteractionService.PromptConfirmAsync(
                         UpdateCommandStrings.NoAppHostFoundUpdateCliPrompt,

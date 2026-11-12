@@ -214,8 +214,33 @@
   <data name="NuGetConfigDirOptionDescription" xml:space="preserve">
     <value>Directory to create or update the NuGet.config file in</value>
   </data>
-  <data name="ForceOptionDescription" xml:space="preserve">
-    <value>Skip the validation restore when explicitly updating a .NET AppHost channel. Configuration conflicts still cause an error.</value>
+  <data name="DryRunOptionDescription" xml:space="preserve">
+    <value>Validate an explicit .NET AppHost channel update using temporary NuGet caches, without proposing or applying changes.</value>
+  </data>
+  <data name="DryRunRequiresChannel" xml:space="preserve">
+    <value>--dry-run requires an explicit --channel or --quality other than default, and cannot be combined with --self or --migrate.</value>
+  </data>
+  <data name="DryRunRequiresDotNet" xml:space="preserve">
+    <value>--dry-run is supported only for .NET AppHosts.</value>
+  </data>
+  <data name="DryRunSuccessful" xml:space="preserve">
+    <value>Channel update validation succeeded. Original files have been restored; no update was applied.</value>
+  </data>
+  <data name="DryRunValidating" xml:space="preserve">
+    <value>Validating the channel update...</value>
+  </data>
+  <data name="DryRunExistingBackupsFormat" xml:space="preserve">
+    <value>Backups from an earlier dry run already exist. Preserve them for recovery if needed before replacing them:
+{0}</value>
+  </data>
+  <data name="DryRunReplaceBackupsPrompt" xml:space="preserve">
+    <value>Replace the existing backups with the current file contents? This discards the previous recovery copies.</value>
+  </data>
+  <data name="DryRunBackupsNotReplaced" xml:space="preserve">
+    <value>Dry run cancelled without replacing existing backups. Recover the originals from the listed backup files or move them aside before retrying.</value>
+  </data>
+  <data name="DryRunBackupRecoveryFormat" xml:space="preserve">
+    <value>Could not restore '{0}'. Its recovery backup was preserved at '{1}'. Restore the backup manually before retrying.</value>
   </data>
   <data name="NoChannelFoundMatching" xml:space="preserve">
     <value>No channel found matching '{0}'. Valid options are: {1}.</value>

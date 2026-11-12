@@ -123,10 +123,26 @@ Automatic SDK rewrites are limited to unconditional declarations. Conditional
 SDK declarations that cannot be safely classified require an explicit version
 edit; source fallback does not guess whether their MSBuild conditions are active.
 
-Use `aspire update --channel <channel> --force` to skip the validation restore
-and persist the confirmed update even if restore would fail. Configuration
-conflicts still cause an error. `--force` does not bypass confirmation prompts
-or skip restore without an explicit channel (`--channel` or legacy `--quality`).
+Explicit channel updates (`--channel` or legacy `--quality`) propose and apply
+confirmed changes without a validation restore. To validate a channel update
+instead, run `aspire update --channel <channel> --dry-run`. This restores the
+candidate graph using temporary NuGet package and HTTP cache folders, without
+proposing or applying the update. Configuration conflicts still cause an error
+in either mode. Updates without an explicit channel retain their normal restore.
+
+Dry runs back up each file they will edit to `<file>.aspire-backup` beside the
+original, then restore the original bytes after validation, including on failure
+or cancellation. A newly created file uses an `.aspire-backup-absent` marker.
+Failed rollback preserves the recovery copies and reports their paths.
+Existing backups require separate confirmation to replace or the dry run stops;
+`--yes` does not authorize replacing backups, and non-interactive runs refuse.
+Restore-generated files such as `obj/project.assets.json` are not backed up.
+
+`--dry-run` requires an explicit channel other than `default` and a .NET
+AppHost. It cannot be combined with `--self`, `--migrate`, or `--config-source`.
+It does not update repository CLI tool manifests or offer CLI self-update.
+Automation can run `aspire update --channel <channel> --dry-run --non-interactive`
+without `--yes`.
 
 ## Configured template sources
 

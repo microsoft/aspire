@@ -20,6 +20,49 @@ namespace Aspire.Cli.Tests.Commands;
 
 public class UpdateCommandRepositoryToolsTests(ITestOutputHelper outputHelper)
 {
+    [Fact]
+    public async Task Update_DryRunDoesNotOfferCliSelfUpdate()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHost = new FileInfo(Path.Combine(workspace.Path, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHost.FullName, "<Project Sdk=\"Microsoft.NET.Sdk\" />");
+        var interaction = new TestInteractionService
+        {
+            ConfirmCallback = (_, _) => throw new InvalidOperationException("Dry runs must not prompt to update.")
+        };
+        var validated = false;
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            ConfigureUpdates(options, interaction);
+            options.ProjectLocatorFactory = _ => new TestProjectLocator
+            {
+                UseOrFindAppHostProjectFileAsyncCallback = (_, createSettings, _) =>
+                {
+                    Assert.False(createSettings);
+                    return Task.FromResult<FileInfo?>(appHost);
+                }
+            };
+            options.ProjectUpdaterFactory = _ => new TestProjectUpdater
+            {
+                UpdateProjectAsyncCallback = (context, _) =>
+                {
+                    Assert.True(context.DryRun);
+                    Assert.Empty(context.AdditionalUpdateSteps);
+                    validated = true;
+                    return Task.FromResult(new ProjectUpdateResult { UpdatedApplied = false });
+                }
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var result = await provider.GetRequiredService<RootCommand>()
+            .Parse("update --channel stable --dry-run --non-interactive").InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, result);
+        Assert.True(validated);
+        Assert.Empty(interaction.BooleanPromptCalls);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -385,16 +428,19 @@ public class UpdateCommandRepositoryToolsTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData(true, true, true, 0)]
-    [InlineData(true, true, true, 1)]
-    [InlineData(true, false, true, 0)]
-    [InlineData(true, false, true, 1)]
-    [InlineData(true, true, false, 0)]
-    [InlineData(true, false, false, 0)]
-    [InlineData(false, true, true, 0)]
-    [InlineData(false, false, true, 0)]
-    public async Task Update_PersistsRepositoryToolsOnlyAfterSuccessfulCandidateRestore(
-        bool confirmUpdates, bool projectNeedsUpdates, bool confirmConfiguration, int restoreExitCode)
+    [InlineData(true, true, true, 0, false)]
+    [InlineData(true, true, true, 1, true)]
+    [InlineData(true, false, true, 0, false)]
+    [InlineData(true, false, true, 1, true)]
+    [InlineData(true, true, false, 0, false)]
+    [InlineData(true, false, false, 0, false)]
+    [InlineData(false, true, true, 0, false)]
+    [InlineData(false, false, true, 0, false)]
+    [InlineData(true, true, true, 0, true)]
+    [InlineData(true, false, true, 0, true)]
+    [InlineData(false, true, false, 0, true)]
+    public async Task Update_ChannelUpdatesToolsOnlyInApplyMode(
+        bool confirmUpdates, bool projectNeedsUpdates, bool confirmConfiguration, int restoreExitCode, bool dryRun)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var directory = workspace.WorkspaceRoot;
@@ -533,14 +579,13 @@ public class UpdateCommandRepositoryToolsTests(ITestOutputHelper outputHelper)
 
         // The real multi-file update transaction needs headroom for filesystem contention in full-suite runs.
         var result = await provider.GetRequiredService<RootCommand>()
-            .Parse("update --channel daily").InvokeAsync().DefaultTimeout(TestConstants.LongTimeoutDuration);
+            .Parse(dryRun ? "update --channel daily --dry-run --non-interactive" : "update --channel daily")
+            .InvokeAsync().DefaultTimeout(TestConstants.LongTimeoutDuration);
 
-        var restoreAttempted = confirmUpdates && confirmConfiguration;
-        var updatesApplied = restoreAttempted && restoreExitCode == 0;
-        Assert.Equal(restoreAttempted && restoreExitCode != 0 ? CliExitCodes.FailedToUpgradeProject : CliExitCodes.Success, result);
-        Assert.Single(interaction.BooleanPromptCalls, call => call.PromptText == UpdateCommandStrings.PerformUpdatesPrompt);
-        Assert.Equal(confirmUpdates ? 2 : 1, interaction.BooleanPromptCalls.Count);
-        Assert.Equal(restoreAttempted ? 1 : 0, restoreCalls);
+        var updatesApplied = !dryRun && confirmUpdates && confirmConfiguration;
+        Assert.Equal(dryRun && restoreExitCode != 0 ? CliExitCodes.FailedToUpgradeProject : CliExitCodes.Success, result);
+        Assert.Equal(dryRun ? 0 : confirmUpdates ? 2 : 1, interaction.BooleanPromptCalls.Count);
+        Assert.Equal(dryRun ? 1 : 0, restoreCalls);
         if (updatesApplied)
         {
             AssertProjectPackagesUpdated();
@@ -557,7 +602,8 @@ public class UpdateCommandRepositoryToolsTests(ITestOutputHelper outputHelper)
         else
         {
             AssertFilesUnchanged([.. originals.Keys]);
-            Assert.Empty(interaction.DisplayedSuccess);
+            Assert.Equal(dryRun && restoreExitCode == 0 ? [UpdateCommandStrings.DryRunSuccessful] : Array.Empty<string>(),
+                interaction.DisplayedSuccess);
         }
         Assert.Equal(originals[lockPath], await File.ReadAllBytesAsync(lockPath));
 

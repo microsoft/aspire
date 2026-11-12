@@ -167,7 +167,7 @@
     <value>The saved configuration source changed while fetching. No source settings were applied. Retry using the saved source binding.</value>
   </data>
   <data name="IncompatibleOptions" xml:space="preserve">
-    <value>--config-source cannot be combined with --self, --migrate, --force, --channel, --quality, or --nuget-config-dir.</value>
+    <value>--config-source cannot be combined with --self, --migrate, --dry-run, --channel, --quality, or --nuget-config-dir.</value>
     <comment>Do not translate the command-line option names.</comment>
   </data>
 </root>

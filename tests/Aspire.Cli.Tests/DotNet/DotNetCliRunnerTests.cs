@@ -211,13 +211,16 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData(false, true, false, false)]
-    [InlineData(true, true, false, false)]
-    [InlineData(false, false, false, false)]
-    [InlineData(false, true, true, false)]
-    [InlineData(false, false, false, true)]
+    [InlineData(false, true, false, false, false)]
+    [InlineData(true, true, false, false, false)]
+    [InlineData(false, false, false, false, false)]
+    [InlineData(false, true, true, false, false)]
+    [InlineData(false, false, false, true, false)]
+    [InlineData(false, true, false, false, true)]
+    [InlineData(true, true, false, false, true)]
+    [InlineData(false, true, true, false, true)]
     public async Task CandidateRestore_AcquiresSdkAndRestoresUpdatedVersionsBeforePersisting(
-        bool fileBased, bool childOwnPolicy, bool customChildTargets, bool escapedPath)
+        bool fileBased, bool childOwnPolicy, bool customChildTargets, bool escapedPath, bool isolated)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var root = escapedPath ? workspace.CreateDirectory("app ('literal')%@$") : workspace.WorkspaceRoot;
@@ -317,7 +320,8 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         var settings = new DotNetRestoreSettings(
             fileBased ? projectFile.FullName + ".csproj" : projectFile.FullName,
             Path.Combine(sdkDirectory, "NuGet.targets"), []);
-        var sdkCache = nuGetService.GetGlobalPackagesFolder(root);
+        var isolatedDirectory = isolated ? workspace.CreateDirectory("validation") : null;
+        var sdkCache = isolated ? Path.Combine(isolatedDirectory!.FullName, "packages") : nuGetService.GetGlobalPackagesFolder(root);
         var sdkPackageDirectory = Path.Combine(sdkCache, "aspire.apphost.sdk", sdkVersion);
         Assert.False(Directory.Exists(sdkPackageDirectory));
         var childRestoreTargets = childTargets;
@@ -347,29 +351,48 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
                     ("Aspire.AppHost.Sdk", sdkVersion), preview.RootConfiguration, sdkCache,
                     TestContext.Current.CancellationToken);
                 Assert.True(File.Exists(Path.Combine(sdkPackageDirectory, "Sdk", "Sdk.props")));
-                var (exitCode, stdout, stderr) = await RunNativeDotNetAsync(root, sdkCache,
-                    ["restore", projectFile.FullName, $"-property:NuGetRestoreTargets={MSBuildEscaping.Escape(preview.TargetsFile.FullName)}"]);
+                string[] restoreArguments =
+                    ["restore", projectFile.FullName, $"-property:NuGetRestoreTargets={MSBuildEscaping.Escape(preview.TargetsFile.FullName)}"];
+                if (isolated)
+                {
+                    restoreArguments = [.. restoreArguments, "--packages", sdkCache, "--no-http-cache", "--force"];
+                }
+                var (exitCode, stdout, stderr) = await RunNativeDotNetAsync(root, sdkCache, restoreArguments);
                 Assert.True(exitCode == 0, stdout + stderr);
                 Assert.Equal(originalConfig, await File.ReadAllBytesAsync(configFile.FullName));
                 if (!fileBased)
                 {
-                    using var graph = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(root.FullName, "obj", "Root.csproj.nuget.dgspec.json")));
+                    var rootOutput = Path.Combine(root.FullName, "obj");
+                    var childOutput = Path.Combine(childDirectory.FullName, "obj");
+                    using var graph = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(rootOutput, "Root.csproj.nuget.dgspec.json")));
                     var projects = graph.RootElement.GetProperty("projects");
                     Assert.Equal([newFeed.FullName, oldFeed.FullName], projects.GetProperty(projectFile.FullName).GetProperty("restore").GetProperty("sources")
                         .EnumerateObject().Select(static source => source.Name).ToArray());
                     using var childGraph = JsonDocument.Parse(await File.ReadAllTextAsync(
-                        Path.Combine(childDirectory.FullName, "obj", "Child.csproj.nuget.dgspec.json")));
+                        Path.Combine(childOutput, "Child.csproj.nuget.dgspec.json")));
                     var childProject = childGraph.RootElement.GetProperty("projects").EnumerateObject().Single().Value;
                     string[] expectedChildSources = childOwnPolicy ? [childFeed.FullName] : [newFeed.FullName, oldFeed.FullName];
                     Assert.Equal(expectedChildSources, childProject.GetProperty("restore").GetProperty("sources")
                         .EnumerateObject().Select(static source => source.Name).ToArray());
-                    Assert.Equal(childCache.FullName, childProject.GetProperty("restore").GetProperty("packagesPath").GetString()?.TrimEnd(Path.DirectorySeparatorChar));
+                    Assert.Equal(isolated ? sdkCache : childCache.FullName,
+                        childProject.GetProperty("restore").GetProperty("packagesPath").GetString()?.TrimEnd(Path.DirectorySeparatorChar));
+                    if (isolated)
+                    {
+                        Assert.Empty(rootCache.EnumerateFileSystemInfos());
+                        Assert.Empty(childCache.EnumerateFileSystemInfos());
+                        Assert.True(File.Exists(Path.Combine(rootOutput, "project.assets.json")));
+                        Assert.True(File.Exists(Path.Combine(childOutput, "project.assets.json")));
+                    }
                     if (customChildTargets)
                     {
                         Assert.Equal("preserved" + Environment.NewLine,
                             await File.ReadAllTextAsync(Path.Combine(childDirectory.FullName, "custom-targets-ran")));
                     }
                 }
+            }
+            if (isolated)
+            {
+                return;
             }
             await DotNetAppHostNuGetConfigMerger.ApplyAsync(candidate, TestContext.Current.CancellationToken);
             if (customChildTargets)
