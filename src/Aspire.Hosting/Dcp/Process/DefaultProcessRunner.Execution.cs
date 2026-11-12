@@ -14,6 +14,12 @@ namespace Aspire.Hosting.Dcp.Process;
 /// </summary>
 internal sealed partial class DefaultProcessRunner : IProcessRunner
 {
+    private const int ReadBufferSize = 16 * 1024;
+
+    // Bounds queued read buffers, excluding in-flight buffers and consumer-retained output.
+    private const int QueuedBufferBudget = 512 * 1024;
+    private const int EventCapacity = QueuedBufferBudget / ReadBufferSize;
+
     /// <inheritdoc />
     public IAsyncEnumerable<ProcessEvent<ReadOnlyMemory<byte>>> CreateExecution(ProcessCommand command)
         => new ProcessEventStream(ReadEventsAsync(command));
@@ -23,7 +29,7 @@ internal sealed partial class DefaultProcessRunner : IProcessRunner
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         var events = Channel.CreateBounded<ProcessEvent<ReadOnlyMemory<byte>>>(
-            new BoundedChannelOptions(32) { SingleReader = true, FullMode = BoundedChannelFullMode.Wait });
+            new BoundedChannelOptions(EventCapacity) { SingleReader = true, FullMode = BoundedChannelFullMode.Wait });
         var abort = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var execution = RunAsync(command, events.Writer, abort, cancellationToken);
         (int? ExitCode, Exception? Failure) result;
@@ -190,7 +196,7 @@ internal sealed partial class DefaultProcessRunner : IProcessRunner
                     while (true)
                     {
                         // Each published array belongs to its event, including after disposal.
-                        var buffer = new byte[16 * 1024];
+                        var buffer = new byte[ReadBufferSize];
                         var count = await stream.ReadAsync(buffer, stop.Token).ConfigureAwait(false);
                         if (count == 0)
                         {
