@@ -2,14 +2,13 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.ApplicationModel;
-using Aspire.Hosting.Dotnet;
 using Aspire.Hosting.Yarp;
 
 namespace Aspire.Hosting;
 
-internal class YarpProjectConfigurationBuilder(IResourceBuilder<DotnetProjectResource> parent) : IYarpConfigurationBuilder
+internal class YarpProjectConfigurationBuilder(IResourceBuilder<IResourceWithEnvironment> parent) : IYarpConfigurationBuilder
 {
-    private readonly IResourceBuilder<DotnetProjectResource> _parent = parent;
+    private readonly IResourceBuilder<IResourceWithEnvironment> _parent = parent;
     internal List<YarpRoute> Routes { get; } = [];
 
     internal List<YarpCluster> Clusters { get; } = [];

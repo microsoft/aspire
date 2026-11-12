@@ -5,7 +5,6 @@
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.ApplicationModel.Docker;
-using Aspire.Hosting.Dotnet;
 using Aspire.Hosting.Yarp;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -269,13 +268,13 @@ public static class YarpResourceExtensions
         return imageName;
     }
     /// <summary>
-    /// Configures YARP for a DotnetProject
+    /// Configures YARP for a IResourceWithEnvronment
     /// </summary>
-    /// <param name="builder">The resource builder for a DotnetProject.</param>
+    /// <param name="builder">The resource builder for an IResourceWithEnvronment.</param>
     /// <param name="configurationBuilder">The callback to configure YARP</param>
     /// <returns>The updated resource builder.</returns>
     [AspireExport(RunSyncOnBackgroundThread = true)]
-    public static IResourceBuilder<DotnetProjectResource> WithYarp(this IResourceBuilder<DotnetProjectResource> builder, Action<IYarpConfigurationBuilder> configurationBuilder)
+    public static IResourceBuilder<IResourceWithEnvironment> WithYarp(this IResourceBuilder<IResourceWithEnvironment> builder, Action<IYarpConfigurationBuilder> configurationBuilder)
     {
         var configBuilder = new YarpProjectConfigurationBuilder(builder);
         configurationBuilder(configBuilder);
