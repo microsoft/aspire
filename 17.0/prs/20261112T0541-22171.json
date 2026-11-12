@@ -1,0 +1,9 @@
+{
+  "author": "joperezr",
+  "comment": "Consolidation backport of Go AppHost changes already covered by earlier entries",
+  "mergedAt": "2026-11-12T05:41:08Z",
+  "number": 22171,
+  "runDate": "2026-11-12T06:04:12Z",
+  "status": "excluded",
+  "title": "[release/17.0] Consolidate ordered Go AppHost backports"
+}
