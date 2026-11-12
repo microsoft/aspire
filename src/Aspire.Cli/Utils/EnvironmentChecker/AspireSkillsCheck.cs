@@ -30,19 +30,15 @@ internal sealed class AspireSkillsCheck(
         var results = new List<EnvironmentCheckResult>();
         if (skillCopies.Count > 0)
         {
-            var displayPaths = skillCopies
-                .Select(copy => copy.Directory)
-                .Distinct(StringComparers.FileSystemPath)
-                .Select(directory => AgentPath.GetDisplayPath(directory, workspaceRoot, executionContext))
-                .Order(StringComparer.Ordinal)
+            // Doctor reports each location once, even when it is found under both scopes.
+            var copies = skillCopies
+                .DistinctBy(copy => copy.Directory, StringComparers.FileSystemPath)
+                .Select(copy => (DisplayPath: AgentPath.GetDisplayPath(copy.Directory, workspaceRoot, executionContext), copy.Owners))
+                .OrderBy(copy => copy.DisplayPath, StringComparer.Ordinal)
                 .ToArray();
 
-            var copyLines = skillCopies
-                .Select(copy => string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_LocationWithAgents,
-                    AgentPath.GetDisplayPath(copy.Directory, workspaceRoot, executionContext),
-                    string.Join(", ", copy.Owners)))
-                .Order(StringComparer.Ordinal)
-                .Select(line => $"  {line}");
+            var copyLines = copies.Select(copy => "  " + string.Format(CultureInfo.CurrentCulture,
+                AgentCommandStrings.InitCommand_LocationWithAgents, copy.DisplayPath, string.Join(", ", copy.Owners)));
 
             results.Add(new EnvironmentCheckResult
             {
@@ -51,7 +47,7 @@ internal sealed class AspireSkillsCheck(
                 Status = EnvironmentCheckStatus.Warning,
                 Message = DoctorCommandStrings.AspireSkillsMessage,
                 Fix = string.Join('\n', [DoctorCommandStrings.AspireSkillsFix, .. copyLines]),
-                Files = displayPaths,
+                Files = copies.Select(copy => copy.DisplayPath).ToArray(),
                 Metadata = new JsonObject
                 {
                     ["workspaceRoot"] = workspaceRoot.FullName

@@ -53,6 +53,12 @@ public class AspireSkillsCheckTests(ITestOutputHelper outputHelper) : IDisposabl
 
         var result = Assert.Single(await check.CheckAsync(TestContext.Current.CancellationToken));
 
+        Assert.Equal(
+            $"""
+            {DoctorCommandStrings.AspireSkillsFix}
+              {string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_LocationWithAgents, ".agents/skills/aspire", "copilot, opencode")}
+            """.ReplaceLineEndings("\n"),
+            result.Fix);
         Assert.Equal([".agents/skills/aspire"], result.Files);
     }
 
