@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics.CodeAnalysis;
-using Aspire.Dashboard.Model;
 using Aspire.Hosting.ApplicationModel;
 using Microsoft.Extensions.DependencyInjection;
 using Aspire.Hosting.Utils;
@@ -12,10 +11,15 @@ namespace Aspire.Hosting;
 /// <summary>
 /// Provides extension methods for adding Dotnet Tool resources to the application model.
 /// </summary>
+/// <remarks>
+/// These APIs remain available for existing C# binaries and generated clients.
+/// For new code, use <c>AddDotnetCliTool</c> from <c>Aspire.Hosting.Dotnet</c>.
+/// </remarks>
 [Experimental("ASPIREDOTNETTOOL", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+[Obsolete("Use AddDotnetCliTool and its configuration methods from the Aspire.Hosting.Dotnet package instead.")]
 public static class DotnetToolResourceExtensions
 {
-    internal const string ArgumentSeparator = "--";
+    internal const string ArgumentSeparator = DotnetToolHelpers.ArgumentSeparator;
 
     /// <summary>
     /// Adds a .NET tool resource to the application model.
@@ -26,6 +30,7 @@ public static class DotnetToolResourceExtensions
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
+    [Obsolete("Use AddDotnetCliTool from the Aspire.Hosting.Dotnet package instead.")]
     public static IResourceBuilder<DotnetToolResource> AddDotnetTool(this IDistributedApplicationBuilder builder, [ResourceName] string name, string packageId)
         => builder.AddDotnetTool(new DotnetToolResource(name, packageId));
 
@@ -39,79 +44,25 @@ public static class DotnetToolResourceExtensions
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
     /// <remarks>This method is not available in polyglot app hosts. Use the overload with name and packageId instead.</remarks>
     [AspireExportIgnore(Reason = "Open generic IResource constraint — not ATS-compatible.")]
+    [Obsolete("Use AddDotnetCliTool from the Aspire.Hosting.Dotnet package instead.")]
     public static IResourceBuilder<T> AddDotnetTool<T>(this IDistributedApplicationBuilder builder, T resource)
         where T : DotnetToolResource
     {
-#pragma warning disable ASPIREEXTENSION001 // WithLaunchToolArgs is experimental.
-        return builder.AddResource(resource)
-            .WithInitialState(new CustomResourceSnapshot
-            {
-                ResourceType = KnownResourceTypes.Tool,
-                Properties = []
-            })
-            .WithIconName("Toolbox")
-            .WithCommand("dotnet")
-            .WithLaunchToolArgs(BuildToolExecArguments, showInCommandLine: false)
-            .WithRequiredCommand("dotnet", context => ValidateDotnetSdkVersionAsync(context, resource.WorkingDirectory))
-            .OnBeforeResourceStarted(BeforeResourceStarted);
-#pragma warning restore ASPIREEXTENSION001
+        return DotnetToolHelpers.AddTool(builder, resource, BuildToolExecArguments,
+            static current => current.CreateSnapshotProperties(), ValidateDotnetSdkVersionAsync);
 
         void BuildToolExecArguments(CommandLineArgsCallbackContext x)
         {
             var toolConfig = resource.ToolConfiguration;
-            if (toolConfig == null)
+            if (toolConfig is null)
             {
                 // If the annotation has been removed, don't add any dotnet tool arguments.
                 return;
             }
 
-            x.Args.Add("tool");
-            x.Args.Add("exec");
-            x.Args.Add(toolConfig.PackageId);
-
-            var sourceArg = toolConfig.IgnoreExistingFeeds ? "--source" : "--add-source";
-
-            foreach (var source in toolConfig.Sources)
-            {
-                x.Args.Add(sourceArg);
-                x.Args.Add(source);
-            }
-
-            if (toolConfig.IgnoreFailedSources)
-            {
-                x.Args.Add("--ignore-failed-sources");
-            }
-
-            if (toolConfig.Version is not null)
-            {
-                x.Args.Add("--version");
-                x.Args.Add(toolConfig.Version);
-            }
-            else if (toolConfig.Prerelease)
-            {
-                x.Args.Add("--prerelease");
-            }
-
-            x.Args.Add("--yes");
-            x.Args.Add(ArgumentSeparator);
+            DotnetToolHelpers.AddArguments(x, toolConfig.PackageId, toolConfig.Version, toolConfig.Prerelease,
+                toolConfig.Sources, toolConfig.IgnoreExistingFeeds, toolConfig.IgnoreFailedSources);
         }
-
-        //TODO: Move to WithConfigurationFinalizer once merged - https://github.com/microsoft/aspire/pull/13200
-        async Task BeforeResourceStarted(T resource, BeforeResourceStartedEvent evt, CancellationToken ct)
-        {
-            var rns = evt.Services.GetRequiredService<ResourceNotificationService>();
-            var properties = resource.CreateSnapshotProperties().ToArray();
-            if (properties.Length == 0)
-            {
-                return;
-            }
-
-            await rns.PublishUpdateAsync(resource, x => x with
-            {
-                Properties = x.Properties.SetResourcePropertyRange(properties)
-            }).ConfigureAwait(false);
-        }
-
     }
 
     /// <summary>
@@ -123,6 +74,7 @@ public static class DotnetToolResourceExtensions
     /// <returns>The <see cref="IResourceBuilder{T}"/> for chaining.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
+    [Obsolete("Use WithToolPackage on a DotnetCliToolResource from the Aspire.Hosting.Dotnet package instead.")]
     public static IResourceBuilder<T> WithToolPackage<T>(this IResourceBuilder<T> builder, string packageId)
         where T : DotnetToolResource
     {
@@ -139,6 +91,7 @@ public static class DotnetToolResourceExtensions
     /// <returns>The <see cref="IResourceBuilder{T}"/> for chaining.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
+    [Obsolete("Use WithToolVersion on a DotnetCliToolResource from the Aspire.Hosting.Dotnet package instead.")]
     public static IResourceBuilder<T> WithToolVersion<T>(this IResourceBuilder<T> builder, string version)
         where T : DotnetToolResource
     {
@@ -154,6 +107,7 @@ public static class DotnetToolResourceExtensions
     /// <returns>The <see cref="IResourceBuilder{T}"/> for chaining.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
+    [Obsolete("Use WithToolPrerelease on a DotnetCliToolResource from the Aspire.Hosting.Dotnet package instead.")]
     public static IResourceBuilder<T> WithToolPrerelease<T>(this IResourceBuilder<T> builder)
         where T : DotnetToolResource
     {
@@ -170,6 +124,7 @@ public static class DotnetToolResourceExtensions
     /// <returns>The <see cref="IResourceBuilder{T}"/> for chaining.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
+    [Obsolete("Use WithToolSource on a DotnetCliToolResource from the Aspire.Hosting.Dotnet package instead.")]
     public static IResourceBuilder<T> WithToolSource<T>(this IResourceBuilder<T> builder, string source)
         where T : DotnetToolResource
     {
@@ -185,6 +140,7 @@ public static class DotnetToolResourceExtensions
     /// <returns>The <see cref="IResourceBuilder{T}"/> for chaining.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
+    [Obsolete("Use WithToolIgnoreExistingFeeds on a DotnetCliToolResource from the Aspire.Hosting.Dotnet package instead.")]
     public static IResourceBuilder<T> WithToolIgnoreExistingFeeds<T>(this IResourceBuilder<T> builder)
         where T : DotnetToolResource
     {
@@ -200,6 +156,7 @@ public static class DotnetToolResourceExtensions
     /// <returns>The <see cref="IResourceBuilder{T}"/> for chaining.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
+    [Obsolete("Use WithToolIgnoreFailedSources on a DotnetCliToolResource from the Aspire.Hosting.Dotnet package instead.")]
     public static IResourceBuilder<T> WithToolIgnoreFailedSources<T>(this IResourceBuilder<T> builder)
         where T : DotnetToolResource
     {
@@ -207,6 +164,7 @@ public static class DotnetToolResourceExtensions
         return builder;
     }
 
+#pragma warning disable ASPIRECOMMAND001 // Retained SDK validation uses the experimental command-validation contract.
     internal static async Task<RequiredCommandValidationResult> ValidateDotnetSdkVersionAsync(RequiredCommandValidationContext context, string workingDirectory)
     {
         var versionProvider = context.Services.GetRequiredService<IDotnetSdkVersionProvider>();
@@ -214,11 +172,7 @@ public static class DotnetToolResourceExtensions
             workingDirectory,
             context.CancellationToken).ConfigureAwait(false);
 
-        if (version?.Major < 10)
-        {
-            return RequiredCommandValidationResult.Failure($"DotnetToolResource requires dotnet SDK 10 or higher to run. Detected version: {version}");
-        }
-
-        return RequiredCommandValidationResult.Success();
+        return DotnetToolHelpers.ValidateSdkVersion(version, nameof(DotnetToolResource));
     }
+#pragma warning restore ASPIRECOMMAND001
 }

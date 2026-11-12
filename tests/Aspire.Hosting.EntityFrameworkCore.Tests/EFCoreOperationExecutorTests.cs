@@ -4,6 +4,7 @@
 #pragma warning disable CS0618 // Retains legacy project operation compatibility.
 
 #pragma warning disable ASPIREDOTNETTOOL
+#pragma warning disable CS0618 // EF operations retain their original tool resource.
 
 using System.Text;
 using Aspire.Hosting.ApplicationModel;

@@ -1,0 +1,15 @@
+﻿{
+  "type": "executable.v0",
+  "workingDirectory": ".",
+  "command": "dotnet",
+  "args": [
+    "tool",
+    "exec",
+    "package",
+    "--version",
+    "1.2.3",
+    "--yes",
+    "--",
+    "--help"
+  ]
+}

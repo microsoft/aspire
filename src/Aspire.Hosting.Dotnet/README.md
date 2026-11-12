@@ -2,7 +2,8 @@
 
 Use this integration to model, configure, and orchestrate SDK-style C#, F#, and Visual Basic
 projects and file-based C# apps (added **by path**) in an Aspire solution. It is the .NET peer of `Aspire.Hosting.Go`,
-`Aspire.Hosting.Python`, and `Aspire.Hosting.JavaScript`.
+`Aspire.Hosting.Python`, and `Aspire.Hosting.JavaScript`. It also supports executables acquired from
+NuGet .NET tool packages.
 
 ## Getting started
 
@@ -10,6 +11,7 @@ projects and file-based C# apps (added **by path**) in an Aspire solution. It is
 
 The **.NET SDK** must be available on the PATH of the machine running the AppHost. File-based C# apps
 (`.cs`) require **.NET 10 or later**.
+CLI tool resources use `dotnet tool exec` and also require **.NET SDK 10 or later**.
 
 ### Add the integration
 
@@ -225,6 +227,55 @@ Where equivalent, use shared project-file or `Directory.Build.props` settings so
 evaluate the same values. Runtime `WithEnvironment` is not an equivalent workaround. See the
 [EF Core integration guidance](../Aspire.Hosting.EntityFrameworkCore/README.md#coordinated-builds-and-custom-build-inputs)
 for the remaining compatibility risk.
+
+## .NET CLI tools
+
+Use the experimental `AddDotnetCliTool` API to acquire a NuGet .NET tool package when the resource
+starts. It does not permanently install the tool. `WithArgs` supplies arguments to the tool, not
+to `dotnet tool exec`.
+
+**C#**
+
+```csharp
+#pragma warning disable ASPIREDOTNETCLITOOL001
+
+builder.AddDotnetCliTool("ef", "dotnet-ef")
+    .WithToolVersion("10.0.*")
+    .WithArgs("--help");
+```
+
+**TypeScript**
+
+```typescript
+await builder.addDotnetCliTool("ef", "dotnet-ef")
+    .withToolVersion("10.0.*")
+    .withArgs(["--help"]);
+```
+
+`WithToolPrerelease` allows prerelease packages when no explicit version is set.
+`WithToolSource` adds package sources; combine it with `WithToolIgnoreExistingFeeds` to use only
+the configured sources. `WithToolIgnoreFailedSources` treats source failures as warnings.
+The resource retains executable environment, endpoint, custom launch-argument, and manifest
+publishing support. It is classified as a tool in the dashboard.
+
+### Migrating from AddDotnetTool
+
+The core `AddDotnetTool`, `DotnetToolResource`, `DotnetToolAnnotation`, and their configuration
+methods are deprecated but remain functional in `Aspire.Hosting`. Existing binaries and generated
+clients do not need a rebuild, an additional package, or SDK regeneration just to keep working.
+Source builds treating warnings as errors may need a targeted `CS0618` suppression while migrating.
+The original experimental diagnostic, `ASPIREDOTNETTOOL`, still applies to that legacy API.
+
+To opt into the replacement, add `Aspire.Hosting.Dotnet` and replace `AddDotnetTool` with
+`AddDotnetCliTool`. For explicit types and annotation queries, replace `DotnetToolResource` and
+`DotnetToolAnnotation` with `DotnetCliToolResource` and `DotnetCliToolAnnotation` from
+`Aspire.Hosting.Dotnet`. Factory extensions remain in `Aspire.Hosting`, and the six `WithTool*`
+method names are unchanged. The new family uses diagnostic `ASPIREDOTNETCLITOOL001`.
+
+The resource families are independent types, so update typed builders, custom subclasses, and
+model queries together. New polyglot callers regenerate their SDK after adding this integration;
+both API families can coexist. EF migration callbacks intentionally continue receiving the
+legacy `DotnetToolResource` in this release.
 
 ## Publishing
 

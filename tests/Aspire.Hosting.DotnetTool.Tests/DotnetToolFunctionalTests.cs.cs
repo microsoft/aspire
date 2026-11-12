@@ -4,6 +4,8 @@
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Utils;
 
+#pragma warning disable CS0618 // Verify legacy tool execution remains supported.
+
 namespace Aspire.Hosting.DotnetTool.Tests;
 
 public class DotnetToolFunctionalTests(ITestOutputHelper testOutputHelper)

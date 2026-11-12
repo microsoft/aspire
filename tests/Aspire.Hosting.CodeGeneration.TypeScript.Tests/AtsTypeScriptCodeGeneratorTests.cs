@@ -2581,6 +2581,63 @@ public class AtsTypeScriptCodeGeneratorTests
     // ===== DTO Generation Tests =====
 
     [Fact]
+    public async Task Generate_DotnetToolFamilies_RetainsLegacyContractsAlongsideCanonicalExports()
+    {
+        var context = AtsCapabilityScanner.ScanAssemblies(
+            [typeof(DistributedApplication).Assembly, typeof(DotnetProjectHostingExtensions).Assembly]).ToAtsContext();
+        string[] configurationMethods =
+        [
+            "withToolIgnoreExistingFeeds", "withToolIgnoreFailedSources", "withToolPackage",
+            "withToolPrerelease", "withToolSource", "withToolVersion"
+        ];
+        var toolCapabilities = context.Capabilities
+            .Where(capability => capability.CapabilityId is "Aspire.Hosting/addDotnetTool" or "Aspire.Hosting.Dotnet/addDotnetCliTool" ||
+                configurationMethods.Any(method => capability.CapabilityId == $"Aspire.Hosting/{method}" ||
+                    capability.CapabilityId == $"Aspire.Hosting.Dotnet/{method}"))
+            .OrderBy(capability => capability.CapabilityId, StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Equal(14, toolCapabilities.Length);
+        foreach (var capability in toolCapabilities)
+        {
+            var legacy = capability.CapabilityId.StartsWith("Aspire.Hosting/", StringComparison.Ordinal);
+            Assert.Equal(legacy, capability.IsObsolete);
+            Assert.True(capability.IsExperimental);
+            Assert.Equal(
+                legacy
+                    ? "Aspire.Hosting/Aspire.Hosting.ApplicationModel.DotnetToolResource"
+                    : "Aspire.Hosting.Dotnet/Aspire.Hosting.Dotnet.DotnetCliToolResource",
+                capability.ReturnType.TypeId);
+            Assert.Single(context.HandleTypes, type => type.AtsTypeId == capability.ReturnType.TypeId);
+        }
+
+        var code = _generator.GenerateDistributedApplication(context)["aspire.mts"];
+        var generatedMethods = code.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(line => line.EndsWith(';') &&
+                (line.StartsWith("addDotnetTool(", StringComparison.Ordinal) ||
+                 line.StartsWith("addDotnetCliTool(", StringComparison.Ordinal) ||
+                 configurationMethods.Any(method => line.StartsWith($"{method}(", StringComparison.Ordinal))))
+            .Distinct()
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        Assert.Equal(14, generatedMethods.Length);
+
+        await Verify(new
+        {
+            Capabilities = toolCapabilities.Select(capability => new
+            {
+                capability.CapabilityId,
+                capability.TargetTypeId,
+                ReturnType = capability.ReturnType.TypeId,
+                Parameters = capability.Parameters.Select(parameter => parameter.Name),
+                capability.IsObsolete,
+                capability.ObsoleteMessage
+            }),
+            GeneratedMethods = generatedMethods
+        });
+    }
+
+    [Fact]
     public async Task Generate_LegacyAddProject_RetainsDeprecatedBuilderMethod()
     {
         var context = AtsCapabilityScanner.ScanAssemblies(
