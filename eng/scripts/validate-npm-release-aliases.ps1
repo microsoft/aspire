@@ -15,10 +15,9 @@ the same alias), and emits the normalized ("effective") sets so the pipeline can
 them to the publish template.
 
 The release job runs with `checkout: none`, so the pipeline cannot dot-source this file
-at runtime. The helper functions are mirrored inline in the pipeline YAML and the
-ReleasePublishNugetPipelineTests.NpmAliasValidationHelpersMatchScript test keeps the two
-copies in sync. This script exists so the same logic can be executed directly in unit
-tests (ValidateNpmReleaseAliasesTests).
+at runtime. The helper functions are mirrored inline in the pipeline YAML. The standalone
+tests (ValidateNpmReleaseAliasesTests) do not exercise or synchronize the pipeline copy,
+so both implementations must be kept aligned when changing validation behavior.
 
 Dot-source the script to import only the helper functions without running validation:
 

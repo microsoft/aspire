@@ -827,12 +827,10 @@ extends:
                       exit 1
                     }
 
-                    # The alias-validation helpers below are mirrored in
-                    # eng/scripts/validate-npm-release-aliases.ps1, which is exercised directly by
-                    # ValidateNpmReleaseAliasesTests. releaseJob runs with `checkout: none`, so these
-                    # functions are inlined here instead of dot-sourced; the
-                    # ReleasePublishNugetPipelineTests.NpmAliasValidationHelpersMatchScript test keeps
-                    # the inline copy and the script in sync.
+                    # The alias-validation helpers are also maintained in
+                    # eng/scripts/validate-npm-release-aliases.ps1. Its standalone tests do not
+                    # exercise this inline copy, which releaseJob needs because it has no checkout.
+                    # Keep both implementations aligned when changing validation behavior.
                     # >>> BEGIN npm release alias helpers (keep in sync with eng/scripts/validate-npm-release-aliases.ps1) >>>
                     function Format-NpmReleaseAliasForError([string] $value) {
                       $escaped = $value.Replace("`r", '\r').Replace("`n", '\n')
@@ -1504,7 +1502,7 @@ extends:
                       }
 
                       $packageSpec = "$packageName@$packageVersion"
-                      Write-Host "Dry-run registry smoke target: $packageSpec"
+                      Write-Host "Staged npm pointer package: $packageSpec"
                     }
                     finally {
                       if (Test-Path -LiteralPath $metadataRoot) {
@@ -1522,7 +1520,7 @@ extends:
                     }
 
                     Write-Host $pingOutput
-                    Write-Host "Dry run skipped installing '$packageSpec' because the package has not been published."
+                    Write-Host "Dry run checked registry reachability without installing '$packageSpec'."
                   displayName: 'Dry Run - Validate npm Registry Reachability'
 
               - ${{ if and(eq(parameters.DryRun, false), or(eq(parameters.SkipNpmRidPublish, false), eq(parameters.SkipNpmPointerPublish, false)), eq(parameters.IsPrerelease, false)) }}:
