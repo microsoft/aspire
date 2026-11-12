@@ -1,34 +1,35 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
+using Aspire.Hosting.Dotnet;
 using Microsoft.Extensions.DependencyInjection;
-#pragma warning disable ASPIREDOTNETTOOL // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning disable ASPIREDOTNETCLITOOL001 // CLI tool APIs are experimental.
 
 var builder = DistributedApplication.CreateBuilder(args);
 
-var simpleUsage = builder.AddDotnetTool("simpleUsage", "dotnet-ef");
+var simpleUsage = builder.AddDotnetCliTool("simpleUsage", "dotnet-ef");
 
-var wildcardVersion = builder.AddDotnetTool("wildcard", "dotnet-ef")
+var wildcardVersion = builder.AddDotnetCliTool("wildcard", "dotnet-ef")
     .WithToolVersion("10.0.*")
     .WithParentRelationship(simpleUsage);
 
-var preRelease = builder.AddDotnetTool("prerelease", "dotnet-ef")
+var preRelease = builder.AddDotnetCliTool("prerelease", "dotnet-ef")
     .WithToolPrerelease()
     .WithParentRelationship(simpleUsage);
 
 // Multiple versions
-var differentVersion = builder.AddDotnetTool("sameToolDifferentVersion1", "dotnet-dump")
+var differentVersion = builder.AddDotnetCliTool("sameToolDifferentVersion1", "dotnet-dump")
     .WithArgs("--version")
     .WithToolVersion("9.0.652701");
-builder.AddDotnetTool("sameToolDifferentVersion2", "dotnet-dump")
+builder.AddDotnetCliTool("sameToolDifferentVersion2", "dotnet-dump")
     .WithToolVersion("9.0.621003")
     .WithArgs("--version")
     .WithParentRelationship(differentVersion);
 
 // Concurrency
-IResourceBuilder<DotnetToolResource>? concurrencyParent = null;
+IResourceBuilder<DotnetCliToolResource>? concurrencyParent = null;
 for (int i = 0; i < 5; i++)
 {
-    var concurrency = builder.AddDotnetTool($"sametoolconcurrency-{i}", "dotnet-trace")
+    var concurrency = builder.AddDotnetCliTool($"sametoolconcurrency-{i}", "dotnet-trace")
         .WithArgs("--version");
 
     if (concurrencyParent == null)
@@ -42,31 +43,31 @@ for (int i = 0; i < 5; i++)
 }
 
 // Substitution
-var substituted = builder.AddDotnetTool("substituted", "dotnet-ef")
+var substituted = builder.AddDotnetCliTool("substituted", "dotnet-ef")
     .WithCommand("calc")
     .WithIconName("Calculator")
     .WithExplicitStart();
-foreach(var toolAnnotation in substituted.Resource.Annotations.OfType<DotnetToolAnnotation>().ToList())
+foreach(var toolAnnotation in substituted.Resource.Annotations.OfType<DotnetCliToolAnnotation>().ToList())
 {
     substituted.Resource.Annotations.Remove(toolAnnotation);
 }
 
 // Fake Offline by using "empty" package feeds
 var fakeSourcesPath = Path.Combine(Path.GetTempPath(), "does-not-exist", Guid.NewGuid().ToString());
-var offline = builder.AddDotnetTool("offlineSimpleUsage", "dotnet-ef")
+var offline = builder.AddDotnetCliTool("offlineSimpleUsage", "dotnet-ef")
     .WithToolSource(fakeSourcesPath)
     .WithToolIgnoreExistingFeeds()
     .WithToolIgnoreFailedSources()
     ;
 
-builder.AddDotnetTool("offlineWildcard", "dotnet-ef")
+builder.AddDotnetCliTool("offlineWildcard", "dotnet-ef")
     .WithToolVersion("10.0.*")
     .WithParentRelationship(offline)
     .WithToolSource(fakeSourcesPath)
     .WithToolIgnoreExistingFeeds()
     .WithToolIgnoreFailedSources();
 
-builder.AddDotnetTool("offlinePrerelease", "dotnet-ef")
+builder.AddDotnetCliTool("offlinePrerelease", "dotnet-ef")
     .WithToolPrerelease()
     .WithParentRelationship(offline)
     .WithToolSource(fakeSourcesPath)
@@ -76,11 +77,11 @@ builder.AddDotnetTool("offlinePrerelease", "dotnet-ef")
 var secret = builder.AddParameter("secret", "Shhhhhhh", secret: true);
 
 // Secrets
-builder.AddDotnetTool("secretArg", "dotnet-ef")
+builder.AddDotnetCliTool("secretArg", "dotnet-ef")
     .WithArgs("--version")
     .WithArgs(secret);
 
-builder.AddDotnetTool("incompatibleSdk", "dotnet-ef")
+builder.AddDotnetCliTool("incompatibleSdk", "dotnet-ef")
     .WithWorkingDirectory(Path.Combine(Projects.DotnetTool_AppHost.ProjectPath, "IncompatibleSdk"));
 
 // Some issues only show up when installing for first time, rather than using existing downloaded versions
@@ -89,7 +90,7 @@ builder.OnBeforeStart(async (evt, _) =>
 {
     var nugetPackagesPath = Path.Join(evt.Services.GetRequiredService<IAspireStore>().BasePath, "nuget");
 
-    foreach (var resource in builder.Resources.OfType<DotnetToolResource>())
+    foreach (var resource in builder.Resources.OfType<DotnetCliToolResource>())
     {
         builder.CreateResourceBuilder(resource)
             .WithEnvironment("NUGET_PACKAGES", nugetPackagesPath)

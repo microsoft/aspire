@@ -874,14 +874,29 @@ type GoObsoleteContext interface {
 	// GetEnum invokes the GetEnum method
 	GetEnum() (GoObsoleteEnum, error)
 
+	// GetLegacyValue invokes the GetLegacyValue method
+	//
+	// Deprecated: This API is obsolete.
+	GetLegacyValue() (string, error)
+
 	// GetObsoleteWireDto invokes the GetObsoleteWireDto method
 	GetObsoleteWireDto() (*GoObsoleteWireDto, error)
 
 	// GetObsoleteWireHandle invokes the GetObsoleteWireHandle method
 	GetObsoleteWireHandle() GoObsoleteWireHandle
 
+	// Legacy gets the Legacy property
+	//
+	// Deprecated: This API is obsolete.
+	Legacy() (string, error)
+
 	// SetCurrent sets the Current property
 	SetCurrent(value string) GoObsoleteContext
+
+	// SetLegacy sets the Legacy property
+	//
+	// Deprecated: This API is obsolete.
+	SetLegacy(value string) GoObsoleteContext
 
 	// Err returns the first error recorded on this wrapper, or nil if the wrapper
 	// resolved successfully and no chained operation has failed.
@@ -952,6 +967,24 @@ func (s *goObsoleteContext) GetEnum() (GoObsoleteEnum, error) {
 	return decodeAs[GoObsoleteEnum](result)
 }
 
+// GetLegacyValue invokes the GetLegacyValue method
+func (s *goObsoleteContext) GetLegacyValue() (string, error) {
+	if err := s.Err(); err != nil {
+		var zero string
+		return zero, err
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/GoObsoleteContext.getLegacyValue", reqArgs)
+	if err != nil {
+		var zero string
+		return zero, err
+	}
+	return decodeAs[string](result)
+}
+
 // GetObsoleteWireDto invokes the GetObsoleteWireDto method
 func (s *goObsoleteContext) GetObsoleteWireDto() (*GoObsoleteWireDto, error) {
 	if err := s.Err(); err != nil {
@@ -991,6 +1024,24 @@ func (s *goObsoleteContext) GetObsoleteWireHandle() GoObsoleteWireHandle {
 	return &goObsoleteWireHandle{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
+// Legacy gets the Legacy property
+func (s *goObsoleteContext) Legacy() (string, error) {
+	if err := s.Err(); err != nil {
+		var zero string
+		return zero, err
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/GoObsoleteContext.legacy", reqArgs)
+	if err != nil {
+		var zero string
+		return zero, err
+	}
+	return decodeAs[string](result)
+}
+
 // SetCurrent sets the Current property
 func (s *goObsoleteContext) SetCurrent(value string) GoObsoleteContext {
 	if s.Err() != nil {
@@ -1002,6 +1053,22 @@ func (s *goObsoleteContext) SetCurrent(value string) GoObsoleteContext {
 	}
 	reqArgs["value"] = serializeValue(value)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/GoObsoleteContext.setCurrent", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
+}
+
+// SetLegacy sets the Legacy property
+func (s *goObsoleteContext) SetLegacy(value string) GoObsoleteContext {
+	if s.Err() != nil {
+		return s
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	reqArgs["value"] = serializeValue(value)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/GoObsoleteContext.setLegacy", reqArgs); err != nil {
 		s.setErr(err)
 	}
 	return s

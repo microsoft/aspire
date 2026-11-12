@@ -36,19 +36,5 @@ internal static class DotnetSdkUtils
         SemVersion.ComparePrecedence(version, s_minimumWebAssemblyProjectReferenceResolutionVersion) >= 0;
 
     public static string? FindNearestGlobalJson(string workingDirectory)
-    {
-        ArgumentException.ThrowIfNullOrEmpty(workingDirectory);
-
-        var physicalWorkingDirectory = PathNormalizer.ResolveSymlinks(Path.GetFullPath(workingDirectory));
-        for (var directory = new DirectoryInfo(physicalWorkingDirectory); directory is not null; directory = directory.Parent)
-        {
-            var globalJsonPath = Path.Combine(directory.FullName, "global.json");
-            if (File.Exists(globalJsonPath))
-            {
-                return PathNormalizer.ResolveToFilesystemPath(globalJsonPath);
-            }
-        }
-
-        return null;
-    }
+        => DotnetSdkVersionProbe.FindNearestGlobalJson(workingDirectory);
 }

@@ -79,6 +79,7 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
 
     // typeId → documentation captured for the handle type
     private readonly Dictionary<string, AtsDocumentationInfo> _handleDocumentation = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, string> _propertyDeprecations = new(StringComparer.Ordinal);
 
     // Short C# type name used in documentation text → generated Go type name. A short name shared by two
     // generated types maps to null so it is never turned into a doc link to the wrong type.
@@ -126,7 +127,9 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
 
     private static AtsContext FilterObsoleteSymbols(AtsContext context)
     {
-            var capabilities = context.Capabilities.Where(capability => !IsObsoleteCapability(context, capability)).ToList();
+            // Deprecation must not remove callable APIs when an existing AppHost regenerates its SDK.
+            // Go callers retain the method with a Deprecated: paragraph, per https://go.dev/wiki/Deprecated.
+            var capabilities = context.Capabilities.ToList();
             var exportedValues = context.ExportedValues.Where(value => !AtsTypeSystemCompatibility.IsObsolete(value)).ToList();
             var requiredTypeIds = new HashSet<string>(StringComparer.Ordinal);
 
@@ -285,13 +288,6 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
         }
     }
 
-    private static bool IsObsoleteCapability(AtsContext context, AtsCapabilityInfo capability)
-    {
-        return capability.IsObsolete
-            || context.Properties.TryGetValue(capability.CapabilityId, out var property)
-                && AttributeDataReader.GetObsoleteData(property) is not null;
-    }
-
     private static string FormatGoSource(string fileName, string source)
     {
         using var process = new Process
@@ -377,6 +373,16 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
         _acceptingNames.Clear();
         _acceptingMarkers.Clear();
         _reservedNames.Clear();
+        _propertyDeprecations.Clear();
+
+        // Property accessors can carry their deprecation only on the source property, not the capability.
+        foreach (var (capabilityId, property) in context.Properties)
+        {
+            if (AttributeDataReader.GetObsoleteData(property) is { } obsolete)
+            {
+                _propertyDeprecations[capabilityId] = obsolete.Message ?? string.Empty;
+            }
+        }
 
         foreach (var resourceName in new[] { "base.go", "transport.go" })
         {
@@ -943,6 +949,7 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
 
     private GoDocContent CreateCapabilityDoc(AtsCapabilityInfo capability)
     {
+        var deprecationMessage = GetDeprecationMessage(capability);
         var targetParamName = capability.TargetParameterName ?? "builder";
         var (requiredParams, optionalParams) = SplitParameters(capability.Parameters
             .Where(p => !string.Equals(p.Name, targetParamName, StringComparison.Ordinal))
@@ -981,10 +988,15 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
             Returns = returnsValue ? capability.Documentation?.Returns : null,
             Notes = GetUnionNotes(capability),
             IsExperimental = AtsTypeSystemCompatibility.IsExperimental(capability),
-            IsObsolete = capability.IsObsolete,
-            ObsoleteMessage = capability.ObsoleteMessage,
+            IsObsolete = deprecationMessage is not null,
+            ObsoleteMessage = deprecationMessage,
         };
     }
+
+    private string? GetDeprecationMessage(AtsCapabilityInfo capability)
+        => capability.IsObsolete
+            ? capability.ObsoleteMessage ?? string.Empty
+            : _propertyDeprecations.GetValueOrDefault(capability.CapabilityId);
 
     // A doc link only resolves to a declared package-level identifier; anything else (such as the
     // map[string]any fallback for an unknown DTO) is written as plain text.

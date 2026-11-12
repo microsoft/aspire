@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+extern alias HostingCore;
+
 #pragma warning disable ASPIREEXTENSION001
 #pragma warning disable ASPIREPERSISTENCE001
 #pragma warning disable ASPIREPIPELINES003
@@ -25,6 +27,7 @@ using Aspire.TestUtilities;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using ProcessSpec = HostingCore::Aspire.Hosting.Dcp.Process.ProcessSpec;
 
 namespace Aspire.Hosting.Dotnet.Tests;
 
