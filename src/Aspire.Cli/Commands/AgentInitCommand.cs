@@ -6,6 +6,7 @@ using System.CommandLine.Completions;
 using System.Diagnostics;
 using System.Globalization;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Aspire.Cli.Agents;
 using Aspire.Cli.Agents.AspireSkills;
 using Aspire.Cli.Agents.Copilot;
@@ -799,6 +800,22 @@ internal sealed class AgentInitCommand : BaseCommand
         }
         catch (Exception ex) when (IsUnreadableConfig(ex))
         {
+        }
+
+        foreach (var path in client.GetForwardedMcpConfigPaths(scope))
+        {
+            try
+            {
+                var config = await McpConfigFileHelper.ReadConfigAsync(
+                    path, ConfigurationHelper.ParseOptions, new AgentConfiguration(), cancellationToken);
+                if (McpConfigFileHelper.GetServerContainer(config, "servers", path)?["aspire"] is JsonObject)
+                {
+                    return true;
+                }
+            }
+            catch (Exception ex) when (IsUnreadableConfig(ex))
+            {
+            }
         }
 
         return false;
