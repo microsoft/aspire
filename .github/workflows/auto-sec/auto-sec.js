@@ -1850,7 +1850,14 @@ async function planAlerts({ alerts, codeScanning, prs, readManifest, listRelease
     };
     await Promise.all(Array.from({ length: Math.min(concurrency, queue.length) }, async () => {
         while (queue.length) {
-            await planGroup(queue.shift());
+            const group = queue.shift();
+            try {
+                await planGroup(group);
+            } catch {
+                // An unparsable manifest or unexpected registry payload must not fail
+                // collection; the agent evaluates this group with the ecosystem rules.
+                group.alerts.forEach(({ entry }) => Object.assign(entry, { disposition: 'agent', note: 'plan-error' }));
+            }
         }
     }));
 
@@ -4011,7 +4018,7 @@ async function scrubAgentOutputs({ core, github, context, fs, env, workDir, read
 // Runs from the pre-agent collection step, after alerts.json, code-scanning.json, and
 // dependabot-prs.json are written. The manifests are read from the checkout the agent
 // starts from, so planned `from` versions match what the agent edits.
-async function writePlan({ fs = require('node:fs'), path = require('node:path'), cwd = process.cwd(), fetchImpl = fetch, now = new Date() } = {}) {
+async function writePlan({ fs = require('node:fs'), path = require('node:path'), cwd = process.cwd(), fetchImpl = fetch, now = new Date(), env = process.env } = {}) {
     const readJsonFile = name => JSON.parse(fs.readFileSync(path.join(cwd, '.auto-sec', name), 'utf8'));
     const readManifest = manifestPath => {
         // The path comes from an alert; never read outside the checkout.
@@ -4031,7 +4038,32 @@ async function writePlan({ fs = require('node:fs'), path = require('node:path'),
         now,
     });
     fs.writeFileSync(path.join(cwd, '.auto-sec', 'plan.json'), JSON.stringify(plan, null, 2));
+    if (env.GITHUB_STEP_SUMMARY) {
+        fs.appendFileSync(env.GITHUB_STEP_SUMMARY, formatPlanSummary(plan));
+    }
     return plan;
+}
+
+// Counts only: the job summary is public, so it never names packages, alerts, or advisories.
+function formatPlanSummary(plan) {
+    const blocked = Object.entries(plan.counts.blocked ?? {});
+    const rows = [
+        ['Covered by a Dependabot PR', plan.counts['dependabot-pr']],
+        ['Planned auto-sec fix', plan.counts.fix],
+        ['Left to the agent', plan.counts.agent],
+        ...blocked.map(([reason, count]) => [`Blocked: ${PUBLIC_BLOCKED_REASONS.has(reason) ? reason : 'other'}`, count]),
+    ];
+    return [
+        '### auto-sec plan (before the agent runs)',
+        '',
+        `Alerts: ${plan.counts.alerts}. Planned package changes: ${plan.fixes.length}.`,
+        '',
+        '| Disposition | Alerts |',
+        '| --- | ---: |',
+        ...rows.map(([label, count]) => `| ${label} | ${count} |`),
+        '',
+        '',
+    ].join('\n');
 }
 
 async function main(argv) {
@@ -4094,6 +4126,7 @@ module.exports = {
     planAlerts,
     selectFixTarget,
     writePlan,
+    formatPlanSummary,
     manifestMentionsVersion,
     manifestPackageVersions,
     manifestVersionChanges,

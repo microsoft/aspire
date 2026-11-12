@@ -1277,6 +1277,38 @@ public sealed class AutoSecWorkflowTests(ITestOutputHelper testOutput)
 
     [Fact]
     [RequiresTools(["node"])]
+    public async Task PlanSurvivesUnreadableManifestsAndSummarizesCountsOnly()
+    {
+        var alert = (int number, string package, string manifest) => new JsonObject
+        {
+            ["number"] = number,
+            ["ecosystem"] = "npm",
+            ["package"] = package,
+            ["manifest_path"] = manifest,
+            ["vulnerable_ranges"] = new JsonArray("< 1.0.1"),
+            ["malware"] = false,
+        };
+
+        var result = await RunHarnessAsync(new JsonObject
+        {
+            ["mode"] = "plan",
+            ["now"] = Now,
+            ["alerts"] = new JsonArray(alert(1, "secret-package", "broken/package-lock.json"), alert(2, "other", "other/yarn.lock")),
+            ["unreadableManifest"] = "broken/package-lock.json",
+            ["manifests"] = new JsonObject { ["other/yarn.lock"] = "" },
+        });
+
+        var plan = result["value"]!;
+        Assert.Equal(
+            ["dependabot:1=agent:plan-error", "dependabot:2=agent:no-vulnerable-version-in-manifest"],
+            plan["alerts"]!.AsArray().Select(entry => $"{entry!["source"]}:{entry["number"]}={entry["disposition"]}:{entry["note"]}"));
+        var summary = plan["summary"]!.GetValue<string>();
+        Assert.Contains("| Left to the agent | 2 |", summary);
+        Assert.DoesNotContain("secret-package", summary);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
     public async Task PlannedMultiMajorFixesPassPublicationPolicy()
     {
         var lockfile = (string first, string second) => new JsonObject

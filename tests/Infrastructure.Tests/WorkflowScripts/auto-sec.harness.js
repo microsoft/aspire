@@ -360,13 +360,18 @@ async function main() {
                 alerts: request.alerts ?? [],
                 codeScanning: request.codeScanning ?? { version_alerts: [], other_rule_counts: [] },
                 prs: request.prs ?? [],
-                readManifest: manifestPath => request.manifests?.[manifestPath] ?? null,
+                readManifest: manifestPath => {
+                    if (request.unreadableManifest === manifestPath) {
+                        throw new Error('synthetic manifest failure');
+                    }
+                    return request.manifests?.[manifestPath] ?? null;
+                },
                 listReleases: (ecosystem, name) => request.registryFailure === name
                     ? Promise.reject(new Error('synthetic registry failure'))
                     : gate.listPackageReleases(ecosystem, name, { fetchImpl }),
                 now: new Date(request.now),
             });
-            result = { value, urls };
+            result = { value: { ...value, summary: gate.formatPlanSummary(value) }, urls };
             break;
         }
         case 'policy': {
