@@ -38,7 +38,7 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
         {
             throw new ProjectUpdaterException(UpdateCommandStrings.DryRunRequiresChannel);
         }
-        using var dryRunRestore = context.DryRun ? new DryRunRestoreDirectory() : null;
+        using var dryRunRestore = context.DryRun ? new DryRunRestoreDirectory(executionContext.AspireHomeDirectory) : null;
         logger.LogDebug("Fetching '{AppHostPath}' items and properties.", projectFile.FullName);
         var ambientSettings = nuGetService.GetNuGetSettings(projectFile.DirectoryName!, cancellationToken);
         var originalConfigurations = new Dictionary<string, byte[]?>(StringComparers.FileSystemPath);
@@ -2007,11 +2007,32 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
     }
     private sealed class DryRunRestoreDirectory : IDisposable
     {
-        internal DirectoryInfo Directory { get; } = System.IO.Directory.CreateTempSubdirectory("aspire-update-validation-");
+        private readonly TemporaryCacheDirectory _directory;
+        internal DirectoryInfo Directory { get; }
 
-        internal DryRunRestoreDirectory()
+        internal DryRunRestoreDirectory(DirectoryInfo aspireHomeDirectory)
         {
-            Directory.CreateSubdirectory("fallback-packages");
+            var root = Path.Combine(aspireHomeDirectory.FullName, "cache", "update-validation");
+            DirectoryHelper.CreateWithOwnerOnlyPermissions(root);
+            _directory = TemporaryCacheDirectory.Create(root, "restore",
+                static path =>
+                {
+                    if (System.IO.Directory.Exists(path))
+                    {
+                        System.IO.Directory.Delete(path, recursive: true);
+                    }
+                },
+                File.Delete);
+            Directory = new DirectoryInfo(_directory.FullName);
+            try
+            {
+                Directory.CreateSubdirectory("fallback-packages");
+            }
+            catch
+            {
+                _directory.Dispose();
+                throw;
+            }
         }
 
         internal string PackagesDirectory => Path.Combine(Directory.FullName, "packages");
@@ -2022,7 +2043,7 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
             ["NUGET_FALLBACK_PACKAGES"] = Path.Combine(Directory.FullName, "fallback-packages")
         };
 
-        public void Dispose() => Directory.Delete(recursive: true);
+        public void Dispose() => _directory.Dispose();
     }
 }
 

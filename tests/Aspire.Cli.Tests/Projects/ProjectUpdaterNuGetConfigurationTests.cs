@@ -181,6 +181,7 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
         var restoreCount = 0;
         var runner = CreateRunner(projectFile, hasExplicitChannel: false);
         string? discoveryPackagesDirectory = null;
+        string? validationRoot = null;
         runner.GetProjectItemsAndPropertiesAsyncCallbackWithTargets = (file, _, properties, _, options, _) =>
         {
             Assert.Equal(dryRun, options.EnvironmentVariables is not null);
@@ -189,6 +190,14 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
                 var discoveryPackages = options.EnvironmentVariables!["NUGET_PACKAGES"];
                 discoveryPackagesDirectory ??= discoveryPackages;
                 Assert.Equal(discoveryPackagesDirectory, discoveryPackages);
+                var restoreDirectory = Path.GetDirectoryName(discoveryPackages)!;
+                Assert.Equal(validationRoot, Path.GetDirectoryName(restoreDirectory));
+                if (!OperatingSystem.IsWindows())
+                {
+                    var ownerOnly = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute;
+                    Assert.Equal(ownerOnly, File.GetUnixFileMode(validationRoot!));
+                    Assert.Equal(ownerOnly, File.GetUnixFileMode(restoreDirectory));
+                }
             }
             return properties.Contains("RestoreConfigFile", StringComparer.Ordinal)
                 ? (0, TestDotNetCliRunner.CreateRestoreSettingsOutput(file, properties))
@@ -225,6 +234,17 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
             return outcome == "restore" ? 1 : 0;
         };
         using var provider = CreateServices(workspace, runner).BuildServiceProvider();
+        if (dryRun)
+        {
+            validationRoot = Path.Combine(
+                provider.GetRequiredService<CliExecutionContext>().AspireHomeDirectory.FullName, "cache", "update-validation");
+            Directory.CreateDirectory(validationRoot);
+            if (!OperatingSystem.IsWindows())
+            {
+                File.SetUnixFileMode(validationRoot, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute
+                    | UnixFileMode.GroupRead | UnixFileMode.OtherRead);
+            }
+        }
         var interaction = Assert.IsType<TestInteractionService>(provider.GetRequiredService<IInteractionService>());
         interaction.ConfirmCallback = (_, _) => outcome != "decline";
         var context = await CreateContextAsync(provider, projectFile, channelName, hasExplicitChannel: channelName == "stable", dryRun);
@@ -261,7 +281,10 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
         Assert.False(File.Exists(projectFile.FullName + ".aspire-backup"));
         if (packagesDirectory is not null)
         {
-            Assert.False(Directory.Exists(Path.GetDirectoryName(packagesDirectory)));
+            var restoreDirectory = Path.GetDirectoryName(packagesDirectory)!;
+            Assert.False(Directory.Exists(restoreDirectory));
+            Assert.False(File.Exists(restoreDirectory + ".lock"));
+            Assert.Empty(Directory.EnumerateFileSystemEntries(validationRoot!));
         }
     }
 
