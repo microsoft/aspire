@@ -82,14 +82,9 @@ internal sealed class FlexibleBooleanDictionaryConverter : JsonConverter<Diction
 
     private static bool ParseBooleanString(string? value, string key)
     {
-        if (string.Equals(value, "true", StringComparison.OrdinalIgnoreCase))
+        if (bool.TryParse(value, out var result))
         {
-            return true;
-        }
-
-        if (string.Equals(value, "false", StringComparison.OrdinalIgnoreCase))
-        {
-            return false;
+            return result;
         }
 
         throw new JsonException($"Cannot convert string '{value}' to boolean for key '{key}'. Expected 'true' or 'false'.");

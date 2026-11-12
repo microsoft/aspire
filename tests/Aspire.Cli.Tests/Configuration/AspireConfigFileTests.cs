@@ -678,7 +678,12 @@ public class AspireConfigFileTests(ITestOutputHelper outputHelper)
         var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
         File.WriteAllText(configPath, """
             {
-              "features": { "polyglotSupportEnabled": "true", "showAllTemplates": "false" }
+              "features": {
+                "polyglotSupportEnabled": "true",
+                "showAllTemplates": "false",
+                "whitespacePaddedEnabled": " true ",
+                "whitespacePaddedDisabled": "false "
+              }
             }
             """);
 
@@ -688,6 +693,8 @@ public class AspireConfigFileTests(ITestOutputHelper outputHelper)
         Assert.NotNull(result.Features);
         Assert.True(result.Features["polyglotSupportEnabled"]);
         Assert.False(result.Features["showAllTemplates"]);
+        Assert.True(result.Features["whitespacePaddedEnabled"]);
+        Assert.False(result.Features["whitespacePaddedDisabled"]);
     }
 
     [Fact]
