@@ -225,6 +225,9 @@ namespace Aspire.TypeSystem
 
         public bool IsCallback { get { throw null; } init { } }
 
+        [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+        public bool IsObsolete { get { throw null; } init { } }
+
         public bool IsOptional { get { throw null; } init { } }
 
         public required string Name { get { throw null; } init { } }
@@ -240,6 +243,9 @@ namespace Aspire.TypeSystem
 
         public AtsDocumentationInfo? Documentation { get { throw null; } init { } }
 
+        [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+        public bool IsObsolete { get { throw null; } init { } }
+
         public required string Name { get { throw null; } init { } }
 
         public required System.Collections.Generic.IReadOnlyList<AtsDtoPropertyInfo> Properties { get { throw null; } init { } }
@@ -252,6 +258,9 @@ namespace Aspire.TypeSystem
         public System.Type? ClrType { get { throw null; } init { } }
 
         public AtsDocumentationInfo? Documentation { get { throw null; } init { } }
+
+        [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+        public bool IsObsolete { get { throw null; } init { } }
 
         public required string Name { get { throw null; } init { } }
 
@@ -266,6 +275,9 @@ namespace Aspire.TypeSystem
     {
         public AtsDocumentationInfo? Documentation { get { throw null; } init { } }
 
+        [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+        public bool IsObsolete { get { throw null; } init { } }
+
         public required string Name { get { throw null; } init { } }
     }
 
@@ -274,6 +286,9 @@ namespace Aspire.TypeSystem
         public string? Description { get { throw null; } init { } }
 
         public AtsDocumentationInfo? Documentation { get { throw null; } init { } }
+
+        [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+        public bool IsObsolete { get { throw null; } init { } }
 
         public required string OwningAssemblyName { get { throw null; } init { } }
 
@@ -345,6 +360,9 @@ namespace Aspire.TypeSystem
 
         public bool IsInterface { get { throw null; } init { } }
 
+        [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+        public bool IsObsolete { get { throw null; } init { } }
+
         public bool IsResourceBuilder { get { throw null; } }
     }
 
@@ -407,6 +425,8 @@ namespace Aspire.TypeSystem
         public static AspireValueData? GetAspireValueData(System.Reflection.FieldInfo field) { throw null; }
 
         public static AspireValueData? GetAspireValueData(System.Reflection.PropertyInfo property) { throw null; }
+
+        public static ObsoleteData? GetObsoleteData(System.Reflection.FieldInfo field) { throw null; }
 
         public static ObsoleteData? GetObsoleteData(System.Reflection.MethodInfo method) { throw null; }
 

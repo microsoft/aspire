@@ -287,6 +287,7 @@ namespace Aspire.Hosting.Azure
             public static readonly string PrincipalId;
             public static readonly string PrincipalName;
             public static readonly string PrincipalType;
+            public static readonly string TenantResourceSuffix;
             public static readonly string UserPrincipalId;
         }
     }
@@ -317,7 +318,6 @@ namespace Aspire.Hosting.Azure
         public static AzureBicepResourceScope CreateForTenant() { throw null; }
     }
 
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
     public sealed partial class AzureEnvironmentResource : ApplicationModel.Resource
     {
         public const string PrepareResourcesStepName = "azure-prepare-resources";
@@ -334,15 +334,12 @@ namespace Aspire.Hosting.Azure
     public static partial class AzureEnvironmentResourceExtensions
     {
         [AspireExport]
-        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         public static ApplicationModel.IResourceBuilder<AzureEnvironmentResource> AddAzureEnvironment(this IDistributedApplicationBuilder builder) { throw null; }
 
         [AspireExport]
-        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         public static ApplicationModel.IResourceBuilder<AzureEnvironmentResource> WithLocation(this ApplicationModel.IResourceBuilder<AzureEnvironmentResource> builder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> location) { throw null; }
 
         [AspireExport]
-        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         public static ApplicationModel.IResourceBuilder<AzureEnvironmentResource> WithResourceGroup(this ApplicationModel.IResourceBuilder<AzureEnvironmentResource> builder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> resourceGroup) { throw null; }
     }
 
@@ -379,7 +376,6 @@ namespace Aspire.Hosting.Azure
         public static bool TryApplyExistingResourceAnnotation(ApplicationModel.IAzureResource aspireResource, AzureResourceInfrastructure infra, global::Azure.Provisioning.Primitives.ProvisionableResource provisionableResource) { throw null; }
     }
 
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public sealed partial class AzurePublishingContext
     {
         public AzurePublishingContext(string outputPath, AzureProvisioningOptions provisioningOptions, System.IServiceProvider serviceProvider, Microsoft.Extensions.Logging.ILogger logger, Pipelines.IReportingStep reportingStep) { }
@@ -401,9 +397,12 @@ namespace Aspire.Hosting.Azure
         internal AzureResourceInfrastructure() : base(default!) { }
 
         public AzureProvisioningResource AspireResource { get { throw null; } }
+
+        [AspireExportIgnore(Reason = "Bicep extension declarations are configured through C# infrastructure callbacks.")]
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE003", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        public System.Collections.Generic.Dictionary<string, string> BicepExtensions { get { throw null; } }
     }
 
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE003", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public sealed partial class AzureRoleAssignmentResource : AzureProvisioningResource
     {
         public AzureRoleAssignmentResource(string name, AzureProvisioningResource targetAzureResource, ApplicationModel.IResource? ownerResource, AzureUserAssignedIdentityResource? identityResource, System.Action<AzureResourceInfrastructure> configureInfrastructure) : base(default!, default!) { }
@@ -568,6 +567,15 @@ namespace Aspire.Hosting.Azure
         BicepOutputReference PrincipalName { get; }
     }
 
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE003", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
+    public partial interface IAzureCdnPrivateLinkTarget : ApplicationModel.IComputeEnvironmentResource, ApplicationModel.IResource
+    {
+        string PrivateLinkGroupId { get; }
+
+        BicepOutputReference GetPrivateLinkLocation(ApplicationModel.IResource origin);
+        BicepOutputReference GetPrivateLinkResourceId(ApplicationModel.IResource origin);
+    }
+
     public partial interface IAzureComputeEnvironmentResource : ApplicationModel.IComputeEnvironmentResource, ApplicationModel.IResource
     {
         IAzureContainerRegistryResource? ContainerRegistry { get; }
@@ -587,6 +595,14 @@ namespace Aspire.Hosting.Azure
     public partial interface IAzureDelegatedSubnetResource : ApplicationModel.IResource
     {
         string DelegatedSubnetServiceName { get; }
+    }
+
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE003", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
+    public partial interface IAzureInternalIngressResource : IAzureDelegatedSubnetResource, ApplicationModel.IResource
+    {
+        ApplicationModel.ReferenceExpression DefaultDomain { get; }
+
+        ApplicationModel.ReferenceExpression StaticIp { get; }
     }
 
     [AspireExport]
@@ -628,6 +644,20 @@ namespace Aspire.Hosting.Azure
         System.Collections.Generic.IEnumerable<string> GetPrivateLinkGroupIds();
     }
 
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE003", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public partial interface IBicepOutputReferenceProvider
+    {
+        BicepOutputReference? GetOutputReference();
+    }
+
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE003", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
+    public sealed partial class InternalLoadBalancerAnnotation : ApplicationModel.IResourceAnnotation
+    {
+        public InternalLoadBalancerAnnotation(ApplicationModel.IAzureResource virtualNetwork) { }
+
+        public ApplicationModel.IAzureResource VirtualNetwork { get { throw null; } }
+    }
+
     public partial interface IResourceWithAzureFunctionsConfig : ApplicationModel.IResource
     {
         void ApplyAzureFunctionsConfiguration(System.Collections.Generic.IDictionary<string, object> target, string connectionName);
@@ -636,6 +666,11 @@ namespace Aspire.Hosting.Azure
     public partial interface ITokenCredentialProvider
     {
         global::Azure.Core.TokenCredential TokenCredential { get; }
+    }
+
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE003", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public sealed partial class ManagedIdentityRequiredAnnotation : ApplicationModel.IResourceAnnotation
+    {
     }
 
     [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE003", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
@@ -695,5 +730,13 @@ namespace Aspire.Hosting.Azure
 
         [System.Runtime.CompilerServices.CompilerGenerated]
         public override readonly string ToString() { throw null; }
+    }
+
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE003", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public sealed partial class TenantScopedResourceAnnotation : ApplicationModel.IResourceAnnotation
+    {
+        public TenantScopedResourceAnnotation(System.Collections.Generic.IReadOnlyDictionary<string, string> resourceIdOutputs) { }
+
+        public System.Collections.Generic.IReadOnlyDictionary<string, string> ResourceIdOutputs { get { throw null; } }
     }
 }

@@ -163,6 +163,8 @@ namespace Aspire.Hosting.JavaScript
     public sealed partial class BunAppResource : JavaScriptAppResource, IResourceWithServiceDiscovery, ApplicationModel.IResourceWithEndpoints, ApplicationModel.IResource, ApplicationModel.IContainerFilesDestinationResource
     {
         public BunAppResource(string name, string command, string workingDirectory) : base(default!, default!, default!) { }
+
+        public override string ResourceTypeDisplayName { get { throw null; } }
     }
 
     public sealed partial record CopyFilePattern(string Source, string Destination)
@@ -174,6 +176,8 @@ namespace Aspire.Hosting.JavaScript
     public sealed partial class DenoAppResource : JavaScriptAppResource, IResourceWithServiceDiscovery, ApplicationModel.IResourceWithEndpoints, ApplicationModel.IResource, ApplicationModel.IContainerFilesDestinationResource
     {
         public DenoAppResource(string name, string command, string workingDirectory) : base(default!, default!, default!) { }
+
+        public override string ResourceTypeDisplayName { get { throw null; } }
     }
 
     [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDENO001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
@@ -209,6 +213,8 @@ namespace Aspire.Hosting.JavaScript
     public partial class JavaScriptAppResource : ApplicationModel.ExecutableResource, IResourceWithServiceDiscovery, ApplicationModel.IResourceWithEndpoints, ApplicationModel.IResource, IResourceWithContainerFiles
     {
         public JavaScriptAppResource(string name, string command, string workingDirectory) : base(default!, default!, default!) { }
+
+        public override string ResourceTypeDisplayName { get { throw null; } }
     }
 
     public sealed partial class JavaScriptBuildScriptAnnotation : ApplicationModel.IResourceAnnotation
@@ -251,7 +257,6 @@ namespace Aspire.Hosting.JavaScript
 
         public string ExecutableName { get { throw null; } }
 
-        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         public System.Action<ApplicationModel.Docker.DockerfileStage>? InitializeDockerBuildStage { get { throw null; } init { } }
 
         public System.Collections.Generic.List<CopyFilePattern> PackageFilesPatterns { get { throw null; } }
@@ -273,12 +278,16 @@ namespace Aspire.Hosting.JavaScript
     public partial class NextJsAppResource : JavaScriptAppResource
     {
         public NextJsAppResource(string name, string command, string workingDirectory) : base(default!, default!, default!) { }
+
+        public override string ResourceTypeDisplayName { get { throw null; } }
     }
 
     [AspireExport(ExposeProperties = true)]
     public partial class NodeAppResource : JavaScriptAppResource, IResourceWithServiceDiscovery, ApplicationModel.IResourceWithEndpoints, ApplicationModel.IResource, ApplicationModel.IContainerFilesDestinationResource
     {
         public NodeAppResource(string name, string command, string workingDirectory) : base(default!, default!, default!) { }
+
+        public override string ResourceTypeDisplayName { get { throw null; } }
     }
 
     [System.Diagnostics.CodeAnalysis.Experimental("ASPIREJAVASCRIPT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
@@ -295,5 +304,7 @@ namespace Aspire.Hosting.JavaScript
     public partial class ViteAppResource : JavaScriptAppResource
     {
         public ViteAppResource(string name, string command, string workingDirectory) : base(default!, default!, default!) { }
+
+        public override string ResourceTypeDisplayName { get { throw null; } }
     }
 }
