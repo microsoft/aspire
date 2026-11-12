@@ -11,6 +11,7 @@ using Aspire.Cli.NuGet;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
+using Aspire.Cli.Utils;
 using Aspire.Shared;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
@@ -111,10 +112,16 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                 },
                 AddPackageAsyncCallback = (_, package, _, _, _, _, _) =>
                     throw new InvalidOperationException($"Unexpected package update: {package}"),
-                RestoreAsyncCallback = (_, _, _) =>
+                RestoreAsyncCallback = (_, options, _) =>
                 {
                     restoreCount++;
-                    return restoreFails ? 1 : 0;
+                    if (restoreFails)
+                    {
+                        options.StandardOutputCallback!("AppHost.csproj : error NU1102: Unable to find package Aspire.Hosting.Foundry with version (>= 17.0.0-preview.1)");
+                        options.StandardErrorCallback!("restore stderr");
+                        return 1;
+                    }
+                    return 0;
                 }
             };
             config.InteractionServiceFactory = _ => new TestInteractionService { ConfirmCallback = (_, _) => true };
@@ -135,6 +142,12 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         {
             await Assert.ThrowsAsync<ProjectUpdaterException>(() =>
                 updater.UpdateProjectAsync(CreateUpdateContext(appHost, channel)).DefaultTimeout());
+            Assert.Equal(
+                [
+                    (OutputLineStream.StdOut, "AppHost.csproj : error NU1102: Unable to find package Aspire.Hosting.Foundry with version (>= 17.0.0-preview.1)"),
+                    (OutputLineStream.StdErr, "restore stderr")
+                ],
+                ((TestInteractionService)provider.GetRequiredService<IInteractionService>()).DisplayedLines);
         }
         else
         {

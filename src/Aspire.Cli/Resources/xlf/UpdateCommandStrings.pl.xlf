@@ -148,8 +148,8 @@
         <note>{0} = AppHost file path.</note>
       </trans-unit>
       <trans-unit id="FailedToRestoreAfterUpdateFormat">
-        <source>Failed to restore packages for project {0} after update.</source>
-        <target state="translated">Nie można przywrócić pakietów projektu {0} po aktualizacji.</target>
+        <source>Validation restore for the candidate channel update of project {0} failed. The update was not applied. Review the restore output for details.</source>
+        <target state="needs-review-translation">Nie można przywrócić pakietów projektu {0} po aktualizacji.</target>
         <note />
       </trans-unit>
       <trans-unit id="FailedUpdatePackageReferenceFormat">
