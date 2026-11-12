@@ -4,6 +4,7 @@
 @using Aspire.Dashboard.Components.Controls.Grid
 @using Aspire.Dashboard.Resources
 @using System.Diagnostics
+@using Microsoft.AspNetCore.Components.Sections
 @inject IStringLocalizer<StructuredFiltering> FilterLoc
 @inject IStringLocalizer<Dialogs> DialogsLoc
 
@@ -13,6 +14,13 @@
         ResourceName="@nameof(Dashboard.Resources.TraceDetail.TraceDetailPageTitle)"
         Loc="@Loc"/>
 </PageTitle>
+
+@if (ViewportInformation.IsDesktop && ResourcesLayout is not null && _trace is not null)
+{
+    <StableSectionContent SectionName="@Aspire.Dashboard.Components.Layout.ResourcesLayout.FooterStatusSectionName">
+        @GetTotalItemsFooter()
+    </StableSectionContent>
+}
 
 <div class="page-content-container">
     @if (_trace is { } trace)
@@ -322,6 +330,12 @@
                     </Details>
                 </SummaryDetailsView>
             </MainSection>
+            <FooterSection>
+                @if (!ViewportInformation.IsDesktop || ResourcesLayout is null)
+                {
+                    @GetTotalItemsFooter()
+                }
+            </FooterSection>
         </AspirePageContentLayout>
     }
     else
@@ -334,6 +348,13 @@
 </div>
 
 @code {
+    private RenderFragment GetTotalItemsFooter() =>
+        @<TotalItemsFooter @ref="_totalItemsFooter"
+                           TotalItemCount="@_totalItemsCount"
+                           SingularText="@Loc[nameof(Dashboard.Resources.TraceDetail.TotalItemsFooterSingularText)]"
+                           PluralText="@Loc[nameof(Dashboard.Resources.TraceDetail.TotalItemsFooterPluralText)]"
+                           PauseText="@PauseText" />;
+
     // The trace detail page is reached by drilling into a row of the traces list, so the back button makes the way
     // back explicit. It uses the same toolbar button styling as the rest of the row so it reads as a page control.
     private RenderFragment GetBackButton()

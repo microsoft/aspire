@@ -157,7 +157,7 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
         // Updating the total item count as a field doesn't work because it isn't updated with the grid.
         // The workaround is to explicitly update and refresh the control.
         _totalItemsCount = traces.TotalItemCount;
-        _totalItemsFooter.UpdateDisplayedCount(_totalItemsCount, _displayedItemCount);
+        _totalItemsFooter?.UpdateDisplayedCount(_totalItemsCount, _displayedItemCount);
 
         return GridItemsProviderResult.From(traces.Items, virtualizedTraceCount);
     }
