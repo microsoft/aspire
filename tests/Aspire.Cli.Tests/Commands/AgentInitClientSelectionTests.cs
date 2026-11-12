@@ -1509,6 +1509,34 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
         }
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task AgentInit_NothingSelectedWithExistingAspireSetup_RefreshesHookOnlyForGlobalScope(bool global)
+    {
+        var scope = global ? AgentConfigurationScope.Global : AgentConfigurationScope.Project;
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var homeDirectory = workspace.CreateDirectory("fake-home");
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(workspace.WorkspaceRoot, homeDirectory: homeDirectory);
+        var hooks = new TestTelemetryHookConfigurator();
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => executionContext;
+            options.TelemetryHookConfiguratorFactory = _ => hooks;
+        });
+        services.AddSingleton<IEnvironment>(new TestEnvironment());
+        using var provider = services.BuildServiceProvider();
+        var client = provider.GetServices<IAgentClient>().Single(client => string.Equals(client.Id, "claude", StringComparisons.AgentClientId));
+        var pluginPath = client.GetIntegrationConfigPath(scope, workspace.WorkspaceRoot);
+        Directory.CreateDirectory(Path.GetDirectoryName(pluginPath)!);
+        await File.WriteAllTextAsync(pluginPath, """{"enabledPlugins":{"aspire@aspire-skills":true}}""");
+
+        var result = provider.GetRequiredService<RootCommand>().Parse(
+            $"agent init --agents claude --scope {scope.ToString().ToLowerInvariant()} --skills none --mcp=false");
+        Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
+        Assert.Equal(global ? ["claude"] : [], hooks.SelectedClientIds);
+    }
+
     [Fact]
     public async Task McpInit_LegacyDelegation_UsesClientScopeAndRemoteSkillOptions()
     {
