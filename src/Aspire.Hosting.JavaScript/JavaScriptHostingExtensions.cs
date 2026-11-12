@@ -184,9 +184,10 @@ public static partial class JavaScriptHostingExtensions
                     {
                         // The workspace resource owns the entire argv (executable + workspace selector +
                         // run + script + args), because the selector placement differs per package manager
-                        // (npm's --workspace= is a suffix; yarn/pnpm/bun filter before run) and pnpm uses a
-                        // topological build selector. So we emit it verbatim rather than reassembling here.
-                        foreach (var arg in wsCtx.Workspace.GetRunScriptCommand(wsCtx.WorkspaceProjectName, runCommand.ScriptName, runCommand.Args))
+                        // (npm's --workspace= is a suffix; yarn/pnpm/bun filter before run). So we don't
+                        // reassemble it here. argv[0] is the executable and is set as the resource command in
+                        // OnBeforeStart; only argv[1..] are args (see GetWorkspaceRunCommand).
+                        foreach (var arg in wsCtx.Workspace.GetRunScriptCommand(wsCtx.WorkspaceProjectName, runCommand.ScriptName, runCommand.Args).Skip(1))
                         {
                             c.Args.Add(arg);
                         }
@@ -272,15 +273,16 @@ public static partial class JavaScriptHostingExtensions
                         // Run post-copy finalization (e.g. regenerate Yarn PnP resolution files)
                         packageManager.FinalizeDockerBuildStage?.Invoke(builderStage);
 
-                        if (resource.TryGetLastAnnotation<JavaScriptBuildScriptAnnotation>(out var buildCommand))
-                        {
-                            if (resource.TryGetLastAnnotation<JavaScriptWorkspaceContextAnnotation>(out var wsBuildCtx) &&
-                                wsBuildCtx.Workspace.GetBuildDependenciesCommand(wsBuildCtx.WorkspaceProjectName, buildCommand.ScriptName) is { } depBuildArgs)
-                            {
-                                builderStage.EmptyLine()
-                                    .Run(string.Join(' ', depBuildArgs));
-                            }
+                        resource.TryGetLastAnnotation<JavaScriptBuildScriptAnnotation>(out var buildCommand);
 
+                        if (GetWorkspaceDependencyBuildCommand(resource, buildCommand) is { } depBuildCommand)
+                        {
+                            builderStage.EmptyLine()
+                                .Run(depBuildCommand);
+                        }
+
+                        if (buildCommand is not null)
+                        {
                             builderStage.EmptyLine()
                                 .Run(BuildPackageScriptCommand(packageManager, buildCommand, resource));
                         }
@@ -334,7 +336,7 @@ public static partial class JavaScriptHostingExtensions
                 if (resourceBuilder.Resource.TryGetLastAnnotation<JavaScriptRunScriptAnnotation>(out _) &&
                     resourceBuilder.Resource.TryGetLastAnnotation<JavaScriptPackageManagerAnnotation>(out var packageManager))
                 {
-                    resourceBuilder.WithCommand(packageManager.ExecutableName);
+                    resourceBuilder.WithCommand(GetRunExecutable(resourceBuilder.Resource, packageManager));
                 }
 
                 return Task.CompletedTask;
@@ -555,8 +557,9 @@ public static partial class JavaScriptHostingExtensions
                 {
                     if (c.Resource.TryGetLastAnnotation<JavaScriptWorkspaceContextAnnotation>(out var wsCtx))
                     {
-                        // The workspace resource owns the entire argv (see GetRunScriptCommand); emit verbatim.
-                        foreach (var arg in wsCtx.Workspace.GetRunScriptCommand(wsCtx.WorkspaceProjectName, runCommand.ScriptName, runCommand.Args))
+                        // The workspace resource owns the entire argv. argv[0] is the executable and is set as the
+                        // resource command in OnBeforeStart; only argv[1..] are args (see GetWorkspaceRunCommand).
+                        foreach (var arg in wsCtx.Workspace.GetRunScriptCommand(wsCtx.WorkspaceProjectName, runCommand.ScriptName, runCommand.Args).Skip(1))
                         {
                             c.Args.Add(arg);
                         }
@@ -646,15 +649,16 @@ public static partial class JavaScriptHostingExtensions
                         // Bun app is a member of a Yarn workspace). No-op for the default Bun package manager.
                         packageManager.FinalizeDockerBuildStage?.Invoke(builderStage);
 
-                        if (resource.TryGetLastAnnotation<JavaScriptBuildScriptAnnotation>(out var buildCommand))
-                        {
-                            if (resource.TryGetLastAnnotation<JavaScriptWorkspaceContextAnnotation>(out var wsBuildCtx) &&
-                                wsBuildCtx.Workspace.GetBuildDependenciesCommand(wsBuildCtx.WorkspaceProjectName, buildCommand.ScriptName) is { } depBuildArgs)
-                            {
-                                builderStage.EmptyLine()
-                                    .Run(string.Join(' ', depBuildArgs));
-                            }
+                        resource.TryGetLastAnnotation<JavaScriptBuildScriptAnnotation>(out var buildCommand);
 
+                        if (GetWorkspaceDependencyBuildCommand(resource, buildCommand) is { } depBuildCommand)
+                        {
+                            builderStage.EmptyLine()
+                                .Run(depBuildCommand);
+                        }
+
+                        if (buildCommand is not null)
+                        {
                             builderStage.EmptyLine()
                                 .Run(BuildPackageScriptCommand(packageManager, buildCommand, resource));
                         }
@@ -783,7 +787,7 @@ public static partial class JavaScriptHostingExtensions
                 if (resourceBuilder.Resource.TryGetLastAnnotation<JavaScriptRunScriptAnnotation>(out _) &&
                     resourceBuilder.Resource.TryGetLastAnnotation<JavaScriptPackageManagerAnnotation>(out var packageManager))
                 {
-                    resourceBuilder.WithCommand(packageManager.ExecutableName);
+                    resourceBuilder.WithCommand(GetRunExecutable(resourceBuilder.Resource, packageManager));
                 }
 
                 return Task.CompletedTask;
@@ -1149,7 +1153,7 @@ public static partial class JavaScriptHostingExtensions
                 if (resourceBuilder.Resource.TryGetLastAnnotation<JavaScriptRunScriptAnnotation>(out _) &&
                     resourceBuilder.Resource.TryGetLastAnnotation<JavaScriptPackageManagerAnnotation>(out var packageManager))
                 {
-                    resourceBuilder.WithCommand(packageManager.ExecutableName);
+                    resourceBuilder.WithCommand(GetRunExecutable(resourceBuilder.Resource, packageManager));
                 }
 
                 return Task.CompletedTask;
@@ -1706,6 +1710,83 @@ public static partial class JavaScriptHostingExtensions
         => $"{JoinDockerShellCommand([packageManager.ExecutableName, .. installCommand.Args])} {installCommand.ProductionInstallArgs}";
 
     /// <summary>
+    /// Builds the Dockerfile <c>RUN</c> command that builds a workspace application's workspace dependencies
+    /// before the application itself, or returns <see langword="null"/> when there is nothing to build.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Declared dependencies (<see cref="JavaScriptBuildDependencyAnnotation"/>) take precedence: each one is run
+    /// through <see cref="JavaScriptWorkspaceResource.GetRunScriptCommand"/> in declaration order. Otherwise the
+    /// workspace's automatic step is used (<see cref="JavaScriptWorkspaceResource.GetBuildDependenciesCommand"/>,
+    /// e.g. pnpm's <c>--filter &lt;name&gt;^...</c>), which only applies when the application itself has a build
+    /// script, since its purpose is to prepare that build.
+    /// </para>
+    /// <para>
+    /// Declared dependencies are joined with <c>&amp;&amp;</c> into ONE <c>RUN</c> step. Separate steps would not
+    /// buy layer caching: they all run after <c>COPY . .</c>, so any source change invalidates every one of them.
+    /// <c>&amp;&amp;</c> keeps the fail-fast behavior. None of these commands receive the application's build args.
+    /// </para>
+    /// </remarks>
+    private static string? GetWorkspaceDependencyBuildCommand(IResource resource, JavaScriptBuildScriptAnnotation? buildCommand)
+    {
+        if (!resource.TryGetLastAnnotation<JavaScriptWorkspaceContextAnnotation>(out var wsCtx))
+        {
+            return null;
+        }
+
+        if (resource.TryGetAnnotationsOfType<JavaScriptBuildDependencyAnnotation>(out var declaredDependencies))
+        {
+            return string.Join(" && ", declaredDependencies.Select(dependency =>
+                JoinDockerShellCommand(wsCtx.Workspace.GetRunScriptCommand(dependency.WorkspaceProjectName, dependency.ResolveScriptName(resource), []))));
+        }
+
+        if (buildCommand is not null &&
+            wsCtx.Workspace.GetBuildDependenciesCommand(wsCtx.WorkspaceProjectName, buildCommand.ScriptName) is { } automaticCommand)
+        {
+            return JoinDockerShellCommand(automaticCommand);
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Resolves the run-mode argv for a workspace member, or <see langword="null"/> when the resource is not a
+    /// workspace member with a run script.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="JavaScriptWorkspaceResource.GetRunScriptCommand"/> returns the COMPLETE argv, executable included
+    /// (e.g. <c>["pnpm", "--filter", "web", "run", "dev"]</c>). In run mode DCP takes the executable and the args
+    /// separately, so callers must use <c>argv[0]</c> as the resource command and only <c>argv[1..]</c> as args.
+    /// Emitting the whole argv as args alongside a package-manager command launched <c>pnpm pnpm --filter ...</c>.
+    /// Taking the executable from the argv (rather than the package-manager annotation) also lets a workspace
+    /// override (e.g. an nx/turbo integration) launch a different executable.
+    /// </remarks>
+    private static IReadOnlyList<string>? GetWorkspaceRunCommand(IResource resource)
+    {
+        if (resource.TryGetLastAnnotation<JavaScriptWorkspaceContextAnnotation>(out var wsCtx) &&
+            resource.TryGetLastAnnotation<JavaScriptRunScriptAnnotation>(out var runCommand))
+        {
+            var argv = wsCtx.Workspace.GetRunScriptCommand(wsCtx.WorkspaceProjectName, runCommand.ScriptName, runCommand.Args);
+            if (argv.Count == 0)
+            {
+                throw new InvalidOperationException(
+                    $"Workspace '{wsCtx.Workspace.Name}' returned an empty run command for member '{wsCtx.WorkspaceProjectName}'.");
+            }
+
+            return argv;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Resolves the run-mode executable: the first element of the workspace run argv for workspace members,
+    /// otherwise the package-manager executable. See <see cref="GetWorkspaceRunCommand"/>.
+    /// </summary>
+    private static string GetRunExecutable(IResource resource, JavaScriptPackageManagerAnnotation packageManager)
+        => GetWorkspaceRunCommand(resource) is { } argv ? argv[0] : packageManager.ExecutableName;
+
+    /// <summary>
     /// Joins arguments into a single command string for Dockerfile <c>RUN</c>, quoting each argument so that
     /// values containing spaces or shell metacharacters survive as one token.
     /// </summary>
@@ -1779,8 +1860,9 @@ public static partial class JavaScriptHostingExtensions
                 {
                     if (c.Resource.TryGetLastAnnotation<JavaScriptWorkspaceContextAnnotation>(out var wsCtx))
                     {
-                        // The workspace resource owns the entire argv (see GetRunScriptCommand); emit verbatim.
-                        foreach (var arg in wsCtx.Workspace.GetRunScriptCommand(wsCtx.WorkspaceProjectName, runCommand.ScriptName, runCommand.Args))
+                        // The workspace resource owns the entire argv. argv[0] is the executable and is set as the
+                        // resource command in OnBeforeStart; only argv[1..] are args (see GetWorkspaceRunCommand).
+                        foreach (var arg in wsCtx.Workspace.GetRunScriptCommand(wsCtx.WorkspaceProjectName, runCommand.ScriptName, runCommand.Args).Skip(1))
                         {
                             c.Args.Add(arg);
                         }
@@ -1871,14 +1953,15 @@ public static partial class JavaScriptHostingExtensions
                         // Run post-copy finalization (e.g. regenerate Yarn PnP resolution files)
                         packageManager.FinalizeDockerBuildStage?.Invoke(dockerBuilder);
 
-                        if (c.Resource.TryGetLastAnnotation<JavaScriptBuildScriptAnnotation>(out var buildCommand))
-                        {
-                            if (c.Resource.TryGetLastAnnotation<JavaScriptWorkspaceContextAnnotation>(out var wsBuildCtx) &&
-                                wsBuildCtx.Workspace.GetBuildDependenciesCommand(wsBuildCtx.WorkspaceProjectName, buildCommand.ScriptName) is { } depBuildArgs)
-                            {
-                                dockerBuilder.Run(string.Join(' ', depBuildArgs));
-                            }
+                        c.Resource.TryGetLastAnnotation<JavaScriptBuildScriptAnnotation>(out var buildCommand);
 
+                        if (GetWorkspaceDependencyBuildCommand(c.Resource, buildCommand) is { } depBuildCommand)
+                        {
+                            dockerBuilder.Run(depBuildCommand);
+                        }
+
+                        if (buildCommand is not null)
+                        {
                             dockerBuilder.Run(BuildPackageScriptCommand(packageManager, buildCommand, c.Resource));
                         }
 
@@ -2127,7 +2210,7 @@ public static partial class JavaScriptHostingExtensions
             {
                 if (resourceBuilder.Resource.TryGetLastAnnotation<JavaScriptPackageManagerAnnotation>(out var packageManager))
                 {
-                    resourceBuilder.WithCommand(packageManager.ExecutableName);
+                    resourceBuilder.WithCommand(GetRunExecutable(resourceBuilder.Resource, packageManager));
                 }
 
                 return Task.CompletedTask;
@@ -2989,6 +3072,115 @@ public static partial class JavaScriptHostingExtensions
     public static IResourceBuilder<TResource> WithBuildScript<TResource>(this IResourceBuilder<TResource> resource, string scriptName, string[]? args = null) where TResource : JavaScriptAppResource
     {
         return resource.WithAnnotation(new JavaScriptBuildScriptAnnotation(scriptName, args));
+    }
+
+    /// <summary>
+    /// Declares workspace members that must be built, in the given order, before this workspace application is
+    /// built in publish mode. Each dependency runs the application's build script name (see
+    /// <see cref="WithBuildScript{TResource}(IResourceBuilder{TResource}, string, string[])"/>), or <c>build</c>
+    /// when none is set.
+    /// </summary>
+    /// <typeparam name="TResource">The type of the workspace application resource.</typeparam>
+    /// <param name="resource">The workspace application resource builder.</param>
+    /// <param name="workspaceProjectNames">The names (package.json <c>name</c>) of the workspace members to build first.</param>
+    /// <returns>The same resource builder instance.</returns>
+    /// <remarks>
+    /// <para>
+    /// Use this for package managers with no native "build my workspace dependencies" selector (npm, Yarn, Bun):
+    /// Aspire does not compute the workspace dependency graph itself, so the dependencies must be listed. pnpm
+    /// builds the dependencies automatically (<c>pnpm --filter &lt;name&gt;^... run build</c>); declaring
+    /// dependencies on a pnpm workspace application replaces that automatic step with the declared list.
+    /// </para>
+    /// <para>
+    /// All dependency builds are emitted as a single Dockerfile <c>RUN</c> step before the application's build
+    /// step, and never receive the application's build arguments. Calls are additive: each call appends to the
+    /// list. Use <see cref="WithBuildDependency{TResource}(IResourceBuilder{TResource}, string, string?)"/> to run
+    /// a different script in a specific dependency.
+    /// </para>
+    /// </remarks>
+    /// <example>
+    /// <code lang="csharp">
+    /// var workspace = builder.AddNpmWorkspace("repo", "./");
+    ///
+    /// workspace.AddViteApp("web", "web", "apps/web")
+    ///     .WithBuildScript("build")
+    ///     .WithBuildDependencies("database", "ui");
+    /// </code>
+    /// </example>
+    /// <exception cref="InvalidOperationException">The resource is not a workspace application.</exception>
+    /// <exception cref="ArgumentException">A name is empty or refers to the application itself.</exception>
+    [AspireExport]
+    public static IResourceBuilder<TResource> WithBuildDependencies<TResource>(this IResourceBuilder<TResource> resource, params string[] workspaceProjectNames) where TResource : JavaScriptAppResource
+    {
+        ArgumentNullException.ThrowIfNull(resource);
+        ArgumentNullException.ThrowIfNull(workspaceProjectNames);
+
+        foreach (var workspaceProjectName in workspaceProjectNames)
+        {
+            resource.WithBuildDependency(workspaceProjectName);
+        }
+
+        return resource;
+    }
+
+    /// <summary>
+    /// Declares a workspace member that must be built before this workspace application is built in publish mode,
+    /// optionally running a specific script in that member.
+    /// </summary>
+    /// <typeparam name="TResource">The type of the workspace application resource.</typeparam>
+    /// <param name="resource">The workspace application resource builder.</param>
+    /// <param name="workspaceProjectName">The name (package.json <c>name</c>) of the workspace member to build first.</param>
+    /// <param name="scriptName">
+    /// The package.json script to run in the dependency. When <see langword="null"/>, the application's build script
+    /// name is used, or <c>build</c> when none is set.
+    /// </param>
+    /// <returns>The same resource builder instance.</returns>
+    /// <remarks>
+    /// Dependencies are built in declaration order, so this can be combined with
+    /// <see cref="WithBuildDependencies{TResource}(IResourceBuilder{TResource}, string[])"/> and called several times,
+    /// including for the same member with different scripts (for example a code-generation step followed by a build).
+    /// See <see cref="WithBuildDependencies{TResource}(IResourceBuilder{TResource}, string[])"/> for how declared
+    /// dependencies interact with the package manager's automatic dependency build.
+    /// </remarks>
+    /// <example>
+    /// <code lang="csharp">
+    /// workspace.AddViteApp("web", "web", "apps/web")
+    ///     .WithBuildScript("build")
+    ///     .WithBuildDependency("database", "generate")
+    ///     .WithBuildDependency("ui");
+    /// </code>
+    /// </example>
+    /// <exception cref="InvalidOperationException">The resource is not a workspace application.</exception>
+    /// <exception cref="ArgumentException">The name is empty or refers to the application itself.</exception>
+    [AspireExport]
+    public static IResourceBuilder<TResource> WithBuildDependency<TResource>(this IResourceBuilder<TResource> resource, string workspaceProjectName, string? scriptName = null) where TResource : JavaScriptAppResource
+    {
+        ArgumentNullException.ThrowIfNull(resource);
+        ArgumentException.ThrowIfNullOrEmpty(workspaceProjectName);
+
+        if (scriptName is not null)
+        {
+            ArgumentException.ThrowIfNullOrEmpty(scriptName);
+        }
+
+        // Fail at the call site rather than at publish time: dependency builds are emitted through the
+        // workspace's package-manager filter, which only exists for workspace applications.
+        if (!resource.Resource.TryGetLastAnnotation<JavaScriptWorkspaceContextAnnotation>(out var workspaceContext))
+        {
+            throw new InvalidOperationException(
+                $"Resource '{resource.Resource.Name}' is not a workspace application. Build dependencies can only be declared on applications added to a JavaScript workspace (for example via AddNpmWorkspace(...).AddViteApp(...)).");
+        }
+
+        if (string.Equals(workspaceProjectName, workspaceContext.WorkspaceProjectName, StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                $"Resource '{resource.Resource.Name}' cannot declare its own workspace member '{workspaceProjectName}' as a build dependency.",
+                nameof(workspaceProjectName));
+        }
+
+        // WithAnnotation's default behavior (Append) is what preserves declaration order, which is the
+        // build order.
+        return resource.WithAnnotation(new JavaScriptBuildDependencyAnnotation(workspaceProjectName, scriptName));
     }
 
     /// <summary>

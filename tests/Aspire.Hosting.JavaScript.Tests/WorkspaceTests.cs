@@ -4,7 +4,9 @@
 #pragma warning disable ASPIREJAVASCRIPT001
 
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Aspire.TestUtilities;
 using Microsoft.Extensions.DependencyInjection;
@@ -136,6 +138,105 @@ public class WorkspaceTests(ITestOutputHelper outputHelper)
         var dockerfile = await File.ReadAllTextAsync(Path.Combine(tempDir.Path, "web.Dockerfile"));
 
         await Verify(dockerfile);
+    }
+
+    [Fact]
+    public async Task VerifyNpmWorkspaceDockerfileBuildsDeclaredDependenciesInOrder()
+    {
+        using var tempDir = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+
+        var root = Path.Combine(tempDir.Path, "ws");
+        Directory.CreateDirectory(root);
+        File.WriteAllText(Path.Combine(root, "package.json"), """{ "name": "root", "workspaces": ["packages/*"] }""");
+        File.WriteAllText(Path.Combine(root, "package-lock.json"), string.Empty);
+
+        CreateWorkspaceMember(root, "web", """{ "name": "web", "scripts": { "build": "vite build" } }""");
+        CreateWorkspaceMember(root, "database", """{ "name": "@repo/database", "scripts": { "generate": "prisma generate", "build": "tsc" } }""");
+        CreateWorkspaceMember(root, "ui", """{ "name": "@repo/ui", "scripts": { "build": "tsc" } }""");
+
+        // npm has no native dependencies-first selector, so the order is declared. Expected: ONE RUN that
+        // generates then builds @repo/database and builds @repo/ui (in declaration order, no build args),
+        // followed by web's own build carrying its args.
+        var webApp = builder.AddNpmWorkspace("ws", root)
+            .AddJavaScriptApp("web", "web", "packages/web")
+            .WithBuildScript("build", ["--mode", "production"])
+            .WithBuildDependency("@repo/database", "generate")
+            .WithBuildDependencies("@repo/database", "@repo/ui");
+
+        await ManifestUtils.GetManifest(webApp.Resource, tempDir.Path);
+
+        var dockerfile = await File.ReadAllTextAsync(Path.Combine(tempDir.Path, "web.Dockerfile"));
+
+        await Verify(dockerfile);
+    }
+
+    [Fact]
+    public async Task VerifyPnpmWorkspaceDeclaredDependenciesReplaceAutomaticDependencyBuild()
+    {
+        using var tempDir = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+
+        var root = Path.Combine(tempDir.Path, "ws");
+        Directory.CreateDirectory(root);
+        File.WriteAllText(Path.Combine(root, "package.json"), """{ "name": "root" }""");
+        File.WriteAllText(Path.Combine(root, "pnpm-workspace.yaml"), "packages:\n  - \"packages/*\"\n");
+        File.WriteAllText(Path.Combine(root, "pnpm-lock.yaml"), string.Empty);
+
+        CreateWorkspaceMember(root, "web", """{ "name": "web", "scripts": { "build": "vite build" } }""");
+        CreateWorkspaceMember(root, "ui", """{ "name": "ui", "scripts": { "build": "tsc" } }""");
+
+        // Declaring dependencies on pnpm replaces the automatic `pnpm --filter web^... run --if-present build`
+        // step with exactly the declared list.
+        var webApp = builder.AddPnpmWorkspace("ws", root)
+            .AddJavaScriptApp("web", "web", "packages/web")
+            .WithBuildScript("build")
+            .WithBuildDependencies("ui");
+
+        await ManifestUtils.GetManifest(webApp.Resource, tempDir.Path);
+
+        var dockerfile = await File.ReadAllTextAsync(Path.Combine(tempDir.Path, "web.Dockerfile"));
+
+        await Verify(dockerfile);
+    }
+
+    [Fact]
+    public void WithBuildDependenciesAppendsAnnotationsInDeclarationOrder()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+
+        var app = builder.AddNpmWorkspace("ws", "ws")
+            .AddJavaScriptApp("web", "web", "packages/web")
+            .WithBuildScript("compile")
+            .WithBuildDependency("database", "generate")
+            .WithBuildDependencies("database", "ui");
+
+        var dependencies = app.Resource.Annotations.OfType<JavaScriptBuildDependencyAnnotation>().ToArray();
+
+        Assert.Equal(["database", "database", "ui"], dependencies.Select(d => d.WorkspaceProjectName));
+        Assert.Equal(["generate", null, null], dependencies.Select(d => d.ScriptName));
+    }
+
+    [Fact]
+    public void WithBuildDependencyThrowsForNonWorkspaceApp()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var app = builder.AddJavaScriptApp("web", "web");
+
+        var ex = Assert.Throws<InvalidOperationException>(() => app.WithBuildDependencies("ui"));
+
+        Assert.Contains("not a workspace application", ex.Message);
+    }
+
+    [Fact]
+    public void WithBuildDependencyThrowsForSelfDependency()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var app = builder.AddNpmWorkspace("ws", "ws").AddJavaScriptApp("web", "web", "packages/web");
+
+        var ex = Assert.Throws<ArgumentException>(() => app.WithBuildDependency("web"));
+
+        Assert.Contains("its own workspace member", ex.Message);
     }
 
     [Fact]
@@ -386,7 +487,6 @@ public class WorkspaceTests(ITestOutputHelper outputHelper)
         }
 
         Assert.Collection(args,
-            arg => Assert.Equal("npm", arg),
             arg => Assert.Equal("run", arg),
             arg => Assert.Equal("dev", arg),
             arg => Assert.Equal("--workspace=project1", arg)
@@ -427,7 +527,6 @@ public class WorkspaceTests(ITestOutputHelper outputHelper)
         }
 
         Assert.Collection(args,
-            arg => Assert.Equal("bun", arg),
             arg => Assert.Equal("--filter=project1", arg),
             arg => Assert.Equal("run", arg),
             arg => Assert.Equal("dev", arg)
@@ -572,7 +671,6 @@ public class WorkspaceTests(ITestOutputHelper outputHelper)
         }
 
         Assert.Collection(args,
-            arg => Assert.Equal("yarn", arg),
             arg => Assert.Equal("workspace", arg),
             arg => Assert.Equal("project1", arg),
             arg => Assert.Equal("run", arg),
@@ -617,12 +715,73 @@ public class WorkspaceTests(ITestOutputHelper outputHelper)
         }
 
         Assert.Collection(args,
-            arg => Assert.Equal("pnpm", arg),
             arg => Assert.Equal("--filter", arg),
             arg => Assert.Equal("project1", arg),
             arg => Assert.Equal("run", arg),
             arg => Assert.Equal("dev", arg)
         );
+    }
+
+    [Theory]
+    [InlineData("npm")]
+    [InlineData("yarn")]
+    [InlineData("pnpm")]
+    [InlineData("bun")]
+    public async Task WorkspaceAppRunCommandDoesNotRepeatExecutableInArgs(string packageManager)
+    {
+        // Regression: GetRunScriptCommand returns the full argv including the executable. Run mode used to
+        // set the package manager as the resource command AND emit the full argv as args, launching
+        // e.g. `pnpm pnpm --filter web run dev`. The executable must appear exactly once, as the command.
+        using var tempDir = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
+
+        // The before-start hooks run the workspace validator, so the workspace must exist on disk with
+        // its member declaration and the package manager's lockfile.
+        var root = Path.Combine(tempDir.Path, "ws");
+        var webDir = Path.Combine(root, "packages", "web");
+        Directory.CreateDirectory(webDir);
+        File.WriteAllText(Path.Combine(webDir, "package.json"), """{ "name": "web", "scripts": { "dev": "vite" } }""");
+
+        if (packageManager == "pnpm")
+        {
+            File.WriteAllText(Path.Combine(root, "package.json"), """{ "name": "root" }""");
+            File.WriteAllText(Path.Combine(root, "pnpm-workspace.yaml"), "packages:\n  - \"packages/*\"\n");
+        }
+        else
+        {
+            File.WriteAllText(Path.Combine(root, "package.json"), """{ "name": "root", "workspaces": ["packages/*"] }""");
+        }
+
+        var lockfile = packageManager switch
+        {
+            "npm" => "package-lock.json",
+            "yarn" => "yarn.lock",
+            "pnpm" => "pnpm-lock.yaml",
+            "bun" => "bun.lock",
+            _ => throw new ArgumentOutOfRangeException(nameof(packageManager))
+        };
+        File.WriteAllText(Path.Combine(root, lockfile), string.Empty);
+
+        IResourceBuilder<JavaScriptAppResource> app = packageManager switch
+        {
+            "npm" => builder.AddNpmWorkspace("ws", root).AddJavaScriptApp("web", "web", "packages/web"),
+            "yarn" => builder.AddYarnWorkspace("ws", root).AddJavaScriptApp("web", "web", "packages/web"),
+            "pnpm" => builder.AddPnpmWorkspace("ws", root).AddJavaScriptApp("web", "web", "packages/web"),
+            "bun" => builder.AddBunWorkspace("ws", root).AddJavaScriptApp("web", "web", "packages/web"),
+            _ => throw new ArgumentOutOfRangeException(nameof(packageManager))
+        };
+
+        using var distributedApp = builder.Build();
+        await ExecuteBeforeStartHooksAsync(distributedApp, CancellationToken.None);
+
+        Assert.True(app.Resource.TryGetLastAnnotation<JavaScriptWorkspaceContextAnnotation>(out var wsCtx));
+        var expectedArgv = wsCtx.Workspace.GetRunScriptCommand("web", "dev", []);
+
+        var args = await ArgumentEvaluator.GetArgumentListAsync(app.Resource);
+
+        Assert.Equal(packageManager, app.Resource.Command);
+        Assert.Equal(expectedArgv[0], app.Resource.Command);
+        Assert.Equal(expectedArgv.Skip(1), args);
     }
 
     [Fact]
@@ -937,8 +1096,10 @@ public class WorkspaceTests(ITestOutputHelper outputHelper)
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
 
         // A real two-member pnpm workspace where `web` depends on the workspace library `shared`
-        // (workspace:*). This is what exercises pnpm's topological filter `--filter web... run build`:
-        // `shared` must be built before `web`. Build scripts avoid network installs so the image
+        // (workspace:*). The generated Dockerfile first builds web's workspace dependencies with
+        // `pnpm --filter web^... run --if-present build` (dependencies only, no build args), then the
+        // member itself with `pnpm --filter web run build`, so `shared` is built before `web`. Note that
+        // this test only asserts the image builds. Build scripts avoid network installs so the image
         // build is deterministic in CI while still validating the generated Dockerfile end-to-end.
         var root = Path.Combine(tempDir.Path, "ws");
         Directory.CreateDirectory(root);
@@ -1265,6 +1426,16 @@ public class WorkspaceTests(ITestOutputHelper outputHelper)
 
         return (process.ExitCode, await stdoutTask, await stderrTask);
     }
+
+    private static void CreateWorkspaceMember(string root, string directoryName, string packageJson)
+    {
+        var memberDir = Path.Combine(root, "packages", directoryName);
+        Directory.CreateDirectory(memberDir);
+        File.WriteAllText(Path.Combine(memberDir, "package.json"), packageJson);
+    }
+
+    [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "ExecuteBeforeStartHooksAsync")]
+    private static extern Task ExecuteBeforeStartHooksAsync(DistributedApplication app, CancellationToken cancellationToken);
 
     private static void AssertWorkspaceAppWiring(
         JavaScriptAppResource appResource,

@@ -1,0 +1,10 @@
+﻿FROM node:22-slim
+WORKDIR /app
+COPY package*.json ./
+COPY packages/database/package.json ./packages/database/package.json
+COPY packages/ui/package.json ./packages/ui/package.json
+COPY packages/web/package.json ./packages/web/package.json
+RUN --mount=type=cache,target=/root/.npm npm ci
+COPY . .
+RUN npm run generate '--workspace=@repo/database' && npm run build '--workspace=@repo/database' && npm run build '--workspace=@repo/ui'
+RUN npm run build --workspace=web -- --mode production

@@ -179,6 +179,94 @@ public class WorkspaceValidationTests(ITestOutputHelper outputHelper)
         Assert.Contains("not a declared workspace member", ex.Message);
     }
 
+    [Fact]
+    public async Task RunModeFlagsUnknownBuildDependency()
+    {
+        using var tempDir = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        var root = CreatePnpmWorkspace(tempDir.Path);
+        CreateMember(root, "ui", """{ "name": "ui", "scripts": { "build": "tsc" } }""");
+
+        var workspace = builder.AddPnpmWorkspace("ws", root);
+        // 'ui-typo' is not a member. Dependency builds only execute in publish mode, but the name check
+        // still runs on `aspire run` so the typo surfaces early.
+        workspace.AddJavaScriptApp("web", "web", "packages/web").WithBuildDependencies("ui", "ui-typo");
+
+        using var app = builder.Build();
+
+        var ex = await Assert.ThrowsAsync<DistributedApplicationException>(() => ExecuteBeforeStartHooksAsync(app, CancellationToken.None));
+
+        Assert.Contains("build dependency 'ui-typo'", ex.Message);
+        Assert.Contains("not a declared workspace member", ex.Message);
+        Assert.DoesNotContain("build dependency 'ui'", ex.Message);
+    }
+
+    [Fact]
+    public async Task PublishFlagsUnknownBuildDependency()
+    {
+        using var tempDir = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+
+        var root = CreatePnpmWorkspace(tempDir.Path);
+
+        var workspace = builder.AddPnpmWorkspace("ws", root);
+        var app = workspace.AddJavaScriptApp("web", "web", "packages/web")
+            .WithBuildScript("build")
+            .WithBuildDependency("database");
+
+        var ex = await Assert.ThrowsAsync<DistributedApplicationException>(() => ManifestUtils.GetManifest(app.Resource, tempDir.Path));
+
+        Assert.Contains("build dependency 'database'", ex.Message);
+        Assert.Contains("not a declared workspace member", ex.Message);
+    }
+
+    [Fact]
+    public async Task PublishFlagsBuildDependencyMissingScript()
+    {
+        using var tempDir = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+
+        var root = CreatePnpmWorkspace(tempDir.Path);
+        // 'database' has no "build" script, which is the script it inherits from the app by default.
+        CreateMember(root, "database", """{ "name": "database", "scripts": { "generate": "prisma generate" } }""");
+
+        var workspace = builder.AddPnpmWorkspace("ws", root);
+        var app = workspace.AddJavaScriptApp("web", "web", "packages/web")
+            .WithBuildScript("build")
+            .WithBuildDependencies("database");
+
+        var ex = await Assert.ThrowsAsync<DistributedApplicationException>(() => ManifestUtils.GetManifest(app.Resource, tempDir.Path));
+
+        Assert.Contains("build dependency 'database' with script 'build'", ex.Message);
+        Assert.Contains("Declared scripts: generate", ex.Message);
+    }
+
+    [Fact]
+    public async Task PublishAcceptsBuildDependencyWithOverriddenScript()
+    {
+        using var tempDir = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+
+        var root = CreatePnpmWorkspace(tempDir.Path);
+        CreateMember(root, "database", """{ "name": "database", "scripts": { "generate": "prisma generate" } }""");
+
+        var workspace = builder.AddPnpmWorkspace("ws", root);
+        var app = workspace.AddJavaScriptApp("web", "web", "packages/web")
+            .WithBuildScript("build")
+            .WithBuildDependency("database", "generate");
+
+        var manifest = await ManifestUtils.GetManifest(app.Resource, tempDir.Path);
+        Assert.NotNull(manifest);
+    }
+
+    private static void CreateMember(string root, string directoryName, string packageJson)
+    {
+        var memberDir = Path.Combine(root, "packages", directoryName);
+        Directory.CreateDirectory(memberDir);
+        File.WriteAllText(Path.Combine(memberDir, "package.json"), packageJson);
+    }
+
     private static string CreatePnpmWorkspace(string basePath)
     {
         var root = Path.Combine(basePath, "ws");
