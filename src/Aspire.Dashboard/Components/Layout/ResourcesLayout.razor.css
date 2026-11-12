@@ -2730,19 +2730,20 @@
     display: none;
 }
 
-/* A compact sidebar row puts the expand toggle after its actions, on screen and in tab order (see
-   RenderResourceActions). Where rows can be hovered, the toggle is the only control in the rail at rest; the actions
-   then appear before it rather than pushing it 92px toward the name, where a pointer heading for the toggle would
-   land on another action. -2 / -1 is the rail's last track, whether the rail has one track (at rest) or several.
-   The toggle needs ::deep because FluentButton renders it, so it doesn't carry this component's scope attribute;
-   the spacer is a plain span rendered here. */
-.resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-row-actions {
-    grid-template-columns: repeat(3, 28px) 20px;
+/* The compact sidebar's expand toggle leads the row, so its actions need no trailing toggle slot. */
+.resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-row {
+    grid-template-columns: minmax(0, 1fr) 88px;
 }
 
-.resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-row-actions ::deep .resource-row-toggle,
+.resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-row-actions {
+    grid-template-columns: repeat(3, 28px);
+    width: 88px;
+    min-width: 88px;
+    max-width: 88px;
+}
+
 .resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-row-actions > .resource-row-toggle-spacer {
-    grid-column: -2 / -1;
+    display: none;
 }
 
 .resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-row-actions > .resource-row-primary-endpoint {
@@ -2757,15 +2758,14 @@
     grid-column: 3;
 }
 
-/* With two highlighted commands, four 22px slots and the 20px toggle need 116px, 4px more than the rail. The rail
-   grows into the 4px gap before it rather than taking the width from the name track, so neither the name nor the
-   error badge moves. The 22px slots keep the 24px spacing between targets (see the sidebar rule above). */
+/* Four 22px targets need 94px with their gaps. Grow into the preceding gap and link end padding so the menu stays
+   right-aligned without moving the name or error badge. Target centers remain 24px apart. */
 .resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-row-actions:has(.resource-row-command-slot-1) {
-    grid-template-columns: repeat(4, 22px) 20px;
-    width: 116px;
-    min-width: 116px;
-    max-width: 116px;
-    margin-inline-start: -4px;
+    grid-template-columns: repeat(4, 22px);
+    width: 94px;
+    min-width: 94px;
+    max-width: 94px;
+    margin-inline-start: -6px;
 }
 
 .resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-row-actions:has(.resource-row-command-slot-1) ::deep .resource-row-command-slot-1 {
@@ -2790,9 +2790,9 @@
 }
 
 /* Compact sidebar rows show their actions only while the row is hovered or focused, or while one of its menus is
-   open, and then in place of the type and state columns. The rest of the time the action rail narrows to the
-   expand toggle (or the spacer that keeps the columns aligned), so the name gets the rail's room. The swap keeps the
-   name's width about the same: the 92px the rail gains is about the 90px the columns give up.
+   open, and then in place of the type and state columns. The rest of the time the action rail is hidden, so the
+   name gets its room. The swap keeps the name's width about the same: the 92px the rail and its gap gain is about
+   the 90px the columns give up.
    An open menu is matched by aria-haspopup as well as aria-expanded: a parent's expand toggle also sets
    aria-expanded="true", and that must not keep its actions showing. Only the attribute's presence is tested
    because Fluent's menu changes the button's aria-haspopup from "menu" to "true" while the menu is open.
@@ -2800,20 +2800,11 @@
    canvas) is excluded and keeps its fixed, always-visible action slots. */
 @media (hover: hover) {
     .resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-row:not(:hover, :focus-within, :has(.resource-row-actions [aria-haspopup][aria-expanded="true"])) {
-        grid-template-columns: minmax(0, 1fr) 20px;
+        grid-template-columns: minmax(0, 1fr);
+        column-gap: 0;
     }
 
     .resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-row:not(:hover, :focus-within, :has(.resource-row-actions [aria-haspopup][aria-expanded="true"])) .resource-row-actions {
-        grid-template-columns: 20px;
-        width: 20px;
-        min-width: 20px;
-        max-width: 20px;
-        margin-inline-start: 0;
-    }
-
-    /* Every action has .resource-row-action. The menus also have a wrapper that occupies a grid slot. */
-    .resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-row:not(:hover, :focus-within, :has(.resource-row-actions [aria-haspopup][aria-expanded="true"])) .resource-row-actions ::deep .resource-row-action,
-    .resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-row:not(:hover, :focus-within, :has(.resource-row-actions [aria-haspopup][aria-expanded="true"])) .resource-row-actions ::deep .aspire-menu-button {
         display: none;
     }
 
@@ -2823,7 +2814,7 @@
 
     /* The error badge keeps one place whether the columns or the actions show, so it never moves, least of all out
        from under a pointer that is on it. Its margin is measured from the end of the name track, which is 92px
-       wider at rest than while the actions show (the 112px rail narrows to 20px). At rest the badge must clear the
+       wider at rest than while the actions show (the 88px rail and 4px gap are hidden). At rest the badge must clear the
        type and state columns: the type column + 34px (see above). While the actions show it must clear the link's
        8px end padding, which is 8px + 92px = 100px from the end of the wider, at-rest track. The badge takes
        whichever is further from the end in both states, so with wide persistent type columns a gap is left before
