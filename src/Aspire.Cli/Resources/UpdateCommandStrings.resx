@@ -55,7 +55,7 @@
     <value>Failed to discover NuGet.config files.</value>
   </data>
   <data name="ChannelUpdateRequiresAmbientNuGetConfigurationFormat" xml:space="preserve">
-    <value>Cannot apply channel '{0}' for '{1}' because MSBuild overrides NuGet configuration: {2}. Remove these overrides to enable explicit channel updates. Updates without an explicit channel remain supported.</value>
+    <value>Cannot apply channel '{0}' for '{1}' because MSBuild overrides NuGet configuration: {2}. Remove these overrides to enable channel updates. Updates without a command-line or configured channel remain supported.</value>
   </data>
   <data name="ChannelFeedAlreadyConfiguredFormat" xml:space="preserve">
     <value>Cannot modify '{0}' because channel source '{1}' is disabled, or the source or its package mappings are inherited or user-owned. Update the NuGet configuration manually instead.</value>
@@ -244,6 +244,14 @@
   </data>
   <data name="NoChannelFoundMatching" xml:space="preserve">
     <value>No channel found matching '{0}'. Valid options are: {1}.</value>
+  </data>
+  <data name="ConfiguredChannelNotFoundFormat" xml:space="preserve">
+    <value>Cannot use channel '{0}' from Aspire configuration. {1}</value>
+    <comment>{0} = configured channel name. {1} = reason the channel could not be resolved.</comment>
+  </data>
+  <data name="UsingConfiguredChannelFormat" xml:space="preserve">
+    <value>Using channel '{0}' from Aspire configuration. Pass --channel to override.</value>
+    <comment>{0} = configured channel name.</comment>
   </data>
   <data name="PendingMigrationsHeader" xml:space="preserve">
     <value>This project has pending migrations:</value>
