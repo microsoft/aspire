@@ -27,6 +27,19 @@
             OnAllValuesCheckedChangedAsync="OnAllFilterVisibilityCheckedChangedAsync"
             OnValueVisibilityChangedAsync="OnResourceFilterVisibilityChangedAsync"/>
     </fieldset>
+    @if (LaunchGroups is not null)
+    {
+        <fieldset class="filter-group">
+            <legend>@Loc[nameof(Resources.Resources.ResourceLaunchGroupsHeader)]</legend>
+            <SelectResourceOptions
+                TValue="string"
+                Id="resource-launch-groups"
+                Values="LaunchGroups"
+                GetLabel="@(group => string.IsNullOrEmpty(group) ? Loc[nameof(Resources.Resources.ResourceLaunchGroupsUngrouped)] : group)"
+                OnAllValuesCheckedChangedAsync="OnAllFilterVisibilityCheckedChangedAsync"
+                OnValueVisibilityChangedAsync="OnResourceFilterVisibilityChangedAsync"/>
+        </fieldset>
+    }
 </FluentStack>
 
 @code {
@@ -39,6 +52,9 @@
 
     [Parameter, EditorRequired]
     public required ConcurrentDictionary<string, bool> ResourceHealthStates { get; set; }
+
+    [Parameter]
+    public ConcurrentDictionary<string, bool>? LaunchGroups { get; set; }
 
     [Parameter, EditorRequired]
     public required Func<Task> OnAllFilterVisibilityCheckedChangedAsync { get; set; }

@@ -4,6 +4,7 @@
 using System.Collections.Concurrent;
 using System.Collections.Immutable;
 using System.Globalization;
+using System.Threading.Channels;
 using Aspire.Dashboard.Components.Controls;
 using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model;
@@ -18,6 +19,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Xunit;
+using LaunchGroupBuildType = Aspire.DashboardService.Proto.V1.LaunchGroupBuildType;
+using LaunchGroupExclusionReason = Aspire.DashboardService.Proto.V1.LaunchGroupExclusionReason;
 
 namespace Aspire.Dashboard.Components.Tests.Controls;
 
@@ -448,6 +451,92 @@ public class ResourceDetailsTests : DashboardTestContext
         var resourcePropertyGrid = cut.FindAll(".property-grid")[0];
         Assert.Contains(ControlsStrings.ResourceDetailsStateDescriptionHeader, resourcePropertyGrid.TextContent);
         Assert.Contains(Columns.StateColumnResourceNotStarted, resourcePropertyGrid.TextContent);
+    }
+
+    [Theory]
+    [InlineData(LaunchGroupBuildType.InitialShared, "Not in active launch group 'Web'")]
+    [InlineData(LaunchGroupBuildType.Deferred, "Not in active launch group 'Web', deferred build")]
+    public void Render_LaunchGroupMetadataShowsMembershipAndStateDetails(LaunchGroupBuildType buildType, string stateDetails)
+    {
+        ResourceSetupHelpers.SetupResourceDetails(this);
+        var resource = ModelTestHelpers.CreateResource("app1", state: KnownResourceState.NotStarted);
+        var information = LaunchGroupTestHelpers.CreateInformation(
+            selectedGroup: "Web",
+            groups: ["Web", "Shared"],
+            resources:
+            [
+                LaunchGroupTestHelpers.CreateResource(
+                    "app1",
+                    groups: ["Web", "Shared"],
+                    inheritedFrom: "parent",
+                    explicitStart: true,
+                    exclusionReason: LaunchGroupExclusionReason.NotInSelectedGroup,
+                    buildType: buildType),
+                LaunchGroupTestHelpers.CreateResource("worker", groups: ["Web"], inheritedFrom: "app1"),
+                LaunchGroupTestHelpers.CreateResource("app1-rebuilder", groups: ["Web"], inheritedFrom: "app1"),
+                LaunchGroupTestHelpers.CreateResource("cache", groups: ["Shared"])
+            ]);
+        var client = new LaunchGroupTestDashboardClient(
+            information,
+            [resource, ModelTestHelpers.CreateResource("app1-rebuilder", hidden: true)],
+            Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>);
+        Services.AddSingleton<IDashboardClient>(client);
+
+        var cut = Render<ResourceDetails>(builder =>
+        {
+            builder.Add(component => component.Resource, resource);
+            builder.Add(component => component.ResourceByName, new ConcurrentDictionary<string, ResourceViewModel>(
+                [new KeyValuePair<string, ResourceViewModel>(resource.Name, resource)]));
+        });
+
+        var properties = cut.Instance.FilteredResourceProperties.ToDictionary(
+            property => property.DisplayName,
+            property => property.Value.StringValue);
+        Assert.Equal(
+            ["Explicit start", "Inherited from", "Launch groups", "State details"],
+            properties.Keys.Order(StringComparer.Ordinal));
+        Assert.Equal("Web, Shared", properties["Launch groups"]);
+        Assert.Equal("parent", properties["Inherited from"]);
+        Assert.Equal("Yes", properties["Explicit start"]);
+        Assert.Equal(stateDetails, properties["State details"]);
+
+        cut.WaitForAssertion(() =>
+        {
+            var groupValues = cut.FindAll(".launch-group-value").Select(element =>
+            {
+                var members = element.GetAttribute("data-tooltip");
+                Assert.Equal("0", element.GetAttribute("tabindex"));
+                Assert.Equal(members, element.GetAttribute("aria-description"));
+                return (element.TextContent.Trim(), members);
+            });
+            Assert.Equal(
+                [("Web", "app1, worker"), ("Web", "app1, worker"), ("Shared", "app1, cache")],
+                groupValues);
+        });
+
+        cut.Render(builder => builder.Add(component => component.ShowHiddenResources, true));
+
+        cut.WaitForAssertion(() =>
+        {
+            var groupValues = cut.FindAll(".launch-group-value")
+                .Select(element => (element.TextContent.Trim(), element.GetAttribute("data-tooltip")));
+            Assert.Equal(
+                [("Web", "app1, app1-rebuilder, worker"), ("Web", "app1, app1-rebuilder, worker"), ("Shared", "app1, cache")],
+                groupValues);
+        });
+
+        var startedResource = ModelTestHelpers.CreateResource("app1", state: KnownResourceState.FailedToStart);
+        client.LaunchGroups!.ApplyToResource(startedResource);
+        cut.Render(builder => builder.Add(component => component.Resource, startedResource));
+
+        var updatedProperties = cut.Instance.FilteredResourceProperties.ToDictionary(
+            property => property.DisplayName,
+            property => property.Value.StringValue);
+        Assert.Equal(properties.Keys.Order(StringComparer.Ordinal), updatedProperties.Keys.Order(StringComparer.Ordinal));
+        Assert.Equal($"{startedResource.ResourceTypeDisplayName} failed to start.", updatedProperties["State details"]);
+        Assert.Equal(
+            ["Web", "Shared"],
+            cut.FindAll(".launch-group-value").Select(element => element.TextContent.Trim()));
     }
 
     [Fact]

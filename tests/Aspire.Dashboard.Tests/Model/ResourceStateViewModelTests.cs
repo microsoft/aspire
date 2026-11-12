@@ -9,6 +9,8 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Xunit;
 using Enum = System.Enum;
+using LaunchGroupBuildType = Aspire.DashboardService.Proto.V1.LaunchGroupBuildType;
+using LaunchGroupExclusionReason = Aspire.DashboardService.Proto.V1.LaunchGroupExclusionReason;
 
 namespace Aspire.Dashboard.Tests.Model;
 
@@ -107,6 +109,56 @@ public class ResourceStateViewModelTests
         Assert.Equal(expectedIconName, vm.Icon.Name);
         Assert.Equal(expectedColor, vm.Color);
         Assert.Equal(expectedText, vm.Text);
+    }
+
+    [Theory]
+    [InlineData(LaunchGroupBuildType.InitialShared, "Localized:StateColumnResourceNotInLaunchGroup:catalog")]
+    [InlineData(LaunchGroupBuildType.Deferred, "Localized:StateColumnResourceNotInLaunchGroupDeferred:catalog")]
+    public void NotStartedResourceTooltipExplainsLaunchGroupExclusion(LaunchGroupBuildType buildType, string expectedTooltip)
+    {
+        var resource = ModelTestHelpers.CreateResource(state: KnownResourceState.NotStarted);
+        resource.LaunchGroup = new ResourceLaunchGroupViewModel(
+            "catalog", ["orders"], null, false, LaunchGroupExclusionReason.NotInSelectedGroup, buildType);
+
+        var tooltip = ResourceStateViewModel.GetResourceStateTooltip(resource, new TestStringLocalizer<Columns>());
+
+        Assert.Equal(expectedTooltip, tooltip);
+    }
+
+    [Theory]
+    [InlineData(LaunchGroupExclusionReason.None, "catalog")]
+    [InlineData(LaunchGroupExclusionReason.ExemptFromSelection, "catalog")]
+    [InlineData(LaunchGroupExclusionReason.NotInSelectedGroup, null)]
+    public void NotStartedResourceTooltipWithoutActiveExclusionUsesDefaultDescription(LaunchGroupExclusionReason exclusionReason, string? selectedGroup)
+    {
+        var resource = ModelTestHelpers.CreateResource(state: KnownResourceState.NotStarted);
+        resource.LaunchGroup = new ResourceLaunchGroupViewModel(
+            selectedGroup, ["orders"], null, true, exclusionReason, LaunchGroupBuildType.Deferred);
+
+        var tooltip = ResourceStateViewModel.GetResourceStateTooltip(resource, new TestStringLocalizer<Columns>());
+
+        Assert.Equal($"Localized:{nameof(Columns.StateColumnResourceNotStarted)}", tooltip);
+    }
+
+    [Theory]
+    [InlineData(KnownResourceState.Starting)]
+    [InlineData(KnownResourceState.Building)]
+    [InlineData(KnownResourceState.Running)]
+    [InlineData(KnownResourceState.Waiting)]
+    [InlineData(KnownResourceState.FailedToStart)]
+    [InlineData(KnownResourceState.Exited)]
+    [InlineData(KnownResourceState.RuntimeUnhealthy)]
+    public void ResourceTooltipAfterManualStartPreservesCurrentStateDescription(KnownResourceState state)
+    {
+        var resource = ModelTestHelpers.CreateResource(state: state);
+        var localizer = new TestStringLocalizer<Columns>();
+        var expectedTooltip = ResourceStateViewModel.GetResourceStateTooltip(resource, localizer);
+        resource.LaunchGroup = new ResourceLaunchGroupViewModel(
+            "catalog", ["orders"], null, false, LaunchGroupExclusionReason.NotInSelectedGroup, LaunchGroupBuildType.Deferred);
+
+        var tooltip = ResourceStateViewModel.GetResourceStateTooltip(resource, localizer);
+
+        Assert.Equal(expectedTooltip, tooltip);
     }
 
     [Fact]

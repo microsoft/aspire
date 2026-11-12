@@ -27,6 +27,7 @@ When automatic CLI bundle setup fails, `ASPIRE009` includes the setup command's 
 
 | Diagnostic ID | Severity | Description | Location |
 | ------------- | -------- | ----------- | -------- |
+| `ASPIRELAUNCHGROUPS001` | Warning | Launch-group membership APIs and selection annotations are experimental and may change or be removed. Suppress this diagnostic to opt in. | [src/Aspire.Hosting/LaunchGroupExtensions.cs](../src/Aspire.Hosting/LaunchGroupExtensions.cs) |
 | `ASPIREAZUREPROVISIONING001` | Warning | The polyglot Azure Provisioning proxy packages are experimental and may change or be removed in future releases. | [src/Aspire.Hosting.Azure.Provisioning/ExperimentalAssemblyInfo.cs](../src/Aspire.Hosting.Azure.Provisioning/ExperimentalAssemblyInfo.cs) |
 | `ASPIREEXPORT018` | Warning | The source-generated Aspire export provider contract is experimental and may change or be removed in future releases. | [src/Aspire.Hosting/Ats/AspireExportProviderAttribute.cs](../src/Aspire.Hosting/Ats/AspireExportProviderAttribute.cs) |
 | `ASPIREPIPELINES005` | Warning | Pipeline output diffing APIs are experimental and may change or be removed in future releases. Suppress this diagnostic to opt in. | [src/Aspire.Hosting/PipelineOutputDiffingExtensions.cs](../src/Aspire.Hosting/PipelineOutputDiffingExtensions.cs) |

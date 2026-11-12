@@ -23,10 +23,30 @@ public class AtsTypeScriptCodeGeneratorTests
 {
     private readonly AtsTypeScriptCodeGenerator _generator = new();
 
+    [Theory]
+    [InlineData("withLaunchGroups")]
+    [InlineData("withOptionalLaunchGroupReference")]
+    public void Scanner_LaunchGroupCapabilities_AreExperimental(string methodName)
+    {
+        var capability = Assert.Single(ScanCapabilitiesFromHostingAssembly(),
+            capability => capability.CapabilityId == $"Aspire.Hosting/{methodName}");
+
+        Assert.True(capability.IsExperimental);
+    }
+
     [Fact]
     public void Language_ReturnsTypeScript()
     {
         Assert.Equal("TypeScript", _generator.Language);
+    }
+
+    [Fact]
+    public void GeneratedCode_IncludesOptionalLaunchGroupReference()
+    {
+        var source = _generator.GenerateDistributedApplication(CreateContextFromBothAssemblies())["aspire.mts"];
+
+        Assert.Contains("withOptionalLaunchGroupReference(dependency:", source);
+        Assert.Contains("Aspire.Hosting/withOptionalLaunchGroupReference", source);
     }
 
     [Fact]

@@ -1756,7 +1756,14 @@ public class ResourcesLayoutTests : DashboardTestContext
 
     private static List<IRenderedComponent<FluentCheckbox>> GetFilterCheckboxes(IRenderedComponent<ResourcePaneFilter> filter, string groupId)
     {
-        var target = groupId switch { "types" => 0, "states" => 1, "health" => 2, _ => 3 };
+        var target = groupId switch
+        {
+            "types" => 0,
+            "states" => 1,
+            "health" => 2,
+            "tags" => 3,
+            _ => 4
+        };
         // The "Show" section at the top lists kinds, not values, and doesn't collapse.
         var count = filter.FindAll("button.resource-filter-group-header").Count;
         for (var i = 0; i < count; i++)
@@ -1901,6 +1908,315 @@ public class ResourcesLayoutTests : DashboardTestContext
         cut.Find(".resource-filter-reset").Click();
         cut.WaitForAssertion(() => Assert.Equal(2, cut.FindAll("[data-resource-name]").Count));
         Assert.True(cut.Find(".resource-filter-reset").HasAttribute("disabled"));
+    }
+
+    [Fact]
+    public async Task FilterPopover_FiltersEffectiveLaunchGroupsAndPreservesResourceState()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        var resources = new List<ResourceViewModel>
+        {
+            ModelTestHelpers.CreateResource("api-1", displayName: "api", state: KnownResourceState.NotStarted),
+            ModelTestHelpers.CreateResource("api-2", displayName: "api", state: KnownResourceState.NotStarted),
+            ModelTestHelpers.CreateResource("worker", state: KnownResourceState.Running),
+            ModelTestHelpers.CreateResource("shared", state: KnownResourceState.Running),
+            ModelTestHelpers.CreateResource("cache", state: KnownResourceState.Running),
+            ModelTestHelpers.CreateResource("unknown", state: KnownResourceState.Running)
+        };
+        var information = LaunchGroupTestHelpers.CreateInformation(
+            selectedGroup: "Web",
+            groups: ["Web", "Data", "Empty"],
+            resources:
+            [
+                LaunchGroupTestHelpers.CreateResource("api", groups: ["Web"]),
+                LaunchGroupTestHelpers.CreateResource("worker", groups: ["Data"]),
+                LaunchGroupTestHelpers.CreateResource("shared", groups: ["Web", "Data"]),
+                LaunchGroupTestHelpers.CreateResource("cache")
+            ]);
+        var sessionStorage = new TestSessionStorage();
+        List<string>? savedGroups = null;
+        sessionStorage.OnSetAsync = (key, value) =>
+        {
+            if (key == BrowserStorageKeys.ResourcePaneLaunchGroupsKey("LaunchGroupsApp"))
+            {
+                savedGroups = Assert.IsType<List<string>>(value);
+            }
+        };
+        ResourceSetupHelpers.SetupResourcesLayout(
+            this,
+            viewport,
+            new LaunchGroupTestDashboardClient(
+                information,
+                resources,
+                () => channel,
+                applicationName: "LaunchGroupsApp"),
+            services => services.AddSingleton<ISessionStorage>(sessionStorage));
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo(DashboardUrls.ResourceListUrl());
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.Equal(6, cut.FindAll("[data-resource-name]").Count));
+
+        var filter = OpenFilter(cut);
+        var boxes = GetFilterCheckboxes(filter, "launch-groups");
+        Assert.Equal(
+            [("(All)", (string?)null), ("Ungrouped", "1"), ("Data", "2"), ("Empty", "0"), ("Web", "3")],
+            boxes.Select((box, index) => (
+                box.Instance.Label!,
+                index == 0 ? null : filter.FindAll(".resource-filter-count")[index - 1].TextContent.Trim())));
+
+        await cut.InvokeAsync(() => boxes.Single(box => box.Instance.Label == "Web").Instance.ValueChanged.InvokeAsync(false));
+        cut.WaitForAssertion(() => Assert.Equal(
+            ["cache", "shared", "unknown", "worker"],
+            GetVisibleResourceNames(cut)));
+        Assert.Equal(["Web"], savedGroups);
+
+        boxes = GetFilterCheckboxes(filter, "launch-groups");
+        await cut.InvokeAsync(() => boxes.Single(box => box.Instance.Label == "Data").Instance.ValueChanged.InvokeAsync(false));
+        cut.WaitForAssertion(() => Assert.Equal(["cache", "unknown"], GetVisibleResourceNames(cut)));
+
+        boxes = GetFilterCheckboxes(filter, "launch-groups");
+        await cut.InvokeAsync(() => boxes.Single(box => box.Instance.Label == "Ungrouped").Instance.ValueChanged.InvokeAsync(false));
+        cut.WaitForAssertion(() => Assert.Equal(["unknown"], GetVisibleResourceNames(cut)));
+        Assert.Equal(["", "Data", "Web"], savedGroups);
+        Assert.Contains("hiddenLaunchGroups=", navigation.Uri, StringComparison.Ordinal);
+
+        Assert.All(resources.Take(2), resource =>
+        {
+            Assert.Equal(nameof(KnownResourceState.NotStarted), resource.State);
+            Assert.Equal("Web", resource.LaunchGroup?.SelectedGroup);
+        });
+
+        cut.Find(".resource-filter-reset").Click();
+        cut.WaitForAssertion(() => Assert.Equal(6, cut.FindAll("[data-resource-name]").Count));
+        Assert.Empty(Assert.IsType<List<string>>(savedGroups));
+        Assert.DoesNotContain("hiddenLaunchGroups", navigation.Uri, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void LaunchGroupFilters_QueryTakesPrecedenceOverSessionState()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var resources = CreateLaunchGroupRestorationResources();
+        var information = CreateLaunchGroupRestorationInformation();
+        var sessionStorage = new TestSessionStorage
+        {
+            OnGetAsync = key => key == BrowserStorageKeys.ResourcePaneLaunchGroupsKey("LaunchGroupsApp")
+                ? (true, new List<string> { "Web" })
+                : (false, null)
+        };
+        ResourceSetupHelpers.SetupResourcesLayout(
+            this,
+            viewport,
+            new LaunchGroupTestDashboardClient(
+                information,
+                resources,
+                Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>,
+                applicationName: "LaunchGroupsApp"),
+            services => services.AddSingleton<ISessionStorage>(sessionStorage));
+        Services.GetRequiredService<NavigationManager>().NavigateTo("/resources?hiddenLaunchGroups=Data");
+
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+
+        cut.WaitForAssertion(() => Assert.Equal(["api", "unknown"], GetVisibleResourceNames(cut)));
+    }
+
+    [Fact]
+    public void LaunchGroupFilters_RestoreApplicationScopedSessionStateWithoutQuery()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var resources = CreateLaunchGroupRestorationResources();
+        var information = CreateLaunchGroupRestorationInformation();
+        var sessionStorage = new TestSessionStorage
+        {
+            OnGetAsync = key => key == BrowserStorageKeys.ResourcePaneLaunchGroupsKey("LaunchGroupsApp")
+                ? (true, new List<string> { "Web" })
+                : (false, null)
+        };
+        ResourceSetupHelpers.SetupResourcesLayout(
+            this,
+            viewport,
+            new LaunchGroupTestDashboardClient(
+                information,
+                resources,
+                Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>,
+                applicationName: "LaunchGroupsApp"),
+            services => services.AddSingleton<ISessionStorage>(sessionStorage));
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ResourceListUrl());
+
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+
+        cut.WaitForAssertion(() => Assert.Equal(["unknown", "worker"], GetVisibleResourceNames(cut)));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void LaunchGroupFilters_IgnoreStaleSavedKeys(bool fromQuery)
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var resources = CreateLaunchGroupRestorationResources();
+        var information = CreateLaunchGroupRestorationInformation();
+        var sessionStorage = new TestSessionStorage
+        {
+            OnGetAsync = key => key == BrowserStorageKeys.ResourcePaneLaunchGroupsKey("LaunchGroupsApp")
+                ? (true, new List<string> { fromQuery ? "Web" : "Removed" })
+                : (false, null)
+        };
+        ResourceSetupHelpers.SetupResourcesLayout(
+            this,
+            viewport,
+            new LaunchGroupTestDashboardClient(
+                information,
+                resources,
+                Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>,
+                applicationName: "LaunchGroupsApp"),
+            services => services.AddSingleton<ISessionStorage>(sessionStorage));
+        Services.GetRequiredService<NavigationManager>().NavigateTo(
+            fromQuery ? "/resources?hiddenLaunchGroups=Removed" : DashboardUrls.ResourceListUrl());
+
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+
+        cut.WaitForAssertion(() => Assert.Equal(["api", "unknown", "worker"], GetVisibleResourceNames(cut)));
+        Assert.DoesNotContain(
+            OpenFilter(cut).FindComponents<FluentCheckbox>(),
+            checkbox => checkbox.Instance.Label == "Removed");
+    }
+
+    [Fact]
+    public async Task LaunchGroupFilters_CombineWithTextStateAndTypeFilters()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var resources = new List<ResourceViewModel>
+        {
+            ModelTestHelpers.CreateResource("api", resourceType: KnownResourceTypes.Project, state: KnownResourceState.Running),
+            ModelTestHelpers.CreateResource("frontend", resourceType: KnownResourceTypes.Project, state: KnownResourceState.Running),
+            ModelTestHelpers.CreateResource("web-container", resourceType: KnownResourceTypes.Container, state: KnownResourceState.Running),
+            ModelTestHelpers.CreateResource("stopped-api", resourceType: KnownResourceTypes.Project, state: KnownResourceState.Exited),
+            ModelTestHelpers.CreateResource("data-project", resourceType: KnownResourceTypes.Project, state: KnownResourceState.Running),
+            ModelTestHelpers.CreateResource("unknown", resourceType: KnownResourceTypes.Project, state: KnownResourceState.Running)
+        };
+        var information = LaunchGroupTestHelpers.CreateInformation(
+            groups: ["Web", "Data"],
+            resources:
+            [
+                LaunchGroupTestHelpers.CreateResource("api", groups: ["Web"]),
+                LaunchGroupTestHelpers.CreateResource("frontend", groups: ["Web"]),
+                LaunchGroupTestHelpers.CreateResource("web-container", groups: ["Web"]),
+                LaunchGroupTestHelpers.CreateResource("stopped-api", groups: ["Web"]),
+                LaunchGroupTestHelpers.CreateResource("data-project", groups: ["Data"])
+            ]);
+        ResourceSetupHelpers.SetupResourcesLayout(
+            this,
+            viewport,
+            new LaunchGroupTestDashboardClient(
+                information,
+                resources,
+                Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.Equal(6, GetVisibleResourceNames(cut).Count));
+
+        var filter = OpenFilter(cut);
+        await SetAllFilterValuesAsync(cut, filter, "launch-groups", isVisible: false);
+        await cut.InvokeAsync(() => GetFilterCheckboxes(filter, "launch-groups").Single(box => box.Instance.Label == "Web").Instance.ValueChanged.InvokeAsync(true));
+        cut.WaitForAssertion(() => Assert.Equal(
+            ["api", "frontend", "stopped-api", "unknown", "web-container"],
+            GetVisibleResourceNames(cut)));
+
+        await SetAllFilterValuesAsync(cut, filter, "types", isVisible: false);
+        await cut.InvokeAsync(() => GetFilterCheckboxes(filter, "types").Single(box => box.Instance.Label == KnownResourceTypes.Project).Instance.ValueChanged.InvokeAsync(true));
+        cut.WaitForAssertion(() => Assert.Equal(
+            ["api", "frontend", "stopped-api", "unknown"],
+            GetVisibleResourceNames(cut)));
+
+        await SetAllFilterValuesAsync(cut, filter, "states", isVisible: false);
+        await cut.InvokeAsync(() => GetFilterCheckboxes(filter, "states").Single(box => box.Instance.Label == nameof(KnownResourceState.Running)).Instance.ValueChanged.InvokeAsync(true));
+        cut.WaitForAssertion(() => Assert.Equal(
+            ["api", "frontend", "unknown"],
+            GetVisibleResourceNames(cut)));
+
+        var search = cut.FindComponent<FluentTextInput>();
+        await cut.InvokeAsync(() => search.Instance.ValueChanged.InvokeAsync("api"));
+        cut.WaitForAssertion(() => Assert.Equal(["api"], GetVisibleResourceNames(cut)));
+    }
+
+    [Fact]
+    public async Task LaunchGroupFilters_NoMatchesDoNotInvokeOrRemoveLifecycleControls()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var executed = new System.Collections.Concurrent.ConcurrentQueue<string>();
+        static CommandViewModel Command(string name) =>
+            new(name, CommandViewModelState.Enabled, name, "", confirmationMessage: "", argumentInputs: [], isHighlighted: true, iconName: "", iconVariant: IconVariant.Regular);
+        var resources = new List<ResourceViewModel>
+        {
+            ModelTestHelpers.CreateResource("api", state: KnownResourceState.Running, commands: [Command(CommandViewModel.StopCommand)])
+        };
+        ResourceSetupHelpers.SetupResourcesLayout(
+            this,
+            viewport,
+            new LaunchGroupTestDashboardClient(
+                LaunchGroupTestHelpers.CreateInformation(
+                    groups: ["Web"],
+                    resources: [LaunchGroupTestHelpers.CreateResource("api", groups: ["Web"])]),
+                resources,
+                Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>,
+                executeResourceCommand: (_, _, command, _, _) =>
+                {
+                    executed.Enqueue(command.Name);
+                    return Task.FromResult(new ResourceCommandResponseViewModel { Kind = ResourceCommandResponseKind.Succeeded });
+                }));
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal(["api"], GetVisibleResourceNames(cut));
+            Assert.Equal("stop api", cut.Find(".resource-row-highlighted").GetAttribute("aria-label"));
+        });
+
+        var filter = OpenFilter(cut);
+        await SetAllFilterValuesAsync(cut, filter, "launch-groups", isVisible: false);
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Empty(GetVisibleResourceNames(cut));
+            Assert.Equal("No resources found", Assert.Single(cut.FindAll(".resource-pane-message")).TextContent.Trim());
+        });
+        Assert.Empty(executed);
+
+        cut.Find(".resource-filter-reset").Click();
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal(["api"], GetVisibleResourceNames(cut));
+            Assert.Equal("stop api", cut.Find(".resource-row-highlighted").GetAttribute("aria-label"));
+        });
+        Assert.Empty(executed);
+    }
+
+    [Fact]
+    public void LaunchGroupFilters_ConfiguredGroupsRemainVisibleWhenNoResourcesExist()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(
+            this,
+            viewport,
+            new LaunchGroupTestDashboardClient(
+                LaunchGroupTestHelpers.CreateInformation(groups: ["Web", "Empty"]),
+                [],
+                Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Empty(GetVisibleResourceNames(cut));
+            Assert.Equal("No resources found", Assert.Single(cut.FindAll(".resource-pane-message")).TextContent.Trim());
+        });
+
+        var filter = OpenFilter(cut);
+        var boxes = GetFilterCheckboxes(filter, "launch-groups");
+        Assert.Equal(
+            [("(All)", (string?)null), ("Empty", "0"), ("Web", "0")],
+            boxes.Select((box, index) => (
+                box.Instance.Label!,
+                index == 0 ? null : filter.FindAll(".resource-filter-count")[index - 1].TextContent.Trim())));
     }
 
     [Fact]
@@ -2662,6 +2978,29 @@ public class ResourcesLayoutTests : DashboardTestContext
             Assert.Equal(["api", "worker"], cut.Instance.GetAllResourceNames());
         });
     }
+
+    private static List<string> GetVisibleResourceNames(IRenderedComponent<ResourcesLayout> cut) =>
+        cut.FindAll("[data-resource-name]")
+            .Select(element => element.GetAttribute("data-resource-name")!)
+            .Order(StringComparer.Ordinal)
+            .ToList();
+
+    private static List<ResourceViewModel> CreateLaunchGroupRestorationResources() =>
+    [
+        ModelTestHelpers.CreateResource("api"),
+        ModelTestHelpers.CreateResource("worker"),
+        ModelTestHelpers.CreateResource("unknown")
+    ];
+
+    private static Aspire.DashboardService.Proto.V1.LaunchGroupInformation CreateLaunchGroupRestorationInformation() =>
+        LaunchGroupTestHelpers.CreateInformation(
+            selectedGroup: "Web",
+            groups: ["Web", "Data"],
+            resources:
+            [
+                LaunchGroupTestHelpers.CreateResource("api", groups: ["Web"]),
+                LaunchGroupTestHelpers.CreateResource("worker", groups: ["Data"])
+            ]);
 
     [Fact]
     public async Task Standalone_SelectingResourcesPreservesSelectionInPageUrls()

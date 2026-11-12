@@ -941,6 +941,69 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ResourceGraphGameSoundOn", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Launch groups.
+        /// </summary>
+        public static string ResourceLaunchGroupsEffectiveMembership {
+            get {
+                return ResourceManager.GetString("ResourceLaunchGroupsEffectiveMembership", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Explicit start.
+        /// </summary>
+        public static string ResourceLaunchGroupsExplicitStart {
+            get {
+                return ResourceManager.GetString("ResourceLaunchGroupsExplicitStart", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Launch groups.
+        /// </summary>
+        public static string ResourceLaunchGroupsHeader {
+            get {
+                return ResourceManager.GetString("ResourceLaunchGroupsHeader", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Inherited from.
+        /// </summary>
+        public static string ResourceLaunchGroupsInheritedFrom {
+            get {
+                return ResourceManager.GetString("ResourceLaunchGroupsInheritedFrom", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to None.
+        /// </summary>
+        public static string ResourceLaunchGroupsNone {
+            get {
+                return ResourceManager.GetString("ResourceLaunchGroupsNone", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Ungrouped.
+        /// </summary>
+        public static string ResourceLaunchGroupsUngrouped {
+            get {
+                return ResourceManager.GetString("ResourceLaunchGroupsUngrouped", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Yes.
+        /// </summary>
+        public static string ResourceLaunchGroupsYes {
+            get {
+                return ResourceManager.GetString("ResourceLaunchGroupsYes", resourceCulture);
+            }
+        }
         
         /// <summary>
         ///   Looks up a localized string similar to Browse meters.

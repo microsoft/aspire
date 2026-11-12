@@ -134,6 +134,24 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Not in active launch group &apos;{0}&apos;.
+        /// </summary>
+        public static string StateColumnResourceNotInLaunchGroup {
+            get {
+                return ResourceManager.GetString("StateColumnResourceNotInLaunchGroup", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Not in active launch group &apos;{0}&apos;, deferred build.
+        /// </summary>
+        public static string StateColumnResourceNotInLaunchGroupDeferred {
+            get {
+                return ResourceManager.GetString("StateColumnResourceNotInLaunchGroupDeferred", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Resource is not configured to start automatically..
         /// </summary>
         public static string StateColumnResourceNotStarted {

@@ -44,6 +44,16 @@ Para obtener más información, consulte https://aka.ms/aspire/container-runtime
         <target state="translated">Error al iniciar {0}.</target>
         <note>{0} is a resource type</note>
       </trans-unit>
+      <trans-unit id="StateColumnResourceNotInLaunchGroup">
+        <source>Not in active launch group '{0}'</source>
+        <target state="new">Not in active launch group '{0}'</target>
+        <note>{0} is the AppHost's selected launch-group name.</note>
+      </trans-unit>
+      <trans-unit id="StateColumnResourceNotInLaunchGroupDeferred">
+        <source>Not in active launch group '{0}', deferred build</source>
+        <target state="new">Not in active launch group '{0}', deferred build</target>
+        <note>{0} is the AppHost's selected launch-group name. The resource's project will be built when manually started.</note>
+      </trans-unit>
       <trans-unit id="StateColumnResourceNotStarted">
         <source>Resource is not configured to start automatically.</source>
         <target state="translated">El recurso no está configurado para iniciarse automáticamente.</target>

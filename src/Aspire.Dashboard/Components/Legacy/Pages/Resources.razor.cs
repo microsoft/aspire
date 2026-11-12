@@ -17,6 +17,7 @@ using Aspire.Dashboard.Utils;
 using Aspire.Hosting.Utils;
 using Humanizer;
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Options;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
@@ -106,6 +107,10 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
     public string? HiddenHealthStates { get; set; }
 
     [Parameter]
+    [SupplyParameterFromQuery]
+    public string? HiddenLaunchGroups { get; set; }
+
+    [Parameter]
     [SupplyParameterFromQuery(Name = "resource")]
     public string? ResourceName { get; set; }
 
@@ -173,10 +178,11 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
     }
 
     // Internal for tests
-    internal bool NoFiltersSet => AreAllTypesVisible && AreAllStatesVisible && AreAllHealthStatesVisible;
+    internal bool NoFiltersSet => AreAllTypesVisible && AreAllStatesVisible && AreAllHealthStatesVisible && AreAllLaunchGroupsVisible;
     internal bool AreAllTypesVisible => PageViewModel.ResourceTypesToVisibility.Values.All(value => value);
     internal bool AreAllStatesVisible => PageViewModel.ResourceStatesToVisibility.Values.All(value => value);
     internal bool AreAllHealthStatesVisible => PageViewModel.ResourceHealthStatusesToVisibility.Values.All(value => value);
+    internal bool AreAllLaunchGroupsVisible => PageViewModel.ResourceLaunchGroupsToVisibility.Values.All(value => value);
 
     private readonly EnumerableGridSort<ResourceGridViewModel> _nameSort = EnumerableGridSort<ResourceGridViewModel>.ByAscending(item => item.Resource, ResourceViewModelNameComparer.Instance);
     private readonly EnumerableGridSort<ResourceGridViewModel> _stateSort = EnumerableGridSort<ResourceGridViewModel>.ByAscending(item => item.Resource.State).ThenAscending(item => item.Resource, ResourceViewModelNameComparer.Instance);
@@ -229,8 +235,11 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         }
         UpdateMenuButtons();
 
-        // Must wait until after the dashboard is connected so the application name is correct.
+        // The initial resource snapshot can arrive after the dashboard connects. Wait for it before reading launch
+        // groups because the AppHost finalizes that metadata while it prepares its initial resource model.
         await DashboardClient.WhenConnected;
+        await DashboardClient.WhenResourcesReady;
+        InitializeLaunchGroupFilters();
         _collapsedResourceNamesKey = BrowserStorageKeys.CollapsedResourceNamesKey(DashboardClient.ApplicationName);
 
         var collapsedResult = await LocalStorage.GetAsync<List<string>>(_collapsedResourceNamesKey);
@@ -258,7 +267,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
 
         async Task SubscribeResourcesAsync()
         {
-            var (snapshot, subscription) = await DataSource.ResourceRepository.SubscribeResourcesAsync(_cts.Token);
+            var (snapshot, subscription) = await DashboardClient.SubscribeResourcesAsync(_cts.Token);
 
             // Apply snapshot.
             foreach (var resource in snapshot)
@@ -361,6 +370,14 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
 
         return added;
     }
+
+    private void InitializeLaunchGroupFilters() =>
+        LaunchGroupInformationViewModel.AddVisibility(DashboardClient.LaunchGroups, PageViewModel.ResourceLaunchGroupsToVisibility);
+
+    private void ApplyLaunchGroupFiltersFromQuery() =>
+        LaunchGroupInformationViewModel.SetHiddenGroups(
+            PageViewModel.ResourceLaunchGroupsToVisibility,
+            HiddenLaunchGroups?.Split(' ').Select(StringUtils.Unescape) ?? []);
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -989,6 +1006,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         public ConcurrentDictionary<string, bool> ResourceTypesToVisibility { get; } = new(StringComparers.ResourceName);
         public ConcurrentDictionary<string, bool> ResourceStatesToVisibility { get; } = new(StringComparers.ResourceState);
         public ConcurrentDictionary<string, bool> ResourceHealthStatusesToVisibility { get; } = new(StringComparer.Ordinal);
+        public ConcurrentDictionary<string, bool> ResourceLaunchGroupsToVisibility { get; } = new(StringComparer.OrdinalIgnoreCase);
 
         public bool Filter(ResourceViewModel resource)
         {
@@ -1006,6 +1024,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
             return (SelectedViewKind == ResourceViewKind.Parameters || IsKeyValueTrue(resource.ResourceType, ResourceTypesToVisibility))
                    && IsKeyValueTrue(resource.State ?? string.Empty, ResourceStatesToVisibility)
                    && IsKeyValueTrue(resource.HealthStatus?.Humanize() ?? string.Empty, ResourceHealthStatusesToVisibility)
+                   && LaunchGroupInformationViewModel.IsVisible(resource, ResourceLaunchGroupsToVisibility)
                    && (TextFilter.Length == 0 || resource.MatchesFilter(TextFilter))
                    && !resource.IsResourceHidden(ShowHiddenResources);
 
@@ -1019,6 +1038,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         public required IDictionary<string, bool> ResourceTypesToVisibility { get; set; }
         public required IDictionary<string, bool> ResourceStatesToVisibility { get; set; }
         public required IDictionary<string, bool> ResourceHealthStatusesToVisibility { get; set; }
+        public IDictionary<string, bool>? ResourceLaunchGroupsToVisibility { get; set; }
     }
 
     public enum ResourceViewKind
@@ -1036,20 +1056,31 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
             viewModel.SelectedViewKind = vk;
         }
 
+        ApplyLaunchGroupFiltersFromQuery();
         return Task.CompletedTask;
     }
 
     public string GetUrlFromSerializableViewModel(ResourcesPageState serializable)
     {
-        return DashboardUrls.ResourcesUrl(
+        var url = DashboardUrls.ResourcesUrl(
             view: serializable.ViewKind,
             // add resource?
             hiddenTypes: SerializeFiltersToString(serializable.ResourceTypesToVisibility),
             hiddenStates: SerializeFiltersToString(serializable.ResourceStatesToVisibility),
             hiddenHealthStates: SerializeFiltersToString(serializable.ResourceHealthStatusesToVisibility));
 
-        static string? SerializeFiltersToString(IDictionary<string, bool> filters)
+        var hiddenLaunchGroups = SerializeFiltersToString(serializable.ResourceLaunchGroupsToVisibility);
+        return hiddenLaunchGroups is null
+            ? url
+            : QueryHelpers.AddQueryString(url, "hiddenLaunchGroups", hiddenLaunchGroups);
+
+        static string? SerializeFiltersToString(IDictionary<string, bool>? filters)
         {
+            if (filters is null)
+            {
+                return null;
+            }
+
             var escapedFilters = filters.Where(kvp => !kvp.Value).Select(kvp => StringUtils.Escape(kvp.Key)).ToList();
             return escapedFilters.Count == 0 ? null : string.Join(" ", escapedFilters);
         }
@@ -1062,7 +1093,8 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
             ViewKind = PageViewModel.SelectedViewKind != ResourceViewKind.Table ? PageViewModel.SelectedViewKind.ToString() : null,
             ResourceTypesToVisibility = PageViewModel.ResourceTypesToVisibility,
             ResourceStatesToVisibility = PageViewModel.ResourceStatesToVisibility,
-            ResourceHealthStatusesToVisibility = PageViewModel.ResourceHealthStatusesToVisibility
+            ResourceHealthStatusesToVisibility = PageViewModel.ResourceHealthStatusesToVisibility,
+            ResourceLaunchGroupsToVisibility = PageViewModel.ResourceLaunchGroupsToVisibility
         };
     }
 

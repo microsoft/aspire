@@ -57,6 +57,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
     private readonly AppHostConfigurationProjector _appHostConfigurationProjector;
 
     private static readonly string[] s_detectionPatterns = ["*.csproj", "*.fsproj", "*.vbproj", "apphost.cs"];
+    private static readonly SemVersion s_minimumLaunchGroupHostingVersion = SemVersion.Parse("17.1.0-0");
     private const string DirectLaunchDisabledConfigKey = "dotnetAppHostDirectLaunchDisabled";
 
     private const string AspireAppHostSdkName = "Aspire.AppHost.Sdk";
@@ -1632,7 +1633,9 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
                     effectiveAppHostFile,
                     directRun.Command,
                     directRun.WorkingDirectory,
-                    directRun.Arguments,
+                    context.LaunchGroup is { } directLaunchGroup
+                        ? [.. directRun.Arguments, $"--Aspire:LaunchGroup={directLaunchGroup}"]
+                        : directRun.Arguments,
                     directRun.Environment,
                     backchannelCompletionSource,
                     directRunOptions,
@@ -1641,12 +1644,27 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
 
             await _appHostConfigurationProjector.ApplyEnvironmentVariablesAsync(env, appHostDirectory, cancellationToken);
 
+            var appHostArguments = context.UnmatchedTokens.ToList();
+            if (context.LaunchGroup is { } launchGroup)
+            {
+                // dotnet run replaces profile commandLineArgs whenever any explicit application arguments
+                // are supplied. Preserve the selected profile's arguments when only the CLI selector was added.
+                if (appHostArguments.Count == 0)
+                {
+                    TryApplyLaunchSettings(effectiveAppHostFile, new Dictionary<string, string>(), appHostArguments,
+                        runOptions.NoLaunchProfile, runOptions.LaunchProfile,
+                        hasExplicitApplicationArgs: false, hasRunArguments: false, argumentsOnly: true);
+                }
+
+                appHostArguments.Add($"--Aspire:LaunchGroup={launchGroup}");
+            }
+
             return await _runner.RunAsync(
                 effectiveAppHostFile,
                 watch,
                 noBuild,
                 noRestore,
-                context.UnmatchedTokens,
+                [.. appHostArguments],
                 env,
                 backchannelCompletionSource,
                 runOptions,
@@ -1723,6 +1741,18 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
             var compatibilityCheck = await CheckAppHostCompatibilityAsync(effectiveAppHostFile, isSingleFileAppHost, cancellationToken);
             if (!compatibilityCheck.IsCompatibleAppHost)
             {
+                context.BuildCompletionSource?.TrySetResult(false);
+                return (CliExitCodes.FailedToDotnetRunAppHost, builtByCli, deferBuildCompletion);
+            }
+
+            // Older Hosting ignores the selector and would start the full application. Check before
+            // either launch path can create a process, including when the AppHost build was skipped.
+            if (context.LaunchGroup is not null &&
+                (!SemVersion.TryParse(compatibilityCheck.AspireHostingVersion, out var hostingVersion) ||
+                 hostingVersion.ComparePrecedenceTo(s_minimumLaunchGroupHostingVersion) < 0))
+            {
+                _interactionService.DisplayError(string.Format(System.Globalization.CultureInfo.CurrentCulture,
+                    ErrorStrings.AppHostIncompatibleWithCli, "--launch-group"));
                 context.BuildCompletionSource?.TrySetResult(false);
                 return (CliExitCodes.FailedToDotnetRunAppHost, builtByCli, deferBuildCompletion);
             }
@@ -1860,14 +1890,15 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         }
 
         var directEnv = new Dictionary<string, string>();
-        if (!TryApplyProjectLaunchSettings(
+        if (!TryApplyLaunchSettings(
                 effectiveAppHostFile,
                 directEnv,
                 arguments,
                 noLaunchProfile,
                 launchProfile,
                 hasExplicitApplicationArgs: unmatchedTokens.Length > 0,
-                hasRunArguments))
+                hasRunArguments,
+                argumentsOnly: false))
         {
             return null;
         }
@@ -2000,14 +2031,15 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
     private static bool IsDotNetMuxerCommand(string command)
         => string.Equals(Path.GetFileNameWithoutExtension(CommandPathResolver.NormalizeRunCommand(command)), "dotnet", StringComparison.OrdinalIgnoreCase);
 
-    private bool TryApplyProjectLaunchSettings(
+    private bool TryApplyLaunchSettings(
         FileInfo effectiveAppHostFile,
         Dictionary<string, string> env,
         List<string> arguments,
         bool noLaunchProfile,
         string? launchProfile,
         bool hasExplicitApplicationArgs,
-        bool hasRunArguments)
+        bool hasRunArguments,
+        bool argumentsOnly)
     {
         if (noLaunchProfile)
         {
@@ -2029,6 +2061,19 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
                     "Falling back to dotnet run for {Project}; launch settings do not contain the requested or a supported default profile.",
                     effectiveAppHostFile.FullName);
                 return false;
+            }
+
+            if (argumentsOnly)
+            {
+                // Both SDK providers use commandLineArgs when no application arguments were supplied.
+                // Executable profiles still need the SDK to launch their configured executable.
+                if (profile.CommandName is not ("Project" or "Executable"))
+                {
+                    return false;
+                }
+
+                AppendParsedArguments(Environment.ExpandEnvironmentVariables(profile.CommandLineArgs ?? string.Empty), arguments);
+                return true;
             }
 
             if (!IsProjectLaunchProfile(profile))

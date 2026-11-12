@@ -109,6 +109,15 @@ public sealed partial class ResourceOverview
             _properties.Add(new DisplayedResourcePropertyViewModel(displayedProperty, Loc, TimeProvider));
         }
 
+        _properties.AddRange(LaunchGroupDisplayHelpers.GetProperties(resource.LaunchGroup, Loc)
+            .Select(property => new DisplayedResourcePropertyViewModel(property, Loc, TimeProvider)));
+
+        if (resource.LaunchGroup is { } launchGroup)
+        {
+            _propertyValueComponents ??= [];
+            LaunchGroupValue.AddValueComponents(_propertyValueComponents, launchGroup, showHiddenResources: false);
+        }
+
         _propertiesMask.Apply(_properties);
         _environmentMask.Apply(resource.Environment);
 

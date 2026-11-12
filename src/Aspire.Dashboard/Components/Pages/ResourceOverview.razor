@@ -2,6 +2,7 @@
 @page "/resources/{ResourceName}"
 @layout ResourcesLayout
 @using Aspire.Dashboard.Extensions
+@using Aspire.Dashboard.Components.Controls.PropertyValues
 @using Aspire.Dashboard.Components.Layout
 @using Aspire.Dashboard.Components.ResourcesGridColumns
 @using Aspire.Dashboard.Otlp.Model
@@ -153,7 +154,18 @@
                     @if (GetStateDescription(resource, stateViewModel.Text) is { } stateDescription)
                     {
                         <dt>@ControlsStringsLoc[nameof(ControlsStrings.ResourceDetailsStateDescriptionHeader)]</dt>
-                        <dd>@stateDescription</dd>
+                        <dd>
+                            @if (ResourceStateViewModel.GetLaunchGroupStateDescription(resource) is { } launchGroupDescription)
+                            {
+                                <LaunchGroupValue Value="@stateDescription"
+                                                  Groups="@(new[] { launchGroupDescription.Group })"
+                                                  TextFormat="@ColumnsLoc[launchGroupDescription.ResourceName]" />
+                            }
+                            else
+                            {
+                                @stateDescription
+                            }
+                        </dd>
                     }
                     @if (resource.HealthStatus is { } healthStatus)
                     {
@@ -187,6 +199,23 @@
                     {
                         <dt>@Loc[nameof(Dashboard.Resources.Resources.ResourcesSourceColumnHeader)]</dt>
                         <dd class="overview-mono" data-tooltip="@source.Tooltip">@source.Value</dd>
+                    }
+                    @if (resource.LaunchGroup is { } launchGroup)
+                    {
+                        @foreach (var property in LaunchGroupDisplayHelpers.GetProperties(launchGroup, Loc))
+                        {
+                            <dt>@property.KnownProperty!.GetDisplayName(Loc)</dt>
+                            <dd>
+                                @if (property.Name == LaunchGroupDisplayHelpers.EffectiveMembershipPropertyKey)
+                                {
+                                    <LaunchGroupValue Value="@property.Value.StringValue" Groups="@launchGroup.Groups" />
+                                }
+                                else
+                                {
+                                    @property.Value.StringValue
+                                }
+                            </dd>
+                        }
                     }
                 </dl>
             </section>

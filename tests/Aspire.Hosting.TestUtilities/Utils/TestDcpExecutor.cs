@@ -11,6 +11,8 @@ internal sealed class TestDcpExecutor : IDcpExecutor
     private readonly Dictionary<string, IResourceReference> _resources = new(StringComparers.ResourceName);
     private readonly ConcurrentQueue<string> _startedResources = new();
 
+    public Task RunApplicationTask { get; set; } = Task.CompletedTask;
+
     /// <summary>
     /// DCP resource names passed to <see cref="StartResourceAsync"/>, in the order they were requested.
     /// </summary>
@@ -22,8 +24,8 @@ internal sealed class TestDcpExecutor : IDcpExecutor
     public IReadOnlyCollection<string> StartedResources => _startedResources;
 
     /// <summary>
-    /// Registers a resource so that <see cref="GetResource"/> can resolve it, mimicking a DCP resource that was
-    /// created for <paramref name="modelResource"/> under the DCP name <paramref name="dcpResourceName"/>.
+    /// Registers a resource so that <see cref="GetResource(string)"/> can resolve it, mimicking a DCP resource that
+    /// was created for <paramref name="modelResource"/> under the DCP name <paramref name="dcpResourceName"/>.
     /// </summary>
     public void AddResource(IResource modelResource, string dcpResourceName)
     {
@@ -37,7 +39,18 @@ internal sealed class TestDcpExecutor : IDcpExecutor
             : throw new InvalidOperationException($"Resource '{resourceName}' not found.");
     }
 
-    public Task RunApplicationAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+    public IResourceReference GetResource(IResource modelResource)
+    {
+        var matches = _resources.Values
+            .Where(resource => ReferenceEquals(resource.ModelResource, modelResource))
+            .ToArray();
+        return matches.Length == 1
+            ? matches[0]
+            : throw new InvalidOperationException(
+                $"Expected one DCP resource for model resource '{modelResource.Name}', found {matches.Length}.");
+    }
+
+    public Task RunApplicationAsync(CancellationToken cancellationToken) => RunApplicationTask;
 
     public Task StartResourceAsync(IResourceReference resourceReference, CancellationToken cancellationToken)
     {

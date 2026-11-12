@@ -1274,7 +1274,9 @@ public class ResourceNotificationService : IDisposable
         var isHidden = annotation.Behavior switch
         {
             HiddenBehavior.Always => true,
-            HiddenBehavior.OnCompletion => IsCompletionState(previousState.State?.Text)
+            HiddenBehavior.BeforeStartOrOnCompletion when previousState.State is null
+                || previousState.State.Text == KnownResourceStates.NotStarted => true,
+            HiddenBehavior.OnCompletion or HiddenBehavior.BeforeStartOrOnCompletion => IsCompletionState(previousState.State?.Text)
                 && previousState.ExitCode is not null
                 && annotation.SuccessfulExitCodes.Contains(previousState.ExitCode.Value),
             _ => previousState.IsHidden

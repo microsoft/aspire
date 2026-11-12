@@ -2,6 +2,36 @@
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="ru" original="../DescribeCommandStrings.resx">
     <body>
+      <trans-unit id="BuildDeferred">
+        <source>Deferred</source>
+        <target state="new">Deferred</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="BuildInitial">
+        <source>Initial</source>
+        <target state="new">Initial</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="BuildInitialPersistent">
+        <source>Initial persistent</source>
+        <target state="new">Initial persistent</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="BuildInitialShared">
+        <source>Initial shared</source>
+        <target state="new">Initial shared</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="BuildNotCoordinated">
+        <source>Not coordinated</source>
+        <target state="new">Not coordinated</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="BuildPending">
+        <source>Pending</source>
+        <target state="new">Pending</target>
+        <note />
+      </trans-unit>
       <trans-unit id="Description">
         <source>Describe resources in a running AppHost</source>
         <target state="translated">Опишите ресурсы в запущенном хосте приложений</target>
@@ -12,14 +42,39 @@
         <target state="translated">Непрерывно выполняйте потоковую передачу изменений состояния ресурса</target>
         <note />
       </trans-unit>
+      <trans-unit id="HeaderBuild">
+        <source>Build</source>
+        <target state="new">Build</target>
+        <note />
+      </trans-unit>
       <trans-unit id="HeaderHealth">
         <source>Health</source>
         <target state="translated">Работоспособность</target>
         <note />
       </trans-unit>
+      <trans-unit id="HeaderInheritedFrom">
+        <source>Inherited from</source>
+        <target state="new">Inherited from</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderLaunchGroupResource">
+        <source>Resource</source>
+        <target state="new">Resource</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderLaunchGroups">
+        <source>Groups</source>
+        <target state="new">Groups</target>
+        <note />
+      </trans-unit>
       <trans-unit id="HeaderName">
         <source>Name</source>
         <target state="translated">Имя</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderStartup">
+        <source>Startup</source>
+        <target state="new">Startup</target>
         <note />
       </trans-unit>
       <trans-unit id="HeaderState">
@@ -47,6 +102,26 @@
         <target state="translated">Формат вывода (таблица, JSON или Mermaid)</target>
         <note />
       </trans-unit>
+      <trans-unit id="LaunchGroupsLabel">
+        <source>Launch groups:</source>
+        <target state="new">Launch groups:</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="LaunchGroupsNotSupported">
+        <source>The running AppHost does not support launch-group inspection. Update the AppHost's Aspire.Hosting.AppHost package and restart it.</source>
+        <target state="new">The running AppHost does not support launch-group inspection. Update the AppHost's Aspire.Hosting.AppHost package and restart it.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="LaunchGroupsOptionDescription">
+        <source>Describe launch groups and resource startup decisions</source>
+        <target state="new">Describe launch groups and resource startup decisions</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="LaunchGroupsOptionsNotSupported">
+        <source>--launch-groups cannot be combined with a resource name, --follow, Mermaid output, --include-hidden, or --include-disabled-commands.</source>
+        <target state="new">--launch-groups cannot be combined with a resource name, --follow, Mermaid output, --include-hidden, or --include-disabled-commands.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="MermaidFollowNotSupported">
         <source>The Mermaid output format does not support --follow. Omit --follow to export a resource graph snapshot.</source>
         <target state="translated">Формат вывода Mermaid не поддерживает параметр --follow. Удалите --follow, чтобы экспортировать снимок Resource Graph.</target>
@@ -70,6 +145,31 @@
       <trans-unit id="SelectAppHostAction">
         <source>describe</source>
         <target state="translated">описать</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SelectedLaunchGroupLabel">
+        <source>Selected launch group:</source>
+        <target state="new">Selected launch group:</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="StartupAutomatic">
+        <source>Default startup</source>
+        <target state="new">Default startup</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="StartupExcludedBySelectedGroup">
+        <source>Excluded by selected group</source>
+        <target state="new">Excluded by selected group</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="StartupExemptFromSelection">
+        <source>Exempt from selection</source>
+        <target state="new">Exempt from selection</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="StartupExplicitStart">
+        <source>Explicit start</source>
+        <target state="new">Explicit start</target>
         <note />
       </trans-unit>
     </body>

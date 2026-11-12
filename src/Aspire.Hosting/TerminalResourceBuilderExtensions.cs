@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIRELAUNCHGROUPS001 // Terminal support hosts retain normal startup independently of workload selection.
+
 using System.Globalization;
 using System.Text.Json;
 using Aspire.Hosting.ApplicationModel;
@@ -343,6 +345,9 @@ public static class TerminalResourceBuilderExtensions
         long appHostProcessIdentity,
         bool dashboardEnabled)
     {
+        // Keep the host available for a later manual start of an unselected workload too.
+        host.Annotations.Add(new ExcludeFromLaunchGroupSelectionAnnotation());
+
         // Equivalent to the previous WithInitialState(...).ExcludeFromManifest().WithArgs(...) chain
         // but we can't go through IResourceBuilder<T> here — we're running mid-event without an
         // IDistributedApplicationBuilder reference, and creating one against the already-built

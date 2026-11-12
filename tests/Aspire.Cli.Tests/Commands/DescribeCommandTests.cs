@@ -1056,6 +1056,264 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
         Assert.Contains(jsonLines, l => l.Contains("aspire-dashboard"));
     }
 
+    [Fact]
+    public async Task DescribeCommand_LaunchGroups_TableOutput_IsDeterministic()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        TestAppHostAuxiliaryBackchannel? connection = null;
+        using var provider = CreateDescribeTestServices(
+            workspace,
+            outputWriter,
+            [],
+            disableAnsi: true,
+            configureConnection: c =>
+            {
+                connection = c;
+                c.SupportsLaunchGroupsV1 = true;
+                c.LaunchGroupsResponse = CreateLaunchGroupsResponse();
+            });
+
+        var exitCode = await provider.GetRequiredService<RootCommand>()
+            .Parse("describe --launch-groups --format table --non-interactive")
+            .InvokeAsync()
+            .DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.NotNull(connection);
+        Assert.Equal(1, connection.GetLaunchGroupsCallCount);
+        Assert.Equal(0, connection.GetDashboardUrlsCallCount);
+        Assert.Equal(0, connection.GetResourceSnapshotsCallCount);
+
+        await Verify(string.Join("\n", outputWriter.Logs.Skip(1)), "txt");
+    }
+
+    [Fact]
+    public async Task DescribeCommand_LaunchGroups_JsonOutput_IsDeterministic()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        using var provider = CreateDescribeTestServices(
+            workspace,
+            outputWriter,
+            [],
+            configureConnection: connection =>
+            {
+                connection.SupportsLaunchGroupsV1 = true;
+                connection.LaunchGroupsResponse = CreateLaunchGroupsResponse();
+            });
+
+        var exitCode = await provider.GetRequiredService<RootCommand>()
+            .Parse("describe --launch-groups --format json --non-interactive")
+            .InvokeAsync()
+            .DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        var jsonOutput = string.Join("", outputWriter.Logs);
+        using var document = JsonDocument.Parse(jsonOutput);
+        Assert.Equal(JsonValueKind.String, document.RootElement.GetProperty("resources")[0].GetProperty("buildType").ValueKind);
+
+        await Verify(jsonOutput, "json");
+    }
+
+    [Fact]
+    public async Task DescribeCommand_LaunchGroups_SupportedEmptyResponse_ProducesEmptyJson()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        TestAppHostAuxiliaryBackchannel? connection = null;
+        using var provider = CreateDescribeTestServices(
+            workspace,
+            outputWriter,
+            [],
+            configureConnection: c =>
+            {
+                connection = c;
+                c.SupportsLaunchGroupsV1 = true;
+                c.LaunchGroupsResponse = new GetLaunchGroupsResponse
+                {
+                    Groups = [],
+                    Resources = []
+                };
+            });
+
+        var exitCode = await provider.GetRequiredService<RootCommand>()
+            .Parse("describe --launch-groups --format json --non-interactive")
+            .InvokeAsync()
+            .DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.NotNull(connection);
+        Assert.Equal(1, connection.GetLaunchGroupsCallCount);
+        Assert.Equal(0, connection.GetDashboardUrlsCallCount);
+        Assert.Equal(0, connection.GetResourceSnapshotsCallCount);
+
+        await Verify(string.Join("", outputWriter.Logs), "json");
+    }
+
+    [Fact]
+    public async Task DescribeCommand_LaunchGroups_NoSelectedGroup_WithConfiguredEmptyGroup_ProducesTable()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        using var provider = CreateDescribeTestServices(
+            workspace,
+            outputWriter,
+            [],
+            disableAnsi: true,
+            configureConnection: connection =>
+            {
+                connection.SupportsLaunchGroupsV1 = true;
+                connection.LaunchGroupsResponse = new GetLaunchGroupsResponse
+                {
+                    Groups = ["empty"],
+                    Resources = []
+                };
+            });
+
+        var exitCode = await provider.GetRequiredService<RootCommand>()
+            .Parse("describe --launch-groups --format table --non-interactive")
+            .InvokeAsync()
+            .DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        await Verify(string.Join("\n", outputWriter.Logs.Skip(1)), "txt");
+    }
+
+    [Fact]
+    public async Task DescribeCommand_LaunchGroups_UnsupportedAppHost_DoesNotFallBackToResources()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        using var errorWriter = new StringWriter();
+        TestAppHostAuxiliaryBackchannel? connection = null;
+        using var provider = CreateDescribeTestServices(
+            workspace,
+            outputWriter,
+            [],
+            configureConnection: c =>
+            {
+                connection = c;
+                c.SupportsLaunchGroupsV1 = false;
+                c.LaunchGroupsResponse = CreateLaunchGroupsResponse();
+            },
+            errorTextWriter: errorWriter);
+
+        var exitCode = await provider.GetRequiredService<RootCommand>()
+            .Parse("describe --launch-groups --format json --non-interactive")
+            .InvokeAsync()
+            .DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.AppHostIncompatible, exitCode);
+        Assert.NotNull(connection);
+        Assert.Equal(0, connection.GetLaunchGroupsCallCount);
+        Assert.Equal(0, connection.GetDashboardUrlsCallCount);
+        Assert.Equal(0, connection.GetResourceSnapshotsCallCount);
+        Assert.Empty(outputWriter.Logs);
+        Assert.Contains("does not support launch-group inspection", errorWriter.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task DescribeCommand_LaunchGroups_MissingResponse_ReturnsIncompatibleWithoutFallback()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        using var errorWriter = new StringWriter();
+        TestAppHostAuxiliaryBackchannel? connection = null;
+        using var provider = CreateDescribeTestServices(
+            workspace,
+            outputWriter,
+            [],
+            configureConnection: c =>
+            {
+                connection = c;
+                c.SupportsLaunchGroupsV1 = true;
+                c.LaunchGroupsResponse = null;
+            },
+            errorTextWriter: errorWriter);
+
+        var exitCode = await provider.GetRequiredService<RootCommand>()
+            .Parse("describe --launch-groups --format json --non-interactive")
+            .InvokeAsync()
+            .DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.AppHostIncompatible, exitCode);
+        Assert.NotNull(connection);
+        Assert.Equal(1, connection.GetLaunchGroupsCallCount);
+        Assert.Equal(0, connection.GetDashboardUrlsCallCount);
+        Assert.Equal(0, connection.GetResourceSnapshotsCallCount);
+        Assert.Empty(outputWriter.Logs);
+        Assert.Contains("does not support launch-group inspection", errorWriter.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task DescribeCommand_LaunchGroups_NoRunningAppHost_ReturnsSuccess()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var exitCode = await provider.GetRequiredService<RootCommand>()
+            .Parse("describe --launch-groups")
+            .InvokeAsync()
+            .DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+    }
+
+    [Fact]
+    public async Task DescribeCommand_LaunchGroups_NoRunningAppHost_KeepsJsonOutputEmpty()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.OutputTextWriter = outputWriter;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var exitCode = await provider.GetRequiredService<RootCommand>()
+            .Parse("describe --launch-groups --format json")
+            .InvokeAsync()
+            .DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Empty(outputWriter.Logs);
+    }
+
+    [Theory]
+    [InlineData("describe api --launch-groups")]
+    [InlineData("describe --launch-groups --follow")]
+    [InlineData("describe --launch-groups --format mermaid")]
+    [InlineData("describe --launch-groups --include-hidden")]
+    [InlineData("describe --launch-groups --include-disabled-commands")]
+    public async Task DescribeCommand_LaunchGroups_RejectsIncompatibleOptions(string commandLine)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        TestAppHostAuxiliaryBackchannel? connection = null;
+        using var provider = CreateDescribeTestServices(
+            workspace,
+            outputWriter,
+            [],
+            configureConnection: c =>
+            {
+                connection = c;
+                c.SupportsLaunchGroupsV1 = true;
+                c.LaunchGroupsResponse = CreateLaunchGroupsResponse();
+            });
+
+        var exitCode = await provider.GetRequiredService<RootCommand>()
+            .Parse(commandLine)
+            .InvokeAsync()
+            .DefaultTimeout();
+
+        Assert.NotEqual(CliExitCodes.Success, exitCode);
+        Assert.NotNull(connection);
+        Assert.Equal(0, connection.GetLaunchGroupsCallCount);
+        Assert.Empty(outputWriter.Logs);
+    }
+
     [Theory]
     [InlineData("resources --format mermaid", false)]
     [InlineData("describe --format=Mermaid", false)]
@@ -1290,6 +1548,67 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
         });
 
         return services.BuildServiceProvider();
+    }
+
+    private static GetLaunchGroupsResponse CreateLaunchGroupsResponse()
+    {
+        return new GetLaunchGroupsResponse
+        {
+            SelectedGroup = "catalog",
+            Groups = ["shared", "empty", "catalog"],
+            Resources =
+            [
+                new LaunchGroupResourceInfo
+                {
+                    Name = "worker",
+                    Groups = ["shared"],
+                    ExplicitStart = false,
+                    ExclusionReason = LaunchGroupExclusionReason.None,
+                    BuildType = LaunchGroupBuildType.Deferred
+                },
+                new LaunchGroupResourceInfo
+                {
+                    Name = "api",
+                    Groups = ["shared", "catalog"],
+                    InheritedFrom = "frontend",
+                    ExplicitStart = false,
+                    ExclusionReason = LaunchGroupExclusionReason.None,
+                    BuildType = LaunchGroupBuildType.Initial
+                },
+                new LaunchGroupResourceInfo
+                {
+                    Name = "cache",
+                    Groups = ["catalog"],
+                    ExplicitStart = true,
+                    ExclusionReason = LaunchGroupExclusionReason.NotInSelectedGroup,
+                    BuildType = LaunchGroupBuildType.InitialPersistent
+                },
+                new LaunchGroupResourceInfo
+                {
+                    Name = "helper",
+                    Groups = [],
+                    ExplicitStart = false,
+                    ExclusionReason = LaunchGroupExclusionReason.ExemptFromSelection,
+                    BuildType = LaunchGroupBuildType.NotCoordinated
+                },
+                new LaunchGroupResourceInfo
+                {
+                    Name = "database",
+                    Groups = ["shared"],
+                    ExplicitStart = false,
+                    ExclusionReason = LaunchGroupExclusionReason.NotInSelectedGroup,
+                    BuildType = LaunchGroupBuildType.InitialShared
+                },
+                new LaunchGroupResourceInfo
+                {
+                    Name = "migration",
+                    Groups = ["catalog"],
+                    ExplicitStart = true,
+                    ExclusionReason = LaunchGroupExclusionReason.ExemptFromSelection,
+                    BuildType = LaunchGroupBuildType.Pending
+                }
+            ]
+        };
     }
 
     private static AppHostInformation CreateAppHostInfo(TemporaryWorkspace workspace, int processId)

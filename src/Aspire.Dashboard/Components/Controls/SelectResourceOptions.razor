@@ -21,7 +21,8 @@
     @* OrderBy doesn't use thread safe APIs on ConcurrentDictionary. Call ToArray first. *@
     @foreach (var (key, isChecked) in Values.ToArray().OrderBy(pair => pair.Key.ToString(), StringComparer.OrdinalIgnoreCase))
     {
-        var label = string.IsNullOrEmpty(key.ToString()) ? Loc[nameof(Resources.ResourceFilterOptionEmpty)] : key.ToString();
+        var label = GetLabel?.Invoke(key) ??
+            (string.IsNullOrEmpty(key.ToString()) ? Loc[nameof(Resources.ResourceFilterOptionEmpty)] : key.ToString());
 
         <FluentCheckbox Label="@label"
                         data-tooltip="@label"
@@ -29,4 +30,5 @@
                         @bind-Value:get="@isChecked"
                         @bind-Value:set="@(c => OnValueVisibilityChangedInternalAsync(key, c))" />
     }
+
 </FluentStack>

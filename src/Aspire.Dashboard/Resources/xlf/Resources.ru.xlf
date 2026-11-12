@@ -497,6 +497,41 @@
         <target state="new">Sound: on</target>
         <note>Text of the button that toggles the sound of the Aspire Outage game, when the sound is on.</note>
       </trans-unit>
+      <trans-unit id="ResourceLaunchGroupsEffectiveMembership">
+        <source>Launch groups</source>
+        <target state="new">Launch groups</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceLaunchGroupsExplicitStart">
+        <source>Explicit start</source>
+        <target state="new">Explicit start</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceLaunchGroupsHeader">
+        <source>Launch groups</source>
+        <target state="new">Launch groups</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceLaunchGroupsInheritedFrom">
+        <source>Inherited from</source>
+        <target state="new">Inherited from</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceLaunchGroupsNone">
+        <source>None</source>
+        <target state="new">None</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceLaunchGroupsUngrouped">
+        <source>Ungrouped</source>
+        <target state="new">Ungrouped</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceLaunchGroupsYes">
+        <source>Yes</source>
+        <target state="new">Yes</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ResourceOverviewBrowseMeters">
         <source>Browse meters</source>
         <target state="new">Browse meters</target>

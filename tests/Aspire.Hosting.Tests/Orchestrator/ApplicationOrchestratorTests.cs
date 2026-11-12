@@ -1309,6 +1309,136 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task StartingModelResourceWaitsUntilDcpResourcesArePrepared()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var resource = builder.AddExecutable("build", "unused", ".").WithExplicitStart();
+        using var app = builder.Build();
+        var events = new DcpExecutorEvents();
+        var dcpExecutor = new TestDcpExecutor();
+        var orchestrator = CreateOrchestrator(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            ResourceNotificationServiceTestHelpers.Create(),
+            dcpEvents: events,
+            dcpExecutor: dcpExecutor);
+
+        var start = orchestrator.StartResourceAsync(resource.Resource, TestContext.Current.CancellationToken);
+        Assert.False(start.IsCompleted);
+
+        dcpExecutor.AddResource(resource.Resource, "build");
+        await events.PublishAsync(new OnResourcesPreparedContext(TestContext.Current.CancellationToken));
+        await start.DefaultTimeout();
+
+        Assert.Equal(["build"], dcpExecutor.StartedResources);
+    }
+
+    [Fact]
+    public async Task CancelingModelResourceStartBeforePreparationDoesNotStartIt()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var resource = builder.AddExecutable("build", "unused", ".").WithExplicitStart();
+        using var app = builder.Build();
+        var dcpExecutor = new TestDcpExecutor();
+        var orchestrator = CreateOrchestrator(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            ResourceNotificationServiceTestHelpers.Create(),
+            dcpExecutor: dcpExecutor);
+        using var cancellation = new CancellationTokenSource();
+
+        var start = orchestrator.StartResourceAsync(resource.Resource, cancellation.Token);
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => start);
+        Assert.Empty(dcpExecutor.StartedResources);
+    }
+
+    [Fact]
+    public async Task CancelingOneModelResourceStartDoesNotCancelOtherWaiters()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var resource = builder.AddExecutable("build", "unused", ".").WithExplicitStart();
+        using var app = builder.Build();
+        var events = new DcpExecutorEvents();
+        var dcpExecutor = new TestDcpExecutor();
+        var orchestrator = CreateOrchestrator(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            ResourceNotificationServiceTestHelpers.Create(),
+            dcpEvents: events,
+            dcpExecutor: dcpExecutor);
+        using var cancellation = new CancellationTokenSource();
+
+        var canceledStart = orchestrator.StartResourceAsync(resource.Resource, cancellation.Token);
+        var retainedStart = orchestrator.StartResourceAsync(resource.Resource, TestContext.Current.CancellationToken);
+        cancellation.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => canceledStart);
+        Assert.False(retainedStart.IsCompleted);
+
+        dcpExecutor.AddResource(resource.Resource, "build");
+        await events.PublishAsync(new OnResourcesPreparedContext(TestContext.Current.CancellationToken));
+        await retainedStart.DefaultTimeout();
+        Assert.Equal(["build"], dcpExecutor.StartedResources);
+    }
+
+    [Fact]
+    public async Task StoppingBeforePreparationCancelsPendingModelResourceStarts()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var resource = builder.AddExecutable("build", "unused", ".").WithExplicitStart();
+        using var app = builder.Build();
+        var dcpExecutor = new TestDcpExecutor();
+        var orchestrator = CreateOrchestrator(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            ResourceNotificationServiceTestHelpers.Create(),
+            dcpExecutor: dcpExecutor);
+
+        var start = orchestrator.StartResourceAsync(resource.Resource, TestContext.Current.CancellationToken);
+        await orchestrator.StopAsync(TestContext.Current.CancellationToken);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => start);
+        Assert.Empty(dcpExecutor.StartedResources);
+    }
+
+    [Fact]
+    public async Task FailedDcpPreparationFailsPendingModelResourceStarts()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var resource = builder.AddExecutable("build", "unused", ".").WithExplicitStart();
+        using var app = builder.Build();
+        var failure = new InvalidOperationException("DCP preparation failed.");
+        var dcpExecutor = new TestDcpExecutor { RunApplicationTask = Task.FromException(failure) };
+        var orchestrator = CreateOrchestrator(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            ResourceNotificationServiceTestHelpers.Create(),
+            dcpExecutor: dcpExecutor);
+
+        var start = orchestrator.StartResourceAsync(resource.Resource, TestContext.Current.CancellationToken);
+        Assert.Same(failure, await Assert.ThrowsAsync<InvalidOperationException>(
+            () => orchestrator.RunApplicationAsync(TestContext.Current.CancellationToken)));
+        Assert.Same(failure, await Assert.ThrowsAsync<InvalidOperationException>(() => start));
+        Assert.Empty(dcpExecutor.StartedResources);
+    }
+
+    [Fact]
+    public async Task FailedDcpHostStartupFailsPendingModelResourceStarts()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var resource = builder.AddExecutable("build", "unused", ".").WithExplicitStart();
+        using var app = builder.Build();
+        var dcpExecutor = new TestDcpExecutor();
+        var orchestrator = CreateOrchestrator(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            ResourceNotificationServiceTestHelpers.Create(),
+            dcpExecutor: dcpExecutor);
+        var failure = new InvalidOperationException("DCP host startup failed.");
+
+        var start = orchestrator.StartResourceAsync(resource.Resource, TestContext.Current.CancellationToken);
+        orchestrator.FailResourcePreparation(failure);
+
+        Assert.Same(failure, await Assert.ThrowsAsync<InvalidOperationException>(() => start));
+        Assert.Empty(dcpExecutor.StartedResources);
+    }
+
+    [Fact]
     public async Task StartingNotStartedReplicaIsForwardedToDcpWhileSiblingWaits()
     {
         // The consequence of WaitingUpdateDoesNotDisturbNotStartedReplicas: StartResourceAsync reads "Waiting" as

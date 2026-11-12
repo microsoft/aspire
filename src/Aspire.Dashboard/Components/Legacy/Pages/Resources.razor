@@ -62,6 +62,7 @@
                     <ResourceFilters ResourceStates="@PageViewModel.ResourceStatesToVisibility"
                                      ResourceTypes="@PageViewModel.ResourceTypesToVisibility"
                                      ResourceHealthStates="@PageViewModel.ResourceHealthStatusesToVisibility"
+                                     LaunchGroups="@(!PageViewModel.ResourceLaunchGroupsToVisibility.IsEmpty ? PageViewModel.ResourceLaunchGroupsToVisibility : null)"
                                      OnAllFilterVisibilityCheckedChangedAsync="@OnAllFilterVisibilityCheckedChangedAsync"
                                      OnResourceFilterVisibilityChangedAsync="@OnResourceFilterVisibilityChangedAsync" />
                 </div>
@@ -76,6 +77,7 @@
                     <ResourceFilters ResourceStates="@PageViewModel.ResourceStatesToVisibility"
                                      ResourceTypes="@PageViewModel.ResourceTypesToVisibility"
                                      ResourceHealthStates="@PageViewModel.ResourceHealthStatusesToVisibility"
+                                     LaunchGroups="@(!PageViewModel.ResourceLaunchGroupsToVisibility.IsEmpty ? PageViewModel.ResourceLaunchGroupsToVisibility : null)"
                                      OnAllFilterVisibilityCheckedChangedAsync="@OnAllFilterVisibilityCheckedChangedAsync"
                                      OnResourceFilterVisibilityChangedAsync="@OnResourceFilterVisibilityChangedAsync" />
                 </FluentPopover>

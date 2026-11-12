@@ -2350,6 +2350,26 @@ impl CSharpAppResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
+    /// Adds a resource to one or more launch groups.
+    pub fn with_launch_groups(&self, launch_group_names: Vec<String>) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("launchGroupNames".to_string(), serde_json::to_value(&launch_group_names).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withLaunchGroups", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Declares a local resource reference that is optional during initial launch-group selection.
+    pub fn with_optional_launch_group_reference(&self, dependency: &IResource) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("dependency".to_string(), dependency.handle().to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting/withOptionalLaunchGroupReference", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
     /// Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
     pub fn with_mcp_server(&self, path: Option<&str>, endpoint_name: Option<&str>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -4420,6 +4440,26 @@ impl ContainerRegistryResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
+    /// Adds a resource to one or more launch groups.
+    pub fn with_launch_groups(&self, launch_group_names: Vec<String>) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("launchGroupNames".to_string(), serde_json::to_value(&launch_group_names).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withLaunchGroups", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Declares a local resource reference that is optional during initial launch-group selection.
+    pub fn with_optional_launch_group_reference(&self, dependency: &IResource) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("dependency".to_string(), dependency.handle().to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting/withOptionalLaunchGroupReference", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
     /// Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start.
     pub fn with_required_command(&self, command: &str, help_link: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -5412,6 +5452,26 @@ impl ContainerResource {
         let result = self.client.invoke_capability("Aspire.Hosting/withContainerNetworkAlias", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
+    }
+
+    /// Adds a resource to one or more launch groups.
+    pub fn with_launch_groups(&self, launch_group_names: Vec<String>) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("launchGroupNames".to_string(), serde_json::to_value(&launch_group_names).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withLaunchGroups", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Declares a local resource reference that is optional during initial launch-group selection.
+    pub fn with_optional_launch_group_reference(&self, dependency: &IResource) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("dependency".to_string(), dependency.handle().to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting/withOptionalLaunchGroupReference", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
     }
 
     /// Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
@@ -7397,6 +7457,26 @@ impl DotnetToolResource {
         Ok(ExecutableResource::new(handle, self.client.clone()))
     }
 
+    /// Adds a resource to one or more launch groups.
+    pub fn with_launch_groups(&self, launch_group_names: Vec<String>) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("launchGroupNames".to_string(), serde_json::to_value(&launch_group_names).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withLaunchGroups", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Declares a local resource reference that is optional during initial launch-group selection.
+    pub fn with_optional_launch_group_reference(&self, dependency: &IResource) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("dependency".to_string(), dependency.handle().to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting/withOptionalLaunchGroupReference", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
     /// Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
     pub fn with_mcp_server(&self, path: Option<&str>, endpoint_name: Option<&str>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -9378,6 +9458,26 @@ impl ExecutableResource {
         Ok(ExecutableResource::new(handle, self.client.clone()))
     }
 
+    /// Adds a resource to one or more launch groups.
+    pub fn with_launch_groups(&self, launch_group_names: Vec<String>) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("launchGroupNames".to_string(), serde_json::to_value(&launch_group_names).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withLaunchGroups", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Declares a local resource reference that is optional during initial launch-group selection.
+    pub fn with_optional_launch_group_reference(&self, dependency: &IResource) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("dependency".to_string(), dependency.handle().to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting/withOptionalLaunchGroupReference", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
     /// Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
     pub fn with_mcp_server(&self, path: Option<&str>, endpoint_name: Option<&str>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -10766,6 +10866,26 @@ impl ExternalServiceResource {
         let result = self.client.invoke_capability("Aspire.Hosting/withExternalServiceHttpHealthCheck", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ExternalServiceResource::new(handle, self.client.clone()))
+    }
+
+    /// Adds a resource to one or more launch groups.
+    pub fn with_launch_groups(&self, launch_group_names: Vec<String>) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("launchGroupNames".to_string(), serde_json::to_value(&launch_group_names).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withLaunchGroups", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Declares a local resource reference that is optional during initial launch-group selection.
+    pub fn with_optional_launch_group_reference(&self, dependency: &IResource) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("dependency".to_string(), dependency.handle().to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting/withOptionalLaunchGroupReference", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
     }
 
     /// Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start.
@@ -14377,6 +14497,26 @@ impl ParameterResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
+    /// Adds a resource to one or more launch groups.
+    pub fn with_launch_groups(&self, launch_group_names: Vec<String>) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("launchGroupNames".to_string(), serde_json::to_value(&launch_group_names).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withLaunchGroups", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Declares a local resource reference that is optional during initial launch-group selection.
+    pub fn with_optional_launch_group_reference(&self, dependency: &IResource) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("dependency".to_string(), dependency.handle().to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting/withOptionalLaunchGroupReference", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
     /// Sets the description of the parameter resource.
     pub fn with_description(&self, description: &str, enable_markdown: Option<bool>) -> Result<ParameterResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -15692,6 +15832,26 @@ impl ProjectResource {
             args.insert("runtimeImage".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         let result = self.client.invoke_capability("Aspire.Hosting/withDockerfileBaseImage", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Adds a resource to one or more launch groups.
+    pub fn with_launch_groups(&self, launch_group_names: Vec<String>) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("launchGroupNames".to_string(), serde_json::to_value(&launch_group_names).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withLaunchGroups", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Declares a local resource reference that is optional during initial launch-group selection.
+    pub fn with_optional_launch_group_reference(&self, dependency: &IResource) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("dependency".to_string(), dependency.handle().to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting/withOptionalLaunchGroupReference", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
@@ -18102,6 +18262,26 @@ impl TestDatabaseResource {
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
 
+    /// Adds a resource to one or more launch groups.
+    pub fn with_launch_groups(&self, launch_group_names: Vec<String>) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("launchGroupNames".to_string(), serde_json::to_value(&launch_group_names).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withLaunchGroups", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Declares a local resource reference that is optional during initial launch-group selection.
+    pub fn with_optional_launch_group_reference(&self, dependency: &IResource) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("dependency".to_string(), dependency.handle().to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting/withOptionalLaunchGroupReference", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
     /// Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
     pub fn with_mcp_server(&self, path: Option<&str>, endpoint_name: Option<&str>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -19772,6 +19952,26 @@ impl TestRedisResource {
         let result = self.client.invoke_capability("Aspire.Hosting/withContainerNetworkAlias", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
+    }
+
+    /// Adds a resource to one or more launch groups.
+    pub fn with_launch_groups(&self, launch_group_names: Vec<String>) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("launchGroupNames".to_string(), serde_json::to_value(&launch_group_names).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withLaunchGroups", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Declares a local resource reference that is optional during initial launch-group selection.
+    pub fn with_optional_launch_group_reference(&self, dependency: &IResource) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("dependency".to_string(), dependency.handle().to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting/withOptionalLaunchGroupReference", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
     }
 
     /// Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
@@ -21704,6 +21904,26 @@ impl TestVaultResource {
         let result = self.client.invoke_capability("Aspire.Hosting/withContainerNetworkAlias", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
+    }
+
+    /// Adds a resource to one or more launch groups.
+    pub fn with_launch_groups(&self, launch_group_names: Vec<String>) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("launchGroupNames".to_string(), serde_json::to_value(&launch_group_names).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withLaunchGroups", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Declares a local resource reference that is optional during initial launch-group selection.
+    pub fn with_optional_launch_group_reference(&self, dependency: &IResource) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("dependency".to_string(), dependency.handle().to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting/withOptionalLaunchGroupReference", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
     }
 
     /// Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.

@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Concurrent;
+using System.Globalization;
+using System.Web;
 using Aspire.Dashboard.Extensions;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Otlp.Model;
@@ -9,8 +11,6 @@ using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Resources;
 using Aspire.Dashboard.Utils;
 using Humanizer;
-using System.Globalization;
-using System.Web;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.WebUtilities;
@@ -45,6 +45,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private const string ResourcesSectionKey = "section:resources";
     private const string ParametersSectionKey = "section:parameters";
     private const string TelemetrySectionKey = "section:telemetry";
+    private const string HiddenLaunchGroupsQueryParameter = "hiddenLaunchGroups";
 
     private readonly ConcurrentDictionary<string, ResourceViewModel> _resourceByName = new(StringComparers.ResourceName);
     private readonly HashSet<string> _collapsedResourceNames = new(StringComparers.ResourceName);
@@ -265,6 +266,8 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     internal ConcurrentDictionary<string, ResourceViewModel> ResourceByName => _resourceByName;
 
+    internal bool ShowHiddenResources => _filter.ShowHiddenResources;
+
     /// <summary>
     /// Raised on the renderer's synchronization context after resources change, so pages that display data owned by
     /// the layout (such as the resource overview) can refresh.
@@ -355,9 +358,13 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
         if (DashboardClient.IsEnabled)
         {
-            // The application name is only correct once the dashboard is connected, and it scopes persisted tree state.
+            // The initial resource snapshot can arrive after the dashboard connects. Wait for it before reading launch
+            // groups because the AppHost finalizes that metadata while it prepares its initial resource model.
             await DashboardClient.WhenConnected;
+            await DashboardClient.WhenResourcesReady;
             _collapsedResourceNamesKey = BrowserStorageKeys.CollapsedResourceNamesKey(DashboardClient.ApplicationName);
+            InitializeLaunchGroupFilters();
+            await RestoreLaunchGroupFiltersAsync(_lastLocation);
             var collapsedResult = await LocalStorage.GetAsync<List<string>>(_collapsedResourceNamesKey);
             if (collapsedResult.Success)
             {
@@ -418,7 +425,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
         // Wait for stored tags and order before showing resources, so the list doesn't first appear in another order.
         await settingsLoaded;
-        var (snapshot, subscription) = await DataSource.ResourceRepository.SubscribeResourcesAsync(cancellationToken);
+        var (snapshot, subscription) = await DashboardClient.SubscribeResourcesAsync(cancellationToken);
         foreach (var resource in snapshot)
         {
             UpsertResource(resource);
@@ -519,6 +526,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         // directly opened /metrics?meter=Test, so only the redirect's history entry marker counts.
         var previousUri = NavigationManager.ToAbsoluteUri(_lastLocation);
         var currentUri = NavigationManager.ToAbsoluteUri(location);
+        await RestoreLaunchGroupFiltersAsync(location);
         var restoringPageState = _isPaneFullCanvas && IsAllSelected && previousUri.Query.Length == 0 &&
             string.Equals(NavigationManager.HistoryEntryState, PageExtensions.RestoredPageStateHistoryEntryState, StringComparison.Ordinal) &&
             string.Equals(previousUri.AbsolutePath, currentUri.AbsolutePath, StringComparisons.UrlPath) &&
@@ -1591,31 +1599,127 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         StateHasChanged();
     });
 
-    private IReadOnlyList<ResourcePaneFilter.FilterGroup> GetFilterGroups() =>
-    [
-        // Telemetry sources aren't resources, so they have no type, but they're listed with the resources. Their
-        // option comes after the types, which include Parameter.
-        new("types", ResourcesLoc[nameof(Dashboard.Resources.Resources.ResourcesResourceTypesHeader)], _filter.ResourceTypesToVisibility, r => [r.ResourceType],
-            TrailingOptions:
-            [
-                new ResourcePaneFilter.FilterOption(
-                    "telemetry-sources",
-                    Loc[nameof(Resources.Layout.NavMenuTelemetrySourcesTab)],
-                    () => _telemetryOnlyResources.Count,
-                    () => _showTelemetryOnlyResources,
-                    SetTelemetrySourcesShownAsync)
-            ]),
-        new("states", ResourcesLoc[nameof(Dashboard.Resources.Resources.ResourcesResourceStatesHeader)], _filter.ResourceStatesToVisibility, r => [r.State ?? string.Empty]),
-        new("health", ResourcesLoc[nameof(Dashboard.Resources.Resources.ResourcesDetailsHealthStateProperty)], _filter.ResourceHealthStatusesToVisibility, r => [r.HealthStatus?.Humanize() ?? string.Empty]),
-        new("tags",
-            Loc[nameof(Resources.Layout.NavMenuTagsTab)],
-            _filter.ResourceTagsToVisibility,
-            r => _filter.ResourceTagsByResource.GetValueOrDefault(r.DisplayName) ?? [string.Empty],
-            key => string.IsNullOrEmpty(key) ? Loc[nameof(Resources.Layout.ResourcePaneUntaggedGroup)] : key)
-    ];
+    private IReadOnlyList<ResourcePaneFilter.FilterGroup> GetFilterGroups()
+    {
+        var groups = new List<ResourcePaneFilter.FilterGroup>
+        {
+            // Telemetry sources aren't resources, so they have no type, but they're listed with the resources. Their
+            // option comes after the types, which include Parameter.
+            new("types", ResourcesLoc[nameof(Dashboard.Resources.Resources.ResourcesResourceTypesHeader)], _filter.ResourceTypesToVisibility, r => [r.ResourceType],
+                TrailingOptions:
+                [
+                    new ResourcePaneFilter.FilterOption(
+                        "telemetry-sources",
+                        Loc[nameof(Resources.Layout.NavMenuTelemetrySourcesTab)],
+                        () => _telemetryOnlyResources.Count,
+                        () => _showTelemetryOnlyResources,
+                        SetTelemetrySourcesShownAsync)
+                ]),
+            new("states", ResourcesLoc[nameof(Dashboard.Resources.Resources.ResourcesResourceStatesHeader)], _filter.ResourceStatesToVisibility, r => [r.State ?? string.Empty]),
+            new("health", ResourcesLoc[nameof(Dashboard.Resources.Resources.ResourcesDetailsHealthStateProperty)], _filter.ResourceHealthStatusesToVisibility, r => [r.HealthStatus?.Humanize() ?? string.Empty]),
+            new("tags",
+                Loc[nameof(Resources.Layout.NavMenuTagsTab)],
+                _filter.ResourceTagsToVisibility,
+                r => _filter.ResourceTagsByResource.GetValueOrDefault(r.DisplayName) ?? [string.Empty],
+                key => string.IsNullOrEmpty(key) ? Loc[nameof(Resources.Layout.ResourcePaneUntaggedGroup)] : key)
+        };
+
+        if (!_filter.ResourceLaunchGroupsToVisibility.IsEmpty)
+        {
+            groups.Add(new(
+                "launch-groups",
+                ResourcesLoc[nameof(Dashboard.Resources.Resources.ResourceLaunchGroupsHeader)],
+                _filter.ResourceLaunchGroupsToVisibility,
+                LaunchGroupInformationViewModel.GetFilterKeys,
+                key => string.IsNullOrEmpty(key)
+                    ? ResourcesLoc[nameof(Dashboard.Resources.Resources.ResourceLaunchGroupsUngrouped)]
+                    : key));
+        }
+
+        return groups;
+    }
 
     private IEnumerable<ResourceViewModel> GetFilterCountResources() =>
         _resourceByName.Values.Where(r => !r.IsResourceHidden(_filter.ShowHiddenResources));
+
+    private void InitializeLaunchGroupFilters() =>
+        LaunchGroupInformationViewModel.AddVisibility(DashboardClient.LaunchGroups, _filter.ResourceLaunchGroupsToVisibility);
+
+    private async Task RestoreLaunchGroupFiltersAsync(string location)
+    {
+        if (_filter.ResourceLaunchGroupsToVisibility.IsEmpty)
+        {
+            return;
+        }
+
+        var uri = NavigationManager.ToAbsoluteUri(location);
+        var query = HttpUtility.ParseQueryString(uri.Query);
+        IReadOnlyList<string> hiddenGroups;
+
+        if (query.AllKeys.Contains(HiddenLaunchGroupsQueryParameter, StringComparer.OrdinalIgnoreCase))
+        {
+            hiddenGroups = DeserializeLaunchGroupFilters(query.GetValues(HiddenLaunchGroupsQueryParameter));
+        }
+        else
+        {
+            var storedGroups = await SessionStorage.GetAsync<List<string>>(
+                BrowserStorageKeys.ResourcePaneLaunchGroupsKey(DashboardClient.ApplicationName));
+            hiddenGroups = storedGroups is { Success: true, Value: { } groups } ? groups : [];
+        }
+
+        LaunchGroupInformationViewModel.SetHiddenGroups(_filter.ResourceLaunchGroupsToVisibility, hiddenGroups);
+    }
+
+    private async Task OnPaneFiltersChangedAsync()
+    {
+        if (_filter.ResourceLaunchGroupsToVisibility.IsEmpty)
+        {
+            return;
+        }
+
+        var hiddenGroups = _filter.ResourceLaunchGroupsToVisibility
+            .Where(pair => !pair.Value)
+            .Select(pair => pair.Key)
+            .Order(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        await SessionStorage.SetAsync(
+            BrowserStorageKeys.ResourcePaneLaunchGroupsKey(DashboardClient.ApplicationName),
+            hiddenGroups);
+
+        var uri = NavigationManager.ToAbsoluteUri(NavigationManager.Uri);
+        var query = HttpUtility.ParseQueryString(uri.Query);
+        query.Remove(HiddenLaunchGroupsQueryParameter);
+
+        if (SerializeLaunchGroupFilters(hiddenGroups) is { } serialized)
+        {
+            query[HiddenLaunchGroupsQueryParameter] = serialized;
+        }
+
+        var queryString = query.ToString();
+        var updatedUri = uri.GetLeftPart(UriPartial.Path) +
+            (string.IsNullOrEmpty(queryString) ? string.Empty : $"?{queryString}") +
+            uri.Fragment;
+
+        if (!string.Equals(uri.AbsoluteUri, updatedUri, StringComparison.Ordinal))
+        {
+            NavigationManager.NavigateTo(updatedUri, replace: true);
+        }
+    }
+
+    private static IReadOnlyList<string> DeserializeLaunchGroupFilters(string[]? values)
+    {
+        return values?
+            .SelectMany(value => value.Split(' '))
+            .Select(value => HttpUtility.UrlDecode(value) ?? string.Empty)
+            .ToList() ?? [];
+    }
+
+    private static string? SerializeLaunchGroupFilters(IEnumerable<string> groups)
+    {
+        var escapedGroups = groups.Select(HttpUtility.UrlEncode).ToList();
+        return escapedGroups.Count == 0 ? null : string.Join(" ", escapedGroups);
+    }
 
     private void UpdateResourceTagFilters()
     {
@@ -1647,7 +1751,8 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         _filter.ResourceTypesToVisibility.Values.All(v => v) &&
         _filter.ResourceStatesToVisibility.Values.All(v => v) &&
         _filter.ResourceHealthStatusesToVisibility.Values.All(v => v) &&
-        _filter.ResourceTagsToVisibility.Values.All(v => v);
+        _filter.ResourceTagsToVisibility.Values.All(v => v) &&
+        _filter.ResourceLaunchGroupsToVisibility.Values.All(v => v);
 
     private bool CanReorderPane =>
         _isLoaded && !IsTelemetryPane &&
@@ -1836,6 +1941,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
                 _filter.ShowHiddenResources = value;
                 EnsureGroupOrder();
                 UpdatePaneMenuItems();
+                ResourcesChanged?.Invoke();
             }));
     }
 

@@ -44,11 +44,17 @@ public sealed class SelfUpdateChannelPersistenceTests(ITestOutputHelper output)
             counter,
             timeout: TimeSpan.FromMinutes(5));
 
-        // The downloaded staging CLI can predate package-only AppHosts.
+        // Start from an older release so the local hive has a real update to apply.
+        // A newly scaffolded AppHost already uses the hive's latest packages, making
+        // the update a no-op that does not persist a project channel.
+        // The downloaded staging CLI can also predate package-only AppHosts.
+        const string initialAppHostVersion = "13.2.1";
         var appHostPath = Path.Combine(projectPath, "apphost.cs");
         var appHostContent = File.ReadAllText(appHostPath);
         var appHostVersion = CliE2ETestHelpers.GetAppHostVersion(appHostContent);
-        File.WriteAllText(appHostPath, $"#:sdk Aspire.AppHost.Sdk@{appHostVersion}\n" + string.Join('\n',
+        File.WriteAllText(appHostPath,
+            $"#:sdk Aspire.AppHost.Sdk@{initialAppHostVersion}\n" +
+            $"#:package Aspire.Hosting.AppHost@{initialAppHostVersion}\n" + string.Join('\n',
             appHostContent.Split('\n').Where(line =>
                 !line.StartsWith("#:sdk Aspire.AppHost.Sdk@", StringComparison.Ordinal) &&
                 !line.StartsWith("#:package Aspire.Hosting.AppHost@", StringComparison.Ordinal) &&
@@ -56,6 +62,7 @@ public sealed class SelfUpdateChannelPersistenceTests(ITestOutputHelper output)
 
         var createdConfig = ReadConfig(configPath);
         createdConfig.Remove("channel");
+        Assert.IsType<JsonObject>(createdConfig["sdk"])["version"] = initialAppHostVersion;
         File.WriteAllText(configPath, createdConfig.ToJsonString());
         Assert.False(ReadConfig(configPath).ContainsKey("channel"));
 
@@ -93,13 +100,18 @@ public sealed class SelfUpdateChannelPersistenceTests(ITestOutputHelper output)
             counter,
             timeout: TimeSpan.FromMinutes(10));
 
+        await auto.RunCommandAsync(
+            "jq -e '.channel == \"staging\"' \"$HOME/.aspire-self-update-e2e/bin/.aspire-install.json\"",
+            counter);
+
         await auto.ClearScreenAsync(counter);
 
         await auto.RunCommandAsync("aspire config set features.updateNotificationsEnabled false -g", counter);
 
-        // Relaunch from the replaced path without specifying a channel. Seeing staging land in the
-        // project config proves the new process resolved the identity persisted in the install
-        // sidecar. A second `aspire update --self` cannot be used to assert this: the preserved
+        // Relaunch from the replaced path without specifying a channel. Updating to the hive's
+        // version proves the new process used the package source retained in the install sidecar.
+        // Implicit updates preserve the project's channel setting rather than selecting a channel.
+        // A second `aspire update --self` cannot be used to assert this: the preserved
         // "packages" field synthesizes a local-hive channel that replaces the same-named built-in
         // one (PackagingService.GetChannelsAsync), and a local hive has no CliDownloadBaseUrl, so
         // self-download reports "Channel 'staging' does not support CLI downloads".
@@ -110,7 +122,9 @@ public sealed class SelfUpdateChannelPersistenceTests(ITestOutputHelper output)
             timeout: TimeSpan.FromMinutes(10));
 
         var updatedConfig = ReadConfig(configPath);
-        Assert.Equal("staging", updatedConfig["channel"]?.GetValue<string>());
+        Assert.Null(updatedConfig["channel"]);
+        Assert.Equal(appHostVersion, Assert.IsType<JsonObject>(updatedConfig["sdk"])["version"]?.GetValue<string>());
+        Assert.Equal(appHostVersion, CliE2ETestHelpers.GetAppHostVersion(File.ReadAllText(appHostPath)));
     }
 
     private static JsonObject ReadConfig(string path)

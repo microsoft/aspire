@@ -851,6 +851,7 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
         public bool SupportsV3 => _inner.SupportsV3;
         public bool SupportsTerminalsV1 => _inner.SupportsTerminalsV1;
         public bool SupportsResourceSnapshotVersionsV1 => _inner.SupportsResourceSnapshotVersionsV1;
+        public bool SupportsLaunchGroupsV1 => _inner.SupportsLaunchGroupsV1;
 
         public Task<GetTerminalInfoResponse> GetTerminalInfoAsync(string resourceName, CancellationToken cancellationToken = default)
         {
@@ -867,6 +868,8 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
             => _inner.GetDashboardUrlsAsync(cancellationToken);
         public Task<List<ResourceSnapshot>> GetResourceSnapshotsAsync(bool includeHidden, CancellationToken cancellationToken = default)
             => _inner.GetResourceSnapshotsAsync(includeHidden, cancellationToken);
+        public Task<GetLaunchGroupsResponse?> GetLaunchGroupsAsync(CancellationToken cancellationToken = default)
+            => _inner.GetLaunchGroupsAsync(cancellationToken);
         public IAsyncEnumerable<ResourceSnapshot> WatchResourceSnapshotsAsync(bool includeHidden, CancellationToken cancellationToken = default)
             => _inner.WatchResourceSnapshotsAsync(includeHidden, cancellationToken);
         public IAsyncEnumerable<ResourceLogLine> GetResourceLogsAsync(string? resourceName = null, bool follow = false, CancellationToken cancellationToken = default)

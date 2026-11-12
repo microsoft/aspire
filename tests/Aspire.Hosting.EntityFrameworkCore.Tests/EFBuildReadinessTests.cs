@@ -3,19 +3,89 @@
 
 #pragma warning disable CS0618 // Retains legacy project build-readiness coverage alongside V2 scenarios.
 
-#pragma warning disable ASPIREPROJECTS001, ASPIREDOTNETTOOL
+#pragma warning disable ASPIREPROJECTS001, ASPIREDOTNETTOOL, ASPIRELAUNCHGROUPS001
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dotnet;
 using Aspire.Hosting.EntityFrameworkCore.Tests.TestServices;
 using Aspire.Hosting.Utils;
+using Aspire.TestUtilities;
+using Aspire.Tests.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Hosting.EntityFrameworkCore.Tests;
 
-public class EFBuildReadinessTests
+public class EFBuildReadinessTests(ITestOutputHelper output)
 {
+    [Fact]
+    [RequiresTools(["dotnet"])]
+    public async Task CommandBuildsDeferredProjectWithoutStartingApplication()
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        var projectPath = Path.Combine(workspace.Path, "Api.csproj");
+        var buildMarker = Path.Combine(workspace.Path, "built-output.txt");
+        var startupMarker = Path.Combine(workspace.Path, "started.txt");
+        File.WriteAllText(projectPath, """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <OutputType>Exe</OutputType>
+                <TargetFramework>net10.0</TargetFramework>
+              </PropertyGroup>
+              <Target Name="RecordOutput" AfterTargets="Build">
+                <WriteLinesToFile File="$(MSBuildProjectDirectory)/built-output.txt" Lines="$(TargetPath)" Overwrite="true" />
+              </Target>
+            </Project>
+            """);
+        File.WriteAllText(Path.Combine(workspace.Path, "Program.cs"), """
+            System.IO.File.WriteAllText(args[0], "started");
+            """);
+
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path,
+            output).WithResourceCleanUp(true);
+        builder.Configuration["Aspire:LaunchGroup"] = "selected";
+        builder.AddParameter("selected", "value").WithLaunchGroups("selected");
+        var project = builder.AddDotnetProject("api", projectPath, options => options.ExcludeLaunchProfile = true)
+            .WithArgs(startupMarker)
+            .WithLaunchGroups("other");
+        var migrations = project.AddEFMigrations("migrations");
+        project.WaitFor(migrations);
+        var tool = new TestEfTool
+        {
+            EmitArtifactAsync = _ =>
+            {
+                Assert.True(File.Exists(buildMarker));
+                Assert.True(File.Exists(File.ReadAllText(buildMarker).Trim()));
+                Assert.False(File.Exists(startupMarker));
+                return Task.CompletedTask;
+            }
+        };
+        migrations.Resource.ToolResource = tool.Resource;
+        await using var app = builder.Build();
+
+        using (var startup = new CancellationTokenSource(TimeSpan.FromMinutes(3)))
+        {
+            await app.StartAsync(startup.Token);
+        }
+
+        Assert.False(File.Exists(buildMarker));
+        using (var commandTimeout = new CancellationTokenSource(TimeSpan.FromMinutes(3)))
+        {
+            var result = await app.Services.GetRequiredService<ResourceCommandService>().ExecuteCommandAsync(
+                migrations.Resource, "ef-database-update", commandTimeout.Token);
+            Assert.True(result.Success, result.Message);
+        }
+
+        Assert.Single(tool.Invocations);
+        Assert.False(File.Exists(startupMarker));
+        Assert.True(app.ResourceNotifications.TryGetCurrentState("api", out var state));
+        Assert.Equal(KnownResourceStates.NotStarted, state.Snapshot.State?.Text);
+
+        using var shutdown = new CancellationTokenSource(TimeSpan.FromMinutes(3));
+        await app.StopAsync(shutdown.Token);
+    }
+
     [Theory]
     [InlineData("ef-database-update")]
     [InlineData("ef-migrations-remove")]

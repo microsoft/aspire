@@ -68,6 +68,12 @@ public interface IDashboardClient : IResourceRepository, IAsyncDisposable
     /// </summary>
     string? MinRequiredVersion { get; }
 
+    /// <summary>
+    /// Gets the launch-group metadata advertised by the connected AppHost,
+    /// or <see langword="null"/> when the AppHost does not support it.
+    /// </summary>
+    LaunchGroupInformationViewModel? LaunchGroups => null;
+
     IAsyncEnumerable<WatchInteractionsResponseUpdate> SubscribeInteractionsAsync(CancellationToken cancellationToken);
 
     Task SendInteractionRequestAsync(WatchInteractionsRequestUpdate request, CancellationToken cancellationToken);

@@ -26,6 +26,15 @@ public class AtsRustCodeGeneratorTests
     }
 
     [Fact]
+    public void GeneratedCode_IncludesOptionalLaunchGroupReference()
+    {
+        var source = _generator.GenerateDistributedApplication(CreateContextFromBothAssemblies())["aspire.rs"];
+
+        Assert.Contains("pub fn with_optional_launch_group_reference(&self, dependency:", source);
+        Assert.Contains("Aspire.Hosting/withOptionalLaunchGroupReference", source);
+    }
+
+    [Fact]
     public async Task GenerateDistributedApplication_WithTestTypes_GeneratesCorrectOutput()
     {
         // Arrange
@@ -76,7 +85,7 @@ public class AtsRustCodeGeneratorTests
                 lazy_static = "1.4"
                 """, timeout.Token);
             await File.WriteAllTextAsync(Path.Combine(directory.FullName, "terminal.rs"), """
-                use terminal_callback_probe::{ExecutableResource, TerminalOptions};
+                use terminal_callback_probe::{ExecutableResource, IResource, TerminalOptions};
                 use serde_json::json;
 
                 // Compile default-preserving and configured callbacks without a running AppHost.
@@ -87,6 +96,11 @@ public class AtsRustCodeGeneratorTests
                         options.columns = 200.0;
                         json!({"p0": options.to_map()})
                     });
+                }
+
+                fn configure_optional_reference(resource: &ExecutableResource, dependency: &ExecutableResource) {
+                    let dependency = IResource::new(dependency.handle().clone(), dependency.client().clone());
+                    let _ = resource.with_optional_launch_group_reference(&dependency);
                 }
 
                 #[test]

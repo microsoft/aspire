@@ -611,13 +611,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
             }
         }
 
-        if (environmentVariables is not null)
-        {
-            foreach (var (key, value) in environmentVariables)
-            {
-                startInfo.Environment[key] = value;
-            }
-        }
+        AppHostServerEnvironment.Apply(startInfo.Environment, environmentVariables);
 
         if (debug)
         {

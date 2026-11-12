@@ -67,6 +67,8 @@ namespace Aspire.Hosting;
 /// </remarks>
 public class DistributedApplicationBuilder : IDistributedApplicationBuilder
 {
+    internal const string ResourceStarterServiceKey = "Aspire.Hosting.ResourceStarter";
+
     private const string HostingDiagnosticListenerName = "Aspire.Hosting";
     private const string ApplicationBuildingEventName = "DistributedApplicationBuilding";
     private const string ApplicationBuiltEventName = "DistributedApplicationBuilt";
@@ -409,6 +411,11 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         _innerBuilder.Services.AddSingleton(_userSecretsManager);
 
         _innerBuilder.Services.AddSingleton(sp => new DistributedApplicationModel(Resources));
+        _innerBuilder.Services.AddSingleton<LaunchGroupService>();
+        _innerBuilder.Services.AddSingleton<LaunchGroupMetadataService>();
+        _innerBuilder.Services.AddKeyedSingleton<Action<IResource, bool?, bool, bool>>(
+            LaunchGroupMetadataService.BuildPlanReporterKey,
+            (services, _) => services.GetRequiredService<LaunchGroupMetadataService>().RecordBuild);
         _innerBuilder.Services.AddSingleton<PipelineExecutor>();
         _innerBuilder.Services.AddHostedService<PipelineExecutor>(sp => sp.GetRequiredService<PipelineExecutor>());
         _innerBuilder.Services.AddSingleton<DistributedApplicationLifecycle>();
@@ -605,6 +612,9 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         {
             // Orchestrator
             _innerBuilder.Services.AddSingleton<ApplicationOrchestrator>();
+            _innerBuilder.Services.AddKeyedSingleton<Func<IResource, CancellationToken, Task>>(
+                ResourceStarterServiceKey,
+                (sp, _) => sp.GetRequiredService<ApplicationOrchestrator>().StartResourceAsync);
             _innerBuilder.Services.AddHostedService<OrchestratorHostService>();
 
             // DCP stuff
