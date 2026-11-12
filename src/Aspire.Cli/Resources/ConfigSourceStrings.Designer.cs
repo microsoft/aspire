@@ -70,6 +70,15 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Configuration is already up to date with its source..
+        /// </summary>
+        internal static string AlreadyUpToDate {
+            get {
+                return ResourceManager.GetString("AlreadyUpToDate", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to A saved configuration source has no recorded applied version. Run `aspire update --config-source` to save its allowed settings and establish the applied version..
         /// </summary>
         internal static string AppliedVersionMissing {
@@ -366,6 +375,15 @@ namespace Aspire.Cli.Resources {
             }
         }
         
+        /// <summary>
+        ///   Looks up a localized string similar to Configuration updated to the latest version from its source..
+        /// </summary>
+        internal static string Updated {
+            get {
+                return ResourceManager.GetString("Updated", resourceCulture);
+            }
+        }
+
         /// <summary>
         ///   Looks up a localized string similar to Update app to use configuration from this source?.
         /// </summary>

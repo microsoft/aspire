@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Agents;
@@ -351,13 +352,63 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(0, agentGit.CheckCalls);
     }
 
-    [Fact]
-    public async Task UpdateConfigSource_RefreshesFreshCacheWithoutUpdatingPackages()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task UpdateConfigSource_DisplaysSavedSourceWithoutExplanation(bool customSelection)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var source = new ConfigSource
+        {
+            Repository = "https://git.example/saved-configuration",
+            Path = customSelection ? "teams/platform.json" : AspireConfigFile.FileName,
+            Ref = customSelection ? "team/configuration" : null,
+            AppliedVersion = "version-1"
+        };
+        await TestConfigSourceServices.SaveBindingAsync(source, workspace.WorkspaceRoot, CancellationToken.None);
+        var interaction = new TestInteractionService();
+        using var provider = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interaction;
+        }).BuildServiceProvider();
+        var git = Assert.IsType<TestConfigSourceRepository>(provider.GetRequiredService<IGitClient>());
+        git.ReadConfiguration = (_, _) =>
+        {
+            Assert.Single(interaction.DisplayedRenderables);
+            return Task.FromResult(("version-1", new JsonObject()));
+        };
+
+        var exitCode = await provider.GetRequiredService<RootCommand>()
+            .Parse("update --config-source --yes --non-interactive").InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(
+            [
+                $"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]",
+                $"[blue]{string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.FetchingSource,
+                    SharedCommandStrings.GitFetchConfigurationSource, source.Repository)}[/]",
+                ConfigSourceStrings.AlreadyUpToDate
+            ],
+            interaction.DisplayedMessages.Select(message => message.Message));
+        using var writer = new StringWriter(CultureInfo.InvariantCulture);
+        var console = AnsiConsole.Create(new AnsiConsoleSettings { Out = new AnsiConsoleOutput(writer), Ansi = AnsiSupport.No });
+        console.Profile.Capabilities.Ansi = false;
+        console.Profile.Width = 160;
+        console.Write(Assert.Single(interaction.DisplayedRenderables));
+        await Verify(writer.ToString()).UseParameters(customSelection).ScrubLinesWithReplace(line => line.TrimEnd());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task UpdateConfigSource_RefreshesFreshCacheWithoutUpdatingPackages(bool changed)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         await TestConfigSourceServices.SaveBindingAsync(s_source, workspace.WorkspaceRoot, CancellationToken.None);
+        var interaction = new TestInteractionService();
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
+            options.InteractionServiceFactory = _ => interaction;
             options.PackagingServiceFactory = _ => new TestPackagingService
             {
                 GetChannelsAsyncCallback = _ => throw new InvalidOperationException("Refresh-only mode must not resolve package channels.")
@@ -367,6 +418,10 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
         var git = Assert.IsType<TestConfigSourceRepository>(provider.GetRequiredService<IGitClient>());
         var service = provider.GetRequiredService<ConfigSourceService>();
         await service.CheckProjectAsync(workspace.WorkspaceRoot, force: false, CancellationToken.None);
+        if (changed)
+        {
+            git.ReadConfiguration = (_, _) => Task.FromResult(("version-2", new JsonObject()));
+        }
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("update --config-source --yes --non-interactive");
 
@@ -376,6 +431,10 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(1, git.Calls);
         Assert.Equal(1, git.CheckCalls);
         Assert.False(Assert.IsType<UpdateCommand>(result.CommandResult.Command).RequiresCliPackageMetadata);
+        var notice = Assert.Single(interaction.DisplayedMessages,
+            message => message.Message == (changed ? ConfigSourceStrings.Updated : ConfigSourceStrings.AlreadyUpToDate));
+        Assert.Equal(changed ? KnownEmojis.CheckMarkButton : KnownEmojis.Information, notice.Emoji);
+        Assert.Equal(ConsoleOutput.Error, notice.ConsoleOverride);
     }
 
     [Theory]
@@ -632,10 +691,16 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal("version-1", AspireConfigFile.Load(project.FullName)!.ConfigSource!.AppliedVersion);
     }
 
-    [Fact]
-    public async Task UpdateConfigSource_MissingBindingSucceedsWithoutDetectionOrAcquisition()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task UpdateConfigSource_MissingOrOptedOutBindingSucceedsWithoutDetectionOrAcquisition(bool optedOut)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        if (optedOut)
+        {
+            await TestConfigSourceServices.SaveBindingAsync(new ConfigSource { OptOut = true }, workspace.WorkspaceRoot, CancellationToken.None);
+        }
         var interaction = new TestInteractionService();
         using var provider = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -645,6 +710,7 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
         Assert.Empty(interaction.DisplayedErrors);
+        Assert.Empty(interaction.DisplayedRenderables);
         var notice = Assert.Single(interaction.DisplayedMessages);
         Assert.Equal(ConfigSourceStrings.NoBinding, notice.Message);
         Assert.Equal(ConsoleOutput.Error, notice.ConsoleOverride);

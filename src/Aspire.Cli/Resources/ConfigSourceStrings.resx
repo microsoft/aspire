@@ -158,6 +158,12 @@
     <value>A new version of the configuration source is available. Run `aspire update --config-source` to apply it.</value>
     <comment>Do not translate "aspire update --config-source".</comment>
   </data>
+  <data name="Updated" xml:space="preserve">
+    <value>Configuration updated to the latest version from its source.</value>
+  </data>
+  <data name="AlreadyUpToDate" xml:space="preserve">
+    <value>Configuration is already up to date with its source.</value>
+  </data>
   <data name="AppliedVersionMissing" xml:space="preserve">
     <value>A saved configuration source has no recorded applied version. Run `aspire update --config-source` to save its allowed settings and establish the applied version.</value>
     <comment>Do not translate "aspire update --config-source".</comment>

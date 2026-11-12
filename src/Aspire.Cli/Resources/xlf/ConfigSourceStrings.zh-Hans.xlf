@@ -7,6 +7,11 @@
         <target state="new">For help accessing this configuration source, see {0}.</target>
         <note>{0} is a hyperlink to the configuration source README.</note>
       </trans-unit>
+      <trans-unit id="AlreadyUpToDate">
+        <source>Configuration is already up to date with its source.</source>
+        <target state="new">Configuration is already up to date with its source.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="AppliedVersionMissing">
         <source>A saved configuration source has no recorded applied version. Run `aspire update --config-source` to save its allowed settings and establish the applied version.</source>
         <target state="new">A saved configuration source has no recorded applied version. Run `aspire update --config-source` to save its allowed settings and establish the applied version.</target>
@@ -175,6 +180,11 @@
       <trans-unit id="UpdateUseSourcePrompt">
         <source>Update app to use configuration from this source?</source>
         <target state="new">Update app to use configuration from this source?</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="Updated">
+        <source>Configuration updated to the latest version from its source.</source>
+        <target state="new">Configuration updated to the latest version from its source.</target>
         <note />
       </trans-unit>
       <trans-unit id="UseSourceOptionDescription">
