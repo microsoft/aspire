@@ -341,11 +341,11 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
                 {
                     var restoreLines = restoreOutput.GetLines().ToArray();
                     logger.LogDebug(
-                        "Validation restore for the candidate '{Channel}' channel update of '{ProjectFile}' failed with exit code {ExitCode}. The update was not applied and the candidate changes will be rolled back. Restore output:{NewLine}{Output}",
+                        "Validation restore for {Channel} channel update failed for project '{ProjectFile}' with exit code {ExitCode}. The update was not applied and the candidate changes will be rolled back. Restore output:{NewLine}{Output}",
                         channel.Name, projectFile.FullName, restoreExitCode, Environment.NewLine,
                         string.Join(Environment.NewLine, restoreLines.Select(static line => line.Line)));
                     interactionService.DisplayLines(restoreLines);
-                    throw new ProjectUpdaterException(string.Format(CultureInfo.InvariantCulture, UpdateCommandStrings.FailedToRestoreAfterUpdateFormat, projectFile.FullName));
+                    throw new ProjectUpdaterException(string.Format(CultureInfo.InvariantCulture, UpdateCommandStrings.FailedToRestoreAfterUpdateFormat, channel.Name, projectFile.FullName));
                 }
             }
 
