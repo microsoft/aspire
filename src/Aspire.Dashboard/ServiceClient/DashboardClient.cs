@@ -614,11 +614,11 @@ internal sealed class DashboardClient : IDashboardClient
             using var activity = _activitySource.StartActivity("Process resource update", ActivityKind.Consumer);
             activity?.SetTag("aspire.dashboard.resource_update.type", response.KindCase.ToString());
 
-            if (response.KindCase == WatchResourcesUpdate.KindOneofCase.InitialData && LaunchGroups is null)
+            if (response.KindCase == WatchResourcesUpdate.KindOneofCase.InitialData)
             {
                 // The dashboard endpoint can accept connections before the AppHost's before-start pipeline has
-                // finalized launch metadata. The initial resource snapshot is sent after that pipeline, so refresh
-                // the one-shot application information before binding metadata to the resource view models.
+                // finalized launch metadata. Initial snapshots follow that pipeline and also arrive after stream
+                // recovery, when a restarted AppHost can have different launch groups or no groups at all.
                 var applicationInformation = await _client!.GetApplicationInformationAsync(
                     new ApplicationInformationRequest(),
                     headers: _headers,
