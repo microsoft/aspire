@@ -8,7 +8,7 @@ namespace Aspire.Hosting.ApplicationModel;
 /// <summary>
 /// Immutable, non-sensitive metadata attached to a resource. Multiple annotations with the same name represent multiple values.
 /// </summary>
-[Experimental(ResourceTraitDiagnostics.DiagnosticId, UrlFormat = ResourceTraitDiagnostics.UrlFormat)]
+[Experimental("ASPIRERESOURCETRAITS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public sealed class TraitAnnotation : IResourceAnnotation
 {
     /// <summary>

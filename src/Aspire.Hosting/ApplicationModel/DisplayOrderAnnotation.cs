@@ -10,7 +10,7 @@ namespace Aspire.Hosting.ApplicationModel;
 /// <see cref="ResourceUrlAnnotation.DisplayOrder"/>. Resources without a display order are treated as having an order of 0.
 /// </summary>
 /// <param name="order">The display order.</param>
-[Experimental(ResourceTraitDiagnostics.DiagnosticId, UrlFormat = ResourceTraitDiagnostics.UrlFormat)]
+[Experimental("ASPIRERESOURCETRAITS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public sealed class DisplayOrderAnnotation(int order) : IResourceAnnotation
 {
     /// <summary>Gets the display order. Higher values appear first.</summary>
