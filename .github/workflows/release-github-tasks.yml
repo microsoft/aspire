@@ -299,7 +299,9 @@ jobs:
         id: check-release
         if: inputs.skip_github_release != true
         env:
-          # Draft visibility requires push access; release operations use this token.
+          # Draft visibility requires push access; the read-only automatic token
+          # would miss an existing draft and break release retries.
+          # https://docs.github.com/en/rest/releases/releases#list-releases
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           RELEASE_VERSION: ${{ inputs.release_version }}
         run: |
