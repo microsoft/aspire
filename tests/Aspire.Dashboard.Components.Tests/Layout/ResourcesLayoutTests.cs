@@ -1552,7 +1552,7 @@ public class ResourcesLayoutTests : DashboardTestContext
     }
 
     [Fact]
-    public void FullPageRowActions_ShowTwoVisibleHighlightsThenOutputAndMenu()
+    public void FullPageRowActions_ShowTwoVisibleHighlightsAndMenu()
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         static CommandViewModel Command(string name, CommandViewModelState state, bool highlighted) =>
@@ -1568,7 +1568,7 @@ public class ResourcesLayoutTests : DashboardTestContext
                     Command("inspect", CommandViewModelState.Disabled, true),
                     Command("extra", CommandViewModelState.Enabled, true)
                 ]),
-                ModelTestHelpers.CreateResource("setting", resourceType: KnownResourceTypes.Parameter)
+                TerminalSetupHelpers.CreateTerminalResource("shell")
             ], resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
         var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
@@ -1586,44 +1586,67 @@ public class ResourcesLayoutTests : DashboardTestContext
                 Assert.Equal("inspect api", button.GetAttribute("aria-label"));
                 Assert.True(button.HasAttribute("disabled"));
             },
-            button => Assert.Equal("Console logs", button.GetAttribute("aria-label")),
             button => Assert.Equal("Actions for api", button.GetAttribute("aria-label")));
-        Assert.Equal(["Actions for setting"],
-            cut.FindAll("[data-resource-name='setting'] .resource-row-actions fluent-button").Select(button => button.GetAttribute("aria-label")));
+        Assert.Equal(["Actions for shell"],
+            cut.FindAll("[data-resource-name='shell'] .resource-row-actions fluent-button").Select(button => button.GetAttribute("aria-label")));
+        var terminalMenu = cut.FindComponents<AspireMenuButton>().Single(button => button.Instance.Title == "Actions for shell");
+        Assert.Contains(terminalMenu.Instance.ItemsProvider(), item => item.Text == "Terminal");
     }
 
     [Theory]
-    [InlineData(false, false, ResourceListDensity.Comfortable)]
-    [InlineData(true, false, ResourceListDensity.Comfortable)]
-    [InlineData(true, true, ResourceListDensity.Comfortable)]
-    [InlineData(false, false, ResourceListDensity.Compact)]
-    [InlineData(true, false, ResourceListDensity.Compact)]
-    [InlineData(true, true, ResourceListDensity.Compact)]
-    public async Task FullPageRowOutput_PrefersTerminalAndFallsBackToConsoleLogs(
-        bool hasTerminal, bool readOnly, ResourceListDensity density)
+    [InlineData(CommandViewModelState.Enabled, false, false, ResourceListDensity.Comfortable)]
+    [InlineData(CommandViewModelState.Enabled, true, false, ResourceListDensity.Compact)]
+    [InlineData(CommandViewModelState.Disabled, true, false, ResourceListDensity.Comfortable)]
+    [InlineData(CommandViewModelState.Enabled, true, true, ResourceListDensity.Compact)]
+    [InlineData(CommandViewModelState.Hidden, true, false, ResourceListDensity.Comfortable)]
+    [InlineData(null, false, false, ResourceListDensity.Compact)]
+    public async Task FullPageParameterActions_ShowOnlySetCommandWhenAvailable(
+        CommandViewModelState? setState, bool highlighted, bool readOnly, ResourceListDensity density)
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
-        var resource = hasTerminal
-            ? TerminalSetupHelpers.CreateTerminalResource("shell-instance", displayName: "shell")
-            : ModelTestHelpers.CreateResource("shell-instance", displayName: "shell");
+        static CommandViewModel Command(string name, string displayName, CommandViewModelState state, bool highlighted) =>
+            new(name, state, displayName, "", confirmationMessage: "", argumentInputs: [], isHighlighted: highlighted, iconName: "Key", iconVariant: IconVariant.Regular);
+        var commands = new List<CommandViewModel>
+        {
+            Command("custom", "Custom", CommandViewModelState.Enabled, true),
+            Command(CommandViewModel.DeleteParameterCommand, "Delete parameter", CommandViewModelState.Enabled, true)
+        };
+        if (setState is { } state)
+        {
+            commands.Add(Command(CommandViewModel.SetParameterCommand, "Set parameter", state, highlighted));
+        }
         ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true, isReadOnly: readOnly,
-            initialResources: [resource, ModelTestHelpers.CreateResource("api")],
+            initialResources:
+            [
+                ModelTestHelpers.CreateResource("setting-id", displayName: "setting", resourceType: KnownResourceTypes.Parameter, commands: [.. commands]),
+                ModelTestHelpers.CreateResource("api")
+            ],
             resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
         var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
         await cut.InvokeAsync(() => Services.GetRequiredService<DashboardViewPreferences>().SetDensityAsync(density));
+        Assert.Equal(["Custom setting", "Delete parameter setting", "Actions for setting"],
+            cut.FindAll("[data-resource-name='setting-id'] .resource-row-actions fluent-button").Select(button => button.GetAttribute("aria-label")));
         ResourceSetupHelpers.ToggleResourceList(cut);
         cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".pane-full-canvas")));
 
-        var output = cut.Find("[data-resource-name='shell-instance'] .resource-row-output");
-        var expectTerminal = hasTerminal && !readOnly;
-        Assert.Equal(expectTerminal ? "Terminal" : "Console logs", output.GetAttribute("aria-label"));
-        Assert.False(output.HasAttribute("disabled"));
-        await cut.InvokeAsync(() => output.Click());
-
-        var navigation = Services.GetRequiredService<NavigationManager>();
-        var expectedPath = expectTerminal ? "/terminals/resource/shell" : "/consolelogs/resource/shell";
-        Assert.Equal(navigation.ToAbsoluteUri(expectedPath).AbsoluteUri, navigation.Uri);
+        var actions = cut.FindAll("[data-resource-name='setting-id'] .resource-row-actions fluent-button");
+        if (setState is null or CommandViewModelState.Hidden)
+        {
+            Assert.Empty(actions);
+        }
+        else
+        {
+            var setButton = Assert.Single(actions);
+            Assert.Equal("Set parameter setting", setButton.GetAttribute("aria-label"));
+            Assert.Equal(readOnly || setState == CommandViewModelState.Disabled, setButton.HasAttribute("disabled"));
+            if (!setButton.HasAttribute("disabled"))
+            {
+                await cut.InvokeAsync(() => setButton.Click());
+                var navigation = Services.GetRequiredService<NavigationManager>();
+                Assert.Equal(navigation.ToAbsoluteUri(DashboardUrls.ResourceOverviewUrl("setting")).AbsoluteUri, navigation.Uri);
+            }
+        }
     }
 
     [Theory]

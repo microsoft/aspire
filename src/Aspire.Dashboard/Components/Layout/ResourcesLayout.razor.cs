@@ -1908,6 +1908,13 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         .Where(c => c.IsHighlighted && c.State != CommandViewModelState.Hidden)
         .Take(DashboardUIHelpers.MaxHighlightedCommands);
 
+    private static IEnumerable<CommandViewModel> GetFullPageRowCommands(ResourceViewModel resource) =>
+        resource.IsParameter
+            ? resource.Commands.Where(c =>
+                string.Equals(c.Name, CommandViewModel.SetParameterCommand, StringComparisons.CommandName) &&
+                c.State != CommandViewModelState.Hidden).Take(1)
+            : GetHighlightedCommands(resource);
+
     private static IEnumerable<CommandViewModel> GetResourceRowCommands(ResourceViewModel resource)
     {
         string[] preferred = resource.KnownState switch
@@ -3124,18 +3131,12 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
                     ? layout.OnRowClickAsync(e, layout.GetResourceName(resource))
                     : Task.CompletedTask);
             ToggleCollapse = EventCallback.Factory.Create<MouseEventArgs>(layout, () => layout.OnToggleCollapseAsync(uniqueResourceName));
-            ViewOutput = EventCallback.Factory.Create<MouseEventArgs>(layout, () =>
-                layout._resourceByName.TryGetValue(uniqueResourceName, out var resource)
-                    ? layout.ResourceMenuBuilder.CreateViewOutputMenuItem(resource, layout._resourceByName).OnClick!()
-                    : Task.CompletedTask);
             MenuItems = () => layout._resourceByName.TryGetValue(uniqueResourceName, out var resource) ? layout.GetResourceMenuItems(resource) : [];
         }
 
         public EventCallback<MouseEventArgs> Click { get; }
 
         public EventCallback<MouseEventArgs> ToggleCollapse { get; }
-
-        public EventCallback<MouseEventArgs> ViewOutput { get; }
 
         public Func<IList<MenuButtonItem>> MenuItems { get; }
 

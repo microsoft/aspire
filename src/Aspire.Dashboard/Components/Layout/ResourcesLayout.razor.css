@@ -11,9 +11,9 @@
     --resource-row-line-height: var(--lineHeightBase300);
     --resource-secondary-font-size: var(--aspire-font-size-secondary);
     --resource-secondary-line-height: 18px;
-    /* The full canvas's action rail from 960px: two highlighted commands, output and the menu, 4 x 28px + 3 x 4px gaps. The
+    /* The full canvas's action rail from 960px: two highlighted commands and the menu, 3 x 28px + 2 x 4px gaps. The
        expand toggle leads the row instead, and the URLs column replaces an open-URL button. */
-    --resource-row-actions-width: 124px;
+    --resource-row-actions-width: 92px;
     /* The full canvas's Started column: a clock, the verb and a short age, up to "Stopped 23h ago". */
     --resource-row-status-width: 128px;
     --resource-insight-height: 28px;
@@ -2188,7 +2188,7 @@
 @container resource-pane (min-width: 420px) {
     .resource-row.resource-row-table {
         /* Identity and actions take priority over secondary metadata. */
-        --resource-row-tracks: [identity] minmax(0, 1fr) [status] var(--resource-row-status-width) [endpoint source insights actions] 102px [end];
+        --resource-row-tracks: [identity] minmax(0, 1fr) [status] var(--resource-row-status-width) [endpoint source insights actions] 76px [end];
         --resource-row-actions-column: actions;
         display: grid;
         grid-template-columns: var(--resource-row-tracks);
@@ -2253,7 +2253,7 @@
 
 @container resource-pane (min-width: 540px) {
     .resource-row.resource-row-table {
-        --resource-row-tracks: [identity] minmax(160px, 1.5fr) [status] var(--resource-row-status-width) [endpoint] minmax(96px, 1fr) [source insights actions] 102px [end];
+        --resource-row-tracks: [identity] minmax(160px, 1.5fr) [status] var(--resource-row-status-width) [endpoint] minmax(96px, 1fr) [source insights actions] 76px [end];
     }
 
     .resource-row-endpoints {
@@ -2951,18 +2951,14 @@
     }
 }
 
-/* Reserve room for two highlighted commands, output and the menu, but pack the available actions against the
+/* Reserve room for two highlighted commands and the menu, but pack the available actions against the
    trailing edge so resources and parameters with fewer actions have no empty slots between their buttons. */
 @container resource-pane (min-width: 420px) {
     .pane-full-canvas .resource-row.resource-row-table .resource-row-actions {
         display: flex;
         justify-content: flex-end;
         justify-self: end;
-        width: 102px;
-    }
-
-    .pane-full-canvas .resource-row-actions ::deep .resource-row-output {
-        display: inline-flex;
+        width: 76px;
     }
 }
 
