@@ -353,7 +353,9 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         }
         if (!force)
         {
-            Assert.Equal(ConfigSourceStrings.UpdateAvailable, Assert.Single(interaction.DisplayedMessages).Message);
+            var notification = Assert.Single(interaction.DisplayedMessages);
+            Assert.Equal(ConfigSourceStrings.UpdateAvailable, notification.Message);
+            Assert.Equal(KnownEmojis.Information, notification.Emoji);
         }
         Assert.Equal(originalGlobal, await File.ReadAllTextAsync(globalFile.FullName));
         Assert.Equal(siblingConfiguration, await File.ReadAllTextAsync(siblingPath));
@@ -2061,9 +2063,10 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task Update_ForcesFetchAndRetainsOnlyLatestSnapshot(bool changed)
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public async Task Update_ForcesFetchAndRetainsOnlyLatestSnapshot(bool sourceChanged, bool localEdits)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var context = workspace.CreateExecutionContext();
@@ -2083,9 +2086,13 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         var stale = Directory.CreateDirectory(Path.Combine(cache, Guid.NewGuid().ToString("N")));
         await File.WriteAllTextAsync(Path.Combine(stale.FullName, "stale.txt"), "obsolete snapshot");
         File.SetAttributes(Path.Combine(stale.FullName, "stale.txt"), FileAttributes.ReadOnly);
-        if (changed)
+        if (sourceChanged)
         {
             git.ReadConfiguration = (_, _) => Task.FromResult(("version-2", new JsonObject()));
+        }
+        if (localEdits)
+        {
+            await ConfigurationService.SetConfigurationInFileAsync(path, "skillSources.team.repository", "example/local");
         }
         clock.UtcNow += TimeSpan.FromSeconds(1);
         var interaction = new TestInteractionService();
@@ -2104,8 +2111,14 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
                 Assert.Equal($"[blue]{string.Format(SharedCommandStrings.FetchingSource,
                     SharedCommandStrings.GitFetchConfigurationSource, s_source.Repository)}[/]", message.Message);
                 Assert.Equal(ConsoleOutput.Error, message.ConsoleOverride);
+            },
+            message =>
+            {
+                Assert.Equal(sourceChanged || localEdits ? ConfigSourceStrings.Updated : ConfigSourceStrings.AlreadyUpToDate, message.Message);
+                Assert.Equal(sourceChanged || localEdits ? KnownEmojis.CheckMarkButton : KnownEmojis.Information, message.Emoji);
+                Assert.Equal(ConsoleOutput.Error, message.ConsoleOverride);
             });
-        if (!changed)
+        if (!sourceChanged)
         {
             Assert.Equal(original, await File.ReadAllTextAsync(path));
         }
@@ -2116,7 +2129,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         var metadata = JsonSerializer.Deserialize(await File.ReadAllTextAsync(
             Path.Combine(next.GetCacheDirectory(s_source), pointer, "metadata.json")), JsonSourceGenerationContext.Default.ConfigSourceMetadata)!;
         Assert.Equal(clock.UtcNow, metadata.FetchedAt);
-        Assert.Equal(changed ? "version-2" : "version-1", metadata.Version);
+        Assert.Equal(sourceChanged ? "version-2" : "version-1", metadata.Version);
         Assert.Equal("version-1", retained.Metadata.Version);
     }
 
