@@ -4,29 +4,33 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using System.IO.Pipes;
+using System.Runtime.InteropServices;
 using System.Text;
 using Aspire.Hosting.Dcp.Process;
 using Aspire.Hosting.Tests.Utils;
+using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
+using Microsoft.DotNet.RemoteExecutor;
 
 namespace Aspire.Hosting.Tests.Dcp;
 
 [Trait("Partition", "4")]
-public class ProcessExecutionTests(ITestOutputHelper outputHelper)
+public partial class ProcessExecutionTests(ITestOutputHelper outputHelper)
 {
     [Theory]
     [InlineData("")]
     [InlineData("NUL\0ü日本語\r\n\nno final newline")]
     public async Task InputIsOwnedAndCapturePreservesExactText(string text)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var child = await BuildChildAsync(workspace.Path, """
+        using var child = CreateChild(static async () =>
+        {
             using var input = new MemoryStream();
             await Console.OpenStandardInput().CopyToAsync(input);
             var bytes = input.ToArray();
             await Console.OpenStandardOutput().WriteAsync(bytes);
             await Console.OpenStandardError().WriteAsync(bytes);
-            """);
+            return 0;
+        });
         var bytes = Encoding.UTF8.GetBytes(text);
         var input = ProcessInput.FromBytes(bytes);
         Assert.Equal(bytes, input.Bytes.ToArray());
@@ -44,18 +48,19 @@ public class ProcessExecutionTests(ITestOutputHelper outputHelper)
     [InlineData(true)]
     public async Task TransfersBothOutputsWhileLargeInputIsBlocked(bool errorFirst)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var child = await BuildChildAsync(workspace.Path, """
+        using var child = CreateChild(static async (string firstIsError) =>
+        {
             var output = Console.OpenStandardOutput();
             var error = Console.OpenStandardError();
             var prefix = Encoding.UTF8.GetBytes(new string('ü', 200000));
-            var first = args[0] == "True" ? error : output;
-            var second = args[0] == "True" ? output : error;
+            var first = firstIsError == "True" ? error : output;
+            var second = firstIsError == "True" ? output : error;
             await Task.WhenAll(first.WriteAsync(prefix).AsTask(), second.WriteAsync(prefix).AsTask());
             using var input = new MemoryStream();
             await Console.OpenStandardInput().CopyToAsync(input);
             await Task.WhenAll(output.WriteAsync(input.ToArray()).AsTask(), error.WriteAsync(input.ToArray()).AsTask());
-            """);
+            return 0;
+        });
         var input = new string('日', 200000);
         Assert.True(Encoding.UTF8.GetByteCount(input) > 400000);
         using var cancellation = CreateCancellation();
@@ -70,20 +75,17 @@ public class ProcessExecutionTests(ITestOutputHelper outputHelper)
     [InlineData(0)]
     public async Task RejectedInputPreservesNonzeroDiagnosticsButIsNotSuccessfulDelivery(int exitCode)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var child = await BuildChildAsync(workspace.Path, """
+        using var child = CreateChild(static async (string requestedExitCode) =>
+        {
             if (OperatingSystem.IsWindows())
             {
-                if (!CloseHandle(GetStdHandle(-10))) { throw new Exception("Closing stdin failed."); }
+                if (!CloseHandle(GetStdHandle(-10))) { throw new IOException("Closing stdin failed."); }
             }
-            else if (Close(0) != 0) { throw new Exception("Closing stdin failed."); }
+            else if (Close(0) != 0) { throw new IOException("Closing stdin failed."); }
             await Console.OpenStandardOutput().WriteAsync(Encoding.UTF8.GetBytes("output\0no newline"));
             await Console.OpenStandardError().WriteAsync(Encoding.UTF8.GetBytes(new string('E', 220000) + "late ü\0\r\n"));
-            Environment.Exit(int.Parse(args[0]));
-            [DllImport("kernel32.dll", SetLastError = true)] static extern nint GetStdHandle(int value);
-            [DllImport("kernel32.dll", SetLastError = true)] static extern bool CloseHandle(nint handle);
-            [DllImport("libc", EntryPoint = "close", SetLastError = true)] static extern int Close(int descriptor);
-            """);
+            return int.Parse(requestedExitCode);
+        });
         using var cancellation = CreateCancellation();
         var capture = CreateExecution(child, ProcessInput.FromBytes(new byte[2000000]), exitCode.ToString()).DecodeText(Encoding.UTF8).ExecuteAndCaptureTextAsync(cancellation.Token);
         if (exitCode == 0)
@@ -101,22 +103,20 @@ public class ProcessExecutionTests(ITestOutputHelper outputHelper)
     [InlineData(true)]
     public async Task EachOutputFlushesAtItsOwnEofBeforeRootExit(bool errorFirst)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var child = await BuildChildAsync(workspace.Path, """
-            using var pipe = new NamedPipeClientStream(".", args[0], PipeDirection.InOut, PipeOptions.Asynchronous);
+        using var child = CreateChild(static async (string pipeName, string firstIsError) =>
+        {
+            using var pipe = new NamedPipeClientStream(".", pipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
             await pipe.ConnectAsync();
-            var isError = args[1] == "True";
+            var isError = firstIsError == "True";
             await (isError ? Console.OpenStandardError() : Console.OpenStandardOutput()).WriteAsync(new byte[] { (byte)'x', 0xE2 });
             if (OperatingSystem.IsWindows())
             {
-                if (!CloseHandle(GetStdHandle(isError ? -12 : -11))) { throw new Exception("Closing output failed."); }
+                if (!CloseHandle(GetStdHandle(isError ? -12 : -11))) { throw new IOException("Closing output failed."); }
             }
-            else if (Close(isError ? 2 : 1) != 0) { throw new Exception("Closing output failed."); }
+            else if (Close(isError ? 2 : 1) != 0) { throw new IOException("Closing output failed."); }
             await pipe.ReadExactlyAsync(new byte[1]);
-            [DllImport("kernel32.dll", SetLastError = true)] static extern nint GetStdHandle(int value);
-            [DllImport("kernel32.dll", SetLastError = true)] static extern bool CloseHandle(nint handle);
-            [DllImport("libc", EntryPoint = "close", SetLastError = true)] static extern int Close(int descriptor);
-            """);
+            return 0;
+        });
         var name = "process-eof-" + Guid.NewGuid().ToString("N");
         await using var pipe = new NamedPipeServerStream(name, PipeDirection.InOut, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
         using var cancellation = CreateCancellation();
@@ -148,14 +148,15 @@ public class ProcessExecutionTests(ITestOutputHelper outputHelper)
     [InlineData(true)]
     public async Task CancellationOrDisposalStopsChildWithoutReadingAnotherEvent(bool cancel)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var child = await BuildChildAsync(workspace.Path, """
-            using var pipe = new NamedPipeClientStream(".", args[0], PipeDirection.InOut, PipeOptions.Asynchronous);
+        using var child = CreateChild(static async (string pipeName) =>
+        {
+            using var pipe = new NamedPipeClientStream(".", pipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
             await pipe.ConnectAsync();
             await pipe.WriteAsync(new byte[] { 1 });
             await Console.OpenStandardOutput().WriteAsync(new byte[2000000]);
             await pipe.ReadExactlyAsync(new byte[1]);
-            """);
+            return 0;
+        });
         var name = "process-stop-" + Guid.NewGuid().ToString("N");
         await using var pipe = new NamedPipeServerStream(name, PipeDirection.InOut, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
         using var cancellation = CreateCancellation();
@@ -203,14 +204,17 @@ public class ProcessExecutionTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var inheritedPath = Environment.GetEnvironmentVariable("PATH");
         Assert.NotNull(inheritedPath);
-        var child = await BuildChildAsync(workspace.Path, """
-            await Console.OpenStandardOutput().WriteAsync(Encoding.UTF8.GetBytes(Environment.GetEnvironmentVariable("TF_BUILD") + "|" + Environment.GetEnvironmentVariable("PATH") + "|" + Environment.GetEnvironmentVariable("CAPTURE_OVERLAY") + "|" + Environment.CurrentDirectory + "|" + string.Join("|", args)));
-            """);
+        using var child = CreateChild(static async (string first, string second, string third, string fourth) =>
+        {
+            var text = Environment.GetEnvironmentVariable("TF_BUILD") + "|" + Environment.GetEnvironmentVariable("PATH") + "|" + Environment.GetEnvironmentVariable("CAPTURE_OVERLAY") + "|" + Environment.CurrentDirectory + "|" + string.Join("|", [first, second, third, fourth]);
+            await Console.OpenStandardOutput().WriteAsync(Encoding.UTF8.GetBytes(text));
+            return 0;
+        });
         string[] arguments = ["space value", "quote\"value", "", "日本語"];
 
-        var result = await new DefaultProcessRunner().CreateExecution(new ProcessCommand(DotnetFileAppProcess.ResolvedExecutablePath)
+        var result = await new DefaultProcessRunner().CreateExecution(new ProcessCommand(child.StartInfo.FileName)
         {
-            Arguments = [child, .. arguments],
+            Arguments = [.. child.Arguments, .. arguments],
             WorkingDirectory = workspace.Path,
             EnvironmentVariables = new Dictionary<string, string> { ["CAPTURE_OVERLAY"] = "ü", ["TF_BUILD"] = "overridden" }
         }).DecodeText(Encoding.UTF8).ExecuteAndCaptureTextAsync(TestContext.Current.CancellationToken);
@@ -228,25 +232,29 @@ public class ProcessExecutionTests(ITestOutputHelper outputHelper)
         var name = "process-tree-" + Guid.NewGuid().ToString("N");
         await using var parentPipe = new NamedPipeServerStream(name, PipeDirection.InOut, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
         await using var childPipe = new NamedPipeServerStream(name + "-child", PipeDirection.InOut, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
-        var app = await BuildChildAsync(workspace.Path, """
-            if (args.Length == 1)
-            {
-                var start = new ProcessStartInfo(Environment.ProcessPath!) { UseShellExecute = false };
-                start.ArgumentList.Add(System.Reflection.Assembly.GetExecutingAssembly().Location);
-                start.ArgumentList.Add(args[0] + "-child");
-                start.ArgumentList.Add("child");
-                Process.Start(start)!.Dispose();
-            }
-            using var pipe = new NamedPipeClientStream(".", args[0], PipeDirection.InOut, PipeOptions.Asynchronous);
-            await pipe.ConnectAsync();
-            using var writer = new StreamWriter(pipe, leaveOpen: true) { AutoFlush = true };
-            await writer.WriteLineAsync(Environment.ProcessId.ToString());
-            await pipe.ReadExactlyAsync(new byte[1]);
-            """);
-        using var cancellation = CreateCancellation();
-        var capture = new DefaultProcessRunner().CreateExecution(new ProcessCommand(DotnetFileAppProcess.ResolvedExecutablePath)
+        // Keep both invocations' diagnostic files owned by the test process, even
+        // when the runner kills the root before it can perform managed cleanup.
+        using var descendant = CreateChild(static async (string childPipeName) =>
         {
-            Arguments = [app, name],
+            await ReportPidAndWaitAsync(childPipeName);
+            return 0;
+        });
+        using var app = CreateChild(static async (string executablePath, string preparedArguments, string parentPipeName) =>
+        {
+            var startInfo = new ProcessStartInfo(executablePath) { UseShellExecute = false };
+            foreach (var argument in CommandLineArgsParser.Parse(preparedArguments))
+            {
+                startInfo.ArgumentList.Add(argument);
+            }
+            startInfo.ArgumentList.Add(parentPipeName + "-child");
+            Process.Start(startInfo)!.Dispose();
+            await ReportPidAndWaitAsync(parentPipeName);
+            return 0;
+        });
+        using var cancellation = CreateCancellation();
+        var capture = new DefaultProcessRunner().CreateExecution(new ProcessCommand(app.StartInfo.FileName)
+        {
+            Arguments = [.. app.Arguments, descendant.StartInfo.FileName, descendant.StartInfo.Arguments, name],
             WorkingDirectory = workspace.Path,
             Input = ProcessInput.FromBytes(new byte[2000000]),
             KillEntireProcessTree = killEntireProcessTree
@@ -292,11 +300,12 @@ public class ProcessExecutionTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task OutputPayloadsRemainValidAfterLaterReadsAndDisposal()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var child = await BuildChildAsync(workspace.Path, """
+        using var child = CreateChild(static async () =>
+        {
             var bytes = Enumerable.Range(0, 200000).Select(i => (byte)(i % 251)).ToArray();
             await Console.OpenStandardOutput().WriteAsync(bytes);
-            """);
+            return 0;
+        });
         using var cancellation = CreateCancellation();
         var retained = new List<ReadOnlyMemory<byte>>();
         var lifecycle = new List<Type>();
@@ -319,9 +328,11 @@ public class ProcessExecutionTests(ITestOutputHelper outputHelper)
     public async Task ExecutionCannotBeConsumedAgain(bool complete)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var child = await BuildChildAsync(workspace.Path, """
-            await File.AppendAllTextAsync(args[0], "launched\n");
-            """);
+        using var child = CreateChild(static async (string ledgerPath) =>
+        {
+            await File.AppendAllTextAsync(ledgerPath, "launched\n");
+            return 0;
+        });
         var ledger = Path.Combine(workspace.Path, "launches.txt");
         var execution = CreateExecution(child, arguments: [ledger]);
         Assert.False(File.Exists(ledger));
@@ -699,20 +710,73 @@ public class ProcessExecutionTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var directory = Path.Combine(workspace.Path, "literal %TEMP%! with spaces");
         Directory.CreateDirectory(directory);
-        await BuildChildAsync(directory, "Console.Write(string.Join('\\0', args));");
+        using var child = CreateChild(static async (string first, string second, string third, string fourth, string fifth, string sixth, string seventh) =>
+        {
+            await Console.OpenStandardOutput().WriteAsync(Encoding.UTF8.GetBytes(string.Join('\0', [first, second, third, fourth, fifth, sixth, seventh])));
+            return 0;
+        });
         var shim = Path.Combine(directory, "compiler.cmd");
-        await File.WriteAllTextAsync(shim, $"@echo off\r\n\"{DotnetFileAppProcess.ResolvedExecutablePath}\" \"%~dp0compiled\\child.dll\" %*\r\n", TestContext.Current.CancellationToken);
+        // RemoteExecutor's compiler-generated names include '<' and '>'. Quote the
+        // known invocation prefix so cmd treats those names as arguments, not redirection.
+        var prefix = string.Join(" ", child.Arguments.Select(argument => $"\"{argument}\""));
+        await File.WriteAllTextAsync(shim, $"@echo off\r\n\"{child.StartInfo.FileName}\" {prefix} %*\r\n", TestContext.Current.CancellationToken);
         string[] arguments = ["literal %PATH%! & value", "", "a^b|c", "a \"quoted\" value", "quoted \"& text\" remains literal", "backslash\\\"quote", @"C:\tools\trailing\"];
         using var cancellation = CreateCancellation();
 
         var result = await new DefaultProcessRunner().CreateExecution(new ProcessCommand(shim)
         {
             Arguments = arguments,
-            InheritEnvironmentVariables = inheritEnvironment
+            InheritEnvironmentVariables = inheritEnvironment,
+            // Loading the test assembly initializes Verify, which needs writable temp storage.
+            EnvironmentVariables = new Dictionary<string, string> { ["TEMP"] = workspace.Path, ["TMP"] = workspace.Path }
         }).DecodeText(Encoding.UTF8).ExecuteAndCaptureTextAsync(cancellation.Token);
 
         Assert.True(result.ExitCode == 0, $"Exit code {result.ExitCode}: {result.StandardOutput}{result.StandardError}");
         Assert.Equal(string.Join('\0', arguments), result.StandardOutput);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("space value")]
+    [InlineData("quote\"value")]
+    [InlineData("backslash\\\"quote")]
+    [InlineData("space and trailing\\")]
+    [InlineData("日本語")]
+    [InlineData("literal %PATH%! & value")]
+    [InlineData("tab\tvalue")]
+    public async Task RemoteExecutorArgumentsRoundTripThroughRunner(string argument)
+    {
+        using var child = new RemoteChild(RemoteExecutor.Invoke(static async (string value) =>
+        {
+            Assert.Equal(10, Environment.Version.Major);
+            await Console.OpenStandardOutput().WriteAsync(Encoding.UTF8.GetBytes(value));
+            return 0;
+        }, argument, new RemoteInvokeOptions { Start = false }));
+
+        var result = await CreateExecution(child).DecodeText(Encoding.UTF8)
+            .ExecuteAndCaptureTextAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(new ProcessCaptureResult(0, argument, ""), result);
+    }
+
+    [Theory]
+    [InlineData("Child exception:\nSystem.IO.IOException: test child failed.")]
+    [InlineData("Child exception:\r\nSystem.InvalidOperationException: 日本語\r\n")]
+    public async Task RemoteChildDisposalReportsFailureAndDeletesExceptionFile(string diagnostic)
+    {
+        var invocation = RemoteExecutor.InvokeRaw((Action)(static () => { }), string.Empty,
+            new RemoteInvokeOptions { Start = false });
+        var exceptionFile = invocation.Options.ExceptionFile;
+        using var child = new RemoteChild(invocation);
+        Assert.False(File.Exists(exceptionFile));
+        await File.WriteAllTextAsync(exceptionFile, diagnostic, TestContext.Current.CancellationToken);
+        Assert.True(File.Exists(exceptionFile));
+
+        var failure = Assert.Throws<RemoteExecutionException>(child.Dispose);
+
+        Assert.Equal("Remote child failed.", failure.Message);
+        Assert.Equal(diagnostic, failure.StackTrace);
+        Assert.False(File.Exists(exceptionFile));
     }
 
     private static async Task<List<T>> CollectAsync<T>(IAsyncEnumerable<T> source)
@@ -765,13 +829,25 @@ public class ProcessExecutionTests(ITestOutputHelper outputHelper)
         }
     }
 
-    private static IAsyncEnumerable<ProcessEvent<ReadOnlyMemory<byte>>> CreateExecution(string child, ProcessInput? input = null,
+    private static RemoteChild CreateChild(Delegate entryPoint)
+        => new(RemoteExecutor.InvokeRaw(entryPoint, string.Empty, new RemoteInvokeOptions { Start = false }));
+
+    private static IAsyncEnumerable<ProcessEvent<ReadOnlyMemory<byte>>> CreateExecution(RemoteChild child, ProcessInput? input = null,
         params string[] arguments)
-        => new DefaultProcessRunner().CreateExecution(new ProcessCommand(DotnetFileAppProcess.ResolvedExecutablePath)
+        => new DefaultProcessRunner().CreateExecution(new ProcessCommand(child.StartInfo.FileName)
         {
-            Arguments = [child, .. arguments],
+            Arguments = [.. child.Arguments, .. arguments],
             Input = input
         });
+
+    private static async Task ReportPidAndWaitAsync(string pipeName)
+    {
+        using var pipe = new NamedPipeClientStream(".", pipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
+        await pipe.ConnectAsync();
+        using var writer = new StreamWriter(pipe, leaveOpen: true) { AutoFlush = true };
+        await writer.WriteLineAsync(Environment.ProcessId.ToString());
+        await pipe.ReadExactlyAsync(new byte[1]);
+    }
 
     private static CancellationTokenSource CreateCancellation()
     {
@@ -780,25 +856,51 @@ public class ProcessExecutionTests(ITestOutputHelper outputHelper)
         return cancellation;
     }
 
-    private static async Task<string> BuildChildAsync(string directory, string body)
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    private static partial nint GetStdHandle(int value);
+
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool CloseHandle(nint handle);
+
+    [LibraryImport("libc", EntryPoint = "close", SetLastError = true)]
+    private static partial int Close(int descriptor);
+
+    private sealed class RemoteChild : IDisposable
     {
-        var source = DotnetFileAppProcess.WriteApp(directory, "child.cs", """
-            #:sdk Microsoft.NET.Sdk
-            #:property TargetFramework=net10.0
-            using System.Diagnostics;
-            using System.IO.Pipes;
-            using System.Text;
-            using System.Runtime.InteropServices;
-            if (Environment.Version.Major != 10) { throw new Exception("The child must run on .NET 10."); }
-            """ + Environment.NewLine + body);
-        var output = Path.Combine(directory, "compiled");
-        var build = await new DefaultProcessRunner().CreateExecution(new ProcessCommand(DotnetFileAppProcess.ResolvedExecutablePath)
+        private readonly RemoteInvokeHandle _invocation;
+
+        public RemoteChild(RemoteInvokeHandle invocation)
         {
-            Arguments = ["build", source, "--output", output, "--nologo", "--verbosity", "quiet"]
-        }).DecodeText(Encoding.UTF8).ExecuteAndCaptureTextAsync(TestContext.Current.CancellationToken);
-        Assert.True(build.ExitCode == 0, build.StandardOutput + build.StandardError);
-        var child = Path.Combine(output, "child.dll");
-        Assert.True(File.Exists(child));
-        return child;
+            _invocation = invocation;
+            StartInfo = invocation.Process.StartInfo;
+            // RemoteExecutor supplies launch metadata only. Its unused Process must never
+            // start or terminate the actual child, whose lifetime belongs to our runner.
+            invocation.Process.Dispose();
+            invocation.Process = null;
+        }
+
+        public ProcessStartInfo StartInfo { get; }
+
+        // For example, --runtimeconfig "C:\test files\tests.runtimeconfig.json".
+        public IReadOnlyList<string> Arguments => CommandLineArgsParser.Parse(StartInfo.Arguments);
+
+        public void Dispose()
+        {
+            using (_invocation)
+            {
+                try
+                {
+                    if (File.Exists(_invocation.Options.ExceptionFile))
+                    {
+                        throw new RemoteExecutionException("Remote child failed.", File.ReadAllText(_invocation.Options.ExceptionFile));
+                    }
+                }
+                finally
+                {
+                    File.Delete(_invocation.Options.ExceptionFile);
+                }
+            }
+        }
     }
 }

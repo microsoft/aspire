@@ -2,6 +2,7 @@
 
   <PropertyGroup>
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <!--
       CS8002: Referenced assembly does not have a strong name. KubernetesClient package is unsigned, we ignore that warning on purpose
     -->
