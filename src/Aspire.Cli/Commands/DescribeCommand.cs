@@ -71,29 +71,6 @@ internal sealed partial class ResourcesCommandJsonContext : JsonSerializerContex
     });
 }
 
-[JsonSerializable(typeof(GetLaunchGroupsResponse))]
-[JsonSerializable(typeof(LaunchGroupResourceInfo))]
-[JsonSerializable(typeof(LaunchGroupResourceInfo[]))]
-[JsonSerializable(typeof(LaunchGroupBuildType))]
-[JsonSerializable(typeof(LaunchGroupExclusionReason))]
-[JsonSourceGenerationOptions(
-    WriteIndented = true,
-    PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
-    DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-    UseStringEnumConverter = true)]
-internal sealed partial class LaunchGroupsCommandJsonContext : JsonSerializerContext
-{
-    private static LaunchGroupsCommandJsonContext? s_relaxedEscaping;
-
-    public static LaunchGroupsCommandJsonContext RelaxedEscaping => s_relaxedEscaping ??= new(new JsonSerializerOptions
-    {
-        WriteIndented = true,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
-    });
-}
-
 internal sealed class DescribeCommand : BaseCommand
 {
     internal override HelpGroup HelpGroup => HelpGroup.Monitoring;
@@ -111,10 +88,6 @@ internal sealed class DescribeCommand : BaseCommand
     private static readonly Option<bool> s_followOption = new("--follow", "-f")
     {
         Description = DescribeCommandStrings.FollowOptionDescription
-    };
-    private static readonly Option<bool> s_launchGroupsOption = new("--launch-groups")
-    {
-        Description = DescribeCommandStrings.LaunchGroupsOptionDescription
     };
     private static readonly Option<ResourceOutputFormat> s_formatOption = new("--format")
     {
@@ -148,7 +121,6 @@ internal sealed class DescribeCommand : BaseCommand
         Arguments.Add(s_resourceArgument);
         Options.Add(s_appHostOption);
         Options.Add(s_followOption);
-        Options.Add(s_launchGroupsOption);
         Options.Add(s_formatOption);
         Options.Add(s_includeHiddenOption);
         Options.Add(s_includeDisabledCommandsOption);
@@ -166,16 +138,6 @@ internal sealed class DescribeCommand : BaseCommand
             {
                 result.AddError("--apphost-pid requires --apphost.");
             }
-
-            if (result.GetValue(s_launchGroupsOption) &&
-                (result.GetValue(s_resourceArgument) is not null ||
-                 result.GetValue(s_followOption) ||
-                 result.GetValue(s_formatOption) == ResourceOutputFormat.Mermaid ||
-                 result.GetValue(s_includeHiddenOption) ||
-                 result.GetValue(s_includeDisabledCommandsOption)))
-            {
-                result.AddError(DescribeCommandStrings.LaunchGroupsOptionsNotSupported);
-            }
         });
     }
 
@@ -189,7 +151,6 @@ internal sealed class DescribeCommand : BaseCommand
         var resourceName = parseResult.GetValue(s_resourceArgument);
         var passedAppHostProjectFile = parseResult.GetValue(s_appHostOption);
         var follow = parseResult.GetValue(s_followOption);
-        var launchGroups = parseResult.GetValue(s_launchGroupsOption);
         var format = parseResult.GetValue(s_formatOption);
         var includeHidden = parseResult.GetValue(s_includeHiddenOption);
         var includeDisabledCommands = parseResult.GetValue(s_includeDisabledCommandsOption);
@@ -214,13 +175,6 @@ internal sealed class DescribeCommand : BaseCommand
         }
 
         var connection = result.Connection!;
-
-        if (launchGroups)
-        {
-            // Launch-group inspection is a dedicated read-only backchannel snapshot. Branch before
-            // creating the resource watcher so inspection cannot activate ordinary describe behavior.
-            return await ExecuteLaunchGroupsAsync(connection, format, cancellationToken).ConfigureAwait(false);
-        }
 
         // Get dashboard URL while the watcher loads initial snapshots.
         // When a specific resource is requested, always include hidden resources
@@ -272,129 +226,6 @@ internal sealed class DescribeCommand : BaseCommand
             return CommandResult.FromExitCode(ExecuteSnapshot(resourceWatcher.GetResources().ToList(), dashboardBaseUrl, resourceName, format, includeDisabledCommands));
         }
     }
-
-    private async Task<CommandResult> ExecuteLaunchGroupsAsync(
-        IAppHostAuxiliaryBackchannel connection,
-        ResourceOutputFormat format,
-        CancellationToken cancellationToken)
-    {
-        if (!connection.SupportsLaunchGroupsV1)
-        {
-            return CommandResult.Failure(CliExitCodes.AppHostIncompatible, DescribeCommandStrings.LaunchGroupsNotSupported);
-        }
-
-        var response = await connection.GetLaunchGroupsAsync(cancellationToken).ConfigureAwait(false);
-        if (response is null)
-        {
-            return CommandResult.Failure(CliExitCodes.AppHostIncompatible, DescribeCommandStrings.LaunchGroupsNotSupported);
-        }
-
-        var normalizedResponse = NormalizeLaunchGroupsResponse(response);
-        if (format == ResourceOutputFormat.Json)
-        {
-            var json = JsonSerializer.Serialize(normalizedResponse, LaunchGroupsCommandJsonContext.RelaxedEscaping.GetLaunchGroupsResponse);
-            InteractionService.DisplayRawText(json, ConsoleOutput.Standard);
-        }
-        else
-        {
-            DisplayLaunchGroupsTable(normalizedResponse);
-        }
-
-        return CommandResult.Success();
-    }
-
-    private void DisplayLaunchGroupsTable(GetLaunchGroupsResponse response)
-    {
-        var selectedGroup = response.SelectedGroup?.EscapeMarkup() ?? "-";
-        var groups = response.Groups.Length == 0
-            ? "-"
-            : string.Join(", ", response.Groups.Select(group => group.EscapeMarkup()));
-
-        InteractionService.DisplayMarkupLine($"[bold]{DescribeCommandStrings.SelectedLaunchGroupLabel.EscapeMarkup()}[/] {selectedGroup}");
-        InteractionService.DisplayMarkupLine($"[bold]{DescribeCommandStrings.LaunchGroupsLabel.EscapeMarkup()}[/] {groups}");
-
-        var table = new Table();
-        table.AddBoldColumn(DescribeCommandStrings.HeaderLaunchGroupResource);
-        table.AddBoldColumn(DescribeCommandStrings.HeaderLaunchGroups);
-        table.AddBoldColumn(DescribeCommandStrings.HeaderInheritedFrom);
-        table.AddBoldColumn(DescribeCommandStrings.HeaderStartup);
-        table.AddBoldColumn(DescribeCommandStrings.HeaderBuild);
-
-        foreach (var resource in response.Resources)
-        {
-            var resourceGroups = resource.Groups.Length == 0
-                ? "-"
-                : string.Join(", ", resource.Groups.Select(group => group.EscapeMarkup()));
-            var inheritedFrom = resource.InheritedFrom?.EscapeMarkup() ?? "-";
-
-            table.AddRow(
-                resource.Name.EscapeMarkup(),
-                resourceGroups,
-                inheritedFrom,
-                GetStartupDescription(resource),
-                GetBuildDescription(resource.BuildType));
-        }
-
-        InteractionService.DisplayRenderable(table);
-    }
-
-    private static string GetStartupDescription(LaunchGroupResourceInfo resource)
-    {
-        var reasons = new List<string>(3);
-        if (resource.ExplicitStart)
-        {
-            reasons.Add(DescribeCommandStrings.StartupExplicitStart);
-        }
-        if (resource.ExclusionReason == LaunchGroupExclusionReason.NotInSelectedGroup)
-        {
-            reasons.Add(DescribeCommandStrings.StartupExcludedBySelectedGroup);
-        }
-        if (resource.ExclusionReason == LaunchGroupExclusionReason.ExemptFromSelection)
-        {
-            reasons.Add(DescribeCommandStrings.StartupExcludedFromSelection);
-        }
-
-        return reasons.Count == 0
-            ? DescribeCommandStrings.StartupAutomatic
-            : string.Join("; ", reasons);
-    }
-
-    private static string GetBuildDescription(LaunchGroupBuildType disposition) => disposition switch
-    {
-        LaunchGroupBuildType.NotCoordinated => DescribeCommandStrings.BuildNotCoordinated,
-        LaunchGroupBuildType.Pending => DescribeCommandStrings.BuildPending,
-        LaunchGroupBuildType.Initial => DescribeCommandStrings.BuildInitial,
-        LaunchGroupBuildType.InitialPersistent => DescribeCommandStrings.BuildInitialPersistent,
-        LaunchGroupBuildType.InitialShared => DescribeCommandStrings.BuildInitialShared,
-        LaunchGroupBuildType.Deferred => DescribeCommandStrings.BuildDeferred,
-        _ => disposition.ToString()
-    };
-
-    private static GetLaunchGroupsResponse NormalizeLaunchGroupsResponse(GetLaunchGroupsResponse response)
-    {
-        return new GetLaunchGroupsResponse
-        {
-            SelectedGroup = response.SelectedGroup,
-            Groups = OrderNames(response.Groups).ToArray(),
-            Resources = response.Resources
-                .OrderBy(resource => resource.Name, StringComparer.OrdinalIgnoreCase)
-                .ThenBy(resource => resource.Name, StringComparer.Ordinal)
-                .Select(resource => new LaunchGroupResourceInfo
-                {
-                    Name = resource.Name,
-                    Groups = OrderNames(resource.Groups).ToArray(),
-                    InheritedFrom = resource.InheritedFrom,
-                    ExplicitStart = resource.ExplicitStart,
-                    ExclusionReason = resource.ExclusionReason,
-                    BuildType = resource.BuildType
-                })
-                .ToArray()
-        };
-    }
-
-    private static IOrderedEnumerable<string> OrderNames(IEnumerable<string> names) =>
-        names.OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(name => name, StringComparer.Ordinal);
 
     private int ExecuteSnapshot(IReadOnlyList<ResourceSnapshot> snapshots, string? dashboardBaseUrl, string? resourceName, ResourceOutputFormat format, bool includeDisabledCommands)
     {

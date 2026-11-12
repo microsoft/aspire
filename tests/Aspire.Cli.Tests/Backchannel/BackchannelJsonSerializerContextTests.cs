@@ -224,47 +224,6 @@ public class BackchannelJsonSerializerContextTests
         Assert.Equal(CompletionStates.InProgress, activity.Data.CompletionState);
     }
 
-    [Theory]
-    [InlineData(LaunchGroupExclusionReason.None)]
-    [InlineData(LaunchGroupExclusionReason.NotInSelectedGroup)]
-    [InlineData(LaunchGroupExclusionReason.ExemptFromSelection)]
-    public void LaunchGroupResponse_RoundTripsThroughSerializer(object exclusionReasonValue)
-    {
-        var exclusionReason = Assert.IsType<LaunchGroupExclusionReason>(exclusionReasonValue);
-        var options = BackchannelJsonSerializerContext.CreateJsonSerializerOptions();
-        var response = new GetLaunchGroupsResponse
-        {
-            SelectedGroup = "catalog",
-            Groups = ["catalog", "empty"],
-            Resources =
-            [
-                new LaunchGroupResourceInfo
-                {
-                    Name = "api",
-                    Groups = ["shared", "catalog"],
-                    InheritedFrom = "parent",
-                    ExplicitStart = true,
-                    ExclusionReason = exclusionReason,
-                    BuildType = LaunchGroupBuildType.InitialShared
-                }
-            ]
-        };
-
-        var json = JsonSerializer.Serialize(response, options);
-        var roundTripped = JsonSerializer.Deserialize<GetLaunchGroupsResponse>(json, options);
-
-        Assert.NotNull(roundTripped);
-        Assert.Equal("catalog", roundTripped.SelectedGroup);
-        Assert.Equal(["catalog", "empty"], roundTripped.Groups);
-        var resource = Assert.Single(roundTripped.Resources);
-        Assert.Equal("api", resource.Name);
-        Assert.Equal(["shared", "catalog"], resource.Groups);
-        Assert.Equal("parent", resource.InheritedFrom);
-        Assert.True(resource.ExplicitStart);
-        Assert.Equal(exclusionReason, resource.ExclusionReason);
-        Assert.Equal(LaunchGroupBuildType.InitialShared, resource.BuildType);
-    }
-
     [Fact]
     public void TerminalReplicaInfo_OldPayloadWithoutNewFields_DeserializesWithNulls()
     {

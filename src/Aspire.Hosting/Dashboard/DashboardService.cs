@@ -5,7 +5,6 @@ using System.Text.RegularExpressions;
 using System.Globalization;
 using System.Runtime.ExceptionServices;
 using Aspire.DashboardService.Proto.V1;
-using Aspire.Hosting.Orchestrator;
 using Google.Protobuf.Collections;
 using Google.Protobuf.WellKnownTypes;
 using Grpc.Core;
@@ -24,6 +23,7 @@ using AppHostTerminalChange = Aspire.Hosting.ApplicationModel.TerminalChange;
 using AppHostTerminalChangeType = Aspire.Hosting.ApplicationModel.TerminalChangeType;
 using AppHostTerminalDescriptor = Aspire.Hosting.ApplicationModel.TerminalDescriptor;
 using AppHostTerminalSnapshot = Aspire.Hosting.ApplicationModel.TerminalSnapshot;
+using LaunchGroupMetadataService = Aspire.Hosting.Orchestrator.LaunchGroupMetadataService;
 using TerminalService = Aspire.Hosting.ApplicationModel.TerminalService;
 
 namespace Aspire.Hosting.Dashboard;

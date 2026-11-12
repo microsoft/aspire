@@ -203,33 +203,9 @@ resource retains the selection. Restarting the AppHost process recomputes it;
 in-process hot reload does not rerun startup. Editing the configuration does not
 dynamically switch groups in an already running AppHost.
 
-## Inspecting a running AppHost
+## Inspecting groups in the Dashboard
 
-Use `aspire describe --launch-groups` while an AppHost is running to inspect the
-finalized plan:
-
-```bash
-aspire describe --launch-groups
-```
-
-The output includes the selected group, known groups, each resource's effective
-memberships and inheritance source, pre-existing explicit-start and group-exclusion
-reasons, and its coordinated build type. It also includes hidden framework
-helpers; some, such as project rebuilders, have their own explicit-start setting.
-`Default startup` means there is no direct launch-group or explicit-start
-restriction; passive structural children still follow their lifetime owner.
-Use the existing `--format json` convention for machine-readable output:
-
-```bash
-aspire describe --launch-groups --format json
-```
-
-An older AppHost that does not expose launch-group metadata is reported as unsupported;
-the CLI does not infer a plan from resource state. Both forms are read-only. They do
-not evaluate environment or argument callbacks, start resources, trigger deferred
-builds, switch the selected group, or mutate the application model.
-
-The Dashboard Resources page also shows effective launch-group memberships and can
+The Dashboard Resources page shows effective launch-group memberships and can
 filter the current resource list by group. Inherited groups are shown the same as
 direct memberships, and a resource with multiple memberships can match each group.
 Filtering only changes the visible rows. It does not change automatic startup,
@@ -247,11 +223,6 @@ Hover over or focus the active group's name in the explanation to see its member
 After a manual Start, state details describe the current lifecycle state instead,
 including any startup failure, rather than continuing to show the initial exclusion.
 
-The JSON metadata uses one `exclusionReason` enum: `None`, `NotInSelectedGroup`,
-or `ExemptFromSelection`. Exempt resources retain their ordinary startup behavior.
-`explicitStart` remains independent, and `buildType` reports the coordinated build
-classification.
-
 ## Project builds
 
 When a group is selected, the AppHost's .NET build coordinator initially builds
@@ -267,9 +238,9 @@ runtime startup; building it does not start that resource.
 An ordinary Start of an excluded, never-built non-persistent .NET project builds
 it before launch. A separate Rebuild is not required. Build-completion consumers,
 such as EF migration commands, trigger or join the needed build without waiting
-for the application to be ready. While a deferred build runs, the starting resource
-shows Building and its console receives the build output. A resource waiting on a
-dependency remains Waiting until that dependency is ready.
+for the application to be ready. While a deferred build runs, the application
+remains Starting; progress and compiler output belong to the build resource.
+A resource waiting on a dependency remains Waiting until that dependency is ready.
 
 Internal deferred build resources are hidden from default resource lists before
 they start and after a successful build. They remain visible while building or
@@ -421,13 +392,6 @@ TestShop's AppHost has legacy `ProjectReference` entries for its projects, so it
 is not a clean demonstration of deferred initial builds. Its `catalogservice`
 and `basketservice` both reference `TestShop.ServiceDefaults` at compile time;
 that does not make either service a runtime dependency of the other.
-
-While TestShop is running, inspect the effective memberships and startup/build plan:
-
-```bash
-aspire describe --launch-groups
-aspire describe --launch-groups --format json
-```
 
 In the Dashboard, filter the Resources page by `catalog`, `basket`, `frontend`, or
 `orders`. The filter is useful for reviewing the current plan, but it does not switch

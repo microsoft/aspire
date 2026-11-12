@@ -16,16 +16,6 @@ namespace Aspire.Hosting.ApplicationModel;
 /// </summary>
 public class ResourceLoggerService : IDisposable
 {
-    /// <summary>
-    /// Creates a resource logger service.
-    /// </summary>
-    public ResourceLoggerService()
-    {
-        BuildOutputCapture = new(this);
-    }
-
-    internal BuildOutputCapture BuildOutputCapture { get; }
-
     // Internal for testing.
     internal TimeProvider TimeProvider { get; set; } = TimeProvider.System;
 
@@ -384,7 +374,7 @@ public class ResourceLoggerService : IDisposable
 
             // Publish the logger before capturing handlers. Handlers registered after this point replay it
             // from _loggers; handlers registered before it are notified below.
-            state = new ResourceLoggerState(resourceName, TimeProvider, BuildOutputCapture);
+            state = new ResourceLoggerState(resourceName, TimeProvider);
             _loggers[resourceName] = state;
             loggerAdded = _loggerAdded;
         }
@@ -424,17 +414,15 @@ public class ResourceLoggerService : IDisposable
         private readonly LogEntries _backlog = new(MaxLogCount) { BaseLineNumber = 0 };
         private readonly string _name;
         private readonly TimeProvider _timeProvider;
-        private readonly BuildOutputCapture _buildOutputCapture;
 
         /// <summary>
         /// Creates a new <see cref="ResourceLoggerState"/>.
         /// </summary>
-        public ResourceLoggerState(string name, TimeProvider timeProvider, BuildOutputCapture buildOutputCapture)
+        public ResourceLoggerState(string name, TimeProvider timeProvider)
         {
             _logger = new ResourceLogger(this);
             _name = name;
             _timeProvider = timeProvider;
-            _buildOutputCapture = buildOutputCapture;
         }
 
         private Action<bool>? _onSubscribersChanged;
@@ -772,10 +760,6 @@ public class ResourceLoggerService : IDisposable
                 }
             }
 
-            if (inMemorySource)
-            {
-                _buildOutputCapture.AddInMemory(_name, logEntry);
-            }
             _onNewLog?.Invoke(logEntry);
         }
 

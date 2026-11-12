@@ -61,60 +61,6 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Deferred.
-        /// </summary>
-        internal static string BuildDeferred {
-            get {
-                return ResourceManager.GetString("BuildDeferred", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Initial.
-        /// </summary>
-        internal static string BuildInitial {
-            get {
-                return ResourceManager.GetString("BuildInitial", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Initial persistent.
-        /// </summary>
-        internal static string BuildInitialPersistent {
-            get {
-                return ResourceManager.GetString("BuildInitialPersistent", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Initial shared.
-        /// </summary>
-        internal static string BuildInitialShared {
-            get {
-                return ResourceManager.GetString("BuildInitialShared", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Not coordinated.
-        /// </summary>
-        internal static string BuildNotCoordinated {
-            get {
-                return ResourceManager.GetString("BuildNotCoordinated", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Pending.
-        /// </summary>
-        internal static string BuildPending {
-            get {
-                return ResourceManager.GetString("BuildPending", resourceCulture);
-            }
-        }
-
-        /// <summary>
         ///   Looks up a localized string similar to Describe resources in a running AppHost.
         /// </summary>
         internal static string Description {
@@ -133,47 +79,11 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Build.
-        /// </summary>
-        internal static string HeaderBuild {
-            get {
-                return ResourceManager.GetString("HeaderBuild", resourceCulture);
-            }
-        }
-
-        /// <summary>
         ///   Looks up a localized string similar to Health.
         /// </summary>
         internal static string HeaderHealth {
             get {
                 return ResourceManager.GetString("HeaderHealth", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Inherited from.
-        /// </summary>
-        internal static string HeaderInheritedFrom {
-            get {
-                return ResourceManager.GetString("HeaderInheritedFrom", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Groups.
-        /// </summary>
-        internal static string HeaderLaunchGroups {
-            get {
-                return ResourceManager.GetString("HeaderLaunchGroups", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Resource.
-        /// </summary>
-        internal static string HeaderLaunchGroupResource {
-            get {
-                return ResourceManager.GetString("HeaderLaunchGroupResource", resourceCulture);
             }
         }
 
@@ -192,15 +102,6 @@ namespace Aspire.Cli.Resources {
         internal static string HeaderState {
             get {
                 return ResourceManager.GetString("HeaderState", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Startup.
-        /// </summary>
-        internal static string HeaderStartup {
-            get {
-                return ResourceManager.GetString("HeaderStartup", resourceCulture);
             }
         }
 
@@ -241,42 +142,6 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Launch groups:.
-        /// </summary>
-        internal static string LaunchGroupsLabel {
-            get {
-                return ResourceManager.GetString("LaunchGroupsLabel", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to The running AppHost does not support launch-group inspection. Update the AppHost&apos;s Aspire.Hosting.AppHost package and restart it..
-        /// </summary>
-        internal static string LaunchGroupsNotSupported {
-            get {
-                return ResourceManager.GetString("LaunchGroupsNotSupported", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Describe launch groups and resource startup decisions.
-        /// </summary>
-        internal static string LaunchGroupsOptionDescription {
-            get {
-                return ResourceManager.GetString("LaunchGroupsOptionDescription", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to --launch-groups cannot be combined with a resource name, --follow, Mermaid output, --include-hidden, or --include-disabled-commands..
-        /// </summary>
-        internal static string LaunchGroupsOptionsNotSupported {
-            get {
-                return ResourceManager.GetString("LaunchGroupsOptionsNotSupported", resourceCulture);
-            }
-        }
-
-        /// <summary>
         ///   Looks up a localized string similar to The Mermaid output format does not support --follow. Omit --follow to export a resource graph snapshot..
         /// </summary>
         internal static string MermaidFollowNotSupported {
@@ -313,56 +178,11 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Selected launch group:.
-        /// </summary>
-        internal static string SelectedLaunchGroupLabel {
-            get {
-                return ResourceManager.GetString("SelectedLaunchGroupLabel", resourceCulture);
-            }
-        }
-
-        /// <summary>
         ///   Looks up a localized string similar to describe.
         /// </summary>
         internal static string SelectAppHostAction {
             get {
                 return ResourceManager.GetString("SelectAppHostAction", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Default startup.
-        /// </summary>
-        internal static string StartupAutomatic {
-            get {
-                return ResourceManager.GetString("StartupAutomatic", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Excluded by selected group.
-        /// </summary>
-        internal static string StartupExcludedBySelectedGroup {
-            get {
-                return ResourceManager.GetString("StartupExcludedBySelectedGroup", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Excluded from selection.
-        /// </summary>
-        internal static string StartupExcludedFromSelection {
-            get {
-                return ResourceManager.GetString("StartupExcludedFromSelection", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Explicit start.
-        /// </summary>
-        internal static string StartupExplicitStart {
-            get {
-                return ResourceManager.GetString("StartupExplicitStart", resourceCulture);
             }
         }
     }

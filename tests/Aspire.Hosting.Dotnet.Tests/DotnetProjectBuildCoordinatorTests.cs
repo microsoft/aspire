@@ -13,7 +13,6 @@ using System.Text;
 using System.Text.Json;
 using System.Threading.Channels;
 using Aspire.Hosting.ApplicationModel;
-using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Dcp;
 using Aspire.Hosting.Dcp.Model;
 using Aspire.Hosting.Dcp.Process;
@@ -661,23 +660,8 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             var orchestrator = app.Services.GetRequiredService<ApplicationOrchestratorProxy>();
             var worker = builder.Resources.Single(resource => resource.Name == "worker");
             Assert.True(worker.TryGetInstances(out var workerInstances));
-            var lines = new System.Collections.Concurrent.ConcurrentQueue<LogLine>();
-            using var logSubscription = app.Services.GetRequiredService<ResourceLoggerService>().Subscribe(
-                workerInstances[0].Name,
-                batch =>
-                {
-                    foreach (var line in batch)
-                    {
-                        lines.Enqueue(line);
-                    }
-                });
-            var building = app.ResourceNotifications.WaitForResourceAsync("worker", KnownResourceStates.Building, coldStart.Token);
-            var start = orchestrator.StartResourceAsync(workerInstances[0].Name, coldStart.Token);
-            await building;
-            Assert.False(File.Exists(workerSentinel));
-            await start;
+            await orchestrator.StartResourceAsync(workerInstances[0].Name, coldStart.Token);
             await app.ResourceNotifications.WaitForResourceAsync("worker", KnownResourceStates.Finished, coldStart.Token);
-            Assert.Contains(lines, line => line.Content.Contains("[build]", StringComparison.Ordinal));
         }
 
         Assert.True(File.Exists(workerSentinel));
@@ -762,19 +746,12 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
                 var attempt = Interlocked.Increment(ref startCount);
                 Assert.InRange(attempt, 1, 2);
                 var notifications = services.GetRequiredService<ResourceNotificationService>();
-                var capture = services.GetRequiredService<ResourceLoggerService>().BuildOutputCapture;
-                var writerName = Assert.Single(resource.GetResolvedResourceNames());
-                capture.BeginAttempt(writerName);
-                capture.Observe(writerName, $"attempt-{attempt}");
                 await notifications.PublishUpdateAsync(resource, snapshot => snapshot with
                 {
                     State = KnownResourceStates.Starting,
                     ExitCode = null
                 });
                 await builder.Eventing.PublishAsync(new BeforeResourceStartedEvent(resource, services), cancellationToken);
-                BuildOutputCapture.AddFollow(
-                    capture.GetAttempt(writerName, $"attempt-{attempt}"),
-                    [LogEntry.Create(timestamp: null, $"output from attempt {attempt}", isErrorMessage: false)]);
                 started[attempt - 1].TrySetResult();
                 await release[attempt - 1].Task.WaitAsync(cancellationToken);
                 await notifications.PublishUpdateAsync(resource, snapshot => snapshot with
@@ -793,23 +770,6 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         AssertBuildDependency(second.Resource, build);
         await app.ResourceNotifications.PublishUpdateAsync(first.Resource, snapshot => snapshot with { State = KnownResourceStates.Starting });
         await app.ResourceNotifications.PublishUpdateAsync(second.Resource, snapshot => snapshot with { State = KnownResourceStates.Starting });
-        var loggerService = app.Services.GetRequiredService<ResourceLoggerService>();
-        var firstLines = new System.Collections.Concurrent.ConcurrentQueue<LogLine>();
-        var secondLines = new System.Collections.Concurrent.ConcurrentQueue<LogLine>();
-        using var firstLogs = loggerService.Subscribe(Assert.Single(first.Resource.GetResolvedResourceNames()), batch =>
-        {
-            foreach (var line in batch)
-            {
-                firstLines.Enqueue(line);
-            }
-        });
-        using var secondLogs = loggerService.Subscribe(Assert.Single(second.Resource.GetResolvedResourceNames()), batch =>
-        {
-            foreach (var line in batch)
-            {
-                secondLines.Enqueue(line);
-            }
-        });
         const string compilerError = "Worker.cs(1,1): error CS0103: Build failed.";
         var getReadCount = UseBuildOutput(app, build, compilerError);
 
@@ -821,12 +781,10 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             Assert.False(firstStart.IsCompleted);
             Assert.False(secondStart.IsCompleted);
             Assert.Equal(1, Volatile.Read(ref startCount));
-            Assert.True(app.ResourceNotifications.TryGetCurrentState(first.Resource.Name, out var firstBuilding));
-            Assert.Equal(KnownResourceStates.Building, firstBuilding.Snapshot.State?.Text);
-            Assert.True(app.ResourceNotifications.TryGetCurrentState(second.Resource.Name, out var secondBuilding));
-            Assert.Equal(KnownResourceStates.Building, secondBuilding.Snapshot.State?.Text);
-            Assert.Contains(firstLines, line => line.Content.Contains("[build] output from attempt 1", StringComparison.Ordinal));
-            Assert.Contains(secondLines, line => line.Content.Contains("[build] output from attempt 1", StringComparison.Ordinal));
+            Assert.True(app.ResourceNotifications.TryGetCurrentState(first.Resource.Name, out var firstState));
+            Assert.Equal(KnownResourceStates.Starting, firstState.Snapshot.State?.Text);
+            Assert.True(app.ResourceNotifications.TryGetCurrentState(second.Resource.Name, out var secondState));
+            Assert.Equal(KnownResourceStates.Starting, secondState.Snapshot.State?.Text);
 
             release[0].SetResult();
             await app.ResourceNotifications.WaitForResourceAsync(build.Name, KnownResourceStates.Running, timeout.Token);
@@ -853,10 +811,6 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             Assert.False(firstRetry.IsCompleted);
             Assert.False(secondRetry.IsCompleted);
             Assert.Equal(2, Volatile.Read(ref startCount));
-            Assert.Equal(1, firstLines.Count(line => line.Content.Contains("[build] output from attempt 1", StringComparison.Ordinal)));
-            Assert.Equal(1, secondLines.Count(line => line.Content.Contains("[build] output from attempt 1", StringComparison.Ordinal)));
-            Assert.Contains(firstLines, line => line.Content.Contains("[build] output from attempt 2", StringComparison.Ordinal));
-            Assert.Contains(secondLines, line => line.Content.Contains("[build] output from attempt 2", StringComparison.Ordinal));
 
             release[1].SetResult();
             await app.ResourceNotifications.WaitForResourceAsync(build.Name, KnownResourceStates.Running, timeout.Token);
@@ -879,7 +833,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task CancelingOneColdStartKeepsTheSharedBuildAndOtherReporterActive()
+    public async Task CancelingOneColdStartKeepsTheSharedBuildAndOtherWaiterActive()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(
@@ -895,18 +849,12 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         var buildStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var releaseBuild = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var starts = 0;
-        BuildOutputCapture.Attempt? attempt = null;
         builder.Services.AddKeyedSingleton<Func<IResource, CancellationToken, Task>>(
             DistributedApplicationBuilder.ResourceStarterServiceKey,
             (services, _) => async (resource, cancellationToken) =>
             {
                 Interlocked.Increment(ref starts);
                 var notifications = services.GetRequiredService<ResourceNotificationService>();
-                var capture = services.GetRequiredService<ResourceLoggerService>().BuildOutputCapture;
-                var writerName = Assert.Single(resource.GetResolvedResourceNames());
-                capture.BeginAttempt(writerName);
-                capture.Observe(writerName, "build-uid");
-                attempt = capture.GetAttempt(writerName, "build-uid");
                 await notifications.PublishUpdateAsync(resource, snapshot => snapshot with
                 {
                     State = KnownResourceStates.Starting,
@@ -927,25 +875,6 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         await app.ExecuteBeforeStartHooksAsync(timeout.Token);
         await app.ResourceNotifications.PublishUpdateAsync(first.Resource, snapshot => snapshot with { State = KnownResourceStates.Starting });
         await app.ResourceNotifications.PublishUpdateAsync(second.Resource, snapshot => snapshot with { State = KnownResourceStates.Starting });
-        var loggerService = app.Services.GetRequiredService<ResourceLoggerService>();
-        var firstLines = new System.Collections.Concurrent.ConcurrentQueue<LogLine>();
-        var secondLines = new System.Collections.Concurrent.ConcurrentQueue<LogLine>();
-        using var firstLogs = loggerService.Subscribe(Assert.Single(first.Resource.GetResolvedResourceNames()),
-            batch =>
-            {
-                foreach (var line in batch)
-                {
-                    firstLines.Enqueue(line);
-                }
-            });
-        using var secondLogs = loggerService.Subscribe(Assert.Single(second.Resource.GetResolvedResourceNames()),
-            batch =>
-            {
-                foreach (var line in batch)
-                {
-                    secondLines.Enqueue(line);
-                }
-            });
         using var firstCancellation = CancellationTokenSource.CreateLinkedTokenSource(timeout.Token);
 
         try
@@ -953,7 +882,6 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             var firstStart = builder.Eventing.PublishAsync(new BeforeResourceStartedEvent(first.Resource, app.Services), firstCancellation.Token);
             var secondStart = builder.Eventing.PublishAsync(new BeforeResourceStartedEvent(second.Resource, app.Services), timeout.Token);
             await buildStarted.Task.WaitAsync(timeout.Token);
-            await app.ResourceNotifications.WaitForResourceAsync(second.Resource.Name, KnownResourceStates.Building, timeout.Token);
             firstCancellation.Cancel();
             await Assert.ThrowsAnyAsync<OperationCanceledException>(() => firstStart);
             Assert.False(secondStart.IsCompleted);
@@ -961,12 +889,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             Assert.True(app.ResourceNotifications.TryGetCurrentState(first.Resource.Name, out var firstState));
             Assert.Equal(KnownResourceStates.Starting, firstState.Snapshot.State?.Text);
             Assert.True(app.ResourceNotifications.TryGetCurrentState(second.Resource.Name, out var secondState));
-            Assert.Equal(KnownResourceStates.Building, secondState.Snapshot.State?.Text);
-
-            Assert.NotNull(attempt);
-            BuildOutputCapture.AddFollow(attempt, [LogEntry.Create(timestamp: null, "shared build continues", isErrorMessage: false)]);
-            Assert.Empty(firstLines);
-            Assert.Contains(secondLines, line => line.Content.Contains("[build] shared build continues", StringComparison.Ordinal));
+            Assert.Equal(KnownResourceStates.Starting, secondState.Snapshot.State?.Text);
             releaseBuild.TrySetResult();
             await secondStart.WaitAsync(timeout.Token);
             Assert.Equal(1, Volatile.Read(ref starts));
@@ -1250,14 +1173,6 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             resource => ReferenceEquals(resource.Parent, first.Resource));
         Assert.True(build.HasAnnotationOfType<ExplicitStartupAnnotation>());
         UseBuildOutput(app, rebuilder, "Worker.cs(1,1): error CS0103: Build failed.");
-        var loggerService = app.Services.GetRequiredService<ResourceLoggerService>();
-        var capture = loggerService.BuildOutputCapture;
-        var rebuilderName = Assert.Single(rebuilder.GetResolvedResourceNames());
-        capture.BeginAttempt(rebuilder, rebuilderName);
-        capture.Observe(rebuilderName, "rebuilder-uid");
-        var attempt = capture.GetAttempt(rebuilderName, "rebuilder-uid");
-        Assert.NotNull(attempt);
-        BuildOutputCapture.AddFollow(attempt, [LogEntry.Create(timestamp: null, "earlier rebuild output", isErrorMessage: false)]);
         await app.ResourceNotifications.PublishUpdateAsync(rebuilder, snapshot => snapshot with
         {
             State = KnownResourceStates.Starting,
@@ -1266,15 +1181,6 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         await builder.Eventing.PublishAsync(new BeforeResourceStartedEvent(rebuilder, app.Services), timeout.Token);
 
         await app.ResourceNotifications.PublishUpdateAsync(second.Resource, snapshot => snapshot with { State = KnownResourceStates.Starting });
-        var lines = new System.Collections.Concurrent.ConcurrentQueue<LogLine>();
-        using var logs = loggerService.Subscribe(Assert.Single(second.Resource.GetResolvedResourceNames()),
-            batch =>
-            {
-                foreach (var line in batch)
-                {
-                    lines.Enqueue(line);
-                }
-            });
         var start = builder.Eventing.PublishAsync(new BeforeResourceStartedEvent(second.Resource, app.Services), timeout.Token);
         var completion = Assert.Single(second.Resource.Annotations.OfType<DotnetProgramBuildCompletionAnnotation>());
         var consumer = completion.Callback(app.Services, timeout.Token);
@@ -1286,11 +1192,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => canceledWait);
         Assert.False(consumer.IsCompleted);
         Assert.True(app.ResourceNotifications.TryGetCurrentState(second.Resource.Name, out var secondState));
-        Assert.Equal(KnownResourceStates.Building, secondState.Snapshot.State?.Text);
-        Assert.Contains(lines, line => line.Content.Contains("[build] earlier rebuild output", StringComparison.Ordinal));
-        BuildOutputCapture.AddFollow(attempt, [LogEntry.Create(timestamp: null, "current rebuild output", isErrorMessage: false)]);
-        Assert.Contains(lines, line => line.Content.Contains("[build] current rebuild output", StringComparison.Ordinal));
-        BuildOutputCapture.Complete(attempt);
+        Assert.Equal(KnownResourceStates.Starting, secondState.Snapshot.State?.Text);
         await app.ResourceNotifications.PublishUpdateAsync(rebuilder, snapshot => snapshot with
         {
             State = finalState,
@@ -1757,42 +1659,24 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         var orchestrator = app.Services.GetRequiredService<ApplicationOrchestratorProxy>();
         var worker = builder.Resources.Single(resource => resource.Name == "worker");
         Assert.True(worker.TryGetInstances(out var workerInstances));
-        var lines = new System.Collections.Concurrent.ConcurrentQueue<LogLine>();
-        using var logs = app.Services.GetRequiredService<ResourceLoggerService>().Subscribe(
-            workerInstances[0].Name,
-            batch =>
-            {
-                foreach (var line in batch)
-                {
-                    lines.Enqueue(line);
-                }
-            });
         var failure = await Assert.ThrowsAsync<DistributedApplicationException>(
             () => orchestrator.StartResourceAsync(workerInstances[0].Name, timeout.Token));
         Assert.Contains("coordinated .NET build failed with exit code 1", failure.Message);
+        Assert.Contains("error CS", failure.Message, StringComparison.Ordinal);
         await app.ResourceNotifications.WaitForResourceAsync("worker", KnownResourceStates.FailedToStart, timeout.Token);
         Assert.False(File.Exists(workerSentinel));
-        var failedBuildLines = lines.Count;
-        var compilerErrors = lines.Count(line => line.Content.Contains("error CS", StringComparison.Ordinal));
-        Assert.True(compilerErrors > 0);
 
-        // A retry can fail before creating a replacement DCP resource, leaving the previous UID observable.
+        // A retry can fail before creating a replacement DCP resource.
         var configurationFailure = await Assert.ThrowsAsync<InvalidOperationException>(
             () => orchestrator.StartResourceAsync(workerInstances[0].Name, timeout.Token));
         Assert.Contains(configurationFailureMarker, configurationFailure.ToString(), StringComparison.Ordinal);
         Assert.False(File.Exists(workerSentinel));
-        Assert.Equal(compilerErrors, lines.Count(line => line.Content.Contains("error CS", StringComparison.Ordinal)));
-        var configurationFailures = lines.Count(line => line.Content.Contains(configurationFailureMarker, StringComparison.Ordinal));
-        Assert.True(configurationFailures > 0);
 
         File.WriteAllText(workerProgram, workingProgram);
         await StartColdAsync(app, orchestrator, builder, "worker", timeout.Token);
 
         Assert.Equal("shared", File.ReadAllText(workerSentinel));
         Assert.Equal(2, File.ReadAllLines(GetBuildCountPath(workerProject)).Length);
-        Assert.True(lines.Count > failedBuildLines);
-        Assert.Equal(compilerErrors, lines.Count(line => line.Content.Contains("error CS", StringComparison.Ordinal)));
-        Assert.Equal(configurationFailures, lines.Count(line => line.Content.Contains(configurationFailureMarker, StringComparison.Ordinal)));
 
         await app.StopAsync(timeout.Token);
     }
@@ -1835,33 +1719,16 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         var orchestrator = app.Services.GetRequiredService<ApplicationOrchestratorProxy>();
         var worker = builder.Resources.Single(resource => resource.Name == "worker");
         Assert.True(worker.TryGetInstances(out var instances));
-        var lines = new System.Collections.Concurrent.ConcurrentQueue<LogLine>();
-        using var logs = app.Services.GetRequiredService<ResourceLoggerService>().Subscribe(
-            instances[0].Name,
-            batch =>
-            {
-                foreach (var line in batch)
-                {
-                    lines.Enqueue(line);
-                }
-            });
-
         var failure = await Assert.ThrowsAsync<InvalidOperationException>(
             () => orchestrator.StartResourceAsync(instances[0].Name, timeout.Token));
         Assert.Contains(failureMarker, failure.ToString(), StringComparison.Ordinal);
         Assert.False(File.Exists(workerSentinel));
         Assert.False(File.Exists(GetBuildCountPath(workerProject)));
-        Assert.Contains(lines, line => line.Content.Contains(failureMarker, StringComparison.Ordinal));
-        var failuresBeforeRetry = lines.Count(line => line.Content.Contains(failureMarker, StringComparison.Ordinal));
 
         await StartColdAsync(app, orchestrator, builder, "worker", timeout.Token);
 
         Assert.Equal("shared", File.ReadAllText(workerSentinel));
         Assert.Single(File.ReadAllLines(GetBuildCountPath(workerProject)));
-        Assert.Contains(lines, line =>
-            line.Content.Contains("[build]", StringComparison.Ordinal) &&
-            line.Content.Contains("Worker.dll", StringComparison.Ordinal));
-        Assert.Equal(failuresBeforeRetry, lines.Count(line => line.Content.Contains(failureMarker, StringComparison.Ordinal)));
 
         await app.StopAsync(timeout.Token);
     }
@@ -3494,7 +3361,11 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         bool restoreProjectsIndividually)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var projectRoot = workspace.CreateDirectory("projects").FullName;
+
+        // NuGet locks packages by path. macOS /var and /private/var aliases must not
+        // let different projects extract concurrently into the same cold package cache.
+        var workspaceRoot = PathNormalizer.ResolveToFilesystemPath(workspace.Path);
+        var projectRoot = Directory.CreateDirectory(Path.Combine(workspaceRoot, "projects")).FullName;
         // A local build-only package exercises restored imports without network access or targeting packs.
         var feed = Directory.CreateDirectory(Path.Combine(projectRoot, "feed")).FullName;
         CreateRestoreTestPackage(feed, "1.0.0");
@@ -3564,12 +3435,12 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         firstProject = Path.Combine(escapedDirectory, Path.GetFileName(firstProject));
         using var buildResource = new DotnetProjectBuildResource(
             "build",
-            workspace.Path,
-            Path.Combine(workspace.Path, "obj", ".aspire", "build"),
+            workspaceRoot,
+            Path.Combine(workspaceRoot, "obj", ".aspire", "build"),
             TimeProvider.System);
         buildResource.ConfigureTraversalBuild(
             [firstProject, secondProject],
-            workspace.Path,
+            workspaceRoot,
             "DebugLocal",
             restoreProjectsIndividually);
 

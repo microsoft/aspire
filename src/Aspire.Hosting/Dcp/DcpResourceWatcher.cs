@@ -369,21 +369,18 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
                     // recorded as complete. The marker is cleared below if the resource is restarted.
                     var logsAvailable = HasLogsAvailable(resource);
                     var isTerminal = status.State is not null && KnownResourceStates.TerminalStates.Contains(status.State);
-                    var buildAttempt = _loggerService.BuildOutputCapture.GetAttempt(resource.Metadata.Name, resource.Metadata.Uid);
                     if (isTerminal)
                     {
                         if (logsAvailable &&
                             _loggerService.HasActiveSubscribers(resource.Metadata.Name) &&
                             !_allLogsFlushed.ContainsKey(resource.Metadata.Name))
                         {
-                            var completed = await FlushCurrentLogsAsync(resource, status, buildAttempt, _shutdownToken).ConfigureAwait(false);
+                            var completed = await FlushCurrentLogsAsync(resource, status, _shutdownToken).ConfigureAwait(false);
                             if (completed)
                             {
                                 _allLogsFlushed.TryAdd(resource.Metadata.Name, true);
                             }
                         }
-
-                        BuildOutputCapture.Complete(buildAttempt);
                     }
                     else
                     {
@@ -479,7 +476,7 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
         return null;
     }
 
-    private async Task<bool> FlushCurrentLogsAsync<T>(T resource, ResourceStatus status, BuildOutputCapture.Attempt? buildAttempt, CancellationToken cancellationToken)
+    private async Task<bool> FlushCurrentLogsAsync<T>(T resource, ResourceStatus status, CancellationToken cancellationToken)
         where T : CustomResource, IKubernetesStaticMetadata
     {
         var logEntries = new List<LogEntry>();
@@ -540,7 +537,6 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
         // them as in-memory entries; otherwise GetAllAsync would replay them before querying
         // the same DCP log source again.
         SetPendingFollowLogDeduplication(resource.Metadata.Name, resource.Metadata.Uid, logEntries);
-        BuildOutputCapture.AddTerminal(buildAttempt, logEntries);
         _loggerService.AddLogEntries(resource.Metadata.Name, logEntries, inMemorySource: false, skipExisting: true);
 
         // Only normal completion of a follow stream proves DCP has no more logs to deliver.
@@ -666,9 +662,7 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
         }
 
         var resourceName = resource.Metadata.Name;
-        var logStream = new LogStreamState(
-            resource.Metadata.Uid,
-            _loggerService.BuildOutputCapture.GetAttempt(resourceName, resource.Metadata.Uid));
+        var logStream = new LogStreamState(resource.Metadata.Uid);
         var cancellationToken = logStream.CancellationToken;
 
         try
@@ -706,7 +700,6 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
 
                         logStream.TryDeliver(() =>
                         {
-                            BuildOutputCapture.AddFollow(logStream.BuildAttempt, logEntries);
                             logEntries = DeduplicateFollowBatch(resourceName, logStream, logEntries);
                             _loggerService.AddLogEntries(resourceName, logEntries, inMemorySource: false, skipExisting: false);
                         });
@@ -1117,7 +1110,6 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
                 // keeping the stale instance would leave the map disagreeing with both the version
                 // recorded here and the snapshot published to subscribers.
                 _observedResources[resourceKey] = new(resourceUid, resourceVersion);
-                _loggerService.BuildOutputCapture.Observe(resource.Metadata.Name, resourceUid);
                 map[resource.Metadata.Name] = resource;
                 return isReplacement ? ResourceChangeResult.Replaced : ResourceChangeResult.Updated;
 
@@ -1159,7 +1151,7 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
         Deleted
     }
 
-    private sealed class LogStreamState(string? resourceUid, BuildOutputCapture.Attempt? buildAttempt) : IDisposable
+    private sealed class LogStreamState(string? resourceUid) : IDisposable
     {
         private readonly object _lock = new();
         private readonly CancellationTokenSource _cancellation = new();
@@ -1181,7 +1173,6 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
         public Task Task => _completion.Task;
 
         public string? ResourceUid { get; } = resourceUid;
-        public BuildOutputCapture.Attempt? BuildAttempt { get; } = buildAttempt;
 
         // Access is guarded by the owning DcpResourceWatcher's pending-deduplication lock.
         public PendingFollowLogDeduplication? PendingDeduplication { get; set; }

@@ -1752,7 +1752,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
                  hostingVersion.ComparePrecedenceTo(s_minimumLaunchGroupHostingVersion) < 0))
             {
                 _interactionService.DisplayError(string.Format(System.Globalization.CultureInfo.CurrentCulture,
-                    ErrorStrings.AppHostIncompatibleWithCli, AuxiliaryBackchannelCapabilities.LaunchGroups_V1));
+                    ErrorStrings.AppHostIncompatibleWithCli, "--launch-group"));
                 context.BuildCompletionSource?.TrySetResult(false);
                 return (CliExitCodes.FailedToDotnetRunAppHost, builtByCli, deferBuildCompletion);
             }

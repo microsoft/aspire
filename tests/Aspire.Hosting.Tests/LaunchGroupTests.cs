@@ -10,7 +10,6 @@ using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using Aspire.Dashboard.Model;
-using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Orchestrator;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Utils;

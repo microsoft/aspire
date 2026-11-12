@@ -60,38 +60,6 @@ public class AppHostAuxiliaryBackchannelTests
     }
 
     [Fact]
-    public async Task GetLaunchGroupsAsync_WhenCapabilityAdvertised_ReturnsResponse()
-    {
-        using var server = TestAppHostBackchannelServer.Start(supportsLaunchGroups: true);
-        using var backchannel = await server.ConnectAsync().DefaultTimeout();
-
-        var response = await backchannel.GetLaunchGroupsAsync().DefaultTimeout();
-
-        Assert.True(backchannel.SupportsLaunchGroupsV1);
-        Assert.NotNull(response);
-        Assert.Equal("catalog", response.SelectedGroup);
-        Assert.Equal(["catalog", "empty"], response.Groups);
-        var resource = Assert.Single(response.Resources);
-        Assert.Equal("api", resource.Name);
-        Assert.Equal(["catalog"], resource.Groups);
-        Assert.Equal(LaunchGroupBuildType.Initial, resource.BuildType);
-        Assert.Equal(1, server.Target.GetLaunchGroupsCallCount);
-    }
-
-    [Fact]
-    public async Task GetLaunchGroupsAsync_WhenCapabilityMissing_ReturnsNullWithoutCallingRpc()
-    {
-        using var server = TestAppHostBackchannelServer.Start();
-        using var backchannel = await server.ConnectAsync().DefaultTimeout();
-
-        var response = await backchannel.GetLaunchGroupsAsync().DefaultTimeout();
-
-        Assert.False(backchannel.SupportsLaunchGroupsV1);
-        Assert.Null(response);
-        Assert.Equal(0, server.Target.GetLaunchGroupsCallCount);
-    }
-
-    [Fact]
     public async Task GetTerminalInfoAsync_WhenTerminalsCapabilityMissing_ReturnsUnavailableWithoutCallingRpc()
     {
         // Terminals_V1 is absent from the server capabilities. The
@@ -144,17 +112,17 @@ public class AppHostAuxiliaryBackchannelTests
         private readonly List<IDisposable> _disposables = [];
         private readonly TaskCompletionSource _clientDisconnected = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        private TestAppHostBackchannelServer(string? stalledMethod, bool supportsLaunchGroups)
+        private TestAppHostBackchannelServer(string? stalledMethod)
         {
             _listener = new TcpListener(IPAddress.Loopback, 0);
-            Target = new TestAppHostRpcTarget(stalledMethod, supportsLaunchGroups);
+            Target = new TestAppHostRpcTarget(stalledMethod);
         }
 
         public TestAppHostRpcTarget Target { get; }
 
-        public static TestAppHostBackchannelServer Start(string? stalledMethod = null, bool supportsLaunchGroups = false)
+        public static TestAppHostBackchannelServer Start(string? stalledMethod = null)
         {
-            var server = new TestAppHostBackchannelServer(stalledMethod, supportsLaunchGroups);
+            var server = new TestAppHostBackchannelServer(stalledMethod);
             server._listener.Start();
 
             return server;
@@ -210,32 +178,21 @@ public class AppHostAuxiliaryBackchannelTests
         private readonly string? _stalledMethod;
         private readonly TaskCompletionSource _stalledMethodEntered = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly TaskCompletionSource _releaseStall = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        private readonly string[] _capabilities;
+        private readonly string[] _capabilities =
+        [
+            AuxiliaryBackchannelCapabilities.V1,
+            AuxiliaryBackchannelCapabilities.V2,
+            AuxiliaryBackchannelCapabilities.ResourceSnapshotVersions_V1
+        ];
 
-        public TestAppHostRpcTarget(string? stalledMethod, bool supportsLaunchGroups)
+        public TestAppHostRpcTarget(string? stalledMethod)
         {
             _stalledMethod = stalledMethod;
-            _capabilities = supportsLaunchGroups
-                ?
-                [
-                    AuxiliaryBackchannelCapabilities.V1,
-                    AuxiliaryBackchannelCapabilities.V2,
-                    AuxiliaryBackchannelCapabilities.ResourceSnapshotVersions_V1,
-                    AuxiliaryBackchannelCapabilities.LaunchGroups_V1
-                ]
-                :
-                [
-                    AuxiliaryBackchannelCapabilities.V1,
-                    AuxiliaryBackchannelCapabilities.V2,
-                    AuxiliaryBackchannelCapabilities.ResourceSnapshotVersions_V1
-                ];
         }
 
         public GetResourcesRequest? GetResourcesRequest { get; private set; }
 
         public WatchResourcesRequest? WatchResourcesRequest { get; private set; }
-
-        public int GetLaunchGroupsCallCount { get; private set; }
 
         public async Task<AppHostInformation> GetAppHostInformationAsync(CancellationToken cancellationToken = default)
         {
@@ -269,28 +226,6 @@ public class AppHostAuxiliaryBackchannelTests
             return Task.FromResult(new GetResourcesResponse
             {
                 Resources = [CreateResourceSnapshot()]
-            });
-        }
-
-        public Task<GetLaunchGroupsResponse> GetLaunchGroupsAsync(GetLaunchGroupsRequest? request = null, CancellationToken cancellationToken = default)
-        {
-            _ = request;
-            _ = cancellationToken;
-            GetLaunchGroupsCallCount++;
-
-            return Task.FromResult(new GetLaunchGroupsResponse
-            {
-                SelectedGroup = "catalog",
-                Groups = ["catalog", "empty"],
-                Resources =
-                [
-                    new LaunchGroupResourceInfo
-                    {
-                        Name = "api",
-                        Groups = ["catalog"],
-                        BuildType = LaunchGroupBuildType.Initial
-                    }
-                ]
             });
         }
 

@@ -532,7 +532,6 @@ public static class DotnetProjectHostingExtensions
         await coordinator.WaitForBuildCompletionAsync(
             resource,
             services,
-            startEvent: null,
             cancellationToken).ConfigureAwait(false);
 
         return await resolver(cancellationToken).ConfigureAwait(false);

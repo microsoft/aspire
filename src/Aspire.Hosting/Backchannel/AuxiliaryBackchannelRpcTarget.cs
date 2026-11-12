@@ -10,7 +10,6 @@ using System.Threading.Channels;
 using Aspire.Dashboard.Model;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Diagnostics;
-using Aspire.Hosting.Orchestrator;
 using Aspire.Shared;
 using Aspire.Shared.ConsoleLogs;
 using Microsoft.Extensions.Configuration;
@@ -44,28 +43,23 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
     /// <param name="request">The request (currently unused, for future expansion).</param>
     /// <param name="cancellationToken">A cancellation token.</param>
     /// <returns>The capabilities response containing supported versions.</returns>
+#pragma warning disable CA1822 // Mark members as static - RPC methods cannot be static
     public Task<GetCapabilitiesResponse> GetCapabilitiesAsync(GetCapabilitiesRequest? request = null, CancellationToken cancellationToken = default)
+#pragma warning restore CA1822
     {
         _ = cancellationToken;
         using var activity = profilingTelemetry.StartJsonRpcServerCall(nameof(GetCapabilitiesAsync), streaming: false, request?.TraceContext);
 
-        var capabilities = new List<string>
-        {
-            AuxiliaryBackchannelCapabilities.V1,
-            AuxiliaryBackchannelCapabilities.V2,
-            AuxiliaryBackchannelCapabilities.V3,
-            AuxiliaryBackchannelCapabilities.Terminals_V1,
-            AuxiliaryBackchannelCapabilities.ResourceSnapshotVersions_V1
-        };
-        // Inspect mode skips before-start hooks, so it has no finalized startup plan to advertise.
-        if (serviceProvider.GetService<LaunchGroupMetadataService>()?.GetInformationOrDefault() is not null)
-        {
-            capabilities.Add(AuxiliaryBackchannelCapabilities.LaunchGroups_V1);
-        }
-
         return Task.FromResult(new GetCapabilitiesResponse
         {
-            Capabilities = capabilities.ToArray()
+            Capabilities =
+            [
+                AuxiliaryBackchannelCapabilities.V1,
+                AuxiliaryBackchannelCapabilities.V2,
+                AuxiliaryBackchannelCapabilities.V3,
+                AuxiliaryBackchannelCapabilities.Terminals_V1,
+                AuxiliaryBackchannelCapabilities.ResourceSnapshotVersions_V1
+            ]
         });
     }
 
@@ -145,16 +139,6 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         {
             Resources = snapshots.ToArray()
         };
-    }
-
-    /// <summary>
-    /// Gets the effective launch-group metadata for the running AppHost.
-    /// </summary>
-    public Task<GetLaunchGroupsResponse> GetLaunchGroupsAsync(GetLaunchGroupsRequest? request = null, CancellationToken cancellationToken = default)
-    {
-        _ = cancellationToken;
-        using var activity = profilingTelemetry.StartJsonRpcServerCall(nameof(GetLaunchGroupsAsync), streaming: false, request?.TraceContext);
-        return Task.FromResult(serviceProvider.GetRequiredService<LaunchGroupMetadataService>().GetInformation());
     }
 
     /// <summary>

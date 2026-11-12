@@ -70,11 +70,6 @@ internal interface IAppHostAuxiliaryBackchannel : IDisposable
     bool SupportsResourceSnapshotVersionsV1 { get; }
 
     /// <summary>
-    /// Gets a value indicating whether the AppHost exposes effective launch-group metadata.
-    /// </summary>
-    bool SupportsLaunchGroupsV1 { get; }
-
-    /// <summary>
     /// Gets the Dashboard URLs from the AppHost.
     /// </summary>
     /// <param name="cancellationToken">Cancellation token.</param>
@@ -87,13 +82,6 @@ internal interface IAppHostAuxiliaryBackchannel : IDisposable
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The AppHost startup readiness response, or null if unavailable.</returns>
     Task<WaitForAppHostReadyResponse?> WaitForAppHostReadyAsync(CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Gets the running AppHost's effective launch-group metadata.
-    /// </summary>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>The launch-group response, or <see langword="null"/> when the AppHost does not support it.</returns>
-    Task<GetLaunchGroupsResponse?> GetLaunchGroupsAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Gets the current resource snapshots from the AppHost.
