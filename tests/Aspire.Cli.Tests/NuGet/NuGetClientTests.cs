@@ -24,6 +24,52 @@ namespace Aspire.Cli.Tests.NuGet;
 public class NuGetClientTests(ITestOutputHelper outputHelper)
 {
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AcquirePackageAsync_OnlyNonIsolatedAcquisitionCanUseAmbientFallbackFolders(bool bypassCaches)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var feed = workspace.CreateDirectory("feed");
+        var fallback = workspace.CreateDirectory("fallback");
+        var packages = workspace.CreateDirectory("packages");
+        const string packageId = "Aspire.UpdateValidation.Sdk";
+        const string version = "1.0.0";
+        NuGetTestHelper.CreatePackage(feed, packageId, version, new Dictionary<string, string>
+        {
+            ["Sdk/Sdk.props"] = "<Project />"
+        });
+        new XDocument(new XElement("configuration",
+            new XElement("packageSources",
+                new XElement("clear"),
+                new XElement("add", new XAttribute("key", "fixture"), new XAttribute("value", feed.FullName))),
+            new XElement("fallbackPackageFolders",
+                new XElement("clear"),
+                new XElement("add", new XAttribute("key", "fixture"), new XAttribute("value", fallback.FullName)))))
+            .Save(Path.Combine(workspace.Path, "nuget.config"));
+        var client = NuGetTestHelper.CreateClient();
+        await client.AcquirePackageAsync((packageId, version), workspace.CreateDirectory("seed").FullName,
+            workspace.Path, fallback.FullName, sensitiveSources: [], bypassCaches: true, TestContext.Current.CancellationToken);
+        File.Delete(Path.Combine(feed.FullName, $"{packageId}.{version}.nupkg"));
+        var restoreDirectory = workspace.CreateDirectory("restore");
+
+        Task AcquireAsync() => client.AcquirePackageAsync(
+            (packageId, version), restoreDirectory.FullName, workspace.Path, packages.FullName,
+            sensitiveSources: [], bypassCaches, TestContext.Current.CancellationToken);
+
+        if (bypassCaches)
+        {
+            var failure = await Assert.ThrowsAsync<NuGetOperationException>(AcquireAsync);
+            Assert.Contains(packageId, failure.Output);
+        }
+        else
+        {
+            await AcquireAsync();
+        }
+        Assert.True(File.Exists(Path.Combine(fallback.FullName, packageId.ToLowerInvariant(), version, "Sdk", "Sdk.props")));
+        Assert.Empty(packages.EnumerateFileSystemInfos());
+    }
+
+    [Theory]
     [InlineData(3999, false)]
     [InlineData(4000, true)]
     [InlineData(4001, true)]

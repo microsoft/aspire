@@ -3049,6 +3049,11 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
 
             options.ProjectLocatorFactory = _ => new TestProjectLocator()
             {
+                FindAppHostProjectFilesAsyncCallback = (_, _, _, skipValidation) =>
+                {
+                    Assert.True(skipValidation);
+                    return Task.FromResult(new List<FileInfo> { new(Path.Combine(projectDirectory.FullName, appHostFileName)) });
+                },
                 UseOrFindAppHostProjectFileAsyncCallback = (projectFile, _, _) =>
                 {
                     return Task.FromResult<FileInfo?>(new FileInfo(Path.Combine(projectDirectory.FullName, appHostFileName)));

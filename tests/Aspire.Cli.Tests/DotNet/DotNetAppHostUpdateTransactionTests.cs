@@ -12,6 +12,32 @@ namespace Aspire.Cli.Tests.DotNet;
 
 public class DotNetAppHostUpdateTransactionTests(ITestOutputHelper outputHelper)
 {
+    [Fact]
+    public async Task Backups_NonInteractiveRefusesBeforeCallingPromptService()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var file = new FileInfo(Path.Combine(workspace.Path, "apphost.cs"));
+        await File.WriteAllTextAsync(file.FullName, "// current");
+        var backup = file.FullName + ".aspire-backup";
+        await File.WriteAllTextAsync(backup, "// previous recovery copy");
+        var interaction = new TestInteractionService
+        {
+            ConfirmCallback = (_, _) => throw new InvalidOperationException("Non-interactive runs must not prompt, including through an extension.")
+        };
+        await using var transaction = new DotNetAppHostUpdateTransaction(new Dictionary<string, byte[]?>
+        {
+            [PathNormalizer.ResolveToFilesystemPath(file.FullName)] = await File.ReadAllBytesAsync(file.FullName)
+        });
+
+        var error = await Assert.ThrowsAsync<ProjectUpdaterException>(() =>
+            transaction.PrepareBackupsAsync([file], interaction, supportsInteractiveInput: false, TestContext.Current.CancellationToken));
+
+        Assert.Equal(UpdateCommandStrings.DryRunBackupsNotReplaced, error.Message);
+        Assert.Empty(interaction.BooleanPromptCalls);
+        Assert.Equal("// previous recovery copy", await File.ReadAllTextAsync(backup));
+        Assert.Equal("// current", await File.ReadAllTextAsync(file.FullName));
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
@@ -30,7 +56,7 @@ public class DotNetAppHostUpdateTransactionTests(ITestOutputHelper outputHelper)
             [PathNormalizer.ResolveToFilesystemPath(file.FullName)] = original
         }))
         {
-            await transaction.PrepareBackupsAsync([file], new TestInteractionService(), TestContext.Current.CancellationToken);
+            await transaction.PrepareBackupsAsync([file], new TestInteractionService(), supportsInteractiveInput: true, TestContext.Current.CancellationToken);
             Assert.Equal(original ?? [], await File.ReadAllBytesAsync(backup));
             await transaction.ApplyAsync([file], () => File.WriteAllTextAsync(file.FullName, "// staged"),
                 TestContext.Current.CancellationToken);
@@ -65,7 +91,7 @@ public class DotNetAppHostUpdateTransactionTests(ITestOutputHelper outputHelper)
         {
             if (replace)
             {
-                await transaction.PrepareBackupsAsync([file], interaction, TestContext.Current.CancellationToken);
+                await transaction.PrepareBackupsAsync([file], interaction, supportsInteractiveInput: true, TestContext.Current.CancellationToken);
                 Assert.Equal("// current", await File.ReadAllTextAsync(backup));
                 await transaction.ApplyAsync([file], () => File.WriteAllTextAsync(file.FullName, "// staged"),
                     TestContext.Current.CancellationToken);
@@ -73,7 +99,7 @@ public class DotNetAppHostUpdateTransactionTests(ITestOutputHelper outputHelper)
             else
             {
                 var error = await Assert.ThrowsAsync<ProjectUpdaterException>(() =>
-                    transaction.PrepareBackupsAsync([file], interaction, TestContext.Current.CancellationToken));
+                    transaction.PrepareBackupsAsync([file], interaction, supportsInteractiveInput: true, TestContext.Current.CancellationToken));
                 Assert.Equal(UpdateCommandStrings.DryRunBackupsNotReplaced, error.Message);
                 Assert.Equal("// previous recovery copy", await File.ReadAllTextAsync(backup));
             }
@@ -92,7 +118,7 @@ public class DotNetAppHostUpdateTransactionTests(ITestOutputHelper outputHelper)
         {
             [PathNormalizer.ResolveToFilesystemPath(file.FullName)] = await File.ReadAllBytesAsync(file.FullName)
         });
-        await transaction.PrepareBackupsAsync([file], new TestInteractionService(), TestContext.Current.CancellationToken);
+        await transaction.PrepareBackupsAsync([file], new TestInteractionService(), supportsInteractiveInput: true, TestContext.Current.CancellationToken);
         await transaction.ApplyAsync([file], () => File.WriteAllTextAsync(file.FullName, "// staged"),
             TestContext.Current.CancellationToken);
         await File.WriteAllTextAsync(file.FullName, "// external");

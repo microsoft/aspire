@@ -140,17 +140,8 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
 
         if (restoreFails)
         {
-            var context = new UpdatePackagesContext
-            {
-                AppHostFile = appHost,
-                Channel = channel,
-                HasExplicitChannel = true,
-                DryRun = true,
-                ConfirmBinding = PromptBinding.CreateDefault(true),
-                NuGetConfigDirBinding = PromptBinding.CreateDefault<string?>(null)
-            };
             await Assert.ThrowsAsync<ProjectUpdaterException>(() =>
-                updater.UpdateProjectAsync(context).DefaultTimeout());
+                updater.UpdateProjectAsync(CreateUpdateContext(appHost, channel, dryRun: true)).DefaultTimeout());
             Assert.Equal(
                 [
                     (OutputLineStream.StdOut, "AppHost.csproj : error NU1102: Unable to find package Aspire.Hosting.Foundry with version (>= 17.0.0-preview.1)"),
@@ -318,7 +309,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         if (restoreFails)
         {
             await Assert.ThrowsAsync<ProjectUpdaterException>(() =>
-                updater.UpdateProjectAsync(CreateUpdateContext(appHost, channel)).DefaultTimeout());
+                updater.UpdateProjectAsync(CreateUpdateContext(appHost, channel, dryRun: true)).DefaultTimeout());
             Assert.Equal(1, restoreCount);
             Assert.Equal(importedContent, await File.ReadAllTextAsync(Path.Combine(workspace.WorkspaceRoot.FullName, "Directory.Build.props")));
             Assert.Equal(original, await File.ReadAllTextAsync(appHost.FullName));
@@ -2151,12 +2142,13 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         });
     }
 
-    private static UpdatePackagesContext CreateUpdateContext(FileInfo appHostFile, PackageChannel channel) =>
+    private static UpdatePackagesContext CreateUpdateContext(FileInfo appHostFile, PackageChannel channel, bool dryRun = false) =>
         new()
         {
             AppHostFile = appHostFile,
             Channel = channel,
             HasExplicitChannel = channel.Type == PackageChannelType.Explicit,
+            DryRun = dryRun,
             ConfirmBinding = PromptBinding.CreateDefault(true),
             NuGetConfigDirBinding = PromptBinding.CreateDefault<string?>(null),
         };
@@ -4175,13 +4167,12 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
     // others were still on stable versions that didn't, and the new mapping blocked fallback
     // to nuget.org -> NU1103.
     //
-    // The fix passes --no-restore to per-package adds and runs a single deferred restore at the
-    // end. This test pins both halves of that contract:
-    //   1. every per-package add was invoked with noRestore=true, and
-    //   2. exactly one restore was invoked, and
-    //   3. the restore came after all the package adds (not interleaved with them).
-    [Fact]
-    public async Task UpdateProjectFileAsync_AppliesAllPackageEditsBeforeFinalRestore()
+    // Per-package adds must not restore a partially updated graph. Explicit channel updates
+    // restore only in dry-run mode, after every candidate package edit is staged.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task UpdateProjectFileAsync_RestoresCompleteChannelGraphOnlyDuringDryRun(bool dryRun)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
@@ -4274,9 +4265,9 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         var dailyChannel = channels.Single(c => c.Name == "daily");
 
         var projectUpdater = provider.GetRequiredService<IProjectUpdater>();
-        var updateResult = await projectUpdater.UpdateProjectAsync(CreateUpdateContext(appHostProjectFile, dailyChannel)).DefaultTimeout();
+        var updateResult = await projectUpdater.UpdateProjectAsync(CreateUpdateContext(appHostProjectFile, dailyChannel, dryRun)).DefaultTimeout();
 
-        Assert.True(updateResult.UpdatedApplied);
+        Assert.Equal(!dryRun, updateResult.UpdatedApplied);
 
         // Every 'dotnet package add' must have been invoked with --no-restore so that NuGet
         // never sees a half-updated reference graph against the new packageSourceMapping.
@@ -4286,6 +4277,11 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
 
         // Exactly one restore should have been invoked - the deferred final restore.
         var restoreCalls = calls.Where(c => c.StartsWith("restore:", StringComparison.Ordinal)).ToList();
+        if (!dryRun)
+        {
+            Assert.Empty(restoreCalls);
+            return;
+        }
         var restore = Assert.Single(restoreCalls);
         Assert.Equal($"restore:{appHostProjectFile.Name}", restore);
 
