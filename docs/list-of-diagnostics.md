@@ -23,6 +23,10 @@ When automatic CLI bundle setup fails, `ASPIRE009` includes the setup command's 
 
 ## Experimental API Warnings
 
+`ASPIREDENO001` is no longer emitted: the Deno hosting APIs are stable. Existing
+suppressions can be removed. See [Deno runtime and publishing](../src/Aspire.Hosting.JavaScript/README.md#deno-runtime-and-publishing)
+for runtime requirements and run/publish behavior.
+
 | Diagnostic ID | Severity | Description | Location |
 | ------------- | -------- | ----------- | -------- |
 | `ASPIREAZUREPROVISIONING001` | Warning | The polyglot Azure Provisioning proxy packages are experimental and may change or be removed in future releases. | [src/Aspire.Hosting.Azure.Provisioning/ExperimentalAssemblyInfo.cs](../src/Aspire.Hosting.Azure.Provisioning/ExperimentalAssemblyInfo.cs) |
