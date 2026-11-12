@@ -182,9 +182,14 @@ public sealed class UpdateChannelNuGetConfigOrderingTests(ITestOutputHelper outp
             dryRunCommand + " --non-interactive --log-level debug > dry-run-output.txt 2>&1; printf '%s' \"$?\" > dry-run-exit.txt",
             counter, TimeSpan.FromMinutes(3));
         await AssertValidationFailedAsync();
-        var failureOutput = await File.ReadAllTextAsync(Path.Combine(root, "dry-run-output.txt"));
-        Assert.Contains("NU1101", failureOutput);
-        Assert.Contains(dependencyId, failureOutput);
+        // The CLI does not forward native restore output. Its assets file records diagnostics as:
+        // { "code": "NU1101", "level": "Error", "libraryId": "Contoso.UpdateValidation.Dependency", ... }
+        var restoreDiagnostics = JsonNode.Parse(
+            await File.ReadAllTextAsync(Path.Combine(root, "obj", "project.assets.json")))!["logs"]!.AsArray();
+        Assert.Single(restoreDiagnostics, diagnostic => diagnostic is { } error
+            && error["code"]?.GetValue<string>() == "NU1101"
+            && error["level"]?.GetValue<string>() == "Error"
+            && error["libraryId"]?.GetValue<string>() == dependencyId);
         await AssertOriginalsAsync();
         Assert.Empty(Directory.GetFiles(root, "*.aspire-backup*"));
         Assert.True(File.Exists(Path.Combine(cachedDependency, ".nupkg.metadata")));
