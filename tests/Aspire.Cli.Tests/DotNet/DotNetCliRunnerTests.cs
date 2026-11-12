@@ -863,9 +863,11 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task RestoreAsyncRunsDotnetRestoreCommand(bool candidate)
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task RestoreAsyncRunsDotnetRestoreCommand(bool candidate, bool isolated)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
@@ -875,9 +877,11 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var targets = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "candidate;targets%('literal')@$?.targets"));
+        var packages = new DirectoryInfo(Path.Combine(workspace.Path, "restore packages"));
         var options = new ProcessInvocationOptions
         {
-            NuGetRestoreTargetsFile = candidate ? targets : null
+            NuGetRestoreTargetsFile = candidate ? targets : null,
+            IsolatedRestorePackagesDirectory = isolated ? packages : null
         };
 
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
@@ -886,9 +890,16 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
             executionContext,
             (args, _, _, _) =>
             {
-                Assert.Equal(candidate
-                    ? ["restore", projectFile.FullName, $"-property:NuGetRestoreTargets={MSBuildEscaping.Escape(targets.FullName)}"]
-                    : ["restore", projectFile.FullName], args);
+                string[] expected = ["restore", projectFile.FullName];
+                if (isolated)
+                {
+                    expected = [.. expected, "--packages", packages.FullName, "--no-http-cache", "--force"];
+                }
+                if (candidate)
+                {
+                    expected = [.. expected, $"-property:NuGetRestoreTargets={MSBuildEscaping.Escape(targets.FullName)}"];
+                }
+                Assert.Equal(expected, args);
             },
             0);
 

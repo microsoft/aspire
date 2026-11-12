@@ -32,7 +32,7 @@ internal sealed class UpdatePackagesContext
     public required Packaging.PackageChannel Channel { get; init; }
 
     /// <summary>
-    /// Gets whether the invocation explicitly requested a channel.
+    /// Gets whether a channel was selected through a command-line option or Aspire configuration.
     /// </summary>
     public required bool HasExplicitChannel { get; init; }
 
