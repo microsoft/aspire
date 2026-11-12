@@ -107,6 +107,28 @@ public sealed class ConfigSourceTests(ITestOutputHelper output)
 
     [Fact]
     [CaptureWorkspaceOnFailure]
+    public Task Doctor_ReportsAppHostUsingConfigurationSource()
+        => ConfigSourceTestContext.RunAsync(output, "sha1", async context =>
+        {
+            await context.CreateProjectAsync();
+            var original = await context.AssertSourceAppliedAsync("original");
+            await context.RunDoctorAndAssertAppHostSourceAsync(bound: true);
+            await context.AssertConfigurationUnchangedAsync(original);
+        });
+
+    [Fact]
+    [CaptureWorkspaceOnFailure]
+    public Task Doctor_ReportsAvailableConfigurationSourceNotUsedByAppHost()
+        => ConfigSourceTestContext.RunAsync(output, "sha1", async context =>
+        {
+            var original = await context.CreateUnboundProjectAsync();
+            await context.RunDoctorAndAssertAppHostSourceAsync(bound: false);
+            await context.AssertConfigurationUnchangedAsync(original);
+            await context.AssertSourceNotAcquiredAsync();
+        });
+
+    [Fact]
+    [CaptureWorkspaceOnFailure]
     public Task Update_ConfigSourceWithoutBindingReportsUsefulMessage()
         => ConfigSourceTestContext.RunAsync(output, "sha1", async context =>
         {

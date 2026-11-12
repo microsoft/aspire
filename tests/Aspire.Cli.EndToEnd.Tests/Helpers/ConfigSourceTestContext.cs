@@ -4,6 +4,7 @@
 using System.IO.Compression;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
+using Aspire.Cli.Resources;
 using Hex1b.Automation;
 using Xunit;
 
@@ -17,6 +18,7 @@ internal sealed class ConfigSourceTestContext
 
     private readonly string _root;
     private readonly string _feedRoot;
+    private readonly string _appHostDirectory;
     private readonly Hex1bTerminalAutomator _auto;
     private readonly SequenceCounter _counter;
     private readonly CancellationToken _cancellationToken;
@@ -28,6 +30,7 @@ internal sealed class ConfigSourceTestContext
     {
         _root = workspace.WorkspaceRoot.FullName;
         _feedRoot = CliE2ETestHelpers.ToContainerPath(Path.Combine(_root, "integration-feed"), workspace);
+        _appHostDirectory = CliE2ETestHelpers.ToContainerPath(Path.Combine(_root, "SourceApp"), workspace);
         _auto = auto;
         _counter = counter;
         _cancellationToken = cancellationToken;
@@ -387,6 +390,51 @@ internal sealed class ConfigSourceTestContext
         Assert.Equal(original.ToJsonString(), actual.ToJsonString());
     }
 
+    public async Task RunDoctorAndAssertAppHostSourceAsync(bool bound)
+    {
+        // Other environment checks can independently fail in the container, so accept doctor's
+        // documented 0/1 exit codes and assert only the configuration-source checks.
+        await _auto.RunCommandAsync(
+            "env -u ASPIRE_ANSI_PASS_THRU NO_COLOR=1 aspire doctor --non-interactive --nologo > \"$ASPIRE_E2E_WORKSPACE/doctor.txt\"; " +
+            "result=$?; cat \"$ASPIRE_E2E_WORKSPACE/doctor.txt\"; test \"$result\" -le 1",
+            _counter, timeout: TimeSpan.FromMinutes(2));
+        await _auto.RunCommandAsync(
+            "aspire doctor --format json --non-interactive --nologo > \"$ASPIRE_E2E_WORKSPACE/doctor.json\"; result=$?; test \"$result\" -le 1",
+            _counter, timeout: TimeSpan.FromMinutes(2));
+
+        // Doctor output can wrap long messages onto indented continuation lines.
+        var text = Regex.Replace(await File.ReadAllTextAsync(Path.Combine(_root, "doctor.txt"), _cancellationToken), @"\s+", " ");
+        Assert.Contains(ConfigSourceStrings.DoctorAvailable, text);
+        Assert.Contains(bound ? ConfigSourceStrings.DoctorBound : ConfigSourceStrings.DoctorUnbound, text);
+        if (!bound)
+        {
+            Assert.Contains(ConfigSourceStrings.DoctorAdoptFix, text);
+        }
+
+        var checks = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(_root, "doctor.json"), _cancellationToken))!["checks"]!.AsArray();
+        var machine = Assert.Single(checks, check => check!["name"]!.GetValue<string>() == "config-source")!;
+        Assert.Equal("pass", machine["status"]!.GetValue<string>());
+        Assert.True(machine["metadata"]!["available"]!.GetValue<bool>());
+        Assert.Equal("ASPIRE_INIT_SOURCE_URL", machine["metadata"]!["origin"]!.GetValue<string>());
+        Assert.Equal(_repository, machine["metadata"]!["repository"]!.GetValue<string>());
+
+        var appHost = Assert.Single(checks, check => check!["name"]!.GetValue<string>() == "apphost-config-source")!;
+        var metadata = appHost["metadata"]!;
+        Assert.Equal(bound ? "pass" : "warning", appHost["status"]!.GetValue<string>());
+        Assert.Equal(bound ? "bound" : "unconfigured", metadata["state"]!.GetValue<string>());
+        Assert.Equal($"{_appHostDirectory}/apphost.cs", metadata["appHostPath"]!.GetValue<string>());
+        Assert.Equal($"{_appHostDirectory}/aspire.config.json", metadata["settingsFile"]!.GetValue<string>());
+        if (bound)
+        {
+            Assert.Equal(_repository, metadata["repository"]!.GetValue<string>());
+            Assert.Equal(await ReadSourceVersionAsync(), metadata["appliedVersion"]!.GetValue<string>());
+        }
+        else
+        {
+            Assert.Null(metadata["repository"]);
+        }
+    }
+
     private async Task InitializeRepositoryAsync(string objectFormat)
     {
         await _auto.RunCommandAsync("aspire config set features.updateNotificationsEnabled false -g", _counter);
@@ -407,7 +455,7 @@ internal sealed class ConfigSourceTestContext
         await _auto.RunCommandAsync("aspire config set docs.custom keep", _counter);
     }
 
-    private Task AssertSourceNotAcquiredAsync()
+    public Task AssertSourceNotAcquiredAsync()
         => _auto.RunCommandAsync("test ! -d \"$HOME/.aspire/configsources\"", _counter);
 
     private async Task<JsonObject> ReadConfigurationAsync()
