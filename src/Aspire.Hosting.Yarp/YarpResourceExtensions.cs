@@ -274,7 +274,8 @@ public static class YarpResourceExtensions
     /// <param name="builder">The resource builder for a DotnetProject.</param>
     /// <param name="configurationBuilder">The callback to configure YARP</param>
     /// <returns>The updated resource builder.</returns>
-    public static IResourceBuilder<DotnetProjectResource> AddYarp(this IResourceBuilder<DotnetProjectResource> builder, Action<IYarpConfigurationBuilder> configurationBuilder)
+    [AspireExport(RunSyncOnBackgroundThread = true)]
+    public static IResourceBuilder<DotnetProjectResource> WithYarp(this IResourceBuilder<DotnetProjectResource> builder, Action<IYarpConfigurationBuilder> configurationBuilder)
     {
         var configBuilder = new YarpProjectConfigurationBuilder(builder);
         configurationBuilder(configBuilder);
