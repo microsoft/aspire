@@ -499,10 +499,9 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
               }
             }
             """;
-        // Opt-out suppresses emission, but global setup still registers the CLI hook.
-        var expectedClaudeGlobalSettings = JsonNode.Parse(expectedPluginSettings)!;
+        // Opt-out suppresses emission, but setup at either scope still registers the user-level CLI hook.
         var hookExecutable = JsonSerializer.Serialize(executablePath);
-        expectedClaudeGlobalSettings["hooks"] = JsonNode.Parse($$"""
+        var expectedHooks = JsonNode.Parse($$"""
             {
               "PostToolUse": [{
                 "matcher": "^Skill$",
@@ -531,7 +530,10 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
                 }]
               }]
             }
-            """);
+            """)!;
+        var expectedClaudeGlobalSettings = JsonNode.Parse(expectedPluginSettings)!;
+        expectedClaudeGlobalSettings["hooks"] = expectedHooks.DeepClone();
+        var expectedClaudeUserSettingsAfterProjectSetup = new JsonObject { ["hooks"] = expectedHooks.DeepClone() };
         const string openCodeSettings = """
             {"theme":"dark","mcp":{"custom":{"type":"remote","url":"https://example.test/mcp"}},"skills":{"paths":["./team-skills"],"urls":["https://example.test/skills/"]}}
             """;
@@ -579,6 +581,18 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
             foreach (var (path, bytes) in configured)
             {
                 Assert.Equal(bytes, await File.ReadAllBytesAsync(path, TestContext.Current.CancellationToken));
+            }
+
+            if (scope == "project")
+            {
+                // Project setup writes the hooks to user-level configuration, which the container creates
+                // owner-only as root, so inspect it in the container and then remove it so the host can
+                // seed the global scope.
+                await auto.RunCommandAsync(
+                    $"jq -e --argjson expected {AspireCliShellCommandHelpers.QuoteBashArg(expectedClaudeUserSettingsAfterProjectSetup.ToJsonString())} " +
+                    """'. == $expected' "$HOME/.claude/settings.json" && test -f "$HOME/.copilot/hooks/aspire-telemetry.json" """,
+                    counter);
+                await auto.RunCommandAsync("""rm -rf "$HOME/.claude" "$HOME/.copilot" """, counter);
             }
         }
     }
