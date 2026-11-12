@@ -659,6 +659,35 @@ fluent-popover-b::part(dialog)::-webkit-scrollbar-corner {
     padding: 0 4px 0 0;
 }
 
+.pause-warning {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--aspire-space-1);
+    min-width: 0;
+    padding: 1px 9px;
+    border-radius: var(--aspire-radius-medium);
+    background: color-mix(in srgb, var(--warning) 14%, transparent);
+    color: var(--colorNeutralForeground1);
+    font-size: var(--aspire-font-size-secondary);
+    font-weight: var(--aspire-font-weight-regular);
+}
+
+.pause-warning-icon {
+    display: flex;
+    flex: 0 0 auto;
+    color: var(--warning);
+}
+
+.pause-warning-message {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.pause-warning-title {
+    font-weight: var(--aspire-font-weight-semibold);
+    padding-inline-end: 4px;
+}
+
 html,
 body {
     width: 100%;
@@ -1294,6 +1323,9 @@ fluent-badge.property-details-accordion-badge {
    descriptions and wrap long URLs rather than overflowing the tooltip's default max width. */
 .dashboard-tooltip {
     width: max-content;
+    /* Adapt desktop Chrome's half-screen tooltip cap to the viewport, with a 300px floor.
+       https://source.chromium.org/chromium/chromium/src/+/main:ui/views/corewm/tooltip_aura.cc */
+    max-width: max(300px, 50vw);
     overflow-wrap: anywhere;
     pointer-events: none;
 }
@@ -1301,6 +1333,57 @@ fluent-badge.property-details-accordion-badge {
 /* Preserve description newlines only in content, not Fluent's shadow-template whitespace. */
 .dashboard-tooltip > span {
     white-space: pre-wrap;
+}
+
+/* Log previews retain their compact layout instead of the viewport-sized text tooltip. */
+.log-tooltip {
+    width: auto;
+    max-width: 350px;
+    flex-direction: column;
+    overflow-wrap: normal;
+}
+
+.log-tooltip .log-tooltip-title {
+    font-weight: bold;
+    font-size: 15px;
+}
+
+.log-tooltip .log-tooltip-subtitle {
+    color: var(--colorNeutralForeground3);
+    font-size: 12px;
+    padding-left: 0.5rem;
+}
+
+.log-tooltip .log-tooltip-title-container {
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow: hidden;
+    margin-bottom: 4px;
+    margin-top: 4px;
+}
+
+.log-tooltip .log-tooltip-table {
+    margin-bottom: 0;
+    width: 100%;
+    font-size: 12px;
+}
+
+.log-tooltip .log-tooltip-table td.label-column {
+    white-space: nowrap;
+    padding-right: var(--spacingHorizontalL);
+    width: 20%;
+}
+
+.log-tooltip .log-tooltip-table td {
+    padding: 3.5px 0;
+    border-bottom: var(--strokeWidthThin) solid var(--colorNeutralStroke3);
+    align-content: start;
+    word-break: break-word;
+}
+
+.log-tooltip .log-tooltip-table tr:last-child td {
+    border-bottom: none;
+    padding-bottom: var(--spacingVerticalXXS);
 }
 
 .resource-hidden-icon {

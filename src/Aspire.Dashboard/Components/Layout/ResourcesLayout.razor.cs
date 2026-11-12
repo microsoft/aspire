@@ -1908,6 +1908,13 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         .Where(c => c.IsHighlighted && c.State != CommandViewModelState.Hidden)
         .Take(DashboardUIHelpers.MaxHighlightedCommands);
 
+    private static IEnumerable<CommandViewModel> GetFullPageRowCommands(ResourceViewModel resource) =>
+        resource.IsParameter
+            ? resource.Commands.Where(c =>
+                string.Equals(c.Name, CommandViewModel.SetParameterCommand, StringComparisons.CommandName) &&
+                c.State != CommandViewModelState.Hidden).Take(1)
+            : GetHighlightedCommands(resource);
+
     private static IEnumerable<CommandViewModel> GetResourceRowCommands(ResourceViewModel resource)
     {
         string[] preferred = resource.KnownState switch
@@ -2088,7 +2095,10 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     }
 
     internal string GetResourceName(ResourceViewModel resource) =>
-        GetDuplicateDisplayNames().Contains(resource.DisplayName) ? resource.Name : resource.DisplayName;
+        IsReplica(resource) ? resource.Name : resource.DisplayName;
+
+    internal bool IsReplica(ResourceViewModel resource) =>
+        GetDuplicateDisplayNames().Contains(resource.DisplayName);
 
     private HashSet<string> GetDuplicateDisplayNames()
     {

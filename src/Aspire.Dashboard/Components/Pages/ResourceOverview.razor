@@ -205,7 +205,7 @@
                         <span class="overview-card-count">@endpointGroups.Count</span>
                     }
                 </div>
-                <ul class="overview-list">
+                <ul class="overview-list overview-endpoints">
                     @foreach (var group in endpointGroups)
                     {
                         var url = group.Primary;
@@ -217,25 +217,41 @@
                             ? Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewEndpointAlsoAt), maskedUrl, DashboardUIHelpers.MaskUrlForDisplay(secondary.OriginalUrlString)].Value
                             : maskedUrl;
                         <li class="overview-endpoint">
-                            <span class="overview-list-label" data-tooltip="@label">@label</span>
-                            <div class="overview-endpoint-addresses">
-                                @if (url.DisplayName is { } friendlyName && friendlyName != label)
+                            @if (url.Url is not null && url.DisplayName is not null && url.DisplayName == label)
+                            {
+                                <a class="overview-list-label" href="@url.Url" data-tooltip="@label" target="_blank" rel="noreferrer noopener">@label</a>
+                            }
+                            else
+                            {
+                                <span class="overview-list-label" data-tooltip="@label">@label</span>
+                            }
+                            <div class="overview-endpoint-value">
+                                <div class="overview-endpoint-addresses">
+                                    @if (url.DisplayName is { } friendlyName && friendlyName != label)
+                                    {
+                                        @if (url.Url is not null)
+                                        {
+                                            <a class="overview-endpoint-name" href="@url.Url" data-tooltip="@addressTooltip" target="_blank" rel="noreferrer noopener">@friendlyName</a>
+                                        }
+                                        else
+                                        {
+                                            <span class="overview-endpoint-name">@friendlyName</span>
+                                        }
+                                    }
+                                    @if (url.Url is not null)
+                                    {
+                                        <a class="overview-endpoint-address overview-mono" href="@url.Url" data-tooltip="@addressTooltip" target="_blank" rel="noreferrer noopener">@maskedUrl</a>
+                                    }
+                                    else
+                                    {
+                                        <span class="overview-endpoint-address overview-mono" data-tooltip="@addressTooltip" tabindex="0">@maskedUrl</span>
+                                    }
+                                </div>
+                                @if (url.IsInternal)
                                 {
-                                    <span class="overview-endpoint-name">@friendlyName</span>
-                                }
-                                @if (url.Url is not null)
-                                {
-                                    <a class="overview-endpoint-address overview-mono" href="@url.Url" data-tooltip="@addressTooltip" target="_blank" rel="noreferrer noopener">@maskedUrl</a>
-                                }
-                                else
-                                {
-                                    <span class="overview-endpoint-address overview-mono" data-tooltip="@addressTooltip" tabindex="0">@maskedUrl</span>
+                                    <span class="overview-badge">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewInternalEndpoint)]</span>
                                 }
                             </div>
-                            @if (url.IsInternal)
-                            {
-                                <span class="overview-badge">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewInternalEndpoint)]</span>
-                            }
                         </li>
                     }
                 </ul>
@@ -540,7 +556,7 @@
                 }
                 else
                 {
-                    <ResourceRelationshipGraph Resource="@(new RelationshipGraphNode(resourceName, resource.ResourceTypeDisplayName, Url: null))"
+                    <ResourceRelationshipGraph Resource="@GetGraphNode(resource, resource.ResourceTypeDisplayName, isCenter: true)"
                                                Incoming="@GetGraphNodes(relatedResources, incoming: true)"
                                                Outgoing="@GetGraphNodes(relatedResources, incoming: false)" />
                 }
