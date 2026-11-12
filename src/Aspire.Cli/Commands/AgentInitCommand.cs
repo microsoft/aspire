@@ -802,20 +802,29 @@ internal sealed class AgentInitCommand : BaseCommand
         {
         }
 
-        foreach (var path in client.GetForwardedMcpConfigPaths(scope))
+        try
         {
-            try
+            // Paths are enumerated lazily from directories that can change underneath us, so
+            // enumeration failures need the same best-effort handling as individual file reads.
+            foreach (var path in client.GetForwardedMcpConfigPaths(scope))
             {
-                var config = await McpConfigFileHelper.ReadConfigAsync(
-                    path, ConfigurationHelper.ParseOptions, new AgentConfiguration(), cancellationToken);
-                if (McpConfigFileHelper.GetServerContainer(config, "servers", path)?["aspire"] is JsonObject)
+                try
                 {
-                    return true;
+                    var config = await McpConfigFileHelper.ReadConfigAsync(
+                        path, ConfigurationHelper.ParseOptions, new AgentConfiguration(), cancellationToken);
+                    if (McpConfigFileHelper.GetServerContainer(config, "servers", path)?["aspire"] is JsonObject)
+                    {
+                        return true;
+                    }
+                }
+                catch (Exception ex) when (IsUnreadableConfig(ex))
+                {
+                    // One unreadable file must not hide a valid registration in another.
                 }
             }
-            catch (Exception ex) when (IsUnreadableConfig(ex))
-            {
-            }
+        }
+        catch (Exception ex) when (IsUnreadableConfig(ex))
+        {
         }
 
         return false;
