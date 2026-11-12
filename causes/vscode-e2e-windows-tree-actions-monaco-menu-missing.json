@@ -1,0 +1,28 @@
+{
+  "id": "vscode-e2e-windows-tree-actions-monaco-menu-missing",
+  "type": "flaky-test",
+  "title": "Flaky: VS Code extension E2E (Windows, tree-actions) tree action commands test cannot locate .monaco-menu",
+  "error_pattern": "no such element: Unable to locate element: {\"method\":\"css selector\",\"selector\":\".monaco-menu\"}",
+  "occurrences": [
+    {
+      "run_id": 43143828316,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/43143828316",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, tree-actions)",
+      "observed_at": "2026-11-12T03:47:12Z",
+      "pr_number": 0,
+      "tests": [
+        {
+          "name": "Aspire tree action command E2E routes view, copy, endpoint, log, and resource commands through tree handlers",
+          "job_id": 130950606748,
+          "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, tree-actions)",
+          "error": "no such element: Unable to locate element: {\"method\":\"css selector\",\"selector\":\".monaco-menu\"}\n  (Session info: chrome=148.0.7778.280)",
+          "stack_trace": "NoSuchElementError: no such element: Unable to locate element: {\"method\":\"css selector\",\"selector\":\".monaco-menu\"}\n  (Session info: chrome=148.0.7778.280)\n    at Object.throwDecodedError (node_modules\\selenium-webdriver\\lib\\error.js:523:15)\n    at parseHttpResponse (node_modules\\selenium-webdriver\\lib\\http.js:526:13)\n    at Executor.execute (node_modules\\selenium-webdriver\\lib\\http.js:458:28)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async Driver.execute (node_modules\\selenium-webdriver\\lib\\webdriver.js:745:17)\n    at async toWireValue (node_modules\\selenium-webdriver\\lib\\webdriver.js:149:15)\n    at async D:\\a\\aspire\\aspire\\extension\\node_modules\\selenium-webdriver\\lib\\webdriver.js:195:16\n    at async forEachKey (node_modules\\selenium-webdriver\\lib\\webdriver.js:189:9)\n    at async convertKeys (node_modules\\selenium-webdriver\\lib\\webdriver.js:194:3)\n    at async Driver.execute (node_modules\\selenium-webdriver\\lib\\webdriver.js:743:22)",
+          "standard_output": "",
+          "standard_error": "",
+          "result_file": "00001.json",
+          "result_format": "mocha"
+        }
+      ]
+    }
+  ]
+}
