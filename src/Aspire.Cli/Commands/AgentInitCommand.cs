@@ -499,14 +499,21 @@ internal sealed class AgentInitCommand : BaseCommand
                 cancellationToken: cancellationToken);
         }
 
+        var (scopeProvided, requestedScope) = scopeBinding.Resolve();
+        var scope = scopeProvided ? requestedScope : scopeBinding.DefaultValue;
+
         if (!configureAspire && !playwright && !dotnetInspect && !configureMcp)
         {
+            // Nothing is installed, so scope is not prompted for. A global re-run still refreshes hooks
+            // for clients whose Aspire setup already exists.
+            if (scope is AgentConfigurationScope.Global)
+            {
+                await ConfigureGlobalTelemetryHooksAsync(selectedClients, [], workspaceRoot, cancellationToken);
+            }
+
             InteractionService.DisplaySubtleMessage(AgentCommandStrings.InitCommand_NoConfigurationSelected);
             return new(CliExitCodes.Success, selectedClients, []);
         }
-
-        var (scopeProvided, requestedScope) = scopeBinding.Resolve();
-        var scope = scopeProvided ? requestedScope : scopeBinding.DefaultValue;
 
         if (!scopeProvided && _hostEnvironment.SupportsInteractiveInput)
         {
@@ -693,24 +700,11 @@ internal sealed class AgentInitCommand : BaseCommand
         // or replace its plugins.
         if (scope is AgentConfigurationScope.Global)
         {
-            var aspireConfiguredClients = GetAspireSkillsRegisteredClients(registrationResults, skillSources)
-                .Concat(mcpConfiguredClients)
-                .ToHashSet();
-            var telemetryHookClients = new List<IAgentClient>();
-            foreach (var client in selectedClients)
-            {
-                // The configurator owns hook eligibility; the guard only avoids reading config it would ignore.
-                if (aspireConfiguredClients.Contains(client) ||
-                    (client.SupportsTelemetryHooks && await HasExistingAspireSetupAsync(client, workspaceRoot, scope, cancellationToken)))
-                {
-                    telemetryHookClients.Add(client);
-                }
-            }
-
-            if (telemetryHookClients.Count > 0)
-            {
-                await ConfigureTelemetryHooksAsync(telemetryHookClients, cancellationToken);
-            }
+            await ConfigureGlobalTelemetryHooksAsync(
+                selectedClients,
+                GetAspireSkillsRegisteredClients(registrationResults, skillSources).Concat(mcpConfiguredClients).ToHashSet(),
+                workspaceRoot,
+                cancellationToken);
         }
 
         if (hasErrors)
@@ -730,6 +724,29 @@ internal sealed class AgentInitCommand : BaseCommand
             RegistrationResults = registrationResults,
             SkillSources = skillSources
         };
+    }
+
+    private async Task ConfigureGlobalTelemetryHooksAsync(
+        IReadOnlyList<IAgentClient> selectedClients,
+        ICollection<IAgentClient> aspireConfiguredClients,
+        DirectoryInfo workspaceRoot,
+        CancellationToken cancellationToken)
+    {
+        var telemetryHookClients = new List<IAgentClient>();
+        foreach (var client in selectedClients)
+        {
+            // The configurator owns hook eligibility; the guard only avoids reading config it would ignore.
+            if (aspireConfiguredClients.Contains(client) ||
+                (client.SupportsTelemetryHooks && await HasExistingAspireSetupAsync(client, workspaceRoot, AgentConfigurationScope.Global, cancellationToken)))
+            {
+                telemetryHookClients.Add(client);
+            }
+        }
+
+        if (telemetryHookClients.Count > 0)
+        {
+            await ConfigureTelemetryHooksAsync(telemetryHookClients, cancellationToken);
+        }
     }
 
     private static IEnumerable<IAgentClient> GetAspireSkillsRegisteredClients(
