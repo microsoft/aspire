@@ -16,7 +16,7 @@ using DotnetSdkProbeResult = HostingDotnet::Aspire.Hosting.Utils.DotnetSdkProbeR
 
 namespace Aspire.Hosting.Dotnet.Tests;
 
-public class DotnetCliToolTests
+public class DotnetCliToolTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public async Task LegacyAndCanonicalFactoriesAndFluentMethodsCoexist()
@@ -87,6 +87,46 @@ public class DotnetCliToolTests
             await ArgumentEvaluator.GetArgumentListAsync(resource));
     }
 
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData(" ")]
+    public void CanonicalFluentStringMethodsRejectInvalidValues(string? value)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var tool = builder.AddDotnetCliTool("tool", "package");
+
+        Assert.ThrowsAny<ArgumentException>(() => tool.WithToolPackage(value!));
+        Assert.ThrowsAny<ArgumentException>(() => tool.WithToolVersion(value!));
+        Assert.ThrowsAny<ArgumentException>(() => tool.WithToolSource(value!));
+    }
+
+    [Fact]
+    public void CanonicalFluentMethodsRejectNullBuilder()
+    {
+        IResourceBuilder<DotnetCliToolResource> builder = null!;
+
+        Assert.Throws<ArgumentNullException>(() => builder.WithToolPackage("package"));
+        Assert.Throws<ArgumentNullException>(() => builder.WithToolVersion("1.0.0"));
+        Assert.Throws<ArgumentNullException>(() => builder.WithToolPrerelease());
+        Assert.Throws<ArgumentNullException>(() => builder.WithToolSource("https://example.invalid"));
+        Assert.Throws<ArgumentNullException>(() => builder.WithToolIgnoreExistingFeeds());
+        Assert.Throws<ArgumentNullException>(() => builder.WithToolIgnoreFailedSources());
+    }
+
+    [Fact]
+    public void LegacyAndCanonicalDefaultWorkingDirectoriesResolveAgainstAppHost()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var expectedWorkingDirectory = Path.GetFullPath(builder.AppHostDirectory);
+
+        var legacy = builder.AddDotnetTool("legacy", "legacy.package");
+        var canonical = builder.AddDotnetCliTool("canonical", "canonical.package");
+
+        Assert.Equal(expectedWorkingDirectory, legacy.Resource.WorkingDirectory);
+        Assert.Equal(expectedWorkingDirectory, canonical.Resource.WorkingDirectory);
+    }
+
     [Fact]
     public void MetadataUsesTheExistingTranslatedLabels()
     {
@@ -153,7 +193,7 @@ public class DotnetCliToolTests
             TestContext.Current.CancellationToken);
         builder.Services.AddSingleton(provider);
         var tool = builder.AddDotnetCliTool("tool", "package");
-        tool.WithWorkingDirectory(builder.AppHostDirectory);
+        Assert.Equal(Path.GetFullPath(builder.AppHostDirectory), tool.Resource.WorkingDirectory);
         using var app = builder.Build();
 
         var command = Assert.Single(tool.Resource.Annotations.OfType<RequiredCommandAnnotation>());
@@ -161,6 +201,76 @@ public class DotnetCliToolTests
             new RequiredCommandValidationContext("dotnet", app.Services, TestContext.Current.CancellationToken));
         Assert.Equal(expectedValid, result.IsValid);
         Assert.Equal(1, process.DisposeCallCount);
+    }
+
+    [Fact]
+    public async Task RealSdkAdapterReturnsInstalledSdkVersion()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        builder.AddDotnetCliTool("tool", "package");
+        using var app = builder.Build();
+
+        var provider = app.Services.GetRequiredService<DotnetCliToolSdkVersionProvider>();
+        var version = await provider.TryGetVersionAsync(
+            builder.AppHostDirectory,
+            TestContext.Current.CancellationToken);
+
+        Assert.NotNull(version);
+        Assert.True(version.Major >= 10);
+    }
+
+    [Fact]
+    public async Task CanonicalToolExecutesSuccessfully()
+    {
+        using var cancellationSource = new CancellationTokenSource(TimeSpan.FromMinutes(2));
+        using var builder = TestDistributedApplicationBuilder.Create().WithTestAndResourceLogging(testOutputHelper);
+        var resource = builder
+            .AddDotnetCliTool("tool", "dotnet-ef")
+            .WithArgs("--help");
+
+        using var app = builder.Build();
+        await app.StartAsync(cancellationSource.Token);
+
+        await app.ResourceNotifications.WaitForResourceAsync(
+            resource.Resource.Name,
+            KnownResourceStates.Running,
+            cancellationSource.Token);
+        var terminalState = await app.ResourceNotifications.WaitForResourceAsync(
+            resource.Resource.Name,
+            KnownResourceStates.TerminalStates,
+            cancellationSource.Token);
+
+        Assert.Equal(KnownResourceStates.Finished, terminalState);
+        Assert.True(app.ResourceNotifications.TryGetCurrentState(resource.Resource.Name, out var resourceState));
+        Assert.Equal(0, resourceState.Snapshot.ExitCode);
+    }
+
+    [Fact]
+    public async Task CanonicalNonexistentToolExitsNonZero()
+    {
+        using var cancellationSource = new CancellationTokenSource(TimeSpan.FromMinutes(2));
+        using var builder = TestDistributedApplicationBuilder.Create().WithTestAndResourceLogging(testOutputHelper);
+        var resource = builder
+            .AddDotnetCliTool("tool", "aspire-nonexistent-dotnet-tool")
+            .WithArgs("--help")
+            .WithToolSource("./fake-package-feed")
+            .WithToolIgnoreExistingFeeds();
+
+        using var app = builder.Build();
+        await app.StartAsync(cancellationSource.Token);
+
+        await app.ResourceNotifications.WaitForResourceAsync(
+            resource.Resource.Name,
+            KnownResourceStates.Running,
+            cancellationSource.Token);
+        var terminalState = await app.ResourceNotifications.WaitForResourceAsync(
+            resource.Resource.Name,
+            KnownResourceStates.TerminalStates,
+            cancellationSource.Token);
+
+        Assert.Equal(KnownResourceStates.Finished, terminalState);
+        Assert.True(app.ResourceNotifications.TryGetCurrentState(resource.Resource.Name, out var resourceState));
+        Assert.NotEqual(0, resourceState.Snapshot.ExitCode);
     }
 
     private sealed class CustomCliToolResource(string name, string packageId) : DotnetCliToolResource(name, packageId);

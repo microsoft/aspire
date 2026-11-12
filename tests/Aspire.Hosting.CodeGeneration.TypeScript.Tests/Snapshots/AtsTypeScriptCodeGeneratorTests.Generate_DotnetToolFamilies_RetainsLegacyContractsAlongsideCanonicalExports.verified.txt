@@ -74,16 +74,14 @@
       TargetTypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.DotnetToolResource,
       ReturnType: Aspire.Hosting/Aspire.Hosting.ApplicationModel.DotnetToolResource,
       Parameters: [],
-      IsObsolete: true,
-      ObsoleteMessage: Use WithToolIgnoreExistingFeeds on a DotnetCliToolResource from the Aspire.Hosting.Dotnet package instead.
+      IsObsolete: false
     },
     {
       CapabilityId: Aspire.Hosting/withToolIgnoreFailedSources,
       TargetTypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.DotnetToolResource,
       ReturnType: Aspire.Hosting/Aspire.Hosting.ApplicationModel.DotnetToolResource,
       Parameters: [],
-      IsObsolete: true,
-      ObsoleteMessage: Use WithToolIgnoreFailedSources on a DotnetCliToolResource from the Aspire.Hosting.Dotnet package instead.
+      IsObsolete: false
     },
     {
       CapabilityId: Aspire.Hosting/withToolPackage,
@@ -92,16 +90,14 @@
       Parameters: [
         packageId
       ],
-      IsObsolete: true,
-      ObsoleteMessage: Use WithToolPackage on a DotnetCliToolResource from the Aspire.Hosting.Dotnet package instead.
+      IsObsolete: false
     },
     {
       CapabilityId: Aspire.Hosting/withToolPrerelease,
       TargetTypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.DotnetToolResource,
       ReturnType: Aspire.Hosting/Aspire.Hosting.ApplicationModel.DotnetToolResource,
       Parameters: [],
-      IsObsolete: true,
-      ObsoleteMessage: Use WithToolPrerelease on a DotnetCliToolResource from the Aspire.Hosting.Dotnet package instead.
+      IsObsolete: false
     },
     {
       CapabilityId: Aspire.Hosting/withToolSource,
@@ -110,8 +106,7 @@
       Parameters: [
         source
       ],
-      IsObsolete: true,
-      ObsoleteMessage: Use WithToolSource on a DotnetCliToolResource from the Aspire.Hosting.Dotnet package instead.
+      IsObsolete: false
     },
     {
       CapabilityId: Aspire.Hosting/withToolVersion,
@@ -120,8 +115,7 @@
       Parameters: [
         version
       ],
-      IsObsolete: true,
-      ObsoleteMessage: Use WithToolVersion on a DotnetCliToolResource from the Aspire.Hosting.Dotnet package instead.
+      IsObsolete: false
     }
   ],
   GeneratedMethods: [

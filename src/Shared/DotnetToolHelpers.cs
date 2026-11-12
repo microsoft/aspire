@@ -27,6 +27,10 @@ internal static class DotnetToolHelpers
         where T : ExecutableResource
     {
         return builder.AddResource(resource)
+            // ExecutableResource stores the constructor value verbatim. Normalize the default "."
+            // against the AppHost before SDK selection so an unrelated process-directory global.json
+            // cannot change whether this tool satisfies the SDK prerequisite.
+            .WithWorkingDirectory(resource.WorkingDirectory)
             .WithInitialState(new CustomResourceSnapshot { ResourceType = KnownResourceTypes.Tool, Properties = [] })
             .WithIconName("Toolbox")
             .WithCommand("dotnet")
