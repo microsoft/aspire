@@ -53,7 +53,7 @@ public sealed class AzureResourceInfrastructure : Infrastructure
     /// </code>
     /// </example>
     [AspireExportIgnore(Reason = "Bicep extension declarations are configured through C# infrastructure callbacks.")]
-    [Experimental("ASPIREAZURE003", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [Experimental("ASPIREAZURE004", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public Dictionary<string, string> BicepExtensions { get; } = new(StringComparer.Ordinal);
 
     internal IEnumerable<ProvisioningParameter> GetParameters() => GetProvisionableResources().OfType<ProvisioningParameter>();

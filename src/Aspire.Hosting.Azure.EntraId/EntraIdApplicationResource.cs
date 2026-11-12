@@ -2,7 +2,9 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREPIPELINES001 // Existing registrations remove the framework's provisioning annotations.
-#pragma warning disable ASPIREAZURE003 // Tenant-scoped resource annotations are experimental.
+#pragma warning disable ASPIREAZURE004 // Bicep extension declarations are experimental.
+#pragma warning disable ASPIREAZURE005 // IBicepOutputReferenceProvider is experimental.
+#pragma warning disable ASPIREAZURE007 // Tenant-scoped resource annotations are experimental.
 
 using System.Globalization;
 using System.IO.Hashing;

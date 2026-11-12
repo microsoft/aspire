@@ -2,7 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREAZURE001 // Azure environment resources are experimental.
-#pragma warning disable ASPIREAZURE003 // Tenant-scoped resource and managed identity annotations are experimental.
+#pragma warning disable ASPIREAZURE003 // Role assignment resources are experimental.
+#pragma warning disable ASPIREAZURE007 // Tenant-scoped resource annotations are experimental.
 #pragma warning disable ASPIREPIPELINES001 // Verifies provisioning annotations on existing resources.
 #pragma warning disable ASPIREPIPELINES003 // Exercises the deployment pipeline for existing registrations.
 
