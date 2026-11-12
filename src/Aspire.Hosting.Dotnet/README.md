@@ -260,9 +260,10 @@ publishing support. It is classified as a tool in the dashboard.
 
 ### Migrating from AddDotnetTool
 
-The core `AddDotnetTool`, `DotnetToolResource`, `DotnetToolAnnotation`, and their configuration
-methods are deprecated but remain functional in `Aspire.Hosting`. Existing binaries and generated
-clients do not need a rebuild, an additional package, or SDK regeneration just to keep working.
+The core `AddDotnetTool` factories, `DotnetToolResource`, and `DotnetToolAnnotation` are deprecated
+but remain functional in `Aspire.Hosting`. The six legacy `WithTool*` methods are not deprecated
+and remain supported for `AddEFMigrations` callbacks. Existing binaries and generated clients do not
+need a rebuild, an additional package, or SDK regeneration just to keep working.
 Source builds treating warnings as errors may need a targeted `CS0618` suppression while migrating.
 The original experimental diagnostic, `ASPIREDOTNETTOOL`, still applies to that legacy API.
 
