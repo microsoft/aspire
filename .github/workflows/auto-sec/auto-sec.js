@@ -981,14 +981,22 @@ function manifestVersionChanges(path, baseText, headText, ecosystem) {
         const baseVersions = [...baseCounts.keys()];
         const removed = baseVersions.filter(version => !counts.has(version));
         const introduced = [...counts.keys()].filter(version => !baseCounts.has(version));
-        for (const version of introduced) {
-            // With several removed versions (one fix per installed major), the occurrence
-            // key says which one each new version replaces. Attributing every removed
-            // version to every target would report 7.29.0 -> 6.28.1 as a breaking change.
-            const replaced = [...keys].filter(([, headVersion]) => headVersion === version)
+        // With several removed versions (one fix per installed major), the occurrence
+        // key says which one each new version replaces. Attributing every removed
+        // version to every target would report 7.29.0 -> 6.28.1 as a breaking change.
+        const pairedFrom = new Map(introduced.map(version => [
+            version,
+            [...keys].filter(([, headVersion]) => headVersion === version)
                 .map(([key]) => baseEntry?.keys.get(key))
-                .filter(baseVersion => baseVersion && removed.includes(baseVersion));
-            add(name, replaced.length ? replaced : removed.length ? removed : baseVersions, version);
+                .filter(baseVersion => baseVersion && removed.includes(baseVersion)),
+        ]));
+        // A removed version that no key pairs with a replacement (an unkeyed override or a
+        // nested copy that disappeared) may now resolve to any introduced version, so it
+        // stays a predecessor of each of them rather than being dropped.
+        const unpaired = removed.filter(version => ![...pairedFrom.values()].some(from => from.includes(version)));
+        for (const version of introduced) {
+            const replaced = pairedFrom.get(version);
+            add(name, replaced.length ? [...replaced, ...unpaired] : removed.length ? removed : baseVersions, version);
         }
         // A consolidation into a version the base already carries introduces nothing new:
         // base `foo@1.0.0` + `foo@2.1.0` -> head `foo@2.1.0` still moves the 1.x consumers
@@ -1772,12 +1780,18 @@ async function planAlerts({ alerts, codeScanning, prs, readManifest, listRelease
 
     const entries = [];
     const groups = new Map();
+    // Covered alerts need no fix, but their advisories still mark versions vulnerable, so
+    // their ranges constrain the target chosen for an uncovered alert on the same package.
+    const coveredRanges = new Map();
+    const groupKey = alert => JSON.stringify([alert.ecosystem, alert.manifest_path, normalizePackageName(alert.ecosystem, alert.package)]);
     for (const alert of alerts) {
         const entry = { source: 'dependabot', number: alert.number, ecosystem: alert.ecosystem, package: alert.package, manifest_path: alert.manifest_path };
         entries.push(entry);
         if (covered.has(alert.number)) {
             entry.disposition = 'dependabot-pr';
             entry.pr_number = covered.get(alert.number);
+            const key = groupKey(alert);
+            coveredRanges.set(key, [...(coveredRanges.get(key) ?? []), ...alertVulnerableRanges(alert)]);
         } else if (alert.ecosystem === 'actions') {
             Object.assign(entry, { disposition: 'blocked', reason: 'actions-pin-requires-maintainer' });
         } else if (alert.ecosystem === 'nuget') {
@@ -1788,9 +1802,9 @@ async function planAlerts({ alerts, codeScanning, prs, readManifest, listRelease
                 ? null : 'unsupported-ecosystem';
             Object.assign(entry, reason ? { disposition: 'blocked', reason } : { disposition: 'agent', note: 'no-lockfile' });
         } else {
-            const key = JSON.stringify([alert.ecosystem, alert.manifest_path, normalizePackageName(alert.ecosystem, alert.package)]);
+            const key = groupKey(alert);
             if (!groups.has(key)) {
-                groups.set(key, { ecosystem: alert.ecosystem, package: alert.package, manifest_path: alert.manifest_path, alerts: [] });
+                groups.set(key, { key, ecosystem: alert.ecosystem, package: alert.package, manifest_path: alert.manifest_path, alerts: [] });
             }
             groups.get(key).alerts.push({ alert, entry });
         }
@@ -1813,7 +1827,7 @@ async function planAlerts({ alerts, codeScanning, prs, readManifest, listRelease
     const queue = [...groups.values()];
     const planGroup = async group => {
         const text = readManifest(group.manifest_path);
-        const ranges = [...new Set(group.alerts.flatMap(({ alert }) => alertVulnerableRanges(alert)))];
+        const ranges = [...new Set([...group.alerts.flatMap(({ alert }) => alertVulnerableRanges(alert)), ...(coveredRanges.get(group.key) ?? [])])];
         const installed = text === null ? [] : [...new Set(manifestPackageVersions(group.manifest_path, text, group.ecosystem, group.package))];
         const vulnerable = installed.filter(version => parseVersion(version) !== null && inVulnerableRanges(version, ranges));
         const decide = (disposition, extra) => group.alerts.forEach(({ entry }) => Object.assign(entry, { disposition }, extra));
@@ -3770,6 +3784,11 @@ function preflightPatch(patchText, readBaseTexts = () => []) {
     if (updates.some(update => update.from.length === 0)) {
         violations.push({ path: '(patch)', reason: 'unrepresentable-summary' });
     }
+    // Publication rejects the whole patch past this budget, so report it while the agent
+    // can still unstage incidental lockfile updates.
+    if (updates.length > MAX_VERSION_CHANGES) {
+        violations.push({ path: '(patch)', reason: 'too-many-version-changes' });
+    }
     if (violations.length > 0) {
         return { ok: false, violations };
     }
@@ -4106,6 +4125,7 @@ module.exports = {
     AUTO_SEC_BRANCH,
     COOLDOWN_DAYS,
     MAX_APPROVALS,
+    DEFAULT_BOT_LOGIN,
     MAX_VERSION_CHANGES,
     compareVersions,
     coveredAlerts,

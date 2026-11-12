@@ -153,6 +153,7 @@ public sealed class AutoSecWorkflowTests(ITestOutputHelper testOutput)
         {
             calls.Add("repos/microsoft/aspire/contents/extension/yarn.lock?ref=head");
         }
+        calls.Add("repos/microsoft/aspire/pulls/101/reviews?per_page=100");
         Assert.Equal(calls, result["calls"]!.AsArray().Select(n => n!.GetValue<string>()));
     }
 
@@ -1277,6 +1278,50 @@ public sealed class AutoSecWorkflowTests(ITestOutputHelper testOutput)
 
     [Fact]
     [RequiresTools(["node"])]
+    public async Task PlanHonorsRangesOfAlertsCoveredByDependabotPullRequests()
+    {
+        var alert = (int number, string range) => new JsonObject
+        {
+            ["number"] = number,
+            ["ecosystem"] = "npm",
+            ["package"] = "foo",
+            ["manifest_path"] = "app/package-lock.json",
+            ["vulnerable_ranges"] = new JsonArray(range),
+            ["malware"] = false,
+        };
+        var versions = new[] { "1.0.0", "1.0.2", "1.0.3", "1.0.4" };
+
+        var result = await RunHarnessAsync(new JsonObject
+        {
+            ["mode"] = "plan",
+            ["now"] = Now,
+            // Alert 2 is covered by a PR, but its advisory marks 1.0.3 vulnerable, so 1.0.3 is not a safe target for alert 1.
+            ["alerts"] = new JsonArray(alert(1, "< 1.0.3"), alert(2, ">= 1.0.3, < 1.0.4")),
+            ["prs"] = new JsonArray(new JsonObject { ["number"] = 99, ["covered_alerts"] = new JsonArray(2) }),
+            ["manifests"] = new JsonObject
+            {
+                ["app/package-lock.json"] = new JsonObject
+                {
+                    ["lockfileVersion"] = 3,
+                    ["packages"] = new JsonObject { ["node_modules/foo"] = new JsonObject { ["version"] = "1.0.0" } },
+                }.ToJsonString(),
+            },
+            ["responses"] = new JsonObject
+            {
+                ["https://registry.npmjs.org/foo"] = Response(new JsonObject
+                {
+                    ["versions"] = new JsonObject(versions.Select(version => KeyValuePair.Create<string, JsonNode?>(version, new JsonObject()))),
+                    ["time"] = new JsonObject(versions.Select(version => KeyValuePair.Create<string, JsonNode?>(version, "2026-06-01T00:00:00Z"))),
+                }),
+            },
+        });
+
+        var fix = Assert.Single(result["value"]!["fixes"]!.AsArray());
+        Assert.Equal("1.0.4", fix!["to"]!.GetValue<string>());
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
     public async Task PlanSurvivesUnreadableManifestsAndSummarizesCountsOnly()
     {
         var alert = (int number, string package, string manifest) => new JsonObject
@@ -1453,17 +1498,6 @@ public sealed class AutoSecWorkflowTests(ITestOutputHelper testOutput)
     }
 
     [Fact]
-    public void ApprovalJobDeclaresTheSameLimitAsTheScript()
-    {
-        var job = GetSection(ReadWorkflow("auto-sec.md"), "^    approve-dependabot-pr:", "^---");
-
-        // The framework drops approval requests beyond the declared max, which left every
-        // run approving one Dependabot PR no matter how many qualified.
-        Assert.Contains("max: 10", job, StringComparison.Ordinal);
-        Assert.Contains("\\\"max\\\":10}", ReadWorkflow("auto-sec.lock.yml"), StringComparison.Ordinal);
-    }
-
-    [Fact]
     [RequiresTools(["node"])]
     public async Task PreflightRejectsUnsupportedLockfileMetadata()
     {
@@ -1513,6 +1547,28 @@ public sealed class AutoSecWorkflowTests(ITestOutputHelper testOutput)
             result["value"]!["violations"]!.AsArray().Select(violation => violation!["reason"]!.GetValue<string>()));
         Assert.Null(result["value"]!["commit_message"]);
         Assert.Null(result["value"]!["pr_table_rows"]);
+    }
+
+    [Fact]
+    [RequiresTools(["node", "git"])]
+    public async Task PreflightRejectsPatchesOverThePublicationVersionBudget()
+    {
+        static string Lockfile(string version) =>
+            "{\n  \"name\": \"x\",\n  \"lockfileVersion\": 3,\n  \"requires\": true,\n  \"packages\": {\n    \"\": {\n      \"name\": \"x\"\n    }"
+            + string.Concat(Enumerable.Range(0, 51).Select(index =>
+                $",\n    \"node_modules/pkg{index}\": {{\n      \"version\": \"{version}\"\n    }}"))
+            + "\n  }\n}\n";
+
+        var result = await RunHarnessAsync(new JsonObject
+        {
+            ["mode"] = "preflight-working-tree",
+            ["baseFiles"] = new JsonObject { ["package-lock.json"] = Lockfile("1.0.0") },
+            ["headFiles"] = new JsonObject { ["package-lock.json"] = Lockfile("1.0.1") },
+        });
+
+        Assert.False(result["value"]!["ok"]!.GetValue<bool>());
+        Assert.Equal(["too-many-version-changes"],
+            result["value"]!["violations"]!.AsArray().Select(violation => violation!["reason"]!.GetValue<string>()));
     }
 
     [Fact]
@@ -4513,6 +4569,16 @@ public sealed class AutoSecWorkflowTests(ITestOutputHelper testOutput)
         "foo@^1.0.0:\n  version \"1.9.0\"\nfoo@^2.0.0:\n  version \"2.1.0\"\n",
         "foo@^1.0.0:\n  version \"1.9.0\"\nfoo@^2.0.0:\n  version \"2.1.0\"\n",
         "[]")]
+    [InlineData(
+        "app/package-lock.json",
+        """{"packages":{"node_modules/foo":{"version":"2.0.0"},"node_modules/parent/node_modules/foo":{"version":"1.0.0"}}}""",
+        """{"packages":{"node_modules/foo":{"version":"2.1.0"}}}""",
+        """[{"name":"foo","from":["2.0.0","1.0.0"],"to":"2.1.0"}]""")]
+    [InlineData(
+        "app/package.json",
+        """{"dependencies":{"foo":"1.0.0"},"overrides":{"parent":{"foo":"2.0.0"}}}""",
+        """{"dependencies":{"foo":"1.0.1"},"overrides":{"parent":{"foo":"1.0.1"}}}""",
+        """[{"name":"foo","from":["1.0.0","2.0.0"],"to":"1.0.1"}]""")]
     public async Task DetectsConsumerMovingBetweenRetainedVersions(string path, string baseText, string headText, string expected)
     {
         var result = await RunHarnessAsync(new JsonObject

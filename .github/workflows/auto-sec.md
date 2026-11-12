@@ -367,7 +367,8 @@ Do not print alert contents into public safe outputs:
 - `.auto-sec/dependabot-prs.json`: open Dependabot PRs with parsed `updates`
   (`name`, `from`, `to`), changed `files`, a `checks` rollup, and
   `covered_alerts`: the alert numbers the PR provably fixes, computed by the same
-  module the approval job uses.
+  module the approval job uses, and `already_approved`: whether the approval bot
+  already approved the current head.
 - `.auto-sec/auto-sec-prs.json`: open pull requests labeled `auto-sec`.
 - `.auto-sec/plan.json`: the precomputed disposition of every alert, produced by the
   same module that gates publication. `counts` totals the dispositions. `fixes` lists
@@ -388,10 +389,12 @@ fixes. Do not match alerts to PRs yourself: a PR covers an alert only when the
 alert number is listed in that PR's `covered_alerts`.
 
 For every PR with a non-empty `covered_alerts` that is **not** a GitHub Actions
-update, emit one `approve_dependabot_pr` item with `pr_number` and the full
-`head_sha`, up to 10 items per run (the approval job's per-run limit). When more
-than 10 PRs qualify, request the PRs that cover the most alerts first, then the
-lowest PR numbers. The approval job verifies green CI,
+update and whose `already_approved` is `false`, emit one `approve_dependabot_pr`
+item with `pr_number` and the full `head_sha`, up to 10 items per run (the approval
+job's per-run limit). An `already_approved` PR already has the bot's approval at
+its current head, so requesting it again wastes the quota; still treat its alerts
+as covered. When more than 10 PRs qualify, request the PRs that cover the most
+alerts first, then the lowest PR numbers. The approval job verifies green CI,
 the cooldown, the manifest-only diff, the package source, and the version change
 itself, and skips PRs that fail any check, so request approval even when CI is
 still running. Still treat alerts as covered by the PR; do not duplicate the fix in
