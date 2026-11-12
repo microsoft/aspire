@@ -152,18 +152,23 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
     }
 
     [Theory]
-    [InlineData("AppHost.csproj", "stable", false, "success")]
-    [InlineData("apphost.cs", "stable", false, "success")]
-    [InlineData("AppHost.csproj", "stable", true, "success")]
-    [InlineData("apphost.cs", "stable", true, "success")]
-    [InlineData("AppHost.csproj", "stable", false, "decline")]
-    [InlineData("apphost.cs", "stable", false, "decline")]
-    [InlineData("AppHost.csproj", "stable", false, "restore")]
-    [InlineData("apphost.cs", "stable", false, "restore")]
-    [InlineData("AppHost.csproj", "default", false, "success")]
-    [InlineData("apphost.cs", "default", false, "success")]
+    [InlineData("AppHost.csproj", "stable", false, "success", false)]
+    [InlineData("apphost.cs", "stable", false, "success", false)]
+    [InlineData("AppHost.csproj", "stable", true, "success", false)]
+    [InlineData("apphost.cs", "stable", true, "success", false)]
+    [InlineData("AppHost.csproj", "stable", false, "decline", false)]
+    [InlineData("apphost.cs", "stable", false, "decline", false)]
+    [InlineData("AppHost.csproj", "stable", false, "restore", false)]
+    [InlineData("apphost.cs", "stable", false, "restore", false)]
+    [InlineData("AppHost.csproj", "default", false, "success", false)]
+    [InlineData("apphost.cs", "default", false, "success", false)]
+    [InlineData("AppHost.csproj", "stable", false, "success", true)]
+    [InlineData("apphost.cs", "stable", false, "success", true)]
+    [InlineData("AppHost.csproj", "default", false, "restore", true)]
+    [InlineData("apphost.cs", "default", false, "restore", true)]
+    [InlineData("AppHost.csproj", "stable", false, "decline", true)]
     public async Task UpdateAsync_AmbientChannelsSynchronizeSdkMetadataAfterSuccessfulRestore(
-        string fileName, string channelName, bool sdkAlreadyCurrent, string outcome)
+        string fileName, string channelName, bool sdkAlreadyCurrent, string outcome, bool force)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = await CreateAppHostAsync(workspace, fileName);
@@ -189,6 +194,7 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
         };
         runner.RestoreAsyncCallback = (_, _, _) =>
         {
+            Assert.False(force && channelName == "stable", "Forced explicit channel updates must not restore.");
             Assert.Equal(originalConfig, File.ReadAllText(configPath));
             restoreCount++;
             return outcome == "restore" ? 1 : 0;
@@ -196,7 +202,7 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
         using var provider = CreateServices(workspace, runner).BuildServiceProvider();
         var interaction = Assert.IsType<TestInteractionService>(provider.GetRequiredService<IInteractionService>());
         interaction.ConfirmCallback = (_, _) => outcome != "decline";
-        var context = await CreateContextAsync(provider, projectFile, channelName, hasExplicitChannel: channelName == "stable");
+        var context = await CreateContextAsync(provider, projectFile, channelName, hasExplicitChannel: channelName == "stable", force);
         var updater = provider.GetRequiredService<IProjectUpdater>();
         if (outcome == "restore")
         {
@@ -223,7 +229,7 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
             Assert.Equal(originalConfig, await File.ReadAllTextAsync(configPath));
             Assert.Equal(originalProject, await File.ReadAllBytesAsync(projectFile.FullName));
         }
-        Assert.Equal(outcome == "decline" || sdkAlreadyCurrent ? 0 : 1, restoreCount);
+        Assert.Equal(outcome == "decline" || sdkAlreadyCurrent || force && channelName == "stable" ? 0 : 1, restoreCount);
         Assert.Equal([UpdateCommandStrings.PerformUpdatesPrompt],
             interaction.BooleanPromptCalls.Select(static call => call.PromptText));
         Assert.Empty(interaction.FilePathPromptCalls);
@@ -902,9 +908,11 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
     }
 
     [Theory]
-    [InlineData("AppHost.csproj")]
-    [InlineData("apphost.cs")]
-    public async Task UpdateAsync_ExplicitSameChannelWithDifferentFeedRestoresWithoutVersionChanges(string fileName)
+    [InlineData("AppHost.csproj", false)]
+    [InlineData("apphost.cs", false)]
+    [InlineData("AppHost.csproj", true)]
+    [InlineData("apphost.cs", true)]
+    public async Task UpdateAsync_ExplicitSameChannelWithDifferentFeedRestoresUnlessForced(string fileName, bool force)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = await CreateAppHostAsync(workspace, fileName);
@@ -932,6 +940,7 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
             Assert.Equal([newSource], NuGetTestHelper.GetEligiblePackageSources(options.NuGetRestoreTargetsFile.DirectoryName!, "Aspire.AppHost.Sdk"));
             Assert.Equal([newSource], NuGetTestHelper.GetEligiblePackageSources(options.NuGetRestoreTargetsFile.DirectoryName!, "Aspire.Hosting.Redis"));
             restoreCount++;
+            Assert.False(force, "Forced channel updates must not attempt a validation restore.");
             return 0;
         };
         using var provider = CreateServices(workspace, runner, new FakeNuGetClient
@@ -945,10 +954,10 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
             """{ "channel": "staging", "sdkVersion": "9.4.1" }""");
 
         var result = await provider.GetRequiredService<IProjectUpdater>().UpdateProjectAsync(
-            CreateContext(projectFile, channel, hasExplicitChannel: true), TestContext.Current.CancellationToken);
+            CreateContext(projectFile, channel, hasExplicitChannel: true, force), TestContext.Current.CancellationToken);
 
         Assert.True(result.UpdatedApplied);
-        Assert.Equal(1, restoreCount);
+        Assert.Equal(force ? 0 : 1, restoreCount);
         Assert.Equal(originalProject, await File.ReadAllBytesAsync(projectFile.FullName));
         Assert.Equal([newSource], NuGetTestHelper.GetEligiblePackageSources(projectFile.DirectoryName!, "Aspire.Hosting.Redis"));
     }
@@ -1512,11 +1521,15 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
     }
 
     [Theory]
-    [InlineData("AppHost.csproj", false)]
-    [InlineData("apphost.cs", false)]
-    [InlineData("AppHost.csproj", true)]
-    [InlineData("apphost.cs", true)]
-    public async Task UpdateAsync_RefusesUnsafeChannelFeedBeforeEdits(string fileName, bool disabledSource)
+    [InlineData("AppHost.csproj", false, false)]
+    [InlineData("apphost.cs", false, false)]
+    [InlineData("AppHost.csproj", true, false)]
+    [InlineData("apphost.cs", true, false)]
+    [InlineData("AppHost.csproj", false, true)]
+    [InlineData("apphost.cs", false, true)]
+    [InlineData("AppHost.csproj", true, true)]
+    [InlineData("apphost.cs", true, true)]
+    public async Task UpdateAsync_RefusesUnsafeChannelFeedBeforeEdits(string fileName, bool disabledSource, bool force)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = await CreateAppHostAsync(workspace, fileName);
@@ -1551,7 +1564,7 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
         var updater = provider.GetRequiredService<IProjectUpdater>();
 
         var error = await Assert.ThrowsAsync<ProjectUpdaterException>(() =>
-            updater.UpdateProjectAsync(CreateContext(projectFile, channel, hasExplicitChannel: true),
+            updater.UpdateProjectAsync(CreateContext(projectFile, channel, hasExplicitChannel: true, force),
                 TestContext.Current.CancellationToken));
 
         Assert.Equal(string.Format(CultureInfo.CurrentCulture,
@@ -1758,19 +1771,20 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
     }
 
     private static async Task<UpdatePackagesContext> CreateContextAsync(
-        IServiceProvider provider, FileInfo projectFile, string channelName, bool hasExplicitChannel)
+        IServiceProvider provider, FileInfo projectFile, string channelName, bool hasExplicitChannel, bool force = false)
     {
         var channels = await provider.GetRequiredService<IPackagingService>()
             .GetChannelsAsync(TestContext.Current.CancellationToken);
-        return CreateContext(projectFile, channels.Single(channel => channel.Name == channelName), hasExplicitChannel);
+        return CreateContext(projectFile, channels.Single(channel => channel.Name == channelName), hasExplicitChannel, force);
     }
 
-    private static UpdatePackagesContext CreateContext(FileInfo projectFile, PackageChannel channel, bool hasExplicitChannel)
+    private static UpdatePackagesContext CreateContext(FileInfo projectFile, PackageChannel channel, bool hasExplicitChannel, bool force = false)
         => new()
         {
             AppHostFile = projectFile,
             Channel = channel,
             HasExplicitChannel = hasExplicitChannel,
+            Force = force,
             ConfirmBinding = PromptBinding.CreateDefault(true),
             NuGetConfigDirBinding = PromptBinding.CreateDefault<string?>(null)
         };

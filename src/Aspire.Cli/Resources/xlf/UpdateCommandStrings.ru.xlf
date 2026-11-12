@@ -162,6 +162,11 @@
         <target state="translated">Примечание. План обновления создан с использованием резервного анализа из-за невозможности разрешить SDK AppHost. Точность анализа зависимостей может быть снижена.</target>
         <note />
       </trans-unit>
+      <trans-unit id="ForceOptionDescription">
+        <source>Skip the validation restore when explicitly updating a .NET AppHost channel. Configuration conflicts still cause an error.</source>
+        <target state="new">Skip the validation restore when explicitly updating a .NET AppHost channel. Configuration conflicts still cause an error.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="MappingAddedFormat">
         <source>   Mapping: {0} (added)</source>
         <target state="translated">   Сопоставление: {0} (добавлено)</target>

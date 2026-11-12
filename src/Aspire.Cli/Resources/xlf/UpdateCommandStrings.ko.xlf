@@ -162,6 +162,11 @@
         <target state="translated">참고: 해결할 수 없는 AppHost SDK 때문에 대체 구문 분석을 사용하여 업데이트 계획이 생성되었습니다. 종속성 분석의 정확도가 낮아질 수 있습니다.</target>
         <note />
       </trans-unit>
+      <trans-unit id="ForceOptionDescription">
+        <source>Skip the validation restore when explicitly updating a .NET AppHost channel. Configuration conflicts still cause an error.</source>
+        <target state="new">Skip the validation restore when explicitly updating a .NET AppHost channel. Configuration conflicts still cause an error.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="MappingAddedFormat">
         <source>   Mapping: {0} (added)</source>
         <target state="translated">   매핑: {0}(추가됨)</target>

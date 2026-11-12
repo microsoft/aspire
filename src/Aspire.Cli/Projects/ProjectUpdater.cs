@@ -317,7 +317,7 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
                     return 0;
                 });
 
-            if (requiresRestore)
+            if (requiresRestore && !(context.Force && hasExplicitChannelPolicy))
             {
                 // Validate the complete updated graph, not old versions against a new feed or a
                 // half-updated graph. Native restore retains each referenced project's own settings.

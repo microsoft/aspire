@@ -162,6 +162,11 @@
         <target state="translated">注意: 由于 AppHost SDK 无法解析，已采用回退解析生成更新计划。依赖项分析的准确性可能有所降低。</target>
         <note />
       </trans-unit>
+      <trans-unit id="ForceOptionDescription">
+        <source>Skip the validation restore when explicitly updating a .NET AppHost channel. Configuration conflicts still cause an error.</source>
+        <target state="new">Skip the validation restore when explicitly updating a .NET AppHost channel. Configuration conflicts still cause an error.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="MappingAddedFormat">
         <source>   Mapping: {0} (added)</source>
         <target state="translated">   映射: {0} (已添加)</target>

@@ -162,6 +162,11 @@
         <target state="translated">Not: Çözülemeyen AppHost SDK nedeniyle geri dönüş ayrıştırması kullanılarak oluşturulan güncelleştirme planı. Bağımlılık analizi doğruluğu azaltmış olabilir.</target>
         <note />
       </trans-unit>
+      <trans-unit id="ForceOptionDescription">
+        <source>Skip the validation restore when explicitly updating a .NET AppHost channel. Configuration conflicts still cause an error.</source>
+        <target state="new">Skip the validation restore when explicitly updating a .NET AppHost channel. Configuration conflicts still cause an error.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="MappingAddedFormat">
         <source>   Mapping: {0} (added)</source>
         <target state="translated">   Eşleme: {0} (eklendi)</target>

@@ -162,6 +162,11 @@
         <target state="translated">Remarque : plan de mise à jour généré à l’aide de l’analyse de secours en raison d’un Kit de développement logiciel (SDK) AppHost non résolu. L’analyse des dépendances peut avoir une précision réduite.</target>
         <note />
       </trans-unit>
+      <trans-unit id="ForceOptionDescription">
+        <source>Skip the validation restore when explicitly updating a .NET AppHost channel. Configuration conflicts still cause an error.</source>
+        <target state="new">Skip the validation restore when explicitly updating a .NET AppHost channel. Configuration conflicts still cause an error.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="MappingAddedFormat">
         <source>   Mapping: {0} (added)</source>
         <target state="translated">   Mappage : {0} (ajouté)</target>

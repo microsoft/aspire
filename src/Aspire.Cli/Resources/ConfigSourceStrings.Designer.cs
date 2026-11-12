@@ -187,7 +187,7 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to --config-source cannot be combined with --self, --migrate, --channel, --quality, or --nuget-config-dir..
+        ///   Looks up a localized string similar to --config-source cannot be combined with --self, --migrate, --force, --channel, --quality, or --nuget-config-dir..
         /// </summary>
         internal static string IncompatibleOptions {
             get {

@@ -62,6 +62,10 @@ internal sealed class UpdateCommand : BaseCommand
     {
         Description = UpdateCommandStrings.MigrateOptionDescription
     };
+    private static readonly Option<bool> s_forceOption = new("--force")
+    {
+        Description = UpdateCommandStrings.ForceOptionDescription
+    };
     private static readonly Option<string?> s_nugetConfigDirOption = new("--nuget-config-dir")
     {
         Description = UpdateCommandStrings.NuGetConfigDirOptionDescription
@@ -104,6 +108,7 @@ internal sealed class UpdateCommand : BaseCommand
         Options.Add(ConfigSourceService.s_useSourceOption);
         Options.Add(s_yesOption);
         Options.Add(s_migrateOption);
+        Options.Add(s_forceOption);
         Options.Add(s_nugetConfigDirOption);
 
         AddNonInteractiveRequiresYesValidator(this, s_yesOption);
@@ -133,7 +138,7 @@ internal sealed class UpdateCommand : BaseCommand
         Validators.Add(result =>
         {
             if (result.GetValue(s_configSourceOption) &&
-                (result.GetValue(s_selfOption) || result.GetValue(s_migrateOption)
+                (result.GetValue(s_selfOption) || result.GetValue(s_migrateOption) || result.GetValue(s_forceOption)
                 || result.GetResult(_channelOption) is not null || result.GetResult(_qualityOption) is not null
                 || result.GetResult(s_nugetConfigDirOption) is not null))
             {
@@ -456,6 +461,7 @@ internal sealed class UpdateCommand : BaseCommand
                 AppHostFile = projectFile,
                 Channel = channel,
                 HasExplicitChannel = hasExplicitChannel,
+                Force = parseResult.GetValue(s_forceOption),
                 ConfirmBinding = confirmBinding,
                 NuGetConfigDirBinding = PromptBinding.Create(parseResult, s_nugetConfigDirOption),
                 AdditionalUpdateSteps = toolUpdateStep is null ? [] : [toolUpdateStep]

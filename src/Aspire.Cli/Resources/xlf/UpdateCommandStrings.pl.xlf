@@ -162,6 +162,11 @@
         <target state="translated">Uwaga: plan aktualizacji został wygenerowany przy użyciu analizy zapasowej z powodu nierozpoznanego zestawu AppHost SDK. Analiza zależności może być mniej dokładna.</target>
         <note />
       </trans-unit>
+      <trans-unit id="ForceOptionDescription">
+        <source>Skip the validation restore when explicitly updating a .NET AppHost channel. Configuration conflicts still cause an error.</source>
+        <target state="new">Skip the validation restore when explicitly updating a .NET AppHost channel. Configuration conflicts still cause an error.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="MappingAddedFormat">
         <source>   Mapping: {0} (added)</source>
         <target state="translated">   Mapowanie: {0} (dodano)</target>

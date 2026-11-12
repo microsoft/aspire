@@ -162,6 +162,11 @@
         <target state="translated">Poznámka: Plán aktualizace byl vygenerován pomocí náhradní analýzy kvůli nevyřešitelné sadě AppHost SDK. Analýza závislostí může mít sníženou přesnost.</target>
         <note />
       </trans-unit>
+      <trans-unit id="ForceOptionDescription">
+        <source>Skip the validation restore when explicitly updating a .NET AppHost channel. Configuration conflicts still cause an error.</source>
+        <target state="new">Skip the validation restore when explicitly updating a .NET AppHost channel. Configuration conflicts still cause an error.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="MappingAddedFormat">
         <source>   Mapping: {0} (added)</source>
         <target state="translated">   Mapování: {0} (přidáno)</target>

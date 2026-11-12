@@ -349,6 +349,15 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Skip the validation restore when explicitly updating a .NET AppHost channel. Configuration conflicts still cause an error..
+        /// </summary>
+        internal static string ForceOptionDescription {
+            get {
+                return ResourceManager.GetString("ForceOptionDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to    Mapping: {0} (added).
         /// </summary>
         internal static string MappingAddedFormat {
