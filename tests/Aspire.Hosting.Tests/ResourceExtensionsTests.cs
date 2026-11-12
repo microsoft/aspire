@@ -34,6 +34,21 @@ public class ResourceExtensionsTests
         Assert.Equal(KnownResourceTypes.Executable, resource.GetResourceType());
     }
 
+#pragma warning disable ASPIRETOOLRESOURCE001, CS0618 // Verify integration-authoring classification and legacy project precedence.
+    [Fact]
+    public void ToolMarkerClassifiesExecutablesWithoutOverridingOtherResourceKinds()
+    {
+        var executable = new MarkedExecutableResource("tool");
+        executable.Annotations.Add(new TestProjectMetadata());
+
+        Assert.Equal(KnownResourceTypes.Tool, executable.GetResourceType());
+        Assert.Equal(KnownResourceTypes.Tool, executable.ResourceTypeDisplayName);
+        Assert.Equal(KnownResourceTypes.Project, new MarkedProjectResource("project").GetResourceType());
+        Assert.Equal(KnownResourceTypes.Container, new MarkedContainerResource("container").GetResourceType());
+        Assert.Equal(nameof(MarkedResource), new MarkedResource("custom").GetResourceType());
+    }
+#pragma warning restore ASPIRETOOLRESOURCE001, CS0618
+
     [Fact]
     public void TryGetAnnotationsOfTypeReturnsFalseWhenNoAnnotations()
     {
@@ -568,6 +583,16 @@ public class ResourceExtensionsTests
 
         Assert.Equal(optionName, exception.ParamName);
     }
+
+#pragma warning disable ASPIRETOOLRESOURCE001, CS0618 // Exercise tool-marker precedence for independently authored resource kinds.
+    private sealed class MarkedExecutableResource(string name) : ExecutableResource(name, "dotnet", "."), IToolResource;
+
+    private sealed class MarkedProjectResource(string name) : ProjectResource(name), IToolResource;
+
+    private sealed class MarkedContainerResource(string name) : ContainerResource(name), IToolResource;
+
+    private sealed class MarkedResource(string name) : Resource(name), IToolResource;
+#pragma warning restore ASPIRETOOLRESOURCE001, CS0618
 
     private sealed class ComputeEnvironmentResource(string name) : Resource(name), IComputeEnvironmentResource
     {

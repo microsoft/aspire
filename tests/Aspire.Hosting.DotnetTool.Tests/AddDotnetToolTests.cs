@@ -6,6 +6,8 @@ using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 
+#pragma warning disable CS0618 // Verify compatibility of the deprecated tool entry points.
+
 namespace Aspire.Hosting.DotnetTool.Tests;
 
 #pragma warning disable ASPIREDOTNETTOOL // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.

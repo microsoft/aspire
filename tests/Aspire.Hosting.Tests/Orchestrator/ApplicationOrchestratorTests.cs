@@ -1098,13 +1098,23 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
         Assert.Null(snapshotEvent.Snapshot.State?.Style);
     }
 
-    [Fact]
-    public async Task OnResourceStarting_ToolResourceType_TransitionsToStarting()
+    [Theory]
+    [InlineData("custom")]
+    [InlineData("legacy")]
+    [InlineData("canonical")]
+    public async Task OnResourceStarting_ToolResourceType_TransitionsToStarting(string resourceKind)
     {
         var builder = DistributedApplication.CreateBuilder();
         builder.WithTestAndResourceLogging(testOutputHelper);
 
-        var resource = builder.AddResource(new CustomResource("tool"));
+#pragma warning disable ASPIREDOTNETTOOL, ASPIREDOTNETCLITOOL001 // Preserve Starting behavior for both tool contracts.
+        IResourceBuilder<IResource> resource = resourceKind switch
+        {
+            "legacy" => builder.AddDotnetTool("tool", "package"),
+            "canonical" => builder.AddDotnetCliTool("tool", "package"),
+            _ => builder.AddResource(new CustomResource("tool"))
+        };
+#pragma warning restore ASPIREDOTNETTOOL, ASPIREDOTNETCLITOOL001
 
         using var app = builder.Build();
         var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
