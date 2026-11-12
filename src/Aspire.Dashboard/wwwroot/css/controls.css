@@ -659,6 +659,35 @@ fluent-popover-b::part(dialog)::-webkit-scrollbar-corner {
     padding: 0 4px 0 0;
 }
 
+.pause-warning {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--aspire-space-1);
+    min-width: 0;
+    padding: 1px 9px;
+    border-radius: var(--aspire-radius-medium);
+    background: color-mix(in srgb, var(--warning) 14%, transparent);
+    color: var(--colorNeutralForeground1);
+    font-size: var(--aspire-font-size-secondary);
+    font-weight: var(--aspire-font-weight-regular);
+}
+
+.pause-warning-icon {
+    display: flex;
+    flex: 0 0 auto;
+    color: var(--warning);
+}
+
+.pause-warning-message {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.pause-warning-title {
+    font-weight: var(--aspire-font-weight-semibold);
+    padding-inline-end: 4px;
+}
+
 html,
 body {
     width: 100%;

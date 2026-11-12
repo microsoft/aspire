@@ -1360,12 +1360,24 @@
 }
 
 .resource-footer-page-status {
-    flex: 0 0 auto;
+    flex: 0 1 auto;
     min-width: 0;
+    max-width: 100%;
     margin-left: auto;
+    overflow: hidden;
     color: var(--colorNeutralForeground2);
     font-size: var(--aspire-font-size-secondary);
     white-space: nowrap;
+}
+
+.resource-footer-page-status ::deep .items-footer {
+    min-height: 0;
+    column-gap: var(--aspire-space-3);
+}
+
+.resource-footer-page-status ::deep .result-count {
+    flex: 0 0 auto;
+    padding-inline-start: 0;
 }
 
 .resource-header {

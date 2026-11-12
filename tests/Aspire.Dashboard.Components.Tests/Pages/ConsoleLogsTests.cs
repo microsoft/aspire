@@ -1056,7 +1056,7 @@ public partial class ConsoleLogsTests : DashboardTestContext
                     loc[nameof(Resources.ConsoleLogs.PauseInProgressText)],
                     FormatHelpers.FormatTimeWithOptionalDate(timeProvider, activePause.Start)),
                 pauseWarning.Instance.PauseText);
-            Assert.Single(cut.Find("footer").QuerySelectorAll(".block-warning"));
+            Assert.Single(cut.Find("footer").QuerySelectorAll(".pause-warning"));
         });
 
         logger.LogInformation("Wait for pause log.");
