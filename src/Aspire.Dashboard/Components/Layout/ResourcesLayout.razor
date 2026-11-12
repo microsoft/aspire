@@ -471,9 +471,8 @@
 }
 
 @code {
-    // A resource's highlighted commands, such as Start and Stop, and its "more" menu. The resource overview shows them
-    // with labels; the resource list shows them as icons on each row. The menu is built when it opens, so the list
-    // doesn't build a menu for every resource it renders.
+    // The resource overview shows highlighted commands with labels; the resource list shows icons and a menu.
+    // Parameters in the full-page list show only their Set parameter command. Menus are built when opened.
     internal RenderFragment RenderResourceActions(ResourceViewModel resource, bool showLabels, ResourceGridViewModel? row, DisplayedUrl? primaryUrl = null) => __builder =>
     {
         var resourceName = GetResourceName(resource);
@@ -507,7 +506,7 @@
                     <FluentIcon Value="@(new Icons.Regular.Size16.Open())" Color="Color.Primary" />
                 </a>
             }
-            @foreach (var command in showLabels ? GetHighlightedCommands(resource) : _isPaneFullCanvas ? GetResourceRowCommands(resource) : GetSidebarCommands(resource))
+            @foreach (var command in showLabels ? GetHighlightedCommands(resource) : _isPaneFullCanvas ? GetFullPageRowCommands(resource) : GetSidebarCommands(resource))
             {
                 var commandTitle = !string.IsNullOrEmpty(command.GetDisplayDescription()) ? command.GetDisplayDescription() : command.GetDisplayName();
                 if (showLabels)
@@ -523,7 +522,7 @@
                 else
                 {
                     <FluentButton Appearance="ButtonAppearance.Transparent"
-                                  Class="@($"{GetResourceRowActionClass(actionIndex++)} resource-row-highlighted resource-row-command-slot-{highlightedIndex++} {(!command.IsHighlighted && _isPaneFullCanvas ? "resource-row-wide-command" : null)}")"
+                                  Class="@($"{GetResourceRowActionClass(actionIndex++)} resource-row-highlighted resource-row-command-slot-{highlightedIndex++}")"
                                   IconOnly="true"
                                   IconStart="@(IconResolver.ResolveHighlightedCommandIcon(command.IconName, command.IconVariant).WithColor("currentColor"))"
                                   data-tooltip="@commandTitle"
@@ -533,14 +532,17 @@
                                   Disabled="@IsCommandDisabled(resource, command)" />
                 }
             }
-            <AspireMenuButton ButtonAppearance="@(showLabels ? ButtonAppearance.Default : ButtonAppearance.Transparent)"
-                              ButtonClass="@(showLabels ? null : "resource-row-action")"
-                              Icon="@(new Icons.Regular.Size16.MoreHorizontal())"
-                              IconColor="Color.Custom"
-                              IconCustomColor="currentColor"
-                              ItemsProvider="@handlers.MenuItems"
-                              data-tooltip-positioning="@(!showLabels ? "above" : null)"
-                              Title="@string.Format(CultureInfo.CurrentCulture, Loc[nameof(Dashboard.Resources.Layout.ResourcePaneResourceActions)], resourceName)" />
+            @if (showLabels || !_isPaneFullCanvas || !resource.IsParameter)
+            {
+                <AspireMenuButton ButtonAppearance="@(showLabels ? ButtonAppearance.Default : ButtonAppearance.Transparent)"
+                                  ButtonClass="@(showLabels ? null : "resource-row-action")"
+                                  Icon="@(new Icons.Regular.Size16.MoreHorizontal())"
+                                  IconColor="Color.Custom"
+                                  IconCustomColor="currentColor"
+                                  ItemsProvider="@handlers.MenuItems"
+                                  data-tooltip-positioning="@(!showLabels ? "above" : null)"
+                                  Title="@string.Format(CultureInfo.CurrentCulture, Loc[nameof(Dashboard.Resources.Layout.ResourcePaneResourceActions)], resourceName)" />
+            }
             @if (!showLabels && toggleLast)
             {
                 RenderRowToggleSlot(__builder);
