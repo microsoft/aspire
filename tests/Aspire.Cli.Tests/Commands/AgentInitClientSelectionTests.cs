@@ -1429,11 +1429,8 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
         if (hasCopiedSkills)
         {
             Assert.Empty(interaction.DisplayedErrors);
-            foreach (var removed in new[] { "~/.agents/skills/aspire", $"{projectDirectory}/skills/aspire-init" })
-            {
-                Assert.Contains(interaction.DisplayedMessages, message => message.Emoji.Equals(KnownEmojis.Robot) &&
-                    message.Message.Contains($"{Environment.NewLine}  [dim]{string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_RemovedSkillCopy, removed)}[/]", StringComparison.Ordinal));
-            }
+            Assert.Contains(interaction.DisplayedMessages, message => message.Emoji.Equals(KnownEmojis.Robot) &&
+                message.Message.EndsWith($"{Environment.NewLine}  [dim]{string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_RemovedSkillCopies, $"~/.agents/skills/aspire, {projectDirectory}/skills/aspire-init")}[/]", StringComparison.Ordinal));
             Assert.False(Directory.Exists(Path.GetDirectoryName(path)));
             Assert.False(Directory.Exists(Path.GetDirectoryName(projectSkillPath)));
             Assert.True(File.Exists(context.Copilot.GetIntegrationConfigPath(AgentConfigurationScope.Global, context.Project)));

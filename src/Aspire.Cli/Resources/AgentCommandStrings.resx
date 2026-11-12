@@ -287,9 +287,9 @@
   {0}</value>
     <comment>{0} lists each agent's configuration path and failure details, one target per line.</comment>
   </data>
-  <data name="InitCommand_RemovedSkillCopy" xml:space="preserve">
-    <value>Removed copied Aspire skill '{0}'.</value>
-    <comment>{0} is the removed skill directory path.</comment>
+  <data name="InitCommand_RemovedSkillCopies" xml:space="preserve">
+    <value>Removed copied Aspire skills: {0}</value>
+    <comment>{0} lists the removed skill directory paths, separated by commas.</comment>
   </data>
   <data name="InitCommand_RemoveSkillCopyFailed" xml:space="preserve">
     <value>Could not remove copied Aspire skill '{0}': {1}</value>

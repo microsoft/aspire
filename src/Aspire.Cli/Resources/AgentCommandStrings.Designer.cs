@@ -466,11 +466,11 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Removed copied Aspire skill &apos;{0}&apos;..
+        ///   Looks up a localized string similar to Removed copied Aspire skills: {0}.
         /// </summary>
-        internal static string InitCommand_RemovedSkillCopy {
+        internal static string InitCommand_RemovedSkillCopies {
             get {
-                return ResourceManager.GetString("InitCommand_RemovedSkillCopy", resourceCulture);
+                return ResourceManager.GetString("InitCommand_RemovedSkillCopies", resourceCulture);
             }
         }
         

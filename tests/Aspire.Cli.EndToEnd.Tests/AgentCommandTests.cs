@@ -227,7 +227,7 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("Where should skills and tools be installed?", timeout: TimeSpan.FromSeconds(30));
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("Removed copied Aspire skill '.agents/skills/aspire'.", timeout: TimeSpan.FromSeconds(30));
+        await auto.WaitUntilTextAsync("Removed copied Aspire skills: .agents/skills/aspire", timeout: TimeSpan.FromSeconds(30));
         await auto.WaitUntilTextAsync("configuration complete", timeout: TimeSpan.FromSeconds(30));
         await auto.WaitForSuccessPromptAsync(counter);
 

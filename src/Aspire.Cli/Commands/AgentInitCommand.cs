@@ -943,13 +943,12 @@ internal sealed class AgentInitCommand : BaseCommand
                     string.Join(", ", result.Clients.Select(static client => client.DisplayName))));
             var message = string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_ConfiguredTargets,
                 string.Join(", ", targets)).EscapeMarkup();
-            foreach (var removedSkillCopy in removedSkillCopies)
+            if (removedSkillCopies.Count > 0)
             {
-                message += $"{Environment.NewLine}  [dim]{string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_RemovedSkillCopy, removedSkillCopy).EscapeMarkup()}[/]";
+                message += $"{Environment.NewLine}  [dim]{string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_RemovedSkillCopies, string.Join(", ", removedSkillCopies)).EscapeMarkup()}[/]";
             }
 
             InteractionService.DisplayMessage(KnownEmojis.Robot, message, allowMarkup: true);
-            InteractionService.DisplayEmptyLine();
         }
 
         return hasErrors;
