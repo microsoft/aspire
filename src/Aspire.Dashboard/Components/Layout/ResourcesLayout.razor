@@ -530,7 +530,7 @@
                                   aria-label="@($"{command.GetDisplayName()} {resourceName}")"
                                   OnClick="@handlers.Command(command.Name)"
                                   Disabled="@IsCommandDisabled(resource, command)">
-                        <FluentIcon Value="@IconResolver.ResolveHighlightedCommandIcon(command.IconName, command.IconVariant)" Color="Color.Primary" />
+                        <FluentIcon Value="@IconResolver.ResolveHighlightedCommandIcon(command.IconName, command.IconVariant)" Color="Color.Custom" CustomColor="currentColor" />
                     </FluentButton>
                 }
             }
@@ -539,7 +539,7 @@
                 <AspireMenuButton ButtonAppearance="@(showLabels ? ButtonAppearance.Default : ButtonAppearance.Transparent)"
                                   ButtonClass="@(showLabels ? null : "resource-row-action")"
                                   Icon="@(new Icons.Regular.Size16.MoreHorizontal())"
-                                  IconColor="Color.Primary"
+                                  IconColor="@(showLabels ? Color.Primary : Color.Custom)"
                                   ItemsProvider="@handlers.MenuItems"
                                   data-tooltip-positioning="@(!showLabels ? "above" : null)"
                                   Title="@string.Format(CultureInfo.CurrentCulture, Loc[nameof(Dashboard.Resources.Layout.ResourcePaneResourceActions)], resourceName)" />
