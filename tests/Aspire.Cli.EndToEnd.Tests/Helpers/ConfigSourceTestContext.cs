@@ -352,7 +352,7 @@ internal sealed class ConfigSourceTestContext
 
     public async Task UpdateProjectWithSourceConsentAsync()
     {
-        await _auto.TypeAsync("aspire update --yes");
+        await _auto.TypeAsync("aspire update --yes --nuget-config-dir .");
         await _auto.EnterAsync();
         var candidate = new CellPatternSearcher().Find("Git source:");
         var consentPrompt = new CellPatternSearcher().Find("Use configuration from this source? [Y/n]:");
@@ -368,7 +368,11 @@ internal sealed class ConfigSourceTestContext
         original["skillSources"] = actual["skillSources"]!.DeepClone();
         original["integrationSources"] = actual["integrationSources"]!.DeepClone();
         original["configSource"] = actual["configSource"]!.DeepClone();
-        Assert.Equal(original.ToJsonString(), actual.ToJsonString());
+        // Plain update also synchronizes SDK metadata with the AppHost's selected package version.
+        var appHost = await File.ReadAllTextAsync(Path.Combine(_root, "SourceApp", "apphost.cs"), _cancellationToken);
+        original["sdk"] ??= new JsonObject();
+        original["sdk"]!["version"] = CliE2ETestHelpers.GetAppHostVersion(appHost);
+        Assert.True(JsonNode.DeepEquals(original, actual), $"Unexpected configuration after source adoption: {actual}");
     }
 
     public async Task AssertConfigurationUpdatedAsync(JsonObject original)

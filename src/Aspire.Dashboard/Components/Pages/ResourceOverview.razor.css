@@ -7,6 +7,12 @@
     outline: none;
 }
 
+.resource-overview:has(> .home.graph-view) {
+    /* The graph's menu otherwise adds a line box below the full-height canvas. */
+    overflow: hidden;
+    padding: 0;
+}
+
 .overview-message {
     display: flex;
     align-items: center;
