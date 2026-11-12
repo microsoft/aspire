@@ -61,6 +61,24 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Showing &lt;strong&gt;{0} spans&lt;/strong&gt;.
+        /// </summary>
+        public static string TotalItemsFooterPluralText {
+            get {
+                return ResourceManager.GetString("TotalItemsFooterPluralText", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Showing &lt;strong&gt;{0} span&lt;/strong&gt;.
+        /// </summary>
+        public static string TotalItemsFooterSingularText {
+            get {
+                return ResourceManager.GetString("TotalItemsFooterSingularText", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Back to traces.
         /// </summary>
         public static string TraceDetailBackToTraces {

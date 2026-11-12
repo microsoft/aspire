@@ -14,6 +14,8 @@ namespace Aspire.Hosting;
 /// </summary>
 public static class AzureVirtualNetworkExtensions
 {
+    private const int MaxSecurityRuleNameLength = 80;
+
     /// <summary>
     /// Adds an Azure Virtual Network resource to the application model.
     /// </summary>
@@ -666,13 +668,14 @@ public static class AzureVirtualNetworkExtensions
         // Check for conflicts and append an index if needed
         var candidateName = baseName;
         var index = 2;
-        while (nsgResource.SecurityRules.Any(r => r.Name == candidateName))
+        while (nsgResource.SecurityRules.Any(r => string.Equals(r.Name, candidateName, StringComparison.OrdinalIgnoreCase)))
         {
             if (index == 100)
             {
                 throw new InvalidOperationException($"Could not generate a unique name for security rule '{baseName}'");
             }
-            candidateName = $"{baseName}-{index}";
+            var suffix = $"-{index}";
+            candidateName = $"{baseName[..Math.Min(baseName.Length, MaxSecurityRuleNameLength - suffix.Length)]}{suffix}";
             index++;
         }
 
@@ -698,6 +701,14 @@ public static class AzureVirtualNetworkExtensions
             parts.Add(to);
         }
 
-        return string.Join("-", parts);
+        // ARM rule names allow ASCII alphanumerics, '_', '.', and '-', but cannot end in '.' or '-'.
+        // Keep CIDRs such as "10.1.1.0/24" and "2001:db8::/64" unchanged in the address properties.
+        // https://learn.microsoft.com/azure/azure-resource-manager/management/resource-name-rules#microsoftnetwork
+        var normalizedName = new string(string.Join("-", parts)
+            .Take(MaxSecurityRuleNameLength)
+            .Select(c => char.IsAsciiLetterOrDigit(c) || c is '_' or '.' or '-' ? c : '-')
+            .ToArray());
+
+        return normalizedName.TrimEnd('.', '-');
     }
 }

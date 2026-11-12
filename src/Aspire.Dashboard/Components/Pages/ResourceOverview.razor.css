@@ -410,8 +410,34 @@ a.overview-list-value:hover {
     font-variant-numeric: tabular-nums;
 }
 
+.overview-endpoints {
+    display: grid;
+    grid-template-columns: fit-content(30%) minmax(0, 1fr);
+    gap: var(--aspire-space-1) var(--aspire-space-3);
+}
+
 .overview-list .overview-endpoint {
+    display: grid;
+    grid-column: 1 / -1;
+    grid-template-columns: subgrid;
+    /* A different subgrid gap would expand the first track beyond its 30% cap. */
+    column-gap: inherit;
     align-items: flex-start;
+    padding: 0;
+    border-top: 0;
+}
+
+.overview-endpoint .overview-list-label {
+    min-width: 0;
+    max-width: none;
+    color: var(--colorNeutralForeground3);
+}
+
+.overview-endpoint-value {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--aspire-space-2);
+    min-width: 0;
 }
 
 .overview-endpoint-addresses {
@@ -433,12 +459,16 @@ a.overview-list-value:hover {
     overflow-wrap: anywhere;
 }
 
-a.overview-endpoint-address {
+a.overview-endpoint-address,
+a.overview-endpoint-name,
+.overview-endpoint a.overview-list-label {
     color: var(--colorBrandForegroundLink);
     text-decoration: none;
 }
 
-a.overview-endpoint-address:hover {
+a.overview-endpoint-address:hover,
+a.overview-endpoint-name:hover,
+.overview-endpoint a.overview-list-label:hover {
     text-decoration: underline;
 }
 

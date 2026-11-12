@@ -214,7 +214,7 @@ namespace Projects%3B
   <PropertyGroup>
     <_AspireCliInvocationMode Condition="'$(AspireCliInvocationMode)' == ''">Path</_AspireCliInvocationMode>
     <_AspireCliInvocationMode Condition="'$(AspireCliInvocationMode)' != ''">$(AspireCliInvocationMode)</_AspireCliInvocationMode>
-    <_AspireUseDnxCliRunHook Condition="'$(_AspireCliInvocationMode.ToLowerInvariant())' == 'dnx' or '$(_AspireCliInvocationMode.ToLowerInvariant())' == 'dnxpinned'">true</_AspireUseDnxCliRunHook>
+    <_AspireCliInvocationModeRequestsDnx Condition="'$(_AspireCliInvocationMode.ToLowerInvariant())' == 'dnx' or '$(_AspireCliInvocationMode.ToLowerInvariant())' == 'dnxpinned'">true</_AspireCliInvocationModeRequestsDnx>
     <_AspireCliDnxPackageId>aspire.cli</_AspireCliDnxPackageId>
     <!-- An explicit Dnx mode leaves the package unversioned so DNX can honor an in-scope tool manifest,
          or select the latest package when no manifest applies. Path fallback and DnxPinned use the CLI
@@ -246,6 +246,13 @@ namespace Projects%3B
     </PropertyGroup>
 
     <Message Text="Aspire CLI invocation selection: $(_AspireResolvedCliInvocationMode) (aspire: $(_AspireResolvedCliPath), dnx: $(_AspireResolvedDnxPath))" Importance="Low" />
+
+    <!-- An explicit AspireCliPath stays authoritative, but it is often inherited from the environment
+         (for example, the Aspire VS Code extension sets it for its terminals), so make it visible when
+         it overrides an explicitly requested DNX mode. See https://github.com/microsoft/aspire/issues/19713. -->
+    <Warning Code="ASPIRE015"
+             Condition="'$(AspireCliPath)' != '' and '$(_AspireCliInvocationModeRequestsDnx)' == 'true'"
+             Text="$(MSBuildProjectName): AspireCliInvocationMode=$(_AspireCliInvocationMode) is ignored because AspireCliPath is set to '$(AspireCliPath)'. AspireCliPath takes precedence over AspireCliInvocationMode and may be inherited from the environment, for example from the Aspire VS Code extension. To use DNX, clear it in the AppHost project with an empty &lt;AspireCliPath&gt;&lt;/AspireCliPath&gt; property. To keep using AspireCliPath, remove AspireCliInvocationMode or add ASPIRE015 to NoWarn." />
   </Target>
 
   <Target Name="ResolveAspireCliBundlePaths"
@@ -663,7 +670,7 @@ namespace Projects%3B
 
   <Target Name="_ValidateAspireCliDnxInvocationMode"
           DependsOnTargets="_ResolveAspireCliInvocation"
-          Condition="'$(IsAspireHost)' == 'true' and '$(AspireUseCliBundle)' == 'true' and '$(_AspireUseDnxCliRunHook)' == 'true' and '$(AspireCliPath)' == ''">
+          Condition="'$(IsAspireHost)' == 'true' and '$(AspireUseCliBundle)' == 'true' and '$(_AspireCliInvocationModeRequestsDnx)' == 'true' and '$(AspireCliPath)' == ''">
     <Error Code="ASPIRE011"
            Condition="'$(_AspireResolvedDnxPath)' == ''"
            Text="$(MSBuildProjectName) is configured with AspireCliInvocationMode=$(_AspireCliInvocationMode), but the dnx command could not be found on PATH. Install or use the .NET SDK 10.0 or later, set AspireCliInvocationMode=Path to use the global aspire command, or set AspireCliPath to an explicit Aspire CLI executable." />
