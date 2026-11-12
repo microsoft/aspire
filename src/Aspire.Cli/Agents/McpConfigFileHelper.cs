@@ -51,6 +51,9 @@ internal static class McpConfigFileHelper
         using var reader = new StreamReader(new MemoryStream(content));
         var text = await reader.ReadToEndAsync(cancellationToken);
 
+        // JsonObject materializes properties lazily, so {"mcpServers":{},"mcpServers":{}} would otherwise
+        // throw ArgumentException on first access instead of being reported as malformed here.
+        documentOptions.AllowDuplicateProperties = false;
         JsonNode? root;
         try
         {
