@@ -6,6 +6,6 @@
   ],
   Results: [
     Configure Aspire MCP for GitHub Copilot at <workspace>/.mcp.json,
-    Installed Aspire agent telemetry hooks for: GitHub Copilot. Only Aspire skill, MCP tool, and reference-file usage is recorded. Opt out anytime by setting ASPIRE_CLI_TELEMETRY_OPTOUT=true.
+    Installed Aspire agent telemetry hooks in user-level configuration for: GitHub Copilot. Only Aspire skill, MCP tool, and reference-file usage is recorded. Opt out anytime by setting ASPIRE_CLI_TELEMETRY_OPTOUT=true.
   ]
 }
