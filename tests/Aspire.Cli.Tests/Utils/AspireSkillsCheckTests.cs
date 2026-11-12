@@ -33,8 +33,9 @@ public class AspireSkillsCheckTests(ITestOutputHelper outputHelper) : IDisposabl
         Assert.Equal(EnvironmentCheckStatus.Warning, result.Status);
         Assert.Equal(
             $"""
-            {string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.AspireSkillsFixFormat, "aspire agent init --agents claude --scope project")}
-            {string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.AspireSkillsFixFormat, "aspire agent init --agents copilot,opencode --scope global")}
+            {DoctorCommandStrings.AspireSkillsFix}
+              {string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_LocationWithAgents, ".claude/skills/aspire-init", "claude")}
+              {string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_LocationWithAgents, "~/.agents/skills/aspire", "copilot, opencode")}
             """.ReplaceLineEndings("\n"),
             result.Fix);
         Assert.Equal([".claude/skills/aspire-init", "~/.agents/skills/aspire"], result.Files);

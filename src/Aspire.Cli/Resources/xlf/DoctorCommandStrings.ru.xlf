@@ -27,10 +27,10 @@
         <target state="translated">Aspire</target>
         <note />
       </trans-unit>
-      <trans-unit id="AspireSkillsFixFormat">
-        <source>Run '{0}' to configure skill sources and remove these copies.</source>
-        <target state="new">Run '{0}' to configure skill sources and remove these copies.</target>
-        <note>{0} is the aspire agent init command (not localizable)</note>
+      <trans-unit id="AspireSkillsFix">
+        <source>Run 'aspire agent init' to configure skill sources and remove these copies:</source>
+        <target state="new">Run 'aspire agent init' to configure skill sources and remove these copies:</target>
+        <note>'aspire agent init' is a command and is not localizable. The copies are listed on the following lines.</note>
       </trans-unit>
       <trans-unit id="AspireSkillsMessage">
         <source>Found static copies of Aspire skills.</source>
@@ -536,11 +536,6 @@
         <source>Environment checks timed out after {0} seconds.</source>
         <target state="translated">Истекло время ожидания проверок среды через {0} сек.</target>
         <note>{0} is the total timeout in seconds.</note>
-      </trans-unit>
-      <trans-unit id="FilesHeader">
-        <source>Files:</source>
-        <target state="new">Files:</target>
-        <note />
       </trans-unit>
       <trans-unit id="HeaderInstallations">
         <source>Aspire CLI Installations</source>

@@ -177,9 +177,8 @@ internal sealed class DoctorCommand : BaseCommand
         var hasDetails = !string.IsNullOrEmpty(result.Details);
         var hasFix = !string.IsNullOrEmpty(result.Fix);
         var hasLink = !string.IsNullOrEmpty(result.Link);
-        var files = result.Files ?? [];
 
-        if (hasDetails || hasFix || hasLink || files.Count > 0)
+        if (hasDetails || hasFix || hasLink)
         {
             var detailGrid = new Grid();
             detailGrid.AddColumn();
@@ -189,7 +188,8 @@ internal sealed class DoctorCommand : BaseCommand
                 var fixLines = result.Fix!.Split('\n', StringSplitOptions.RemoveEmptyEntries);
                 foreach (var line in fixLines)
                 {
-                    detailGrid.AddRow(new Markup($"{line.Trim().EscapeMarkup()}"));
+                    // Leading spaces nest a fix line under the line above it.
+                    detailGrid.AddRow(new Markup($"{line.TrimEnd().EscapeMarkup()}"));
                 }
             }
 
@@ -202,15 +202,6 @@ internal sealed class DoctorCommand : BaseCommand
             {
                 detailGrid.AddRow(new Markup($"[dim]Details:[/]"));
                 detailGrid.AddRow(new Markup($"[dim]{result.Details!.EscapeMarkup()}[/]"));
-            }
-
-            if (files.Count > 0)
-            {
-                detailGrid.AddRow(new Markup($"[dim]{DoctorCommandStrings.FilesHeader.EscapeMarkup()}[/]"));
-                foreach (var file in files)
-                {
-                    detailGrid.AddRow(new Markup($"[dim]  {file.EscapeMarkup()}[/]"));
-                }
             }
 
             _ansiConsole.Write(new Padder(detailGrid, new Padding(7, 0)));

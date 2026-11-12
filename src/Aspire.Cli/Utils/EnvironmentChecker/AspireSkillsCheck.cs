@@ -37,24 +37,20 @@ internal sealed class AspireSkillsCheck(
                 .Order(StringComparer.Ordinal)
                 .ToArray();
 
-            // Init removes only copies at its scope that a selected agent reads, so each fix line
-            // names the agents for one scope.
-            var fix = string.Join('\n', skillCopies
-                .GroupBy(copy => copy.Scope)
-                .OrderBy(group => group.Key)
-                .Select(group =>
-                {
-                    var agents = string.Join(',', group.SelectMany(copy => copy.Owners).Distinct().Order(StringComparer.Ordinal));
-                    var command = $"aspire agent init --agents {agents} --scope {group.Key.ToString().ToLowerInvariant()}";
-                    return string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.AspireSkillsFixFormat, command);
-                }));
+            var copyLines = skillCopies
+                .Select(copy => string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_LocationWithAgents,
+                    AgentPath.GetDisplayPath(copy.Directory, workspaceRoot, executionContext),
+                    string.Join(", ", copy.Owners)))
+                .Order(StringComparer.Ordinal)
+                .Select(line => $"  {line}");
+
             results.Add(new EnvironmentCheckResult
             {
                 Category = EnvironmentCheckCategories.Environment,
                 Name = CheckName,
                 Status = EnvironmentCheckStatus.Warning,
                 Message = DoctorCommandStrings.AspireSkillsMessage,
-                Fix = fix,
+                Fix = string.Join('\n', [DoctorCommandStrings.AspireSkillsFix, .. copyLines]),
                 Files = displayPaths,
                 Metadata = new JsonObject
                 {
