@@ -1209,12 +1209,29 @@ internal static partial class DotnetProjectBuildCoordinator
                         buildResource,
                         step.Projects.Select(GetBuildIdentity).Distinct().ToArray()));
 
-                    if (index >= initialBuildSteps.Count &&
-                            !buildResource.HasAnnotationOfType<ExplicitStartupAnnotation>())
+                    if (index >= initialBuildSteps.Count)
                     {
+                        // Deferred build helpers have no useful pending action of their own.
+                        // Keep them out of default lists until they start, but expose failures.
+                        var originalHidden = buildResource.Annotations.OfType<HiddenAnnotation>().Single();
+                        var hidden = new HiddenAnnotation(HiddenBehavior.BeforeStartOrOnCompletion)
+                        {
+                            SuccessfulExitCodes = originalHidden.SuccessfulExitCodes
+                        };
+                        buildResource.Annotations.Remove(originalHidden);
+                        buildResource.Annotations.Add(hidden);
+                        rollbackActions.Push(() =>
+                        {
+                            buildResource.Annotations.Remove(hidden);
+                            buildResource.Annotations.Add(originalHidden);
+                        });
+
+                        if (!buildResource.HasAnnotationOfType<ExplicitStartupAnnotation>())
+                        {
                             var explicitStartup = new ExplicitStartupAnnotation();
                             buildResource.Annotations.Add(explicitStartup);
                             rollbackActions.Push(() => buildResource.Annotations.Remove(explicitStartup));
+                        }
                     }
 
                     foreach (var entry in step.Projects)

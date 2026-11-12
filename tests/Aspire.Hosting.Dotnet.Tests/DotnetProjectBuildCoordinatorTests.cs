@@ -2114,6 +2114,64 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task DeferredBuildVisibilityFollowsBuildState(bool hasInitialProject)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path,
+            outputHelper);
+        builder.Configuration["Aspire:LaunchGroup"] = "catalog";
+        builder.AddParameter("selected").WithLaunchGroups("catalog");
+        if (hasInitialProject)
+        {
+            var initialPath = CreateProject(workspace.Path, "Catalog", "Catalog.csproj");
+            builder.AddDotnetProject("catalog", initialPath, options => options.ExcludeLaunchProfile = true)
+                .WithLaunchGroups("catalog");
+        }
+
+        var projectPath = CreateProject(workspace.Path, "Worker", "Worker.csproj");
+        var project = builder.AddDotnetProject("worker", projectPath, options => options.ExcludeLaunchProfile = true);
+        await using var app = builder.Build();
+        await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
+
+        var build = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>(),
+            resource => resource.HasAnnotationOfType<ExplicitStartupAnnotation>());
+        (string? State, int? ExitCode, bool IsHidden)[] transitions =
+        [
+            (null, null, true),
+            (KnownResourceStates.NotStarted, null, true),
+            (KnownResourceStates.Starting, null, false),
+            (KnownResourceStates.Building, null, false),
+            (KnownResourceStates.Running, null, false),
+            (KnownResourceStates.Exited, null, false),
+            (KnownResourceStates.Finished, 1, false),
+            (KnownResourceStates.FailedToStart, null, false),
+            (KnownResourceStates.Finished, 0, true),
+            (KnownResourceStates.Starting, 0, false),
+            (KnownResourceStates.Exited, 0, true)
+        ];
+        foreach (var (state, exitCode, isHidden) in transitions)
+        {
+            await app.ResourceNotifications.PublishUpdateAsync(build, snapshot => snapshot with
+            {
+                State = state is null ? null : new ResourceStateSnapshot(state, null),
+                ExitCode = exitCode
+            });
+            Assert.True(app.ResourceNotifications.TryGetCurrentState(build.Name, out var resourceEvent));
+            Assert.Equal(isHidden, resourceEvent.Snapshot.IsHidden);
+        }
+
+        await app.ResourceNotifications.PublishUpdateAsync(project.Resource, snapshot => snapshot with
+        {
+            State = KnownResourceStates.NotStarted
+        });
+        Assert.True(app.ResourceNotifications.TryGetCurrentState(project.Resource.Name, out var projectEvent));
+        Assert.False(projectEvent.Snapshot.IsHidden);
+    }
+
+    [Theory]
     [InlineData(PersistenceMode.Persistent)]
     [InlineData(PersistenceMode.ParentProcess)]
     [InlineData(PersistenceMode.Resource)]

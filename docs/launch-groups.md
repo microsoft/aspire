@@ -271,6 +271,10 @@ for the application to be ready. While a deferred build runs, the starting resou
 shows Building and its console receives the build output. A resource waiting on a
 dependency remains Waiting until that dependency is ready.
 
+Internal deferred build resources are hidden from default resource lists before
+they start and after a successful build. They remain visible while building or
+after a failure. The excluded application resources remain visible and startable.
+
 Coordinator-owned output-writing builds are conservatively serialized. This includes
 initial builds, deferred cold-Start builds, and Rebuild commands, so separate build
 processes do not race while writing shared `bin` and `obj` directories.
