@@ -45,6 +45,9 @@ internal sealed class ClaudeCodeAgentClient(
     /// <remarks>
     /// Every canonical skill name starts with <c>aspire</c>. <c>//**/</c> matches at any absolute depth, so this covers
     /// plugin, user, and project skill installs (https://code.claude.com/docs/en/hooks#filter-by-tool-name-and-arguments-with-the-if-field).
+    /// Claude Code builds earlier than 2.1.85 ignore <c>if</c> and run the hook for every read, and the classifier drops
+    /// non-Aspire reads. Builds earlier than 2.1.176 can fail to match Read path rules
+    /// (https://github.com/anthropics/claude-code/blob/main/CHANGELOG.md).
     /// </remarks>
     internal const string TelemetryHookReadIf = "Read(//**/skills/aspire*/**)";
 
