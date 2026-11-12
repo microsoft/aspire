@@ -49,6 +49,10 @@ public sealed class CliStarterValidationTests(ITestOutputHelper output)
                 else
                 {
                     Write-Invocation $args[0] @($args | Select-Object -Skip 1)
+                    if ($args[0] -eq 'logs')
+                    {
+                        'installer diagnostic'
+                    }
                 }
             }
 
@@ -121,10 +125,19 @@ public sealed class CliStarterValidationTests(ITestOutputHelper output)
             .Select(item => item.GetProperty("arguments")[0].GetString())
             .ToArray();
         Assert.Equal(linux && !failFrontend ? ["app", "frontend", "cache"] : ["app", "frontend"], waitedResources);
-        Assert.Equal(["add", "run", "stop", "start", "resources", .. waitedResources.Select(_ => "wait"), "stop"],
+        var finalCommands = failFrontend ? new[] { "logs", "stop" } : ["stop"];
+        Assert.Equal(["add", "run", "stop", "start", "resources", .. waitedResources.Select(_ => "wait"), .. finalCommands],
             invocations.Select(item => item.GetProperty("command").GetString()).ToArray());
 
         var goProject = Path.Combine(validationRoot, "aspire-go-starter", "AspireCliGoStarterSmoke");
+        if (failFrontend)
+        {
+            var logInvocation = Assert.Single(invocations, item => item.GetProperty("command").GetString() == "logs");
+            Assert.Contains("--include-hidden", logInvocation.GetProperty("arguments").EnumerateArray().Select(arg => arg.GetString()));
+            var logPath = Path.Combine(validationRoot, "aspire-go-starter", "diagnostics", "aspire-resource-logs.log");
+            Assert.Equal("installer diagnostic", File.ReadAllText(logPath).Trim());
+        }
+
         foreach (var relativePath in new[] { "node_modules", Path.Combine("frontend", "node_modules") })
         {
             Assert.Equal("installed dependency", File.ReadAllText(Path.Combine(goProject, relativePath, "preserved.txt")).Trim());

@@ -394,6 +394,18 @@ foreach ($template in $templates)
 
                 if ($waitProcess.ExitCode -ne 0)
                 {
+                    try
+                    {
+                        # Capture installer logs before stopping the AppHost; they can explain
+                        # why a dependent resource entered FailedToStart.
+                        aspire logs --include-hidden --tail 200 *>&1 |
+                            Out-File -FilePath (Join-Path $diagnosticsDir 'aspire-resource-logs.log') -Encoding utf8
+                    }
+                    catch
+                    {
+                        Write-Warning "${templateId}: failed to capture resource logs: $($_.Exception.Message)"
+                    }
+
                     throw "${templateId}: aspire wait for resource $resourceName failed with exit code $($waitProcess.ExitCode)."
                 }
             }
