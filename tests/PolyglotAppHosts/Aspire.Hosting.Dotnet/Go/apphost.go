@@ -12,8 +12,8 @@ func main() {
 		log.Fatal(aspire.FormatError(err))
 	}
 
-	project := builder.AddDotnetProject("project", "./src/Project/Project.csproj", &aspire.DotnetProjectOptions{
-		LaunchProfileName: aspire.StringPtr("https"),
+	project := builder.AddDotnetProject("project", "./src/Project/Project.csproj", &aspire.AddDotnetProjectOptions{
+		Options: &aspire.DotnetProjectOptions{LaunchProfileName: aspire.StringPtr("https")},
 	})
 	project.WithReplicas(2)
 	project.DisableForwardedHeaders()
