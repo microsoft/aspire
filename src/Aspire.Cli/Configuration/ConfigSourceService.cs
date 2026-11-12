@@ -148,11 +148,14 @@ internal sealed class ConfigSourceService(
     /// Resolves an optional configuration source from the environment or employee detection,
     /// obtains consent, and acquires the accepted source.
     /// </summary>
-    public Task<ConfigSource?> ResolveAndAcquireConfigSourceAsync(ParseResult parseResult, CancellationToken cancellationToken) =>
-        ResolveAndAcquireConfigSourceAsync(parseResult, allowInteractiveInput: true, cancellationToken);
+    /// <param name="parseResult">The command parse result containing the optional consent option.</param>
+    /// <param name="consentPrompt">The confirmation prompt describing what accepting the source does for the current command.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    public Task<ConfigSource?> ResolveAndAcquireConfigSourceAsync(ParseResult parseResult, string consentPrompt, CancellationToken cancellationToken) =>
+        ResolveAndAcquireConfigSourceAsync(parseResult, consentPrompt, allowInteractiveInput: true, cancellationToken);
 
     internal async Task<ConfigSource?> ResolveAndAcquireConfigSourceAsync(
-        ParseResult parseResult, bool allowInteractiveInput, CancellationToken cancellationToken)
+        ParseResult parseResult, string consentPrompt, bool allowInteractiveInput, CancellationToken cancellationToken)
     {
         var repository = environment.GetEnvironmentVariable(CliConfigNames.InitSourceUrl);
         var explicitSource = repository is not null;
@@ -218,7 +221,7 @@ internal sealed class ConfigSourceService(
             {
                 throw new ConfigSourceException(ConfigSourceStrings.ConsentRequired);
             }
-            accepted = await interaction.PromptConfirmAsync(ConfigSourceStrings.UseSourcePrompt,
+            accepted = await interaction.PromptConfirmAsync(consentPrompt,
                 binding: PromptBinding.CreateDefault(true),
                 cancellationToken: cancellationToken);
         }
@@ -248,7 +251,7 @@ internal sealed class ConfigSourceService(
             return null;
         }
 
-        return await ResolveAndAcquireConfigSourceAsync(parseResult, cancellationToken);
+        return await ResolveAndAcquireConfigSourceAsync(parseResult, ConfigSourceStrings.InitUseSourcePrompt, cancellationToken);
     }
 
     public async Task MaterializeAsync(ConfigSource source, DirectoryInfo projectDirectory, CancellationToken cancellationToken)
@@ -275,7 +278,7 @@ internal sealed class ConfigSourceService(
             return;
         }
 
-        var source = await ResolveAndAcquireConfigSourceAsync(parseResult, cancellationToken);
+        var source = await ResolveAndAcquireConfigSourceAsync(parseResult, ConfigSourceStrings.UpdateUseSourcePrompt, cancellationToken);
         if (source is not null)
         {
             await ApplySourceAsync(source, path, cancellationToken);

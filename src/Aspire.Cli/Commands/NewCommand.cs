@@ -586,7 +586,7 @@ internal sealed class NewCommand : BaseCommand
 
         // Obtain consent and acquire the source before creating project files so acquisition
         // failures or missing non-interactive consent do not leave a partial project.
-        var configSource = await ConfigSources.ResolveAndAcquireConfigSourceAsync(parseResult, cancellationToken);
+        var configSource = await ConfigSources.ResolveAndAcquireConfigSourceAsync(parseResult, ConfigSourceStrings.NewUseSourcePrompt, cancellationToken);
         var templatePath = parseResult.GetValue(s_templatePathOption);
         var templateRepository = parseResult.GetValue(s_templateRepositoryOption);
         var templateRepositoryRef = parseResult.GetValue(s_templateRepositoryRefOption);
