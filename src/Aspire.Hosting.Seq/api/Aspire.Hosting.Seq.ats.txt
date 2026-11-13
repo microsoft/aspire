@@ -9,6 +9,7 @@ Aspire.Hosting.ApplicationModel/SeqResource.connectionStringExpression(context: 
 Aspire.Hosting.ApplicationModel/SeqResource.host(context: Aspire.Hosting.Seq/Aspire.Hosting.ApplicationModel.SeqResource) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReferenceExpression
 Aspire.Hosting.ApplicationModel/SeqResource.port(context: Aspire.Hosting.Seq/Aspire.Hosting.ApplicationModel.SeqResource) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReferenceExpression
 Aspire.Hosting.ApplicationModel/SeqResource.primaryEndpoint(context: Aspire.Hosting.Seq/Aspire.Hosting.ApplicationModel.SeqResource) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference
+Aspire.Hosting.ApplicationModel/SeqResource.resourceTypeDisplayName(context: Aspire.Hosting.Seq/Aspire.Hosting.ApplicationModel.SeqResource) -> string
 Aspire.Hosting.ApplicationModel/SeqResource.uriExpression(context: Aspire.Hosting.Seq/Aspire.Hosting.ApplicationModel.SeqResource) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression
 Aspire.Hosting.Seq/addSeq(name: string, adminPassword: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource, port?: number) -> Aspire.Hosting.Seq/Aspire.Hosting.ApplicationModel.SeqResource
 Aspire.Hosting.Seq/withDataBindMount(source: string, isReadOnly?: boolean) -> Aspire.Hosting.Seq/Aspire.Hosting.ApplicationModel.SeqResource
