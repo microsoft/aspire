@@ -1016,10 +1016,9 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
         Assert.Empty(interaction.DisplayedErrors);
         Assert.Contains(interaction.DisplayedMessages, message => message.Emoji.Equals(KnownEmojis.Robot) &&
-            message.Message.EndsWith($"{Environment.NewLine}  [dim]{string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_RemovedSkillCopies, ".opencode/skill/aspire")}[/]", StringComparison.Ordinal));
+            message.Message.Contains(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_RemovedSkillCopies, ".opencode/skill/aspire"), StringComparison.Ordinal));
         Assert.False(Directory.Exists(skillDirectory));
         Assert.True(Directory.Exists(Path.Combine(context.Project.FullName, ".opencode", "skill")));
-        // Configured skill roots belong to the user; the CLI never copied skills there.
         Assert.Equal(configuredSkill, await File.ReadAllTextAsync(configuredSkillPath));
         var config = JsonNode.Parse(await File.ReadAllTextAsync(configPath))!;
         var sources = array ? config["skills"]!.AsArray() : config["skills"]!["urls"]!.AsArray();

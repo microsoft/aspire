@@ -533,12 +533,9 @@ internal sealed class AgentInitCommand : BaseCommand
             cancellationToken.ThrowIfCancellationRequested();
             registrationResults = await AgentConfiguration.ApplyRemoteAsync(selectedClients, workspaceRoot, scope, skillSources, cancellationToken);
 
-            // Configured skill sources supersede copies left by older CLI versions, but registration
-            // can fail or change nothing (for example when all sources are disabled), so copies are
-            // kept unless every selected agent now has Aspire skills at this scope. Only copies at this
-            // scope in folders a selected agent reads are removed.
-            // Removal runs before the results are displayed so removed copies are listed under the
-            // configured sources that replaced them.
+            // Registration can fail or change nothing (for example when all sources are disabled), so
+            // copies are kept unless every selected agent now has Aspire skills at this scope.
+            // Removal runs before display so removed copies are listed under the sources that replaced them.
             var canRemoveSkillCopies =
                 !registrationResults.Any(static result => result.Status is AgentConfigurationStatus.Failed) &&
                 selectedClients.All(client => HasAspireSkillsRegistration(client, workspaceRoot, scope));
@@ -1101,9 +1098,8 @@ internal sealed class AgentInitCommand : BaseCommand
     {
         try
         {
-            // Empty sources limit the check to the built-in aspire-skills plugin or catalog. A configured
-            // source can enable unrelated plugins, which would not replace the copied Aspire skills.
-            return client.HasIntegrationRegistration(workspaceRoot, scope, []);
+            // Configured sources can enable unrelated plugins that would not replace the copied Aspire skills.
+            return client.HasIntegrationRegistration(workspaceRoot, scope, [SkillSource.BuiltIn]);
         }
         catch (Exception ex) when (ex is JsonException or InvalidOperationException or IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
         {

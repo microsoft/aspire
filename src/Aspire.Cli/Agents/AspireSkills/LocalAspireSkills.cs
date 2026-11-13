@@ -24,7 +24,6 @@ internal static class LocalAspireSkills
 
     private static readonly string[] s_universalSkillOwners = [CopilotAgentClient.ClientId, OpenCodeAgentClient.ClientId];
 
-    // The locations older CLIs copied skills into, with the clients each was installed for.
     // Agent-specific roots such as CLAUDE_CONFIG_DIR or OpenCode skills.paths never received copies.
     private static readonly (string Directory, string[] Owners)[] s_projectSkillDirectories =
     [
@@ -34,10 +33,6 @@ internal static class LocalAspireSkills
         (Path.Combine(".opencode", "skill"), [OpenCodeAgentClient.ClientId])
     ];
 
-    /// <summary>
-    /// Finds skill directories copied by older CLIs in the workspace and in the user-level standard location,
-    /// with the IDs of the clients that read each one.
-    /// </summary>
     internal static IReadOnlyList<(string Directory, AgentConfigurationScope Scope, string[] Owners)> Find(
         DirectoryInfo workingDirectory,
         DirectoryInfo workspaceRoot,
@@ -46,9 +41,9 @@ internal static class LocalAspireSkills
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        // Clients load project skills along the active ancestor chain, not just at its root.
-        // Clamping to the workspace excludes sibling projects and unrelated current directories.
-        // Older CLIs only installed user-level copies to the standard location.
+        // Clients load project skills along the active ancestor chain, so every directory from the
+        // working directory up to the workspace root is checked. Older CLIs only copied user-level
+        // skills to the standard location.
         var candidates = AgentPath.ProjectDirectories(workingDirectory, workspaceRoot)
             .SelectMany(root => s_projectSkillDirectories.Select(location =>
                 (Path: Path.Combine(root.FullName, location.Directory), Scope: AgentConfigurationScope.Project, location.Owners)))
@@ -63,10 +58,7 @@ internal static class LocalAspireSkills
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                // Older CLIs copied each skill as a directory with supporting files (for example
-                // references/) and no ownership stamp, so the directory name is the only signal.
-                // Directory.Exists treats inaccessible paths as missing, which is correct here:
-                // an agent running as the same user cannot load them either.
+                // Older CLIs left no ownership stamp, so the directory name is the only signal.
                 var path = Path.GetFullPath(Path.Combine(skillsDirectory, name));
                 if (Directory.Exists(path))
                 {

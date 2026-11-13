@@ -30,7 +30,6 @@ internal sealed class AspireSkillsCheck(
         var results = new List<EnvironmentCheckResult>();
         if (skillCopies.Count > 0)
         {
-            // Doctor reports each location once, even when it is found under both scopes.
             var copies = skillCopies
                 .DistinctBy(copy => copy.Directory, StringComparers.FileSystemPath)
                 .Select(copy => (DisplayPath: AgentPath.GetDisplayPath(copy.Directory, workspaceRoot, executionContext), copy.Owners))
