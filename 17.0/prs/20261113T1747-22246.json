@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "OTLP redirect fix",
+  "mergedAt": "2026-11-13T17:47:31Z",
+  "number": 22246,
+  "runDate": "2026-11-13T18:10:00Z",
+  "status": "included",
+  "title": "[release/17.0] Avoid dashboard page redirects on OTLP endpoints"
+}

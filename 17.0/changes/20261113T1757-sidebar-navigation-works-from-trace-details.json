@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Clicking an already-selected resource or group in the sidebar while viewing trace details now returns to the traces page instead of doing nothing.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🧭",
+  "firstMergedAt": "2026-11-13T17:57:04Z",
+  "lastMergedAt": "2026-11-13T17:57:04Z",
+  "name": "Sidebar navigation works from trace details",
+  "owner": "JamesNK",
+  "prs": [
+    22258
+  ]
+}

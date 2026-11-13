@@ -1,0 +1,9 @@
+{
+  "author": "ellahathaway",
+  "comment": "Backport of agent init telemetry fixes; grouped with Faster agent telemetry hooks",
+  "mergedAt": "2026-11-13T17:55:27Z",
+  "number": 22231,
+  "runDate": "2026-11-13T18:10:00Z",
+  "status": "included",
+  "title": "[release/17.0] `aspire agent init` telemetry fixes"
+}

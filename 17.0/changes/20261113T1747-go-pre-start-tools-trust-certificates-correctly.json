@@ -1,0 +1,19 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Go pre-start tools such as `WithModTidy` and `WithModDownload` now use platform-appropriate certificate trust, fixing module download failures caused by lost system roots.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔐",
+  "firstMergedAt": "2026-11-13T17:47:18Z",
+  "lastMergedAt": "2026-11-13T17:47:18Z",
+  "name": "Go pre-start tools trust certificates correctly",
+  "owner": "danegsta",
+  "prs": [
+    22260
+  ]
+}

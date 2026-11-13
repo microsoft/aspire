@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The input interaction dialog is narrower again with unboxed fields, and checkbox-to-label spacing is consistent across the dashboard, with the gap clickable.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "☑️",
+  "firstMergedAt": "2026-11-13T17:47:46Z",
+  "lastMergedAt": "2026-11-13T17:47:46Z",
+  "name": "Compact input dialog and consistent checkbox spacing",
+  "owner": "JamesNK",
+  "prs": [
+    22237
+  ]
+}

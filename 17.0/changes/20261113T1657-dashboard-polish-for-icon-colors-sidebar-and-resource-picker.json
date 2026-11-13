@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Action icon colors are now consistent, resource sidebar hover state and resource picker popup width are fixed, tag group chevrons align with state dots, and traces with many logs render a single hover preview instead of one per log marker.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🎨",
+  "firstMergedAt": "2026-11-13T16:57:53Z",
+  "lastMergedAt": "2026-11-13T16:57:53Z",
+  "name": "Dashboard polish for icon colors, sidebar, and resource picker",
+  "owner": "maddymontaquila",
+  "prs": [
+    22232
+  ]
+}

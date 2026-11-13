@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "No matching changelog entry for idle polling docs",
+  "mergedAt": "2026-11-13T17:03:43Z",
+  "number": 2096,
+  "runDate": "2026-11-13T18:10:00Z",
+  "status": "excluded",
+  "title": "[docs] Document idle polling behavior in VS Code extension"
+}

@@ -1,0 +1,20 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "\"All resources\" keeps its name and counts on one row in Comfortable density, and sidebar empty states now appear below the scope selector.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "📏",
+  "firstMergedAt": "2026-11-13T17:28:20Z",
+  "lastMergedAt": "2026-11-13T17:48:34Z",
+  "name": "Resource sidebar layout fixes",
+  "owner": "IEvangelist",
+  "prs": [
+    22256,
+    22250
+  ]
+}

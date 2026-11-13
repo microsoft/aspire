@@ -1,0 +1,9 @@
+{
+  "author": "danegsta",
+  "comment": "Backport of 22222; Go cert trust fix",
+  "mergedAt": "2026-11-13T17:47:18Z",
+  "number": 22260,
+  "runDate": "2026-11-13T18:10:00Z",
+  "status": "included",
+  "title": "[release/17.0] Fix certificate trust for Go pre-start tools"
+}

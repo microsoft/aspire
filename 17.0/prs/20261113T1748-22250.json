@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Grouped: sidebar layout fixes",
+  "mergedAt": "2026-11-13T17:48:34Z",
+  "number": 22250,
+  "runDate": "2026-11-13T18:10:00Z",
+  "status": "included",
+  "title": "[release/17.0] Keep sidebar empty states below the scope selector"
+}

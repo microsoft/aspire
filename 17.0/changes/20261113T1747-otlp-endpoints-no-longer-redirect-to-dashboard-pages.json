@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "When the dashboard frontend and OTLP HTTP endpoints use separate ports, requests to the OTLP endpoint root now return 404 instead of redirecting to a dashboard page.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔀",
+  "firstMergedAt": "2026-11-13T17:47:31Z",
+  "lastMergedAt": "2026-11-13T17:47:31Z",
+  "name": "OTLP endpoints no longer redirect to dashboard pages",
+  "owner": "JamesNK",
+  "prs": [
+    22246
+  ]
+}
