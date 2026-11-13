@@ -1080,6 +1080,49 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(reason == "registration-failed" ? 1 : 0, interaction.DisplayedErrors.Count);
     }
 
+    [Theory]
+    [InlineData("copilot", "selected-scope", true)]
+    [InlineData("copilot", "other-scope", false)]
+    [InlineData("opencode", "selected-scope", true)]
+    [InlineData("opencode", "inline-config", false)]
+    public async Task Remote_RemovesSkillCopiesOnlyWhenSelectedScopeHasAspireSkills(string agent, string replacement, bool removed)
+    {
+        using var context = new AgentConfigurationTestContext(outputHelper);
+        var skillDirectory = Path.Combine(context.Project.FullName, ".agents", "skills", "aspire");
+        await AgentConfigurationTestContext.WriteAsync(Path.Combine(skillDirectory, "SKILL.md"), "My customized Aspire instructions.");
+        await AgentConfigurationTestContext.WriteAsync(Path.Combine(context.Project.FullName, "aspire.config.json"),
+            """{"skillSources":{"default":{"enabled":false}}}""");
+        const string plugin = """{"enabledPlugins":{"aspire@aspire-skills":true}}""";
+        const string catalog = """{"skills":{"urls":["https://raw.githubusercontent.com/microsoft/aspire-skills/main/opencode/v1/"]}}""";
+        IAgentClient client = agent == "copilot" ? context.Copilot : context.OpenCode;
+        var settingsPath = client.GetIntegrationConfigPath(AgentConfigurationScope.Project, context.Project);
+        var settings = agent == "copilot" ? plugin : catalog;
+        switch (replacement)
+        {
+            case "selected-scope":
+                await AgentConfigurationTestContext.WriteAsync(settingsPath, settings);
+                break;
+            case "other-scope":
+                await AgentConfigurationTestContext.WriteAsync(
+                    client.GetIntegrationConfigPath(AgentConfigurationScope.Global, context.Project), settings);
+                break;
+            case "inline-config":
+                context.SetVariable("OPENCODE_CONFIG_CONTENT", settings);
+                break;
+        }
+        using var provider = context.CreateServiceCollection(outputHelper).BuildServiceProvider();
+
+        var result = provider.GetRequiredService<RootCommand>().Parse(
+            $"agent init --agents {agent} --scope project --skills aspire --mcp=false");
+
+        Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
+        Assert.Equal(!removed, Directory.Exists(skillDirectory));
+        if (replacement == "selected-scope")
+        {
+            Assert.Equal(settings, await File.ReadAllTextAsync(settingsPath));
+        }
+    }
+
     [Fact]
     public async Task Remote_RemovesOnlySkillCopiesInFoldersTheSelectedAgentReads()
     {

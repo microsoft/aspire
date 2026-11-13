@@ -534,7 +534,7 @@ internal sealed class AgentInitCommand : BaseCommand
             registrationResults = await AgentConfiguration.ApplyRemoteAsync(selectedClients, workspaceRoot, scope, skillSources, cancellationToken);
 
             // Removal runs before display so removed copies are listed under the sources that replaced them.
-            var skillCopiesToRemove = FindReplacedSkillCopies(registrationResults, selectedClients, workspaceRoot, scope, cancellationToken);
+            var skillCopiesToRemove = FindSkillCopiesReplacedAtSelectedScope(registrationResults, selectedClients, workspaceRoot, scope, cancellationToken);
             var (removedSkillCopies, skillCopyFailures) = RemoveSkillCopies(skillCopiesToRemove, workspaceRoot);
             hasErrors |= DisplayRemoteConfigurationResults(registrationResults, removedSkillCopies, workspaceRoot);
             foreach (var failure in skillCopyFailures)
@@ -1046,14 +1046,14 @@ internal sealed class AgentInitCommand : BaseCommand
         return hasErrors;
     }
 
-    // Registration can fail or change nothing (for example when all sources are disabled), so
-    // copies are kept unless every selected agent now has Aspire skills at this scope.
-    private string[] FindReplacedSkillCopies(IReadOnlyList<AgentTargetResult> registrationResults,
+    private string[] FindSkillCopiesReplacedAtSelectedScope(IReadOnlyList<AgentTargetResult> registrationResults,
         IReadOnlyList<IAgentClient> selectedClients, DirectoryInfo workspaceRoot, AgentConfigurationScope scope,
         CancellationToken cancellationToken)
     {
         if (registrationResults.Any(static result => result.Status is AgentConfigurationStatus.Failed) ||
-            !selectedClients.All(client => HasAspireSkillsRegistration(client, workspaceRoot, scope)))
+            !selectedClients.All(client => registrationResults.Any(result =>
+                result.Clients.Contains(client) && result.Configuration is { } configuration &&
+                ConfigurationContainsAspireSkills(client, configuration))))
         {
             return [];
         }
@@ -1092,6 +1092,25 @@ internal sealed class AgentInitCommand : BaseCommand
         }
 
         return (removed, failures);
+    }
+
+    private static bool ConfigurationContainsAspireSkills(IAgentClient client, JsonObject configuration)
+    {
+        if (client.Id == OpenCodeAgentClient.ClientId)
+        {
+            try
+            {
+                return AspireSkillsRemoteConfiguration.HasOpenCodeCatalog(configuration, [SkillSource.BuiltIn]);
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+            {
+                return false;
+            }
+        }
+
+        return configuration["enabledPlugins"] is JsonObject plugins &&
+            plugins[AspireSkillsRemoteConfiguration.PluginName] is JsonValue enabled &&
+            enabled.TryGetValue<bool>(out var isEnabled) && isEnabled;
     }
 
     private static bool HasAspireSkillsRegistration(IAgentClient client, DirectoryInfo workspaceRoot,
