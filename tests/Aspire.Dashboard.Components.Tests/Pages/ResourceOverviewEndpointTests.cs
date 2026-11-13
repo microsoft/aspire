@@ -33,7 +33,9 @@ public class ResourceOverviewEndpointTests : DashboardTestContext
         [
             new("public", new Uri(original), false, false, new("Catalog API", 5)),
             new("public", new Uri(original), true, false, new("Catalog API", 5)),
-            new("plain", new Uri(original), false, false, UrlDisplayPropertiesViewModel.Empty)
+            new("plain", new Uri(original), false, false, UrlDisplayPropertiesViewModel.Empty),
+            new(null, new Uri(original), false, false, new("Documentation", 0)),
+            new("same", new Uri(original), false, false, new("same", 0))
         ]);
         var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
         ResourceSetupHelpers.SetupResourceOverview(this, viewport, new TestDashboardClient(
@@ -50,14 +52,37 @@ public class ResourceOverviewEndpointTests : DashboardTestContext
         {
             var card = cut.Find("[aria-labelledby='overview-endpoints-title']");
             var rows = card.QuerySelectorAll(".overview-endpoint");
-            Assert.Equal(2, rows.Length);
+            Assert.Equal(4, rows.Length);
             var named = rows.Single(row => row.QuerySelector(".overview-endpoint-name") is not null);
-            Assert.Equal("Catalog API", named.QuerySelector(".overview-endpoint-name")!.TextContent);
+            var displayName = named.QuerySelector(".overview-endpoint-name")!;
+            var fallbackName = rows.Single(row => row.QuerySelector(".overview-list-label")!.TextContent == "Documentation").QuerySelector(".overview-list-label")!;
+            var matchingName = rows.Single(row => row.QuerySelector(".overview-list-label")!.TextContent == "same").QuerySelector(".overview-list-label")!;
+            Assert.Equal("Catalog API", displayName.TextContent);
+            Assert.All(new[] { displayName, fallbackName, matchingName }, name =>
+            {
+                Assert.Equal(isLink ? "A" : "SPAN", name.TagName);
+                if (isLink)
+                {
+                    Assert.Equal(original, name.GetAttribute("href"));
+                    Assert.Equal("_blank", name.GetAttribute("target"));
+                    Assert.Equal("noreferrer noopener", name.GetAttribute("rel"));
+                }
+                else
+                {
+                    Assert.Null(name.GetAttribute("href"));
+                }
+            });
+            if (isLink)
+            {
+                Assert.Equal($"{expected}, also at {expected}", displayName.GetAttribute("data-tooltip"));
+            }
+            Assert.Equal("Documentation", fallbackName.GetAttribute("data-tooltip"));
+            Assert.Equal("same", matchingName.GetAttribute("data-tooltip"));
             // Each endpoint is listed once: its other address is in the tooltip, masked like the address shown.
-            Assert.Equal(2, card.QuerySelectorAll(".overview-endpoint-address").Length);
+            Assert.Equal(4, card.QuerySelectorAll(".overview-endpoint-address").Length);
             Assert.All(card.QuerySelectorAll(".overview-endpoint-address"), address => Assert.Equal(expected, address.TextContent));
             Assert.Equal($"{expected}, also at {expected}", named.QuerySelector(".overview-endpoint-address")!.GetAttribute("data-tooltip"));
-            Assert.Equal(expected, rows.Single(row => row != named).QuerySelector(".overview-endpoint-address")!.GetAttribute("data-tooltip"));
+            Assert.Equal(expected, rows.Single(row => row.QuerySelector(".overview-list-label")!.TextContent == "plain").QuerySelector(".overview-endpoint-address")!.GetAttribute("data-tooltip"));
             Assert.All(rows, row =>
             {
                 var primary = row.QuerySelector(".overview-endpoint-address")!;

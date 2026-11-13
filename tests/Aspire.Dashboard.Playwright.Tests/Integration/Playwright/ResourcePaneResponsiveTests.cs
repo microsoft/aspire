@@ -190,8 +190,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             await page.GotoAsync("/resources/cache?pane=tags");
             // These are expanded-list rows: a compact row is a single 32px line, and a comfortable one has two lines.
             foreach (var (density, fontSize, lineHeight, rowHeight) in new[]
-                // Secondary text sizes on the type scale: caption and secondary.
-                { ("Compact", 11d, 16d, 32d), ("Comfortable", 12d, 18d, 52d) })
+                { ("Compact", 12d, 16d, 32d), ("Comfortable", 12d, 18d, 52d) })
             {
                 await page.GetByRole(AriaRole.Button, new() { Name = "Settings", Exact = true }).ClickAsync();
                 await page.GetByRole(AriaRole.Button, new() { Name = density, Exact = true }).ClickAsync();
@@ -1188,15 +1187,15 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                             if (icon.width !== iconBox || icon.height !== iconBox) errors.push(`${row.dataset.resourceName}: icon box`);
                             const mainGlyph = row.querySelector('.resource-row-glyph svg').getBoundingClientRect();
                             if (mainGlyph.width !== glyphSize || mainGlyph.height !== glyphSize) errors.push(`${row.dataset.resourceName}: glyph`);
-                            // The type scale: secondary (12px), body (13px) and large (14px) for the three densities' names.
-                            const expectedFont = compact ? 12 : 13;
+                            // Both densities use the shared body size for names and secondary size for chips.
+                            const expectedFont = 13;
                             if (parseFloat(getComputedStyle(row.querySelector('.resource-row-name')).fontSize) !== expectedFont)
                                 errors.push(`${row.dataset.resourceName}: density font`);
                             for (const chip of row.querySelectorAll('.resource-row-insight')) {
                                 const chipBox = chip.getBoundingClientRect();
                                 if (!chipBox.width) continue;
                                 const style = getComputedStyle(chip), glyph = chip.querySelector('svg').getBoundingClientRect();
-                                const font = compact ? 11 : 12; // caption and secondary on the type scale
+                                const font = 12;
                                 const line = compact ? 16 : 18;
                                 const target = compact ? 24 : 28;
                                 const iconSize = compact ? 12 : 14;
@@ -1761,7 +1760,8 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                                 rail.getBoundingClientRect().width, shown(overflow) ? 1 : 0,
                                 essential.every(shown) ? 1 : 0,
                                 [...rail.querySelectorAll('.resource-row-action')].some(shown) ? 1 : 0,
-                                row.matches(':hover, :focus-within') ? 1 : 0];
+                                row.matches(':hover, :focus-within') ? 1 : 0,
+                                rail.querySelectorAll('.resource-row-highlighted').length];
                         })
                         """;
                     var resourceRows = pane.Locator(".resource-row[data-resource-name]");
@@ -1774,9 +1774,9 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                         Assert.Equal(1, values[1]);
                         if (compactSidebar && values[6] == 0)
                         {
-                            // At rest, a compact row's rail narrows to the expand toggle and hides every action, so the
-                            // name gets the room. Hovering or focusing it brings the actions back (checked below).
-                            Assert.Equal(20, values[2]);
+                            // At rest, a compact row hides its action rail so metadata can use the trailing space.
+                            // Hovering or focusing it brings the actions back (checked below).
+                            Assert.Equal(0, values[2]);
                             Assert.Equal(0, values[5]);
                         }
                         else
@@ -1784,7 +1784,8 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                             Assert.Equal(1, values[3]);
                             if (!fullCanvas)
                             {
-                                Assert.Equal(112, values[2]);
+                                var expectedRailWidth = compactSidebar ? (values[7] > 1 ? 94 : 88) : 112;
+                                Assert.Equal(expectedRailWidth, values[2]);
                                 Assert.Equal(1, values[4]);
                             }
                         }
@@ -1797,12 +1798,16 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                         // without a pointer.
                         foreach (var reveal in new Func<ILocator, Task>[] { row => row.HoverAsync(), row => row.Locator(".resource-row-link").FocusAsync() })
                         {
-                            var revealed = resourceRows.First;
-                            await reveal(revealed);
-                            var values = (await revealed.EvaluateAsync<double[][]>($"row => ({measureRows})([row])"))[0];
-                            Assert.Equal(new double[] { 112, 1, 1, 1 }, values[2..6]);
-                            await page.Mouse.MoveAsync(1, 1);
-                            await revealed.Locator(".resource-row-link").BlurAsync();
+                            foreach (var resourceName in new[] { "cache", "api" })
+                            {
+                                var revealed = pane.Locator($".resource-row[data-resource-name='{resourceName}']").First;
+                                await reveal(revealed);
+                                var values = (await revealed.EvaluateAsync<double[][]>($"row => ({measureRows})([row])"))[0];
+                                var expectedRailWidth = values[7] > 1 ? 94 : 88;
+                                Assert.Equal(new double[] { expectedRailWidth, 1, 1, 1 }, values[2..6]);
+                                await page.Mouse.MoveAsync(1, 1);
+                                await revealed.Locator(".resource-row-link").BlurAsync();
+                            }
                         }
                     }
                     var list = pane.Locator(".resource-pane-list");

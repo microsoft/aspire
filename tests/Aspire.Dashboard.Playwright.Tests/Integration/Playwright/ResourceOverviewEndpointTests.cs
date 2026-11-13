@@ -48,6 +48,10 @@ public sealed class ResourceOverviewEndpointTests : PlaywrightTestsBase<Resource
 
             var catalog = rows.Filter(new() { Has = page.GetByText("Catalog API", new() { Exact = true }) });
             await Assertions.Expect(catalog.Locator(".overview-list-label")).ToHaveTextAsync("https");
+            var catalogName = catalog.GetByRole(AriaRole.Link, new() { Name = "Catalog API", Exact = true });
+            await Assertions.Expect(catalogName).ToHaveAttributeAsync("href", PublicUrl);
+            await Assertions.Expect(catalogName).ToHaveAttributeAsync("target", "_blank");
+            await Assertions.Expect(catalogName).ToHaveAttributeAsync("rel", "noreferrer noopener");
             var link = catalog.GetByRole(AriaRole.Link, new() { Name = MaskedPublicUrl, Exact = true });
             await Assertions.Expect(link).ToBeVisibleAsync();
             await Assertions.Expect(link).ToHaveAttributeAsync("href", PublicUrl);
@@ -75,7 +79,8 @@ public sealed class ResourceOverviewEndpointTests : PlaywrightTestsBase<Resource
 
             var docs = rows.Filter(new() { Has = page.GetByText("Documentation", new() { Exact = true }) });
             await Assertions.Expect(docs.Locator(".overview-list-label")).ToHaveTextAsync("Documentation");
-            await Assertions.Expect(docs.GetByRole(AriaRole.Link)).ToHaveTextAsync("https://localhost:7443/docs");
+            await Assertions.Expect(docs.GetByRole(AriaRole.Link, new() { Name = "Documentation", Exact = true })).ToHaveAttributeAsync("href", "https://localhost:7443/docs");
+            await Assertions.Expect(docs.GetByRole(AriaRole.Link, new() { Name = "https://localhost:7443/docs", Exact = true })).ToBeVisibleAsync();
 
             var plain = rows.Filter(new() { Has = page.GetByText("http", new() { Exact = true }) });
             await Assertions.Expect(plain.GetByRole(AriaRole.Link)).ToHaveTextAsync("http://localhost:5080");
