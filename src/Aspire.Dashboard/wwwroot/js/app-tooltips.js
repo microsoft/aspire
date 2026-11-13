@@ -13,6 +13,8 @@ class AspireTooltipProvider extends HTMLElement {
     #visibilityObserver = null;
     #keyboardModality = false;
     #focusDismissed = false;
+    #maxTextLength = 1024;
+    #wordSegmenter = new Intl.Segmenter(undefined, { granularity: "word" });
 
     connectedCallback() {
         this.#controller = new AbortController();
@@ -224,10 +226,42 @@ class AspireTooltipProvider extends HTMLElement {
             tooltip.replaceChildren(...content.childNodes);
         } else {
             const content = document.createElement("span");
-            content.textContent = target.text;
+            content.textContent = this.#truncateText(target.text);
             tooltip.replaceChildren(content);
         }
         this.#content = target;
+    }
+
+    #truncateText(text) {
+        if (text.length <= this.#maxTextLength) {
+            return text;
+        }
+
+        // Use Chromium's 1024-unit Windows limit consistently on all platforms. Reserve one unit
+        // for an ellipsis, preferring the last ICU word boundary before the limit.
+        // https://source.chromium.org/chromium/chromium/src/+/main:ui/views/corewm/tooltip_state_manager.cc
+        // https://source.chromium.org/chromium/chromium/src/+/main:ui/gfx/text_elider.cc
+        let end = this.#maxTextLength - 1;
+        for (const { index, segment } of this.#wordSegmenter.segment(text)) {
+            const boundary = index + segment.length;
+            if (boundary >= this.#maxTextLength) {
+                break;
+            }
+            end = boundary;
+        }
+
+        let prefix = text.slice(0, end).replace(/[\p{White_Space}\p{Cc}]+$/u, "");
+        // If the only word boundary was leading whitespace, keep part of the following long word.
+        if (!prefix && end !== this.#maxTextLength - 1) {
+            prefix = text.slice(0, this.#maxTextLength - 1);
+        }
+        // A character-limit cut inside a long word must not leave an unmatched UTF-16 surrogate.
+        const lastCodeUnit = prefix.charCodeAt(prefix.length - 1);
+        if (lastCodeUnit >= 0xD800 && lastCodeUnit <= 0xDBFF) {
+            prefix = prefix.slice(0, -1);
+        }
+
+        return prefix.trim() + "\u2026";
     }
 
     #leave(element) {
