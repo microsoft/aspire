@@ -27,14 +27,19 @@
         {
             @* Message bar links are specified by application code, so they don't need automatic URL sanitization. *@
             <span class="dashboard-message-bar-link">
-                <a href="@Content.LinkUrl" target="_blank" rel="noreferrer noopener">@Content.LinkText</a>
+                <a href="@Content.LinkUrl" target="_blank" rel="noreferrer noopener" @onclick="OnLinkClickAsync">@Content.LinkText</a>
             </span>
         }
     </div>
     <div class="dashboard-message-bar-actions">
         @if (Content.LinkAsAction && !string.IsNullOrEmpty(Content.LinkText) && !string.IsNullOrEmpty(Content.LinkUrl))
         {
-            <a class="dashboard-message-bar-link-action" href="@Content.LinkUrl">@Content.LinkText</a>
+            var isExternal = IsExternalUrl(Content.LinkUrl);
+            <a class="dashboard-message-bar-link-action"
+               href="@Content.LinkUrl"
+               target="@(isExternal ? "_blank" : null)"
+               rel="@(isExternal ? "noreferrer noopener" : null)"
+               @onclick="OnLinkClickAsync">@Content.LinkText</a>
         }
         @if (!string.IsNullOrEmpty(Content.PrimaryAction))
         {
@@ -93,6 +98,20 @@
         }
 
         return CloseAsync(true);
+    }
+
+    // The browser follows the link natively, so it opens without being popup-blocked. This handler only runs
+    // afterward on the server and doesn't prevent the navigation.
+    private Task OnLinkClickAsync()
+    {
+        return Content.CloseOnLinkClick ? CloseAsync(true) : Task.CompletedTask;
+    }
+
+    // Only http(s) is treated as external. A dashboard-relative path such as "/resources" also parses as an
+    // absolute file:// URI on Unix, so the scheme check is required rather than relying on UriKind.Absolute.
+    private static bool IsExternalUrl(string url)
+    {
+        return Uri.TryCreate(url, UriKind.Absolute, out var uri) && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
     }
 
     private Task CloseAsync(object? data)

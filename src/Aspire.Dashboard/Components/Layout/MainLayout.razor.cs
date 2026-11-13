@@ -216,7 +216,12 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
             {
                 Title = DialogsLoc[nameof(Resources.Dialogs.DashboardFeedbackPromptTitle)],
                 Message = DialogsLoc[nameof(Resources.Dialogs.DashboardFeedbackPromptMessage)],
-                PrimaryAction = DialogsLoc[nameof(Resources.Dialogs.DashboardFeedbackPromptShare)],
+                // A native link, not a server-side window.open, so the browser doesn't popup-block it after the
+                // Blazor Server round trip.
+                LinkText = DialogsLoc[nameof(Resources.Dialogs.DashboardFeedbackPromptShare)],
+                LinkUrl = DashboardFeedbackDialog.DiscussionUrl,
+                LinkAsAction = true,
+                CloseOnLinkClick = true,
                 SecondaryAction = DialogsLoc[nameof(Resources.Dialogs.DashboardFeedbackPromptIgnore)]
             },
             MessageBarIntent.Info,
@@ -226,30 +231,15 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
 
     private async Task OnDashboardFeedbackMessageClosedAsync(MessageBarResult result)
     {
-        if (result.Data is false)
+        // Sharing feedback (true) or ignoring (false) stops the prompt permanently. Dismissing with the close button
+        // (null) only hides it for the current browser session.
+        if (result.Data is bool)
         {
             await LocalStorage.SetUnprotectedAsync(BrowserStorageKeys.DashboardFeedbackPromptDismissed, true);
             return;
         }
 
         await SessionStorage.SetAsync(BrowserStorageKeys.DashboardFeedbackPromptDismissedForSession, true);
-        if (result.Data is true)
-        {
-            await InvokeAsync(LaunchDashboardFeedbackAsync);
-        }
-    }
-
-    private async Task LaunchDashboardFeedbackAsync()
-    {
-        var parameters = new DialogParameters
-        {
-            Title = DialogsLoc[nameof(Resources.Dialogs.DashboardFeedbackDialogTitle)],
-            PrimaryAction = string.Empty,
-            SecondaryAction = string.Empty,
-            Width = "min(640px, calc(100vw - 24px))"
-        };
-        var feedback = new DashboardFeedback { IsAppHost = DashboardClient.IsEnabled };
-        await DialogService.ShowDialogAsync<DashboardFeedbackDialog>(feedback, parameters);
     }
 
     private async Task DisplayUnsecuredEndpointsMessageAsync()

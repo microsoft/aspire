@@ -3,6 +3,7 @@
 
 using System.Threading.Channels;
 using Aspire.Dashboard.Components.Controls;
+using Aspire.Dashboard.Components.Dialogs;
 using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Components.Tests.Shared;
@@ -360,6 +361,44 @@ public partial class MainLayoutTests : DashboardTestContext
             readKeys);
         var messageBarProvider = _messageBarProvider!;
         messageBarProvider.WaitForAssertion(() => Assert.Single(messageBarProvider.FindComponents<DashboardMessageBar>()));
+    }
+
+    [Theory]
+    [InlineData("a.dashboard-message-bar-link-action", BrowserStorageKeys.DashboardFeedbackPromptDismissed)]
+    [InlineData("fluent-button.dashboard-message-bar-action", BrowserStorageKeys.DashboardFeedbackPromptDismissed)]
+    [InlineData("fluent-button.dashboard-message-bar-dismiss", BrowserStorageKeys.DashboardFeedbackPromptDismissedForSession)]
+    public async Task DashboardFeedbackPrompt_Close_StoresDismissal(string selector, string expectedKey)
+    {
+        var dismissedKeySetTcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var localStorage = new TestLocalStorage
+        {
+            OnGetUnprotectedAsync = key => key switch
+            {
+                BrowserStorageKeys.UnsecuredTelemetryMessageDismissedKey or BrowserStorageKeys.UnsecuredEndpointMessageDismissedKey => (true, true),
+                _ => (false, null)
+            },
+            OnSetUnprotectedAsync = (key, _) => dismissedKeySetTcs.TrySetResult(key)
+        };
+        var sessionStorage = new TestSessionStorage
+        {
+            OnGetAsync = _ => (false, null),
+            OnSetAsync = (key, _) => dismissedKeySetTcs.TrySetResult(key)
+        };
+        SetupMainLayoutServices(localStorage: localStorage, sessionStorage: sessionStorage);
+
+        var cut = Render<MainLayout>(builder =>
+        {
+            builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
+        });
+
+        var messageBarProvider = _messageBarProvider!;
+        var link = messageBarProvider.WaitForElement("a.dashboard-message-bar-link-action");
+        Assert.Equal(DashboardFeedbackDialog.DiscussionUrl, link.GetAttribute("href"));
+        Assert.Equal("_blank", link.GetAttribute("target"));
+
+        messageBarProvider.Find(selector).Click();
+
+        Assert.Equal(expectedKey, await dismissedKeySetTcs.Task.DefaultTimeout());
     }
 
     [Theory]

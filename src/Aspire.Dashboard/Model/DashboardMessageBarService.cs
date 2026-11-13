@@ -21,10 +21,17 @@ public sealed class DashboardMessageBarContent
     public string? LinkUrl { get; init; }
 
     /// <summary>
-    /// Shows the link with the actions and opens it in the dashboard, instead of a new tab. Following the link doesn't
-    /// close the message bar.
+    /// Shows the link with the actions instead of inline with the message. An <c>http</c> or <c>https</c> URL opens in
+    /// a new tab, and any other URL, such as a dashboard-relative path, opens in the dashboard. Following the link
+    /// doesn't close the message bar unless <see cref="CloseOnLinkClick"/> is set.
     /// </summary>
     public bool LinkAsAction { get; init; }
+
+    /// <summary>
+    /// Closes the message bar with a <c>true</c> result when the link is followed. The browser still follows the link
+    /// natively, so a new tab opened by it isn't popup-blocked.
+    /// </summary>
+    public bool CloseOnLinkClick { get; init; }
 
     public string? PrimaryAction { get; init; }
 
