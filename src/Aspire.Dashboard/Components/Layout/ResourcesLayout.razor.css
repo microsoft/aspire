@@ -2515,6 +2515,15 @@
     padding-inline-end: 12px;
 }
 
+.resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-row {
+    padding-inline-end: 6px;
+}
+
+.resources-layout:not(.pane-full-canvas) .resource-row:not(:has(> .resource-row-actions)) {
+    grid-template-columns: minmax(0, 1fr);
+    column-gap: 0;
+}
+
 .resources-layout:not(.pane-full-canvas) .resource-row:has(.resource-row-primary-endpoint) {
     --resource-row-endpoint-width: calc(var(--resource-row-action-size) + 2px);
 }
@@ -2799,12 +2808,12 @@
     }
 
     /* At rest the rows' actions are hidden and their state dots form a column at the end of the list, so the group
-       header's chevron is centered over that column instead of floating just past it. The row link ends 12px before
-       the row and has 8px of end padding, so the 10px dot's center is 25px from the end; the header ends at the same
-       line, and the 20px chevron needs 15px after it to center there. The count badge before it moves with it.
+       header's chevron is centered over that column instead of floating just past it. The compact row link ends 6px
+       before the row and has 8px of end padding, so the 10px dot's center is 19px from the end; the header ends at the
+       same line, and the 20px chevron needs 9px after it to center there. The count badge before it moves with it.
        Touch screens keep the actions showing, so they have no dot column there and the chevron keeps its place. */
     .resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-tag-header > .resource-row-toggle {
-        margin-inline-end: 15px;
+        margin-inline-end: 9px;
     }
 }
 
