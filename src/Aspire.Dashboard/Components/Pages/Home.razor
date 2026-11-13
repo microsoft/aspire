@@ -1,3 +1,9 @@
 @page "/"
+@layout ResourcesLayout
+@using Aspire.Dashboard.Components.Layout
+@using Aspire.Dashboard.Resources
+@inject IStringLocalizer<Dashboard.Resources.Resources> Loc
 
-@* The dashboard opens on the full resource list, with all resources selected. *@
+@* The dashboard's home. The layout draws the resource list across the page as a table (see
+   ResourcesLayout.IsResourceListHome), so the page has no content of its own. *@
+<PageTitle><ApplicationName ResourceName="@nameof(Dashboard.Resources.Resources.ResourcesPageTitle)" Loc="@Loc" /></PageTitle>

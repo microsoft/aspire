@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.RegularExpressions;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Tests.Integration.Playwright.Infrastructure;
 using Aspire.TestUtilities;
@@ -214,6 +215,8 @@ public class DashboardInteractionsTests : PlaywrightTestsBase<DashboardInteracti
             await Assertions.Expect(tooltip).ToHaveCountAsync(0);
             await anchor.FocusAsync();
             await Assertions.Expect(tooltip.Locator(".log-tooltip-title")).ToHaveTextAsync("Updated event");
+            // Fluent gives a new tooltip its id after it's connected, so read the id once it has one.
+            await Assertions.Expect(tooltip).ToHaveAttributeAsync("id", new Regex(".+"));
             await Assertions.Expect(anchor).ToHaveAttributeAsync("aria-describedby", (await tooltip.GetAttributeAsync("id"))!);
 
             await anchor.EvaluateAsync("""

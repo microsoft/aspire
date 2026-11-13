@@ -32,12 +32,13 @@ public sealed class DashboardExperienceTests : PlaywrightTestsBase<DashboardServ
 
     [Theory]
     [OuterloopTest("Resource-intensive Playwright browser test")]
-    [InlineData("/legacy/resources", "/resources")]
+    // The resources pages differ between the experiences, so a legacy one goes to the modern home, the resource table.
+    [InlineData("/legacy/resources", "/")]
     [InlineData("/legacy/consolelogs", "/consolelogs")]
     [InlineData("/legacy/structuredlogs", "/structuredlogs")]
     [InlineData("/legacy/traces", "/traces")]
     [InlineData("/legacy/metrics", "/metrics")]
-    [InlineData("/legacy/does-not-exist", "/resources")]
+    [InlineData("/legacy/does-not-exist", "/")]
     public Task NewDashboard_RedirectsLegacyRoutesToModernPages(string legacyPath, string expectedPath)
         => AssertExperienceRouteAsync("modern", legacyPath, expectedPath, expectLegacy: false);
 

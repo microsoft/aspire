@@ -252,8 +252,37 @@ export function registerTabOverflow(registrationId, dotNetRef) {
             state.bodyObserver.observe(layoutRoot, { childList: true });
         }
     };
+    // The strip is re-created whenever the location changes. A tab that had keyboard focus is removed with it, and
+    // focus falls to the page, so a key pressed next, such as Enter on the tab the user just moved to, is lost. That
+    // happens when a navigation lands just after focus moved, for example the brand's navigation home. Focus moves
+    // to the same tab in the new strip instead.
+    const onTabFocus = event => {
+        const tab = event.target instanceof Element ? event.target.closest('.resources-tab-header fluent-tab[id^="tab-"]') : null;
+        state.focusedTab = tab;
+    };
+    document.addEventListener("focusin", onTabFocus);
+    state.onTabFocus = onTabFocus;
+    const restoreTabFocus = () => {
+        const previous = state.focusedTab;
+        if (!previous || previous.isConnected || (document.activeElement && document.activeElement !== document.body)) {
+            return;
+        }
+        const replacement = document.getElementById(previous.id);
+        if (replacement && replacement !== previous) {
+            replacement.focus();
+            // A tab that's just been created can't take focus until the tab list has set it up.
+            if (document.activeElement !== replacement) {
+                requestAnimationFrame(() => {
+                    if (!document.activeElement || document.activeElement === document.body) {
+                        replacement.focus();
+                    }
+                });
+            }
+        }
+    };
     state.bodyObserver = new MutationObserver(() => {
         bindContainers();
+        restoreTabFocus();
         const nav = document.querySelector(".resource-tabs-nav");
         if (nav !== state.nav || (nav?.querySelector(".resources-tab-header") ?? null) !== state.tablist) {
             schedule();
@@ -279,6 +308,7 @@ export function unregisterTabOverflow(registrationId) {
     state.tabsObserver.disconnect();
     state.bodyObserver.disconnect();
     window.removeEventListener("resize", state.schedule);
+    document.removeEventListener("focusin", state.onTabFocus);
 }
 
 export function registerPaneResizer(layoutElement, dotNetRef, minimumWidth, maximumWidth, defaultWidth) {
@@ -298,9 +328,14 @@ export function registerPaneResizer(layoutElement, dotNetRef, minimumWidth, maxi
     let pendingCommits = 0;
     let disposed = false;
 
+    // The page header's brand sits on top of the list's column and follows its width (see MainLayout.razor.css).
+    // The header is outside the layout element, so the width is also applied to the root element they share.
+    const shellElement = layoutElement.closest('.layout');
     const applyWidth = () => {
-        if (layoutElement.style.getPropertyValue('--resource-pane-expanded-width') !== `${width}px`) {
-            layoutElement.style.setProperty('--resource-pane-expanded-width', `${width}px`);
+        for (const element of [layoutElement, shellElement]) {
+            if (element && element.style.getPropertyValue('--resource-pane-expanded-width') !== `${width}px`) {
+                element.style.setProperty('--resource-pane-expanded-width', `${width}px`);
+            }
         }
         if (handle.getAttribute('aria-valuenow') !== `${width}`) {
             handle.setAttribute('aria-valuenow', `${width}`);
@@ -799,71 +834,13 @@ export function registerResourceContextMenu(layoutElement, dotNetRef) {
             event.target.click();
         }
     };
-    // Escape closes the resource content, as the header's close button does, when nothing else uses the key. Menus,
-    // popovers and dialogs close themselves with it, and text fields and the terminal keep it. Some of them close in
-    // their own keydown handler, so whether the key is free is decided in the capture phase, before any of them runs,
-    // and the button is clicked in the bubble phase, only if no handler took the key (preventDefault). The capture
-    // listener is on the window, which comes before the document: the tooltip provider removes a shown tooltip in its
-    // own capture listener on the document.
-    let escapeIsFree = false;
-    const escapeOwnerSelector = 'input, textarea, select, [contenteditable=""], [contenteditable="true"], .xterm, ' +
-        '[popover], fluent-popover-b, fluent-menu, fluent-dialog, dialog, [role="dialog"], [role="menu"], [role="listbox"], [role="combobox"], [role="textbox"]';
-    const hasOpenOverlay = () => {
-        // A control whose popup is open says so (aria-haspopup with aria-expanded="true"), whatever the popup is built
-        // with: the filter button's popover isn't a native popover, and focus stays on the button after clicking it.
-        // A tree toggle has aria-expanded but no popup, so it doesn't count.
-        if (document.querySelector('[aria-haspopup]:not([aria-haspopup="false"])[aria-expanded="true"]')) {
-            return true;
-        }
-        // A shown tooltip is dismissed by Escape (see app-tooltips.js), and the same key mustn't also close the content.
-        // https://www.w3.org/WAI/WCAG22/Understanding/content-on-hover-or-focus.html
-        if (document.querySelector('aspire-tooltip-provider fluent-tooltip:not([aria-hidden="true"])')) {
-            return true;
-        }
-        // A FluentPopover's dialog is in its shadow root, out of reach of the query below, and the button opening it
-        // doesn't always say so, like the URLs column's +N button. Its host says whether it's open:
-        //   <fluent-popover-b class="content-list-popover url-overflow-popover" anchor-id="…-more" opened="true">
-        if (document.querySelector('fluent-popover-b[opened="true"]')) {
-            return true;
-        }
-        try {
-            // Hidden tooltips can stay in the popover layer, so they're left to the check above.
-            return [...document.querySelectorAll(':popover-open, dialog[open]')]
-                .some(element => element.localName !== 'fluent-tooltip' && !element.closest('aspire-tooltip-provider'));
-        }
-        catch {
-            // Browsers without the popover API have no open popovers to protect.
-            return false;
-        }
-    };
-    const onEscapeCapture = event => {
-        escapeIsFree = event.key === 'Escape' && !event.isComposing && !event.repeat &&
-            !event.ctrlKey && !event.altKey && !event.metaKey && !event.shiftKey &&
-            !event.composedPath().some(target => target instanceof Element && target.matches(escapeOwnerSelector)) &&
-            !hasOpenOverlay();
-    };
-    const onEscape = event => {
-        const isFree = escapeIsFree;
-        escapeIsFree = false;
-        // Fluent's tab list cancels the keys it receives, Escape included, without doing anything with Escape. So a
-        // focused tab, for example the one just clicked to open the content, doesn't keep Escape from closing it.
-        const isFromTabList = event.composedPath().some(target => target instanceof Element && target.matches('[role="tablist"]'));
-        if (!isFree || (event.defaultPrevented && !isFromTabList)) {
-            return;
-        }
-        // The header renders the button only while there's content to close (see DetailPageCloseButton).
-        const close = layoutElement.querySelector('.resource-header-controls .detail-page-close');
-        if (close && close.getClientRects().length > 0 && !close.closest('[inert]')) {
-            event.preventDefault();
-            close.click();
-        }
-    };
-
     // While the resource list fills the page, no tab is shown selected, and choosing the current tab opens its content.
     // The tab list can't report that choice (see OpenTabFromFullCanvasAsync), so a click, Enter or Space on a tab is
     // passed on. The tabs are in the page header, outside the layout, so this listens on the document.
+    // Also while home is loading (data-home-pending), when choosing the current tab is lost the same way: the layout
+    // holds it until home has loaded.
     const onTabActivate = event => {
-        if (!layoutElement.classList.contains('pane-full-canvas') ||
+        if (!(layoutElement.classList.contains('pane-full-canvas') || layoutElement.dataset.homePending === 'true') ||
             (event.type === 'keydown' && (event.isComposing || (event.key !== 'Enter' && event.key !== ' ')))) {
             return;
         }
@@ -889,8 +866,6 @@ export function registerResourceContextMenu(layoutElement, dotNetRef) {
     document.addEventListener('keydown', onTabUserActivation, true);
     layoutElement.addEventListener('mousedown', onShiftPointerDown, true);
     document.addEventListener('keydown', onContextMenuDismiss, true);
-    window.addEventListener('keydown', onEscapeCapture, true);
-    document.addEventListener('keydown', onEscape);
     document.addEventListener('click', onTabActivate);
     document.addEventListener('keydown', onTabActivate);
     layoutElement.addEventListener('click', onClick);
@@ -905,8 +880,6 @@ export function registerResourceContextMenu(layoutElement, dotNetRef) {
         document.removeEventListener('keydown', onTabUserActivation, true);
         layoutElement.removeEventListener('mousedown', onShiftPointerDown, true);
         document.removeEventListener('keydown', onContextMenuDismiss, true);
-        window.removeEventListener('keydown', onEscapeCapture, true);
-        document.removeEventListener('keydown', onEscape);
         document.removeEventListener('click', onTabActivate);
         document.removeEventListener('keydown', onTabActivate);
         layoutElement.removeEventListener('click', onClick);
