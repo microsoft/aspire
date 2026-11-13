@@ -7,6 +7,31 @@
         <target state="translated">Перед разрешением конечных точек или строк подключения необходимо запустить приложение.</target>
         <note />
       </trans-unit>
+      <trans-unit id="DashboardDisabledExceptionMessage">
+        <source>The dashboard is not enabled for this application.</source>
+        <target state="translated">Панель мониторинга не включена для этого приложения.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardTestingPublishModeExceptionMessage">
+        <source>Dashboard testing is not supported in publish mode.</source>
+        <target state="translated">Тестирование панели мониторинга не поддерживается в режиме публикации.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardUrlApplicationNotStartedExceptionMessage">
+        <source>The application must be started before retrieving the dashboard URL.</source>
+        <target state="translated">Перед получением URL-адреса панели мониторинга необходимо запустить приложение.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardUrlPublishModeExceptionMessage">
+        <source>The dashboard URL is not available in publish mode.</source>
+        <target state="translated">URL-адрес панели мониторинга недоступен в режиме публикации.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardUrlUnavailableExceptionMessage">
+        <source>The dashboard URL is not available.</source>
+        <target state="translated">URL-адрес панели мониторинга недоступен.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="EndpointForResourceNotFoundExceptionMessage">
         <source>Endpoint '{0}' for resource '{1}' not found.</source>
         <target state="translated">Конечная точка "{0}" для ресурса "{1}" не найдена.</target>

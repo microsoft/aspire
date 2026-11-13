@@ -1,0 +1,3 @@
+﻿config:
+  myapp:
+    DEFERRED_VALUE: "resolved-value"

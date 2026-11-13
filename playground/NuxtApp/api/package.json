@@ -1,0 +1,9 @@
+{
+  "name": "nuxt-sample-api",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs",
+    "build": "node --check server.mjs"
+  }
+}

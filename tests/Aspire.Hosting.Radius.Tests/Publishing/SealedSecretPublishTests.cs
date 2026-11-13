@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIRERADIUS006 // Experimental: the secret-store APIs are under test.
-#pragma warning disable ASPIREPIPELINES001
 
 using System.Reflection;
 using Aspire.Hosting.ApplicationModel;

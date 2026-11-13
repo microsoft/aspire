@@ -36,8 +36,9 @@ resource log_env_shared 'Microsoft.OperationalInsights/workspaces@2025-02-01' ex
   scope: resourceGroup(log_env_shared_rg)
 }
 
-resource app_host 'Microsoft.App/managedEnvironments@2025-07-01' = {
+resource app_host 'Microsoft.App/managedEnvironments@2026-07-01' = {
   name: take('apphost${uniqueString(resourceGroup().id)}', 24)
+  tags: tags
   location: location
   properties: {
     appLogsConfiguration: {
@@ -54,7 +55,6 @@ resource app_host 'Microsoft.App/managedEnvironments@2025-07-01' = {
       }
     ]
   }
-  tags: tags
 }
 
 resource aspireDashboard 'Microsoft.App/managedEnvironments/dotNetComponents@2025-10-02-preview' = {
@@ -80,3 +80,5 @@ output AZURE_CONTAINER_APPS_ENVIRONMENT_NAME string = app_host.name
 output AZURE_CONTAINER_APPS_ENVIRONMENT_ID string = app_host.id
 
 output AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN string = app_host.properties.defaultDomain
+
+output AZURE_CONTAINER_APPS_ENVIRONMENT_LOCATION string = toLower(replace(app_host.location, ' ', ''))

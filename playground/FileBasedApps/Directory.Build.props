@@ -2,8 +2,4 @@
 
     <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
 
-    <PropertyGroup>
-        <NoWarn>$(NoWarn);ASPIRECSHARPAPPS001</NoWarn>
-    </PropertyGroup>
-
 </Project>

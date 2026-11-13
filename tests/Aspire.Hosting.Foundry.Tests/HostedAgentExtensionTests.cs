@@ -1,8 +1,11 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable CS0618 // Retain legacy .NET ProjectResource hosted-agent interop; Foundry.AddProject is unrelated.
 #pragma warning disable ASPIRECOMPUTE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning disable ASPIREPROJECTS001
 
+using System.ClientModel.Primitives;
 using System.Net;
 using System.Runtime.CompilerServices;
 using System.Text;
@@ -11,6 +14,7 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
+using Azure.AI.Projects;
 using Azure.AI.Projects.Agents;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -423,7 +427,6 @@ public class HostedAgentExtensionTests
         var envVars = await AzureHostedAgentResource.GetResolvedEnvironmentVariablesAsync(
             app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
             hostedAgent,
-            hostedAgent.Target,
             NullLogger.Instance,
             CancellationToken.None);
 
@@ -432,6 +435,26 @@ public class HostedAgentExtensionTests
         Assert.DoesNotContain("HTTP_PORTS", envVars.Keys);
         Assert.DoesNotContain("HTTPS_PORTS", envVars.Keys);
         Assert.DoesNotContain("DEFAULT_AD_PORT", envVars.Keys);
+    }
+
+    [Fact]
+    public void AsHostedAgent_InPublishMode_DotnetProjectKeepsSdkPublishingTarget()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+        var agent = builder.AddDotnetProject("agent", "agent.csproj", options => options.ExcludeLaunchProfile = true)
+            .WithHttpEndpoint(targetPort: 9000, env: "DEFAULT_AD_PORT")
+            .AsHostedAgent(project, HostedAgentProtocol.Responses, "2.0.0");
+
+        builder.Build();
+
+        var hostedAgent = Assert.Single(builder.Resources.OfType<AzureHostedAgentResource>());
+        Assert.Same(agent.Resource, hostedAgent.Target);
+        Assert.True(agent.Resource.SupportsDotnetProgramPublishing());
+        Assert.DoesNotContain(builder.Resources.OfType<ContainerResource>(), resource => resource.Name == agent.Resource.Name);
+        Assert.DoesNotContain(agent.Resource.Annotations, annotation => annotation is DockerfileBuildAnnotation);
+        Assert.Contains(agent.Resource.Annotations, annotation => annotation is EndpointEnvironmentInjectionFilterAnnotation);
     }
 
     [Fact]
@@ -571,7 +594,6 @@ public class HostedAgentExtensionTests
         var envVars = await AzureHostedAgentResource.GetResolvedEnvironmentVariablesAsync(
             app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
             hostedAgent,
-            agent.Resource,
             NullLogger.Instance,
             CancellationToken.None);
 
@@ -582,9 +604,182 @@ public class HostedAgentExtensionTests
     }
 
     [Fact]
-    public void GetAgentEndpointProtocols_MapsContainerProtocolsToEndpointProtocols()
+    public async Task GetResolvedEnvironmentVariables_EvaluatesHostedAgentTarget()
     {
-        var endpointProtocols = AzureHostedAgentResource.GetAgentEndpointProtocols(
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        IResource? evaluatedResource = null;
+        var agent = builder.AddExecutable("agent", "python", ".")
+            .WithEnvironment(context =>
+            {
+                evaluatedResource = context.Resource;
+                context.EnvironmentVariables["RESOURCE_NAME"] = context.Resource.Name;
+            });
+
+        using var app = builder.Build();
+        var hostedAgent = new AzureHostedAgentResource("agent-ha", agent.Resource);
+
+        var envVars = await AzureHostedAgentResource.GetResolvedEnvironmentVariablesAsync(
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
+            hostedAgent,
+            NullLogger.Instance,
+            CancellationToken.None);
+
+        Assert.Same(hostedAgent.Target, evaluatedResource);
+        Assert.Equal(agent.Resource.Name, envVars["RESOURCE_NAME"]);
+    }
+
+    [Fact]
+    public async Task GetResolvedEnvironmentVariables_ProjectsGeneratedConnectionStringAliases()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var connection = builder.AddConnectionString("my-db", ReferenceExpression.Create($"Host=example"));
+        var agent = builder.AddExecutable("agent", "python", ".")
+            .WithReference(connection)
+            .WithEnvironment("ConnectionStrings__my-db", "Host=override")
+            .WithEnvironment("custom-name", "custom-value");
+
+        using var app = builder.Build();
+        var hostedAgent = new AzureHostedAgentResource("agent-ha", agent.Resource);
+
+        var envVars = await AzureHostedAgentResource.GetResolvedEnvironmentVariablesAsync(
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
+            hostedAgent,
+            NullLogger.Instance,
+            CancellationToken.None);
+
+        Assert.Collection(
+            envVars.OrderBy(static entry => entry.Key, StringComparer.Ordinal),
+            entry =>
+            {
+                Assert.Equal("ConnectionStrings__my_db", entry.Key);
+                Assert.Equal("Host=override", entry.Value);
+            },
+            entry =>
+            {
+                Assert.Equal("custom-name", entry.Key);
+                Assert.Equal("custom-value", entry.Value);
+            });
+
+        var configuration = new HostedAgentConfiguration("test-image")
+        {
+            EnvironmentVariables = envVars
+        };
+        var exception = Assert.Throws<DistributedApplicationException>(
+            () => configuration.ToProjectsAgentVersionCreationOptions(agent.Resource.Name));
+
+        Assert.Equal(
+            "Foundry hosted agent for target resource 'agent' contains environment variable names that are not supported by Foundry Hosted Agents. Environment variable names must contain only ASCII letters, digits, or underscores. Invalid name(s): 'custom-name'",
+            exception.Message);
+    }
+
+    [Fact]
+    public async Task GetResolvedEnvironmentVariables_PreservesStandaloneConnectionStringNames()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var connection = builder.AddConnectionString("my-db", ReferenceExpression.Create($"Host=example"));
+        var reference = new ConnectionStringReference(connection.Resource, optional: false);
+        var agent = builder.AddExecutable("agent", "python", ".")
+            .WithEnvironment("ConnectionStrings__my-db", reference)
+            .WithEnvironment("ConnectionStrings__my_db", "Host=manual");
+
+        using var app = builder.Build();
+        var hostedAgent = new AzureHostedAgentResource("agent-ha", agent.Resource);
+        var envVars = await AzureHostedAgentResource.GetResolvedEnvironmentVariablesAsync(
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
+            hostedAgent,
+            NullLogger.Instance,
+            CancellationToken.None);
+
+        Assert.Equal(
+            new Dictionary<string, string>
+            {
+                ["ConnectionStrings__my-db"] = "Host=example",
+                ["ConnectionStrings__my_db"] = "Host=manual"
+            },
+            envVars);
+    }
+
+    [Fact]
+    public async Task GetResolvedEnvironmentVariables_ResolvesSelectedConnectionStringExpression()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var connection = builder.AddConnectionString("my-db", ReferenceExpression.Create($"Host=primary"));
+#pragma warning disable ASPIRECONNECTIONSTRINGS001
+        var names = ConnectionStringEnvironmentVariableNames.Create(connection.Resource, "my-db-http");
+        var reference = new ConnectionStringReference(
+            connection.Resource, optional: false, names, "HttpConnectionStringExpression",
+            ReferenceExpression.Create($"Host=http"));
+        var agent = builder.AddExecutable("agent", "python", ".")
+            .WithEnvironment(names.OriginalName, reference)
+            .WithEnvironment(names.PortableName, reference);
+#pragma warning restore ASPIRECONNECTIONSTRINGS001
+
+        using var app = builder.Build();
+        var hostedAgent = new AzureHostedAgentResource("agent-ha", agent.Resource);
+        var envVars = await AzureHostedAgentResource.GetResolvedEnvironmentVariablesAsync(
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
+            hostedAgent,
+            NullLogger.Instance,
+            CancellationToken.None);
+
+        Assert.Equal(
+            new Dictionary<string, string> { ["ConnectionStrings__my_db_http"] = "Host=http" },
+            envVars);
+    }
+
+    [Fact]
+    public async Task GetResolvedEnvironmentVariables_PreservesReplacedConnectionStringAliases()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var connection = builder.AddConnectionString("my-db", ReferenceExpression.Create($"Host=example"));
+        var agent = builder.AddExecutable("agent", "python", ".")
+            .WithReference(connection)
+            .WithEnvironment("ConnectionStrings__my-db", "Host=original")
+            .WithEnvironment("ConnectionStrings__my_db", "Host=portable");
+
+        using var app = builder.Build();
+        var hostedAgent = new AzureHostedAgentResource("agent-ha", agent.Resource);
+        var envVars = await AzureHostedAgentResource.GetResolvedEnvironmentVariablesAsync(
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
+            hostedAgent,
+            NullLogger.Instance,
+            CancellationToken.None);
+
+        Assert.Equal(
+            new Dictionary<string, string>
+            {
+                ["ConnectionStrings__my-db"] = "Host=original",
+                ["ConnectionStrings__my_db"] = "Host=portable"
+            },
+            envVars);
+    }
+
+    [Fact]
+    public async Task CreateAgentVersionAsync_RejectsUnsupportedProtocolBeforeSendingRequests()
+    {
+        var resource = new AzureHostedAgentResource("agent", new ContainerResource("target"));
+        var configuration = new HostedAgentConfiguration("test-image")
+        {
+            ProtocolVersions = [new ProtocolVersionRecord(new ProjectsAgentProtocol("unknown"), "1.0.0")]
+        };
+        using var handler = new SequenceHttpMessageHandler();
+        using var httpClient = new HttpClient(handler);
+        var client = new AIProjectClient(
+            new Uri("https://example.invalid/api/projects/my-project"),
+            new TestTokenCredential(),
+            new AIProjectClientOptions { Transport = new HttpClientPipelineTransport(httpClient) });
+
+        var exception = await Assert.ThrowsAsync<NotSupportedException>(() => resource.CreateAgentVersionAsync(
+            client.AgentAdministrationClient, configuration, TestContext.Current.CancellationToken));
+
+        Assert.Equal("Foundry hosted agent endpoint protocol 'unknown' is not supported.", exception.Message);
+        Assert.Empty(handler.Requests);
+    }
+
+    [Fact]
+    public void GetAgentEndpointProtocolConfiguration_MapsContainerProtocolsToEndpointProtocols()
+    {
+        var configuration = AzureHostedAgentResource.GetAgentEndpointProtocolConfiguration(
             [
                 new ProtocolVersionRecord(ProjectsAgentProtocol.Invocations, "1.0.0"),
                 new ProtocolVersionRecord(ProjectsAgentProtocol.Responses, "1.0.0"),
@@ -592,11 +787,40 @@ public class HostedAgentExtensionTests
                 new ProtocolVersionRecord(ProjectsAgentProtocol.Invocations, "1.1.0")
             ]);
 
-        Assert.Collection(
-            endpointProtocols,
-            protocol => Assert.Equal(AgentEndpointProtocol.Invocations, protocol),
-            protocol => Assert.Equal(AgentEndpointProtocol.Responses, protocol),
-            protocol => Assert.Equal(AgentEndpointProtocol.Activity, protocol));
+        Assert.NotNull(configuration.Invocations);
+        Assert.NotNull(configuration.Responses);
+        Assert.NotNull(configuration.Activity);
+        Assert.Null(configuration.A2a);
+        Assert.Null(configuration.Mcp);
+        Assert.Null(configuration.InvocationsWs);
+    }
+
+    [Fact]
+    public void GetAgentEndpointProtocolConfiguration_MapsAdditionalProtocols()
+    {
+        var configuration = AzureHostedAgentResource.GetAgentEndpointProtocolConfiguration(
+            [
+                new ProtocolVersionRecord(new ProjectsAgentProtocol("a2a"), "1.0.0"),
+                new ProtocolVersionRecord(new ProjectsAgentProtocol("mcp"), "1.0.0"),
+                new ProtocolVersionRecord(new ProjectsAgentProtocol("invocations_ws"), "1.0.0"),
+                new ProtocolVersionRecord(new ProjectsAgentProtocol("activity_protocol"), "1.0.0")
+            ]);
+
+        Assert.NotNull(configuration.A2a);
+        Assert.NotNull(configuration.Mcp);
+        Assert.NotNull(configuration.InvocationsWs);
+        Assert.NotNull(configuration.Activity);
+        Assert.Null(configuration.Responses);
+        Assert.Null(configuration.Invocations);
+    }
+
+    [Fact]
+    public void GetAgentEndpointProtocolConfiguration_RejectsUnsupportedProtocol()
+    {
+        var exception = Assert.Throws<NotSupportedException>(() => AzureHostedAgentResource.GetAgentEndpointProtocolConfiguration(
+            [new ProtocolVersionRecord(new ProjectsAgentProtocol("unknown"), "1.0.0")]));
+
+        Assert.Equal("Foundry hosted agent endpoint protocol 'unknown' is not supported.", exception.Message);
     }
 
     [Fact]
@@ -720,7 +944,7 @@ public class HostedAgentExtensionTests
     }
 
     [Fact]
-    public void AsHostedAgent_StampsReferenceRoleAssignmentAnnotationOnTarget_WithAzureAIUserRole()
+    public void AsHostedAgent_StampsReferenceRoleAssignmentAnnotationOnTarget_WithFoundryUserRole()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var project = builder.AddFoundry("account")
@@ -736,12 +960,12 @@ public class HostedAgentExtensionTests
         var annotation = Assert.Single(hostedAgent.Target.Annotations.OfType<ReferenceRoleAssignmentAnnotation>());
         Assert.Same(account, annotation.Target);
         Assert.Contains(annotation.Roles, role =>
-            string.Equals(role.Id, AzureHostedAgentResource.AzureAIUserRoleDefinitionId, StringComparison.OrdinalIgnoreCase));
+            string.Equals(role.Id, FoundryResource.FoundryUserRoleDefinitionId, StringComparison.OrdinalIgnoreCase));
 #pragma warning restore ASPIREAZURE003
     }
 
     [Fact]
-    public void AsHostedAgent_ReferenceRoleAssignmentAnnotation_GrantsOnlyAzureAIUserRole()
+    public void AsHostedAgent_ReferenceRoleAssignmentAnnotation_GrantsOnlyFoundryUserRole()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var project = builder.AddFoundry("account")
@@ -757,9 +981,9 @@ public class HostedAgentExtensionTests
 #pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates.
         var annotation = Assert.Single(hostedAgent.Target.Annotations.OfType<ReferenceRoleAssignmentAnnotation>());
 
-        // The implied grant is least-privilege: only "Azure AI User" is required to invoke the agent.
+        // The implied grant is least-privilege: only "Foundry User" is required to invoke the agent.
         var role = Assert.Single(annotation.Roles);
-        Assert.Equal(AzureHostedAgentResource.AzureAIUserRoleDefinitionId, role.Id, ignoreCase: true);
+        Assert.Equal(FoundryResource.FoundryUserRoleDefinitionId, role.Id, ignoreCase: true);
 
         // The account's default data-plane roles must NOT be folded in here. A consumer that references
         // the account directly still receives them via the preparer's normal walk, and a consumer that
@@ -826,3 +1050,4 @@ public class HostedAgentExtensionTests
         public string ProjectPath => "project";
     }
 }
+#pragma warning restore CS0618

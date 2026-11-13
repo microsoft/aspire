@@ -103,7 +103,7 @@ public static class AzureNetworkSecurityGroupExtensions
                 nameof(rule));
         }
 
-        builder.Resource.SecurityRules.Add(rule);
+        builder.Resource.Rules.Add(rule);
         return builder;
     }
 

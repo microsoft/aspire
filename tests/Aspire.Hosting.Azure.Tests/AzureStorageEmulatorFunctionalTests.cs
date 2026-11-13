@@ -162,7 +162,7 @@ public class AzureStorageEmulatorFunctionalTests(ITestOutputHelper testOutputHel
         var queuesResourceName = "QueuesConnection";
         var queueName = "my-queue";
 
-        using var builder = TestDistributedApplicationBuilder.Create().WithTestAndResourceLogging(testOutputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var storage = builder.AddAzureStorage("storage").RunAsEmulator();
         var blobs = storage.AddBlobs(blobsResourceName);
         var container = storage.AddBlobContainer(blobContainerName);
@@ -213,7 +213,7 @@ public class AzureStorageEmulatorFunctionalTests(ITestOutputHelper testOutputHel
     {
         var cts = new CancellationTokenSource(TimeSpan.FromMinutes(3));
 
-        using var builder = TestDistributedApplicationBuilder.Create().WithTestAndResourceLogging(testOutputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var storage = builder.AddAzureStorage("storage").RunAsEmulator();
         var blobs = storage.AddBlobs("BlobConnection");
         var blobContainer = storage.AddBlobContainer("testblobcontainer");
@@ -253,7 +253,7 @@ public class AzureStorageEmulatorFunctionalTests(ITestOutputHelper testOutputHel
     {
         var cts = new CancellationTokenSource(TimeSpan.FromMinutes(3));
 
-        using var builder = TestDistributedApplicationBuilder.Create().WithTestAndResourceLogging(testOutputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var storage = builder.AddAzureStorage("storage").RunAsEmulator();
         var queues = storage.AddQueues("QueueConnection");
         var queue = storage.AddQueue("testqueue");

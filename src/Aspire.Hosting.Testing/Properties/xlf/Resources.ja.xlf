@@ -7,6 +7,31 @@
         <target state="translated">エンドポイントまたは接続文字列を解決する前に、アプリケーションを起動する必要があります。</target>
         <note />
       </trans-unit>
+      <trans-unit id="DashboardDisabledExceptionMessage">
+        <source>The dashboard is not enabled for this application.</source>
+        <target state="translated">このアプリケーションではダッシュボードが有効になっていません。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardTestingPublishModeExceptionMessage">
+        <source>Dashboard testing is not supported in publish mode.</source>
+        <target state="translated">公開モードではダッシュボードのテストはサポートされていません。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardUrlApplicationNotStartedExceptionMessage">
+        <source>The application must be started before retrieving the dashboard URL.</source>
+        <target state="translated">ダッシュボードの URL を取得する前に、アプリケーションを起動する必要があります。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardUrlPublishModeExceptionMessage">
+        <source>The dashboard URL is not available in publish mode.</source>
+        <target state="translated">公開モードではダッシュボードの URL を利用できません。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardUrlUnavailableExceptionMessage">
+        <source>The dashboard URL is not available.</source>
+        <target state="translated">ダッシュボードの URL は利用できません。</target>
+        <note />
+      </trans-unit>
       <trans-unit id="EndpointForResourceNotFoundExceptionMessage">
         <source>Endpoint '{0}' for resource '{1}' not found.</source>
         <target state="translated">リソース '{1}' のエンドポイント '{0}' が見つかりません。</target>

@@ -403,7 +403,6 @@ else {
 # Build the bundle payload (aspire-managed + DCP tar.gz archive, and optionally native AOT CLI)
 if (-not $SkipBundle) {
   $bundleProjPath = Join-Path $RepoRoot "eng" "Bundle.proj"
-  $skipNativeArg = if ($NativeAot) { '' } else { '/p:SkipNativeBuild=true' }
 
   # Clean stale managed publish output so dotnet publish doesn't skip due to incremental builds
   $staleManagedDir = Join-Path $RepoRoot "artifacts" "bundle" $bundleRid "managed"
@@ -415,7 +414,7 @@ if (-not $SkipBundle) {
   Write-Log "Building bundle (aspire-managed + DCP$(if ($NativeAot) { ' + native AOT CLI' }))..."
   $buildArgs = @($bundleProjPath, '-c', $effectiveConfig) + $packVersionArgs + @("/p:TargetRid=$bundleRid")
   if (-not $NativeAot) {
-    $buildArgs += '/p:SkipNativeBuild=true'
+    $buildArgs += '/p:SkipCliArtifacts=true'
   }
   & dotnet build @buildArgs
   if ($LASTEXITCODE -ne 0) {
@@ -440,17 +439,17 @@ if (-not $SkipCli) {
   $cliExeName = if ($bundleRid -like 'win-*') { 'aspire.exe' } else { 'aspire' }
 
   if ($NativeAot) {
-    # Native AOT CLI is produced by Bundle.proj's _PublishNativeCli target
+    # Native AOT CLI is produced by Bundle.proj's final CLI packaging phase.
     # (already has embedded bundle payload)
-    $cliPublishDir = Join-Path $RepoRoot "artifacts" "bin" "Aspire.Cli" $effectiveConfig "net10.0" $bundleRid "native"
+    $cliPublishDir = Join-Path $RepoRoot "artifacts" "bin" "Aspire.Cli" $effectiveConfig "net11.0" $bundleRid "native"
     if (-not (Test-Path -LiteralPath $cliPublishDir)) {
-      $cliPublishDir = Join-Path $RepoRoot "artifacts" "bin" "Aspire.Cli" $effectiveConfig "net10.0" $bundleRid "publish"
+      $cliPublishDir = Join-Path $RepoRoot "artifacts" "bin" "Aspire.Cli" $effectiveConfig "net11.0" $bundleRid "publish"
     }
   } elseif ($Rid) {
     # Cross-RID: publish CLI for the target platform with embedded bundle payload
     Write-Log "Publishing Aspire CLI for target RID: $Rid"
     $cliProj = Join-Path $RepoRoot "src" "Aspire.Cli" "Aspire.Cli.csproj"
-    $cliPublishDir = Join-Path $RepoRoot "artifacts" "bin" "Aspire.Cli" $effectiveConfig "net10.0" $Rid "publish"
+    $cliPublishDir = Join-Path $RepoRoot "artifacts" "bin" "Aspire.Cli" $effectiveConfig "net11.0" $Rid "publish"
     $publishArgs = @($cliProj, '-c', $effectiveConfig, '-r', $Rid, '--self-contained', '/p:PublishAot=false', '/p:PublishSingleFile=true') + $packVersionArgs
     if ($bundlePayloadArchive) {
       $publishArgs += "/p:BundlePayloadPath=$($bundlePayloadArchive.FullName)"
@@ -465,7 +464,7 @@ if (-not $SkipCli) {
     if ($bundlePayloadArchive) {
       # NativeAOT CLI (Aspire.Cli.csproj sets PublishAot=true) with embedded bundle payload.
       # Publish output is RID-specific when we pass -r, so the path includes $bundleRid.
-      $cliPublishDir = Join-Path $RepoRoot "artifacts" "bin" "Aspire.Cli.Tool" $effectiveConfig "net10.0" $bundleRid "publish"
+      $cliPublishDir = Join-Path $RepoRoot "artifacts" "bin" "Aspire.Cli.Tool" $effectiveConfig "net11.0" $bundleRid "publish"
       Write-Log "Publishing Aspire CLI (dotnet tool, native AOT) with embedded bundle payload..."
       & dotnet publish $cliProj -c $effectiveConfig -r $bundleRid @packVersionArgs "/p:BundlePayloadPath=$($bundlePayloadArchive.FullName)"
       if ($LASTEXITCODE -ne 0) {
@@ -475,9 +474,9 @@ if (-not $SkipCli) {
     } else {
       # -SkipBundle builds Aspire.Cli.Tool with PublishAot=false, which keeps the
       # historical framework-dependent, non-RID output layout.
-      $cliPublishDir = Join-Path $RepoRoot "artifacts" "bin" "Aspire.Cli.Tool" $effectiveConfig "net10.0" "publish"
+      $cliPublishDir = Join-Path $RepoRoot "artifacts" "bin" "Aspire.Cli.Tool" $effectiveConfig "net11.0" "publish"
       if (-not (Test-Path -LiteralPath $cliPublishDir)) {
-        $cliPublishDir = Join-Path $RepoRoot "artifacts" "bin" "Aspire.Cli.Tool" $effectiveConfig "net10.0"
+        $cliPublishDir = Join-Path $RepoRoot "artifacts" "bin" "Aspire.Cli.Tool" $effectiveConfig "net11.0"
       }
     }
   }

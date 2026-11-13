@@ -55,7 +55,7 @@ checkout:
     # checkout, changing the workspace layout used by this workflow.
     path: .
     github-app:
-      app-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
+      client-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
       private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
       owner: "microsoft"
       repositories: ["aspire.dev"]
@@ -81,14 +81,14 @@ tools:
     allowed-repos:
       - microsoft/*
     github-app:
-      app-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
+      client-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
       private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
       owner: "microsoft"
       repositories: ["aspire.dev", "aspire"]
 
 safe-outputs:
   github-app:
-    app-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
+    client-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
     private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
     owner: "microsoft"
     repositories: ["aspire.dev", "aspire"]

@@ -13,6 +13,21 @@ const builder = await createBuilder();
 
 // ── 1. addAzureServiceBus ──────────────────────────────────────────────────
 const serviceBus = await builder.addAzureServiceBus("messaging");
+await serviceBus.configureInfrastructure(async infrastructure => {
+    const namespace = await infrastructure.getServiceBusNamespace();
+    const tags = await namespace.tags.get();
+    await tags.set("provisioning-proxy", "typescript");
+
+    const configuredQueue = await infrastructure.getServiceBusQueueByIdentifier("orders");
+    await configuredQueue.maxDeliveryCount.set(5);
+    await configuredQueue.lockDuration.set(300000);
+
+    const configuredTopic = await infrastructure.getServiceBusTopicByIdentifier("events");
+    await configuredTopic.enablePartitioning.set(true);
+
+    const configuredSubscription = await infrastructure.getServiceBusSubscriptionByIdentifier("audit");
+    await configuredSubscription.requiresSession.set(true);
+});
 
 // ── 2. runAsEmulator — with configureContainer callback ────────────────────
 const emulatorBus = await builder

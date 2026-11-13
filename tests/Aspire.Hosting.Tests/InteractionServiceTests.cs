@@ -188,6 +188,107 @@ public class InteractionServiceTests
     }
 
     [Fact]
+    public async Task IsAvailable_ConsumersNotReady_ReturnsFalseAndPromptsThrow()
+    {
+        var consumerState = new InteractionServiceConsumerState();
+        var interactionService = CreateInteractionService(consumerState: consumerState);
+
+        Assert.True(consumerState.Ready);
+        Assert.True(interactionService.IsAvailable);
+        consumerState.Ready = false;
+
+        Assert.False(interactionService.IsAvailable);
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => interactionService.PromptMessageBoxAsync("Title", "Message")).DefaultTimeout();
+        Assert.Contains(nameof(BeforeStartEvent), ex.Message);
+        Assert.Empty(interactionService.GetCurrentInteractions());
+
+        consumerState.Ready = true;
+        Assert.True(interactionService.IsAvailable);
+    }
+
+    [Fact]
+    public async Task BeforeStartEvent_PromptIsGuardedByIsAvailable_DoesNotDeadlock()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(options => options.DisableDashboard = false);
+
+        bool? isAvailableDuringBeforeStart = null;
+        Exception? promptException = null;
+        builder.Eventing.Subscribe<BeforeStartEvent>(async (e, ct) =>
+        {
+            var interactionService = e.Services.GetRequiredService<IInteractionService>();
+            isAvailableDuringBeforeStart = interactionService.IsAvailable;
+
+            try
+            {
+                // Nothing can answer this prompt before the host starts, so it must not be awaited forever.
+                await interactionService.PromptMessageBoxAsync("Title", "Message", cancellationToken: ct);
+            }
+            catch (Exception ex)
+            {
+                promptException = ex;
+            }
+        });
+
+        using var app = builder.Build();
+        var interactionService = app.Services.GetRequiredService<IInteractionService>();
+        var consumerState = app.Services.GetRequiredService<InteractionServiceConsumerState>();
+
+        // Code that runs after Build() but before the before-start hooks also can't get an answer.
+        Assert.False(consumerState.Ready);
+        Assert.False(interactionService.IsAvailable);
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => interactionService.PromptMessageBoxAsync("Title", "Message")).DefaultTimeout();
+
+        await app.ExecuteBeforeStartHooksAsync(default).DefaultTimeout();
+
+        Assert.False(isAvailableDuringBeforeStart);
+        Assert.IsType<InvalidOperationException>(promptException);
+        Assert.True(consumerState.Ready);
+        Assert.True(interactionService.IsAvailable);
+    }
+
+    [Fact]
+    public async Task BeforeStartEvent_Failure_RestoresConsumerReadiness()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(options => options.DisableDashboard = false);
+        builder.Eventing.Subscribe<BeforeStartEvent>((e, ct) => throw new InvalidOperationException("Before-start failed."));
+
+        using var app = builder.Build();
+        var consumerState = app.Services.GetRequiredService<InteractionServiceConsumerState>();
+        var interactionService = app.Services.GetRequiredService<IInteractionService>();
+        Assert.False(consumerState.Ready);
+        Assert.False(interactionService.IsAvailable);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => app.ExecuteBeforeStartHooksAsync(default)).DefaultTimeout();
+
+        Assert.True(consumerState.Ready);
+        Assert.True(interactionService.IsAvailable);
+    }
+
+    [Fact]
+    public async Task DistributedApplicationWrapper_PreservesConsumerReadiness()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(options => options.DisableDashboard = false);
+        using var app = builder.Build();
+        var consumerState = app.Services.GetRequiredService<InteractionServiceConsumerState>();
+        var interactionService = app.Services.GetRequiredService<IInteractionService>();
+        Assert.False(consumerState.Ready);
+
+        await app.ExecuteBeforeStartHooksAsync(default).DefaultTimeout();
+        Assert.True(consumerState.Ready);
+        Assert.True(interactionService.IsAvailable);
+
+        // Testing wrappers share the original application's services and may be created after its hooks finish.
+        using var wrapper = new DistributedApplication(app);
+
+        Assert.Same(app.Services, wrapper.Services);
+        Assert.True(consumerState.Ready);
+        Assert.True(wrapper.Services.GetRequiredService<IInteractionService>().IsAvailable);
+    }
+
+    [Fact]
     public void IsAvailable_DashboardDisabled_ReturnsFalse()
     {
         // Arrange & Act
@@ -220,7 +321,8 @@ public class InteractionServiceTests
             new DistributedApplicationOptions(),
             new ServiceCollection().BuildServiceProvider(),
             configuration,
-            new TestInteractionFileUploadStore());
+            new TestInteractionFileUploadStore(),
+            new InteractionServiceConsumerState());
 
         // Assert
         Assert.Equal(expected, interactionService.IsAvailable);
@@ -248,7 +350,8 @@ public class InteractionServiceTests
             new DistributedApplicationOptions(),
             new ServiceCollection().BuildServiceProvider(),
             configuration,
-            new TestInteractionFileUploadStore());
+            new TestInteractionFileUploadStore(),
+            new InteractionServiceConsumerState());
 
         // Assert - Invalid values should be ignored, defaulting to true (since dashboard is enabled)
         Assert.True(interactionService.IsAvailable);
@@ -271,7 +374,8 @@ public class InteractionServiceTests
             new DistributedApplicationOptions { DisableDashboard = true },
             new ServiceCollection().BuildServiceProvider(),
             configuration,
-            new TestInteractionFileUploadStore());
+            new TestInteractionFileUploadStore(),
+            new InteractionServiceConsumerState());
 
         // Assert - Both conditions should result in false
         Assert.False(interactionService.IsAvailable);
@@ -1332,7 +1436,7 @@ public class InteractionServiceTests
             CancellationToken.None);
     }
 
-    private static InteractionService CreateInteractionService(DistributedApplicationOptions? options = null, IInteractionFileUploadStore? fileUploadStore = null)
+    private static InteractionService CreateInteractionService(DistributedApplicationOptions? options = null, IInteractionFileUploadStore? fileUploadStore = null, InteractionServiceConsumerState? consumerState = null)
     {
         var configuration = new ConfigurationBuilder().Build();
         return new InteractionService(
@@ -1340,7 +1444,8 @@ public class InteractionServiceTests
             options ?? new DistributedApplicationOptions(),
             new ServiceCollection().BuildServiceProvider(),
             configuration,
-            fileUploadStore ?? new TestInteractionFileUploadStore());
+            fileUploadStore ?? new TestInteractionFileUploadStore(),
+            consumerState ?? new InteractionServiceConsumerState());
     }
 
     [Fact]
@@ -1368,7 +1473,8 @@ public class InteractionServiceTests
         Assert.Equal(interaction.InteractionId, Assert.Single(fileUploadStore.StartedInteractions));
         Assert.Equal(interaction.InteractionId, Assert.Single(fileUploadStore.CompletedInteractions));
         var resultInput = Assert.IsType<InteractionInput>(result.Data);
-        Assert.Single(resultInput.Files!);
+        using var files = resultInput.GetFiles();
+        Assert.Single(files);
     }
 
     [Fact]
@@ -1504,6 +1610,51 @@ public class InteractionServiceTests
 
         Assert.True(interaction.CompletionTcs.Task.IsCompletedSuccessfully);
         Assert.Empty(input.ValidationErrors);
+    }
+
+    [Theory]
+    [InlineData(false, 1, true)]
+    [InlineData(false, 2, false)]
+    [InlineData(true, InteractionHelpers.MaxFileCount, true)]
+    [InlineData(true, InteractionHelpers.MaxFileCount + 1, false)]
+    public async Task PromptInputsAsync_FileCount_ValidatesLimit(bool allowMultipleFiles, int fileCount, bool expectedValid)
+    {
+        var fileUploadStore = new TestInteractionFileUploadStore();
+        var interactionService = CreateInteractionService(fileUploadStore: fileUploadStore);
+        var input = new InteractionInput
+        {
+            Name = "File",
+            Label = "File",
+            InputType = InputType.File,
+            AllowMultipleFiles = allowMultipleFiles
+        };
+        _ = interactionService.PromptInputAsync("Select file", "please", input);
+        var interaction = Assert.Single(interactionService.GetCurrentInteractions());
+        var registeredFileInputs = Assert.Single(fileUploadStore.StartedFileInputs);
+        Assert.Equal((input.Name, InteractionHelpers.GetMaxFileCount(allowMultipleFiles)), Assert.Single(registeredFileInputs));
+        var files = Enumerable.Range(0, fileCount)
+            .Select(i => new InputFileDto($"file-{i}", $"file-{i}.txt", $"/tmp/file-{i}.txt"))
+            .ToArray();
+
+        await CompleteInteractionAsync(
+            interactionService,
+            interaction.InteractionId,
+            new InteractionCompletionState { Complete = true, State = new[] { input } },
+            inputs: [new InputDto("File", "files", InputType.File, files)]);
+
+        if (expectedValid)
+        {
+            Assert.True(interaction.CompletionTcs.Task.IsCompletedSuccessfully);
+            Assert.Empty(input.ValidationErrors);
+        }
+        else
+        {
+            var maxFileCount = allowMultipleFiles ? InteractionHelpers.MaxFileCount : 1;
+            Assert.False(interaction.CompletionTcs.Task.IsCompleted);
+            Assert.Collection(
+                input.ValidationErrors,
+                error => Assert.Equal($"File count exceeds the maximum of {maxFileCount}.", error));
+        }
     }
 
     [Fact]

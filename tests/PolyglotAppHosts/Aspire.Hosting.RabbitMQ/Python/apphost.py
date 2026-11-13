@@ -9,7 +9,7 @@ with create_builder() as builder:
     rabbitmq.with_data_volume()
     rabbitmq.with_management_plugin()
     rabbitmq2 = builder.add_rabbit_mq("resource")
-    rabbitmq2.with_management_plugin(15673)
+    rabbitmq2.with_management_plugin(port=15673)
     # ---- Property access on RabbitMQServerResource ----
     _endpoint = rabbitmq.primary_endpoint
     _mgmt_endpoint = rabbitmq.management_endpoint

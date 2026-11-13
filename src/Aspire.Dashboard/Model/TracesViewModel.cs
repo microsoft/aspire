@@ -2,30 +2,49 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Dashboard.Model.Otlp;
-using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
+using Aspire.Dashboard.Utils;
 
 namespace Aspire.Dashboard.Model;
 
 public class TracesViewModel
 {
-    private readonly TelemetryRepository _telemetryRepository;
+    private readonly DashboardDataSource _dataSource;
     private readonly List<FieldTelemetryFilter> _filters = new();
 
-    private PagedResult<OtlpTrace>? _traces;
+    private PagedResult<TraceSummary>? _traces;
     private ResourceKey? _resourceKey;
+    private IReadOnlyList<ResourceKey>? _resourceKeys;
     private string _filterText = string.Empty;
     private int _startIndex;
     private int _count;
-    private bool _currentDataHasErrors;
     private SpanType? _spanType;
 
-    public TracesViewModel(TelemetryRepository telemetryRepository)
+    public TracesViewModel(DashboardDataSource dataSource)
     {
-        _telemetryRepository = telemetryRepository;
+        _dataSource = dataSource;
     }
 
     public ResourceKey? ResourceKey { get => _resourceKey; set => SetValue(ref _resourceKey, value); }
+
+    /// <summary>
+    /// Gets or sets the resources to include when several resources are selected. When set, it's used instead of
+    /// <see cref="ResourceKey"/>, and an empty list matches no data because none of the selected resources have telemetry.
+    /// </summary>
+    public IReadOnlyList<ResourceKey>? ResourceKeys
+    {
+        get => _resourceKeys;
+        set
+        {
+            if (_resourceKeys is null ? value is null : value is not null && _resourceKeys.SequenceEqual(value))
+            {
+                return;
+            }
+
+            _resourceKeys = value;
+            _traces = null;
+        }
+    }
     public SpanType? SpanType { get => _spanType; set => SetValue(ref _spanType, value); }
     public string FilterText { get => _filterText; set => SetValue(ref _filterText, value); }
     public int StartIndex { get => _startIndex; set => SetValue(ref _startIndex, value); }
@@ -75,55 +94,34 @@ public class TracesViewModel
         _traces = null;
     }
 
-    public PagedResult<OtlpTrace> GetTraces()
+    public async Task<PagedResult<TraceSummary>> GetTracesAsync(CancellationToken cancellationToken)
     {
+        if (ResourceKeys is { Count: 0 })
+        {
+            MaxDuration = TimeSpan.Zero;
+            return PagedResult<TraceSummary>.Empty;
+        }
+
         var traces = _traces;
         if (traces == null)
         {
             var filters = GetFilters();
 
-            var result = _telemetryRepository.GetTraces(new GetTracesRequest
+            var result = await _dataSource.TelemetryRepository.GetTraceSummariesAsync(new GetTracesRequest
             {
-                ResourceKeys = ResourceKey is { } key ? [key] : [],
+                ResourceKeys = ResourceKeys ?? (ResourceKey is { } key ? [key] : []),
                 StartIndex = StartIndex,
                 Count = Count,
                 Filters = filters,
-                TraceNameFilterText = FilterText
-            });
+                TraceNameFilterText = FilterText,
+                LatestItemCount = DashboardUIHelpers.MaxVirtualizedItemCount
+            }, cancellationToken).ConfigureAwait(false);
 
             traces = result.PagedResult;
             MaxDuration = result.MaxDuration;
-
-            _currentDataHasErrors = result.PagedResult.Items.Any(t => t.Spans.Any(s => s.Status == OtlpSpanStatusCode.Error));
         }
 
         return traces;
-    }
-
-    // First check if there were any errors in already available data. Avoid fetching data again.
-    public bool HasErrors() => _currentDataHasErrors || GetErrorTraces(count: 0).TotalItemCount > 0;
-
-    public PagedResult<OtlpTrace> GetErrorTraces(int count)
-    {
-        var filters = Filters.Cast<TelemetryFilter>().ToList();
-
-        if (SpanType?.Filter is { } typeFilter)
-        {
-            filters.Add(typeFilter);
-        }
-
-        filters.Add(new FieldTelemetryFilter { Field = KnownTraceFields.StatusField, Condition = FilterCondition.Equals, Value = OtlpSpanStatusCode.Error.ToString() });
-
-        var errorTraces = _telemetryRepository.GetTraces(new GetTracesRequest
-        {
-            ResourceKeys = ResourceKey is { } key ? [key] : [],
-            StartIndex = 0,
-            Count = count,
-            Filters = filters,
-            TraceNameFilterText = FilterText
-        });
-
-        return errorTraces.PagedResult;
     }
 
     private List<TelemetryFilter> GetFilters()

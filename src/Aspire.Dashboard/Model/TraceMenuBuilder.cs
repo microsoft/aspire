@@ -25,8 +25,7 @@ public sealed class TraceMenuBuilder
     private readonly IStringLocalizer<ControlsStrings> _controlsLoc;
     private readonly NavigationManager _navigationManager;
     private readonly DashboardDialogService _dialogService;
-    private readonly TelemetryRepository _telemetryRepository;
-    private readonly IOutgoingPeerResolver[] _outgoingPeerResolvers;
+    private readonly DashboardDataSource _dataSource;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="TraceMenuBuilder"/> class.
@@ -35,14 +34,12 @@ public sealed class TraceMenuBuilder
         IStringLocalizer<ControlsStrings> controlsLoc,
         NavigationManager navigationManager,
         DashboardDialogService dialogService,
-        TelemetryRepository telemetryRepository,
-        IEnumerable<IOutgoingPeerResolver> outgoingPeerResolvers)
+        DashboardDataSource dataSource)
     {
         _controlsLoc = controlsLoc;
         _navigationManager = navigationManager;
         _dialogService = dialogService;
-        _telemetryRepository = telemetryRepository;
-        _outgoingPeerResolvers = outgoingPeerResolvers.ToArray();
+        _dataSource = dataSource;
     }
 
     /// <summary>
@@ -56,7 +53,33 @@ public sealed class TraceMenuBuilder
         OtlpTrace trace,
         bool showViewDetails = true)
     {
-        if (showViewDetails)
+        AddMenuItems(menuItems, trace.TraceId, () => trace, showViewDetails ? DashboardUrls.TraceDetailUrl(trace.TraceId) : null);
+    }
+
+    /// <summary>
+    /// Adds menu items for a trace summary to the provided list.
+    /// </summary>
+    /// <param name="menuItems">The list to add menu items to.</param>
+    /// <param name="summary">The trace summary to create menu items for.</param>
+    /// <param name="traceDetailUrl">
+    /// The URL the View Details menu item navigates to. Callers pass the hosting page's contextual URL so the
+    /// trace detail keeps the list's resource selection and filters, the same as clicking the row.
+    /// </param>
+    public void AddMenuItems(
+        List<MenuButtonItem> menuItems,
+        TraceSummary summary,
+        string traceDetailUrl)
+    {
+        AddMenuItems(menuItems, summary.TraceId, () => _dataSource.TelemetryRepository.GetTrace(summary.TraceId), traceDetailUrl);
+    }
+
+    private void AddMenuItems(
+        List<MenuButtonItem> menuItems,
+        string traceId,
+        Func<OtlpTrace?> getTrace,
+        string? viewDetailsUrl)
+    {
+        if (viewDetailsUrl is not null)
         {
             menuItems.Add(new MenuButtonItem
             {
@@ -64,7 +87,7 @@ public sealed class TraceMenuBuilder
                 Icon = s_viewDetailsIcon,
                 OnClick = () =>
                 {
-                    _navigationManager.NavigateTo(DashboardUrls.TraceDetailUrl(trace.TraceId));
+                    _navigationManager.NavigateTo(viewDetailsUrl);
                     return Task.CompletedTask;
                 }
             });
@@ -76,7 +99,7 @@ public sealed class TraceMenuBuilder
             Icon = s_structuredLogsIcon,
             OnClick = () =>
             {
-                _navigationManager.NavigateTo(DashboardUrls.StructuredLogsUrl(traceId: trace.TraceId));
+                _navigationManager.NavigateTo(DashboardUrls.StructuredLogsUrl(traceId: traceId));
                 return Task.CompletedTask;
             }
         });
@@ -87,7 +110,13 @@ public sealed class TraceMenuBuilder
             Icon = s_bracesIcon,
             OnClick = async () =>
             {
-                var result = ExportHelpers.GetTraceAsJson(trace, _telemetryRepository, _outgoingPeerResolvers);
+                var trace = getTrace();
+                if (trace is null)
+                {
+                    return;
+                }
+
+                var result = await ExportHelpers.GetTraceAsJsonAsync(trace, _dataSource.TelemetryRepository, CancellationToken.None).ConfigureAwait(false);
                 await TextVisualizerDialog.OpenDialogAsync(new OpenTextVisualizerDialogOptions
                 {
                     DialogService = _dialogService,

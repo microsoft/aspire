@@ -1,8 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIRECONTAINERRUNTIME001
+#pragma warning disable ASPIREPROJECTS001
 
 using System.Globalization;
 using System.Text;
@@ -12,6 +12,7 @@ using Aspire.Hosting.Docker.Resources.ServiceNodes;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Publishing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Docker;
@@ -22,6 +23,9 @@ namespace Aspire.Hosting.Docker;
 [AspireExport(ExposeProperties = true)]
 public class DockerComposeServiceResource : Resource, IResourceWithParent<DockerComposeEnvironmentResource>
 {
+    /// <inheritdoc/>
+    public override string ResourceTypeDisplayName => "Docker Compose Service";
+
     private readonly IResource _targetResource;
     private readonly DockerComposeEnvironmentResource _composeEnvironmentResource;
 
@@ -109,7 +113,7 @@ public class DockerComposeServiceResource : Resource, IResourceWithParent<Docker
     /// <inheritdoc/>
     public DockerComposeEnvironmentResource Parent => _composeEnvironmentResource;
 
-    internal async Task<Service> BuildComposeServiceAsync()
+    internal async Task<Service> BuildComposeServiceAsync(IConfiguration configuration)
     {
         var composeService = new Service
         {
@@ -124,7 +128,7 @@ public class DockerComposeServiceResource : Resource, IResourceWithParent<Docker
         SetContainerName(composeService);
         SetEntryPoint(composeService);
         SetPullPolicy(composeService);
-        await AddEnvironmentVariablesAndCommandLineArgsAsync(composeService).ConfigureAwait(false);
+        await AddEnvironmentVariablesAndCommandLineArgsAsync(composeService, configuration).ConfigureAwait(false);
         AddPorts(composeService);
         AddVolumes(composeService);
         SetDependsOn(composeService);
@@ -135,7 +139,7 @@ public class DockerComposeServiceResource : Resource, IResourceWithParent<Docker
     {
         // If the resource has a Dockerfile build annotation, we don't have the image name
         // it will come as a parameter
-        if (resourceInstance.TryGetLastAnnotation<DockerfileBuildAnnotation>(out _) || resourceInstance is ProjectResource)
+        if (resourceInstance.RequiresImageBuild())
         {
             containerImageName = this.AsContainerImagePlaceholder();
             return true;
@@ -187,7 +191,7 @@ public class DockerComposeServiceResource : Resource, IResourceWithParent<Docker
             foreach (var waitAnnotation in waitAnnotations)
             {
                 // We can only wait on other compose services
-                if (waitAnnotation.Resource is ProjectResource || waitAnnotation.Resource.IsContainer())
+                if (waitAnnotation.Resource.SupportsDotnetProgramPublishing() || waitAnnotation.Resource.IsContainer())
                 {
                     // https://docs.docker.com/compose/how-tos/startup-order/#control-startup
                     composeService.DependsOn[waitAnnotation.Resource.Name.ToLowerInvariant()] = new()
@@ -214,13 +218,13 @@ public class DockerComposeServiceResource : Resource, IResourceWithParent<Docker
         }
     }
 
-    private async Task AddEnvironmentVariablesAndCommandLineArgsAsync(Service composeService)
+    private async Task AddEnvironmentVariablesAndCommandLineArgsAsync(Service composeService, IConfiguration configuration)
     {
         var env = new Dictionary<string, string>();
 
         foreach (var kv in EnvironmentVariables)
         {
-            var value = await this.ProcessValueAsync(kv.Value).ConfigureAwait(false);
+            var value = await this.ProcessValueAsync(kv.Value, configuration).ConfigureAwait(false);
 
             env[kv.Key] = value?.ToString() ?? string.Empty;
         }
@@ -237,7 +241,7 @@ public class DockerComposeServiceResource : Resource, IResourceWithParent<Docker
 
         foreach (var arg in Args)
         {
-            var value = await this.ProcessValueAsync(arg).ConfigureAwait(false);
+            var value = await this.ProcessValueAsync(arg, configuration).ConfigureAwait(false);
 
             if (value is not string str)
             {

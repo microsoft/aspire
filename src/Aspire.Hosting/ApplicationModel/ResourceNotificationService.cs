@@ -90,7 +90,7 @@ public class ResourceNotificationService : IDisposable
     /// </summary>
     /// <remarks>
     /// This method returns a task that will complete when the resource reaches the specified target state. If the resource
-    /// is already in the target state, the method will return immediately.<br/>
+    /// is already in the target state, the method will return immediately without logging wait or completion messages.<br/>
     /// If the resource doesn't reach one of the target states before <paramref name="cancellationToken"/> is signaled, this method
     /// will throw <see cref="OperationCanceledException"/>.
     /// </remarks>
@@ -111,7 +111,7 @@ public class ResourceNotificationService : IDisposable
     /// </summary>
     /// <remarks>
     /// This method returns a task that will complete when the resource reaches one of the specified target states. If the resource
-    /// is already in the target state, the method will return immediately.<br/>
+    /// is already in the target state, the method will return immediately without logging wait or completion messages.<br/>
     /// If the resource doesn't reach one of the target states before <paramref name="cancellationToken"/> is signaled, this method
     /// will throw <see cref="OperationCanceledException"/>.
     /// </remarks>
@@ -123,19 +123,24 @@ public class ResourceNotificationService : IDisposable
                                                      Justification = "targetState(s) parameters are mutually exclusive.")]
     public async Task<string> WaitForResourceAsync(string resourceName, IEnumerable<string> targetStates, CancellationToken cancellationToken = default)
     {
-        if (_logger.IsEnabled(LogLevel.Debug))
+        var waitTask = WaitForResourceCoreAsync(
+            resourceName,
+            re => re.Snapshot.State?.Text is { Length: > 0 } stateText && targetStates.Contains(stateText, StringComparers.ResourceState),
+            $"Resource '{resourceName}' failed to reach one of the target states: [{string.Join(", ", targetStates)}] before the operation was cancelled.",
+            cancellationToken);
+        var loggedWait = !waitTask.IsCompletedSuccessfully;
+        if (loggedWait && _logger.IsEnabled(LogLevel.Debug))
         {
             _logger.LogDebug("Waiting for resource '{ResourceName}' to enter one of the target state: {TargetStates}", resourceName, string.Join(", ", targetStates));
         }
 
-        var resourceEvent = await WaitForResourceCoreAsync(
-            resourceName,
-            re => re.Snapshot.State?.Text is { Length: > 0 } stateText && targetStates.Contains(stateText, StringComparers.ResourceState),
-            $"Resource '{resourceName}' failed to reach one of the target states: [{string.Join(", ", targetStates)}] before the operation was cancelled.",
-            cancellationToken).ConfigureAwait(false);
-
+        var resourceEvent = await waitTask.ConfigureAwait(false);
         var finalState = resourceEvent.Snapshot.State!.Text!;
-        _logger.LogDebug("Finished waiting for resource '{ResourceName}'. Resource state is '{State}'.", resourceName, finalState);
+        if (loggedWait)
+        {
+            _logger.LogDebug("Finished waiting for resource '{ResourceName}'. Resource state is '{State}'.", resourceName, finalState);
+        }
+
         return finalState;
     }
 
@@ -236,8 +241,6 @@ public class ResourceNotificationService : IDisposable
     /// </remarks>
     public async Task<ResourceEvent> WaitForResourceHealthyAsync(string resourceName, WaitBehavior waitBehavior, CancellationToken cancellationToken = default)
     {
-        _logger.LogDebug("Waiting for resource '{ResourceName}' to enter the '{State}' state.", resourceName, HealthStatus.Healthy);
-
         if (waitBehavior == WaitBehavior.StopOnResourceUnavailable && !TryGetCurrentState(resourceName, out _))
         {
             // TryGetCurrentState returns false both when a resource doesn't exist and when it exists
@@ -253,12 +256,21 @@ public class ResourceNotificationService : IDisposable
             }
         }
 
-        var resourceEvent = await WaitForResourceCoreAsync(
+        var healthyTask = WaitForResourceCoreAsync(
             resourceName,
             re => ShouldYieldHealthyWait(waitBehavior, re.Snapshot),
             $"Resource '{resourceName}' failed to become healthy before the operation was cancelled.",
             waitCondition: "healthy",
-            cancellationToken: cancellationToken).ConfigureAwait(false);
+            cancellationToken: cancellationToken);
+        // WatchAsync replays the current snapshot synchronously. Skip wait logs when the
+        // resource is already healthy, as repeated dashboard URL requests hit this path.
+        var loggedWait = !healthyTask.IsCompletedSuccessfully;
+        if (loggedWait)
+        {
+            _logger.LogDebug("Waiting for resource '{ResourceName}' to enter the '{State}' state.", resourceName, HealthStatus.Healthy);
+        }
+
+        var resourceEvent = await healthyTask.ConfigureAwait(false);
 
         if (resourceEvent.Snapshot.HealthStatus != HealthStatus.Healthy)
         {
@@ -267,18 +279,35 @@ public class ResourceNotificationService : IDisposable
         }
 
         // Now wait for the resource ready event to be executed (matching behavior of WaitUntilHealthyAsync).
-        _logger.LogDebug("Waiting for resource ready to execute for '{ResourceName}'.", resourceName);
-        resourceEvent = await WaitForResourceCoreAsync(
+        var readyTask = WaitForResourceCoreAsync(
             resourceName,
             re => re.ResourceId == resourceEvent.ResourceId && re.Snapshot.ResourceReadyEvent is not null,
             $"Resource '{resourceName}' failed to execute the resource ready event before the operation was cancelled.",
             waitCondition: "resource_ready",
-            cancellationToken: cancellationToken).ConfigureAwait(false);
+            cancellationToken: cancellationToken);
+        if (loggedWait || !readyTask.IsCompletedSuccessfully)
+        {
+            _logger.LogDebug("Waiting for resource ready to execute for '{ResourceName}'.", resourceName);
+            loggedWait = true;
+        }
+
+        resourceEvent = await readyTask.ConfigureAwait(false);
 
         // Observe the result of the resource ready event task
-        await resourceEvent.Snapshot.ResourceReadyEvent!.EventTask.WaitAsync(cancellationToken).ConfigureAwait(false);
+        var eventTask = resourceEvent.Snapshot.ResourceReadyEvent!.EventTask;
+        if (!eventTask.IsCompletedSuccessfully && !loggedWait)
+        {
+            _logger.LogDebug("Waiting for resource ready to execute for '{ResourceName}'.", resourceName);
+            loggedWait = true;
+        }
 
-        _logger.LogDebug("Finished waiting for resource '{ResourceName}'.", resourceName);
+        cancellationToken.ThrowIfCancellationRequested();
+        await eventTask.WaitAsync(cancellationToken).ConfigureAwait(false);
+
+        if (loggedWait)
+        {
+            _logger.LogDebug("Finished waiting for resource '{ResourceName}'.", resourceName);
+        }
 
         return resourceEvent;
     }
@@ -490,8 +519,16 @@ public class ResourceNotificationService : IDisposable
 
         try
         {
+            // WaitFor on a child resource also adds a wait for its parent, so waiting on several children
+            // of the same parent (or calling WaitFor repeatedly) produces equivalent annotations. Waiting on
+            // each of them again only duplicates the wait and its log messages, so collapse them first.
             var waitAnnotationsToProcess = waitAnnotationList
                 .Where(static waitAnnotation => waitAnnotation.Resource is not IResourceWithoutLifetime)
+                .DistinctBy(waitAnnotation => (
+                    waitAnnotation.Resource,
+                    waitAnnotation.WaitType,
+                    waitAnnotation.WaitType == WaitType.WaitForCompletion ? waitAnnotation.ExitCode : 0,
+                    waitAnnotation.WaitType == WaitType.WaitForCompletion ? (WaitBehavior?)null : waitAnnotation.WaitBehavior ?? DefaultWaitBehavior))
                 .ToArray();
 
             if (waitAnnotationsToProcess.Length == 0)
@@ -556,9 +593,19 @@ public class ResourceNotificationService : IDisposable
                     WaitType.WaitForCompletion => WaitUntilCompletionAsync(resource, waitAnnotation.Resource, waitAnnotation.ExitCode, cancellationToken, OnDependencyReadyAsync),
                     WaitType.WaitUntilStarted => WaitUntilStartedAsync(resource, waitAnnotation.Resource, waitAnnotation.WaitBehavior ?? DefaultWaitBehavior, cancellationToken, OnDependencyReadyAsync),
                     _ => throw new DistributedApplicationException($"Unexpected wait type: {waitAnnotation.WaitType}")
-                });
+                })
+                .ToArray();
 
-            await Task.WhenAll(pendingDependencies).ConfigureAwait(false);
+            var allDependencies = Task.WhenAll(pendingDependencies);
+            try
+            {
+                await allDependencies.ConfigureAwait(false);
+            }
+            catch (Exception) when (GetDependencyFailures(allDependencies) is { Length: > 1 } failures)
+            {
+                // Awaiting Task.WhenAll only rethrows the first failure, so report every failed dependency.
+                throw new AggregateException($"Resource '{resource.Name}' failed waiting for {failures.Length} dependencies.", failures);
+            }
 
             var clearRemainingDependencies = false;
             await pendingDependencyLock.WaitAsync(CancellationToken.None).ConfigureAwait(false);
@@ -593,6 +640,9 @@ public class ResourceNotificationService : IDisposable
             throw;
         }
     }
+
+    private static Exception[] GetDependencyFailures(Task allDependencies) =>
+        allDependencies.Exception?.InnerExceptions.Where(static ex => ex is not OperationCanceledException).ToArray() ?? [];
 
     private Task PublishWaitingForDependenciesAsync(IResource resource, IEnumerable<string> dependencyNames)
     {
@@ -636,6 +686,7 @@ public class ResourceNotificationService : IDisposable
     /// </summary>
     /// <remarks>
     /// This method returns a task that will complete when the specified predicate returns <see langword="true" />.<br/>
+    /// If the predicate matches a current resource snapshot, the method will return immediately without logging wait or completion messages.<br/>
     /// If the predicate isn't satisfied before <paramref name="cancellationToken"/> is signaled, this method
     /// will throw <see cref="OperationCanceledException"/>.
     /// </remarks>
@@ -647,13 +698,22 @@ public class ResourceNotificationService : IDisposable
                                                      Justification = "predicate and targetState(s) parameters are mutually exclusive.")]
     public async Task<ResourceEvent> WaitForResourceAsync(string resourceName, Func<ResourceEvent, bool> predicate, CancellationToken cancellationToken = default)
     {
-        _logger.LogDebug("Waiting for resource '{ResourceName}' to match predicate.", resourceName);
-        var resourceEvent = await WaitForResourceCoreAsync(
+        var waitTask = WaitForResourceCoreAsync(
             resourceName,
             predicate,
             $"Resource '{resourceName}' failed to meet the predicate condition before the operation was cancelled.",
-            cancellationToken).ConfigureAwait(false);
-        _logger.LogDebug("Finished waiting for resource '{ResourceName}'.", resourceName);
+            cancellationToken);
+        var loggedWait = !waitTask.IsCompletedSuccessfully;
+        if (loggedWait)
+        {
+            _logger.LogDebug("Waiting for resource '{ResourceName}' to match predicate.", resourceName);
+        }
+
+        var resourceEvent = await waitTask.ConfigureAwait(false);
+        if (loggedWait)
+        {
+            _logger.LogDebug("Finished waiting for resource '{ResourceName}'.", resourceName);
+        }
 
         return resourceEvent;
     }
@@ -770,26 +830,24 @@ public class ResourceNotificationService : IDisposable
             OnResourceUpdated += WriteToChannel;
         }
 
-        // Return the last snapshot for each resource.
-        // We do this after subscribing to the event to avoid missing any updates.
-
-        // Keep track of the versions we have seen so far to avoid duplicates.
-        var versionsSeen = new Dictionary<string, long>();
-
-        foreach (var state in _resourceNotificationStates)
-        {
-            var resourceId = state.Key;
-
-            if (state.Value.LastSnapshot is { } snapshot)
-            {
-                versionsSeen[resourceId] = snapshot.Version;
-
-                yield return new ResourceEvent(state.Value.Resource, resourceId, snapshot);
-            }
-        }
-
         try
         {
+            // Subscribe before replaying snapshots so updates cannot be missed. Keep the
+            // replay inside try so early disposal also removes the event subscription.
+            var versionsSeen = new Dictionary<string, long>();
+
+            foreach (var state in _resourceNotificationStates)
+            {
+                var resourceId = state.Key;
+
+                if (state.Value.LastSnapshot is { } snapshot)
+                {
+                    versionsSeen[resourceId] = snapshot.Version;
+
+                    yield return new ResourceEvent(state.Value.Resource, resourceId, snapshot);
+                }
+            }
+
             await foreach (var item in channel.Reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
             {
                 // Skip events that are older than the max version we have seen so far. This avoids duplicates.
@@ -850,6 +908,17 @@ public class ResourceNotificationService : IDisposable
             newState = UpdateCommands(resource, newState);
 
             newState = UpdateIcons(resource, newState);
+
+            if (resource.TryGetLastAnnotation<ResourceTypeDisplayNameAnnotation>(out var resourceTypeDisplayNameAnnotation))
+            {
+                newState = newState with { ResourceTypeDisplayName = resourceTypeDisplayNameAnnotation.ResourceTypeDisplayName };
+            }
+            else if (!newState.HasResourceTypeDisplayName() && resource is Resource modelResource &&
+                modelResource.ResourceTypeDisplayName != resource.GetResourceType())
+            {
+                // Keep the snapshot's own resource type as the fallback for custom snapshot producers.
+                newState = newState with { ResourceTypeDisplayName = modelResource.ResourceTypeDisplayName };
+            }
 
             newState = UpdateDashboardVisibility(resource, newState);
 

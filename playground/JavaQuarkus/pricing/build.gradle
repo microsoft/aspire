@@ -10,6 +10,8 @@ repositories {
 
 dependencies {
     implementation enforcedPlatform("${quarkusPlatformGroupId}:${quarkusPlatformArtifactId}:${quarkusPlatformVersion}")
+    // Keep Jackson modules aligned with the patched version while retaining Quarkus's other constraints.
+    implementation enforcedPlatform("com.fasterxml.jackson:jackson-bom:2.22.3")
     implementation 'io.quarkus:quarkus-rest-jackson'
     implementation 'io.quarkus:quarkus-smallrye-health'
     implementation 'io.quarkus:quarkus-opentelemetry'

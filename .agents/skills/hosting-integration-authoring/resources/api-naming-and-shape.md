@@ -88,6 +88,6 @@ Do not accumulate mutually exclusive annotations unless multiple annotations are
 
 ## Experimental APIs
 
-Mark unstable or emerging APIs with `[Experimental("ASPIRE...")]` and use a unique diagnostic ID. Deployment, publishing, compute, language-runtime, and generated-Dockerfile APIs often require experimental treatment.
+Mark unstable or emerging APIs with `[Experimental("ASPIRE...")]` and use a unique diagnostic ID. Deployment, publishing, compute, and language-runtime APIs often require experimental treatment. The Dockerfile builder APIs, including callbacks, base-image configuration, and container-file helpers, are stable and do not require an experimental diagnostic.
 
 Do not add obsolete shims for APIs that have not shipped stable unless there is a specific compatibility reason.

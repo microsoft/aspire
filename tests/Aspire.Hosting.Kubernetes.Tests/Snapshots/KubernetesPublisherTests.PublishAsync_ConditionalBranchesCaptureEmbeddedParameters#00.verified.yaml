@@ -1,0 +1,12 @@
+﻿parameters:
+  myapp:
+    mode: "enabled"
+secrets:
+  myapp:
+    OPTIONS: ""
+    password: ""
+config:
+  env_dashboard:
+    ASPIRE_DASHBOARD_TELEMETRY_OPTOUT: "true"
+  myapp:
+    user: "alice"

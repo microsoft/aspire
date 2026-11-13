@@ -1,0 +1,12 @@
+{
+  "appHost": {
+    "path": "apphost.rs",
+    "language": "rust"
+  },
+  "features": {
+    "experimentalPolyglotRust": true
+  },
+  "packages": {
+    "Aspire.Hosting.Azure.EntraId": ""
+  }
+}

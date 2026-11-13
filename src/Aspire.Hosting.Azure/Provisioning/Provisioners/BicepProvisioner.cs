@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREFILESYSTEM001 // Type is for evaluation purposes only
-
 using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
@@ -12,17 +10,16 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure.Provisioning.Internal;
 using Aspire.Hosting.Azure.Resources;
 using Aspire.Hosting.Pipelines;
+using Aspire.Hosting.Utils;
 using Azure;
 using Azure.Core;
 using Azure.Identity;
 using Azure.ResourceManager;
-using Azure.ResourceManager.Resources;
-using Azure.ResourceManager.Resources.Models;
+using Azure.ResourceManager.Resources.Deployments;
+using Azure.ResourceManager.Resources.Deployments.Models;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Azure.Provisioning;
-
-#pragma warning disable ASPIREPIPELINES002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 internal sealed class BicepProvisioner(
     ResourceNotificationService notificationService,
@@ -64,7 +61,7 @@ internal sealed class BicepProvisioner(
             return false;
         }
 
-        var currentCheckSum = await BicepUtilities.GetCurrentChecksumAsync(resource, stateSection, logger, cancellationToken).ConfigureAwait(false);
+        var currentCheckSum = await BicepUtilities.GetCurrentChecksumAsync(resource, stateSection, executionContext, logger, cancellationToken).ConfigureAwait(false);
         var configCheckSum = stateSection.Data[BicepUtilities.DeploymentStateChecksumKey]?.GetValue<string>();
 
         if (string.IsNullOrEmpty(configCheckSum))
@@ -566,7 +563,7 @@ internal sealed class BicepProvisioner(
         logger.LogDebug("Setting parameters and scope for resource {ResourceName}", resource.Name);
         // Convert the parameters to a JSON object
         var parameters = new JsonObject();
-        await BicepUtilities.SetParametersAsync(parameters, resource, cancellationToken: cancellationToken).ConfigureAwait(false);
+        await BicepUtilities.SetParametersAsync(parameters, resource, executionContext, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         var scope = new JsonObject();
         await BicepUtilities.SetScopeAsync(scope, resource, cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -576,7 +573,12 @@ internal sealed class BicepProvisioner(
             : isSubscriptionScoped
                 ? subscription.GetArmDeployments()
                 : resourceGroup.GetArmDeployments();
-        var deploymentName = executionContext.IsPublishMode ? $"{resource.Name}-{_timeProvider.GetUtcNow().ToUnixTimeSeconds()}" : resource.Name;
+        var deploymentSuffix = executionContext.IsPublishMode
+            ? $"-{_timeProvider.GetUtcNow().ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture)}"
+            : string.Empty;
+        // Reserve the publish suffix before shortening so ARM's 64-character limit is never exceeded.
+        // https://learn.microsoft.com/azure/azure-resource-manager/management/resource-name-rules#microsoftresources
+        var deploymentName = ResourceNameHelpers.TruncateWithHash(resource.Name, 64 - deploymentSuffix.Length) + deploymentSuffix;
         var deploymentId = GetDeploymentId(isTenantScoped, isSubscriptionScoped, subscription, resourceGroup, deploymentName);
         var checksum = BicepUtilities.GetChecksum(resource, parameters, scope);
         var sw = Stopwatch.StartNew();
@@ -1373,13 +1375,15 @@ internal sealed class BicepProvisioner(
     {
         static void ValidateUnknownPrincipalParameter(ProvisioningContext context)
         {
-            // Well-known principal parameters can only be populated in run mode.
-            // In publish mode, principal parameters must be provided by the creator of the bicep resource.
+            // Application principal parameters can only be populated in run mode. Published artifacts
+            // bind them from their outer template because the application identity can differ from the
+            // credential applying the deployment.
 
             // We assume that the BicepProvisioner only runs in publish mode during `aspire deploy` operations
             // and not from azd. azd fills in principal parameters during its deployment process with a managed
-            // identity it creates. But the BicepProvisioner only fills them in with the current principal,
-            // which is not correct in publish mode.
+            // identity it creates. The deployment-principal parameters are the exception: direct `aspire deploy`
+            // intentionally binds them from the current credential because that identity performs subsequent
+            // data-plane operations.
             if (context.ExecutionContext.IsPublishMode)
             {
                 throw new InvalidOperationException("An Azure principal parameter was not supplied a value. Ensure you are using an environment that supports role assignments, for example AddAzureContainerAppEnvironment.");
@@ -1393,6 +1397,17 @@ internal sealed class BicepProvisioner(
             resource.Parameters[AzureBicepResource.KnownParameters.PrincipalId] = context.Principal.Id;
         }
 
+        var hasUserPrincipalId = resource.Parameters.TryGetValue(AzureBicepResource.KnownParameters.UserPrincipalId, out var userPrincipalId);
+        var populatedUserPrincipalId = false;
+        if (hasUserPrincipalId && userPrincipalId is null)
+        {
+            // Published artifacts bind this deployment-principal parameter from the outer
+            // main.bicep template. Direct `aspire deploy` has no outer template, so use the
+            // authenticated principal that performs the data-plane deployment.
+            resource.Parameters[AzureBicepResource.KnownParameters.UserPrincipalId] = context.Principal.Id;
+            populatedUserPrincipalId = true;
+        }
+
         if (resource.Parameters.TryGetValue(AzureBicepResource.KnownParameters.PrincipalName, out var principalName) && principalName is null)
         {
             ValidateUnknownPrincipalParameter(context);
@@ -1402,12 +1417,29 @@ internal sealed class BicepProvisioner(
 
         if (resource.Parameters.TryGetValue(AzureBicepResource.KnownParameters.PrincipalType, out var principalType) && principalType is null)
         {
-            ValidateUnknownPrincipalParameter(context);
+            if (hasUserPrincipalId && !populatedUserPrincipalId)
+            {
+                throw new InvalidOperationException(
+                    $"The Azure parameter '{AzureBicepResource.KnownParameters.PrincipalType}' must be supplied when " +
+                    $"'{AzureBicepResource.KnownParameters.UserPrincipalId}' is provided explicitly.");
+            }
 
-            resource.Parameters[AzureBicepResource.KnownParameters.PrincipalType] = "User";
+            if (!hasUserPrincipalId)
+            {
+                ValidateUnknownPrincipalParameter(context);
+            }
+
+            // Use the principal type detected from the credential's access token (the `idtyp`
+            // claim) instead of hardcoding "User". A hardcoded "User" caused the role-assignment
+            // `-roles` deployments synthesized by AzureResourcePreparer to fail with
+            // `UnmatchedPrincipalType` / `PrincipalNotFound` whenever the AppHost ran under a
+            // service-principal / federated-workload-identity credential (CI, CD, deploy bots).
+            // See https://github.com/microsoft/aspire/issues/13933.
+            resource.Parameters[AzureBicepResource.KnownParameters.PrincipalType] = context.Principal.Type;
         }
 
-        if (!resource.Parameters.TryGetValue(AzureBicepResource.KnownParameters.Location, out var location) || location is null)
+        if (resource.HasLocationParameter &&
+            (!resource.Parameters.TryGetValue(AzureBicepResource.KnownParameters.Location, out var location) || location is null))
         {
             resource.Parameters[AzureBicepResource.KnownParameters.Location] = context.Location.Name;
         }

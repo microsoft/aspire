@@ -20,6 +20,8 @@ using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 
+#pragma warning disable ASPIRETERMINAL001 // Internal consumer of the experimental AppHost terminal API.
+
 namespace Aspire.Hosting.Backchannel;
 
 /// <summary>
@@ -50,7 +52,14 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
 
         return Task.FromResult(new GetCapabilitiesResponse
         {
-            Capabilities = [AuxiliaryBackchannelCapabilities.V1, AuxiliaryBackchannelCapabilities.V2, AuxiliaryBackchannelCapabilities.V3, AuxiliaryBackchannelCapabilities.Terminals_V1]
+            Capabilities =
+            [
+                AuxiliaryBackchannelCapabilities.V1,
+                AuxiliaryBackchannelCapabilities.V2,
+                AuxiliaryBackchannelCapabilities.V3,
+                AuxiliaryBackchannelCapabilities.Terminals_V1,
+                AuxiliaryBackchannelCapabilities.ResourceSnapshotVersions_V1
+            ]
         });
     }
 
@@ -571,8 +580,9 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
     }
 
     /// <summary>
-    /// Lists every <c>WithTerminal</c>-enabled resource in the AppHost, with current grid size and
-    /// attached-peer details. Used by <c>aspire terminal ps</c>. Each per-resource snapshot is
+    /// Lists every terminal in the AppHost. Resource terminals are reported with current grid size and
+    /// attached-peer details; AppHost-owned terminals are reported separately because they have no
+    /// replicas or terminal host. Used by <c>aspire terminal ps</c>. Each per-resource snapshot is
     /// independent: a resource whose terminal host hasn't started yet (or whose control RPC times
     /// out) is reported with <see cref="TerminalSummary.IsHostReachable"/> = false rather than
     /// failing the whole listing.
@@ -617,8 +627,27 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
 
         return new ListTerminalsResponse
         {
-            Terminals = [.. terminals],
+            ResourceTerminals = [.. terminals],
+            AppHostTerminals = CollectAppHostTerminals(),
         };
+    }
+
+    /// <summary>
+    /// Projects the terminals the AppHost itself owns — dock tabs, terminals shown in an interaction dialog,
+    /// and terminals driven only through automation — into the listing.
+    /// </summary>
+    private AppHostTerminalSummary[] CollectAppHostTerminals()
+    {
+        var terminalService = serviceProvider.GetRequiredService<TerminalService>();
+
+        return [.. terminalService.ListAll()
+            .Where(t => t.Owner == TerminalOwner.AppHost)
+            .Select(t => new AppHostTerminalSummary
+            {
+                TerminalId = t.Id,
+                Title = t.Title,
+                Placement = t.Placement.ToString(),
+            })];
     }
 
     /// <summary>
@@ -1120,7 +1149,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         // redacting a secret whose value has since been replaced or whose owning resource has restarted.
         var secretParameterValues = await GetResolvedSecretParameterValuesAsync(cancellationToken).ConfigureAwait(false);
 
-        // Build environment variables. Values that match a secret parameter's value are
+        // Build environment variables. Values that match a known resolved secret value are
         // redacted so secrets don't leak through clients (e.g. aspire describe --format json).
         var environmentVariables = snapshot.EnvironmentVariables
             .Select(e => new ResourceSnapshotEnvironmentVariable
@@ -1139,7 +1168,8 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         // and the VS Code extension can detect terminal availability and target the right replica.
         // The sensitive terminal.consumerUdsPath is redacted to null below by the IsSensitive check,
         // which is intentional: the CLI resolves the real socket path via GetTerminalInfoAsync.
-        var stampedProperties = TerminalResourceSnapshotProperties.AddTerminalProperties(resource, resourceEvent.ResourceId, snapshot.Properties);
+        var stampedProperties = TerminalResourceSnapshotProperties.AddTerminalProperties(resource, resourceEvent.ResourceId,
+            ResourceTraitSnapshotProperties.AddTraitProperties(resource, snapshot.Properties));
         var properties = new Dictionary<string, JsonNode?>();
         string[]? waitingFor = null;
         foreach (var prop in stampedProperties)
@@ -1177,8 +1207,10 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         return new ResourceSnapshot
         {
             Name = resourceEvent.ResourceId,
+            Version = snapshot.Version,
             DisplayName = resource.Name,
             ResourceType = snapshot.ResourceType,
+            ResourceTypeDisplayName = snapshot.ResourceTypeDisplayName,
             State = snapshot.State?.Text,
             WaitingFor = waitingFor,
             StateStyle = snapshot.State?.Style,
@@ -1200,15 +1232,15 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
     }
 
     /// <summary>
-    /// Redacts an environment variable value when it matches a secret parameter's resolved value
+    /// Redacts an environment variable value when it matches a known resolved secret value
     /// so secrets don't leak through clients (e.g. <c>aspire describe --format json</c>).
     /// </summary>
     /// <remarks>
-    /// Matching is value-based: a value is redacted only when it is exactly equal to a resolved secret
-    /// parameter value. This has two known limitations:
+    /// Matching is value-based: a value is redacted only when it is exactly equal to a known resolved
+    /// secret value. This has two known limitations:
     /// <list type="bullet">
     /// <item>A non-secret value that coincidentally equals a secret value is also redacted (false positive).</item>
-    /// <item>A secret embedded as a substring of a larger composed value (e.g. a connection string) is not
+    /// <item>A secret embedded in a larger string without expression sensitivity metadata is not
     /// detected, because only exact-equality matches are redacted.</item>
     /// </list>
     /// </remarks>

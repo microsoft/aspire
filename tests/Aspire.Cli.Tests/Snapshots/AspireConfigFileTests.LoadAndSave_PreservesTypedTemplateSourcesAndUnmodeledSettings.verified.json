@@ -1,0 +1,17 @@
+﻿{
+  "templateSources": {
+    "local": {
+      "displayName": "Company [templates]",
+      "path": "/templates"
+    },
+    "git": {
+      "repository": "https://example.test/templates"
+    },
+    "unfinished": {
+      "ref": "main"
+    }
+  },
+  "unrelated": {
+    "enabled": true
+  }
+}

@@ -5,6 +5,7 @@ using System.Collections;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
+using Aspire.Hosting.ApplicationModel;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting;
@@ -19,6 +20,11 @@ public interface IInteractionService
     /// this service is not available to interact with the user and service methods will throw
     /// an exception.
     /// </summary>
+    /// <remarks>
+    /// The service is not available until the app host has completed its before-start hooks, such as
+    /// <see cref="ApplicationModel.BeforeStartEvent"/> subscribers, because the dashboard and CLI that respond
+    /// to interactions haven't started yet.
+    /// </remarks>
     bool IsAvailable { get; }
 
     /// <summary>
@@ -123,6 +129,68 @@ public interface IInteractionService
     /// </returns>
     [Experimental("ASPIREINTERACTION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     Task<InteractionResult<bool>> PromptProgressAsync(string message, ProgressInteractionOptions? options = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Displays a caller-owned terminal in a dialog while optional work runs.
+    /// </summary>
+    /// <param name="message">The message to display above the terminal.</param>
+    /// <param name="terminal">The exact terminal instance registered with this AppHost, with <see cref="TerminalPlacement.Dialog"/> placement.</param>
+    /// <param name="options">Optional title, cancel button text, message formatting, and work callback.</param>
+    /// <param name="cancellationToken">A token to cancel the interaction and signal cancellation to the work callback.</param>
+    /// <returns>
+    /// An <see cref="InteractionResult{T}"/> containing <c>true</c> when work or an explicit completion succeeds,
+    /// or a canceled result when the user or caller cancels the interaction.
+    /// </returns>
+    /// <exception cref="ArgumentNullException"><paramref name="message"/> or <paramref name="terminal"/> is <see langword="null"/>.</exception>
+    /// <exception cref="InvalidOperationException">
+    /// The interaction service is unavailable, the terminal is not registered with this AppHost, or its placement is not <see cref="TerminalPlacement.Dialog"/>.
+    /// </exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was canceled before the interaction began.</exception>
+    /// <remarks>
+    /// <para>
+    /// Create and start the terminal before prompting, and dispose it when the caller is finished with it.
+    /// The interaction borrows the terminal: completion, cancellation, and viewer disconnection do not stop or
+    /// dispose it. The same terminal can be reused across prompts. The terminal process exiting does not close
+    /// the dialog.
+    /// </para>
+    /// <para>
+    /// When <see cref="TerminalInteractionOptions.Work"/> is supplied, successful completion closes the dialog.
+    /// The optional <see cref="InteractionOptions.PrimaryButtonText"/> labels a cancel button, not a submit button.
+    /// User or external cancellation closes the dialog and signals <see cref="TerminalContext.CancellationToken"/>;
+    /// this method waits for the callback to finish before returning. Non-cancellation callback exceptions are
+    /// propagated after the interaction is removed. Without a callback, the dialog waits for explicit completion,
+    /// the cancel button, or <paramref name="cancellationToken"/>.
+    /// </para>
+    /// <para>
+    /// Secondary and dismiss buttons are not shown. Disconnecting a viewer does not complete the interaction;
+    /// reconnecting can display the pending dialog again.
+    /// </para>
+    /// </remarks>
+    /// <example>
+    /// <code language="csharp">
+    /// await using var terminal = terminalService.CreateTerminal(new TerminalLaunchOptions
+    /// {
+    ///     Title = "Setup",
+    ///     Executable = "./setup.sh",
+    ///     Placement = TerminalPlacement.Dialog
+    /// });
+    /// terminal.Start();
+    /// var result = await interactionService.PromptTerminalAsync("Running setup.", terminal,
+    ///     new TerminalInteractionOptions
+    ///     {
+    ///         Title = "Setup",
+    ///         PrimaryButtonText = "Cancel",
+    ///         Work = async context =>
+    ///         {
+    ///             await terminal.WaitForTextAsync("Continue? ", cancellationToken: context.CancellationToken);
+    ///             await terminal.SendTextAsync("y\r", context.CancellationToken);
+    ///             await terminal.WaitForTextAsync("Setup complete", cancellationToken: context.CancellationToken);
+    ///         }
+    ///     }, cancellationToken);
+    /// </code>
+    /// </example>
+    [Experimental(TerminalDiagnostics.DiagnosticId, UrlFormat = TerminalDiagnostics.UrlFormat)]
+    Task<InteractionResult<bool>> PromptTerminalAsync(string message, AspireTerminal terminal, TerminalInteractionOptions? options = null, CancellationToken cancellationToken = default);
 }
 
 internal record QueueLoadOptions(
@@ -285,10 +353,16 @@ public sealed class InteractionInput
     private string _name = null!;
     private bool _required;
     private InputLoadOptions? _dynamicLoading;
+    private InteractionFileCollection _files = new([]);
 
     internal string EffectiveLabel => string.IsNullOrWhiteSpace(Label) ? Name : Label;
     internal InputLoadingState? DynamicLoadingState { get; set; }
     internal List<string> ValidationErrors { get; } = [];
+
+    // The resource the input provides a value for, sent to the dashboard so it can tell which parameter an input is for
+    // without relying on the input's name. See ParameterProcessor.HandleUnresolvedParametersAsync.
+    internal string? RelatedResourceName { get; set; }
+
     internal void SetName(string name)
     {
         ArgumentNullException.ThrowIfNull(name);
@@ -297,7 +371,10 @@ public sealed class InteractionInput
 
     internal void SetRequired(bool required) => _required = required;
 
-    internal void SetFiles(IReadOnlyList<InteractionFile>? files) => Files = files;
+    internal void SetFiles(InteractionFileCollection files)
+    {
+        _files = files;
+    }
 
     internal void SetDynamicLoading(InputLoadOptions? dynamicLoading) => _dynamicLoading = dynamicLoading;
 
@@ -434,11 +511,93 @@ public sealed class InteractionInput
     /// Gets the files associated with this <see cref="InputType.File"/> input.
     /// Populated after the user selects file(s) and the interaction completes.
     /// </summary>
+    /// <remarks>
+    /// This property does not provide ownership of the uploaded files. Use <see cref="GetFiles"/> and dispose the
+    /// returned collection when the files are no longer needed.
+    /// </remarks>
+    [Obsolete("Use GetFiles() and dispose the returned collection when the files are no longer needed.")]
     // Excluded from the ATS surface: InteractionFile holds non-serializable methods (OpenRead, ReadAllBytesAsync)
     // and refers to server-local file paths. Polyglot app hosts receive file metadata through the manually defined
     // InteractionInputFile interface in base.mts, populated by ToResultInput.
     [AspireExportIgnore(Reason = "InteractionFile contains non-serializable methods and server-local paths; polyglot callers use InteractionInputFile from base.mts.")]
-    public IReadOnlyList<InteractionFile>? Files { get; private set; }
+    public IReadOnlyList<InteractionFile>? Files => _files.Count > 0 ? _files : null;
+
+    /// <summary>
+    /// Gets the files associated with this <see cref="InputType.File"/> input.
+    /// </summary>
+    /// <returns>
+    /// A disposable collection of uploaded files. Disposing the collection deletes the uploaded files from disk.
+    /// </returns>
+    /// <remarks>
+    /// The caller owns the returned collection and must dispose it when the files are no longer needed to delete the
+    /// temporary files before AppHost shutdown. After disposal, the file metadata remains available but new content
+    /// reads cannot be started. Streams opened before disposal remain usable until those streams are disposed. Files
+    /// that are not disposed are deleted when the AppHost shuts down.
+    /// </remarks>
+    [AspireExportIgnore(Reason = "InteractionFileCollection owns server-local files and implements IDisposable, which is not ATS-compatible.")]
+    public InteractionFileCollection GetFiles() => _files;
+}
+
+/// <summary>
+/// Represents the uploaded files associated with an interaction input.
+/// </summary>
+/// <remarks>
+/// Dispose the collection when its files are no longer needed. Disposing the collection deletes the uploaded files
+/// from disk and prevents new content reads. Streams opened before disposal remain usable until those streams are
+/// disposed. Disposal is idempotent.
+/// </remarks>
+[AspireExportIgnore(Reason = "InteractionFileCollection owns server-local files and implements IDisposable, which is not ATS-compatible.")]
+public sealed class InteractionFileCollection : IReadOnlyList<InteractionFile>, IDisposable
+{
+    private readonly IReadOnlyList<InteractionFile> _files;
+    private Action? _dispose;
+
+    internal InteractionFileCollection(IReadOnlyList<InteractionFile> files, Action? dispose = null)
+    {
+        _files = files;
+        _dispose = dispose;
+    }
+
+    /// <summary>
+    /// Gets the number of uploaded files in the collection.
+    /// </summary>
+    public int Count => _files.Count;
+
+    /// <summary>
+    /// Gets an uploaded file by its zero-based index.
+    /// </summary>
+    /// <param name="index">The zero-based index of the file.</param>
+    /// <returns>The uploaded file at the specified index.</returns>
+    public InteractionFile this[int index] => _files[index];
+
+    /// <summary>
+    /// Returns an enumerator that iterates through the uploaded files.
+    /// </summary>
+    /// <returns>An enumerator for the uploaded files.</returns>
+    public IEnumerator<InteractionFile> GetEnumerator() => _files.GetEnumerator();
+
+    /// <inheritdoc/>
+    IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+
+    /// <summary>
+    /// Deletes the uploaded files from disk and prevents new content reads. Streams that are already open remain
+    /// usable until those streams are disposed.
+    /// </summary>
+    public void Dispose()
+    {
+        var dispose = Interlocked.Exchange(ref _dispose, null);
+        if (dispose is null)
+        {
+            return;
+        }
+
+        foreach (var file in _files)
+        {
+            file.MarkDisposed();
+        }
+
+        dispose();
+    }
 }
 
 /// <summary>
@@ -446,6 +605,8 @@ public sealed class InteractionInput
 /// </summary>
 public sealed class InteractionFile
 {
+    private bool _disposed;
+
     internal InteractionFile(string id, string name, string filePath)
     {
         Id = id;
@@ -472,14 +633,42 @@ public sealed class InteractionFile
     /// Opens a read-only stream for the file content.
     /// </summary>
     /// <returns>A <see cref="Stream"/> for reading the file.</returns>
-    public Stream OpenRead() => new FileStream(FilePath, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 4096, useAsync: true);
+    /// <remarks>
+    /// The returned stream remains usable if the owning <see cref="InteractionFileCollection"/> is disposed. Dispose
+    /// the stream when reading is complete so the operating system can finish reclaiming the deleted file.
+    /// </remarks>
+    /// <exception cref="ObjectDisposedException">The owning <see cref="InteractionFileCollection"/> has been disposed.</exception>
+    public Stream OpenRead()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return new FileStream(FilePath, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete, bufferSize: 4096, useAsync: true);
+    }
 
     /// <summary>
     /// Reads all bytes of the file asynchronously.
     /// </summary>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A byte array containing the file content.</returns>
-    public Task<byte[]> ReadAllBytesAsync(CancellationToken cancellationToken = default) => File.ReadAllBytesAsync(FilePath, cancellationToken);
+    /// <exception cref="ObjectDisposedException">The owning <see cref="InteractionFileCollection"/> has been disposed.</exception>
+    public Task<byte[]> ReadAllBytesAsync(CancellationToken cancellationToken = default)
+    {
+        // File.ReadAllBytesAsync opens with FileShare.Read, which can prevent the owning collection from deleting
+        // the temporary file on Windows while a read is in progress. OpenRead also shares deletion.
+        var stream = OpenRead();
+        return ReadAllBytesAsyncCore(stream, cancellationToken);
+    }
+
+    private static async Task<byte[]> ReadAllBytesAsyncCore(Stream stream, CancellationToken cancellationToken)
+    {
+        await using (stream.ConfigureAwait(false))
+        {
+            var bytes = new byte[stream.Length];
+            await stream.ReadExactlyAsync(bytes, cancellationToken).ConfigureAwait(false);
+            return bytes;
+        }
+    }
+
+    internal void MarkDisposed() => _disposed = true;
 }
 
 /// <summary>
@@ -791,6 +980,11 @@ public class NotificationInteractionOptions : InteractionOptions
     /// Gets or sets the URL for the link in the notification.
     /// </summary>
     public string? LinkUrl { get; set; }
+
+    // The resources the notification is about, which the dashboard can offer to show. The parameter processor names
+    // the unresolved parameters, so the dashboard doesn't have to recognize that notification from its text or link.
+    // Internal because only the parameter processor sends it.
+    internal IReadOnlyList<string>? RelatedResourceNames { get; init; }
 }
 
 /// <summary>
@@ -829,6 +1023,50 @@ public sealed class ProgressContext
     /// Gets the <see cref="System.Threading.CancellationToken"/> that is triggered when the user clicks
     /// the cancel button or the operation is externally canceled.
     /// </summary>
+    public required CancellationToken CancellationToken { get; init; }
+}
+
+/// <summary>
+/// Options for displaying a caller-owned terminal in an interaction dialog.
+/// </summary>
+/// <remarks>
+/// Set <see cref="InteractionOptions.PrimaryButtonText"/> to show a cancel button; by default there is no button.
+/// Secondary and dismiss buttons are not shown. The terminal's lifetime is independent of these options.
+/// </remarks>
+[Experimental(TerminalDiagnostics.DiagnosticId, UrlFormat = TerminalDiagnostics.UrlFormat)]
+public class TerminalInteractionOptions : InteractionOptions
+{
+    /// <summary>
+    /// Gets or sets the optional dialog title. No title is displayed by default.
+    /// </summary>
+    public string? Title { get; set; }
+
+    /// <summary>
+    /// Gets or sets optional asynchronous work to run while the terminal dialog is displayed.
+    /// </summary>
+    /// <remarks>
+    /// Successful completion closes the dialog. User or external cancellation signals
+    /// <see cref="TerminalContext.CancellationToken"/> and the prompt waits for the callback to finish.
+    /// Exceptions propagate from <see cref="IInteractionService.PromptTerminalAsync"/> after the dialog is removed.
+    /// Without work, the dialog waits for explicit completion or cancellation, not for terminal process exit.
+    /// Neither work completion nor cancellation disposes the caller-owned terminal.
+    /// </remarks>
+    public Func<TerminalContext, Task>? Work { get; set; }
+}
+
+/// <summary>
+/// Provides cancellation to the work callback of a terminal interaction.
+/// </summary>
+[Experimental(TerminalDiagnostics.DiagnosticId, UrlFormat = TerminalDiagnostics.UrlFormat)]
+public sealed class TerminalContext
+{
+    /// <summary>
+    /// Gets the token signaled when the user requests cancellation or the interaction is externally canceled.
+    /// </summary>
+    /// <remarks>
+    /// Observe this token in automation calls and other asynchronous work. Cancellation does not stop the terminal;
+    /// its caller remains responsible for disposing it when no longer needed.
+    /// </remarks>
     public required CancellationToken CancellationToken { get; init; }
 }
 

@@ -4,6 +4,7 @@
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="..\..\src\Aspire.Hosting.Dotnet\Aspire.Hosting.Dotnet.csproj" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.EntityFrameworkCore\Aspire.Hosting.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\Aspire.Hosting.TestUtilities\Aspire.Hosting.TestUtilities.csproj" />
     <!-- Provides the generated Projects.ServiceA/ServiceB/ServiceC apphost-resource types.

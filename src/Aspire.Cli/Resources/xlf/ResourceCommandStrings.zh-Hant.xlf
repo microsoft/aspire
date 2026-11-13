@@ -4,62 +4,62 @@
     <body>
       <trans-unit id="ArgumentRequired">
         <source>The '{0}' argument is required.</source>
-        <target state="new">The '{0}' argument is required.</target>
+        <target state="translated">'{0}' 引數為必要項目。</target>
         <note />
       </trans-unit>
       <trans-unit id="AvailableResourceCommands">
         <source>Available resource commands:</source>
-        <target state="new">Available resource commands:</target>
+        <target state="translated">可用的資源命令:</target>
         <note />
       </trans-unit>
       <trans-unit id="CommandDescription">
         <source>Execute a command on a resource (e.g. start, stop, restart)</source>
-        <target state="needs-review-translation">在資源上執行命令。</target>
+        <target state="translated">在資源上執行命令 (例如啟動、停止、重新啟動)</target>
         <note />
       </trans-unit>
       <trans-unit id="CommandNameArgumentDescription">
         <source>The name of the command to execute (e.g. start, stop, restart)</source>
-        <target state="needs-review-translation">所要執行命令的名稱。</target>
+        <target state="translated">要執行的命令名稱 (例如啟動、停止、重新啟動)</target>
         <note />
       </trans-unit>
       <trans-unit id="CommandResourceArgumentDescription">
         <source>The name of the resource to execute the command on</source>
-        <target state="needs-review-translation">要執行命令的資源名稱。</target>
+        <target state="translated">要執行命令的資源名稱</target>
         <note />
       </trans-unit>
       <trans-unit id="CommandSpecificHelpAllowedValues">
         <source>Allowed values: {0}.</source>
-        <target state="new">Allowed values: {0}.</target>
+        <target state="translated">允許的值: {0}。</target>
         <note />
       </trans-unit>
       <trans-unit id="CommandSpecificHelpCommandOptions">
         <source>Command options:</source>
-        <target state="new">Command options:</target>
+        <target state="translated">命令選項:</target>
         <note />
       </trans-unit>
       <trans-unit id="CommandSpecificHelpDefaultValue">
         <source>Default: {0}.</source>
-        <target state="new">Default: {0}.</target>
+        <target state="translated">預設值: {0}。</target>
         <note />
       </trans-unit>
       <trans-unit id="CommandSpecificHelpDelimiterHint">
         <source>Use `-- --{0}{1}` to pass this command option.</source>
-        <target state="new">Use `-- --{0}{1}` to pass this command option.</target>
+        <target state="translated">使用 `-- --{0}{1}` 傳遞此命令選項。</target>
         <note />
       </trans-unit>
       <trans-unit id="CommandSpecificHelpRequired">
         <source>Required.</source>
-        <target state="new">Required.</target>
+        <target state="translated">必要項目。</target>
         <note />
       </trans-unit>
       <trans-unit id="CommandSpecificHelpUsageSyntax">
         <source>aspire resource {0} {1} [options] [[--] &lt;command-options&gt;...]</source>
-        <target state="new">aspire resource {0} {1} [options] [[--] &lt;command-options&gt;...]</target>
+        <target state="translated">Aspire 資源 {0} {1} [options] [[--] &lt;command-options&gt;...]</target>
         <note />
       </trans-unit>
       <trans-unit id="CommandSpecificHelpValuePlaceholder">
         <source>value</source>
-        <target state="new">value</target>
+        <target state="translated">值</target>
         <note />
       </trans-unit>
       <trans-unit id="SelectAppHostAction">

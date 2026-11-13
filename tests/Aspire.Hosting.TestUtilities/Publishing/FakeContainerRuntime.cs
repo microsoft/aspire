@@ -13,31 +13,46 @@ using Aspire.Hosting.ApplicationModel;
 
 public sealed class FakeContainerRuntime(bool shouldFail = false, bool isRunning = true, string name = "fake-runtime") : IContainerRuntime, IContainerRuntimeResolver
 {
+    private int _checkIfRunningCallCount;
+    private int _resolveAsyncCallCount;
+
     public string Name => name;
-    public bool WasHealthCheckCalled { get; private set; }
-    public int CheckIfRunningCallCount { get; private set; }
+    public bool WasHealthCheckCalled => CheckIfRunningCallCount > 0;
+    public int CheckIfRunningCallCount => Volatile.Read(ref _checkIfRunningCallCount);
+    public int ResolveAsyncCallCount => Volatile.Read(ref _resolveAsyncCallCount);
     public bool WasTagImageCalled { get; private set; }
     public bool WasRemoveImageCalled { get; private set; }
     public bool WasPushImageCalled { get; private set; }
     public bool WasBuildImageCalled { get; private set; }
+    public bool WasInspectImageConfigCalled { get; private set; }
+    public bool WasInspectImageManifestCalled { get; private set; }
     public bool WasLoginToRegistryCalled { get; private set; }
     public bool WasComposeDownCalled { get; private set; }
     public ComposeOperationContext? LastComposeDownContext { get; private set; }
     public ConcurrentBag<(string localImageName, string targetImageName)> TagImageCalls { get; } = [];
     public ConcurrentBag<string> RemoveImageCalls { get; } = [];
     public ConcurrentBag<IResource> PushImageCalls { get; } = [];
+    public ConcurrentBag<string> InspectImageConfigCalls { get; } = [];
+    public ConcurrentBag<string> InspectImageManifestCalls { get; } = [];
     public ConcurrentBag<(string contextPath, string dockerfilePath, ContainerImageBuildOptions? options)> BuildImageCalls { get; } = [];
     public ConcurrentBag<(string registryServer, string username, string password)> LoginToRegistryCalls { get; } = [];
     public Dictionary<string, string?>? CapturedBuildArguments { get; private set; }
     public Dictionary<string, BuildImageSecretValue>? CapturedBuildSecrets { get; private set; }
     public string? CapturedStage { get; private set; }
     public Func<string, string, ContainerImageBuildOptions?, Dictionary<string, string?>, Dictionary<string, BuildImageSecretValue>, string?, CancellationToken, Task>? BuildImageAsyncCallback { get; set; }
+    public Func<string, string, CancellationToken, Task>? TagImageAsyncCallback { get; set; }
+    public Func<string, CancellationToken, Task>? RemoveImageAsyncCallback { get; set; }
+    public Func<string, CancellationToken, Task<ContainerImageManifestInspectionResult>>? InspectImageManifestAsyncCallback { get; set; }
+    public Func<CancellationToken, Task<bool>>? CheckIfRunningAsyncCallback { get; set; }
+    public Func<CancellationToken, Task<IContainerRuntime>>? ResolveAsyncCallback { get; set; }
+    public string? InspectedImageDigest { get; set; }
+    public string? InspectedImageOperatingSystem { get; set; }
+    public string? InspectedImageArchitecture { get; set; }
 
     public Task<bool> CheckIfRunningAsync(CancellationToken cancellationToken)
     {
-        WasHealthCheckCalled = true;
-        CheckIfRunningCallCount++;
-        return Task.FromResult(isRunning && !shouldFail);
+        Interlocked.Increment(ref _checkIfRunningCallCount);
+        return CheckIfRunningAsyncCallback?.Invoke(cancellationToken) ?? Task.FromResult(isRunning && !shouldFail);
     }
 
     public Task TagImageAsync(string localImageName, string targetImageName, CancellationToken cancellationToken)
@@ -48,7 +63,7 @@ public sealed class FakeContainerRuntime(bool shouldFail = false, bool isRunning
         {
             throw new InvalidOperationException("Fake container runtime is configured to fail");
         }
-        return Task.CompletedTask;
+        return TagImageAsyncCallback?.Invoke(localImageName, targetImageName, cancellationToken) ?? Task.CompletedTask;
     }
 
     public Task RemoveImageAsync(string imageName, CancellationToken cancellationToken)
@@ -59,7 +74,7 @@ public sealed class FakeContainerRuntime(bool shouldFail = false, bool isRunning
         {
             throw new InvalidOperationException("Fake container runtime is configured to fail");
         }
-        return Task.CompletedTask;
+        return RemoveImageAsyncCallback?.Invoke(imageName, cancellationToken) ?? Task.CompletedTask;
     }
 
     public Task PushImageAsync(IResource resource, CancellationToken cancellationToken)
@@ -106,6 +121,47 @@ public sealed class FakeContainerRuntime(bool shouldFail = false, bool isRunning
         return Task.CompletedTask;
     }
 
+    public Task<ContainerImageConfigInspectionResult> InspectImageConfigAsync(string imageName, CancellationToken cancellationToken)
+    {
+        WasInspectImageConfigCalled = true;
+        InspectImageConfigCalls.Add(imageName);
+        if (shouldFail)
+        {
+            throw new InvalidOperationException("Fake container runtime is configured to fail");
+        }
+
+        var config = new ContainerImageConfig([], [], workingDirectory: null);
+        return Task.FromResult(ContainerImageConfigInspectionResult.Success(config, "{}"));
+    }
+
+    public Task<ContainerImageManifestInspectionResult> InspectImageManifestAsync(string imageName, CancellationToken cancellationToken)
+    {
+        WasInspectImageManifestCalled = true;
+        InspectImageManifestCalls.Add(imageName);
+        if (shouldFail)
+        {
+            throw new InvalidOperationException("Fake container runtime is configured to fail");
+        }
+
+        if (InspectImageManifestAsyncCallback is not null)
+        {
+            return InspectImageManifestAsyncCallback(imageName, cancellationToken);
+        }
+
+        if (InspectedImageDigest is not null &&
+            InspectedImageOperatingSystem is not null &&
+            InspectedImageArchitecture is not null)
+        {
+            var manifest = new ContainerImageManifest(
+                InspectedImageDigest,
+                InspectedImageOperatingSystem,
+                InspectedImageArchitecture);
+            return Task.FromResult(ContainerImageManifestInspectionResult.Success([manifest]));
+        }
+
+        return Task.FromResult(ContainerImageManifestInspectionResult.Success([], "{}"));
+    }
+
     public Task ComposeUpAsync(ComposeOperationContext context, CancellationToken cancellationToken)
     {
         if (shouldFail)
@@ -133,6 +189,7 @@ public sealed class FakeContainerRuntime(bool shouldFail = false, bool isRunning
 
     public Task<IContainerRuntime> ResolveAsync(CancellationToken cancellationToken = default)
     {
-        return Task.FromResult<IContainerRuntime>(this);
+        Interlocked.Increment(ref _resolveAsyncCallCount);
+        return ResolveAsyncCallback?.Invoke(cancellationToken) ?? Task.FromResult<IContainerRuntime>(this);
     }
 }

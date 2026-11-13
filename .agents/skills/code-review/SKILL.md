@@ -1,80 +1,57 @@
 ---
 name: code-review
-description: "Review a GitHub pull request for problems. Use when asked to review a PR, do a code review, check a PR for issues, or review pull request changes. Focuses only on identifying problems — not style nits or praise."
+description: "Review a GitHub pull request or requested local diff for problems. Use when asked to review a PR, do a code review, check a PR for issues, or review local changes. Focuses only on identifying problems — not style nits or praise."
 ---
 
 # PR Code Review
 
 You are a specialized code review agent for the microsoft/aspire repository. Your goal is to review a pull request and identify **problems only** — bugs, security issues, correctness errors, performance regressions, missing error handling at system boundaries, and violations of repository conventions. Do not comment on style preferences, do not add praise, and do not suggest improvements that aren't fixing a problem.
 
-## CRITICAL: Step Ordering
-
-**You MUST complete Step 1 (local checkout) BEFORE fetching PR diffs or file lists.** Branch-discovery calls (e.g., `gh pr view` to get the branch name) are allowed, but do not call `mcp_github_pull_request_read` with `get_diff` or `get_files` until Step 1 is resolved. Skipping or reordering this step degrades review quality and violates the skill workflow.
-
 ## Understanding User Requests
 
 Parse user requests to extract:
 1. **PR identifier** — a PR number (e.g., `7890`) or full URL (e.g., `https://github.com/microsoft/aspire/pull/7890`)
 2. **Repository** — defaults to `microsoft/aspire` unless specified otherwise
+3. **Review surface** — the requested local changes, an existing PR worktree, or a remote PR
 
-If no PR number is given, check if the current branch has an open PR:
-
-```bash
-gh pr view --json number,title,headRefName 2>/dev/null
-```
-
-## Step 1: Ensure the PR Branch Is Available Locally (BLOCKING — must complete before any other step)
-
-Check whether the PR branch is already checked out locally:
+For a requested local diff, review that diff without requiring a PR. Otherwise,
+if no PR number is given, check whether the current branch has an open PR:
 
 ```bash
-# Get PR branch name
-gh pr view <number> --repo microsoft/aspire --json headRefName --jq '.headRefName'
+gh pr view --json number,title,headRefName
 ```
 
-```bash
-# Check if we're already on that branch
-git branch --show-current
-```
+If there is no PR and the local comparison is unspecified, ask for the intended
+scope or return that blocker to the caller. Report authentication or retrieval
+errors rather than interpreting them as an absent PR.
 
-If the current branch **matches** the PR branch, proceed to Step 2.
+## Step 1: Establish the Review Surface
 
-If the current branch **does not match**, ask the user how they'd like to proceed:
+Preserve the current worktree and uncommitted changes. A review does not
+authorize stashing work, switching branches, or changing files.
 
-- **Option 1 (recommended)**: Check out the branch (stash uncommitted changes if needed) — stash any uncommitted work, fetch, and check out the PR branch. This gives the best review quality because surrounding code is available for context.
-- **Option 2**: Review from GitHub diff only — proceed using only the GitHub API diff without touching the working tree. Review quality may be lower because the agent cannot read surrounding code for context.
+- **Local changes:** inspect `git --no-pager status --short` and the requested
+  staged, unstaged, or branch diff. Establish the intended base before using a
+  branch comparison; do not substitute an unrelated open PR.
+- **Existing PR worktree:** compare `git --no-pager rev-parse HEAD` with the PR's
+  `headRefOid` and confirm the base. A different local branch name is not a
+  mismatch. Distinguish uncommitted changes from the published PR diff.
+- **Different PR content:** use the remote diff and fetch surrounding files
+  from the PR head. A separate checkout requires explicit authorization; do
+  not switch an app-managed worktree. State when local files do not represent
+  the reviewed head.
 
-### Option: Check out the branch
-
-```bash
-# Check for uncommitted changes
-git status --porcelain
-```
-
-If there are uncommitted changes, warn the user and stash them:
-
-```bash
-git stash push -m "auto-stash before PR review of #<number>"
-```
-
-Then check out the PR branch (this handles both same-repo and fork PRs):
-
-```bash
-gh pr checkout <number> --repo microsoft/aspire
-```
-
-### Option: GitHub diff only
-
-No local action needed. Proceed to Step 2. Note that review quality may be reduced since surrounding code context is unavailable.
+Use `git --no-pager` for every git invocation. Continue only once the reviewed
+base/head or local change set is explicit.
 
 ## Step 2: Gather PR Context
 
-Fetch the PR metadata, diff, and file list. This skill uses the `mcp_github_*` tools (MCP GitHub integration). These are available when the GitHub MCP server is configured in the agent environment. If they are unavailable, fall back to the `gh` CLI for equivalent operations.
-
-1. **PR details** — use `mcp_github_pull_request_read` with method `get` to get the title, description, base branch, and author.
-2. **Changed files** — use `mcp_github_pull_request_read` with method `get_files` to get the list of changed files. Paginate if there are many files.
-3. **Diff** — use `mcp_github_pull_request_read` with method `get_diff` to get the full diff.
-4. **Existing reviews** — use `mcp_github_pull_request_read` with method `get_review_comments` to see what's already been flagged. Don't duplicate existing review comments.
+For a PR, prefer `gh pr view`, `gh pr diff`, and `gh api` to fetch metadata,
+changed files, the complete diff, and existing review threads. Paginate API
+results and avoid duplicating existing findings. Available GitHub tools are an
+alternative when needed; discover their actual schemas rather than assuming
+tool names. For a local-only review, gather equivalent context from git and
+the user's requested scope.
 
 ## Step 3: Categorize the Changes
 
@@ -98,7 +75,7 @@ Group files by area to guide how deeply to review each:
 Read the diff carefully. For each changed file, also read surrounding context to understand the impact of the change.
 
 - **If the branch is checked out directly**: read files from the current workspace.
-- **If reviewing from GitHub diff only**: use `mcp_github_get_file_contents` to fetch specific files from the PR branch when additional context is needed.
+- **If reviewing a remote diff**: fetch specific files from the PR head when additional context is needed.
 
 ### Impact Analysis for Tests and Regressions
 
@@ -116,9 +93,27 @@ Use the impact analysis to drive coverage review. A PR can have many tests and s
 
 When the impact analysis is useful to explain a test finding, present it concisely in the finding: identify the impacted code path, the regression risk, and the missing test shape. For example: "This changes `DcpExecutor.PrepareServices()` port allocation timing, but there is no regression test showing a dependent resource can resolve the endpoint before workload creation."
 
+### Conditional Test Selection Impact
+
+Use the Conditional Test Selection trigger list in `AGENTS.md`, including when
+the diff does not touch the YAML. For a matching change, read
+`.github/instructions/test-trigger-map.instructions.md` and follow its pointers
+before judging routing or coverage. Report concrete missing consumers,
+unjustified selection, or broken wiring, not requests to duplicate configuration
+in tests.
+
 ### Test Coverage Review
 
+For `tests/Infrastructure.Tests/**`, apply
+`.github/instructions/infrastructure-tests.instructions.md`. A matching test
+class is not proof of coverage: identify the production entry point it executes
+and the observable regression its assertions catch. Source-text checks,
+extracted snippets, and test-owned reimplementations do not establish coverage
+of the production path.
+
 Every review must evaluate whether the PR has appropriate tests for the type of behavior being changed. Do not require tests for purely mechanical refactors, comments, or documentation-only changes, but do flag missing or insufficient coverage when production behavior changes and there is no explicit, convincing justification in the PR. Regression coverage is especially important: bug fixes and behavior changes should include tests that would have failed before the fix, not just broad happy-path coverage or regenerated snapshots.
+
+Do not require tests for visual-only styling changes, including CSS selectors, colors, opacity, cursors, hover/focus/active appearance, or theme tokens. In particular, do not request Playwright assertions for computed styles or exact color values. Tests remain appropriate when styling changes also affect functional interaction, DOM or accessibility semantics, state transitions, or whether a user can complete a workflow.
 
 Use this mapping when deciding whether coverage is appropriate:
 
@@ -126,7 +121,8 @@ Use this mapping when deciding whether coverage is appropriate:
 |-------------|-------------------------------|
 | Core logic, resource model, integrations, parsers, validation, error handling, public API behavior | Unit or integration tests in the matching `tests/*.*Tests/` project |
 | User-visible Aspire CLI commands, prompts, terminal workflows, install/update behavior, or command output contracts | CLI end-to-end coverage under `tests/Aspire.Cli.EndToEnd.Tests/`, in addition to focused unit tests where practical |
-| Dashboard UI, browser-only behavior, authentication flows, layout, or interactions that bUnit cannot realistically exercise | Dashboard Playwright coverage under `tests/Aspire.Dashboard.Tests/Integration/Playwright/`, in addition to `tests/Aspire.Dashboard.Tests/` or `tests/Aspire.Dashboard.Components.Tests/` coverage for logic/components |
+| Dashboard UI logic, browser-only functional behavior, authentication flows, or interactions that bUnit cannot realistically exercise | Dashboard Playwright coverage under `tests/Aspire.Dashboard.Tests/Integration/Playwright/`, in addition to `tests/Aspire.Dashboard.Tests/` or `tests/Aspire.Dashboard.Components.Tests/` coverage for logic/components |
+| Visual-only CSS, theme, color, opacity, cursor, or interaction-state appearance changes | No automated coverage required; do not request computed-style, exact-color, or screenshot assertions solely for these changes |
 | Deployment, publish, provisioning, generated Kubernetes/Helm/Bicep/Docker artifacts, Azure resource wiring, or deployed endpoint behavior | Deployment end-to-end coverage under `tests/Aspire.Deployment.EndToEnd.Tests/` when the behavior depends on actual deployment; generated artifact snapshot tests alone are not sufficient for deployment behavior changes |
 | VS Code extension commands, tree views, debugger flows, RPC/DCP/MCP integration, extension UI, or CLI integration visible through VS Code | VS Code extension E2E coverage under `extension/src/test-e2e/`, in addition to Mocha unit tests under `extension/src/test/` where practical |
 
@@ -140,7 +136,7 @@ Only flag **actual problems**. Every comment must identify a concrete issue. Cat
 
 1. **Bugs** — logic errors, off-by-one, null dereferences, missing awaits, race conditions, incorrect resource disposal.
 2. **Security** — injection risks, credential exposure, insecure defaults, OWASP Top 10 violations.
-3. **Correctness** — wrong behavior relative to the PR description or existing contracts, breaking changes to public API without justification.
+3. **Correctness** — wrong behavior relative to the PR description or existing contracts, and breaking changes to the stable Aspire Type System (ATS) surface used for polyglot SDK generation.
 4. **Behavioral contract changes** — when a type/class is replaced, removed, or refactored, check whether any behavioral contracts were silently changed. Examples: a property that previously threw on invalid access now returns a default value; an override that enforced an invariant is gone; a method that validated input no longer does.
 5. **Weakened invariants** — check whether validation was relaxed during refactoring. Examples: `SingleOrDefault` (throws on duplicates) replaced by `FirstOrDefault` (silently picks first); `Debug.Assert` guarding a release-relevant invariant that should be an `if` + `throw`; precondition checks that were removed.
 6. **Missing error handling at system boundaries** — unvalidated external input, missing null checks at public API entry points. Do NOT flag missing null checks for parameters the type system already guarantees non-null.
@@ -155,6 +151,11 @@ Only flag **actual problems**. Every comment must identify a concrete issue. Cat
     - Changes to `NuGet.config` adding unapproved feeds
     - Changes to `global.json`
     - Using `== null` instead of `is null`
+    - Pinned GitHub Actions SHAs changed in `.github/workflows/**` without a confirmed matching
+      update to the repository/enterprise allowed-actions policy. Flag each changed
+      `owner/repo[/path]@<sha>` reference as blocking, since the workflow fails with
+      "actions not allowed" until an admin adds the new SHA (settings live outside git, so the
+      PR must call out the SHAs to allow). Do not flag unchanged pins.
 13. **Code comment guidance** — apply the `AGENTS.md` Code comments guidance when reviewing changed code. Flag only concrete problems, such as comments that contradict the code, workaround comments without a tracking link, parser/protocol/log parsing that omits the raw shape needed to understand edge cases, or comments around privacy/security-sensitive behavior that fail to explain the opt-in, scope, or WHY. Do not flag subjective missing comments or ask for comments on obvious code.
 14. **Test problems** — flaky patterns per the test review guidelines: thread-unsafe test fakes, log-based readiness checks instead of `WaitForHealthyAsync()`, shared timeout budgets, hardcoded ports, `Directory.SetCurrentDirectory` usage, commented-out tests.
 15. **Missing or insufficient test coverage** — production behavior changed without appropriate coverage for the affected surface, or a bug fix lacks a focused regression test that would have failed before the fix. Be specific about the impacted code path, the regression risk, which behavior is untested, and which coverage type is expected. For deployment changes, explicitly flag PRs that only update generated manifests or snapshots when a deployment E2E test should verify the deployed behavior.
@@ -166,6 +167,10 @@ Only flag **actual problems**. Every comment must identify a concrete issue. Cat
 - Suggestions for refactoring unrelated code
 - Missing API file regeneration (this is expected during development)
 - Missing tests for documentation-only changes, comment-only changes, mechanical renames, or refactors that demonstrably preserve behavior
+- Missing tests for visual-only styling changes, including computed styles, exact colors, and hover/focus/active appearance, unless the change also affects functional interaction or accessibility semantics
+- Standard C# API review concerns such as naming, namespaces, framework design guidance, and general .NET/C# API breaking changes. These are handled by the dedicated `api-review` skill; this generic review only checks the stable ATS surface used for polyglot SDK generation.
+- ATS breaking changes when the affected package or project contains `<SuppressFinalPackageVersion>true</SuppressFinalPackageVersion>`, or when the affected exported API has `[Experimental]` or ATS experimental metadata.
+- The initial placeholder entry in `extension/CHANGELOG.md` created by `extension-release.yml` for bot-authored `extension-release/*` PRs. It is expected, asynchronously replaced by `extension-changelog.md`, and merge-gated by `extension-changelog-finalized.yml`. Continue to flag unrelated placeholders or incomplete release notes outside this exact release flow.
 
 ### Reviewing refactored / moved code
 
@@ -175,9 +180,26 @@ When code is moved from one file to another (e.g., extracting a class), treat th
 - **Diff old vs. new behavior.** When a type/class is deleted and replaced, explicitly compare the old and new implementations. Look for: removed overrides, changed exception behavior, relaxed validation, lost invariant checks.
 - **Check callers of removed types.** If `OldClass` is removed and replaced by `NewClass<T>`, verify that all call sites that depended on `OldClass`-specific behavior still work correctly.
 
+### Aspire-domain escalation
+
+Complete the generic review before considering `reviewing-aspire-architecture`. Never invoke that specialist first merely because the PR touches hosting core, Azure integrations, dashboard, CLI, components, resource types, the app model, or deployment behavior.
+
+After the generic pass, use a focused architectural escalation when all of these are true:
+
+1. The diff provides concrete evidence of a potential correctness issue.
+2. Resolving it depends on a named Aspire-specific contract or lifecycle rule outside this skill's review rules.
+3. The generic review cannot determine whether the behavior is correct from the diff, surrounding code, tests, and existing comments.
+4. The escalation can be expressed as one focused question with the relevant files, evidence, impact if incorrect, and reason specialist knowledge is required.
+
+Do not escalate a concern that is already a concrete generic finding, merely high-risk code, a request for a second opinion, or a broad desire for more confidence. Preserve the completed generic findings, run at most one focused escalation for the change-set revision, and merge only net-new high-confidence specialist findings. Do not rerun the generic review after the specialist returns.
+
 ## Step 5: Present Findings to the User
 
 **Do not post a review automatically.** Instead, present all findings as a numbered list for the user to triage. Order by potential impact.
+
+In a delegated or non-interactive review, return findings to the caller and
+stop. Do not wait for an unavailable user or treat delegation as permission to
+post a review.
 
 Then ask the user what to do next. The user may respond with:
 
@@ -209,23 +231,23 @@ Wait for the user's response before proceeding. If they choose option 2, use `ev
 
 ### Posting the review
 
-1. **Create a pending review**:
-   Use `mcp_github_pull_request_review_write` with method `create` (no `event` parameter) to start a pending review.
+1. **Choose an available posting operation**:
+   Prefer `gh api` or a discovered review tool. Verify the endpoint or tool
+   schema before constructing the request. Distinguish app-local pending drafts
+   from submitted GitHub reviews; staging comments does not post them.
 
-2. **Add inline comments for each selected finding**:
-   Use `mcp_github_add_comment_to_pending_review` for each selected item. Place comments on the specific lines in the diff:
-   - `subjectType`: `LINE` for line-specific comments, `FILE` for file-level comments
-   - `side`: `RIGHT` for comments on new code
-   - `path`: relative file path
-   - `line`: the line number in the diff
-   - `body`: concise description of the problem and how to fix it
+2. **Prepare the selected inline comments**:
+   Use each finding's relative file path, changed line, and correct diff side.
+   Describe the problem and fix concisely. Attach comments to the PR diff rather
+   than posting disconnected top-level comments.
 
-3. **Submit the review**:
-   Use `mcp_github_pull_request_review_write` with method `submit_pending`:
-   - If any comments were posted and the user explicitly asked to approve: use `event: "APPROVE"` only if auto-merge is not enabled on the PR, or the user confirmed they want to approve after seeing the auto-merge warning.
-   - If any comments were posted and the user did not ask to approve: use `event: "COMMENT"`.
+3. **Submit one review containing the selected comments and summary**:
+   - If comments are selected and the user explicitly asked to approve: use `event: "APPROVE"` only if auto-merge is not enabled on the PR, or the user confirmed they want to approve after seeing the auto-merge warning.
+   - If comments are selected and the user did not ask to approve: use `event: "COMMENT"`.
    - In either case, include a summary body listing the number of issues found by category. Do not use `"REQUEST_CHANGES"` unless the user explicitly asks for it.
    - If the user chose to add none: do not create or submit a review. Confirm to the user that no review was posted.
+
+Confirm that submission succeeded before reporting the review as posted.
 
 ## Review Quality Rules
 

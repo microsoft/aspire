@@ -1,6 +1,10 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable CS0618 // Retains migration configuration and metadata contracts for legacy projects.
+
+#pragma warning disable ASPIREPROJECTS001
+
 using Aspire.Hosting.Utils;
 using Aspire.Hosting.ApplicationModel;
 
@@ -97,18 +101,26 @@ public class EFMigrationConfigurationTests
         Assert.True(migrations.Resource.PublishAsMigrationScript);
     }
 
-    [Fact]
-    public void AllConfigurationOptionsCanBeChained()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void AllConfigurationOptionsCanBeChained(bool useDotnetProject)
     {
         using var builder = TestDistributedApplicationBuilder.Create();
-        var project = builder.AddProject<Projects.ServiceA>("myproject");
-        var migrations = project.AddEFMigrations("mymigrations", typeof(TestDbContext).FullName!)
+        var migrations = useDotnetProject
+            ? builder.AddDotnetProject("myproject", new Projects.ServiceA().ProjectPath, options => options.ExcludeLaunchProfile = true)
+                .AddEFMigrations("mymigrations", typeof(TestDbContext).FullName!)
+            : builder.AddProject<Projects.ServiceA>("myproject", options => options.ExcludeLaunchProfile = true)
+                .AddEFMigrations("mymigrations", typeof(TestDbContext).FullName!);
+        var result = migrations
             .RunDatabaseUpdateOnStart()
             .PublishAsMigrationScript()
             .PublishAsMigrationBundle()
             .WithMigrationOutputDirectory("CustomDir")
             .WithMigrationNamespace("MyApp.Migrations");
 
+        Assert.Same(migrations, result);
+        Assert.Equal(typeof(TestDbContext).FullName, migrations.Resource.DbContextTypeName);
         Assert.True(migrations.Resource.PublishAsMigrationScript);
         Assert.True(migrations.Resource.PublishAsMigrationBundle);
         Assert.Equal("CustomDir", migrations.Resource.MigrationOutputDirectory);
@@ -196,6 +208,71 @@ public class EFMigrationConfigurationTests
         var migrations = project.AddEFMigrations("mymigrations", typeof(TestDbContext).FullName!);
 
         Assert.Throws<ArgumentException>(() => migrations.WithMigrationsProject(""));
+    }
+
+    [Fact]
+    public void WithMigrationsProjectForPolyglotRejectsFileBasedApp()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var startup = builder.AddProject<Projects.ServiceA>("startup");
+        var migrations = startup.AddEFMigrations("migrations");
+        var target = builder.AddDotnetProject("target", "app.cs", options => options.ExcludeLaunchProfile = true);
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            EFMigrationResourceBuilderExtensions.WithMigrationsProjectForPolyglot(migrations, target));
+
+        Assert.Equal("EF Core migrations require a project file. Resource 'target' is a file-based app.", exception.Message);
+        Assert.Null(migrations.Resource.MigrationsProjectPath);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void WithMigrationsProjectForPolyglotAcceptsProjectResource(bool useDotnetStartupProject, bool useDotnetMigrationsProject)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var migrations = useDotnetStartupProject
+            ? builder.AddDotnetProject("startup", new Projects.ServiceA().ProjectPath, options => options.ExcludeLaunchProfile = true)
+                .AddEFMigrations("migrations")
+            : builder.AddProject<Projects.ServiceA>("startup", options => options.ExcludeLaunchProfile = true)
+                .AddEFMigrations("migrations");
+        IResourceBuilder<IDotnetProgramResource> target = useDotnetMigrationsProject
+            ? builder.AddDotnetProject("target", new Projects.ServiceB().ProjectPath, options => options.ExcludeLaunchProfile = true)
+            : builder.AddProject<Projects.ServiceB>("target", options => options.ExcludeLaunchProfile = true);
+
+        var result = EFMigrationResourceBuilderExtensions.WithMigrationsProjectForPolyglot(migrations, target);
+
+        Assert.Same(migrations, result);
+        Assert.Equal(target.Resource.GetProjectMetadata().ProjectPath, migrations.Resource.MigrationsProjectPath);
+        Assert.Same(target.Resource, migrations.Resource.MigrationsProjectResource);
+
+        migrations.WithMigrationsProject<Projects.ServiceA>();
+        Assert.Null(migrations.Resource.MigrationsProjectResource);
+
+        migrations.WithMigrationsProjectForPolyglot(target);
+        migrations.Resource.MigrationsProjectPath = new Projects.ServiceA().ProjectPath;
+        Assert.Null(migrations.Resource.MigrationsProjectResource);
+        Assert.Null(migrations.Resource.MigrationsProjectMetadata);
+    }
+
+    [Fact]
+    public void WithMigrationsProjectForPolyglotPreservesOmittedAndStringPaths()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var startup = builder.AddProject<Projects.ServiceA>("startup");
+        var migrations = startup.AddEFMigrations("migrations");
+
+        Assert.Same(migrations, EFMigrationResourceBuilderExtensions.WithMigrationsProjectForPolyglot(migrations));
+        Assert.Null(migrations.Resource.MigrationsProjectPath);
+
+        var result = EFMigrationResourceBuilderExtensions.WithMigrationsProjectForPolyglot(migrations, "Target.csproj");
+
+        Assert.Same(migrations, result);
+        Assert.Equal(Path.GetFullPath(Path.Combine(builder.AppHostDirectory, "Target.csproj")), migrations.Resource.MigrationsProjectPath);
+        Assert.Same(migrations, EFMigrationResourceBuilderExtensions.WithMigrationsProjectForPolyglot(migrations));
+        Assert.Equal(Path.GetFullPath(Path.Combine(builder.AppHostDirectory, "Target.csproj")), migrations.Resource.MigrationsProjectPath);
     }
 
     [Fact]

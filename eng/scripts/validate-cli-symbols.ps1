@@ -62,7 +62,7 @@
   linux-x64/linux-arm64/osx-x64/osx-arm64.
 
 .PARAMETER TargetFramework
-  Target framework moniker for the Aspire CLI build. Default: net10.0.
+  Target framework moniker for the Aspire CLI build. Default: net11.0.
   Used to compute the bin path under artifacts/bin/Aspire.Cli/<Configuration>/
   <TargetFramework>/<Rid>/native/.
 
@@ -103,7 +103,7 @@ param(
   [string]$RepoRoot = "$PSScriptRoot/../..",
   [string]$Configuration = 'Release',
   [string]$Rid,
-  [string]$TargetFramework = 'net10.0',
+  [string]$TargetFramework = 'net11.0',
   [switch]$SkipBuild
 )
 

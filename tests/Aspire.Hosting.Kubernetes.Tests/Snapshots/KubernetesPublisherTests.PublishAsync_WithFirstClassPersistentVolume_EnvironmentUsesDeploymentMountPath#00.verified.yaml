@@ -1,0 +1,15 @@
+﻿---
+apiVersion: "v1"
+kind: "ConfigMap"
+metadata:
+  name: "api-config"
+  labels:
+    app.kubernetes.io/name: "{{ .Chart.Name }}"
+    app.kubernetes.io/component: "api"
+    app.kubernetes.io/instance: "{{ .Release.Name }}"
+data:
+  OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY: {{ tpl "{{ .Values.config.api.OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY }}" . | quote }}
+  MEDIA_PATH: {{ tpl "{{ .Values.config.api.MEDIA_PATH }}" . | quote }}
+  OTEL_EXPORTER_OTLP_ENDPOINT: {{ tpl "{{ .Values.config.api.OTEL_EXPORTER_OTLP_ENDPOINT }}" . | quote }}
+  OTEL_EXPORTER_OTLP_PROTOCOL: {{ tpl "{{ .Values.config.api.OTEL_EXPORTER_OTLP_PROTOCOL }}" . | quote }}
+  OTEL_SERVICE_NAME: {{ tpl "{{ .Values.config.api.OTEL_SERVICE_NAME }}" . | quote }}

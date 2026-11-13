@@ -14,7 +14,7 @@
     }
     else
     {
-        <span class="grid-value" title="@(ToolTip ?? Value)" id="@_cellTextId" @onkeydown:stopPropagation="true">
+        <span class="grid-value" data-tooltip="@(ShowToolTip ? ToolTip ?? Value : null)" id="@_cellTextId" @onkeydown:stopPropagation="true">
             @if (ContentBeforeValue == null && ContentAfterValue == null && string.IsNullOrEmpty(Value))
             {
                 <span class="empty-data"></span>
@@ -49,11 +49,12 @@
     <div @onclick:stopPropagation="true" @onkeydown:stopPropagation="true" class="button-container">
 
         <span class="defaultHidden">
-            <FluentButton Appearance="Appearance.Lightweight"
+            <FluentButton Appearance="ButtonAppearance.Transparent"
+                          IconOnly="true"
                           Disabled="@(ValueToVisualize is null && Value is null)"
                           OnClick="OpenTextVisualizerAsync"
                           aria-label="@DialogsLoc[nameof(Dialogs.OpenInTextVisualizer)]">
-                <FluentIcon Icon="Icons.Regular.Size16.SlideSearch" />
+                <FluentIcon Icon="Icons.Regular.Size16.SlideSearch" Color="Color.Primary" />
             </FluentButton>
         </span>
 
@@ -64,9 +65,10 @@
 
         @if (EnableMasking)
         {
-            <FluentButton Appearance="Appearance.Lightweight"
+            <FluentButton Appearance="ButtonAppearance.Transparent"
+                          IconOnly="true"
                           IconEnd="@(IsMasked ? _unmaskIcon : _maskIcon)"
-                          Title="@(IsMasked ? Loc[nameof(ControlsStrings.GridValueMaskShowValue)] : Loc[nameof(ControlsStrings.GridValueMaskHideValue)])"
+                          data-tooltip="@(IsMasked ? Loc[nameof(ControlsStrings.GridValueMaskShowValue)] : Loc[nameof(ControlsStrings.GridValueMaskHideValue)])"
                           OnClick="ToggleMaskStateAsync"
                           aria-label="@(IsMasked ? Loc[nameof(ControlsStrings.GridValueMaskShowValue)] : Loc[nameof(ControlsStrings.GridValueMaskHideValue)])"
                           Class="grid-value-mask-button" />

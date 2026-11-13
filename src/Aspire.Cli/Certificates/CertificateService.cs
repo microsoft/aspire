@@ -101,17 +101,17 @@ internal sealed class CertificateService(
                 }
                 else
                 {
-                    interactionService.DisplayMessage(KnownEmojis.Warning, string.Format(CultureInfo.CurrentCulture, ErrorStrings.CertificateGenerationFailed, generateResult));
+                    interactionService.DisplayMessage(KnownEmojis.PoliceCarLight, string.Format(CultureInfo.CurrentCulture, ErrorStrings.CertificateGenerationFailed, generateResult));
                 }
             }
 
             if (preCheck.IsPartiallyTrusted)
             {
-                interactionService.DisplayMessage(KnownEmojis.Warning, ErrorStrings.CertificatesPartiallyTrustedNonInteractive);
+                interactionService.DisplayMessage(KnownEmojis.PoliceCarLight, ErrorStrings.CertificatesPartiallyTrustedNonInteractive);
             }
             else if (!preCheck.IsFullyTrusted)
             {
-                interactionService.DisplayMessage(KnownEmojis.Warning, ErrorStrings.CertificatesNotTrustedNonInteractive);
+                interactionService.DisplayMessage(KnownEmojis.PoliceCarLight, ErrorStrings.CertificatesNotTrustedNonInteractive);
             }
 
             if (preCheck.IsPartiallyTrusted && isLinux)
@@ -136,11 +136,11 @@ internal sealed class CertificateService(
 
         if (trustResultCode == EnsureCertificateResult.UserCancelledTrustStep)
         {
-            interactionService.DisplayMessage(KnownEmojis.Warning, CertificatesCommandStrings.TrustCancelled);
+            interactionService.DisplayMessage(KnownEmojis.PoliceCarLight, CertificatesCommandStrings.TrustCancelled);
         }
         else if (!CertificateHelpers.IsSuccessfulTrustResult(trustResultCode))
         {
-            interactionService.DisplayMessage(KnownEmojis.Warning, string.Format(CultureInfo.CurrentCulture, ErrorStrings.CertificatesMayNotBeFullyTrusted, trustResultCode));
+            interactionService.DisplayMessage(KnownEmojis.PoliceCarLight, string.Format(CultureInfo.CurrentCulture, ErrorStrings.CertificatesMayNotBeFullyTrusted, trustResultCode));
         }
 
         var postTrustCheck = certificateToolRunner.CheckHttpCertificate(cancellationToken);
@@ -231,8 +231,4 @@ internal sealed class CertificateService(
             return null;
         }
     }
-}
-
-internal sealed class CertificateServiceException(string message) : Exception(message)
-{
 }

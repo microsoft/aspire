@@ -3,7 +3,7 @@
     align-items: center;
     /* Small, even spacing between action controls. Alignment across rows comes from the fixed-width
        slots below, not from this gap. */
-    gap: var(--aspire-space-3xs, 2px);
+    gap: 2px;
 }
 
 /* Every action position (a command button, the console-logs button, an empty command spacer, or the
@@ -28,5 +28,5 @@
 /* Give the vertical separator a consistent height inside the flex row (it would otherwise collapse). */
 .resource-actions ::deep .action-divider {
     height: 20px;
-    margin-inline: var(--aspire-space-3xs, 2px);
+    margin-inline: 2px;
 }

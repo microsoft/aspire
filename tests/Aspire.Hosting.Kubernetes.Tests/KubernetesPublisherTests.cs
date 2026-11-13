@@ -1,11 +1,18 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource Kubernetes projection alongside executable/V2 deployment coverage.
 #pragma warning disable ASPIRECOMPUTE002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning disable ASPIRECOMPUTE003
+#pragma warning disable ASPIREPIPELINES003
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Kubernetes.Resources;
+using Aspire.Hosting.Pipelines;
+using Aspire.Hosting.Tests;
 using Aspire.Hosting.Utils;
+using Aspire.TestUtilities;
+using Microsoft.Extensions.DependencyInjection;
 using YamlDotNet.RepresentationModel;
 using YamlDotNet.Serialization;
 
@@ -13,6 +20,424 @@ namespace Aspire.Hosting.Kubernetes.Tests;
 
 public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
 {
+    [Theory]
+    [InlineData("tcp", false, EndpointProperty.BrowserOrigins)]
+    [InlineData("tcp", true, EndpointProperty.BrowserOrigins)]
+    [InlineData("http", false, EndpointProperty.BrowserOrigins)]
+    [InlineData("tcp", false, EndpointProperty.PrimaryBrowserOrigin)]
+    [InlineData("tcp", true, EndpointProperty.PrimaryBrowserOrigin)]
+    [InlineData("http", false, EndpointProperty.PrimaryBrowserOrigin)]
+    public void BrowserOriginsRejectInternalOrNonHttpEndpoints(string scheme, bool external, EndpointProperty property)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        var environment = builder.AddKubernetesEnvironment("env").WithDashboard(false);
+        var web = builder.AddContainer("web", "image")
+            .WithEndpoint(name: "endpoint", scheme: scheme, targetPort: 8080, isExternal: external);
+        builder.AddContainer("consumer", "image").WithEnvironment("ORIGINS", web.GetEndpoint("endpoint").Property(property));
+        using var app = builder.Build();
+
+        var error = Assert.Throws<AggregateException>(app.Run);
+
+        Assert.EndsWith(
+            "Kubernetes cannot provide browser origins for endpoint 'endpoint' on resource 'web' because it is not an external HTTP(S) endpoint. " +
+            "Reference an external HTTP(S) endpoint or supply an explicit origin parameter.", error.GetBaseException().Message);
+        Assert.Empty(environment.Resource.CapturedHelmValues);
+    }
+
+    [Theory]
+    [RequiresTools(["helm"])]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task BrowserOriginsRenderAsYamlString(bool configured)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        var environment = builder.AddKubernetesEnvironment("env").WithDashboard(false);
+        var web = builder.AddContainer("web", "image").WithHttpEndpoint(targetPort: 8080).WithExternalHttpEndpoints();
+        environment.AddIngress("public").WithHostname("public.example").WithHostname("alias.example").WithPath("/", web.GetEndpoint("http"));
+        var origin = web.GetEndpoint("HTTP", KnownNetworkIdentifiers.LocalhostNetwork).BrowserOrigins;
+        var token = builder.AddParameter("token", "test-token", secret: true);
+        var json = builder.AddParameter("json", "[\"quoted\"]", publishValueAsDefault: true);
+        builder.AddContainer("consumer", "image")
+            .WithEnvironment("ORIGINS", origin)
+            .WithEnvironment("CONFIG", ReferenceExpression.Create($"origins={origin}"))
+            .WithEnvironment("SECRET_CONFIG", ReferenceExpression.Create($"origins={origin};json={json};token={token}"))
+            .WithEnvironment("JSON_CONFIG", json)
+            .WithEnvironment("UNICODE_CONFIG", ReferenceExpression.Create($"\U0001F680{origin}"))
+            .WithEnvironment("UNICODE_SECRET", ReferenceExpression.Create($"\U0001F680{token}"))
+            .WithEnvironment("TOKEN", token)
+            .WithEnvironment("MULTILINE", builder.AddParameter("multiline", "first \"quoted\" line\nsecond\\line", publishValueAsDefault: true))
+            .WithEnvironment("PORT", web.GetEndpoint("HTTP").Property(EndpointProperty.Port));
+        var expected = configured ? "https://override.example,https://alias.example" : "http://public.example,http://alias.example";
+        if (configured)
+        {
+            builder.Configuration["Parameters:web-http-BrowserOrigins"] = expected;
+        }
+        using var app = builder.Build();
+        app.Run();
+
+        await HelmDeploymentEngine.ResolveAndWriteDeployValuesAsync(workspace.Path, environment.Resource, TestContext.Current.CancellationToken);
+        var rendered = new System.Text.StringBuilder();
+        var errors = new System.Text.StringBuilder();
+        var overridePath = Path.Combine(workspace.Path, HelmDeploymentEngine.GetDeployValuesFileName("env"));
+        var arguments = "template origin-test . --show-only templates/consumer/config.yaml --show-only templates/consumer/secrets.yaml";
+        if (File.Exists(overridePath))
+        {
+            arguments += $" -f \"{overridePath}\"";
+        }
+        var exitCode = await new DefaultHelmRunner().RunAsync(arguments, workspace.Path,
+            line => rendered.AppendLine(line), line => errors.AppendLine(line), TestContext.Current.CancellationToken);
+        Assert.True(exitCode == 0, errors.ToString());
+        var yaml = new YamlStream();
+        yaml.Load(new StringReader(rendered.ToString()));
+        Assert.Equal(2, yaml.Documents.Count);
+        var resources = yaml.Documents
+            .Select(document => Assert.IsType<YamlMappingNode>(document.RootNode))
+            .ToDictionary(resource => Assert.IsType<YamlScalarNode>(resource.Children[new YamlScalarNode("kind")]).Value!);
+        var map = resources["ConfigMap"];
+        var data = Assert.IsType<YamlMappingNode>(map.Children[new YamlScalarNode("data")]);
+        Assert.Equal(expected, Assert.IsType<YamlScalarNode>(data.Children[new YamlScalarNode("ORIGINS")]).Value);
+        Assert.Equal($"origins={expected}", Assert.IsType<YamlScalarNode>(data.Children[new YamlScalarNode("CONFIG")]).Value);
+        Assert.Equal("first \"quoted\" line\nsecond\\line", Assert.IsType<YamlScalarNode>(data.Children[new YamlScalarNode("MULTILINE")]).Value);
+        Assert.Equal("8080", Assert.IsType<YamlScalarNode>(data.Children[new YamlScalarNode("PORT")]).Value);
+        Assert.Equal($"\U0001F680{expected}", Assert.IsType<YamlScalarNode>(data.Children[new YamlScalarNode("UNICODE_CONFIG")]).Value);
+        var stringData = Assert.IsType<YamlMappingNode>(resources["Secret"].Children[new YamlScalarNode("stringData")]);
+        Assert.Equal("[\"quoted\"]", Assert.IsType<YamlScalarNode>(data.Children[new YamlScalarNode("JSON_CONFIG")]).Value);
+        Assert.Equal($"origins={expected};json=[\"quoted\"];token=test-token", Assert.IsType<YamlScalarNode>(stringData.Children[new YamlScalarNode("SECRET_CONFIG")]).Value);
+        Assert.Equal("test-token", Assert.IsType<YamlScalarNode>(stringData.Children[new YamlScalarNode("TOKEN")]).Value);
+        Assert.Equal("\U0001F680test-token", Assert.IsType<YamlScalarNode>(stringData.Children[new YamlScalarNode("UNICODE_SECRET")]).Value);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void BrowserOriginDefaultsRequireInputForDeferredTlsHostnameScope(bool gateway)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        var environment = builder.AddKubernetesEnvironment("env").WithDashboard(false);
+        var web = builder.AddContainer("web", "image").WithHttpEndpoint(targetPort: 8080).WithExternalHttpEndpoints();
+        var hostname = builder.AddParameter("tls-hostname", "web.example.com");
+        if (gateway)
+        {
+            environment.AddGateway("public").WithGatewayClass("test").WithHostname(hostname)
+                .WithTls("certificate").WithRoute("web.example.com", "/", web.GetEndpoint("http"));
+        }
+        else
+        {
+            environment.AddIngress("public").WithHostname(hostname)
+                .WithTls("certificate").WithPath("web.example.com", "/", web.GetEndpoint("http"));
+        }
+        var consumer = builder.AddContainer("consumer", "image")
+            .WithEnvironment("ORIGIN", web.GetEndpoint("http").BrowserOrigins);
+        using var app = builder.Build();
+
+        app.Run();
+
+        var target = Assert.IsType<KubernetesResource>(consumer.Resource.GetDeploymentTargetAnnotation()!.DeploymentTarget);
+        Assert.Null(target.EnvironmentVariables["ORIGIN"].ParameterSource!.Default);
+    }
+
+    [Theory]
+    [InlineData(false, "web.example.com", true)]
+    [InlineData(true, "web.example.com", true)]
+    [InlineData(false, "a.web.example.com", false)]
+    [InlineData(true, "a.web.example.com", true)]
+    [InlineData(false, "example.com", false)]
+    [InlineData(true, "example.com", false)]
+    [InlineData(false, "web.otherexample.com", false)]
+    [InlineData(true, "web.otherexample.com", false)]
+    [InlineData(false, "WEB.EXAMPLE.COM", true)]
+    [InlineData(true, "WEB.EXAMPLE.COM", true)]
+    public async Task BrowserOriginDefaultsRespectWildcardTlsHostnameScope(bool gateway, string hostname, bool https)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        var environment = builder.AddKubernetesEnvironment("env").WithDashboard(false);
+        var web = builder.AddContainer("web", "image").WithHttpEndpoint(targetPort: 8080).WithExternalHttpEndpoints();
+        var consumer = builder.AddContainer("consumer", "image").WithEnvironment("ORIGIN", web.GetEndpoint("http").BrowserOrigins);
+        if (gateway)
+        {
+            environment.AddGateway("public").WithGatewayClass("test").WithHostname("*.example.com")
+                .WithTls("certificate").WithRoute(hostname, "/", web.GetEndpoint("http"));
+        }
+        else
+        {
+            environment.AddIngress("public").WithHostname("*.example.com")
+                .WithTls("certificate").WithPath(hostname, "/", web.GetEndpoint("http"));
+        }
+        using var app = builder.Build();
+        app.Run();
+
+        var target = Assert.IsType<KubernetesResource>(consumer.Resource.GetDeploymentTargetAnnotation()!.DeploymentTarget);
+        Assert.Equal($"{(https ? "https" : "http")}://{hostname.ToLowerInvariant()}", await target.EnvironmentVariables["ORIGIN"].ParameterSource!.GetValueAsync(default));
+        if (gateway)
+        {
+            var route = builder.Resources.OfType<KubernetesGatewayResource>().Single();
+            Assert.Equal("*.example.com", route.GeneratedGateway!.Spec.Listeners.Single(listener => listener.Protocol == "HTTPS").Hostname);
+        }
+        else
+        {
+            var route = builder.Resources.OfType<KubernetesIngressResource>().Single();
+            Assert.Equal(["*.example.com"], Assert.Single(route.GeneratedIngress!.Spec.Tls).Hosts);
+        }
+    }
+
+    [Fact]
+    public async Task BrowserOriginInputsKeepDistinctEndpointIdentities()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        var environment = builder.AddKubernetesEnvironment("env").WithDashboard(false);
+        var first = builder.AddContainer("a-b", "image").WithHttpEndpoint(name: "c", targetPort: 80)
+            .WithExternalHttpEndpoints().WithComputeEnvironment(environment);
+        var second = builder.AddContainer("a", "image").WithHttpEndpoint(name: "b-c", targetPort: 80)
+            .WithExternalHttpEndpoints().WithComputeEnvironment(environment);
+        environment.AddIngress("first-ingress").WithPath("first.example", "/", first.GetEndpoint("c"));
+        environment.AddIngress("second-ingress").WithPath("second.example", "/", second.GetEndpoint("b-c"));
+        var consumer = builder.AddContainer("consumer", "image").WithComputeEnvironment(environment)
+            .WithEnvironment("FIRST", first.GetEndpoint("c").BrowserOrigins)
+            .WithEnvironment("SECOND", second.GetEndpoint("b-c").BrowserOrigins)
+            .WithEnvironment("REPEATED", first.GetEndpoint("c").BrowserOrigins);
+        using var app = builder.Build();
+
+        app.Run();
+
+        var target = Assert.IsType<KubernetesResource>(consumer.Resource.GetDeploymentTargetAnnotation()!.DeploymentTarget);
+        var firstInput = target.EnvironmentVariables["FIRST"].ParameterSource!;
+        var secondInput = target.EnvironmentVariables["SECOND"].ParameterSource!;
+        Assert.NotSame(firstInput, secondInput);
+        Assert.NotEqual(firstInput.Name, secondInput.Name);
+        Assert.Same(firstInput, target.EnvironmentVariables["REPEATED"].ParameterSource);
+        Assert.Equal("http://first.example", await firstInput.GetValueAsync(default));
+        Assert.Equal("http://second.example", await secondInput.GetValueAsync(default));
+        await Verify(await File.ReadAllTextAsync(Path.Combine(workspace.Path, "values.yaml")), "yaml");
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task BrowserOriginDefaultsFollowConfiguredPublicRoutes(bool gateway, bool tls)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        var environment = builder.AddKubernetesEnvironment("env").WithDashboard(false);
+        var web = builder.AddContainer("web", "image").WithHttpEndpoint(targetPort: 8080).WithExternalHttpEndpoints();
+        var endpoint = web.GetEndpoint("http");
+        if (gateway)
+        {
+            var route = environment.AddGateway("public").WithGatewayClass("test")
+                .WithHostname("public.example").WithHostname("alias.example").WithRoute("/app", endpoint);
+            if (tls)
+            {
+                route.WithTls("certificate");
+            }
+        }
+        else
+        {
+            var route = environment.AddIngress("public").WithIngressClass("test")
+                .WithHostname("public.example").WithHostname("alias.example").WithPath("/app", endpoint);
+            if (tls)
+            {
+                route.WithTls("certificate");
+            }
+        }
+        builder.AddContainer("consumer", "image")
+            .WithEnvironment("ORIGIN", endpoint.PrimaryBrowserOrigin)
+            .WithEnvironment("ORIGINS", endpoint.BrowserOrigins);
+        using var app = builder.Build();
+
+        app.Run();
+
+        var scheme = tls ? "https" : "http";
+        var consumer = Assert.IsType<KubernetesResource>(builder.Resources.Single(resource => resource.Name == "consumer").GetDeploymentTargetAnnotation()!.DeploymentTarget);
+        Assert.Equal($"{scheme}://public.example,{scheme}://alias.example", await consumer.EnvironmentVariables["ORIGINS"].ParameterSource!.GetValueAsync(default));
+        Assert.Equal($"{scheme}://public.example", await consumer.EnvironmentVariables["ORIGIN"].ParameterSource!.GetValueAsync(default));
+        await Verify(await File.ReadAllTextAsync(Path.Combine(workspace.Path, "values.yaml")), "yaml").UseParameters(gateway, tls);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task BrowserOriginDefaultsUseOnlyMatchingHostScopedRoutes(bool gateway, bool tls)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        var environment = builder.AddKubernetesEnvironment("env").WithDashboard(false);
+        var web = builder.AddContainer("web", "image").WithHttpEndpoint(targetPort: 8080).WithExternalHttpEndpoints();
+        var other = builder.AddContainer("other", "image").WithHttpEndpoint(targetPort: 8080).WithExternalHttpEndpoints();
+        if (gateway)
+        {
+            var route = environment.AddGateway("public").WithGatewayClass("test").WithHostname("inherited.example")
+                .WithRoute("web.example", "/", web.GetEndpoint("http"))
+                .WithRoute("other.example", "/", other.GetEndpoint("http"))
+                .WithRoute("web.example", "/duplicate", web.GetEndpoint("http"));
+            if (tls)
+            {
+                route.WithTls("certificate");
+            }
+        }
+        else
+        {
+            var route = environment.AddIngress("public").WithHostname("inherited.example")
+                .WithPath("web.example", "/", web.GetEndpoint("http"))
+                .WithPath("other.example", "/", other.GetEndpoint("http"))
+                .WithPath("web.example", "/duplicate", web.GetEndpoint("http"));
+            if (tls)
+            {
+                route.WithTls("certificate");
+            }
+        }
+        var consumer = builder.AddContainer("consumer", "image").WithEnvironment("ORIGINS", web.GetEndpoint("http").BrowserOrigins);
+        using var app = builder.Build();
+
+        app.Run();
+
+        var target = Assert.IsType<KubernetesResource>(consumer.Resource.GetDeploymentTargetAnnotation()!.DeploymentTarget);
+        var parameter = target.EnvironmentVariables["ORIGINS"].ParameterSource!;
+        Assert.Equal("http://web.example", await parameter.GetValueAsync(default));
+    }
+
+    [Fact]
+    public async Task BrowserOriginDefaultsAllowConfiguredOverride()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        var environment = builder.AddKubernetesEnvironment("env").WithDashboard(false);
+        var web = builder.AddContainer("web", "image").WithHttpEndpoint(targetPort: 8080).WithExternalHttpEndpoints();
+        environment.AddIngress("public").WithHostname("public.example").WithPath("/", web.GetEndpoint("http"));
+        builder.Configuration["Parameters:web-http-BrowserOrigins"] = "https://override.example";
+        builder.Configuration["Parameters:web-http-PrimaryBrowserOrigin"] = "https://primary.example";
+        builder.AddContainer("consumer", "image")
+            .WithEnvironment("ORIGIN", web.GetEndpoint("http").PrimaryBrowserOrigin)
+            .WithEnvironment("ORIGINS", web.GetEndpoint("http").BrowserOrigins);
+        using var app = builder.Build();
+
+        app.Run();
+
+        await Verify(await File.ReadAllTextAsync(Path.Combine(workspace.Path, "values.yaml")), "yaml");
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("*.example")]
+    [InlineData("example/path")]
+    [InlineData("user@example")]
+    [InlineData("example?query")]
+    [InlineData("example#fragment")]
+    [InlineData("example:8080")]
+    [InlineData("example:80")]
+    [InlineData("example:443")]
+    [InlineData("parameter")]
+    public void BrowserOriginsWithoutConcretePublicHostRequireInput(string? hostname)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        var environment = builder.AddKubernetesEnvironment("env").WithDashboard(false);
+        var web = builder.AddContainer("web", "image").WithHttpEndpoint(targetPort: 8080).WithExternalHttpEndpoints();
+        var ingress = environment.AddIngress("public").WithPath("/", web.GetEndpoint("http"));
+        if (hostname == "parameter")
+        {
+            ingress.WithHostname(builder.AddParameter("hostname", "public.example"));
+        }
+        else if (hostname is not null)
+        {
+            ingress.WithHostname(hostname);
+        }
+        builder.AddContainer("consumer", "image")
+            .WithEnvironment("ORIGIN", web.GetEndpoint("http").PrimaryBrowserOrigin)
+            .WithEnvironment("ORIGINS", web.GetEndpoint("http").BrowserOrigins);
+        using var app = builder.Build();
+
+        app.Run();
+
+        var parameter = Assert.Single(environment.Resource.CapturedHelmValues, value => value.Parameter.Name == "web-http-BrowserOrigins").Parameter;
+        Assert.Null(parameter.Default);
+        Assert.True(parameter.Required);
+        var primaryParameter = Assert.Single(environment.Resource.CapturedHelmValues, value => value.Parameter.Name == "web-http-PrimaryBrowserOrigin").Parameter;
+        Assert.Null(primaryParameter.Default);
+        Assert.True(primaryParameter.Required);
+    }
+
+    [Fact]
+    public async Task BrowserUrlProjectionUsesPublisherExpression()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        builder.Services.AddSingleton<IDeploymentStateManager>(new InMemoryDeploymentStateManager());
+        var environment = builder.AddKubernetesEnvironment("env");
+        builder.Configuration["Parameters:frontend-http-BrowserOrigins"] = "https://public.example,https://alias.example";
+        var frontend = builder.AddContainer("frontend", "nginx:alpine").WithHttpEndpoint(port: 8080, targetPort: 8080).WithExternalHttpEndpoints();
+        var origin = frontend.GetEndpoint("http").BrowserOrigins;
+        builder.AddContainer("backend", "nginx:alpine")
+            .WithEnvironment("ORIGIN", origin)
+            .WithEnvironment("ORIGINS", frontend.GetEndpoint("http").BrowserOrigins)
+            .WithEnvironment("CONFIG", ReferenceExpression.Create($"origin={origin}"));
+        using var app = builder.Build();
+
+        app.Run();
+
+        Assert.Empty(environment.Resource.CapturedHelmValueProviders);
+        Assert.Single(environment.Resource.CapturedHelmValues.Select(value => value.Parameter).Distinct());
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        await HelmDeploymentEngine.ResolveAndWriteDeployValuesAsync(workspace.Path, environment.Resource, cts.Token);
+
+        await Verify(await File.ReadAllTextAsync(Path.Combine(workspace.Path, "templates/backend/config.yaml")), "yaml")
+            .AppendContentAsFile(await File.ReadAllTextAsync(Path.Combine(workspace.Path, "values.yaml")), "yaml")
+            .AppendContentAsFile(await File.ReadAllTextAsync(Path.Combine(workspace.Path, HelmDeploymentEngine.GetDeployValuesFileName("env"))), "yaml");
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PublishAsync_SupportsFileKeyRef(bool? optional)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        builder.AddKubernetesEnvironment("env");
+
+        builder.AddContainer("myapp", "nginx:alpine")
+            .PublishAsKubernetesService(resource =>
+            {
+                var pod = resource.Workload!.PodTemplate.Spec;
+                pod.Volumes.Add(new VolumeV1 { Name = "generated-env", EmptyDir = new() });
+                pod.InitContainers.Add(new ContainerV1
+                {
+                    Name = "prepare-env",
+                    Image = "docker.io/library/busybox:1.37@sha256:bdf57e528e45e4433820e045b29b4597825a1c9e38353532d90a01445013f82e",
+                    Command = { "sh", "-ec" },
+                    Args = { "printf \"SOURCE_KEY='generated-value'\\nOTHER_KEY='other-value'\\n\" > /out/app.env" },
+                    VolumeMounts = { new VolumeMountV1 { Name = "generated-env", MountPath = "/out" } }
+                });
+                pod.Containers[0].Env.Add(new EnvVarV1
+                {
+                    Name = "APP_VALUE",
+                    ValueFrom = new EnvVarSourceV1
+                    {
+                        FileKeyRef = new FileKeySelectorV1
+                        {
+                            VolumeName = "generated-env",
+                            Path = "app.env",
+                            Key = "SOURCE_KEY",
+                            Optional = optional
+                        }
+                    }
+                });
+            });
+
+        using var app = builder.Build();
+        app.Run();
+
+        await Verify(await File.ReadAllTextAsync(Path.Combine(workspace.Path, "templates/myapp/deployment.yaml")), "yaml")
+            .UseParameters(optional);
+    }
+
     [Fact]
     public async Task PublishAsync_GeneratesValidHelmChart()
     {
@@ -58,7 +483,8 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
             "templates/myapp/deployment.yaml",
             "templates/myapp/service.yaml",
             "templates/myapp/config.yaml",
-            "templates/myapp/secrets.yaml"
+            "templates/myapp/secrets.yaml",
+            "templates/env-dashboard/config.yaml"
         };
 
         SettingsTask settingsTask = default!;
@@ -234,6 +660,43 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void PublishAsync_AdditionalResourceWithSameNameAsGeneratedResourceDoesNotOverwriteTemplate()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        builder.AddKubernetesEnvironment("env");
+
+        // Additional resources commonly share the name of the generated object they target
+        // (e.g. a GKE ServiceExport must have the same name as its Service).
+        builder.AddContainer("myapp", "mcr.microsoft.com/dotnet/aspnet:8.0")
+            .WithHttpEndpoint(targetPort: 8080)
+            .PublishAsKubernetesService(serviceResource =>
+            {
+                serviceResource.AddManifest("net.gke.io/v1", "ServiceExport", serviceResource.Service!.Metadata.Name);
+            });
+
+        var app = builder.Build();
+
+        app.Run();
+
+        var templatesFolder = Path.Combine(workspace.Path, "templates", "myapp");
+        var templates = Directory.GetFiles(templatesFolder, "*.yaml")
+            .ToDictionary(static path => Path.GetFileName(path), File.ReadAllText);
+
+        var serviceTemplate = Assert.Contains("service.yaml", templates);
+        Assert.Contains("kind: \"Service\"", serviceTemplate);
+
+        var serviceExportTemplate = Assert.Single(templates, t => t.Value.Contains("kind: ServiceExport", StringComparison.Ordinal));
+        Assert.NotEqual("service.yaml", serviceExportTemplate.Key);
+        var yaml = new YamlStream();
+        yaml.Load(new StringReader(serviceExportTemplate.Value));
+        var root = Assert.IsType<YamlMappingNode>(yaml.Documents[0].RootNode);
+        var metadata = Assert.IsType<YamlMappingNode>(root.Children[new YamlScalarNode("metadata")]);
+        Assert.Equal("myapp-service", Assert.IsType<YamlScalarNode>(metadata.Children[new YamlScalarNode("name")]).Value);
+    }
+
+    [Fact]
     public void KubernetesManifestResourceWithFieldThrowsWhenIntermediatePathIsScalar()
     {
         var manifest = new KubernetesManifestResource("example.com/v1", "Example", "example");
@@ -243,6 +706,31 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
 
         Assert.Contains("Cannot set nested manifest field 'spec.replicas' because 'spec' already has a scalar value.", exception.Message);
     }
+
+    [Theory]
+    [MemberData(nameof(InvalidManifestFieldValues))]
+    public void KubernetesManifestResourceWithFieldRejectsInvalidValues(object value)
+    {
+        var manifest = new KubernetesManifestResource("example.com/v1", "Example", "example");
+        manifest.WithField("spec.replicas", 3);
+
+        Assert.Throws<ArgumentException>(() => manifest.WithField("spec", value));
+
+        var spec = Assert.IsType<Dictionary<string, object?>>(Assert.Single(manifest.Fields).Value);
+        Assert.Equal(3, Assert.Single(spec).Value);
+    }
+
+    public static TheoryData<object> InvalidManifestFieldValues => new()
+    {
+        new object(),
+        double.NaN,
+        double.PositiveInfinity,
+        new Dictionary<int, object> { [1] = "invalid-key" },
+        new Dictionary<string, object> { ["$handle"] = "resource", ["$type"] = "Resource" },
+        new Dictionary<string, object> { ["nested"] = new object[] { new Dictionary<string, object> { ["$handle"] = "resource", ["$type"] = "Resource" } } },
+        new Dictionary<string, object> { ["nested"] = new object[] { new object() } },
+        new object[] { new Dictionary<string, object> { ["nested"] = double.NegativeInfinity } }
+    };
 
     [Fact]
     public async Task PublishAsync_HandlesSpecialResourceName()
@@ -257,12 +745,17 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
         var param1 = builder.AddParameter("param1", secret: true);
         var cs = builder.AddConnectionString("api-cs", ReferenceExpression.Create($"Url={param0}, Secret={param1}"));
         var csPlain = builder.AddConnectionString("api-cs2", ReferenceExpression.Create($"host.local:80"));
+        var manualAlias = builder.AddConnectionString("manual-db", ReferenceExpression.Create($"unused"));
 
         var param3 = builder.AddResource(ParameterResourceBuilderExtensions.CreateDefaultPasswordParameter(builder, "param3"));
         builder.AddProject<TestProject>("SpeciaL-ApP", launchProfileName: null)
             .WithEnvironment("param3", param3)
             .WithReference(cs)
-            .WithReference(csPlain);
+            .WithReference(csPlain)
+            .WithEnvironment("ConnectionStrings__api-cs2", "override")
+            .WithReferenceEnvironment(ReferenceEnvironmentInjectionFlags.ConnectionProperties)
+            .WithReference(manualAlias)
+            .WithEnvironment("ConnectionStrings__manual-db", "manual");
 
         var app = builder.Build();
 
@@ -309,7 +802,6 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
         builder.AddKubernetesEnvironment("env");
 
         // Add a container to the application
-#pragma warning disable ASPIREPROBES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
         var api = builder
             .AddContainer("myapp", "mcr.microsoft.com/dotnet/aspnet:8.0")
             .WithEnvironment("ASPNETCORE_ENVIRONMENT", "Development")
@@ -320,9 +812,8 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
         builder
             .AddProject<TestProject>("project1", launchProfileName: null)
             .WithHttpsEndpoint()
-            .WithHttpProbe(ProbeType.Readiness,"/ready", initialDelaySeconds: 60)
+            .WithHttpProbe(ProbeType.Readiness, "/ready", initialDelaySeconds: 60)
             .WithHttpProbe(ProbeType.Liveness, "/health");
-#pragma warning restore ASPIREPROBES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
         var app = builder.Build();
 
@@ -440,6 +931,90 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
                     Name = "projected-secrets",
                     MountPath = "/mnt/secrets",
                     ReadOnly = true
+                });
+            });
+
+        var app = builder.Build();
+
+        app.Run();
+
+        var deploymentPath = Path.Combine(workspace.Path, "templates/myapp/deployment.yaml");
+        var deployment = await File.ReadAllTextAsync(deploymentPath);
+
+        await Verify(deployment, "yaml");
+    }
+
+    [Fact]
+    public async Task PublishAsync_SupportsCsiVolumes()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        builder.AddKubernetesEnvironment("env");
+
+        builder.AddContainer("myapp", "mcr.microsoft.com/dotnet/aspnet:8.0")
+            .PublishAsKubernetesService(serviceResource =>
+            {
+                var podTemplate = serviceResource.Workload!.PodTemplate;
+                podTemplate.Spec.Volumes.Add(new()
+                {
+                    Name = "secrets-store",
+                    Csi = new()
+                    {
+                        Driver = "secrets-store.csi.k8s.io",
+                        ReadOnly = true,
+                        FsType = "ext4",
+                        VolumeAttributes =
+                        {
+                            ["secretProviderClass"] = "my-spc"
+                        },
+                        NodePublishSecretRef = new()
+                        {
+                            Name = "secrets-store-creds"
+                        }
+                    }
+                });
+
+                podTemplate.Spec.Containers[0].VolumeMounts.Add(new()
+                {
+                    Name = "secrets-store",
+                    MountPath = "/mnt/secrets-store",
+                    ReadOnly = true
+                });
+            });
+
+        var app = builder.Build();
+
+        app.Run();
+
+        var deploymentPath = Path.Combine(workspace.Path, "templates/myapp/deployment.yaml");
+        var deployment = await File.ReadAllTextAsync(deploymentPath);
+
+        await Verify(deployment, "yaml");
+    }
+
+    [Fact]
+    public async Task PublishAsync_OmitsCsiVolumeSourceWhenUnset()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        builder.AddKubernetesEnvironment("env");
+
+        builder.AddContainer("myapp", "mcr.microsoft.com/dotnet/aspnet:8.0")
+            .PublishAsKubernetesService(serviceResource =>
+            {
+                var podTemplate = serviceResource.Workload!.PodTemplate;
+                podTemplate.Spec.Volumes.Add(new()
+                {
+                    Name = "scratch",
+                    EmptyDir = new()
+                });
+
+                podTemplate.Spec.Containers[0].VolumeMounts.Add(new()
+                {
+                    Name = "scratch",
+                    MountPath = "/mnt/scratch"
                 });
             });
 
@@ -652,6 +1227,204 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
         await settingsTask;
     }
 
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task PublishUsesConfiguredContainerRegistry(bool explicitRegistry, bool customizeImage)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        var registry = builder.AddContainerRegistry("registry", "default.example.com", "default");
+        var environment = builder.AddKubernetesEnvironment("env").WithDashboard(false);
+        var project = builder.AddDotnetProject("api", "api.csproj", options => options.ExcludeLaunchProfile = true)
+            .WithHttpEndpoint();
+
+        if (explicitRegistry)
+        {
+            var assignedRegistry = builder.AddContainerRegistry("assigned-registry", "registry.example.com", "apps");
+            environment.WithContainerRegistry(registry);
+            project.WithContainerRegistry(registry).WithContainerRegistry(assignedRegistry);
+        }
+
+        var callbackCount = 0;
+        if (customizeImage)
+        {
+            project.WithImagePushOptions(context =>
+            {
+                callbackCount++;
+                context.Options.RemoteImageName = "services/backend";
+                context.Options.RemoteImageTag = "v2";
+            });
+        }
+
+        using var app = builder.Build();
+
+        await app.RunAsync();
+
+        Assert.Equal(customizeImage ? 1 : 0, callbackCount);
+        Assert.Same(project.Resource, Assert.Single(environment.Resource.CapturedHelmImageReferences).Resource);
+
+        await Verify(await File.ReadAllTextAsync(Path.Combine(workspace.Path, "values.yaml")), "yaml")
+            .AppendContentAsFile(await File.ReadAllTextAsync(Path.Combine(workspace.Path, "templates", "api", "deployment.yaml")), "yaml")
+            .UseParameters(explicitRegistry, customizeImage);
+    }
+
+    [Fact]
+    public async Task PublishUsesContainerRegistryParameterDefaults()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        builder.AddKubernetesEnvironment("env").WithDashboard(false);
+        var endpoint = builder.AddParameter("registry-endpoint", "registry.example.com", publishValueAsDefault: true);
+        var repository = builder.AddParameter("registry-repository", "apps", publishValueAsDefault: true);
+        var registry = builder.AddContainerRegistry("registry", endpoint, repository);
+        builder.AddDotnetProject("api", "api.csproj", options => options.ExcludeLaunchProfile = true)
+            .WithContainerRegistry(registry);
+        using var app = builder.Build();
+
+        await app.RunAsync();
+
+        await Verify(await File.ReadAllTextAsync(Path.Combine(workspace.Path, "values.yaml")), "yaml");
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task PublishDefersContainerRegistryParameters(bool repositoryParameter, bool secret)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        var environment = builder.AddKubernetesEnvironment("env").WithDashboard(false);
+        var endpoint = builder.AddParameter("registry-endpoint", "registry.example.com", publishValueAsDefault: true);
+        var repository = builder.AddParameter("registry-repository", "apps", publishValueAsDefault: true);
+        var deferredValue = repositoryParameter ? "apps" : "registry.example.com";
+        var deferred = builder.AddParameter("deferred", deferredValue, secret: secret);
+        var registry = builder.AddContainerRegistry("registry",
+            repositoryParameter ? endpoint : deferred,
+            repositoryParameter ? deferred : repository);
+        var project = builder.AddDotnetProject("api", "api.csproj", options => options.ExcludeLaunchProfile = true)
+            .WithContainerRegistry(registry);
+        using var app = builder.Build();
+
+        await app.RunAsync();
+
+        Assert.Same(project.Resource, Assert.Single(environment.Resource.CapturedHelmImageReferences).Resource);
+        var publishedValues = await File.ReadAllTextAsync(Path.Combine(workspace.Path, "values.yaml"));
+        await HelmDeploymentEngine.ResolveAndWriteDeployValuesAsync(workspace.Path, environment.Resource, CancellationToken.None);
+
+        await Verify(publishedValues, "yaml")
+            .AppendContentAsFile(await File.ReadAllTextAsync(Path.Combine(workspace.Path, HelmDeploymentEngine.GetDeployValuesFileName("env"))), "yaml")
+            .UseParameters(repositoryParameter, secret);
+    }
+
+    [Fact]
+    public async Task PublishDefersSecretContainerRegistryDefaults()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        builder.AddKubernetesEnvironment("env").WithDashboard(false);
+        var endpoint = builder.AddResource(ParameterResourceBuilderExtensions.CreateDefaultPasswordParameter(builder, "registry-endpoint"));
+        var registry = builder.AddContainerRegistry("registry", endpoint);
+        builder.AddDotnetProject("api", "api.csproj", options => options.ExcludeLaunchProfile = true)
+            .WithContainerRegistry(registry);
+        using var app = builder.Build();
+
+        await app.RunAsync();
+
+        await Verify(await File.ReadAllTextAsync(Path.Combine(workspace.Path, "values.yaml")), "yaml");
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PublishDefersMissingContainerRegistryParameters(bool repositoryParameter)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        builder.AddKubernetesEnvironment("env").WithDashboard(false);
+        var endpoint = builder.AddParameter("registry-endpoint", "registry.example.com", publishValueAsDefault: true);
+        var missing = builder.AddParameter("missing");
+        var registry = builder.AddContainerRegistry("registry",
+            repositoryParameter ? endpoint : missing,
+            repositoryParameter ? missing : null);
+        builder.AddDotnetProject("api", "api.csproj", options => options.ExcludeLaunchProfile = true)
+            .WithContainerRegistry(registry)
+            .WithImagePushOptions(_ => throw new InvalidOperationException("Deferred image must not be resolved during publish."));
+        using var app = builder.Build();
+
+        await app.RunAsync();
+
+        await Verify(await File.ReadAllTextAsync(Path.Combine(workspace.Path, "values.yaml")), "yaml")
+            .UseParameters(repositoryParameter);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PublishDefersContainerRegistryOutputs(bool repositoryOutput)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        var environment = builder.AddKubernetesEnvironment("env").WithDashboard(false);
+        var output = ReferenceExpression.Create($"{new TestValueProvider("provisioned-value")}");
+        var registry = builder.AddResource(new ContainerRegistryResource("registry",
+            repositoryOutput ? ReferenceExpression.Create($"registry.example.com") : output,
+            repositoryOutput ? output : null));
+        var project = builder.AddDotnetProject("api", "api.csproj", options => options.ExcludeLaunchProfile = true)
+            .WithContainerRegistry(registry)
+            .WithImagePushOptions(_ => throw new InvalidOperationException("Deferred image must not be resolved during publish."));
+        using var app = builder.Build();
+
+        await app.RunAsync();
+
+        Assert.Same(project.Resource, Assert.Single(environment.Resource.CapturedHelmImageReferences).Resource);
+        await Verify(await File.ReadAllTextAsync(Path.Combine(workspace.Path, "values.yaml")), "yaml")
+            .UseParameters(repositoryOutput);
+    }
+
+    [Fact]
+    public async Task PublishUsesContainerRegistryForDockerfileWithoutChangingPrebuiltImages()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        builder.AddKubernetesEnvironment("env").WithDashboard(false);
+        var registry = builder.AddContainerRegistry("registry", "registry.example.com");
+        builder.AddExecutable("worker", "node", ".")
+            .PublishAsDockerFile()
+            .WithContainerRegistry(registry);
+        builder.AddContainer("cache", "redis", "7")
+            .WithContainerRegistry(registry);
+        using var app = builder.Build();
+
+        await app.RunAsync();
+
+        await Verify(await File.ReadAllTextAsync(Path.Combine(workspace.Path, "values.yaml")), "yaml")
+            .AppendContentAsFile(await File.ReadAllTextAsync(Path.Combine(workspace.Path, "templates", "worker", "deployment.yaml")), "yaml")
+            .AppendContentAsFile(await File.ReadAllTextAsync(Path.Combine(workspace.Path, "templates", "cache", "deployment.yaml")), "yaml");
+    }
+
+    [Fact]
+    public async Task KubernetesWithDotnetProjectUsesImageParameterAndProjectEndpoint()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        builder.AddKubernetesEnvironment("env");
+        builder.AddDotnetProject("api", "api.csproj", options => options.ExcludeLaunchProfile = true)
+            .WithHttpEndpoint();
+        using var app = builder.Build();
+
+        app.Run();
+
+        await Verify(File.ReadAllText(Path.Combine(workspace.Path, "Chart.yaml")), "yaml")
+            .AppendContentAsFile(File.ReadAllText(Path.Combine(workspace.Path, "values.yaml")), "yaml")
+            .AppendContentAsFile(File.ReadAllText(Path.Combine(workspace.Path, "templates", "api", "deployment.yaml")), "yaml")
+            .AppendContentAsFile(File.ReadAllText(Path.Combine(workspace.Path, "templates", "api", "service.yaml")), "yaml")
+            .AppendContentAsFile(File.ReadAllText(Path.Combine(workspace.Path, "templates", "api", "config.yaml")), "yaml");
+    }
+
     [Fact]
     public async Task KubernetesMapsPortsForBaitAndSwitchResources()
     {
@@ -693,6 +1466,50 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
                 settingsTask = settingsTask.AppendContentAsFile(File.ReadAllText(filePath), fileExtension);
             }
         }
+        await settingsTask;
+    }
+
+    [Fact]
+    public async Task PublishAsync_ProjectAndExecutableVolumesUseDefaultStorageAndEnvironmentPaths()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        builder.AddKubernetesEnvironment("env");
+
+        builder.AddProject<TestProject>("project", launchProfileName: null)
+            .WithVolume("project-data", "/srv/project", env: "DATA_PATH");
+        builder.AddExecutable("executable", "node", ".")
+            .PublishAsDockerFile()
+            .WithVolume("executable-data", "/srv/executable", env: "DATA_PATH");
+
+        var app = builder.Build();
+        app.Run();
+
+        var expectedFiles = new[]
+        {
+            "templates/project/config.yaml",
+            "templates/project/deployment.yaml",
+            "templates/executable/config.yaml",
+            "templates/executable/deployment.yaml",
+            "values.yaml",
+        };
+
+        SettingsTask settingsTask = default!;
+
+        foreach (var expectedFile in expectedFiles)
+        {
+            var filePath = Path.Combine(workspace.Path, expectedFile);
+            Assert.True(File.Exists(filePath), $"Expected publisher to emit {expectedFile}.");
+
+            var content = await File.ReadAllTextAsync(filePath);
+            AssertNoBuggyEmptyMappings(content);
+
+            settingsTask = settingsTask is null
+                ? Verify(content, "yaml")
+                : settingsTask.AppendContentAsFile(content, "yaml");
+        }
+
         await settingsTask;
     }
 
@@ -822,11 +1639,9 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
         builder.AddKubernetesEnvironment("k8s");
 
-#pragma warning disable ASPIREPROBES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
         builder.AddContainer("api", "questdb/questdb:9.4.1")
             .WithHttpEndpoint(port: 9002, targetPort: 9000, name: "http")
             .WithHttpProbe(ProbeType.Readiness, "/ready");
-#pragma warning restore ASPIREPROBES001
 
         var app = builder.Build();
         app.Run();
@@ -856,6 +1671,254 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task PublishAsync_EmbeddedParametersInEnvironmentExpressionsPopulateValues()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        builder.AddKubernetesEnvironment("env");
+
+        // Regression for https://github.com/microsoft/aspire/issues/11140: the base chart keeps
+        // deployment parameters empty, but every nested Helm reference must still be declared.
+        var host = builder.AddParameter("host", "localhost");
+        var token = builder.AddParameter("token", "test-token", secret: true);
+
+        builder.AddContainer("myapp", "nginx")
+            .WithEnvironment("SOME_URL", $"http://{host}/test")
+            .WithEnvironment("SECRET_URL", $"http://{host}/test?token={token}");
+
+        var app = builder.Build();
+        app.Run();
+
+        var expectedFiles = new[]
+        {
+            "values.yaml",
+            "templates/myapp/config.yaml",
+            "templates/myapp/secrets.yaml",
+        };
+
+        SettingsTask settingsTask = default!;
+
+        foreach (var expectedFile in expectedFiles)
+        {
+            var filePath = Path.Combine(workspace.Path, expectedFile);
+            var fileExtension = Path.GetExtension(filePath)[1..];
+
+            if (settingsTask is null)
+            {
+                settingsTask = Verify(File.ReadAllText(filePath), fileExtension);
+            }
+            else
+            {
+                settingsTask = settingsTask.AppendContentAsFile(File.ReadAllText(filePath), fileExtension);
+            }
+        }
+
+        await settingsTask;
+    }
+
+    [Fact]
+    public async Task PublishAsync_ConflictingEmbeddedParameterValuesPathReportsError()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        var reporter = new TestPipelineActivityReporter(outputHelper);
+        builder.Services.AddSingleton<IPipelineActivityReporter>(reporter);
+
+        builder.AddKubernetesEnvironment("env");
+
+        var host = builder.AddParameter("host", "parameter-host", publishValueAsDefault: true);
+
+        builder.AddContainer("myapp", "nginx")
+            .WithEnvironment("host", "environment-host")
+            .WithEnvironment("URL", $"http://{host}/test");
+
+        using var app = builder.Build();
+        await app.RunAsync();
+
+        Assert.Equal(CompletionState.CompletedWithError, reporter.ResultCompletionState);
+        Assert.Contains(
+            "Resource 'myapp' maps both environment value 'host' and embedded parameter 'host' " +
+            "to Helm values path 'config.myapp.host'. Rename one of them so each value has a unique Helm path.",
+            Assert.IsType<string>(reporter.CompletionMessage));
+    }
+
+    [Fact]
+    public async Task PublishAsync_EmbeddedParametersWithSameNormalizedValuesPathReportError()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        var reporter = new TestPipelineActivityReporter(outputHelper);
+        builder.Services.AddSingleton<IPipelineActivityReporter>(reporter);
+
+        builder.AddKubernetesEnvironment("env");
+
+        var dashedHost = builder.AddParameter("api-host", "dashed-host", publishValueAsDefault: true);
+        var underscoredHost = new ParameterResource("api_host", _ => "underscored-host");
+
+        builder.AddContainer("myapp", "nginx")
+            .WithEnvironment("URL", $"http://{dashedHost}/{underscoredHost}");
+
+        using var app = builder.Build();
+        await app.RunAsync();
+
+        Assert.Equal(CompletionState.CompletedWithError, reporter.ResultCompletionState);
+        Assert.Contains(
+            "Resource 'myapp' maps both embedded parameter 'api-host' and embedded parameter 'api_host' " +
+            "to Helm values path 'config.myapp.api_host'. Rename one of them so each value has a unique Helm path.",
+            Assert.IsType<string>(reporter.CompletionMessage));
+    }
+
+    [Fact]
+    public async Task PublishAsync_DistinctEmbeddedParameterSourcesWithSameNameReportError()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        builder.AddKubernetesEnvironment("env");
+
+        var firstHost = new ParameterResource("host", _ => "first-host");
+        var secondHost = new ParameterResource("host", _ => "second-host");
+
+        builder.AddContainer("myapp", "nginx")
+            .WithEnvironment("URL", $"http://{firstHost}/{secondHost}");
+
+        using var app = builder.Build();
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => app.RunAsync());
+
+        Assert.Contains(
+            "Resource 'myapp' maps multiple distinct embedded parameter sources named 'host' " +
+            "to Helm values path 'config.myapp.host'. Reuse the same ParameterResource instance " +
+            "or give each source a unique name.",
+            exception.ToString());
+    }
+
+    [Fact]
+    public async Task PublishAsync_DistinctConditionalParameterSourcesWithSameNameReportError()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        builder.AddKubernetesEnvironment("env");
+
+        var firstCondition = new ParameterResource("enable-tls", _ => bool.TrueString);
+        var secondCondition = new ParameterResource("enable-tls", _ => bool.FalseString);
+
+        builder.AddContainer("myapp", "nginx")
+            .WithEnvironment(context =>
+            {
+                context.EnvironmentVariables["FIRST"] = ReferenceExpression.CreateConditional(
+                    firstCondition,
+                    bool.TrueString,
+                    ReferenceExpression.Create($"enabled"),
+                    ReferenceExpression.Create($"disabled"));
+                context.EnvironmentVariables["SECOND"] = ReferenceExpression.CreateConditional(
+                    secondCondition,
+                    bool.TrueString,
+                    ReferenceExpression.Create($"enabled"),
+                    ReferenceExpression.Create($"disabled"));
+            });
+
+        using var app = builder.Build();
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => app.RunAsync());
+
+        Assert.Contains(
+            "Resource 'myapp' maps multiple distinct condition parameter sources named 'enable-tls' " +
+            "to Helm values path 'parameters.myapp.enable_tls'. Reuse the same ParameterResource instance " +
+            "or give each source a unique name.",
+            exception.ToString());
+    }
+
+    [Fact]
+    public async Task PublishAsync_CompositeExpressionPreservesExpressionShape()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        builder.AddKubernetesEnvironment("env");
+
+        var first = builder.AddParameter("first", "alpha", publishValueAsDefault: true);
+        var second = builder.AddParameter("second", "beta", publishValueAsDefault: true);
+
+        builder.AddContainer("myapp", "nginx")
+            .WithEnvironment("COMPOSITE", $"prefix-{{literal}}-{second}-{first}-{second}-suffix");
+
+        var app = builder.Build();
+        app.Run();
+
+        var expectedFiles = new[]
+        {
+            "values.yaml",
+            "templates/myapp/config.yaml",
+        };
+
+        SettingsTask settingsTask = default!;
+
+        foreach (var expectedFile in expectedFiles)
+        {
+            var filePath = Path.Combine(workspace.Path, expectedFile);
+            var fileExtension = Path.GetExtension(filePath)[1..];
+
+            if (settingsTask is null)
+            {
+                settingsTask = Verify(File.ReadAllText(filePath), fileExtension);
+            }
+            else
+            {
+                settingsTask = settingsTask.AppendContentAsFile(File.ReadAllText(filePath), fileExtension);
+            }
+        }
+
+        await settingsTask;
+    }
+
+    [Fact]
+    public async Task PublishAsync_SharedEmbeddedParameterIsScopedPerResource()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        builder.AddKubernetesEnvironment("env");
+
+        var sharedHost = builder.AddParameter("shared-host", "shared.internal", publishValueAsDefault: true);
+
+        builder.AddContainer("first", "nginx")
+            .WithEnvironment("URL", $"http://{sharedHost}/first");
+
+        builder.AddContainer("second", "nginx")
+            .WithEnvironment("URL", $"http://{sharedHost}/second");
+
+        var app = builder.Build();
+        app.Run();
+
+        var expectedFiles = new[]
+        {
+            "values.yaml",
+            "templates/first/config.yaml",
+            "templates/second/config.yaml",
+        };
+
+        SettingsTask settingsTask = default!;
+
+        foreach (var expectedFile in expectedFiles)
+        {
+            var filePath = Path.Combine(workspace.Path, expectedFile);
+            var fileExtension = Path.GetExtension(filePath)[1..];
+
+            if (settingsTask is null)
+            {
+                settingsTask = Verify(File.ReadAllText(filePath), fileExtension);
+            }
+            else
+            {
+                settingsTask = settingsTask.AppendContentAsFile(File.ReadAllText(filePath), fileExtension);
+            }
+        }
+
+        await settingsTask;
+    }
+
+    [Fact]
     public async Task PublishAsync_HandlesConditionalReferenceExpression()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -867,7 +1930,7 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
             .WithEnvironment(context =>
             {
                 var conditional = ReferenceExpression.CreateConditional(
-                    new TestConditionProvider(bool.TrueString),
+                    new TestValueProvider(bool.TrueString),
                     bool.TrueString,
                     ReferenceExpression.Create($",ssl=true"),
                     ReferenceExpression.Empty);
@@ -875,7 +1938,7 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
                 context.EnvironmentVariables["TLS_SUFFIX"] = conditional;
 
                 var conditionalFalse = ReferenceExpression.CreateConditional(
-                    new TestConditionProvider(bool.FalseString),
+                    new TestValueProvider(bool.FalseString),
                     bool.TrueString,
                     ReferenceExpression.Create($",ssl=true"),
                     ReferenceExpression.Create($",ssl=false"));
@@ -917,12 +1980,63 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task PublishAsync_HandlesConditionalReferenceExpressionWithParameterCondition()
+    public async Task PublishAsync_ConditionalBranchesCaptureEmbeddedParameters()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         builder.AddKubernetesEnvironment("env");
+
+        var mode = builder.AddParameter("mode", "enabled", publishValueAsDefault: true);
+        var user = builder.AddParameter("user", "alice", publishValueAsDefault: true);
+        var password = builder.AddParameter("password", "test-password", secret: true);
+
+        builder.AddContainer("myapp", "nginx")
+            .WithEnvironment(context =>
+            {
+                context.EnvironmentVariables["OPTIONS"] = ReferenceExpression.CreateConditional(
+                    mode.Resource,
+                    "enabled",
+                    ReferenceExpression.Create($"user={user};password={password}"),
+                    ReferenceExpression.Create($"user={user};disabled"));
+            });
+
+        var app = builder.Build();
+        app.Run();
+
+        var expectedFiles = new[]
+        {
+            "values.yaml",
+            "templates/myapp/secrets.yaml",
+        };
+
+        SettingsTask settingsTask = default!;
+
+        foreach (var expectedFile in expectedFiles)
+        {
+            var filePath = Path.Combine(workspace.Path, expectedFile);
+            var fileExtension = Path.GetExtension(filePath)[1..];
+
+            if (settingsTask is null)
+            {
+                settingsTask = Verify(File.ReadAllText(filePath), fileExtension);
+            }
+            else
+            {
+                settingsTask = settingsTask.AppendContentAsFile(File.ReadAllText(filePath), fileExtension);
+            }
+        }
+
+        await settingsTask;
+    }
+
+    [Fact]
+    public async Task PublishAsync_HandlesConditionalReferenceExpressionWithParameterCondition()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        var environment = builder.AddKubernetesEnvironment("env");
 
         // Use a real ParameterResource as the condition with a known default value.
         var enableTls = builder.AddParameter("enable-tls", "True", publishValueAsDefault: true);
@@ -941,6 +2055,12 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
 
         var app = builder.Build();
         app.Run();
+
+        Assert.Contains(environment.Resource.CapturedHelmValues, captured =>
+            captured.Section == "parameters" &&
+            captured.ResourceKey == "myapp" &&
+            captured.ValueKey == "enable_tls" &&
+            captured.Parameter == enableTls.Resource);
 
         var expectedFiles = new[]
         {
@@ -970,6 +2090,32 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
         }
 
         await settingsTask;
+    }
+
+    [Fact]
+    public async Task PublishAsync_ResolvesEndpointTlsEnabledProperty()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        builder.AddKubernetesEnvironment("env");
+
+        var cache = builder.AddContainer("cache", "redis")
+            .WithEndpoint(targetPort: 6379, name: "tcp", scheme: "tcp")
+            .WithEndpoint(targetPort: 6380, name: "tls", scheme: "tcp")
+            .WithEndpoint("tls", endpoint => endpoint.TlsEnabled = true);
+
+        builder.AddContainer("myapp", "mcr.microsoft.com/dotnet/aspnet:8.0")
+            .WithEnvironment("CACHE_TLS", cache.GetEndpoint("tls").Property(EndpointProperty.TlsEnabled))
+            .WithEnvironment("CACHE_PLAIN_TLS", cache.GetEndpoint("tcp").Property(EndpointProperty.TlsEnabled));
+
+        var app = builder.Build();
+        app.Run();
+
+        var valuesContent = await File.ReadAllTextAsync(Path.Combine(workspace.Path, "values.yaml"));
+
+        Assert.Contains("CACHE_TLS: \"True\"", valuesContent);
+        Assert.Contains("CACHE_PLAIN_TLS: \"False\"", valuesContent);
     }
 
     [Fact]
@@ -1290,6 +2436,179 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task PublishAsync_WithFirstClassPersistentVolume_WithConfigurationAppliesToGeneratedClaim()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        var k8s = builder.AddKubernetesEnvironment("env");
+        var data = k8s.AddPersistentVolume("data")
+            .WithPersistentVolumeName("existing-volume")
+            .WithConfiguration(claim =>
+            {
+                claim.Metadata.Labels["example.com/retention"] = "retain";
+                claim.Spec.VolumeMode = "Filesystem";
+            });
+
+        builder.AddContainer("service", "nginx")
+            .WithPersistentVolume(data, "/var/lib/data");
+
+        var app = builder.Build();
+        app.Run();
+
+        Assert.NotNull(data.Resource.GeneratedClaim);
+        var claim = data.Resource.GeneratedClaim!;
+        Assert.Equal("retain", claim.Metadata.Labels["example.com/retention"]);
+        Assert.Equal("Filesystem", claim.Spec.VolumeMode);
+
+        var claimPath = Path.Combine(workspace.Path, "templates", "data", "data.yaml");
+        Assert.True(File.Exists(claimPath));
+        var content = await File.ReadAllTextAsync(claimPath);
+        await Verify(content, "yaml");
+    }
+
+    [Fact]
+    public async Task PublishAsync_WithFirstClassPersistentVolume_StorageClassConfigurationPreservesOmissionAndEmptyValue()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        var k8s = builder.AddKubernetesEnvironment("env")
+            .WithProperties(environment => environment.DefaultStorageClassName = "default-class");
+        var omitted = k8s.AddPersistentVolume("omitted")
+            .WithPersistentVolumeName("existing-volume")
+            .WithoutStorageClass();
+        var empty = k8s.AddPersistentVolume("empty")
+            .WithStorageClass(string.Empty);
+
+        builder.AddContainer("service", "nginx")
+            .WithPersistentVolume(omitted, "/var/lib/data")
+            .WithPersistentVolume(empty, "/var/lib/empty");
+
+        var app = builder.Build();
+        app.Run();
+
+        var omittedClaimPath = Path.Combine(workspace.Path, "templates", "omitted", "omitted.yaml");
+        var emptyClaimPath = Path.Combine(workspace.Path, "templates", "empty", "empty.yaml");
+        Assert.True(File.Exists(omittedClaimPath));
+        Assert.True(File.Exists(emptyClaimPath));
+
+        var omittedClaim = await File.ReadAllTextAsync(omittedClaimPath);
+        var emptyClaim = await File.ReadAllTextAsync(emptyClaimPath);
+
+        await Verify(omittedClaim, "yaml")
+            .AppendContentAsFile(emptyClaim, "yaml");
+    }
+
+    [Fact]
+    public async Task PublishAsync_PersistentVolumeStorageClassLastCallWins()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        var k8s = builder.AddKubernetesEnvironment("env")
+            .WithProperties(environment => environment.DefaultStorageClassName = "default-class");
+        var parameter = builder.AddParameter("storageclass");
+        var volumes = new[]
+        {
+            k8s.AddPersistentVolume("explicit").WithoutStorageClass().WithStorageClass("fast"),
+            k8s.AddPersistentVolume("classless").WithoutStorageClass().WithStorageClass(""),
+            k8s.AddPersistentVolume("parameter").WithoutStorageClass().WithStorageClass(parameter),
+            k8s.AddPersistentVolume("omitted").WithStorageClass("fast").WithoutStorageClass(),
+            k8s.AddPersistentVolume("omitted-parameter").WithStorageClass(parameter).WithoutStorageClass(),
+        };
+
+        foreach (var volume in volumes)
+        {
+            builder.AddContainer($"{volume.Resource.Name}-service", "nginx")
+                .WithPersistentVolume(volume, "/data");
+        }
+
+        using var app = builder.Build();
+        app.Run();
+
+        SettingsTask settingsTask = default!;
+        foreach (var volume in volumes)
+        {
+            var name = volume.Resource.Name;
+            var content = await File.ReadAllTextAsync(Path.Combine(workspace.Path, "templates", name, $"{name}.yaml"));
+            settingsTask = settingsTask is null
+                ? Verify(content, "yaml")
+                : settingsTask.AppendContentAsFile(content, "yaml");
+        }
+
+        await settingsTask;
+    }
+
+    [Fact]
+    public async Task PublishAsync_PersistentVolumeStorageClassPreservesEmptyParameter()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        var k8s = builder.AddKubernetesEnvironment("env")
+            .WithProperties(environment => environment.DefaultStorageClassName = "");
+        var empty = builder.AddParameter("empty-class", "", publishValueAsDefault: true);
+        var whitespace = builder.AddParameter("whitespace-class", " \t", publishValueAsDefault: true);
+        var volumes = new[]
+        {
+            k8s.AddPersistentVolume("default"),
+            k8s.AddPersistentVolume("classless").WithStorageClass(empty),
+            k8s.AddPersistentVolume("whitespace").WithStorageClass(whitespace),
+        };
+
+        foreach (var volume in volumes)
+        {
+            builder.AddContainer($"{volume.Resource.Name}-service", "nginx")
+                .WithPersistentVolume(volume, "/data");
+        }
+
+        using var app = builder.Build();
+        app.Run();
+
+        SettingsTask settingsTask = default!;
+        foreach (var volume in volumes)
+        {
+            var name = volume.Resource.Name;
+            var content = await File.ReadAllTextAsync(Path.Combine(workspace.Path, "templates", name, $"{name}.yaml"));
+            settingsTask = settingsTask is null
+                ? Verify(content, "yaml")
+                : settingsTask.AppendContentAsFile(content, "yaml");
+        }
+
+        await settingsTask;
+    }
+
+    [Fact]
+    public async Task PublishAsync_PersistentVolumeCallbacksRunInOrderAfterDefaults()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        var k8s = builder.AddKubernetesEnvironment("env");
+        var volume = k8s.AddPersistentVolume("data")
+            .WithStorageClass("fast")
+            .WithPersistentVolumeName("original-volume")
+            .WithConfiguration(claim =>
+            {
+                Assert.Equal("fast", claim.Spec.StorageClassName);
+                Assert.Equal("original-volume", claim.Spec.VolumeName);
+                claim.Spec.StorageClassName = "";
+                claim.Spec.VolumeName = "replacement-volume";
+                claim.Metadata.Labels["stage"] = "first";
+            })
+            .WithConfiguration(claim =>
+            {
+                Assert.Equal("first", claim.Metadata.Labels["stage"]);
+                claim.Metadata.Labels["stage"] = "second";
+            });
+        builder.AddContainer("service", "nginx").WithPersistentVolume(volume, "/data");
+
+        using var app = builder.Build();
+        app.Run();
+
+        var content = await File.ReadAllTextAsync(Path.Combine(workspace.Path, "templates", "data", "data.yaml"));
+        await Verify(content, "yaml");
+    }
+
+    [Fact]
     public async Task PublishAsync_WithFirstClassPersistentVolume_KubernetesCustomizationOverridesDefaultFsGroup()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -1355,6 +2674,135 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task PublishAsync_WithFirstClassPersistentVolume_EnvironmentUsesDeploymentMountPath()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        var kubernetes = builder.AddKubernetesEnvironment("env");
+        var volume = kubernetes.AddPersistentVolume("media")
+            .WithStorageClass("azurefile-csi")
+            .WithCapacity("100Gi")
+            .WithAccessMode(PersistentVolumeAccessMode.ReadWriteMany);
+
+        builder.AddProject<TestProject>("api", launchProfileName: null)
+            .WithPersistentVolume(volume, "/srv/media", env: "MEDIA_PATH");
+
+        var app = builder.Build();
+        var store = app.Services.GetRequiredService<IAspireStore>();
+        var localPath = KubernetesPersistentVolumeLocalStorage.GetPath(store, volume.Resource);
+
+        app.Run();
+
+        Assert.False(Directory.Exists(localPath));
+
+        var expectedFiles = new[]
+        {
+            "templates/api/config.yaml",
+            "templates/api/statefulset.yaml",
+            "templates/media/media.yaml",
+            "values.yaml",
+        };
+
+        SettingsTask settingsTask = default!;
+
+        foreach (var expectedFile in expectedFiles)
+        {
+            var filePath = Path.Combine(workspace.Path, expectedFile);
+            Assert.True(File.Exists(filePath), $"Expected publisher to emit {expectedFile}.");
+
+            var content = await File.ReadAllTextAsync(filePath);
+            AssertNoBuggyEmptyMappings(content);
+
+            settingsTask = settingsTask is null
+                ? Verify(content, "yaml")
+                : settingsTask.AppendContentAsFile(content, "yaml");
+        }
+
+        await settingsTask;
+    }
+
+    [Fact]
+    public async Task PublishAsync_WithFirstClassPersistentVolume_StorageClassConfigurationControlsGeneratedClaim()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        var k8s = builder.AddKubernetesEnvironment("env")
+            .WithProperties(environment => environment.DefaultStorageClassName = "default-class");
+
+        var defaultVolume = k8s.AddPersistentVolume("default");
+        var explicitVolume = k8s.AddPersistentVolume("explicit")
+            .WithStorageClass("explicit-class");
+        var omittedVolume = k8s.AddPersistentVolume("omitted")
+            .WithoutStorageClass();
+
+        builder.AddContainer("default-service", "nginx")
+            .WithPersistentVolume(defaultVolume, "/data");
+        builder.AddContainer("explicit-service", "nginx")
+            .WithPersistentVolume(explicitVolume, "/data");
+        builder.AddContainer("omitted-service", "nginx")
+            .WithPersistentVolume(omittedVolume, "/data");
+
+        var app = builder.Build();
+        app.Run();
+
+        Assert.Equal("default-class", ReadStorageClassName(workspace.Path, "default"));
+        Assert.Equal("explicit-class", ReadStorageClassName(workspace.Path, "explicit"));
+        Assert.Null(ReadStorageClassName(workspace.Path, "omitted"));
+    }
+
+    [Fact]
+    public async Task PublishAsync_WithPersistentVolumeEnvironment_OnContainerAndExecutable()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        var kubernetes = builder.AddKubernetesEnvironment("env");
+        var containerVolume = kubernetes.AddPersistentVolume("container-data")
+            .WithCapacity("1Gi");
+        var executableVolume = kubernetes.AddPersistentVolume("executable-data")
+            .WithCapacity("1Gi");
+
+        builder.AddContainer("container", "nginx")
+            .WithPersistentVolume(containerVolume, "/srv/container", env: "DATA_PATH");
+        builder.AddExecutable("executable", "node", ".")
+            .PublishAsDockerFile()
+            .WithPersistentVolume(executableVolume, "/srv/executable", env: "DATA_PATH");
+
+        var app = builder.Build();
+        app.Run();
+
+        var expectedFiles = new[]
+        {
+            "templates/container/config.yaml",
+            "templates/container/statefulset.yaml",
+            "templates/container-data/container-data.yaml",
+            "templates/executable/config.yaml",
+            "templates/executable/statefulset.yaml",
+            "templates/executable-data/executable-data.yaml",
+            "values.yaml",
+        };
+
+        SettingsTask settingsTask = default!;
+
+        foreach (var expectedFile in expectedFiles)
+        {
+            var filePath = Path.Combine(workspace.Path, expectedFile);
+            Assert.True(File.Exists(filePath), $"Expected publisher to emit {expectedFile}.");
+
+            var content = await File.ReadAllTextAsync(filePath);
+            AssertNoBuggyEmptyMappings(content);
+
+            settingsTask = settingsTask is null
+                ? Verify(content, "yaml")
+                : settingsTask.AppendContentAsFile(content, "yaml");
+        }
+
+        await settingsTask;
+    }
+
+    [Fact]
     public async Task PublishAsync_WithFirstClassPersistentVolume_FallsThroughForUnboundVolumes()
     {
         // A workload may declare both a bound and an unbound volume. The bound one
@@ -1415,7 +2863,7 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
             .WithPersistentVolume(data);
 
         var app = builder.Build();
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => app.RunAsync());
+        var ex = await Assert.ThrowsAsync<DistributedApplicationException>(() => app.RunAsync());
         Assert.Contains("service", ex.Message);
         Assert.Contains("envA", ex.Message);
         Assert.Contains("envB", ex.Message);
@@ -1554,6 +3002,19 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
                 System.Text.RegularExpressions.Regex.Escape(backupTierName) + @"\s*:"),
             valuesContent);
     }
+    private static string? ReadStorageClassName(string workspacePath, string volumeName)
+    {
+        var claimPath = Path.Combine(workspacePath, "templates", volumeName, $"{volumeName}.yaml");
+        var yaml = new YamlStream();
+        using var reader = new StringReader(File.ReadAllText(claimPath));
+        yaml.Load(reader);
+
+        var root = (YamlMappingNode)yaml.Documents[0].RootNode;
+        var spec = (YamlMappingNode)root["spec"];
+        return spec.Children.TryGetValue("storageClassName", out var storageClass)
+            ? ((YamlScalarNode)storageClass).Value
+            : null;
+    }
 
     /// <summary>
     /// Asserts that the rendered YAML does not contain known-buggy empty <c>{}</c>
@@ -1588,17 +3049,6 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
                 Assert.DoesNotContain(pattern, content);
             }
         }
-    }
-
-    private sealed class TestConditionProvider(string value) : IValueProvider, IManifestExpressionProvider
-    {
-        public string ValueExpression => "test-condition";
-
-        public ValueTask<string?> GetValueAsync(CancellationToken cancellationToken = default)
-            => new(value);
-
-        public ValueTask<string?> GetValueAsync(ValueProviderContext context, CancellationToken cancellationToken = default)
-            => new(value);
     }
 
     private sealed class TestProject : IProjectMetadata
@@ -1639,3 +3089,4 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
         };
     }
 }
+#pragma warning restore CS0618

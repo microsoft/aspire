@@ -6,7 +6,16 @@ using Azure.Core;
 
 namespace Aspire.Hosting.Azure.Provisioning;
 
-internal sealed record UserPrincipal(Guid Id, string Name);
+// Represents the Azure identity that the provisioner is acting as.
+// `Type` is forwarded directly to the `principalType` property on
+// Microsoft.Authorization/roleAssignments. ARM accepts a fixed set of values for that property
+// (see the docs link below); today this component emits "User" or "ServicePrincipal" based on
+// the credential's access token, but the field is a plain string so consumers can override it.
+// Defaults to "User" to preserve historical behavior for credentials whose access tokens don't
+// include the `idtyp` claim.
+// principalType values: https://learn.microsoft.com/azure/templates/microsoft.authorization/roleassignments
+// idtyp claim:          https://learn.microsoft.com/entra/identity-platform/access-token-claims-reference#payload-claims
+internal sealed record AzurePrincipal(Guid Id, string Name, string Type = "User");
 
 internal sealed class ProvisioningContext(
     TokenCredential credential,
@@ -15,7 +24,7 @@ internal sealed class ProvisioningContext(
     IResourceGroupResource resourceGroup,
     ITenantResource tenant,
     AzureLocation location,
-    UserPrincipal principal,
+    AzurePrincipal principal,
     DistributedApplicationExecutionContext executionContext)
 {
     public TokenCredential Credential => credential;
@@ -24,6 +33,6 @@ internal sealed class ProvisioningContext(
     public ITenantResource Tenant => tenant;
     public IResourceGroupResource ResourceGroup => resourceGroup;
     public AzureLocation Location => location;
-    public UserPrincipal Principal => principal;
+    public AzurePrincipal Principal => principal;
     public DistributedApplicationExecutionContext ExecutionContext => executionContext;
 }

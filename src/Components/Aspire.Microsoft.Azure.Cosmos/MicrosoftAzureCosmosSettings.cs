@@ -26,6 +26,14 @@ public sealed class MicrosoftAzureCosmosSettings
     public string? ContainerName { get; set; }
 
     /// <summary>
+    /// Gets or sets a boolean value that indicates whether the Azure Cosmos DB health check is disabled or not.
+    /// </summary>
+    /// <value>
+    /// The default value is <see langword="false"/>.
+    /// </value>
+    public bool DisableHealthChecks { get; set; }
+
+    /// <summary>
     /// Gets or sets a boolean value that indicates whether the OpenTelemetry tracing is disabled or not.
     /// </summary>
     /// <value>

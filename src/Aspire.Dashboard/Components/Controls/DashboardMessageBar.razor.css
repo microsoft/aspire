@@ -1,0 +1,183 @@
+.dashboard-message-bar {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    width: 100%;
+    min-width: 0;
+    min-height: 36px;
+    padding: 0 12px;
+    border: 1px solid var(--colorNeutralStroke2);
+    border-radius: var(--aspire-radius-small);
+    background-color: var(--messagebar-info-background-color);
+    column-gap: var(--aspire-space-2);
+    color: var(--messagebar-foreground-color);
+    font-size: var(--aspire-font-size-secondary);
+    line-height: var(--lineHeightBase200);
+}
+
+.dashboard-message-bar:not(.intent-warning, .intent-error, .intent-success) {
+    border-color: var(--messagebar-info-border-color);
+}
+
+.dashboard-message-bar.intent-warning {
+    border-color: var(--messagebar-warning-border-color);
+    background-color: var(--messagebar-warning-background-color);
+}
+
+.dashboard-message-bar.intent-error {
+    border-color: var(--messagebar-error-border-color);
+    background-color: var(--messagebar-error-background-color);
+}
+
+.dashboard-message-bar.intent-success {
+    border-color: var(--messagebar-success-border-color);
+    background-color: var(--messagebar-success-background-color);
+}
+
+.dashboard-message-bar-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+}
+
+.dashboard-message-bar.intent-warning .dashboard-message-bar-icon ::deep svg {
+    fill: #e85e36 !important;
+}
+
+.dashboard-message-bar.intent-info .dashboard-message-bar-icon ::deep svg {
+    fill: var(--info) !important;
+}
+
+.dashboard-message-bar-content {
+    padding-block: 8px;
+}
+
+.dashboard-message-bar-title {
+    font-weight: var(--aspire-font-weight-semibold);
+    padding-inline-end: 8px;
+}
+
+.dashboard-message-bar-link {
+    padding-inline-start: 8px;
+}
+
+/* Markdown code blocks in interaction notifications. Keep long output, such as stack traces,
+   compact and scrollable so the whole notification fits in the message bar area. */
+.dashboard-message-bar-message ::deep pre {
+    margin: 0.25rem 0;
+}
+
+.dashboard-message-bar-message ::deep .code-container {
+    max-height: 6rem;
+    overflow: auto;
+}
+
+.dashboard-message-bar-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: var(--aspire-space-2);
+}
+
+.dashboard-message-bar-link-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 28px;
+    padding: 0 12px;
+    border: 1px solid var(--colorNeutralStroke1);
+    border-radius: var(--aspire-radius-small);
+    background: var(--colorNeutralBackground1);
+    color: var(--colorNeutralForeground1);
+    font-weight: var(--aspire-font-weight-semibold);
+    text-decoration: none;
+}
+
+.dashboard-message-bar-link-action:hover {
+    border-color: var(--colorNeutralStroke1Hover);
+    background: var(--colorNeutralBackground1Hover);
+}
+
+.dashboard-message-bar-link-action:focus-visible {
+    outline: 2px solid var(--colorStrokeFocus2);
+    outline-offset: 2px;
+}
+
+::deep .dashboard-message-bar-actions .dashboard-message-bar-dismiss {
+    flex: 0 0 16px;
+    width: 16px;
+    min-width: 16px;
+    max-width: 16px;
+    height: 16px;
+    min-height: 16px;
+    padding: 0;
+    border-color: transparent;
+    border-radius: var(--aspire-radius-small);
+    background-color: transparent;
+}
+
+::deep .dashboard-message-bar-dismiss svg {
+    display: block;
+    height: 16px;
+}
+
+@media (max-width: 768px) {
+    .dashboard-message-bar {
+        position: relative;
+        /* Let the capped alert stack scroll instead of compressing wrapped actions out of their card. */
+        flex-shrink: 0;
+        grid-template-columns: auto minmax(0, 1fr);
+        align-items: start;
+        padding: 8px 40px 8px 8px;
+        gap: var(--aspire-space-1);
+    }
+
+    .dashboard-message-bar-icon {
+        padding-top: 1px;
+    }
+
+    .dashboard-message-bar-content {
+        min-width: 0;
+        padding: 0;
+        overflow-wrap: anywhere;
+    }
+
+    .dashboard-message-bar-link {
+        padding-inline-start: 4px;
+    }
+
+    .dashboard-message-bar-actions {
+        grid-column: 2;
+        justify-content: flex-start;
+        gap: var(--aspire-space-1);
+    }
+
+    .dashboard-message-bar-actions:not(:has(.dashboard-message-bar-action, .dashboard-message-bar-link-action)) {
+        display: contents;
+    }
+
+    ::deep .dashboard-message-bar-actions .dashboard-message-bar-dismiss {
+        position: absolute;
+        inset-block-start: 4px;
+        inset-inline-end: 4px;
+        width: 32px;
+        min-width: 32px;
+        max-width: 32px;
+        height: 32px;
+        min-height: 32px;
+    }
+}
+
+@media (min-width: 601px) and (max-width: 768px) {
+    .dashboard-message-bar {
+        grid-template-columns: auto minmax(0, 1fr) auto;
+    }
+
+    .dashboard-message-bar-actions {
+        grid-column: 3;
+        grid-row: 1;
+        align-self: center;
+    }
+}

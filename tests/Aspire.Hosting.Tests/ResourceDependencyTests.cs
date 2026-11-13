@@ -60,8 +60,10 @@ public class ResourceDependencyTests
         Assert.Contains(api.Resource, dependencies);
     }
 
-    [Fact]
-    public async Task HostUrlDependencyOnlyIncludesMatchingHostEndpoint()
+    [Theory]
+    [InlineData("localhost")]
+    [InlineData("frontend.dev.localhost")]
+    public async Task HostUrlDependencyOnlyIncludesMatchingHostEndpoint(string hostName)
     {
         using var builder = TestDistributedApplicationBuilder.Create();
 
@@ -84,7 +86,7 @@ public class ResourceDependencyTests
             .WithAnnotation(nonHostEndpoint);
 
         var container = builder.AddContainer("container", "alpine")
-            .WithEnvironment("URL", new HostUrl("http://localhost:17092/path"));
+            .WithEnvironment("URL", new HostUrl($"http://{hostName}:17092/path"));
 
         var serviceProvider = new TestServiceProvider()
             .AddService(new DistributedApplicationModel(builder.Resources));

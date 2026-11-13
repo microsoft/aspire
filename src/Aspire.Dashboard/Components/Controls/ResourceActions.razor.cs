@@ -6,31 +6,24 @@ using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Resources;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
-using Microsoft.FluentUI.AspNetCore.Components;
-using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
 namespace Aspire.Dashboard.Components;
 
 public partial class ResourceActions : ComponentBase
 {
-    private static readonly Icon s_consoleLogsIcon = new Icons.Regular.Size16.SlideText();
-
     private AspireMenuButton? _menuButton;
 
     [Inject]
     public required ResourceMenuBuilder ResourceMenuBuilder { get; init; }
 
     [Inject]
-    public required IStringLocalizer<Resources.Resources> Loc { get; init; }
-
-    [Inject]
     public required IStringLocalizer<ControlsStrings> ControlLoc { get; init; }
 
     [Inject]
-    public required NavigationManager NavigationManager { get; init; }
+    public required IconResolver IconResolver { get; init; }
 
     [Inject]
-    public required IconResolver IconResolver { get; init; }
+    public required IDashboardClient DashboardClient { get; init; }
 
     [Parameter]
     public required EventCallback<CommandViewModel> CommandSelected { get; set; }
@@ -59,7 +52,6 @@ public partial class ResourceActions : ComponentBase
     {
         _highlightedCommands.Clear();
 
-        // If display is desktop then we display highlighted commands next to the ... button.
         if (ViewportInformation.IsDesktop)
         {
             _highlightedCommands.AddRange(Resource.Commands.Where(c => c.IsHighlighted && c.State != CommandViewModelState.Hidden).Take(MaxHighlightedCount));
@@ -77,6 +69,7 @@ public partial class ResourceActions : ComponentBase
             CommandSelected,
             IsCommandExecuting,
             showViewDetails: true,
+            showTerminalItem: true,
             showConsoleLogsItem: true,
             showUrls: false);
 

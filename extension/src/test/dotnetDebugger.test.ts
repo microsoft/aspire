@@ -1,34 +1,82 @@
 import * as assert from 'assert';
 import childProcess = require('child_process');
 import { EventEmitter } from 'events';
+import * as nodeFs from 'fs';
+import * as nodeOs from 'os';
 import * as nodePath from 'path';
+import { PassThrough } from 'stream';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
-import { createProjectDebuggerExtension, DotNetService, projectDebuggerExtension, quoteCommandLineArgument } from '../debugger/languages/dotnet';
+import { createProjectDebuggerExtension, createProjectResourceAttachProvider, DotNetService, externalBuildProjectDebuggerExtension, projectDebuggerExtension, quoteCommandLineArgument } from '../debugger/languages/dotnet';
 import { AspireExtendedDebugConfiguration, AspireResourceExtendedDebugConfiguration, ExecutableLaunchConfiguration, ProjectLaunchConfiguration } from '../dcp/types';
 import * as io from '../utils/io';
-import { createDebugSessionConfiguration, ResourceDebuggerExtension } from '../debugger/debuggerExtensions';
+import { createDebugSessionConfiguration, getResourceDebuggerExtensions, ResourceDebuggerExtension } from '../debugger/debuggerExtensions';
+import type { ResourceAttachProvider } from '../debugger/resourceDebugContracts';
 import { AppHostParentOutputFilter, AspireDebugSession } from '../debugger/AspireDebugSession';
+import { csharpExtensionId, getSupportedCapabilities } from '../capabilities';
 import * as hotReload from '../debugger/hotReload';
+import * as cliProcess from '../utils/process/cliProcess';
+import { extensionLogOutputChannel } from '../utils/logging';
+import {
+    LaunchedChildProcessResolver,
+    type LaunchedChildProcess,
+    type LaunchedChildProcessClock,
+    type LaunchedChildProcessQuery,
+} from '../debugger/launchedChildProcessDiscovery';
+import { AppHostBuildFailureError } from '../debugger/appHostBuildFailureError';
 import * as cliPathModule from '../utils/cliPath';
 import * as cliPathEnvironmentModule from '../utils/cliPathEnvironment';
 import { workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
+import { invalidMsBuildRunCommandResponse } from '../loc/strings';
 
 import { removeDirectorySafely } from './testHelpers';
 class TestDotNetService {
-    private _getDotNetTargetPathStub: sinon.SinonStub;
+    public getDotNetProjectLaunchPropertiesStub: sinon.SinonStub;
+    public getDotNetProjectRunPropertiesStub: sinon.SinonStub;
     private _hasDevKit: boolean;
 
+    public getDotNetAttachTargetInfoStub: sinon.SinonStub;
+    public getDotNetTargetPathStub: sinon.SinonStub;
     public buildDotNetProjectStub: sinon.SinonStub;
 
     // `dotnet run-api` output returned for file-based (.cs) apps. Tests override this with a serialized
     // RunCommand payload; the default empty string mirrors the not-configured case.
     public runApiOutput: string = '';
     public runApiEnvironment: NodeJS.ProcessEnv | undefined;
+    public fileAppRunProperties = { runCommand: 'dotnet', runArguments: '' };
+    public fileAppRunBuildConfiguration: string | undefined;
+    public fileAppRunSuppressRestore: boolean | undefined;
+    public fileAppRunEnvironment: NodeJS.ProcessEnv | undefined;
+    public projectLaunchProperties: {
+        targetPath: string;
+        runCommand?: string;
+        useAppHost?: boolean;
+        useWinUI?: boolean;
+        windowsPackageType?: string;
+    };
+    public projectRunProperties: { targetPath: string, runCommand: string, runArguments: string, runWorkingDirectory?: string };
 
     constructor(outputPath: string, rejectBuild: Error | null, hasDevKit: boolean) {
-        this._getDotNetTargetPathStub = sinon.stub();
-        this._getDotNetTargetPathStub.resolves(outputPath);
+        this.getDotNetAttachTargetInfoStub = sinon.stub();
+        this.getDotNetAttachTargetInfoStub.resolves({ targetPath: outputPath, useAppHost: true });
+
+        this.projectLaunchProperties = {
+            targetPath: outputPath,
+            useAppHost: false,
+            useWinUI: false
+        };
+        this.getDotNetProjectLaunchPropertiesStub = sinon.stub().callsFake(() =>
+            Promise.resolve(this.projectLaunchProperties));
+        this.getDotNetTargetPathStub = sinon.stub();
+        this.getDotNetTargetPathStub.resolves(outputPath);
+        this.projectRunProperties = {
+            targetPath: outputPath,
+            runCommand: 'dotnet',
+            runArguments: `exec "${outputPath}"`,
+            runWorkingDirectory: nodePath.dirname(outputPath)
+        };
+        this.getDotNetProjectRunPropertiesStub = sinon.stub().callsFake(() =>
+            Promise.resolve(this.projectRunProperties));
 
         this.buildDotNetProjectStub = sinon.stub();
         if (rejectBuild) {
@@ -40,12 +88,28 @@ class TestDotNetService {
         this._hasDevKit = hasDevKit;
     }
 
-    getDotNetTargetPath(projectFile: string): Promise<string> {
-        return this._getDotNetTargetPathStub(projectFile);
+    getDotNetAttachTargetInfo(projectFile: string, configuration?: string, cancellationToken?: vscode.CancellationToken, framework?: string): Promise<{ targetPath: string, targetName?: string, useAppHost: boolean }> {
+        return framework
+            ? this.getDotNetAttachTargetInfoStub(projectFile, configuration, cancellationToken, framework)
+            : cancellationToken
+                ? this.getDotNetAttachTargetInfoStub(projectFile, configuration, cancellationToken)
+                : this.getDotNetAttachTargetInfoStub(projectFile, configuration);
     }
 
-    buildDotNetProject(projectFile: string): Promise<void> {
-        return this.buildDotNetProjectStub(projectFile);
+    getDotNetProjectLaunchProperties(projectFile: string, buildConfiguration?: string, environment?: NodeJS.ProcessEnv, workingDirectory?: string): Promise<TestDotNetService['projectLaunchProperties']> {
+        return this.getDotNetProjectLaunchPropertiesStub(projectFile, buildConfiguration, environment, workingDirectory);
+    }
+
+    getDotNetTargetPath(projectFile: string, buildConfiguration?: string, environment?: NodeJS.ProcessEnv, workingDirectory?: string): Promise<string> {
+        return this.getDotNetTargetPathStub(projectFile, buildConfiguration, environment, workingDirectory);
+    }
+
+    getDotNetProjectRunProperties(projectFile: string, buildConfiguration?: string, environment?: NodeJS.ProcessEnv, workingDirectory?: string): Promise<{ targetPath: string, runCommand: string, runArguments: string, runWorkingDirectory?: string }> {
+        return this.getDotNetProjectRunPropertiesStub(projectFile, buildConfiguration, environment, workingDirectory);
+    }
+
+    buildDotNetProject(projectFile: string, buildConfiguration?: string, environment?: NodeJS.ProcessEnv, workingDirectory?: string): Promise<void> {
+        return this.buildDotNetProjectStub(projectFile, buildConfiguration, environment, workingDirectory);
     }
 
     getAndActivateDevKit(): Promise<boolean> {
@@ -56,6 +120,114 @@ class TestDotNetService {
         this.runApiEnvironment = environment;
         return Promise.resolve(this.runApiOutput);
     }
+
+    getDotNetFileAppRunProperties(_projectPath: string, buildConfiguration: string, suppressRestore: boolean, environment?: NodeJS.ProcessEnv): Promise<{ runCommand: string; runArguments: string }> {
+        this.fileAppRunBuildConfiguration = buildConfiguration;
+        this.fileAppRunSuppressRestore = suppressRestore;
+        this.fileAppRunEnvironment = environment;
+        return Promise.resolve(this.fileAppRunProperties);
+    }
+}
+
+function createMsbuildProcess(): {
+    process: childProcess.ChildProcessWithoutNullStreams;
+    stdout: EventEmitter & { setEncoding(encoding: string): void };
+    stderr: EventEmitter & { setEncoding(encoding: string): void };
+    kill: sinon.SinonStub;
+} {
+    const process = new EventEmitter() as unknown as childProcess.ChildProcessWithoutNullStreams;
+    const stdout = Object.assign(new EventEmitter(), {
+        setEncoding: (_encoding: string) => { },
+    });
+    const stderr = Object.assign(new EventEmitter(), {
+        setEncoding: (_encoding: string) => { },
+    });
+    const kill = sinon.stub().callsFake((signal?: NodeJS.Signals | number) => {
+        (process as unknown as { killed: boolean }).killed = true;
+        process.emit('close', null, signal);
+        return true;
+    });
+    Object.assign(process, {
+        exitCode: null,
+        signalCode: null,
+        killed: false,
+        pid: 1234,
+        kill,
+        stdout,
+        stderr,
+    });
+
+    return { process, stdout, stderr, kill };
+}
+
+interface TestLaunchedChildProcess {
+    readonly pid: number;
+    readonly parentPid: number;
+    readonly executable: string;
+    readonly command: string;
+    readonly commandLineArguments?: readonly string[];
+}
+
+interface TestLaunchedChildProcessIdentity {
+    readonly requiresDirectChild?: boolean;
+    isLauncher(process: TestLaunchedChildProcess): boolean;
+    isCandidate(process: TestLaunchedChildProcess): boolean;
+}
+
+interface TestLaunchedChildProcessResolver {
+    resolveProcessId(
+        launcherPid: number,
+        identity: TestLaunchedChildProcessIdentity,
+        cancellationToken?: vscode.CancellationToken,
+    ): Promise<number>;
+}
+
+class StaticLaunchedChildProcessQuery implements LaunchedChildProcessQuery {
+    constructor(private readonly _processes: readonly LaunchedChildProcess[]) {
+    }
+
+    async listProcesses(): Promise<readonly LaunchedChildProcess[]> {
+        return this._processes;
+    }
+}
+
+const immediateProcessClock: LaunchedChildProcessClock = {
+    now: () => 0,
+    sleep: async () => { },
+};
+
+function createLaunchedProcess(pid: number, parentPid: number, executable: string, command = executable): LaunchedChildProcess {
+    return { pid, parentPid, executable, command };
+}
+
+type TestResource = Parameters<ResourceAttachProvider['createDebugConfiguration']>[0];
+
+function createProjectResource(
+    properties: TestResource['properties'],
+    name = 'api',
+    displayName = 'API',
+): TestResource {
+    return {
+        name,
+        displayName,
+        resourceType: 'Project',
+        state: 'Running',
+        properties,
+    };
+}
+
+function createAttachProvider(
+    dotNetService: TestDotNetService,
+    childProcessResolver: TestLaunchedChildProcessResolver,
+    fileSystem?: { realpath(path: string): Promise<string> },
+): ResourceAttachProvider {
+    const factory = createProjectResourceAttachProvider as unknown as (
+        dotNetServiceProducer: () => TestDotNetService,
+        resolver: TestLaunchedChildProcessResolver,
+        fileSystem?: { realpath(path: string): Promise<string> },
+    ) => ResourceAttachProvider;
+
+    return factory(() => dotNetService, childProcessResolver, fileSystem);
 }
 
 suite('Dotnet Debugger Extension Tests', () => {
@@ -77,9 +249,1505 @@ suite('Dotnet Debugger Extension Tests', () => {
 
     teardown(() => sinon.restore());
 
-    function createDebuggerExtension(outputPath: string, rejectBuild: Error | null, hasDevKit: boolean, doesOutputFileExist: boolean): { dotNetService: TestDotNetService, extension: ResourceDebuggerExtension, doesFileExistStub: sinon.SinonStub } {
+    function createDebuggerExtension(outputPath: string, rejectBuild: Error | null, hasDevKit: boolean, doesOutputFileExist: boolean): { dotNetService: TestDotNetService, extension: ResourceDebuggerExtension, attachProvider: ResourceAttachProvider, doesFileExistStub: sinon.SinonStub } {
         const fakeDotNetService = new TestDotNetService(outputPath, rejectBuild, hasDevKit);
-        return { dotNetService: fakeDotNetService, extension: createProjectDebuggerExtension(() => fakeDotNetService), doesFileExistStub: sinon.stub(io, 'doesFileExist').resolves(doesOutputFileExist) };
+        const childProcessResolver: TestLaunchedChildProcessResolver = {
+            resolveProcessId: sinon.stub().resolves(4321),
+        };
+        return {
+            dotNetService: fakeDotNetService,
+            extension: createProjectDebuggerExtension(() => fakeDotNetService),
+            attachProvider: createProjectResourceAttachProvider(() => fakeDotNetService, childProcessResolver),
+            doesFileExistStub: sinon.stub(io, 'doesFileExist').resolves(doesOutputFileExist),
+        };
+    }
+
+    test('IDE attach verifies the reported application PID for DLL and apphost launches', async () => {
+        const cases = [
+            {
+                targetPath: '/repo/bin/Release/net10.0/Api.dll',
+                executable: '/usr/share/dotnet/dotnet',
+                command: '"/usr/share/dotnet/dotnet" "/repo/bin/Release/net10.0/Api.dll"',
+                commandLineArguments: ['/usr/share/dotnet/dotnet', '/repo/bin/Release/net10.0/Api.dll'],
+            },
+            {
+                targetPath: 'C:\\repo\\bin\\Release\\net10.0\\Api.dll',
+                executable: 'C:\\Program Files\\dotnet\\dotnet.exe',
+                command: '"C:\\Program Files\\dotnet\\dotnet.exe" "C:\\repo\\bin\\Release\\net10.0\\Api.dll"',
+            },
+            {
+                targetPath: '/repo/bin/Release/net10.0/Api.dll',
+                executable: '/repo/bin/Release/net10.0/Api',
+                command: '/repo/bin/Release/net10.0/Api',
+            },
+            {
+                targetPath: 'C:\\repo\\bin\\Release\\net10.0\\Api.dll',
+                executable: 'C:\\repo\\bin\\Release\\net10.0\\Api.exe',
+                command: '"C:\\repo\\bin\\Release\\net10.0\\Api.exe"',
+            },
+        ];
+
+        for (const candidate of cases) {
+            const dotNetService = new TestDotNetService(candidate.targetPath, null, false);
+            const resolver = new LaunchedChildProcessResolver(new StaticLaunchedChildProcessQuery([
+                { pid: 1234, parentPid: 10, ...candidate },
+                createLaunchedProcess(4321, 1234, candidate.executable, candidate.command),
+            ]), immediateProcessClock, { timeoutMs: 10, retryDelayMs: 10 });
+            const provider = createAttachProvider(dotNetService, resolver, { realpath: async value => value });
+            const resource = createProjectResource({
+                'executable.pid': 1234,
+                'executable.path': 'dotnet',
+                'project.path': '/repo/Api.csproj',
+                'project.launchCommand': 'ide',
+                'project.configuration': 'Release',
+                'executable.args': null,
+            });
+
+            assert.strictEqual(provider.canAttachToResource(resource), true, candidate.executable);
+            const configuration = await provider.createDebugConfiguration(resource);
+
+            assert.strictEqual(configuration.processId, 1234, candidate.executable);
+            assert.strictEqual(configuration.request, 'attach');
+            assert.strictEqual(dotNetService.getDotNetAttachTargetInfoStub.calledWith('/repo/Api.csproj', 'Release'), true);
+        }
+    });
+
+    test('IDE attach rejects another DLL even when its arguments or child match the target', async () => {
+        const targetPath = '/repo/bin/Debug/net10.0/Api.dll';
+        const dotNetService = new TestDotNetService(targetPath, null, false);
+        const resolver = new LaunchedChildProcessResolver(new StaticLaunchedChildProcessQuery([
+            {
+                ...createLaunchedProcess(1234, 10, '/usr/share/dotnet/dotnet', `dotnet /other/Api.dll "${targetPath}"`),
+                commandLineArguments: ['dotnet', '/other/Api.dll', targetPath],
+            },
+            createLaunchedProcess(4321, 1234, '/repo/bin/Debug/net10.0/Api'),
+        ]), immediateProcessClock, { timeoutMs: 10, retryDelayMs: 10 });
+        const provider = createAttachProvider(dotNetService, resolver, { realpath: async value => value });
+
+        await assert.rejects(provider.createDebugConfiguration(createProjectResource({
+            'executable.pid': 1234,
+            'executable.path': 'dotnet',
+            'project.path': '/repo/Api.csproj',
+            'project.launchCommand': 'ide',
+        })), { errorKind: 'resourceNotAttachable' });
+    });
+
+    test('direct coordinated attach verifies the reported application PID for apphost and DLL launches', async () => {
+        for (const candidate of [
+            {
+                targetPath: '/repo/bin/Release/net10.0/Api.dll',
+                useAppHost: true,
+                executable: '/repo/bin/Release/net10.0/Api',
+                command: '/repo/bin/Release/net10.0/Api',
+            },
+            {
+                targetPath: 'C:\\repo\\bin\\Release\\net10.0\\Api.dll',
+                useAppHost: true,
+                executable: 'C:\\repo\\bin\\Release\\net10.0\\Api.exe',
+                command: '"C:\\repo\\bin\\Release\\net10.0\\Api.exe"',
+            },
+            {
+                targetPath: '/repo/bin/Release/net10.0/Api.dll',
+                useAppHost: false,
+                executable: '/usr/share/dotnet/dotnet',
+                command: '"/usr/share/dotnet/dotnet" exec "/repo/bin/Release/net10.0/Api.dll"',
+            },
+        ]) {
+            const dotNetService = new TestDotNetService(candidate.targetPath, null, false);
+            dotNetService.getDotNetAttachTargetInfoStub.resolves(candidate);
+            const resolver = new LaunchedChildProcessResolver(new StaticLaunchedChildProcessQuery([
+                { pid: 1234, parentPid: 10, ...candidate },
+                createLaunchedProcess(4321, 1234, candidate.executable, candidate.command),
+            ]), immediateProcessClock, { timeoutMs: 10, retryDelayMs: 10 });
+            const provider = createAttachProvider(dotNetService, resolver, { realpath: async value => value });
+            const resource = createProjectResource({
+                'executable.pid': 1234,
+                'executable.path': candidate.executable,
+                'executable.args': null,
+                'project.path': '/repo/Api.csproj',
+                'project.launchCommand': 'direct',
+                'project.configuration': 'Release',
+                'project.targetPath': candidate.targetPath,
+                'project.useAppHost': candidate.useAppHost,
+                'resource.launchConfigurationType': 'project-with-external-build.v1',
+            });
+
+            assert.strictEqual(provider.canRecognizeResource(resource), true, candidate.executable);
+            assert.strictEqual(provider.canAttachToResource(resource), true, candidate.executable);
+            const configuration = await provider.createDebugConfiguration(resource);
+
+            assert.strictEqual(configuration.processId, 1234, candidate.executable);
+            assert.strictEqual(configuration.request, 'attach');
+            assert.strictEqual(dotNetService.getDotNetAttachTargetInfoStub.called, false);
+        }
+    });
+
+    test('direct coordinated attach rejects another program even when its child matches the project output', async () => {
+        const targetPath = '/repo/bin/Release/net10.0/Api.dll';
+        for (const candidate of [
+            { executable: '/other/Api', command: '/other/Api', useAppHost: true },
+            { executable: '/usr/share/dotnet/dotnet', command: 'dotnet exec /other/Api.dll', useAppHost: false },
+            { executable: '/usr/share/dotnet/dotnet', command: `dotnet run --project /repo/Api.csproj -- "${targetPath}"`, useAppHost: false },
+        ]) {
+            const dotNetService = new TestDotNetService(targetPath, null, false);
+            dotNetService.getDotNetAttachTargetInfoStub.resolves({ targetPath, useAppHost: candidate.useAppHost });
+            const resolver = new LaunchedChildProcessResolver(new StaticLaunchedChildProcessQuery([
+                { pid: 1234, parentPid: 10, ...candidate },
+                createLaunchedProcess(4321, 1234, '/usr/share/dotnet/dotnet', `dotnet exec "${targetPath}"`),
+            ]), immediateProcessClock, { timeoutMs: 10, retryDelayMs: 10 });
+            const provider = createAttachProvider(dotNetService, resolver, { realpath: async value => value });
+
+            await assert.rejects(provider.createDebugConfiguration(createProjectResource({
+                'executable.pid': 1234,
+                'executable.path': candidate.executable,
+                'project.path': '/repo/Api.csproj',
+                'project.launchCommand': 'direct',
+                'project.targetPath': targetPath,
+                'project.useAppHost': candidate.useAppHost,
+                'resource.launchConfigurationType': 'project-with-external-build.v1',
+            })), { errorKind: 'resourceNotAttachable' });
+            assert.strictEqual(dotNetService.getDotNetAttachTargetInfoStub.called, false);
+        }
+    });
+
+    test('native executables require explicit coordinated direct-launch metadata', () => {
+        const dotNetService = new TestDotNetService('/repo/bin/Release/net10.0/Api.dll', null, false);
+        const provider = createAttachProvider(dotNetService, { resolveProcessId: sinon.stub().resolves(1234) });
+        for (const metadata of [
+            {},
+            { 'resource.launchConfigurationType': 'project-with-external-build.v1' },
+            { 'project.launchCommand': 'direct' },
+            { 'project.launchCommand': 'direct', 'resource.launchConfigurationType': 'project' },
+            { 'project.launchCommand': 'direct', 'resource.launchConfigurationType': 'unknown' },
+            { 'project.launchCommand': 'run', 'resource.launchConfigurationType': 'project-with-external-build.v1' },
+        ]) {
+            const resource = createProjectResource({
+                'executable.pid': 1234,
+                'executable.path': '/repo/bin/Release/net10.0/Api',
+                'project.path': '/repo/Api.csproj',
+                ...metadata,
+            });
+            assert.strictEqual(provider.canRecognizeResource(resource), false);
+            assert.strictEqual(provider.canAttachToResource(resource), false);
+        }
+
+        for (const executablePath of [undefined, '', '   ']) {
+            const resource = createProjectResource({
+                'executable.pid': 1234,
+                'executable.path': executablePath,
+                'project.path': '/repo/Api.csproj',
+                'project.launchCommand': 'direct',
+                'project.targetPath': '/repo/bin/Release/net10.0/Api.dll',
+                'project.useAppHost': 'true',
+                'resource.launchConfigurationType': 'project-with-external-build.v1',
+            });
+            assert.strictEqual(provider.canRecognizeResource(resource), false);
+            assert.strictEqual(provider.canAttachToResource(resource), false);
+        }
+        assert.strictEqual(dotNetService.getDotNetAttachTargetInfoStub.called, false);
+    });
+
+    test('attach configuration resolves the evaluated framework-dependent TargetPath child PID', async () => {
+        const { dotNetService } = createDebuggerExtension('/repo/bin/Debug/net10.0/EvaluatedAssemblyName.dll', null, true, true);
+        dotNetService.getDotNetAttachTargetInfoStub.resolves({
+            targetPath: '/repo/bin/Debug/net10.0/EvaluatedAssemblyName.dll',
+            useAppHost: false,
+        });
+        const resolver = {
+            resolveProcessId: sinon.stub().resolves(4321),
+        };
+        const attachProvider = createAttachProvider(dotNetService, resolver);
+
+        const configuration = await attachProvider.createDebugConfiguration(createProjectResource({
+            'executable.pid': '1234',
+            'executable.path': 'dotnet',
+            'project.path': '/repo/api/Api.csproj',
+            'project.launchCommand': 'run',
+        }));
+
+        assert.deepStrictEqual(configuration, {
+            type: 'coreclr',
+            request: 'attach',
+            name: 'Attach debugger: API',
+            processId: 4321,
+        });
+        assert.strictEqual(resolver.resolveProcessId.firstCall.args[0], 1234);
+        const processIdentity = resolver.resolveProcessId.firstCall.args[1] as TestLaunchedChildProcessIdentity;
+        assert.strictEqual(processIdentity.isLauncher({
+            pid: 1234,
+            parentPid: 1,
+            executable: '/usr/local/share/dotnet/dotnet',
+            command: 'dotnet run --project /repo/api/Api.csproj',
+        }), true);
+        assert.strictEqual(processIdentity.isLauncher({
+            pid: 1234,
+            parentPid: 1,
+            executable: '/usr/local/share',
+            command: '/usr/local/share/dotnet/dotnet run --project /repo/api/Api.csproj',
+        }), false);
+        assert.strictEqual(processIdentity.requiresDirectChild, true);
+        assert.strictEqual(processIdentity.isCandidate({
+            pid: 4321,
+            parentPid: 1234,
+            executable: '/usr/local/share/dotnet/dotnet',
+            command: 'dotnet exec /repo/bin/Debug/net10.0/EvaluatedAssemblyName.dll',
+        }), true);
+        assert.strictEqual(processIdentity.isCandidate({
+            pid: 4322,
+            parentPid: 1234,
+            executable: '/usr/local/share/dotnet/dotnet',
+            command: 'dotnet exec /repo/bin/Debug/net10.0/Api.dll',
+        }), false);
+        assert.strictEqual(processIdentity.isCandidate({
+            pid: 4323,
+            parentPid: 1234,
+            executable: '/usr/local/share/dotnet/dotnet',
+            command: 'dotnet exec /repo/OneDrive - Microsoft/über-long-path/My Attach Service.dll "" --urls http://localhost:5000',
+        }), false);
+    });
+
+    test('watch attach permits a transitive TargetPath descendant', async () => {
+        const targetPath = '/repo/bin/Debug/net10.0/Api.dll';
+        const { dotNetService } = createDebuggerExtension(targetPath, null, true, true);
+        dotNetService.getDotNetAttachTargetInfoStub.resolves({ targetPath, useAppHost: false });
+        const resolver = {
+            resolveProcessId: sinon.stub().resolves(4321),
+        };
+        const attachProvider = createAttachProvider(dotNetService, resolver);
+
+        await attachProvider.createDebugConfiguration(createProjectResource({
+            'executable.pid': '1234',
+            'executable.path': 'dotnet',
+            'project.path': '/repo/api/Api.csproj',
+            'project.launchCommand': 'watch',
+        }));
+
+        const processIdentity = resolver.resolveProcessId.firstCall.args[1] as TestLaunchedChildProcessIdentity;
+        assert.strictEqual(processIdentity.requiresDirectChild, false);
+        assert.strictEqual(processIdentity.isCandidate({
+            pid: 4321,
+            parentPid: 5678,
+            executable: '/usr/local/share/dotnet/dotnet',
+            command: `dotnet exec ${targetPath}`,
+        }), true);
+    });
+
+    test('matches a spaced evaluated TargetPath from the raw framework-dependent command without matching a prefix sibling', async () => {
+        const targetPath = '/repo/OneDrive - Microsoft/über-long-path/My Attach Service.dll';
+        const { dotNetService } = createDebuggerExtension(targetPath, null, true, true);
+        dotNetService.getDotNetAttachTargetInfoStub.resolves({ targetPath, useAppHost: false });
+        const resolver = {
+            resolveProcessId: sinon.stub().resolves(4321),
+        };
+        const attachProvider = createAttachProvider(dotNetService, resolver);
+
+        await attachProvider.createDebugConfiguration(createProjectResource({
+            'executable.pid': '1234',
+            'executable.path': 'dotnet',
+            'project.path': '/repo/api/Api.csproj',
+        }));
+
+        const processIdentity = resolver.resolveProcessId.firstCall.args[1] as TestLaunchedChildProcessIdentity;
+        assert.strictEqual(processIdentity.isCandidate({
+            pid: 4321,
+            parentPid: 1234,
+            executable: '/usr/local/share/dotnet/dotnet',
+            command: `dotnet exec ${targetPath} "" --urls http://localhost:5000`,
+        }), true);
+        assert.strictEqual(processIdentity.isCandidate({
+            pid: 4322,
+            parentPid: 1234,
+            executable: '/usr/local/share/dotnet/dotnet',
+            command: `dotnet exec ${targetPath}.bak`,
+        }), false);
+        assert.strictEqual(processIdentity.isCandidate({
+            pid: 4323,
+            parentPid: 1234,
+            executable: '/usr/local/share/dotnet/dotnet',
+            command: `dotnet run ${targetPath}`,
+        }), false);
+        assert.strictEqual(processIdentity.isCandidate({
+            pid: 4324,
+            parentPid: 1234,
+            executable: '/usr/local/share/dotnet/dotnet',
+            command: `dotnet exec /repo/bin/Debug/net10.0/Other.dll ${targetPath}`,
+        }), false);
+    });
+
+    test('matches a structured framework-dependent TargetPath without accepting other dotnet children', async () => {
+        const targetPath = '/repo/OneDrive - Microsoft/über-long-path/My Attach Service.dll';
+        const { dotNetService } = createDebuggerExtension(targetPath, null, true, true);
+        dotNetService.getDotNetAttachTargetInfoStub.resolves({ targetPath, useAppHost: false });
+        const resolver = {
+            resolveProcessId: sinon.stub().resolves(4321),
+        };
+        const attachProvider = createAttachProvider(dotNetService, resolver);
+
+        await attachProvider.createDebugConfiguration(createProjectResource({
+            'executable.pid': '1234',
+            'executable.path': 'dotnet',
+            'project.path': '/repo/api/Api.csproj',
+        }));
+
+        const processIdentity = resolver.resolveProcessId.firstCall.args[1] as TestLaunchedChildProcessIdentity;
+        assert.strictEqual(processIdentity.isCandidate({
+            pid: 4321,
+            parentPid: 1234,
+            executable: '/usr/local/share/dotnet/dotnet',
+            command: 'dotnet exec malformed-posix-command',
+            commandLineArguments: ['dotnet', 'exec', targetPath, '', '--urls', 'http://localhost:5000'],
+        }), true);
+        assert.strictEqual(processIdentity.isCandidate({
+            pid: 4322,
+            parentPid: 1234,
+            executable: '/usr/local/share/dotnet/dotnet',
+            command: 'dotnet exec malformed-posix-command',
+            commandLineArguments: ['dotnet', 'exec', `${targetPath}.bak`],
+        }), false);
+        assert.strictEqual(processIdentity.isCandidate({
+            pid: 4323,
+            parentPid: 1234,
+            executable: '/usr/local/share/dotnet/dotnet',
+            command: 'dotnet exec malformed-posix-command',
+            commandLineArguments: [
+                'dotnet',
+                'exec',
+                '/repo/bin/Debug/net10.0/Other.dll',
+                targetPath,
+            ],
+        }), false);
+    });
+
+    for (const targetPath of [String.raw`\\server\share\Api.dll`, '/repo/bin/Api.dll']) {
+        test(`preserves framework-dependent path casing rules for ${targetPath}`, async () => {
+            const { dotNetService } = createDebuggerExtension(targetPath, null, true, true);
+            dotNetService.getDotNetAttachTargetInfoStub.resolves({ targetPath, useAppHost: false });
+            const resolver = { resolveProcessId: sinon.stub().resolves(4321) };
+            const provider = createAttachProvider(dotNetService, resolver, { realpath: async value => value });
+            await provider.createDebugConfiguration(createProjectResource({
+                'executable.pid': '1234',
+                'executable.path': 'dotnet',
+                'project.path': '/repo/api/Api.csproj',
+                'project.launchCommand': 'run',
+            }));
+
+            const identity = resolver.resolveProcessId.firstCall.args[1] as TestLaunchedChildProcessIdentity;
+            const expectedCaseMatch = targetPath.startsWith('\\\\');
+            for (const structured of [false, true]) {
+                const candidate = (operand: string) => ({
+                    pid: 4321,
+                    parentPid: 1234,
+                    executable: 'dotnet',
+                    command: `dotnet exec "${operand}"`,
+                    ...(structured ? { commandLineArguments: ['dotnet', 'exec', operand] } : {}),
+                });
+                assert.strictEqual(identity.isCandidate(candidate(targetPath)), true);
+                assert.strictEqual(identity.isCandidate(candidate(targetPath.toLowerCase())), expectedCaseMatch);
+                assert.strictEqual(identity.isCandidate(candidate(`${targetPath}.bak`)), false);
+            }
+        });
+    }
+
+    test('older redacted framework-dependent snapshots match TargetName instead of the default TargetPath', async () => {
+        const { dotNetService } = createDebuggerExtension('/repo/bin/Debug/net10.0/Api.dll', null, true, true);
+        dotNetService.getDotNetAttachTargetInfoStub.resolves({
+            targetPath: '/repo/bin/Debug/net10.0/Api.dll',
+            targetName: 'Api',
+            useAppHost: false,
+        });
+        const resolver = {
+            resolveProcessId: sinon.stub().resolves(4321),
+        };
+        const attachProvider = createAttachProvider(dotNetService, resolver);
+
+        await attachProvider.createDebugConfiguration(createProjectResource({
+            'executable.pid': '1234',
+            'executable.path': 'dotnet',
+            'executable.args': null,
+            'project.path': '/repo/api/Api.csproj',
+        }));
+
+        const processIdentity = resolver.resolveProcessId.firstCall.args[1] as TestLaunchedChildProcessIdentity;
+        assert.strictEqual(processIdentity.requiresDirectChild, true);
+        assert.strictEqual(processIdentity.isCandidate({
+            pid: 4321,
+            parentPid: 1234,
+            executable: '/usr/local/share/dotnet/dotnet',
+            command: 'dotnet exec /repo/bin/Release/net10.0/Api.dll --urls http://localhost:5000',
+        }), true);
+        assert.strictEqual(processIdentity.isCandidate({
+            pid: 4322,
+            parentPid: 1234,
+            executable: '/usr/local/share/dotnet/dotnet',
+            command: 'dotnet exec "/repo/bin/Release/net10.0/Api.dll" --urls http://localhost:5000',
+        }), true);
+        assert.strictEqual(processIdentity.isCandidate({
+            pid: 4323,
+            parentPid: 1234,
+            executable: '/usr/local/share/dotnet/dotnet',
+            command: 'dotnet exec /repo/bin/Release/net10.0/Api.Worker.dll',
+        }), false);
+        assert.strictEqual(processIdentity.isCandidate({
+            pid: 4324,
+            parentPid: 1234,
+            executable: '/usr/local/share/dotnet/dotnet',
+            command: 'dotnet exec /repo/bin/Release/net10.0/Other.dll /repo/app-arguments/Api.dll',
+        }), false);
+    });
+
+    test('older structured framework-dependent snapshots use the first DLL target after dotnet exec', async () => {
+        const { dotNetService } = createDebuggerExtension('/repo/bin/Debug/net10.0/Api.dll', null, true, true);
+        dotNetService.getDotNetAttachTargetInfoStub.resolves({
+            targetPath: '/repo/bin/Debug/net10.0/Api.dll',
+            targetName: 'Api',
+            useAppHost: false,
+        });
+        const resolver = {
+            resolveProcessId: sinon.stub().resolves(4321),
+        };
+        const attachProvider = createAttachProvider(dotNetService, resolver);
+
+        await attachProvider.createDebugConfiguration(createProjectResource({
+            'executable.pid': '1234',
+            'executable.path': 'dotnet',
+            'executable.args': null,
+            'project.path': '/repo/api/Api.csproj',
+        }));
+
+        const processIdentity = resolver.resolveProcessId.firstCall.args[1] as TestLaunchedChildProcessIdentity;
+        assert.strictEqual(processIdentity.isCandidate({
+            pid: 4321,
+            parentPid: 1234,
+            executable: '/usr/local/share/dotnet/dotnet',
+            command: 'dotnet exec malformed-posix-command',
+            commandLineArguments: [
+                'dotnet',
+                'exec',
+                '/repo/bin/Release/net10.0/Other.dll',
+                '/repo/app-arguments/Api.dll',
+            ],
+        }), false);
+        assert.strictEqual(processIdentity.isCandidate({
+            pid: 4322,
+            parentPid: 1234,
+            executable: '/usr/local/share/dotnet/dotnet',
+            command: 'dotnet exec malformed-posix-command',
+            commandLineArguments: [
+                'dotnet',
+                'exec',
+                '/repo/bin/Release/net10.0/Api.dll',
+                '/repo/app-arguments/Other.dll',
+            ],
+        }), true);
+    });
+
+    test('older redacted apphost snapshots match the TargetName executable basename', async () => {
+        const { dotNetService } = createDebuggerExtension('/repo/bin/Debug/net10.0/Api.dll', null, true, true);
+        dotNetService.getDotNetAttachTargetInfoStub.resolves({
+            targetPath: '/repo/bin/Debug/net10.0/Api.dll',
+            targetName: 'Api',
+            useAppHost: true,
+        });
+        const resolver = {
+            resolveProcessId: sinon.stub().resolves(4321),
+        };
+        const attachProvider = createAttachProvider(dotNetService, resolver);
+
+        await attachProvider.createDebugConfiguration(createProjectResource({
+            'executable.pid': '1234',
+            'executable.path': 'dotnet',
+            'executable.args': null,
+            'project.path': '/repo/api/Api.csproj',
+        }));
+
+        const processIdentity = resolver.resolveProcessId.firstCall.args[1] as TestLaunchedChildProcessIdentity;
+        assert.strictEqual(processIdentity.isCandidate({
+            pid: 4321,
+            parentPid: 1234,
+            executable: '/repo/bin/Release/net10.0/Api',
+            command: '/repo/bin/Release/net10.0/Api',
+        }), true);
+        assert.strictEqual(processIdentity.isCandidate({
+            pid: 4322,
+            parentPid: 1234,
+            executable: '/repo/bin/Release/net10.0/Api.Worker',
+            command: '/repo/bin/Release/net10.0/Api.Worker',
+        }), false);
+        assert.strictEqual(processIdentity.isCandidate({
+            pid: 4323,
+            parentPid: 1234,
+            executable: '/repo/bin/Release/net10.0/api',
+            command: '/repo/bin/Release/net10.0/api',
+        }), false);
+        assert.strictEqual(processIdentity.isCandidate({
+            pid: 4324,
+            parentPid: 1234,
+            executable: 'C:\\repo\\bin\\Release\\net10.0\\API.EXE',
+            command: 'C:\\repo\\bin\\Release\\net10.0\\API.EXE',
+        }), true);
+        assert.strictEqual(processIdentity.isCandidate({
+            pid: 4325,
+            parentPid: 1234,
+            executable: 'API.EXE',
+            command: 'API.EXE',
+        }), true);
+    });
+
+    test('older TargetName fallback remains scoped to the selected launcher tree', async () => {
+        const targetPath = '/repo/bin/Debug/net10.0/Api.dll';
+        const dotNetService = new TestDotNetService(targetPath, null, true);
+        dotNetService.getDotNetAttachTargetInfoStub.resolves({
+            targetPath,
+            targetName: 'Api',
+            useAppHost: false,
+        });
+        const resolver = new LaunchedChildProcessResolver(
+            new StaticLaunchedChildProcessQuery([
+                createLaunchedProcess(1234, 1, '/usr/local/share/dotnet/dotnet', 'dotnet run --project /repo/api/Api.csproj'),
+                createLaunchedProcess(4321, 1234, '/usr/local/share/dotnet/dotnet', 'dotnet exec /repo/bin/Release/net10.0/Api.dll'),
+                createLaunchedProcess(5678, 1, '/usr/local/share/dotnet/dotnet', 'dotnet run --project /repo/api/Api.csproj'),
+                createLaunchedProcess(8765, 5678, '/usr/local/share/dotnet/dotnet', 'dotnet exec /repo/bin/Release/net10.0/Api.dll'),
+            ]),
+            immediateProcessClock,
+            { timeoutMs: 20, retryDelayMs: 10 });
+        const attachProvider = createAttachProvider(dotNetService, resolver);
+
+        const configuration = await attachProvider.createDebugConfiguration(createProjectResource({
+            'executable.pid': '1234',
+            'executable.path': 'dotnet',
+            'executable.args': null,
+            'project.path': '/repo/api/Api.csproj',
+        }));
+
+        assert.strictEqual(configuration.processId, 4321);
+    });
+
+    test('older TargetName fallback fails closed when MSBuild omits TargetName', async () => {
+        const { dotNetService } = createDebuggerExtension('/repo/bin/Debug/net10.0/Api.dll', null, true, true);
+        dotNetService.getDotNetAttachTargetInfoStub.resolves({
+            targetPath: '/repo/bin/Debug/net10.0/Api.dll',
+            useAppHost: false,
+        });
+        const resolver = {
+            resolveProcessId: sinon.stub().resolves(4321),
+        };
+        const attachProvider = createAttachProvider(dotNetService, resolver);
+
+        await assert.rejects(
+            attachProvider.createDebugConfiguration(createProjectResource({
+                'executable.pid': '1234',
+                'executable.path': 'dotnet',
+                'executable.args': null,
+                'project.path': '/repo/api/Api.csproj',
+            })),
+            (error: unknown) => error instanceof Error
+                && error.message === 'This resource cannot be attached to a debugger.');
+
+        assert.strictEqual(resolver.resolveProcessId.called, false);
+    });
+
+    test('older TargetName fallback rejects present invalid safe metadata', async () => {
+        const dotNetService = new TestDotNetService('/repo/bin/Debug/net10.0/Api.dll', null, true);
+        dotNetService.getDotNetAttachTargetInfoStub.resolves({
+            targetPath: '/repo/bin/Debug/net10.0/Api.dll',
+            targetName: 'Api',
+            useAppHost: false,
+        });
+        const resolver = {
+            resolveProcessId: sinon.stub().resolves(4321),
+        };
+        const attachProvider = createAttachProvider(dotNetService, resolver);
+        const invalidProperties = [
+            { label: 'empty configuration', propertyName: 'project.configuration', propertyValue: '' },
+            { label: 'null target framework', propertyName: 'project.targetFramework', propertyValue: null },
+            { label: 'non-string configuration', propertyName: 'project.configuration', propertyValue: 42 },
+        ] as const;
+
+        for (const [index, { label, propertyName, propertyValue }] of invalidProperties.entries()) {
+            const resourceName = `api-${index}`;
+            await assert.rejects(
+                attachProvider.createDebugConfiguration(createProjectResource({
+                    'executable.pid': '1234',
+                    'executable.path': 'dotnet',
+                    'executable.args': null,
+                    'project.path': '/repo/api/Api.csproj',
+                    [propertyName]: propertyValue,
+                }, resourceName)),
+                (error: unknown) => error instanceof Error
+                    && error.message === `Invalid launch configuration for ${resourceName}.`,
+                label);
+        }
+
+        assert.strictEqual(dotNetService.getDotNetAttachTargetInfoStub.called, false);
+        assert.strictEqual(resolver.resolveProcessId.called, false);
+    });
+
+    test('attach configuration resolves an apphost child by its evaluated executable identity', async () => {
+        sinon.stub(process, 'platform').value('linux');
+        const targetPath = '/repo/OneDrive - Microsoft/über-long-path/My Attach Service';
+        const { dotNetService } = createDebuggerExtension(targetPath, null, true, true);
+        dotNetService.getDotNetAttachTargetInfoStub.resolves({ targetPath, useAppHost: true });
+        const resolver = {
+            resolveProcessId: sinon.stub().resolves(4321),
+        };
+        const attachProvider = createAttachProvider(dotNetService, resolver);
+
+        const configuration = await attachProvider.createDebugConfiguration(createProjectResource({
+            'executable.pid': 1234,
+            'executable.path': 'dotnet',
+            'project.path': '/repo/api/Api.csproj',
+        }));
+
+        assert.strictEqual(configuration.processId, 4321);
+        assert.strictEqual(configuration.processName, undefined);
+        const processIdentity = resolver.resolveProcessId.firstCall.args[1] as TestLaunchedChildProcessIdentity;
+        assert.strictEqual(processIdentity.isCandidate({
+            pid: 4321,
+            parentPid: 1234,
+            executable: targetPath,
+            command: `"${targetPath}" "" --urls http://localhost:5000`,
+        }), true);
+        assert.strictEqual(processIdentity.isCandidate({
+            pid: 4322,
+            parentPid: 1234,
+            executable: '/repo/OneDrive',
+            command: `"${targetPath} Worker"`,
+        }), false);
+        assert.strictEqual(processIdentity.isCandidate({
+            pid: 4323,
+            parentPid: 1234,
+            executable: '/repo/OneDrive',
+            command: `${targetPath} Worker`,
+        }), false);
+        assert.strictEqual(processIdentity.isCandidate({
+            pid: 4324,
+            parentPid: 1234,
+            executable: '/repo/OneDrive',
+            command: `"${targetPath}"`,
+        }), false);
+        assert.strictEqual(processIdentity.isCandidate({
+            pid: 4325,
+            parentPid: 1234,
+            executable: `${targetPath} Worker`,
+            command: `${targetPath} Worker`,
+        }), false);
+    });
+
+    test('matches a long macOS apphost path only through the exact executable identity', async () => {
+        sinon.stub(process, 'platform').value('darwin');
+        const targetPath = '/repo/OneDrive - Microsoft/über-long-path/My Attach Service With A Long Name';
+        const { dotNetService } = createDebuggerExtension(targetPath, null, true, true);
+        dotNetService.getDotNetAttachTargetInfoStub.resolves({ targetPath, useAppHost: true });
+        const resolver = {
+            resolveProcessId: sinon.stub().resolves(4321),
+        };
+        const attachProvider = createAttachProvider(dotNetService, resolver);
+
+        await attachProvider.createDebugConfiguration(createProjectResource({
+            'executable.pid': 1234,
+            'executable.path': 'dotnet',
+            'project.path': '/repo/api/Api.csproj',
+        }));
+
+        const processIdentity = resolver.resolveProcessId.firstCall.args[1] as TestLaunchedChildProcessIdentity;
+        assert.strictEqual(processIdentity.isCandidate({
+            pid: 4321,
+            parentPid: 1234,
+            executable: targetPath,
+            command: `${targetPath} --urls http://localhost:5000`,
+        }), true);
+        assert.strictEqual(processIdentity.isCandidate({
+            pid: 4322,
+            parentPid: 1234,
+            executable: '/repo/OneDrive -',
+            command: targetPath,
+        }), false);
+        assert.strictEqual(processIdentity.isCandidate({
+            pid: 4323,
+            parentPid: 1234,
+            executable: `${targetPath} Worker`,
+            command: targetPath,
+        }), false);
+    });
+
+    test('preserves raw and full-realpath apphost candidates', async () => {
+        const targetPath = '/workspace/link/bin/Debug/net10.0/Api.dll';
+        const appHostPath = '/workspace/link/bin/Debug/net10.0/Api';
+        const appHostExePath = `${appHostPath}.exe`;
+        const canonicalAppHostPath = '/workspace/physical/bin/Debug/net10.0/Api';
+        const canonicalAppHostExePath = `${canonicalAppHostPath}.exe`;
+        const { dotNetService } = createDebuggerExtension(targetPath, null, true, true);
+        const resolver = {
+            resolveProcessId: sinon.stub().resolves(4321),
+        };
+        const realpath = sinon.stub().callsFake(async (candidate: string) => {
+            if (candidate === appHostPath) {
+                return canonicalAppHostPath;
+            }
+            if (candidate === appHostExePath) {
+                return canonicalAppHostExePath;
+            }
+
+            throw new Error('ENOENT');
+        });
+        const attachProvider = createAttachProvider(dotNetService, resolver, { realpath });
+
+        await attachProvider.createDebugConfiguration(createProjectResource({
+            'executable.pid': '1234',
+            'executable.path': 'dotnet',
+            'project.path': '/workspace/link/api/Api.csproj',
+        }));
+
+        const appHostIdentity = resolver.resolveProcessId.firstCall.args[1] as TestLaunchedChildProcessIdentity;
+        assert.strictEqual(appHostIdentity.isCandidate({
+            pid: 4321,
+            parentPid: 1234,
+            executable: canonicalAppHostPath,
+            command: canonicalAppHostPath,
+        }), true);
+        assert.strictEqual(appHostIdentity.isCandidate({
+            pid: 4322,
+            parentPid: 1234,
+            executable: appHostPath,
+            command: appHostPath,
+        }), true);
+        assert.strictEqual(appHostIdentity.isCandidate({
+            pid: 4323,
+            parentPid: 1234,
+            executable: canonicalAppHostExePath,
+            command: canonicalAppHostExePath,
+        }), true);
+        assert.strictEqual(appHostIdentity.isCandidate({
+            pid: 4324,
+            parentPid: 1234,
+            executable: appHostExePath,
+            command: appHostExePath,
+        }), true);
+        assert.strictEqual(appHostIdentity.isCandidate({
+            pid: 4325,
+            parentPid: 1234,
+            executable: '/workspace/other/bin/Debug/net10.0/Api',
+            command: '/workspace/other/bin/Debug/net10.0/Api',
+        }), false);
+        assert.ok(realpath.calledWithExactly(appHostPath));
+        assert.ok(realpath.calledWithExactly(appHostExePath));
+    });
+
+    test('matches a deleted apphost from a symlinked TargetPath directory', async () => {
+        const targetPath = '/workspace/link/bin/Debug/net10.0/Api.dll';
+        const appHostPath = '/workspace/link/bin/Debug/net10.0/Api';
+        const appHostExePath = `${appHostPath}.exe`;
+        const targetDirectory = nodePath.dirname(targetPath);
+        const canonicalTargetDirectory = '/workspace/physical/bin/Debug/net10.0';
+        const canonicalAppHostPath = nodePath.join(canonicalTargetDirectory, nodePath.basename(appHostPath));
+        const canonicalAppHostExePath = nodePath.join(canonicalTargetDirectory, nodePath.basename(appHostExePath));
+        const { dotNetService } = createDebuggerExtension(targetPath, null, true, true);
+        const resolver = {
+            resolveProcessId: sinon.stub().resolves(4321),
+        };
+        const realpath = sinon.stub().callsFake(async (candidate: string) => {
+            if (candidate === targetDirectory) {
+                return canonicalTargetDirectory;
+            }
+
+            throw new Error('ENOENT');
+        });
+        const attachProvider = createAttachProvider(dotNetService, resolver, { realpath });
+
+        await attachProvider.createDebugConfiguration(createProjectResource({
+            'executable.pid': '1234',
+            'executable.path': 'dotnet',
+            'project.path': '/workspace/link/api/Api.csproj',
+        }));
+
+        const appHostIdentity = resolver.resolveProcessId.firstCall.args[1] as TestLaunchedChildProcessIdentity;
+        assert.strictEqual(appHostIdentity.isCandidate({
+            pid: 4321,
+            parentPid: 1234,
+            executable: canonicalAppHostPath,
+            command: canonicalAppHostPath,
+        }), true);
+        assert.strictEqual(appHostIdentity.isCandidate({
+            pid: 4322,
+            parentPid: 1234,
+            executable: canonicalAppHostExePath,
+            command: canonicalAppHostExePath,
+        }), true);
+        assert.ok(realpath.calledWithExactly(appHostPath));
+        assert.ok(realpath.calledWithExactly(targetDirectory));
+    });
+
+    test('does not match a same-named apphost outside the canonical TargetPath directory', async () => {
+        const targetPath = '/workspace/link/bin/Debug/net10.0/Api.dll';
+        const targetDirectory = nodePath.dirname(targetPath);
+        const canonicalTargetDirectory = '/workspace/physical/bin/Debug/net10.0';
+        const unrelatedAppHostPath = '/workspace/other/bin/Debug/net10.0/Api';
+        const { dotNetService } = createDebuggerExtension(targetPath, null, true, true);
+        const resolver = {
+            resolveProcessId: sinon.stub().resolves(4321),
+        };
+        const realpath = sinon.stub().callsFake(async (candidate: string) => {
+            if (candidate === targetDirectory) {
+                return canonicalTargetDirectory;
+            }
+
+            throw new Error('ENOENT');
+        });
+        const attachProvider = createAttachProvider(dotNetService, resolver, { realpath });
+
+        await attachProvider.createDebugConfiguration(createProjectResource({
+            'executable.pid': '1234',
+            'executable.path': 'dotnet',
+            'project.path': '/workspace/link/api/Api.csproj',
+        }));
+
+        const appHostIdentity = resolver.resolveProcessId.firstCall.args[1] as TestLaunchedChildProcessIdentity;
+        assert.strictEqual(appHostIdentity.isCandidate({
+            pid: 4321,
+            parentPid: 1234,
+            executable: unrelatedAppHostPath,
+            command: unrelatedAppHostPath,
+        }), false);
+        assert.strictEqual(appHostIdentity.isCandidate({
+            pid: 4322,
+            parentPid: 1234,
+            executable: '/workspace/physical/bin/Debug/net10.0/Api Replica',
+            command: '/workspace/physical/bin/Debug/net10.0/Api Replica',
+        }), false);
+    });
+
+    test('falls back to raw apphost candidates when canonical TargetPath directory lookup fails', async () => {
+        const targetPath = '/workspace/link/bin/Debug/net10.0/Api.dll';
+        const appHostPath = '/workspace/link/bin/Debug/net10.0/Api';
+        const appHostExePath = `${appHostPath}.exe`;
+        const targetDirectory = nodePath.dirname(targetPath);
+        const { dotNetService } = createDebuggerExtension(targetPath, null, true, true);
+        const resolver = {
+            resolveProcessId: sinon.stub().resolves(4321),
+        };
+        const realpath = sinon.stub().rejects(new Error('ENOENT'));
+        const attachProvider = createAttachProvider(dotNetService, resolver, { realpath });
+
+        await attachProvider.createDebugConfiguration(createProjectResource({
+            'executable.pid': '1234',
+            'executable.path': 'dotnet',
+            'project.path': '/workspace/link/api/Api.csproj',
+        }));
+
+        const appHostIdentity = resolver.resolveProcessId.firstCall.args[1] as TestLaunchedChildProcessIdentity;
+        assert.strictEqual(appHostIdentity.isCandidate({
+            pid: 4321,
+            parentPid: 1234,
+            executable: appHostPath,
+            command: appHostPath,
+        }), true);
+        assert.strictEqual(appHostIdentity.isCandidate({
+            pid: 4322,
+            parentPid: 1234,
+            executable: appHostExePath,
+            command: appHostExePath,
+        }), true);
+        assert.ok(realpath.calledWithExactly(appHostPath));
+        assert.ok(realpath.calledWithExactly(appHostExePath));
+        assert.ok(realpath.calledWithExactly(targetDirectory));
+    });
+
+    test('normalizes Windows executable and command identities before matching', async () => {
+        const targetPath = 'C:\\Repo\\My Attach Service.dll';
+        const { dotNetService } = createDebuggerExtension(targetPath, null, true, true);
+        dotNetService.getDotNetAttachTargetInfoStub.resolves({ targetPath, useAppHost: true });
+        const resolver = {
+            resolveProcessId: sinon.stub().resolves(4321),
+        };
+        const attachProvider = createAttachProvider(dotNetService, resolver);
+
+        await attachProvider.createDebugConfiguration(createProjectResource({
+            'executable.pid': '1234',
+            'executable.path': 'dotnet',
+            'project.path': '/repo/api/Api.csproj',
+        }));
+
+        const appHostIdentity = resolver.resolveProcessId.firstCall.args[1] as TestLaunchedChildProcessIdentity;
+        assert.strictEqual(appHostIdentity.isCandidate({
+            pid: 4321,
+            parentPid: 1234,
+            executable: 'c:/repo/MY ATTACH SERVICE.EXE',
+            command: 'not-used-for-apphost',
+        }), true);
+
+        dotNetService.getDotNetAttachTargetInfoStub.resolves({ targetPath: 'C:\\Repo\\Api.dll', useAppHost: false });
+        await attachProvider.createDebugConfiguration(createProjectResource({
+            'executable.pid': '1234',
+            'executable.path': 'dotnet',
+            'project.path': '/repo/api/Api.csproj',
+        }));
+
+        const frameworkDependentIdentity = resolver.resolveProcessId.secondCall.args[1] as TestLaunchedChildProcessIdentity;
+        assert.strictEqual(frameworkDependentIdentity.isCandidate({
+            pid: 4322,
+            parentPid: 1234,
+            executable: 'c:/Program Files/dotnet/DOTNET.EXE',
+            command: 'dotnet exec c:/REPO\\api.DLL',
+        }), true);
+    });
+
+    test('attach configuration derives the default apphost identity from TargetPath', async () => {
+        const { dotNetService } = createDebuggerExtension('/repo/bin/Debug/net10.0/Api.dll', null, true, true);
+        const resolver = {
+            resolveProcessId: sinon.stub().resolves(4321),
+        };
+        const attachProvider = createAttachProvider(dotNetService, resolver);
+
+        await attachProvider.createDebugConfiguration(createProjectResource({
+            'executable.pid': 1234,
+            'executable.path': 'dotnet',
+            'project.path': '/repo/api/Api.csproj',
+        }));
+
+        const processIdentity = resolver.resolveProcessId.firstCall.args[1] as TestLaunchedChildProcessIdentity;
+        assert.strictEqual(processIdentity.isCandidate({
+            pid: 4321,
+            parentPid: 1234,
+            executable: '/repo/bin/Debug/net10.0/Api',
+            command: '/repo/bin/Debug/net10.0/Api --urls http://localhost:5000',
+        }), true);
+        assert.strictEqual(processIdentity.isCandidate({
+            pid: 4322,
+            parentPid: 1234,
+            executable: '/repo/bin/Debug/net10.0/Api.dll',
+            command: '/repo/bin/Debug/net10.0/Api.dll',
+        }), false);
+    });
+
+    test('attach configuration scopes replicas with the same TargetPath to their launcher PIDs', async () => {
+        const { dotNetService } = createDebuggerExtension('/repo/bin/Debug/net10.0/Replica.dll', null, true, true);
+        const resolver = {
+            resolveProcessId: sinon.stub()
+                .onFirstCall().resolves(4321)
+                .onSecondCall().resolves(4322),
+        };
+        const attachProvider = createAttachProvider(dotNetService, resolver);
+        const resource = (pid: number) => createProjectResource({
+            'executable.pid': pid,
+            'executable.path': 'dotnet',
+            'project.path': '/repo/api/Api.csproj',
+        }, `api-${pid}`);
+
+        const firstConfiguration = await attachProvider.createDebugConfiguration(resource(1234));
+        const secondConfiguration = await attachProvider.createDebugConfiguration(resource(5678));
+
+        assert.strictEqual(firstConfiguration.processId, 4321);
+        assert.strictEqual(secondConfiguration.processId, 4322);
+        assert.deepStrictEqual(resolver.resolveProcessId.firstCall.args.slice(0, 1), [1234]);
+        assert.deepStrictEqual(resolver.resolveProcessId.secondCall.args.slice(0, 1), [5678]);
+    });
+
+    test('attach configuration fails closed for missing and ambiguous framework-dependent children', async () => {
+        const targetPath = '/repo/bin/Debug/net10.0/Api.dll';
+        const createProvider = (processes: readonly LaunchedChildProcess[]) => {
+            const dotNetService = new TestDotNetService(targetPath, null, true);
+            dotNetService.getDotNetAttachTargetInfoStub.resolves({ targetPath, useAppHost: false });
+            const resolver = new LaunchedChildProcessResolver(
+                new StaticLaunchedChildProcessQuery(processes),
+                immediateProcessClock,
+                { timeoutMs: 20, retryDelayMs: 10 });
+            return createProjectResourceAttachProvider(() => dotNetService, resolver);
+        };
+        const resource = createProjectResource({
+            'executable.pid': '1234',
+            'executable.path': 'dotnet',
+            'project.path': '/repo/api/Api.csproj',
+        });
+        const noChild = createProvider([
+            createLaunchedProcess(1234, 1, '/usr/local/share/dotnet/dotnet', 'dotnet run --project /repo/api/Api.csproj'),
+            createLaunchedProcess(4321, 1234, '/usr/local/share/dotnet/dotnet', 'dotnet exec /repo/bin/Debug/net10.0/Other.dll'),
+        ]);
+        const ambiguousChildren = createProvider([
+            createLaunchedProcess(1234, 1, '/usr/local/share/dotnet/dotnet', 'dotnet run --project /repo/api/Api.csproj'),
+            createLaunchedProcess(4321, 1234, '/usr/local/share/dotnet/dotnet', `dotnet exec ${targetPath}`),
+            createLaunchedProcess(4322, 1234, '/usr/local/share/dotnet/dotnet', `dotnet exec ${targetPath}`),
+        ]);
+
+        await assert.rejects(noChild.createDebugConfiguration(resource));
+        await assert.rejects(ambiguousChildren.createDebugConfiguration(resource));
+    });
+
+    test('attach configuration resolves same-name framework-dependent replicas within each launcher tree', async () => {
+        const targetPath = '/repo/bin/Debug/net10.0/Api.dll';
+        const { dotNetService } = createDebuggerExtension(targetPath, null, true, true);
+        dotNetService.getDotNetAttachTargetInfoStub.resolves({ targetPath, useAppHost: false });
+        const resolver = new LaunchedChildProcessResolver(
+            new StaticLaunchedChildProcessQuery([
+                createLaunchedProcess(1234, 1, '/usr/local/share/dotnet/dotnet', 'dotnet run --project /repo/api/Api.csproj'),
+                createLaunchedProcess(4321, 1234, '/usr/local/share/dotnet/dotnet', `dotnet exec ${targetPath}`),
+                createLaunchedProcess(5678, 1, '/usr/local/share/dotnet/dotnet', 'dotnet run --project /repo/api/Api.csproj'),
+                createLaunchedProcess(8765, 5678, '/usr/local/share/dotnet/dotnet', `dotnet exec ${targetPath}`),
+            ]),
+            immediateProcessClock,
+            { timeoutMs: 20, retryDelayMs: 10 });
+        const attachProvider = createAttachProvider(dotNetService, resolver);
+        const resource = (pid: number) => createProjectResource({
+            'executable.pid': pid,
+            'executable.path': 'dotnet',
+            'project.path': '/repo/api/Api.csproj',
+        }, `api-${pid}`);
+
+        assert.strictEqual((await attachProvider.createDebugConfiguration(resource(1234))).processId, 4321);
+        assert.strictEqual((await attachProvider.createDebugConfiguration(resource(5678))).processId, 8765);
+    });
+
+    test('attach configuration uses the resolved project TargetPath child process ID', async () => {
+        const { attachProvider, dotNetService } = createDebuggerExtension('/repo/bin/Debug/net10.0/FromTargetPath.dll', null, true, true);
+
+        const configuration = await attachProvider.createDebugConfiguration(createProjectResource({
+            'executable.pid': '1234',
+            'executable.path': 'dotnet',
+            'project.path': '/repo/api/Api.csproj',
+        }));
+
+        assert.strictEqual(configuration.type, 'coreclr');
+        assert.strictEqual(configuration.request, 'attach');
+        assert.strictEqual(configuration.name, 'Attach debugger: API');
+        assert.strictEqual(configuration.processId, 4321);
+        assert.strictEqual(configuration.processName, undefined);
+        assert.ok(dotNetService.getDotNetAttachTargetInfoStub.calledOnceWithExactly('/repo/api/Api.csproj', undefined));
+        assert.strictEqual(dotNetService.getDotNetTargetPathStub.called, false);
+    });
+
+    test('attach configuration uses safe properties when executable arguments are redacted', async () => {
+        const { attachProvider, dotNetService } = createDebuggerExtension('/repo/bin/Release/net10.0/ReleaseApi.dll', null, true, true);
+
+        await attachProvider.createDebugConfiguration(createProjectResource({
+            'executable.pid': '1234',
+            'executable.path': 'dotnet',
+            'executable.args': null,
+            'project.path': '/repo/api/Api.csproj',
+            'project.configuration': 'Release',
+            'project.targetFramework': 'net10.0',
+            'project.launchCommand': 'run',
+        }));
+
+        assert.ok(dotNetService.getDotNetAttachTargetInfoStub.calledOnceWithExactly(
+            '/repo/api/Api.csproj', 'Release', undefined, 'net10.0'));
+    });
+
+    test('attach configuration prefers safe properties and does not parse executable arguments', async () => {
+        const { attachProvider, dotNetService } = createDebuggerExtension('/repo/bin/Release/net10.0/ReleaseApi.dll', null, true, true);
+
+        await attachProvider.createDebugConfiguration(createProjectResource({
+            'executable.pid': '1234',
+            'executable.path': 'dotnet',
+            'executable.args': ['run', '--configuration', 'Debug', '--framework', 'net9.0'],
+            'project.path': '/repo/api/Api.csproj',
+            'project.configuration': 'Release',
+            'project.targetFramework': 'net10.0',
+            'project.launchCommand': 'run',
+        }));
+
+        await attachProvider.createDebugConfiguration(createProjectResource({
+            'executable.pid': '5678',
+            'executable.path': 'dotnet',
+            'executable.args': ['run', '--configuration', 'Debug', '--framework', 'net9.0'],
+            'project.path': '/repo/api/Api.csproj',
+            'project.launchCommand': 'run',
+        }, 'args-only', 'Args only'));
+
+        assert.deepStrictEqual(dotNetService.getDotNetAttachTargetInfoStub.firstCall.args, [
+            '/repo/api/Api.csproj', 'Release', undefined, 'net10.0',
+        ]);
+        assert.deepStrictEqual(dotNetService.getDotNetAttachTargetInfoStub.secondCall.args, [
+            '/repo/api/Api.csproj', undefined,
+        ]);
+        assert.strictEqual(dotNetService.getDotNetTargetPathStub.called, false);
+    });
+
+    test('attach configuration rejects present invalid launch command metadata', async () => {
+        const { attachProvider, dotNetService } = createDebuggerExtension('/repo/bin/Debug/net10.0/Api.dll', null, true, true);
+        const cases = [
+            { label: 'unsupported publish marker', launchCommand: 'publish' },
+            { label: 'present null marker fails before older fallback', launchCommand: null },
+        ] as const;
+
+        for (const { label, launchCommand } of cases) {
+            dotNetService.getDotNetAttachTargetInfoStub.resetHistory();
+            dotNetService.getDotNetTargetPathStub.resetHistory();
+
+            await assert.rejects(
+                attachProvider.createDebugConfiguration(createProjectResource({
+                    'executable.pid': '1234',
+                    'executable.path': 'dotnet',
+                    'executable.args': null,
+                    'project.path': '/repo/api/Api.csproj',
+                    'project.launchCommand': launchCommand,
+                })),
+                (error: unknown) => error instanceof Error
+                    && error.message === 'Invalid launch configuration for api.',
+                label);
+
+            assert.strictEqual(dotNetService.getDotNetAttachTargetInfoStub.called, false, label);
+            assert.strictEqual(dotNetService.getDotNetTargetPathStub.called, false, label);
+        }
+    });
+
+    test('attach configuration passes cancellation to target discovery', async () => {
+        const { attachProvider, dotNetService } = createDebuggerExtension('/repo/bin/Debug/net10.0/Api.dll', null, true, true);
+        const cancellation = new vscode.CancellationTokenSource();
+
+        try {
+            await attachProvider.createDebugConfiguration(createProjectResource({
+                'executable.pid': '1234',
+                'executable.path': 'dotnet',
+                'project.path': '/repo/api/Api.csproj',
+            }), cancellation.token);
+
+            assert.ok(dotNetService.getDotNetAttachTargetInfoStub.calledOnceWithExactly(
+                '/repo/api/Api.csproj',
+                undefined,
+                cancellation.token));
+        }
+        finally {
+            cancellation.dispose();
+        }
+    });
+
+    test('target discovery cancels and terminates its specific msbuild process', async () => {
+        const dotNetService = new DotNetService(undefined);
+        const msbuildProcess = createMsbuildProcess();
+        sinon.stub(childProcess, 'spawn').returns(msbuildProcess.process);
+        const terminate = sinon.stub(cliProcess, 'terminateCliProcess').resolves();
+        const cancellation = new vscode.CancellationTokenSource();
+
+        try {
+            const targetDiscovery = dotNetService.getDotNetAttachTargetInfo('/repo/api/Api.csproj', undefined, cancellation.token);
+            cancellation.cancel();
+            const outcome = await Promise.race([
+                targetDiscovery.then(
+                    () => 'completed',
+                    error => error instanceof vscode.CancellationError ? 'cancelled' : 'failed'),
+                new Promise<'timedOut'>(resolve => setTimeout(() => resolve('timedOut'), 100)),
+            ]);
+
+            assert.strictEqual(outcome, 'cancelled');
+            assert.ok(terminate.calledOnceWithExactly(
+                msbuildProcess.process,
+                'dotnet msbuild target discovery',
+                { force: true, suppressTimeoutWarning: true }));
+        }
+        finally {
+            cancellation.dispose();
+        }
+    });
+
+    test('target discovery drains bounded stderr and includes probe output on failure', async () => {
+        const dotNetService = new DotNetService(undefined);
+        const msbuildProcess = createMsbuildProcess();
+        sinon.stub(childProcess, 'spawn').callsFake(() => {
+            queueMicrotask(() => {
+                msbuildProcess.stdout.emit('data', 'stdout-marker');
+                msbuildProcess.stderr.emit('data', 'x'.repeat(128 * 1024));
+                msbuildProcess.stderr.emit('data', 'stderr-marker');
+                msbuildProcess.process.emit('close', 1);
+            });
+            return msbuildProcess.process;
+        });
+
+        await assert.rejects(
+            dotNetService.getDotNetAttachTargetInfo('/repo/api/Api.csproj'),
+            (error: unknown) => error instanceof Error
+                && error.message.includes('stdout-marker')
+                && error.message.includes('stderr-marker')
+                && error.message.length < 132 * 1024);
+    });
+
+    test('target discovery terminates its specific msbuild probe when it times out', async () => {
+        const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
+        const dotNetService = new DotNetService(undefined);
+        const msbuildProcess = createMsbuildProcess();
+        sinon.stub(childProcess, 'spawn').returns(msbuildProcess.process);
+        const terminate = sinon.stub(cliProcess, 'terminateCliProcess').resolves();
+
+        try {
+            const targetDiscovery = dotNetService.getDotNetAttachTargetInfo('/repo/api/Api.csproj');
+            const completion = targetDiscovery.then(
+                () => 'completed',
+                error => error instanceof Error && /timed out/.test(error.message) ? 'timedOut' : 'failed');
+
+            await clock.tickAsync(10_000);
+
+            assert.strictEqual(await Promise.race([completion, Promise.resolve('pending')]), 'timedOut');
+            assert.ok(terminate.calledOnceWithExactly(
+                msbuildProcess.process,
+                'dotnet msbuild target discovery',
+                { force: true, suppressTimeoutWarning: true }));
+        }
+        finally {
+            clock.restore();
+        }
+    });
+
+    test('target discovery does not arm a timeout after it has been cancelled', async () => {
+        const clock = sinon.useFakeTimers();
+        const dotNetService = new DotNetService(undefined);
+        const msbuildProcess = createMsbuildProcess();
+        sinon.stub(childProcess, 'spawn').returns(msbuildProcess.process);
+        const terminate = sinon.stub(cliProcess, 'terminateCliProcess').resolves();
+        const cancellationToken: vscode.CancellationToken = {
+            isCancellationRequested: true,
+            onCancellationRequested: listener => {
+                listener(undefined);
+                return new vscode.Disposable(() => { });
+            },
+        };
+
+        try {
+            const targetDiscovery = dotNetService.getDotNetAttachTargetInfo('/repo/api/Api.csproj', undefined, cancellationToken);
+
+            await assert.rejects(targetDiscovery, error => error instanceof vscode.CancellationError);
+            await clock.tickAsync(10_000);
+
+            assert.ok(terminate.calledOnceWithExactly(
+                msbuildProcess.process,
+                'dotnet msbuild target discovery',
+                { force: true, suppressTimeoutWarning: true }));
+        }
+        finally {
+            clock.restore();
+        }
+    });
+
+    for (const stopReason of ['cancelled', 'timedOut'] as const) {
+        test(`target discovery observes failed cleanup after ${stopReason}`, async () => {
+            const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
+            const cancellation = new vscode.CancellationTokenSource();
+            const msbuildProcess = createMsbuildProcess();
+            sinon.stub(childProcess, 'spawn').returns(msbuildProcess.process);
+            const terminate = sinon.stub(cliProcess, 'terminateCliProcess').rejects(new Error('probe cleanup failed'));
+            const log = sinon.stub(extensionLogOutputChannel, 'error');
+            try {
+                const discovery = new DotNetService(undefined).getDotNetAttachTargetInfo(
+                    '/repo/api/Api.csproj', undefined, cancellation.token);
+                const completion = discovery.then(
+                    () => 'completed',
+                    error => error instanceof vscode.CancellationError ? 'cancelled'
+                        : error instanceof Error && /timed out/.test(error.message) ? 'timedOut' : 'failed');
+                if (stopReason === 'cancelled') {
+                    cancellation.cancel();
+                    await clock.tickAsync(0);
+                } else {
+                    await clock.tickAsync(10_000);
+                }
+
+                assert.strictEqual(await completion, stopReason);
+                assert.ok(terminate.calledOnce);
+                assert.ok(log.called);
+            }
+            finally {
+                cancellation.dispose();
+                clock.restore();
+            }
+        });
+    }
+
+    test('target discovery returns TargetName for framework-dependent projects', async () => {
+        const dotNetService = new DotNetService(undefined);
+        const msbuildProcess = createMsbuildProcess();
+        const spawn = sinon.stub(childProcess, 'spawn').callsFake(() => {
+            queueMicrotask(() => {
+                msbuildProcess.stdout.emit('data', JSON.stringify({
+                    Properties: {
+                        TargetPath: '/repo/bin/Release/net10.0/ReleaseApi.dll',
+                        TargetName: ' ReleaseApi ',
+                        UseAppHost: 'false',
+                    },
+                }));
+                msbuildProcess.process.emit('close', 0);
+            });
+            return msbuildProcess.process;
+        });
+
+        const targetInfo = await dotNetService.getDotNetAttachTargetInfo('/repo/api/Api.csproj', 'Release');
+
+        assert.deepStrictEqual(targetInfo, {
+            targetPath: '/repo/bin/Release/net10.0/ReleaseApi.dll',
+            targetName: 'ReleaseApi',
+            useAppHost: false,
+        });
+        assert.deepStrictEqual(spawn.firstCall.args[1], [
+            'msbuild',
+            '/repo/api/Api.csproj',
+            '-nologo',
+            '-getProperty:TargetPath',
+            '-getProperty:TargetName',
+            '-getProperty:UseAppHost',
+            '-v:q',
+            '-property:GenerateFullPaths=true',
+            '-property:Configuration=Release',
+        ]);
+    });
+
+    test('attach configuration rejects file-based project resources', async () => {
+        const { attachProvider, dotNetService } = createDebuggerExtension('/repo/bin/Debug/net10.0/Api.dll', null, true, true);
+
+        await assert.rejects(
+            attachProvider.createDebugConfiguration(createProjectResource({
+                'executable.pid': '1234',
+                'executable.path': 'dotnet',
+                'project.path': '/repo/api/Api.cs',
+                'secret.snapshot.property': 'top-secret',
+            })),
+            (error: unknown) => {
+                assert.ok(error instanceof Error);
+                assert.strictEqual(error.message, 'Invalid launch configuration for api.');
+                assert.strictEqual(error.name, 'ResourceAttachConfigurationError');
+                assert.strictEqual(
+                    (error as Error & { errorKind?: string }).errorKind,
+                    'resourceNotAttachable');
+                return true;
+            });
+
+        assert.strictEqual(dotNetService.getDotNetTargetPathStub.called, false);
+    });
+
+    test('attach configuration keeps parented project resources attachable', async () => {
+        const { attachProvider, dotNetService } = createDebuggerExtension('/repo/bin/Debug/net10.0/FromTargetPath.dll', null, true, true);
+
+        const configuration = await attachProvider.createDebugConfiguration(createProjectResource({
+            'executable.pid': '1234',
+            'executable.path': 'dotnet',
+            'project.path': '/repo/api/Api.csproj',
+            'resource.launchConfigurationType': 'project',
+            'resource.parentName': 'group',
+        }, 'api-grouped'));
+
+        assert.strictEqual(configuration.processId, 4321);
+        assert.strictEqual(configuration.processName, undefined);
+        assert.ok(dotNetService.getDotNetAttachTargetInfoStub.calledOnceWithExactly('/repo/api/Api.csproj', undefined));
+        assert.strictEqual(dotNetService.getDotNetTargetPathStub.called, false);
+    });
+
+    test('attach configuration rejects parented MAUI platform resources', async () => {
+        const { attachProvider, dotNetService } = createDebuggerExtension('/repo/bin/Debug/net10.0/FromTargetPath.dll', null, true, true);
+
+        await assert.rejects(
+            attachProvider.createDebugConfiguration(createProjectResource({
+                'executable.pid': '1234',
+                'executable.path': 'dotnet',
+                'project.path': '/repo/maui/MauiApp.csproj',
+                'resource.launchConfigurationType': 'maui',
+                'resource.parentName': 'mauiapp',
+            }, 'mauiapp-android-emulator', 'MAUI')),
+            (error: unknown) => error instanceof Error
+                && error.name === 'ResourceAttachConfigurationError'
+                && (error as Error & { errorKind?: string }).errorKind === 'resourceNotAttachable');
+
+        assert.strictEqual(dotNetService.getDotNetTargetPathStub.called, false);
+    });
+
+    test('attach configuration rejects parented resources without explicit launch metadata', async () => {
+        const { attachProvider, dotNetService } = createDebuggerExtension('/repo/bin/Debug/net10.0/FromTargetPath.dll', null, true, true);
+
+        await assert.rejects(
+            attachProvider.createDebugConfiguration(createProjectResource({
+                'executable.pid': '1234',
+                'executable.path': 'dotnet',
+                'project.path': '/repo/api/Api.csproj',
+                'resource.parentName': 'group',
+            }, 'legacy-parented', 'Legacy parented project')),
+            (error: unknown) => error instanceof Error
+                && error.name === 'ResourceAttachConfigurationError'
+                && (error as Error & { errorKind?: string }).errorKind === 'resourceNotAttachable');
+
+        assert.strictEqual(dotNetService.getDotNetTargetPathStub.called, false);
+    });
+    for (const failure of ['nonzero exit', 'stderr on successful exit', 'spawn error', 'synchronous spawn error'] as const) {
+        test(`dotnet build failures use the typed AppHost build failure boundary: ${failure}`, async () => {
+            sinon.stub(cliPathModule, 'resolveCliPath').resolves({ cliPath: 'aspire', available: true, source: 'path' });
+            const buildProcess = Object.assign(new EventEmitter(), {
+                stdout: new EventEmitter(),
+                stderr: new EventEmitter(),
+            });
+            sinon.stub(childProcess, 'spawn').callsFake(() => {
+                if (failure === 'synchronous spawn error') {
+                    throw new Error('dotnet could not start');
+                }
+                setImmediate(() => {
+                    if (failure === 'spawn error') {
+                        buildProcess.emit('error', new Error('dotnet could not start'));
+                    } else {
+                        buildProcess.stderr.emit('data', Buffer.from('Build failed.'));
+                        buildProcess.emit('close', failure === 'nonzero exit' ? 1 : 0);
+                    }
+                });
+                return buildProcess as unknown as childProcess.ChildProcessWithoutNullStreams;
+            });
+            const debugSession = {
+                sendMessage: sinon.stub(),
+            } as unknown as AspireDebugSession;
+            const service = new DotNetService(debugSession);
+
+            await assert.rejects(
+                service.buildDotNetProject('/workspace/AppHost/AppHost.csproj'),
+                error => {
+                    assert.ok(error instanceof AppHostBuildFailureError);
+                    assert.strictEqual(error.debugConsoleOutputAlreadyWritten,
+                        failure === 'nonzero exit' || failure === 'stderr on successful exit');
+                    return true;
+                });
+        });
+    }
+
+    test('dotnet build classifies real synchronous argument validation as an unstreamed build failure', async () => {
+        sinon.stub(cliPathModule, 'resolveCliPath').resolves({ cliPath: 'aspire', available: true, source: 'path' });
+        const sendMessage = sinon.stub();
+        const service = new DotNetService({ sendMessage } as unknown as AspireDebugSession);
+
+        // Node rejects a NUL-containing argument before creating a child or emitting "error".
+        await assert.rejects(
+            service.buildDotNetProject('/workspace/AppHost/AppHost.csproj', 'Debug\0'),
+            error => {
+                assert.ok(error instanceof AppHostBuildFailureError);
+                assert.strictEqual(error.debugConsoleOutputAlreadyWritten, false);
+                assert.match(error.message, /null bytes/i);
+                return true;
+            });
+        sinon.assert.notCalled(sendMessage);
+    });
+
+    test('dotnet build leaves CLI resolution failures outside the build failure boundary', async () => {
+        const failure = new Error('CLI resolution failed');
+        sinon.stub(cliPathModule, 'resolveCliPath').rejects(failure);
+        const spawn = sinon.stub(childProcess, 'spawn');
+        const service = new DotNetService({ sendMessage: sinon.stub() } as unknown as AspireDebugSession);
+
+        await assert.rejects(service.buildDotNetProject('/workspace/AppHost/AppHost.csproj'), error => error === failure);
+        sinon.assert.notCalled(spawn);
+    });
+
+    function createRunnableProjectOutput(testName: string): {
+        tempRoot: string;
+        projectPath: string;
+        outputPath: string;
+        outputDirectory: string;
+    } {
+        const tempRoot = nodePath.join(process.cwd(), '.test-temp', `${testName}-${process.pid}-${Date.now()}`);
+        const projectDirectory = nodePath.join(tempRoot, 'Project');
+        const outputDirectory = nodePath.join(projectDirectory, 'bin', 'Debug', 'net10.0');
+        const projectPath = nodePath.join(projectDirectory, 'Project.csproj');
+        const outputPath = nodePath.join(outputDirectory, 'Project.dll');
+        nodeFs.mkdirSync(outputDirectory, { recursive: true });
+        nodeFs.writeFileSync(projectPath, '<Project></Project>');
+        nodeFs.writeFileSync(outputPath, '');
+        nodeFs.writeFileSync(nodePath.join(outputDirectory, 'Project.runtimeconfig.json'), JSON.stringify({
+            runtimeOptions: {
+                tfm: 'net10.0',
+                framework: {
+                    name: 'Microsoft.NETCore.App',
+                    version: '10.0.0'
+                }
+            }
+        }));
+
+        return { tempRoot, projectPath, outputPath, outputDirectory };
     }
 
     function restoreEnvironmentVariable(name: string, value: string | undefined): void {
@@ -87,8 +1755,49 @@ suite('Dotnet Debugger Extension Tests', () => {
             delete process.env[name];
             return;
         }
-
         process.env[name] = value;
+    }
+
+    for (const [projectFile, language] of [
+        ['/workspace/AppHost.fsproj', 'F#'],
+        ['/workspace/AppHost.vbproj', 'Visual Basic'],
+    ]) {
+        test(`${language} AppHost tracker routes output through the AppHost coordinator`, async () => {
+            const parentDebugSession = {
+                id: 'aspire-session',
+                type: 'aspire',
+                name: 'Aspire',
+                workspaceFolder: undefined,
+                configuration: {
+                    type: 'aspire',
+                    request: 'launch',
+                    name: 'Aspire',
+                    program: projectFile,
+                },
+                customRequest: sinon.stub(),
+                getDebugProtocolBreakpoint: sinon.stub(),
+            } as unknown as vscode.DebugSession;
+            const aspireDebugSession = new AspireDebugSession(parentDebugSession, {} as any, {} as any, {} as any, () => { });
+            const outputCoordinator = (aspireDebugSession as unknown as {
+                _appHostLogOutput: {
+                    handleDebugAdapterOutput(output: string, category: string | undefined): unknown;
+                };
+            })._appHostLogOutput;
+            const handleOutputSpy = sinon.spy(outputCoordinator, 'handleDebugAdapterOutput');
+            const trackerStub = sinon.stub(aspireDebugSession, 'createDebugAdapterTrackerCore');
+            sinon.stub(projectDebuggerExtension, 'createDebugSessionConfigurationCallback').resolves();
+            sinon.stub(aspireDebugSession, 'startAndGetDebugSession').resolves({
+                id: 'apphost-session',
+            } as unknown as Awaited<ReturnType<AspireDebugSession['startAndGetDebugSession']>>);
+
+            await aspireDebugSession.startAppHost(projectFile, ['run', '--project', projectFile], [], true, { forceBuild: false });
+
+            const onOutput = trackerStub.firstCall.args[1]?.onOutput;
+            assert.ok(onOutput);
+            onOutput('AppHost output\n', 'stdout');
+
+            assert.strictEqual(handleOutputSpy.calledOnceWithExactly('AppHost output\n', 'stdout'), true);
+        });
     }
 
     test('failed AppHost start writes error to debug console', async () => {
@@ -147,8 +1856,7 @@ suite('Dotnet Debugger Extension Tests', () => {
         const aspireDebugSession = new AspireDebugSession(parentDebugSession, {} as any, {} as any, {} as any, () => { });
         const outputEvents: any[] = [];
         const outputSubscription = aspireDebugSession.onDidSendMessage(message => outputEvents.push(message));
-        const startError = new Error('Build FAILED.');
-        (startError as Error & { debugConsoleOutputAlreadyWritten?: boolean }).debugConsoleOutputAlreadyWritten = true;
+        const startError = new AppHostBuildFailureError('Build FAILED.', true);
 
         sinon.stub(aspireDebugSession, 'createDebugAdapterTrackerCore');
         sinon.stub(aspireDebugSession, 'startAndGetDebugSession').rejects(startError);
@@ -191,7 +1899,8 @@ suite('Dotnet Debugger Extension Tests', () => {
 
         await aspireDebugSession.startAppHost('/workspace/apphost.ts', ['node', 'apphost.ts'], [], true, { forceBuild: false });
 
-        const restartHandler = trackerStub.firstCall.args[1] as (debugSessionId: string) => boolean;
+        const restartHandler = trackerStub.firstCall.args[1]?.onRestartRequested;
+        assert.ok(restartHandler);
         assert.strictEqual(restartHandler(aspireDebugSession.debugSessionId), true);
         assert.strictEqual(configuration.__aspireAppHostRestartSourceSessionId, parentDebugSession.id);
 
@@ -233,7 +1942,8 @@ suite('Dotnet Debugger Extension Tests', () => {
 
         await aspireDebugSession.startAppHost('/workspace/apphost.ts', ['node', 'apphost.ts'], [], true, { forceBuild: false });
 
-        const restartHandler = trackerStub.firstCall.args[1] as (debugSessionId: string) => boolean;
+        const restartHandler = trackerStub.firstCall.args[1]?.onRestartRequested;
+        assert.ok(restartHandler);
         assert.strictEqual(restartHandler(aspireDebugSession.debugSessionId), true);
         assert.ok(terminateCallback);
         await terminateCallback(appHostDebugSession);
@@ -276,7 +1986,8 @@ suite('Dotnet Debugger Extension Tests', () => {
 
         await aspireDebugSession.startAppHost('/workspace/apphost.ts', ['node', 'apphost.ts'], [], true, { forceBuild: false });
 
-        const restartHandler = trackerStub.firstCall.args[1] as (debugSessionId: string) => boolean;
+        const restartHandler = trackerStub.firstCall.args[1]?.onRestartRequested;
+        assert.ok(restartHandler);
         assert.strictEqual(restartHandler(aspireDebugSession.debugSessionId), true);
         assert.ok(terminateCallback);
         await terminateCallback(appHostDebugSession);
@@ -400,6 +2111,154 @@ suite('Dotnet Debugger Extension Tests', () => {
         assert.strictEqual(dotNetService.buildDotNetProjectStub.called, true);
     });
 
+    test('unpackaged WinUI project launches the generated apphost executable', async () => {
+        sinon.stub(process, 'platform').value('win32');
+        const outputPath = 'C:\\temp\\bin\\Debug\\net10.0-windows\\win-x64\\WinUIApp.dll';
+        const appHostPath = 'C:\\temp\\bin\\Debug\\net10.0-windows\\win-x64\\WinUIApp.exe';
+        const { extension, dotNetService, doesFileExistStub } = createDebuggerExtension(outputPath, null, true, true);
+        dotNetService.projectLaunchProperties = {
+            targetPath: outputPath,
+            runCommand: appHostPath,
+            useAppHost: true,
+            useWinUI: true,
+            windowsPackageType: 'None'
+        };
+        const debugConfig: AspireResourceExtendedDebugConfiguration = {
+            runId: '1',
+            debugSessionId: '1',
+            type: 'coreclr',
+            name: 'Test Debug Config',
+            request: 'launch',
+            noDebug: false
+        };
+        const launchConfig: ProjectLaunchConfiguration = {
+            type: 'project',
+            project_path: 'C:\\temp\\WinUIApp.csproj'
+        };
+
+        await extension.createDebugSessionConfigurationCallback!(
+            launchConfig,
+            [],
+            [],
+            { debug: true, runId: '1', debugSessionId: '1', isApphost: false, debugSession: sinon.createStubInstance(AspireDebugSession) },
+            debugConfig);
+
+        assert.strictEqual(debugConfig.program, appHostPath);
+        assert.strictEqual(debugConfig.noDebug, false);
+        assert.strictEqual(doesFileExistStub.calledWithExactly(outputPath), true);
+        assert.strictEqual(doesFileExistStub.calledWithExactly(appHostPath), true);
+        assert.strictEqual(dotNetService.buildDotNetProjectStub.notCalled, true);
+    });
+
+    test('unpackaged WinUI project builds when the generated apphost executable is missing', async () => {
+        sinon.stub(process, 'platform').value('win32');
+        const outputPath = 'C:\\temp\\bin\\Debug\\net10.0-windows\\win-x64\\WinUIApp.dll';
+        const appHostPath = 'C:\\temp\\bin\\Debug\\net10.0-windows\\win-x64\\WinUIApp.exe';
+        const { extension, dotNetService, doesFileExistStub } = createDebuggerExtension(outputPath, null, true, false);
+        dotNetService.projectLaunchProperties = {
+            targetPath: outputPath,
+            runCommand: appHostPath,
+            useAppHost: true,
+            useWinUI: true,
+            windowsPackageType: 'none'
+        };
+        const debugConfig: AspireResourceExtendedDebugConfiguration = {
+            runId: '1',
+            debugSessionId: '1',
+            type: 'coreclr',
+            name: 'Test Debug Config',
+            request: 'launch'
+        };
+        const launchConfig: ProjectLaunchConfiguration = {
+            type: 'project',
+            project_path: 'C:\\temp\\WinUIApp.csproj'
+        };
+
+        await extension.createDebugSessionConfigurationCallback!(
+            launchConfig,
+            [],
+            [],
+            { debug: true, runId: '1', debugSessionId: '1', isApphost: false, debugSession: sinon.createStubInstance(AspireDebugSession) },
+            debugConfig);
+
+        assert.strictEqual(debugConfig.program, appHostPath);
+        assert.strictEqual(doesFileExistStub.calledWithExactly(outputPath), true);
+        assert.strictEqual(doesFileExistStub.calledWithExactly(appHostPath), true);
+        assert.strictEqual(dotNetService.buildDotNetProjectStub.calledOnceWith('C:\\temp\\WinUIApp.csproj'), true);
+    });
+
+    test('unpackaged WinUI project builds when the managed target is missing', async () => {
+        sinon.stub(process, 'platform').value('win32');
+        const outputPath = 'C:\\temp\\bin\\Debug\\net10.0-windows\\win-x64\\WinUIApp.dll';
+        const appHostPath = 'C:\\temp\\bin\\Debug\\net10.0-windows\\win-x64\\WinUIApp.exe';
+        const { extension, dotNetService, doesFileExistStub } = createDebuggerExtension(outputPath, null, true, true);
+        doesFileExistStub.withArgs(outputPath).resolves(false);
+        doesFileExistStub.withArgs(appHostPath).resolves(true);
+        dotNetService.projectLaunchProperties = {
+            targetPath: outputPath,
+            runCommand: appHostPath,
+            useAppHost: true,
+            useWinUI: true,
+            windowsPackageType: 'None'
+        };
+        const debugConfig: AspireResourceExtendedDebugConfiguration = {
+            runId: '1',
+            debugSessionId: '1',
+            type: 'coreclr',
+            name: 'Test Debug Config',
+            request: 'launch'
+        };
+        const launchConfig: ProjectLaunchConfiguration = {
+            type: 'project',
+            project_path: 'C:\\temp\\WinUIApp.csproj'
+        };
+
+        await extension.createDebugSessionConfigurationCallback!(
+            launchConfig,
+            [],
+            [],
+            { debug: true, runId: '1', debugSessionId: '1', isApphost: false, debugSession: sinon.createStubInstance(AspireDebugSession) },
+            debugConfig);
+
+        assert.strictEqual(debugConfig.program, appHostPath);
+        assert.strictEqual(doesFileExistStub.calledWithExactly(outputPath), true);
+        assert.strictEqual(doesFileExistStub.calledWithExactly(appHostPath), true);
+        assert.strictEqual(dotNetService.buildDotNetProjectStub.calledOnceWith('C:\\temp\\WinUIApp.csproj'), true);
+    });
+
+    test('packaged WinUI project keeps the managed target path', async () => {
+        sinon.stub(process, 'platform').value('win32');
+        const outputPath = 'C:\\temp\\bin\\Debug\\net10.0-windows\\win-x64\\WinUIApp.dll';
+        const { extension, dotNetService } = createDebuggerExtension(outputPath, null, true, true);
+        dotNetService.projectLaunchProperties = {
+            targetPath: outputPath,
+            runCommand: 'C:\\temp\\bin\\Debug\\net10.0-windows\\win-x64\\WinUIApp.exe',
+            useAppHost: true,
+            useWinUI: true,
+            windowsPackageType: 'MSIX'
+        };
+        const debugConfig: AspireResourceExtendedDebugConfiguration = {
+            runId: '1',
+            debugSessionId: '1',
+            type: 'coreclr',
+            name: 'Test Debug Config',
+            request: 'launch'
+        };
+        const launchConfig: ProjectLaunchConfiguration = {
+            type: 'project',
+            project_path: 'C:\\temp\\WinUIApp.csproj'
+        };
+
+        await extension.createDebugSessionConfigurationCallback!(
+            launchConfig,
+            [],
+            [],
+            { debug: true, runId: '1', debugSessionId: '1', isApphost: false, debugSession: sinon.createStubInstance(AspireDebugSession) },
+            debugConfig);
+
+        assert.strictEqual(debugConfig.program, outputPath);
+    });
+
     test('project-scoped dotnet commands use the project directory as their working directory', async () => {
         const projectPath = nodePath.join(process.cwd(), '.test-temp', `dotnet-cwd-${process.pid}-${Date.now()}`, 'TestProject.csproj');
         const outputPath = nodePath.join(nodePath.dirname(projectPath), 'bin', 'Debug', 'net10.0', 'TestProject.dll');
@@ -409,7 +2268,18 @@ suite('Dotnet Debugger Extension Tests', () => {
             stderr: new EventEmitter()
         });
 
-        const execFileStub = sinon.stub(childProcess, 'execFile').yields(null, { stdout: outputPath, stderr: '' });
+        const execFileStub = sinon.stub(childProcess, 'execFile').yields(null, {
+            stdout: JSON.stringify({
+                Properties: {
+                    TargetPath: outputPath,
+                    RunCommand: '',
+                    UseAppHost: 'false',
+                    UseWinUI: 'false',
+                    WindowsPackageType: ''
+                }
+            }),
+            stderr: ''
+        });
         const spawnStub = sinon.stub(childProcess, 'spawn').callsFake(() => {
             setImmediate(() => buildProcess.emit('close', 0));
             return buildProcess as unknown as childProcess.ChildProcessWithoutNullStreams;
@@ -417,7 +2287,8 @@ suite('Dotnet Debugger Extension Tests', () => {
 
         const launchConfig: ProjectLaunchConfiguration = {
             type: 'project',
-            project_path: projectPath
+            project_path: projectPath,
+            build_configuration: 'Release'
         };
 
         const debugConfig: AspireResourceExtendedDebugConfiguration = {
@@ -439,6 +2310,380 @@ suite('Dotnet Debugger Extension Tests', () => {
 
         assert.strictEqual(msbuildCallFor(execFileStub, projectPath).args[2]?.cwd, projectDirectory);
         assert.strictEqual(buildCallFor(spawnStub, projectPath).args[2]?.cwd, projectDirectory);
+        assert.deepStrictEqual(
+            msbuildCallFor(execFileStub, projectPath).args[1].slice(-2),
+            ['-property:Configuration=Release', '-property:GenerateFullPaths=true']);
+        assert.deepStrictEqual(
+            buildCallFor(spawnStub, projectPath).args[1].slice(-2),
+            ['--configuration', 'Release']);
+
+        const buildWorkingDirectory = nodePath.join(nodePath.dirname(projectDirectory), 'sdk-root');
+        launchConfig.build_working_directory = buildWorkingDirectory;
+        execFileStub.resetHistory();
+        spawnStub.resetHistory();
+
+        await projectDebuggerExtension.createDebugSessionConfigurationCallback!(
+            launchConfig,
+            [],
+            [],
+            { debug: true, runId: '1', debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession },
+            { ...debugConfig });
+
+        assert.strictEqual(msbuildCallFor(execFileStub, projectPath).args[2]?.cwd, buildWorkingDirectory);
+        assert.strictEqual(buildCallFor(spawnStub, projectPath).args[2]?.cwd, buildWorkingDirectory);
+    });
+
+    test('target path property evaluation merges ambient and resource build environments', async () => {
+        const ambientName = 'ASPIRE_TEST_TARGET_PATH_AMBIENT';
+        const overriddenName = 'ASPIRE_TEST_TARGET_PATH_OVERRIDE';
+        const inheritedEnvironment = {
+            [ambientName]: process.env[ambientName],
+            [overriddenName]: process.env[overriddenName]
+        };
+        process.env[ambientName] = 'ambient';
+        process.env[overriddenName] = 'ambient';
+
+        try {
+            sinon.stub(cliPathModule, 'resolveCliPath').resolves({ cliPath: '/resolved/aspire', available: true, source: 'configured' });
+            const resolvedEnv = { MARKER: 'resolved-env' } as unknown as NodeJS.ProcessEnv;
+            const createResolvedEnvStub = sinon.stub(cliPathEnvironmentModule, 'createResolvedAspireCliPathProcessEnvironment').returns(resolvedEnv);
+            let responseFilePath: string | undefined;
+            let responseFileContents: string | undefined;
+            let responseFileMode: number | undefined;
+            const execFileStub = sinon.stub(childProcess, 'execFile').callsFake((...callArgs: any[]) => {
+                const args = callArgs[1] as string[];
+                responseFilePath = getMsBuildResponseFilePath(args);
+                responseFileContents = nodeFs.readFileSync(responseFilePath, 'utf8');
+                responseFileMode = nodeFs.statSync(responseFilePath).mode & 0o777;
+                callArgs.at(-1)(null, { stdout: '/workspace/bin/Debug/app.dll', stderr: '' });
+                return {} as childProcess.ChildProcess;
+            });
+            const service = new DotNetService({} as AspireDebugSession);
+
+            await service.getDotNetTargetPath('/workspace/app.csproj', 'Debug', {
+                [overriddenName]: 'resource;value%',
+                ASPIRE_TEST_TARGET_PATH_RESOURCE: 'resource',
+                ['BUILD\nINJECTED']: 'safe'
+            });
+
+            const baseEnvironment = createResolvedEnvStub.firstCall.args[1];
+            assert.strictEqual(baseEnvironment?.[ambientName], 'ambient');
+            assert.strictEqual(baseEnvironment?.[overriddenName], 'resource;value%');
+            assert.strictEqual(baseEnvironment?.ASPIRE_TEST_TARGET_PATH_RESOURCE, 'resource');
+            assert.strictEqual(execFileStub.firstCall.args[2]?.env, resolvedEnv);
+            const msbuildArgs = execFileStub.firstCall.args[1];
+            assert.ok(Array.isArray(msbuildArgs));
+            assert.deepStrictEqual(
+                msbuildArgs.filter((arg: string) => !arg.startsWith('@')).slice(-1),
+                ['-property:GenerateFullPaths=true']);
+            assert.strictEqual(
+                responseFileContents,
+                [
+                    `"--property:${overriddenName}=resource%3Bvalue%25"`,
+                    '"--property:ASPIRE_TEST_TARGET_PATH_RESOURCE=resource"',
+                    '"--property:BUILD%0AINJECTED=safe"'
+                ].join(nodeOs.EOL) + nodeOs.EOL);
+            assert.ok(!msbuildArgs.some((arg: string) => arg.includes('resource;value%') || arg.includes('resource%3Bvalue%25')));
+            assert.ok(responseFilePath);
+            assert.strictEqual(nodeFs.existsSync(responseFilePath), false);
+            if (process.platform !== 'win32') {
+                assert.strictEqual(responseFileMode, 0o600);
+            }
+        } finally {
+            for (const [name, value] of Object.entries(inheritedEnvironment)) {
+                restoreEnvironmentVariable(name, value);
+            }
+        }
+    });
+
+    test('project launch properties use the coordinated build context and parse MSBuild JSON', async () => {
+        const projectPath = 'C:\\temp\\WinUIApp.csproj';
+        const resolvedEnv = { MARKER: 'resolved-env' } as unknown as NodeJS.ProcessEnv;
+        sinon.stub(cliPathModule, 'resolveCliPath').resolves({ cliPath: '/resolved/aspire', available: true, source: 'configured' });
+        sinon.stub(cliPathEnvironmentModule, 'createResolvedAspireCliPathProcessEnvironment').returns(resolvedEnv);
+        const execFileStub = sinon.stub(childProcess, 'execFile').yields(null, {
+            stdout: JSON.stringify({
+                Properties: {
+                    TargetPath: 'C:\\temp\\bin\\WinUIApp.dll',
+                    RunCommand: 'C:\\temp\\bin\\WinUIApp.exe',
+                    UseAppHost: ' TRUE ',
+                    UseWinUI: 'true',
+                    WindowsPackageType: 'None'
+                }
+            }),
+            stderr: ''
+        });
+        const service = new DotNetService({} as AspireDebugSession);
+
+        const properties = await service.getDotNetProjectLaunchProperties(
+            projectPath,
+            'Release',
+            { BUILD_FLAVOR: 'custom' },
+            'C:\\sdk-root');
+
+        assert.deepStrictEqual(properties, {
+            targetPath: 'C:\\temp\\bin\\WinUIApp.dll',
+            runCommand: 'C:\\temp\\bin\\WinUIApp.exe',
+            useAppHost: true,
+            useWinUI: true,
+            windowsPackageType: 'None'
+        });
+        const msbuildCall = msbuildCallFor(execFileStub, projectPath);
+        assert.ok(msbuildCall.args[1].includes('-getProperty:TargetPath,RunCommand,UseAppHost,UseWinUI,WindowsPackageType'));
+        assert.ok(msbuildCall.args[1].includes('-property:Configuration=Release'));
+        assert.strictEqual(msbuildCall.args[2]?.cwd, 'C:\\sdk-root');
+        assert.strictEqual(msbuildCall.args[2]?.env, resolvedEnv);
+    });
+
+    test('project run properties use the coordinated build context and parse a dedicated result file', async () => {
+        sinon.stub(cliPathModule, 'resolveCliPath').resolves({ cliPath: '/resolved/aspire', available: true, source: 'configured' });
+        const createResolvedEnvStub = sinon.stub(cliPathEnvironmentModule, 'createResolvedAspireCliPathProcessEnvironment')
+            .returns({ RESOLVED: 'environment' });
+        let responseFilePath: string | undefined;
+        let responseFileContents: string | undefined;
+        let resultOutputPath: string | undefined;
+        const execFileStub = sinon.stub(childProcess, 'execFile').callsFake((...callArgs: any[]) => {
+            const args = callArgs[1] as string[];
+            responseFilePath = getMsBuildResponseFilePath(args);
+            responseFileContents = nodeFs.readFileSync(responseFilePath, 'utf8');
+            resultOutputPath = getMsBuildResultOutputPath(args);
+            nodeFs.writeFileSync(resultOutputPath, JSON.stringify({
+                Properties: {
+                    TargetPath: '/workspace/bin/app.dll',
+                    RunCommand: '"/workspace/bin/app"',
+                    RunArguments: '--host-arg',
+                    RunWorkingDirectory: 'relative-run-directory',
+                    UseAppHost: 'true',
+                    UseWinUI: ' TRUE ',
+                    WindowsPackageType: 'None'
+                }
+            }));
+            callArgs.at(-1)(null, {
+                stdout: 'A successful MSBuild diagnostic.\n',
+                stderr: ''
+            });
+            return {} as childProcess.ChildProcess;
+        });
+        const service = new DotNetService({} as AspireDebugSession);
+
+        const result = await service.getDotNetProjectRunProperties(
+            '/workspace/app.csproj',
+            'Release',
+            { BUILD_FLAVOR: 'custom\u2003"flavor";\r\n\tvalue%' },
+            '/workspace/sdk-root');
+
+        assert.deepStrictEqual(result, {
+            targetPath: '/workspace/bin/app.dll',
+            runCommand: '/workspace/bin/app',
+            runArguments: '--host-arg',
+            runWorkingDirectory: nodePath.resolve('/workspace', 'relative-run-directory'),
+            useAppHost: true,
+            useWinUI: true,
+            windowsPackageType: 'None'
+        });
+        assert.strictEqual(execFileStub.firstCall.args[2]?.cwd, '/workspace/sdk-root');
+        const runPropertyArgs = execFileStub.firstCall.args[1];
+        assert.ok(Array.isArray(runPropertyArgs));
+        assert.deepStrictEqual(
+            runPropertyArgs.filter((arg: string) =>
+                !arg.startsWith('@') &&
+                !arg.startsWith('-getResultOutputFile:')).slice(-5),
+            [
+                '-target:ComputeRunArguments',
+                '-getProperty:TargetPath,RunCommand,RunArguments,RunWorkingDirectory,UseAppHost,UseWinUI,WindowsPackageType',
+                '-v:q',
+                '-property:Configuration=Release',
+                '-property:GenerateFullPaths=true'
+            ]);
+        assert.strictEqual(responseFileContents, `"--property:BUILD_FLAVOR=custom\u2003%22flavor%22%3B%0D%0A%09value%25"${nodeOs.EOL}`);
+        assert.ok(!runPropertyArgs.some((arg: string) => arg.includes('custom\u2003"flavor";\r\n\tvalue%') || arg.includes('custom\u2003%22flavor%22%3B%0D%0A%09value%25')));
+        assert.ok(responseFilePath);
+        assert.strictEqual(nodeFs.existsSync(responseFilePath), false);
+        assert.ok(resultOutputPath);
+        assert.strictEqual(nodeFs.existsSync(resultOutputPath), false);
+        assert.strictEqual(createResolvedEnvStub.firstCall.args[1]?.BUILD_FLAVOR, 'custom\u2003"flavor";\r\n\tvalue%');
+    });
+
+    test('project property evaluation errors preserve diagnostics and omit the command line', async () => {
+        const secretValue = 'sentinel-build-secret';
+        let responseFilePath: string | undefined;
+        sinon.stub(cliPathModule, 'resolveCliPath').resolves({ cliPath: '/resolved/aspire', available: true, source: 'configured' });
+        sinon.stub(childProcess, 'execFile').callsFake((...callArgs: any[]) => {
+            const args = callArgs[1] as string[];
+            responseFilePath = getMsBuildResponseFilePath(args);
+            const command = `dotnet ${args.join(' ')}`;
+            const error = Object.assign(
+                new Error(`Command failed: ${command}\nsafe message containing ${secretValue}`),
+                {
+                    cmd: command,
+                    stdout: `safe stdout containing ${secretValue}`,
+                    stderr: `safe stderr containing ${secretValue}`
+                });
+            callArgs.at(-1)(error);
+            return {} as childProcess.ChildProcess;
+        });
+        const service = new DotNetService({} as AspireDebugSession);
+
+        await assert.rejects(
+            service.getDotNetTargetPath(
+                '/workspace/app.csproj',
+                undefined,
+                {
+                    BUILD_SECRET_PREFIX: 'sentinel-build',
+                    BUILD_SECRET: secretValue
+                }),
+            (error: Error) => {
+                assert.ok(error.message.includes(`safe stdout containing ${secretValue}`));
+                assert.ok(error.message.includes(`safe stderr containing ${secretValue}`));
+                assert.ok(!error.message.includes('Command failed:'));
+                return true;
+            });
+
+        assert.ok(responseFilePath);
+        assert.strictEqual(nodeFs.existsSync(responseFilePath), false);
+    });
+
+    test('target path property evaluation removes differently-cased ambient variables on Windows', async () => {
+        const platformStub = sinon.stub(process, 'platform').value('win32');
+        const ambientName = 'Aspire_Test_Target_Path_Case';
+        const resourceName = ambientName.toUpperCase();
+        const normalizedName = ambientName.toLowerCase();
+        const inheritedEntries = Object.entries(process.env)
+            .filter(([name]) => name.toLowerCase() === normalizedName);
+        for (const [name] of inheritedEntries) {
+            delete process.env[name];
+        }
+        process.env[ambientName] = 'ambient';
+
+        try {
+            sinon.stub(cliPathModule, 'resolveCliPath').resolves({ cliPath: '/resolved/aspire', available: true, source: 'configured' });
+            const createResolvedEnvStub = sinon.stub(cliPathEnvironmentModule, 'createResolvedAspireCliPathProcessEnvironment').returns({});
+            sinon.stub(childProcess, 'execFile').yields(null, { stdout: '/workspace/bin/Debug/app.dll', stderr: '' });
+            const service = new DotNetService({} as AspireDebugSession);
+
+            await service.getDotNetTargetPath('/workspace/app.csproj', undefined, {
+                [resourceName]: 'resource'
+            });
+
+            const matchingEntries = Object.entries(createResolvedEnvStub.firstCall.args[1] ?? {})
+                .filter(([name]) => name.toLowerCase() === normalizedName);
+            assert.deepStrictEqual(matchingEntries, [[resourceName, 'resource']]);
+        } finally {
+            platformStub.restore();
+            for (const name of Object.keys(process.env)) {
+                if (name.toLowerCase() === normalizedName) {
+                    delete process.env[name];
+                }
+            }
+            for (const [name, value] of inheritedEntries) {
+                process.env[name] = value;
+            }
+        }
+    });
+
+    test('dotnet build removes differently-cased ambient variables on Windows', async () => {
+        const platformStub = sinon.stub(process, 'platform').value('win32');
+        const ambientName = 'Aspire_Test_Build_Case';
+        const resourceName = ambientName.toUpperCase();
+        const normalizedName = ambientName.toLowerCase();
+        const inheritedEntries = Object.entries(process.env)
+            .filter(([name]) => name.toLowerCase() === normalizedName);
+        for (const [name] of inheritedEntries) {
+            delete process.env[name];
+        }
+        process.env[ambientName] = 'ambient';
+
+        try {
+            sinon.stub(cliPathModule, 'resolveCliPath').resolves({ cliPath: '/resolved/aspire', available: true, source: 'configured' });
+            const buildProcess = Object.assign(new EventEmitter(), {
+                stdout: new EventEmitter(),
+                stderr: new EventEmitter()
+            });
+            let responseFilePath: string | undefined;
+            let responseFileContents: string | undefined;
+            const spawnStub = sinon.stub(childProcess, 'spawn').callsFake(() => {
+                const args = spawnStub.lastCall.args[1] as string[];
+                responseFilePath = getMsBuildResponseFilePath(args);
+                responseFileContents = nodeFs.readFileSync(responseFilePath, 'utf8');
+                setImmediate(() => buildProcess.emit('close', 0));
+                return buildProcess as unknown as childProcess.ChildProcessWithoutNullStreams;
+            });
+            const service = new DotNetService({} as AspireDebugSession);
+
+            await service.buildDotNetProject('/workspace/app.csproj', 'Debug', {
+                [resourceName]: 'resource'
+            });
+
+            const matchingEntries = Object.entries(spawnStub.firstCall.args[2]?.env ?? {})
+                .filter(([name]) => name.toLowerCase() === normalizedName);
+            assert.deepStrictEqual(matchingEntries, [[resourceName, 'resource']]);
+            const buildArgs = spawnStub.firstCall.args[1] as string[];
+            assert.ok(!buildArgs.some(arg => arg.includes('resource')));
+            assert.strictEqual(responseFileContents, `"--property:${resourceName}=resource"${nodeOs.EOL}`);
+            assert.ok(responseFilePath);
+            assert.strictEqual(nodeFs.existsSync(responseFilePath), false);
+        } finally {
+            platformStub.restore();
+            for (const name of Object.keys(process.env)) {
+                if (name.toLowerCase() === normalizedName) {
+                    delete process.env[name];
+                }
+            }
+            for (const [name, value] of inheritedEntries) {
+                process.env[name] = value;
+            }
+        }
+    });
+
+    test('dotnet build streams build environment values without corrupting output', async () => {
+        const secretValue = 'sentinel-build-secret';
+        const sendMessage = sinon.stub();
+        const buildProcess = Object.assign(new EventEmitter(), {
+            stdout: new EventEmitter(),
+            stderr: new EventEmitter()
+        });
+        sinon.stub(cliPathModule, 'resolveCliPath').resolves({ cliPath: '/resolved/aspire', available: true, source: 'configured' });
+        sinon.stub(childProcess, 'spawn').callsFake(() => {
+            setImmediate(() => {
+                buildProcess.stdout.emit('data', Buffer.from('before sentinel-build-'));
+                buildProcess.stdout.emit('data', Buffer.from('secret after'));
+                buildProcess.emit('close', 1);
+            });
+            return buildProcess as unknown as childProcess.ChildProcessWithoutNullStreams;
+        });
+        const service = new DotNetService({ sendMessage } as unknown as AspireDebugSession);
+
+        await assert.rejects(
+            service.buildDotNetProject(
+                '/workspace/app.csproj',
+                undefined,
+                { BUILD_SECRET: secretValue }));
+
+        assert.deepStrictEqual(
+            sendMessage.getCalls().map(call => call.args),
+            [
+                ['before sentinel-build-', false, 'stdout'],
+                ['secret after', false, 'stdout']
+            ]);
+    });
+
+    test('target path property evaluation does not reintroduce a stale differently-cased AspireCliPath on Windows', async () => {
+        const platformStub = sinon.stub(process, 'platform').value('win32');
+        sinon.stub(cliPathModule, 'resolveCliPath').resolves({ cliPath: 'aspire', available: true, source: 'path' });
+        const execFileStub = sinon.stub(childProcess, 'execFile').yields(null, { stdout: '/workspace/bin/Debug/app.dll', stderr: '' });
+        const service = new DotNetService({} as AspireDebugSession);
+
+        try {
+            await service.getDotNetTargetPath('/workspace/app.csproj', undefined, {
+                ASPIRECLIPATH: 'C:\\stale\\aspire.exe'
+            });
+
+            const matchingNames = Object.keys(execFileStub.firstCall.args[2]?.env ?? {})
+                .filter(name => name.toLowerCase() === 'aspireclipath');
+            assert.deepStrictEqual(matchingNames, []);
+        } finally {
+            platformStub.restore();
+        }
     });
 
     test('project-scoped dotnet commands resolve the CLI using the target derived from the project path and forward only that resolved CLI', async () => {
@@ -450,7 +2695,18 @@ suite('Dotnet Debugger Extension Tests', () => {
             stderr: new EventEmitter()
         });
 
-        const execFileStub = sinon.stub(childProcess, 'execFile').yields(null, { stdout: outputPath, stderr: '' });
+        const execFileStub = sinon.stub(childProcess, 'execFile').yields(null, {
+            stdout: JSON.stringify({
+                Properties: {
+                    TargetPath: outputPath,
+                    RunCommand: '',
+                    UseAppHost: 'false',
+                    UseWinUI: 'false',
+                    WindowsPackageType: ''
+                }
+            }),
+            stderr: ''
+        });
         const spawnStub = sinon.stub(childProcess, 'spawn').callsFake(() => {
             setImmediate(() => buildProcess.emit('close', 0));
             return buildProcess as unknown as childProcess.ChildProcessWithoutNullStreams;
@@ -508,6 +2764,287 @@ suite('Dotnet Debugger Extension Tests', () => {
         assert.strictEqual(clock.countTimers(), 0);
     });
 
+    test('dotnet run-api preserves the requested environment', async () => {
+        sinon.stub(cliPathModule, 'resolveCliPath').resolves({ cliPath: '/resolved/aspire', available: true, source: 'configured' });
+        const stdout = new PassThrough();
+        const child = Object.assign(new EventEmitter(), {
+            stdin: new PassThrough(),
+            stdout,
+            stderr: new PassThrough(),
+            kill: sinon.stub()
+        });
+        const spawnStub = sinon.stub(childProcess, 'spawn').returns(
+            child as unknown as childProcess.ChildProcessWithoutNullStreams);
+        const service = new DotNetService({} as AspireDebugSession);
+
+        const response = service.getDotNetRunApiOutput(
+            '/workspace/app.cs',
+            { ASPIRE_SUPPRESS_CLI_RUN_HOOK: 'true' });
+        await new Promise<void>(resolve => setImmediate(resolve));
+        stdout.write('{"$type":"RunCommand"}\n');
+        await response;
+
+        assert.deepStrictEqual(spawnStub.firstCall.args[1], ['run-api']);
+        assert.strictEqual(
+            spawnStub.firstCall.args[2]?.env?.ASPIRE_SUPPRESS_CLI_RUN_HOOK,
+            'true');
+    });
+
+    test('dotnet run-api removes differently-cased ambient variables on Windows', async () => {
+        const platformStub = sinon.stub(process, 'platform').value('win32');
+        const ambientName = 'Aspire_Test_Run_Api_Case';
+        const resourceName = ambientName.toUpperCase();
+        const normalizedName = ambientName.toLowerCase();
+        const inheritedEntries = Object.entries(process.env)
+            .filter(([name]) => name.toLowerCase() === normalizedName);
+        for (const [name] of inheritedEntries) {
+            delete process.env[name];
+        }
+        process.env[ambientName] = 'ambient';
+
+        try {
+            sinon.stub(cliPathModule, 'resolveCliPath').resolves({ cliPath: '/resolved/aspire', available: true, source: 'configured' });
+            const stdout = new PassThrough();
+            const child = Object.assign(new EventEmitter(), {
+                stdin: new PassThrough(),
+                stdout,
+                stderr: new PassThrough(),
+                kill: sinon.stub()
+            });
+            const spawnStub = sinon.stub(childProcess, 'spawn').returns(
+                child as unknown as childProcess.ChildProcessWithoutNullStreams);
+            const service = new DotNetService({} as AspireDebugSession);
+
+            const response = service.getDotNetRunApiOutput(
+                '/workspace/app.cs',
+                { [resourceName]: 'resource' });
+            await new Promise<void>(resolve => setImmediate(resolve));
+            stdout.write('{"$type":"RunCommand"}\n');
+            await response;
+
+            const matchingEntries = Object.entries(spawnStub.firstCall.args[2]?.env ?? {})
+                .filter(([name]) => name.toLowerCase() === normalizedName);
+            assert.deepStrictEqual(matchingEntries, [[resourceName, 'resource']]);
+        } finally {
+            platformStub.restore();
+            for (const name of Object.keys(process.env)) {
+                if (name.toLowerCase() === normalizedName) {
+                    delete process.env[name];
+                }
+            }
+            for (const [name, value] of inheritedEntries) {
+                process.env[name] = value;
+            }
+        }
+    });
+
+    test('file-app run properties use build configuration and parse a dedicated result file', async () => {
+        const projectPath = nodePath.join(process.cwd(), '.test-temp', 'configured-file-app', 'app.cs');
+        const resolvedEnv = { MARKER: 'resolved-env' } as unknown as NodeJS.ProcessEnv;
+        sinon.stub(cliPathModule, 'resolveCliPath').resolves({ cliPath: '/resolved/aspire', available: true, source: 'configured' });
+        const createResolvedEnvStub = sinon.stub(cliPathEnvironmentModule, 'createResolvedAspireCliPathProcessEnvironment').returns(resolvedEnv);
+        let resultOutputPath: string | undefined;
+        const execFileStub = sinon.stub(childProcess, 'execFile').callsFake((...callArgs: any[]) => {
+            const args = callArgs[1] as string[];
+            resultOutputPath = getMsBuildResultOutputPath(args);
+            nodeFs.writeFileSync(resultOutputPath, JSON.stringify({
+                Properties: {
+                    RunCommand: '/workspace/bin/Debug/app',
+                    RunArguments: 'exec "/workspace/bin/Debug/app.dll"'
+                }
+            }));
+            callArgs.at(-1)(null, {
+                stdout: 'A successful build diagnostic.\n',
+                stderr: ''
+            });
+            return {} as childProcess.ChildProcess;
+        });
+        const service = new DotNetService({} as AspireDebugSession);
+
+        const result = await service.getDotNetFileAppRunProperties(
+            projectPath,
+            'Debug',
+            false,
+            { ASPIRE_SUPPRESS_CLI_RUN_HOOK: 'true' });
+
+        assert.deepStrictEqual(result, {
+            runCommand: '/workspace/bin/Debug/app',
+            runArguments: 'exec "/workspace/bin/Debug/app.dll"'
+        });
+        assert.deepStrictEqual(execFileStub.firstCall.args[1], [
+            'build',
+            projectPath,
+            '--configuration',
+            'Debug',
+            '--nologo',
+            '--verbosity',
+            'quiet',
+            '-target:ComputeRunArguments',
+            '-getProperty:RunCommand,RunArguments',
+            `-getResultOutputFile:${resultOutputPath}`
+        ]);
+        assert.strictEqual(execFileStub.firstCall.args[2]?.cwd, nodePath.dirname(projectPath));
+        assert.strictEqual(execFileStub.firstCall.args[2]?.env, resolvedEnv);
+        assert.ok(resultOutputPath);
+        assert.strictEqual(nodeFs.existsSync(resultOutputPath), false);
+        assert.strictEqual(createResolvedEnvStub.firstCall.args[0], '/resolved/aspire');
+        assert.strictEqual(
+            createResolvedEnvStub.firstCall.args[1]?.ASPIRE_SUPPRESS_CLI_RUN_HOOK,
+            'true');
+    });
+
+    test('file-app run properties suppress implicit restore when requested', async () => {
+        sinon.stub(cliPathModule, 'resolveCliPath').resolves({ cliPath: '/resolved/aspire', available: true, source: 'configured' });
+        let resultOutputPath: string | undefined;
+        const execFileStub = sinon.stub(childProcess, 'execFile').callsFake((...callArgs: any[]) => {
+            resultOutputPath = getMsBuildResultOutputPath(callArgs[1] as string[]);
+            nodeFs.writeFileSync(
+                resultOutputPath,
+                JSON.stringify({
+                    Properties: {
+                        RunCommand: '/workspace/bin/Debug/app',
+                        RunArguments: ''
+                    }
+                }));
+            callArgs.at(-1)(null, { stdout: '', stderr: '' });
+            return {} as childProcess.ChildProcess;
+        });
+        const service = new DotNetService({} as AspireDebugSession);
+
+        await service.getDotNetFileAppRunProperties('/workspace/app.cs', 'Debug', true);
+
+        assert.deepStrictEqual(execFileStub.firstCall.args[1], [
+            'build',
+            '/workspace/app.cs',
+            '--configuration',
+            'Debug',
+            '--no-restore',
+            '--nologo',
+            '--verbosity',
+            'quiet',
+            '-target:ComputeRunArguments',
+            '-getProperty:RunCommand,RunArguments',
+            `-getResultOutputFile:${resultOutputPath}`
+        ]);
+    });
+
+    test('file-app run properties remove differently-cased ambient variables on Windows', async () => {
+        const platformStub = sinon.stub(process, 'platform').value('win32');
+        const ambientName = 'Aspire_Test_File_App_Case';
+        const resourceName = ambientName.toUpperCase();
+        const normalizedName = ambientName.toLowerCase();
+        const inheritedEntries = Object.entries(process.env)
+            .filter(([name]) => name.toLowerCase() === normalizedName);
+        for (const [name] of inheritedEntries) {
+            delete process.env[name];
+        }
+        process.env[ambientName] = 'ambient';
+
+        try {
+            sinon.stub(cliPathModule, 'resolveCliPath').resolves({ cliPath: '/resolved/aspire', available: true, source: 'configured' });
+            const createResolvedEnvStub = sinon.stub(cliPathEnvironmentModule, 'createResolvedAspireCliPathProcessEnvironment').returns({});
+            sinon.stub(childProcess, 'execFile').callsFake((...callArgs: any[]) => {
+                const resultOutputPath = getMsBuildResultOutputPath(callArgs[1] as string[]);
+                nodeFs.writeFileSync(resultOutputPath, JSON.stringify({
+                    Properties: {
+                        RunCommand: '/workspace/bin/Debug/app',
+                        RunArguments: ''
+                    }
+                }));
+                callArgs.at(-1)(null, { stdout: '', stderr: '' });
+                return {} as childProcess.ChildProcess;
+            });
+            const service = new DotNetService({} as AspireDebugSession);
+
+            await service.getDotNetFileAppRunProperties(
+                '/workspace/app.cs',
+                'Debug',
+                false,
+                { [resourceName]: 'resource' });
+
+            const matchingEntries = Object.entries(createResolvedEnvStub.firstCall.args[1] ?? {})
+                .filter(([name]) => name.toLowerCase() === normalizedName);
+            assert.deepStrictEqual(matchingEntries, [[resourceName, 'resource']]);
+        } finally {
+            platformStub.restore();
+            for (const name of Object.keys(process.env)) {
+                if (name.toLowerCase() === normalizedName) {
+                    delete process.env[name];
+                }
+            }
+            for (const [name, value] of inheritedEntries) {
+                process.env[name] = value;
+            }
+        }
+    });
+
+    test('file-app run properties reject missing and malformed machine-readable responses', async () => {
+        sinon.stub(cliPathModule, 'resolveCliPath').resolves({ cliPath: '/resolved/aspire', available: true, source: 'configured' });
+        const execFileStub = sinon.stub(childProcess, 'execFile');
+        execFileStub.onFirstCall().callsFake((...callArgs: any[]) => {
+            nodeFs.writeFileSync(
+                getMsBuildResultOutputPath(callArgs[1] as string[]),
+                JSON.stringify({ Properties: { RunCommand: '/workspace/bin/Debug/app' } }));
+            callArgs.at(-1)(null, { stdout: '', stderr: '' });
+            return {} as childProcess.ChildProcess;
+        });
+        execFileStub.onSecondCall().callsFake((...callArgs: any[]) => {
+            nodeFs.writeFileSync(getMsBuildResultOutputPath(callArgs[1] as string[]), 'not-json');
+            callArgs.at(-1)(null, { stdout: '', stderr: '' });
+            return {} as childProcess.ChildProcess;
+        });
+        const service = new DotNetService({} as AspireDebugSession);
+        await assert.rejects(service.getDotNetFileAppRunProperties('/workspace/app.cs', 'Debug', false));
+        await assert.rejects(service.getDotNetFileAppRunProperties('/workspace/app.cs', 'Debug', false));
+    });
+
+    test('file-app build failures format process errors and deduplicate diagnostics', async () => {
+        const projectPath = '/workspace/app.cs';
+        sinon.stub(cliPathModule, 'resolveCliPath').resolves({ cliPath: '/resolved/aspire', available: true, source: 'configured' });
+        sinon.stub(childProcess, 'execFile').callsFake((...callArgs: any[]) => {
+            const args = callArgs[1] as string[];
+            const command = `dotnet ${args.join(' ')}`;
+            const error = Object.assign(
+                new Error(`Command failed: ${command}\nrepeated diagnostic`),
+                {
+                    cmd: command,
+                    stdout: 'repeated diagnostic',
+                    stderr: 'repeated diagnostic'
+                });
+            callArgs.at(-1)(error);
+            return {} as childProcess.ChildProcess;
+        });
+        const service = new DotNetService({} as AspireDebugSession);
+
+        await assert.rejects(
+            service.getDotNetFileAppRunProperties(projectPath, 'Debug', false),
+            (error: Error) => {
+                assert.ok(!error.message.includes('Command failed:'));
+                assert.ok(error.message.includes(projectPath));
+                assert.strictEqual(error.message.split('repeated diagnostic').length - 1, 1);
+                return true;
+            });
+    });
+
+    test('project run properties use the localized invalid-response message', async () => {
+        sinon.stub(cliPathModule, 'resolveCliPath').resolves({ cliPath: '/resolved/aspire', available: true, source: 'configured' });
+        sinon.stub(childProcess, 'execFile').callsFake((...callArgs: any[]) => {
+            nodeFs.writeFileSync(
+                getMsBuildResultOutputPath(callArgs[1] as string[]),
+                JSON.stringify({ Properties: { RunCommand: '/workspace/bin/app' } }));
+            callArgs.at(-1)(null, { stdout: '', stderr: '' });
+            return {} as childProcess.ChildProcess;
+        });
+        const service = new DotNetService({} as AspireDebugSession);
+
+        await assert.rejects(
+            service.getDotNetProjectRunProperties('/workspace/app.csproj'),
+            (error: Error) => {
+                assert.ok(error.message.includes(invalidMsBuildRunCommandResponse));
+                return true;
+            });
+    });
+
     test('dotnet run-api does not time out or spawn while CLI resolution is pending', async () => {
         const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
         let rejectResolution!: (reason?: unknown) => void;
@@ -559,6 +3096,158 @@ suite('Dotnet Debugger Extension Tests', () => {
 
         assert.strictEqual(debugConfig.program, outputPath);
         assert.strictEqual(dotNetService.buildDotNetProjectStub.notCalled, true);
+    });
+
+    test('project launch with suppressed build uses the configured output without rebuilding', async () => {
+        const outputPath = 'C:\\temp\\bin\\Release\\net10.0\\TestProject.dll';
+        const { extension, dotNetService } = createDebuggerExtension(outputPath, null, true, true);
+        const projectPath = 'C:\\temp\\TestProject.csproj';
+        const launchConfig: ProjectLaunchConfiguration = {
+            type: 'project',
+            project_path: projectPath,
+            build_configuration: 'Release',
+            build_environment: { BUILD_FLAVOR: 'build' },
+            build_working_directory: 'C:\\sdk-root',
+            suppress_build: true
+        };
+        const debugConfig: AspireResourceExtendedDebugConfiguration = {
+            runId: '1',
+            debugSessionId: '1',
+            type: 'coreclr',
+            name: 'Test Debug Config',
+            request: 'launch'
+        };
+        const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
+
+        await extension.createDebugSessionConfigurationCallback!(
+            launchConfig,
+            [],
+            [
+                { name: 'BUILD_FLAVOR', value: 'runtime' },
+                { name: 'RUNTIME_ONLY', value: 'not-for-msbuild' }
+            ],
+            { debug: true, forceBuild: true, runId: '1', debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession },
+            debugConfig);
+
+        assert.ok(dotNetService.getDotNetProjectLaunchPropertiesStub.calledOnceWith(
+            projectPath,
+            'Release',
+            { BUILD_FLAVOR: 'build' },
+            'C:\\sdk-root'));
+        assert.ok(dotNetService.buildDotNetProjectStub.notCalled);
+        assert.strictEqual(debugConfig.program, outputPath);
+    });
+
+    test('project launch with suppressed build fails instead of rebuilding when expected output is missing', async () => {
+        const outputPath = 'C:\\temp\\bin\\Release\\net10.0\\TestProject.dll';
+        const { extension, dotNetService } = createDebuggerExtension(outputPath, null, true, false);
+        const projectPath = 'C:\\temp\\TestProject.csproj';
+        const launchConfig: ProjectLaunchConfiguration = {
+            type: 'project',
+            project_path: projectPath,
+            build_configuration: 'Release',
+            build_environment: { BUILD_FLAVOR: 'custom' },
+            suppress_build: true
+        };
+        const debugConfig: AspireResourceExtendedDebugConfiguration = {
+            runId: '1',
+            debugSessionId: '1',
+            type: 'coreclr',
+            name: 'Test Debug Config',
+            request: 'launch'
+        };
+        const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
+
+        await assert.rejects(
+            extension.createDebugSessionConfigurationCallback!(
+                launchConfig,
+                [],
+                [],
+                { debug: true, runId: '1', debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession },
+                debugConfig),
+            /expected prebuilt output .* does not exist.*building is suppressed/i);
+
+        assert.ok(dotNetService.buildDotNetProjectStub.notCalled);
+    });
+
+    test('project launch with suppressed build reports a missing WinUI apphost without rebuilding', async () => {
+        sinon.stub(process, 'platform').value('win32');
+        const projectPath = 'C:\\temp\\WinUIApp.csproj';
+        const outputPath = 'C:\\temp\\bin\\Release\\net10.0-windows\\win-x64\\WinUIApp.dll';
+        const appHostPath = 'C:\\temp\\bin\\Release\\net10.0-windows\\win-x64\\WinUIApp.exe';
+        const { extension, dotNetService, doesFileExistStub } = createDebuggerExtension(outputPath, null, true, true);
+        doesFileExistStub.withArgs(appHostPath).resolves(false);
+        dotNetService.projectLaunchProperties = {
+            targetPath: outputPath,
+            runCommand: appHostPath,
+            useAppHost: true,
+            useWinUI: true,
+            windowsPackageType: 'None'
+        };
+        const launchConfig: ProjectLaunchConfiguration = {
+            type: 'project',
+            project_path: projectPath,
+            suppress_build: true
+        };
+        const debugConfig: AspireResourceExtendedDebugConfiguration = {
+            runId: '1',
+            debugSessionId: '1',
+            type: 'coreclr',
+            name: 'Test Debug Config',
+            request: 'launch'
+        };
+
+        await assert.rejects(
+            extension.createDebugSessionConfigurationCallback!(
+                launchConfig,
+                [],
+                [],
+                { debug: true, runId: '1', debugSessionId: '1', isApphost: false, debugSession: sinon.createStubInstance(AspireDebugSession) },
+                debugConfig),
+            error => error instanceof Error && error.message.includes(appHostPath));
+
+        assert.ok(dotNetService.buildDotNetProjectStub.notCalled);
+    });
+
+    test('project fallback build uses the environment selected for target path evaluation', async () => {
+        const outputPath = 'C:\\temp\\bin\\custom\\Release\\net10.0\\TestProject.dll';
+        const { extension, dotNetService } = createDebuggerExtension(outputPath, null, true, false);
+        const projectPath = 'C:\\temp\\TestProject.csproj';
+        const launchConfig: ProjectLaunchConfiguration = {
+            type: 'project',
+            project_path: projectPath,
+            build_configuration: 'Release',
+            build_environment: { BUILD_FLAVOR: 'custom' }
+        };
+        const debugConfig: AspireResourceExtendedDebugConfiguration = {
+            runId: '1',
+            debugSessionId: '1',
+            type: 'coreclr',
+            name: 'Test Debug Config',
+            request: 'launch'
+        };
+        const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
+
+        await extension.createDebugSessionConfigurationCallback!(
+            launchConfig,
+            [],
+            [
+                { name: 'BUILD_FLAVOR', value: 'custom' },
+                { name: 'RUNTIME_ONLY', value: 'not-for-msbuild' }
+            ],
+            { debug: true, runId: '1', debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession },
+            debugConfig);
+
+        const buildEnvironment = { BUILD_FLAVOR: 'custom' };
+        assert.ok(dotNetService.getDotNetProjectLaunchPropertiesStub.calledOnceWith(
+            projectPath,
+            'Release',
+            buildEnvironment));
+        assert.ok(dotNetService.buildDotNetProjectStub.calledOnceWith(
+            projectPath,
+            'Release',
+            buildEnvironment));
+        assert.strictEqual(debugConfig.program, outputPath);
     });
 
     test('project debug configuration is byte-identical whether or not C# Dev Kit is installed', async () => {
@@ -663,7 +3352,16 @@ suite('Dotnet Debugger Extension Tests', () => {
             AMBIENT_ONLY: process.env.AMBIENT_ONLY,
             CLI_PRECEDENCE: process.env.CLI_PRECEDENCE,
             DEFAULT_PROFILE_ONLY: process.env.DEFAULT_PROFILE_ONLY,
-            DEFAULT_PROFILE_EXPLICIT: process.env.DEFAULT_PROFILE_EXPLICIT
+            DEFAULT_PROFILE_EXPLICIT: process.env.DEFAULT_PROFILE_EXPLICIT,
+            DEFAULT_PROFILE_EXPANDED: process.env.DEFAULT_PROFILE_EXPANDED,
+            DEFAULT_PROFILE_SOURCE: process.env.DEFAULT_PROFILE_SOURCE,
+            DEFAULT_PROFILE_DEPENDENT: process.env.DEFAULT_PROFILE_DEPENDENT,
+            DEFAULT_PROFILE_RAW: process.env.DEFAULT_PROFILE_RAW,
+            DEFAULT_PROFILE_CYCLE_A: process.env.DEFAULT_PROFILE_CYCLE_A,
+            DEFAULT_PROFILE_CYCLE_B: process.env.DEFAULT_PROFILE_CYCLE_B,
+            DEFAULT_PROFILE_SELF: process.env.DEFAULT_PROFILE_SELF,
+            PROFILE_ROOT: process.env.PROFILE_ROOT,
+            PROFILE_MISSING: process.env.PROFILE_MISSING
         };
 
         process.env.mode = 'ambient-h1';
@@ -674,6 +3372,15 @@ suite('Dotnet Debugger Extension Tests', () => {
         process.env.CLI_PRECEDENCE = 'from-process';
         process.env.DEFAULT_PROFILE_ONLY = 'from-process';
         process.env.DEFAULT_PROFILE_EXPLICIT = 'from-process';
+        process.env.DEFAULT_PROFILE_EXPANDED = 'from-process';
+        process.env.DEFAULT_PROFILE_SOURCE = 'from-process-source';
+        process.env.DEFAULT_PROFILE_DEPENDENT = 'from-process-dependent';
+        process.env.DEFAULT_PROFILE_RAW = 'from-process-raw';
+        process.env.DEFAULT_PROFILE_CYCLE_A = 'ambient-a';
+        process.env.DEFAULT_PROFILE_CYCLE_B = 'ambient-b';
+        process.env.DEFAULT_PROFILE_SELF = 'ambient-self';
+        delete process.env.PROFILE_ROOT;
+        delete process.env.PROFILE_MISSING;
 
         try {
             const projectPath = nodePath.join(projectDir, 'AppHost.csproj');
@@ -687,12 +3394,23 @@ suite('Dotnet Debugger Extension Tests', () => {
                             mode: '1',
                             EXPLICIT: 'from-h1',
                             DEFAULT_PROFILE_ONLY: 'from-h1',
-                            DEFAULT_PROFILE_EXPLICIT: 'from-h1'
+                            DEFAULT_PROFILE_EXPLICIT: 'from-h1',
+                            DEFAULT_PROFILE_EXPANDED: '%PROFILE_ROOT%/default',
+                            DEFAULT_PROFILE_SOURCE: 'from-h1',
+                            DEFAULT_PROFILE_DEPENDENT: '%DEFAULT_PROFILE_SOURCE%/dependent',
+                            DEFAULT_PROFILE_RAW: '%DEFAULT_PROFILE_SOURCE%/raw',
+                            DEFAULT_PROFILE_CYCLE_A: '%DEFAULT_PROFILE_CYCLE_B%',
+                            DEFAULT_PROFILE_CYCLE_B: '%DEFAULT_PROFILE_CYCLE_A%',
+                            DEFAULT_PROFILE_SELF: '%DEFAULT_PROFILE_SELF%',
+                            INVALID_DEFAULT_ENV: 42
                         }
                     },
                     h2: {
                         commandName: 'Project',
                         applicationUrl: 'http://localhost:15002',
+                        executablePath: false,
+                        workingDirectory: true,
+                        useSSL: 'ignored by the SDK',
                         environmentVariables: {
                             mode: '2',
                             EXPLICIT: 'from-h2',
@@ -701,8 +3419,13 @@ suite('Dotnet Debugger Extension Tests', () => {
                     },
                     h3: {
                         commandName: 'Project',
+                        commandLineArgs: '--profile-root %PROFILE_ROOT% --msbuild $(PROFILE_ROOT) --missing %PROFILE_MISSING% --overlap %PROFILE_MISSING%PROFILE_ROOT%',
                         environmentVariables: {
-                            UNSELECTED_ONLY: 'from-h3'
+                            UNSELECTED_ONLY: 'from-h3',
+                            PROFILE_PATH: '%PROFILE_ROOT%/config',
+                            PROFILE_MSBUILD: '$(PROFILE_ROOT)/config',
+                            PROFILE_UNRESOLVED: '%PROFILE_MISSING%/config',
+                            PROFILE_OVERLAP: '%PROFILE_MISSING%PROFILE_ROOT%'
                         }
                     }
                 }
@@ -746,7 +3469,15 @@ suite('Dotnet Debugger Extension Tests', () => {
                     { name: 'CLI_PRECEDENCE', value: 'from-cli' },
                     { name: 'UNSELECTED_ONLY', value: 'from-cli' },
                     { name: 'DEFAULT_PROFILE_ONLY', value: 'from-h1' },
-                    { name: 'DEFAULT_PROFILE_EXPLICIT', value: 'from-cli-explicit' }
+                    { name: 'DEFAULT_PROFILE_EXPLICIT', value: 'from-cli-explicit' },
+                    { name: 'DEFAULT_PROFILE_EXPANDED', value: '/profile/root/default' },
+                    { name: 'DEFAULT_PROFILE_SOURCE', value: 'from-h1' },
+                    { name: 'DEFAULT_PROFILE_DEPENDENT', value: 'from-process-source/dependent' },
+                    { name: 'DEFAULT_PROFILE_RAW', value: '%DEFAULT_PROFILE_SOURCE%/raw' },
+                    { name: 'DEFAULT_PROFILE_CYCLE_A', value: 'ambient-b' },
+                    { name: 'DEFAULT_PROFILE_CYCLE_B', value: 'ambient-a' },
+                    { name: 'DEFAULT_PROFILE_SELF', value: 'explicit-self' },
+                    { name: 'PROFILE_ROOT', value: '/profile/root' }
                 ],
                 { debug: true, runId: '1', debugSessionId: '1', isApphost: true, debugSession: fakeAspireDebugSession },
                 extension);
@@ -760,7 +3491,14 @@ suite('Dotnet Debugger Extension Tests', () => {
                 CLI_PRECEDENCE: debugConfig.env.CLI_PRECEDENCE,
                 UNSELECTED_ONLY: debugConfig.env.UNSELECTED_ONLY,
                 DEFAULT_PROFILE_ONLY: debugConfig.env.DEFAULT_PROFILE_ONLY,
-                DEFAULT_PROFILE_EXPLICIT: debugConfig.env.DEFAULT_PROFILE_EXPLICIT
+                DEFAULT_PROFILE_EXPLICIT: debugConfig.env.DEFAULT_PROFILE_EXPLICIT,
+                DEFAULT_PROFILE_EXPANDED: debugConfig.env.DEFAULT_PROFILE_EXPANDED,
+                DEFAULT_PROFILE_SOURCE: debugConfig.env.DEFAULT_PROFILE_SOURCE,
+                DEFAULT_PROFILE_DEPENDENT: debugConfig.env.DEFAULT_PROFILE_DEPENDENT,
+                DEFAULT_PROFILE_RAW: debugConfig.env.DEFAULT_PROFILE_RAW,
+                DEFAULT_PROFILE_CYCLE_A: debugConfig.env.DEFAULT_PROFILE_CYCLE_A,
+                DEFAULT_PROFILE_CYCLE_B: debugConfig.env.DEFAULT_PROFILE_CYCLE_B,
+                DEFAULT_PROFILE_SELF: debugConfig.env.DEFAULT_PROFILE_SELF
             }, {
                 mode: '2',
                 DOTNET_LAUNCH_PROFILE: 'h2',
@@ -770,8 +3508,18 @@ suite('Dotnet Debugger Extension Tests', () => {
                 CLI_PRECEDENCE: 'from-cli',
                 UNSELECTED_ONLY: 'from-cli',
                 DEFAULT_PROFILE_ONLY: 'from-process',
-                DEFAULT_PROFILE_EXPLICIT: 'from-cli-explicit'
+                DEFAULT_PROFILE_EXPLICIT: 'from-cli-explicit',
+                DEFAULT_PROFILE_EXPANDED: 'from-process',
+                DEFAULT_PROFILE_SOURCE: 'from-process-source',
+                DEFAULT_PROFILE_DEPENDENT: 'from-process-dependent',
+                DEFAULT_PROFILE_RAW: 'from-process-raw',
+                DEFAULT_PROFILE_CYCLE_A: 'ambient-a',
+                DEFAULT_PROFILE_CYCLE_B: 'ambient-b',
+                DEFAULT_PROFILE_SELF: 'explicit-self'
             });
+            assert.strictEqual(debugConfig.cwd, projectDir);
+            assert.strictEqual(debugConfig.executablePath, undefined);
+            assert.strictEqual(debugConfig.checkForDevCert, undefined);
             assert.deepStrictEqual(
                 Object.keys(debugConfig.env).filter(name => name.toLowerCase() === 'mode'),
                 ['mode']);
@@ -794,6 +3542,44 @@ suite('Dotnet Debugger Extension Tests', () => {
                 extension);
 
             assert.strictEqual(ambientUrlDebugConfig.env.ASPNETCORE_URLS, 'http://localhost:14000');
+
+            const cliSelectedDebugSessionConfig: AspireExtendedDebugConfiguration = {
+                type: 'aspire',
+                request: 'launch',
+                name: 'Aspire',
+                program: projectPath
+            };
+            fakeAspireDebugSession.configuration = cliSelectedDebugSessionConfig;
+            const cliSelectedLaunchConfig: ProjectLaunchConfiguration = {
+                ...launchConfig,
+                launch_profile: 'h3'
+            };
+            const cliSelectedDebugConfig = await createDebugSessionConfiguration(
+                cliSelectedDebugSessionConfig,
+                cliSelectedLaunchConfig,
+                undefined,
+                [{ name: 'PROFILE_ROOT', value: '/profile/root' }],
+                { debug: true, runId: '1', debugSessionId: '1', isApphost: true, debugSession: fakeAspireDebugSession },
+                extension);
+
+            assert.strictEqual(
+                cliSelectedDebugConfig.args,
+                '--profile-root /profile/root --msbuild $(PROFILE_ROOT) --missing %PROFILE_MISSING% --overlap %PROFILE_MISSING%PROFILE_ROOT%');
+            assert.strictEqual(cliSelectedDebugConfig.env.PROFILE_PATH, '/profile/root/config');
+            assert.strictEqual(cliSelectedDebugConfig.env.PROFILE_MSBUILD, '$(PROFILE_ROOT)/config');
+            assert.strictEqual(cliSelectedDebugConfig.env.PROFILE_UNRESOLVED, '%PROFILE_MISSING%/config');
+            assert.strictEqual(cliSelectedDebugConfig.env.PROFILE_OVERLAP, '%PROFILE_MISSING%PROFILE_ROOT%');
+
+            const forwardedArguments = ['--literal', '%PROFILE_ROOT%'];
+            const explicitArgumentsDebugConfig = await createDebugSessionConfiguration(
+                cliSelectedDebugSessionConfig,
+                cliSelectedLaunchConfig,
+                forwardedArguments,
+                [{ name: 'PROFILE_ROOT', value: '/profile/root' }],
+                { debug: true, runId: '1', debugSessionId: '1', isApphost: true, debugSession: fakeAspireDebugSession },
+                extension);
+
+            assert.deepStrictEqual(explicitArgumentsDebugConfig.args, forwardedArguments);
         } finally {
             platformStub.restore();
             for (const [name, value] of Object.entries(inheritedEnvironment)) {
@@ -1091,19 +3877,116 @@ suite('Dotnet Debugger Extension Tests', () => {
         }
     });
 
-    test('advertises the coreclr project debugger and extracts project_path for .csproj and file-based .cs', () => {
-        // A DotnetProjectResource (AddDotnetProject) advertises the same "project" launch capability as
-        // AddProject and emits a ProjectLaunchConfiguration carrying project_path (a .csproj or a file-based
-        // .cs). The extension's .NET debugger keys purely off that "project" type + project_path, so it must
-        // resolve the same coreclr debugger and project file regardless of which resource produced the config.
-        assert.strictEqual(projectDebuggerExtension.resourceType, 'project');
-        assert.strictEqual(projectDebuggerExtension.debugAdapter, 'coreclr');
-        assert.deepStrictEqual(projectDebuggerExtension.getSupportedFileTypes(), ['.cs', '.csproj']);
+    for (const debug of [false, true]) {
+        test(`disables coreclr's implicit profile when launching a resource in ${debug ? 'Debug' : 'Run'} mode`, async () => {
+            const fixture = createRunnableProjectOutput(`resource-excluded-profile-${debug}`);
+            try {
+                const { extension } = createDebuggerExtension(fixture.outputPath, null, true, true);
+                const parentConfiguration: AspireExtendedDebugConfiguration = {
+                    type: 'aspire',
+                    request: 'launch',
+                    name: 'Aspire',
+                    program: fixture.projectPath,
+                };
+                const launchConfig: ProjectLaunchConfiguration = {
+                    type: 'project',
+                    project_path: fixture.projectPath,
+                    suppress_build: true,
+                    disable_launch_profile: true,
+                };
+                const debugConfiguration = await createDebugSessionConfiguration(
+                    parentConfiguration,
+                    launchConfig,
+                    undefined,
+                    [],
+                    { debug, runId: '1', debugSessionId: '1', isApphost: false, debugSession: { configuration: parentConfiguration } as AspireDebugSession },
+                    extension);
 
-        const csprojConfig: ProjectLaunchConfiguration = { type: 'project', project_path: '/tmp/Worker.csproj' };
-        const fileBasedConfig: ProjectLaunchConfiguration = { type: 'project', project_path: '/tmp/app.cs' };
-        assert.strictEqual(projectDebuggerExtension.getProjectFile(csprojConfig), '/tmp/Worker.csproj');
-        assert.strictEqual(projectDebuggerExtension.getProjectFile(fileBasedConfig), '/tmp/app.cs');
+                assert.strictEqual(debugConfiguration.launchSettingsProfile, null);
+                assert.strictEqual(debugConfiguration.noDebug, !debug);
+            } finally {
+                removeDirectorySafely(fixture.tempRoot);
+            }
+        });
+    }
+
+    test('advertises the coreclr debugger for SDK-style C#, F# and VB projects and file-based C# apps', () => {
+        sinon.stub(vscode.extensions, 'getExtension').callsFake(extensionId =>
+            extensionId === csharpExtensionId ? { id: extensionId } as vscode.Extension<unknown> : undefined);
+
+        assert.strictEqual(projectDebuggerExtension.resourceType, 'project');
+        assert.strictEqual(externalBuildProjectDebuggerExtension.resourceType, 'project-with-external-build.v1');
+        assert.ok(getSupportedCapabilities().includes('project-with-external-build.v1'));
+        assert.strictEqual(projectDebuggerExtension.debugAdapter, 'coreclr');
+        assert.deepStrictEqual(projectDebuggerExtension.getSupportedFileTypes(), ['.cs', '.csproj', '.fsproj', '.vbproj']);
+        assert.deepStrictEqual(externalBuildProjectDebuggerExtension.getSupportedFileTypes(), projectDebuggerExtension.getSupportedFileTypes());
+
+        for (const projectPath of ['Worker.csproj', 'Worker.fsproj', 'Worker.vbproj', 'app.cs']) {
+            for (const extension of [projectDebuggerExtension, externalBuildProjectDebuggerExtension]) {
+                const config: ProjectLaunchConfiguration = { type: extension.resourceType as ProjectLaunchConfiguration['type'], project_path: projectPath };
+                assert.strictEqual(extension.getProjectFile(config), projectPath);
+                assert.strictEqual(extension.getDisplayName(config), `.NET: ${projectPath}`);
+            }
+        }
+    });
+
+    test('does not advertise a .NET project debugger when only the F# language extension is installed', () => {
+        sinon.stub(vscode.extensions, 'getExtension').callsFake(extensionId =>
+            extensionId === 'Ionide.Ionide-fsharp' ? { id: extensionId } as vscode.Extension<unknown> : undefined);
+
+        const projectCapabilities = getSupportedCapabilities().filter(capability =>
+            capability === 'project' || capability === 'project-with-external-build.v1' || capability === csharpExtensionId);
+        const projectDebuggers = getResourceDebuggerExtensions().filter(extension =>
+            extension.resourceType === 'project' || extension.resourceType === 'project-with-external-build.v1');
+
+        assert.deepStrictEqual(projectCapabilities, []);
+        assert.deepStrictEqual(projectDebuggers, []);
+    });
+
+    test('invalid project launch configurations do not expose arbitrary properties', async () => {
+        const secret = 'top-secret';
+        const invalidLaunchConfig = {
+            type: 'node',
+            name: 'api',
+            secret,
+        } as unknown as ExecutableLaunchConfiguration;
+        const info = sinon.stub(extensionLogOutputChannel, 'info');
+
+        assert.throws(
+            () => projectDebuggerExtension.getProjectFile(invalidLaunchConfig),
+            (error: unknown) => {
+                assert.ok(error instanceof Error);
+                assert.strictEqual(error.message, 'Invalid launch configuration for node.');
+                return true;
+            });
+
+        await assert.rejects(
+            projectDebuggerExtension.createDebugSessionConfigurationCallback!(
+                invalidLaunchConfig,
+                [],
+                [],
+                {
+                    debug: true,
+                    runId: '1',
+                    debugSessionId: '1',
+                    isApphost: false,
+                    debugSession: sinon.createStubInstance(AspireDebugSession),
+                },
+                {
+                    runId: '1',
+                    debugSessionId: '1',
+                    type: 'coreclr',
+                    name: 'Test Debug Config',
+                    request: 'launch',
+                }),
+            (error: unknown) => {
+                assert.ok(error instanceof Error);
+                assert.strictEqual(error.message, 'Invalid launch configuration for node.');
+                return true;
+            });
+
+        assert.strictEqual(info.calledOnceWithExactly('The resource type was not project for node'), true);
+        assert.strictEqual(info.firstCall.args.join(' ').includes(secret), false);
     });
 
     test('file-based AppHost follows CLI build ownership', async () => {
@@ -1120,7 +4003,8 @@ suite('Dotnet Debugger Extension Tests', () => {
 
         const launchConfig: ProjectLaunchConfiguration = {
             type: 'project',
-            project_path: '/tmp/apphost.cs'
+            project_path: '/tmp/apphost.cs',
+            build_configuration: 'Release'
         };
 
         const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
@@ -1141,6 +4025,7 @@ suite('Dotnet Debugger Extension Tests', () => {
             createDebugConfig());
 
         assert.strictEqual(dotNetService.buildDotNetProjectStub.notCalled, true);
+        assert.strictEqual(dotNetService.fileAppRunBuildConfiguration, 'Release');
 
         await extension.createDebugSessionConfigurationCallback!(
             launchConfig,
@@ -1181,10 +4066,15 @@ suite('Dotnet Debugger Extension Tests', () => {
             WorkingDirectory: '/tmp',
             EnvironmentVariables: {}
         });
+        dotNetService.fileAppRunProperties = {
+            runCommand: executablePath,
+            runArguments: ''
+        };
 
         const launchConfig: ProjectLaunchConfiguration = {
             type: 'project',
-            project_path: '/tmp/apphost.cs'
+            project_path: '/tmp/apphost.cs',
+            build_configuration: 'Debug'
         };
         const debugConfig: AspireResourceExtendedDebugConfiguration = {
             runId: '1',
@@ -1203,6 +4093,7 @@ suite('Dotnet Debugger Extension Tests', () => {
             debugConfig);
 
         assert.strictEqual(dotNetService.runApiEnvironment?.ASPIRE_SUPPRESS_CLI_RUN_HOOK, 'true');
+        assert.strictEqual(dotNetService.fileAppRunEnvironment?.ASPIRE_SUPPRESS_CLI_RUN_HOOK, 'true');
         assert.strictEqual(debugConfig.program, executablePath);
         assert.strictEqual(dotNetService.buildDotNetProjectStub.notCalled, true);
     });
@@ -1290,13 +4181,104 @@ suite('Dotnet Debugger Extension Tests', () => {
 
         assert.strictEqual(extension.debugAdapter, 'coreclr');
         assert.strictEqual(debugConfig.program, executablePath);
-        assert.strictEqual(debugConfig.args, undefined);
+        assert.deepStrictEqual(debugConfig.args, []);
         // cwd defaults to the file's directory; run-api's WorkingDirectory (empty here) is not consumed.
         assert.strictEqual(debugConfig.cwd, '/tmp');
         // run-api's profile-derived EnvironmentVariables are dropped (only DOTNET_ROOT* would be kept), so
         // RUNAPI_ENV must not appear.
         assert.deepStrictEqual(debugConfig.env, {});
         assert.strictEqual(dotNetService.buildDotNetProjectStub.called, true);
+    });
+
+    test('file-based .cs project uses configuration-specific run properties and preserves run-api host environment', async () => {
+        const debugDllPath = '/workspace/bin/Debug/app.dll';
+        const { extension, dotNetService } = createDebuggerExtension('unused-build-output', null, true, true);
+        dotNetService.runApiOutput = JSON.stringify({
+            $type: 'RunCommand',
+            Version: 1,
+            ExecutablePath: '/workspace/bin/Release/app',
+            CommandLineArguments: '',
+            WorkingDirectory: '',
+            EnvironmentVariables: {
+                DOTNET_ROOT: '/usr/share/dotnet'
+            }
+        });
+        dotNetService.fileAppRunProperties = {
+            runCommand: 'dotnet',
+            runArguments: `exec "${debugDllPath}"`
+        };
+
+        const launchConfig: ProjectLaunchConfiguration = {
+            type: 'project',
+            project_path: '/workspace/app.cs',
+            build_configuration: 'Debug',
+            suppress_build: true
+        };
+        const debugConfig: AspireResourceExtendedDebugConfiguration = {
+            runId: '1',
+            debugSessionId: '1',
+            type: 'coreclr',
+            name: 'Test Debug Config',
+            request: 'launch'
+        };
+        const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
+
+        await extension.createDebugSessionConfigurationCallback!(
+            launchConfig,
+            ['--message', 'hello'],
+            [],
+            { debug: true, runId: '1', debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession },
+            debugConfig);
+
+        assert.strictEqual(dotNetService.fileAppRunBuildConfiguration, 'Debug');
+        assert.strictEqual(dotNetService.fileAppRunSuppressRestore, true);
+        assert.strictEqual(dotNetService.fileAppRunEnvironment, undefined);
+        assert.strictEqual(debugConfig.program, 'dotnet');
+        assert.deepStrictEqual(debugConfig.args, ['exec', debugDllPath, '--message', 'hello']);
+        assert.deepStrictEqual(debugConfig.env, { DOTNET_ROOT: '/usr/share/dotnet' });
+        assert.strictEqual(dotNetService.buildDotNetProjectStub.notCalled, true);
+    });
+
+    test('file-based .cs project preserves configuration-specific apphost run arguments', async () => {
+        const configuredAppHostPath = '/workspace/obj/Debug/net10.0/app';
+        const { extension, dotNetService } = createDebuggerExtension('unused-build-output', null, true, true);
+        dotNetService.runApiOutput = JSON.stringify({
+            $type: 'RunCommand',
+            Version: 1,
+            ExecutablePath: '/workspace/obj/Release/net10.0/app',
+            CommandLineArguments: '--from-default-profile',
+            WorkingDirectory: '',
+            EnvironmentVariables: {}
+        });
+        dotNetService.fileAppRunProperties = {
+            runCommand: configuredAppHostPath,
+            runArguments: '--from-msbuild "value with spaces"'
+        };
+
+        const launchConfig: ProjectLaunchConfiguration = {
+            type: 'project',
+            project_path: '/workspace/app.cs',
+            build_configuration: 'Debug',
+            suppress_build: true
+        };
+        const debugConfig: AspireResourceExtendedDebugConfiguration = {
+            runId: '1',
+            debugSessionId: '1',
+            type: 'coreclr',
+            name: 'Test Debug Config',
+            request: 'launch'
+        };
+        const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
+
+        await extension.createDebugSessionConfigurationCallback!(
+            launchConfig,
+            ['--from-session'],
+            [],
+            { debug: true, runId: '1', debugSessionId: '1', isApphost: true, debugSession: fakeAspireDebugSession },
+            debugConfig);
+
+        assert.strictEqual(debugConfig.program, configuredAppHostPath);
+        assert.deepStrictEqual(debugConfig.args, ['--from-msbuild', 'value with spaces', '--from-session']);
     });
 
     test('file-based .cs project preserves run-api DOTNET_ROOT host variables but drops profile env', async () => {
@@ -1347,20 +4329,18 @@ suite('Dotnet Debugger Extension Tests', () => {
         });
     });
 
-    test('file-based .cs project launched via the dotnet launcher keeps the run-api host DLL and user args', async () => {
+    test('file-based .cs project launched via the dotnet launcher keeps the run-api host args and user args', async () => {
         // When the SDK resolves a file-based app to the `dotnet` launcher, run-api returns ExecutablePath=dotnet
-        // and CommandLineArguments carrying the built app DLL. The extension must launch that program with the
-        // DLL host argument first, then the user application arguments supplied by DCP. Dropping CommandLineArguments
-        // would launch the 'dotnet' launcher with nothing to run. The working directory and environment come from
-        // the launch profile (here, its defaults) — not from run-api, whose values reflect the SDK default profile.
-        const dllPath = '/tmp/obj/Debug/net10.0/app.dll';
+        // and SDK-serialized CommandLineArguments such as `exec "<TargetPath>"` for UseAppHost=false.
+        // The extension must deserialize those host tokens before prepending user arguments supplied by DCP.
+        const dllPath = '/tmp/obj/Debug/net10.0/app with spaces.dll';
         const workingDirectory = '/tmp/obj/Debug/net10.0';
         const { extension, dotNetService } = createDebuggerExtension('unused-build-output', null, true, true);
         dotNetService.runApiOutput = JSON.stringify({
             $type: 'RunCommand',
             Version: 1,
             ExecutablePath: 'dotnet',
-            CommandLineArguments: dllPath,
+            CommandLineArguments: `exec "${dllPath}"`,
             WorkingDirectory: workingDirectory,
             EnvironmentVariables: { RUNAPI_ENV: 'from-run-api' }
         });
@@ -1383,13 +4363,56 @@ suite('Dotnet Debugger Extension Tests', () => {
         await extension.createDebugSessionConfigurationCallback!(launchConfig, ['--message', 'hello'], [], { debug: true, runId: '1', debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession }, debugConfig);
 
         assert.strictEqual(debugConfig.program, 'dotnet');
-        assert.strictEqual(debugConfig.args, `${dllPath} --message hello`);
+        assert.deepStrictEqual(debugConfig.args, ['exec', dllPath, '--message', 'hello']);
         // cwd comes from the launch profile default (the file's directory), not run-api's WorkingDirectory.
         assert.strictEqual(debugConfig.cwd, '/tmp');
         // run-api's profile-derived EnvironmentVariables are dropped (only DOTNET_ROOT* would be kept), so
         // RUNAPI_ENV must not appear.
         assert.deepStrictEqual(debugConfig.env, {});
         assert.strictEqual(dotNetService.buildDotNetProjectStub.called, true);
+    });
+
+    test('file-based .cs AppHost keeps run-api host arguments and forwarded arg tokens separate', async () => {
+        // The AppHost forwards run-session arguments as discrete tokens. When run-api reports the file-based
+        // host program as `dotnet exec "<TargetPath>"`, the extension must deserialize and prepend those
+        // SDK-authored host tokens without joining the forwarded tokens into command-line text.
+        const path = require('path');
+
+        const projectPath = path.join(process.cwd(), '.test-temp', `dotnet-apphost-forwarded-args-${process.pid}-${Date.now()}`, 'apphost.cs');
+        const projectDirectory = path.dirname(projectPath);
+        const dllPath = path.join(projectDirectory, 'obj', 'Debug', 'net10.0', 'output with spaces', 'apphost.dll');
+        const forwardedArgs = ['--custom', 'value with spaces', '', 'literal "quote"', String.raw`C:\tools\backslash\path`];
+        const { extension, dotNetService } = createDebuggerExtension('unused-build-output', null, true, true);
+        dotNetService.runApiOutput = JSON.stringify({
+            $type: 'RunCommand',
+            Version: 1,
+            ExecutablePath: 'dotnet',
+            CommandLineArguments: `exec "${dllPath}"`,
+            WorkingDirectory: path.join(projectDirectory, 'from-run-api'),
+            EnvironmentVariables: {}
+        });
+
+        const launchConfig: ProjectLaunchConfiguration = {
+            type: 'project',
+            project_path: projectPath
+        };
+
+        const debugConfig: AspireResourceExtendedDebugConfiguration = {
+            runId: '1',
+            debugSessionId: '1',
+            type: 'coreclr',
+            name: 'Test Debug Config',
+            request: 'launch'
+        };
+
+        const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
+
+        await extension.createDebugSessionConfigurationCallback!(launchConfig, forwardedArgs, [], { debug: true, forceBuild: false, runId: '1', debugSessionId: '1', isApphost: true, debugSession: fakeAspireDebugSession }, debugConfig);
+
+        assert.strictEqual(debugConfig.program, 'dotnet');
+        assert.deepStrictEqual(debugConfig.args, ['exec', dllPath, '--custom', 'value with spaces', '', 'literal "quote"', String.raw`C:\tools\backslash\path`]);
+        assert.strictEqual(debugConfig.cwd, projectDirectory);
+        assert.strictEqual(dotNetService.buildDotNetProjectStub.notCalled, true);
     });
 
     test('file-based .cs applies the launch profile working directory', async () => {
@@ -1510,7 +4533,8 @@ suite('Dotnet Debugger Extension Tests', () => {
     test('file-based .cs with disable_launch_profile ignores run-api profile arguments, working directory, and profile environment but keeps DOTNET_ROOT', async () => {
         // With disable_launch_profile the extension selects no launch profile, but `dotnet run-api` still applies
         // the SDK default profile and returns its arguments, working directory, and environment. The profile
-        // values may not leak into the debug configuration: args come only from the run session, cwd defaults to
+        // values may not leak into the debug configuration: args come only from the run session (an explicit empty
+        // array here), cwd defaults to
         // the file's directory, and no profile env is applied. The runtime host-resolution variables (DOTNET_ROOT*)
         // are NOT profile-derived, so they must still be preserved even when the profile is disabled.
         const fs = require('fs');
@@ -1565,7 +4589,7 @@ suite('Dotnet Debugger Extension Tests', () => {
             await extension.createDebugSessionConfigurationCallback!(launchConfig, [], [], { debug: true, runId: '1', debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession }, debugConfig);
 
             assert.strictEqual(debugConfig.program, executablePath);
-            assert.strictEqual(debugConfig.args, undefined);
+            assert.deepStrictEqual(debugConfig.args, []);
             assert.strictEqual(debugConfig.cwd, tempRoot);
             // The profile env (DISABLED_PROFILE_ENV) is dropped; the runtime host variable DOTNET_ROOT is preserved.
             assert.deepStrictEqual(debugConfig.env, { DOTNET_ROOT: '/usr/share/dotnet' });
@@ -1575,7 +4599,7 @@ suite('Dotnet Debugger Extension Tests', () => {
     });
 
     test('file-based dotnet.cs apphost named dotnet is not mistaken for the launcher', async () => {
-        // A file-based app whose entry file is `dotnet.cs` builds an apphost whose AssemblyName — and therefore
+        // A file-based app whose entry file is `dotnet.cs` builds an apphost whose TargetName — and therefore
         // executable file name — is `dotnet`/`dotnet.exe`, the same name as the launcher but at a full build-output
         // path. run-api returns that full path as ExecutablePath and echoes the SDK default profile's arguments
         // in CommandLineArguments. Because the program is an apphost (a rooted path), not the launcher (a bare
@@ -2185,6 +5209,178 @@ suite('Dotnet Debugger Extension Tests', () => {
         assert.strictEqual(debugConfig.noDebug, true);
     });
 
+    test('externally built project honors a custom run command without requiring project output', async () => {
+        const { tempRoot, projectPath, outputPath } = createRunnableProjectOutput('dotnet-debugger-custom-run-command');
+        const projectDirectory = nodePath.dirname(projectPath);
+
+        try {
+            const { extension, dotNetService, doesFileExistStub } = createDebuggerExtension(outputPath, null, true, false);
+            const runWorkingDirectory = nodePath.join(projectDirectory, 'custom-working-directory');
+            dotNetService.projectRunProperties = {
+                targetPath: outputPath,
+                runCommand: 'custom-launcher',
+                runArguments: '--from-msbuild "value with spaces"',
+                runWorkingDirectory
+            };
+            const launchConfig: ProjectLaunchConfiguration = {
+                type: 'project-with-external-build.v1',
+                project_path: projectPath,
+                suppress_build: true
+            };
+            const debugConfig: AspireResourceExtendedDebugConfiguration = {
+                runId: '1',
+                debugSessionId: '1',
+                type: 'coreclr',
+                name: 'Test Debug Config',
+                request: 'launch'
+            };
+            const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
+
+            await extension.createDebugSessionConfigurationCallback!(
+                launchConfig,
+                ['--from-session'],
+                [],
+                { debug: true, runId: '1', debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession },
+                debugConfig);
+
+            assert.strictEqual(debugConfig.program, 'custom-launcher');
+            assert.deepStrictEqual(debugConfig.args, ['--from-msbuild', 'value with spaces', '--from-session']);
+            assert.strictEqual(debugConfig.cwd, runWorkingDirectory);
+            assert.strictEqual(debugConfig.noDebug, true);
+            assert.strictEqual(dotNetService.getDotNetProjectRunPropertiesStub.callCount, 1);
+            assert.strictEqual(dotNetService.getDotNetTargetPathStub.callCount, 0);
+            assert.strictEqual(dotNetService.buildDotNetProjectStub.callCount, 0);
+            assert.strictEqual(doesFileExistStub.callCount, 0);
+        } finally {
+            removeDirectorySafely(tempRoot);
+        }
+    });
+
+    test('externally built project keeps debugger attach for the SDK dotnet exec command', async () => {
+        const { tempRoot, projectPath, outputPath, outputDirectory } = createRunnableProjectOutput('dotnet-debugger-dotnet-exec');
+
+        try {
+            const { extension, dotNetService } = createDebuggerExtension(outputPath, null, true, true);
+            const launchConfig: ProjectLaunchConfiguration = {
+                type: 'project-with-external-build.v1',
+                project_path: projectPath,
+                suppress_build: true
+            };
+            const debugConfig: AspireResourceExtendedDebugConfiguration = {
+                runId: '1',
+                debugSessionId: '1',
+                type: 'coreclr',
+                name: 'Test Debug Config',
+                request: 'launch'
+            };
+            const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
+
+            await extension.createDebugSessionConfigurationCallback!(
+                launchConfig,
+                ['--from-session'],
+                [],
+                { debug: true, runId: '1', debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession },
+                debugConfig);
+
+            assert.strictEqual(debugConfig.program, 'dotnet');
+            assert.deepStrictEqual(debugConfig.args, ['exec', outputPath, '--from-session']);
+            assert.strictEqual(debugConfig.cwd, outputDirectory);
+            assert.strictEqual(debugConfig.noDebug, undefined);
+            assert.strictEqual(dotNetService.getDotNetProjectRunPropertiesStub.callCount, 1);
+            assert.strictEqual(dotNetService.getDotNetTargetPathStub.callCount, 0);
+        } finally {
+            removeDirectorySafely(tempRoot);
+        }
+    });
+
+    test('externally built project keeps debugger attach for a direct target command', async () => {
+        const { tempRoot, projectPath, outputPath } = createRunnableProjectOutput('dotnet-debugger-direct-target');
+
+        try {
+            const { extension, dotNetService } = createDebuggerExtension(outputPath, null, true, true);
+            dotNetService.projectRunProperties = {
+                targetPath: outputPath,
+                runCommand: outputPath,
+                runArguments: '--from-msbuild',
+                runWorkingDirectory: nodePath.dirname(projectPath)
+            };
+            const launchConfig: ProjectLaunchConfiguration = {
+                type: 'project-with-external-build.v1',
+                project_path: projectPath,
+                suppress_build: true
+            };
+            const debugConfig: AspireResourceExtendedDebugConfiguration = {
+                runId: '1',
+                debugSessionId: '1',
+                type: 'coreclr',
+                name: 'Test Debug Config',
+                request: 'launch'
+            };
+            const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
+
+            await extension.createDebugSessionConfigurationCallback!(
+                launchConfig,
+                ['--from-session'],
+                [],
+                { debug: true, runId: '1', debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession },
+                debugConfig);
+
+            assert.strictEqual(debugConfig.program, outputPath);
+            assert.deepStrictEqual(debugConfig.args, ['--from-msbuild', '--from-session']);
+            assert.strictEqual(debugConfig.noDebug, undefined);
+            assert.strictEqual(dotNetService.getDotNetProjectRunPropertiesStub.callCount, 1);
+            assert.strictEqual(dotNetService.getDotNetTargetPathStub.callCount, 0);
+        } finally {
+            removeDirectorySafely(tempRoot);
+        }
+    });
+
+    test('externally built project keeps debugger attach for the SDK apphost command', async () => {
+        const { tempRoot, projectPath, outputPath } = createRunnableProjectOutput('dotnet-debugger-apphost');
+        const output = nodePath.parse(outputPath);
+        const appHostPath = nodePath.join(
+            output.dir,
+            `${output.name}${process.platform === 'win32' ? '.exe' : ''}`);
+
+        try {
+            const { extension, dotNetService } = createDebuggerExtension(outputPath, null, true, true);
+            dotNetService.projectRunProperties = {
+                targetPath: outputPath,
+                runCommand: appHostPath,
+                runArguments: '--from-msbuild',
+                runWorkingDirectory: nodePath.dirname(projectPath)
+            };
+            const launchConfig: ProjectLaunchConfiguration = {
+                type: 'project-with-external-build.v1',
+                project_path: projectPath,
+                suppress_build: true
+            };
+            const debugConfig: AspireResourceExtendedDebugConfiguration = {
+                runId: '1',
+                debugSessionId: '1',
+                type: 'coreclr',
+                name: 'Test Debug Config',
+                request: 'launch'
+            };
+            const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
+
+            await extension.createDebugSessionConfigurationCallback!(
+                launchConfig,
+                ['--from-session'],
+                [],
+                { debug: true, runId: '1', debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession },
+                debugConfig);
+
+            assert.strictEqual(debugConfig.program, appHostPath);
+            assert.deepStrictEqual(debugConfig.args, ['--from-msbuild', '--from-session']);
+            assert.strictEqual(debugConfig.noDebug, undefined);
+            assert.strictEqual(dotNetService.getDotNetProjectRunPropertiesStub.callCount, 1);
+            assert.strictEqual(dotNetService.getDotNetTargetPathStub.callCount, 0);
+        } finally {
+            removeDirectorySafely(tempRoot);
+        }
+    });
+
     test('uses dotnet CLI when project runtimeconfig has no runnable framework', async () => {
         const fs = require('fs');
         const path = require('path');
@@ -2225,10 +5421,120 @@ suite('Dotnet Debugger Extension Tests', () => {
 
             assert.strictEqual(debugConfig.type, 'coreclr');
             assert.strictEqual(debugConfig.program, 'dotnet');
-            assert.deepStrictEqual(debugConfig.args, ['run', '--project', projectPath, '--no-launch-profile', '--', '--message', 'hello world']);
+            assert.deepStrictEqual(debugConfig.args, ['exec', outputPath, '--message', 'hello world']);
             assert.strictEqual(debugConfig.noDebug, true);
         } finally {
             removeDirectorySafely(tempRoot);
+        }
+    });
+
+    test('coordinated project uses configured dotnet CLI fallback without rebuilding', async () => {
+        const fs = require('fs');
+        const path = require('path');
+
+        const tempRoot = path.join(process.cwd(), '.test-temp', `dotnet-debugger-${process.pid}-${Date.now()}`);
+        const projectDir = path.join(tempRoot, 'Frontend With Spaces');
+        const outputDir = path.join(projectDir, 'bin', 'Release', 'net10.0');
+        fs.mkdirSync(outputDir, { recursive: true });
+
+        try {
+            const projectPath = path.join(projectDir, 'Frontend.csproj');
+            const outputPath = path.join(outputDir, 'Frontend.dll');
+            fs.writeFileSync(projectPath, '<Project></Project>');
+            fs.writeFileSync(outputPath, '');
+            fs.writeFileSync(path.join(outputDir, 'Frontend.runtimeconfig.json'), JSON.stringify({
+                runtimeOptions: {
+                    tfm: 'net10.0'
+                }
+            }));
+
+            const { extension } = createDebuggerExtension(outputPath, null, true, true);
+            const buildWorkingDirectory = path.join(tempRoot, 'sdk-root');
+            const launchConfig: ProjectLaunchConfiguration = {
+                type: 'project',
+                project_path: projectPath,
+                build_configuration: 'Release',
+                build_environment: { BUILD_FLAVOR: 'custom;flavor%' },
+                build_working_directory: buildWorkingDirectory,
+                suppress_build: true
+            };
+
+            const debugConfig: AspireResourceExtendedDebugConfiguration = {
+                runId: '1',
+                debugSessionId: '1',
+                type: 'coreclr',
+                name: 'Test Debug Config',
+                request: 'launch'
+            };
+
+            const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
+
+            await extension.createDebugSessionConfigurationCallback!(launchConfig, ['--message', 'hello world'], [], { debug: true, runId: '1', debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession }, debugConfig);
+
+            assert.strictEqual(debugConfig.type, 'coreclr');
+            assert.strictEqual(debugConfig.program, 'dotnet');
+            assert.deepStrictEqual(debugConfig.args, ['exec', outputPath, '--message', 'hello world']);
+            assert.strictEqual(debugConfig.cwd, outputDir);
+            assert.strictEqual(debugConfig.noDebug, true);
+        } finally {
+            removeDirectorySafely(tempRoot);
+        }
+    });
+
+    test('project Executable profile preserves forwarded array args without expanding tokens', async () => {
+        const fs = require('fs');
+        const path = require('path');
+
+        const tempRoot = path.join(process.cwd(), '.test-temp', `dotnet-debugger-exec-args-${process.pid}-${Date.now()}`);
+        const projectDir = path.join(tempRoot, 'ToolProject');
+        const propertiesDir = path.join(projectDir, 'Properties');
+        fs.mkdirSync(propertiesDir, { recursive: true });
+
+        const spacesEnvVarName = 'ASPIRE_TEST_DEBUGGER_ARG_SPACES';
+        const pathEnvVarName = 'ASPIRE_TEST_DEBUGGER_ARG_PATH';
+        const backslashPath = String.raw`C:\tools\backslash\path`;
+        process.env[spacesEnvVarName] = 'value with spaces';
+        process.env[pathEnvVarName] = backslashPath;
+
+        try {
+            const projectPath = path.join(projectDir, 'ToolProject.csproj');
+            fs.writeFileSync(projectPath, '<Project></Project>');
+            fs.writeFileSync(path.join(propertiesDir, 'launchSettings.json'), JSON.stringify({
+                profiles: {
+                    Tool: {
+                        commandName: 'Executable',
+                        executablePath: 'dotnet'
+                    }
+                }
+            }));
+
+            const outputPath = path.join(projectDir, 'bin', 'Debug', 'net10.0', 'ToolProject.dll');
+            const { extension } = createDebuggerExtension(outputPath, null, true, true);
+            const launchConfig: ProjectLaunchConfiguration = {
+                type: 'project',
+                project_path: projectPath,
+                launch_profile: 'Tool'
+            };
+
+            const debugConfig: AspireResourceExtendedDebugConfiguration = {
+                runId: '1',
+                debugSessionId: '1',
+                type: 'coreclr',
+                name: 'Test Debug Config',
+                request: 'launch'
+            };
+
+            const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
+            const forwardedArgs = ['--custom', `$(${spacesEnvVarName})`, '', 'literal "quote"', `$(${pathEnvVarName})`];
+
+            await extension.createDebugSessionConfigurationCallback!(launchConfig, forwardedArgs, [], { debug: true, runId: '1', debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession }, debugConfig);
+
+            assert.strictEqual(debugConfig.program, 'dotnet');
+            assert.deepStrictEqual(debugConfig.args, forwardedArgs);
+        } finally {
+            delete process.env[spacesEnvVarName];
+            delete process.env[pathEnvVarName];
+            fs.rmSync(tempRoot, { recursive: true, force: true });
         }
     });
 
@@ -2261,11 +5567,21 @@ suite('Dotnet Debugger Extension Tests', () => {
                 }
             }));
 
-            const { extension } = createDebuggerExtension(outputPath, null, true, true);
+            const { extension, dotNetService } = createDebuggerExtension(outputPath, null, true, true);
+            const buildWorkingDirectory = path.join(tempRoot, 'sdk-root');
+            dotNetService.projectRunProperties = {
+                targetPath: outputPath,
+                runCommand: 'dotnet',
+                runArguments: `exec "${outputPath}"`,
+                runWorkingDirectory: projectDir
+            };
             const launchConfig: ProjectLaunchConfiguration = {
-                type: 'project',
+                type: 'project-with-external-build.v1',
                 project_path: projectPath,
-                launch_profile: 'Development'
+                launch_profile: 'Development',
+                build_environment: { BUILD_FLAVOR: 'custom flavor' },
+                build_working_directory: buildWorkingDirectory,
+                suppress_build: true
             };
 
             const debugConfig: AspireResourceExtendedDebugConfiguration = {
@@ -2280,7 +5596,15 @@ suite('Dotnet Debugger Extension Tests', () => {
 
             await extension.createDebugSessionConfigurationCallback!(launchConfig, undefined, [], { debug: true, runId: '1', debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession }, debugConfig);
 
-            assert.strictEqual(debugConfig.args, `run --project "${projectPath}" --no-launch-profile -- --arg "value with spaces" --message "say \\"hi\\"" --path "C:\\Temp\\file.txt"`);
+            assert.strictEqual(
+                debugConfig.args,
+                `exec "${outputPath}" --arg "value with spaces" --message "say \\"hi\\"" --path "C:\\Temp\\file.txt"`);
+            assert.strictEqual(debugConfig.cwd, projectDir);
+            assert.ok(dotNetService.getDotNetProjectRunPropertiesStub.calledOnceWith(
+                projectPath,
+                undefined,
+                { BUILD_FLAVOR: 'custom flavor' },
+                buildWorkingDirectory));
         } finally {
             removeDirectorySafely(tempRoot);
         }
@@ -2541,7 +5865,7 @@ suite('Dotnet Debugger Extension Tests', () => {
         const outputPath = path.join(projectDir, 'bin', 'Debug', 'net7.0', 'WebProject.dll');
         const { extension } = createDebuggerExtension(outputPath, null, true, true);
         const launchConfig: ProjectLaunchConfiguration = {
-            type: 'project',
+            type: 'project-with-external-build.v1',
             project_path: projectPath,
             launch_profile: 'Development'
         };
@@ -2571,6 +5895,7 @@ suite('Dotnet Debugger Extension Tests', () => {
             extension);
 
         assert.deepStrictEqual(debugConfig.serverReadyAction, serverReadyAction);
+        assert.strictEqual(debugConfig.targetPath, projectPath);
 
         removeDirectorySafely(tempDir);
     });
@@ -2669,7 +5994,8 @@ suite('Dotnet Debugger Extension Tests', () => {
         const launchConfig: ProjectLaunchConfiguration = {
             type: 'project',
             project_path: projectPath,
-            launch_profile: 'Aspire_my-function'
+            launch_profile: 'Aspire_my-function',
+            build_environment: { BUILD_FLAVOR: 'custom' }
         };
 
         const debugConfig: AspireResourceExtendedDebugConfiguration = {
@@ -2682,7 +6008,15 @@ suite('Dotnet Debugger Extension Tests', () => {
 
         const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
 
-        await extension.createDebugSessionConfigurationCallback!(launchConfig, undefined, [], { debug: true, runId: '1', debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession }, debugConfig);
+        await extension.createDebugSessionConfigurationCallback!(
+            launchConfig,
+            undefined,
+            [
+                { name: 'BUILD_FLAVOR', value: 'custom' },
+                { name: 'RUNTIME_ONLY', value: 'not-for-msbuild' }
+            ],
+            { debug: true, runId: '1', debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession },
+            debugConfig);
 
         // program should be the executable path from the profile, NOT the project output DLL
         assert.strictEqual(debugConfig.program, 'dotnet');
@@ -2691,13 +6025,16 @@ suite('Dotnet Debugger Extension Tests', () => {
         assert.strictEqual(debugConfig.args, 'exec --depsfile ./MyClassLibFunction.deps.json --runtimeconfig ./MyClassLibFunction.runtimeconfig.json RuntimeSupport.dll MyClassLibFunction::MyClassLibFunction.Function::FunctionHandler');
 
         // cwd should resolve to the profile's working directory
-        assert.strictEqual(debugConfig.cwd, path.resolve(projectDir, 'bin/Debug/net10.0/'));
+        assert.strictEqual(debugConfig.cwd, path.resolve(propertiesDir, 'bin/Debug/net10.0/'));
 
         // env should include the profile's environment variables
         assert.strictEqual(debugConfig.env.FUNCTION_ENV, 'test');
 
         // project should still be built (to compile the class library dependencies)
-        assert.strictEqual(dotNetService.buildDotNetProjectStub.calledOnce, true);
+        assert.ok(dotNetService.buildDotNetProjectStub.calledOnceWith(
+            projectPath,
+            undefined,
+            { BUILD_FLAVOR: 'custom' }));
 
         // cleanup
         removeDirectorySafely(tempDir);
@@ -2815,6 +6152,110 @@ suite('Dotnet Debugger Extension Tests', () => {
         }
     });
 
+    test('fails explicit project launch when the selected profile is missing, malformed, or has an unsupported commandName', async () => {
+        const fs = require('fs');
+        const os = require('os');
+        const path = require('path');
+
+        const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-test-'));
+        try {
+            const projectDir = path.join(tempDir, 'AppHost');
+            const propertiesDir = path.join(projectDir, 'Properties');
+            fs.mkdirSync(propertiesDir, { recursive: true });
+
+            const projectPath = path.join(projectDir, 'AppHost.csproj');
+            fs.writeFileSync(projectPath, '<Project></Project>');
+            fs.writeFileSync(path.join(propertiesDir, 'launchSettings.json'), `{
+                "profiles": {
+                    "invalid": {
+                        "commandName": "project",
+                        "commandLineArgs": 42
+                    },
+                    "malformed": {
+                        "commandName": "Project",
+                        "launchBrowser": "yes"
+                    },
+                    "duplicateMalformed": {
+                        "commandName": "Project",
+                        "launchBrowser": "yes",
+                        "launchBrowser": true
+                    }
+                }
+            }`);
+
+            const outputPath = path.join(projectDir, 'bin', 'Debug', 'net10.0', 'AppHost.dll');
+            const { extension, dotNetService } = createDebuggerExtension(outputPath, null, true, true);
+            const debugConfig: AspireResourceExtendedDebugConfiguration = {
+                runId: '1',
+                debugSessionId: '1',
+                type: 'coreclr',
+                name: 'Test Debug Config',
+                request: 'launch'
+            };
+            const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
+            const unsupportedLaunchConfig: ProjectLaunchConfiguration = {
+                type: 'project',
+                project_path: projectPath,
+                launch_profile: 'invalid'
+            };
+            const missingLaunchConfig: ProjectLaunchConfiguration = {
+                type: 'project',
+                project_path: projectPath,
+                launch_profile: 'missing'
+            };
+            const malformedLaunchConfig: ProjectLaunchConfiguration = {
+                type: 'project',
+                project_path: projectPath,
+                launch_profile: 'malformed'
+            };
+            const duplicateMalformedLaunchConfig: ProjectLaunchConfiguration = {
+                type: 'project',
+                project_path: projectPath,
+                launch_profile: 'duplicateMalformed'
+            };
+
+            await assert.rejects(
+                extension.createDebugSessionConfigurationCallback!(
+                    unsupportedLaunchConfig,
+                    undefined,
+                    [],
+                    { debug: true, runId: '1', debugSessionId: '1', isApphost: true, debugSession: fakeAspireDebugSession },
+                    debugConfig),
+                /Launch profile 'invalid' uses a commandName that dotnet run does not support/);
+
+            await assert.rejects(
+                extension.createDebugSessionConfigurationCallback!(
+                    malformedLaunchConfig,
+                    undefined,
+                    [],
+                    { debug: true, runId: '1', debugSessionId: '1', isApphost: true, debugSession: fakeAspireDebugSession },
+                    debugConfig),
+                /Launch profile 'malformed' contains property values that dotnet run does not support/);
+
+            await assert.rejects(
+                extension.createDebugSessionConfigurationCallback!(
+                    duplicateMalformedLaunchConfig,
+                    undefined,
+                    [],
+                    { debug: true, runId: '1', debugSessionId: '1', isApphost: true, debugSession: fakeAspireDebugSession },
+                    debugConfig),
+                /Launch profile 'duplicateMalformed' contains property values that dotnet run does not support/);
+
+            await assert.rejects(
+                extension.createDebugSessionConfigurationCallback!(
+                    missingLaunchConfig,
+                    undefined,
+                    [],
+                    { debug: true, runId: '1', debugSessionId: '1', isApphost: true, debugSession: fakeAspireDebugSession },
+                    debugConfig),
+                /Launch profile 'missing' could not be uniquely resolved/);
+
+            assert.strictEqual(dotNetService.buildDotNetProjectStub.called, false);
+        } finally {
+            removeDirectorySafely(tempDir);
+        }
+    });
+
     test('expands environment variables in Executable profile executablePath and commandLineArgs', async () => {
         // Executable launch profiles may contain $(VAR) references (e.g. $(HOME)) that
         // VS expands natively but the coreclr debugger does not. The extension must expand
@@ -2894,6 +6335,19 @@ function msbuildCallFor(stub: sinon.SinonStub, projectPath: string): sinon.Sinon
 
 function buildCallFor(stub: sinon.SinonStub, projectPath: string): sinon.SinonSpyCall<any[], any> {
     return dotnetCallFor(stub, projectPath, 'dotnet build');
+}
+
+function getMsBuildResponseFilePath(args: string[]): string {
+    const responseFileArgument = args.find(arg => arg.startsWith('@'));
+    assert.ok(responseFileArgument, `Expected an MSBuild response-file argument in ${JSON.stringify(args)}.`);
+    return responseFileArgument.slice(1);
+}
+
+function getMsBuildResultOutputPath(args: string[]): string {
+    const prefix = '-getResultOutputFile:';
+    const resultOutputArgument = args.find(arg => arg.startsWith(prefix));
+    assert.ok(resultOutputArgument, `Expected an MSBuild result-output argument in ${JSON.stringify(args)}.`);
+    return resultOutputArgument.slice(prefix.length);
 }
 
 function dotnetCallFor(stub: sinon.SinonStub, projectPath: string, description: string): sinon.SinonSpyCall<any[], any> {

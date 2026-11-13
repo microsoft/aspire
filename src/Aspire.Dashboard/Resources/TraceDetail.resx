@@ -152,4 +152,18 @@
   <data name="TraceDetailNoSpans" xml:space="preserve">
     <value>No spans found</value>
   </data>
+  <data name="TraceDetailBackToTraces" xml:space="preserve">
+    <value>Back to traces</value>
+  </data>
+  <data name="TraceDetailBackToTracesButton" xml:space="preserve">
+    <value>Traces</value>
+  </data>
+  <data name="TotalItemsFooterSingularText" xml:space="preserve">
+    <value>Showing &lt;strong&gt;{0} span&lt;/strong&gt;</value>
+    <comment>{0} is a number. This is raw markup, so &lt;strong&gt; and &lt;/strong&gt; should not be modified</comment>
+  </data>
+  <data name="TotalItemsFooterPluralText" xml:space="preserve">
+    <value>Showing &lt;strong&gt;{0} spans&lt;/strong&gt;</value>
+    <comment>{0} is a number. This is raw markup, so &lt;strong&gt; and &lt;/strong&gt; should not be modified</comment>
+  </data>
 </root>

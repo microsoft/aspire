@@ -10,6 +10,7 @@ using System.Text.Json.Serialization;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
+using Aspire.Cli.Utils;
 using Aspire.Shared.Json;
 using Microsoft.Extensions.Logging;
 using Semver;
@@ -160,6 +161,12 @@ internal sealed class SdkDumpCommand : BaseCommand
             emoji: KnownEmojis.MagnifyingGlassTiltedLeft));
     }
 
+    private Task<IAppHostServerProject> CreateCapabilityScannerProjectAsync(string tempDir, CancellationToken cancellationToken)
+    {
+        var repoRoot = AspireRepositoryDetector.DetectRepositoryRoot(tempDir);
+        return _appHostServerProjectFactory.CreateAsync(tempDir, restoreRootConfigDirectory: repoRoot, cancellationToken);
+    }
+
     private async Task<int> DumpCapabilitiesAsync(
         List<IntegrationReference> integrations,
         FileInfo? outputFile,
@@ -171,7 +178,7 @@ internal sealed class SdkDumpCommand : BaseCommand
 
         try
         {
-            var appHostServerProject = await _appHostServerProjectFactory.CreateAsync(tempDir, cancellationToken);
+            var appHostServerProject = await CreateCapabilityScannerProjectAsync(tempDir, cancellationToken);
 
             _logger.LogDebug("Building AppHost server for capability scanning with {Count} integrations", integrations.Count);
 
@@ -193,7 +200,7 @@ internal sealed class SdkDumpCommand : BaseCommand
                 return CliExitCodes.FailedToBuildArtifacts;
             }
 
-            await using var serverSession = _serverSessionFactory.Create(appHostServerProject, environmentVariables: null, debug: false, gracefulShutdownSignaler: null, shutdownService: null, isolateConsole: false, cancellationToken);
+            await using var serverSession = _serverSessionFactory.Create(appHostServerProject, environmentVariables: null, debug: false, gracefulShutdownSignaler: null, shutdownService: null, isolateConsole: false, ownsProject: true, cancellationToken);
             // Short-lived RPC session: StartAsync() spawns the server. We never observe the
             // exit-code task (WaitForExitAsync) because disposal flows the exit code through the
             // activity scope and the only failure mode we care about surfaces via the RPC call below.
@@ -270,7 +277,7 @@ internal sealed class SdkDumpCommand : BaseCommand
 
         try
         {
-            var appHostServerProject = await _appHostServerProjectFactory.CreateAsync(tempDir, cancellationToken);
+            var appHostServerProject = await CreateCapabilityScannerProjectAsync(tempDir, cancellationToken);
 
             _logger.LogDebug("Building AppHost server for batched capability scanning with {Count} integrations", integrations.Count);
 
@@ -292,7 +299,7 @@ internal sealed class SdkDumpCommand : BaseCommand
                 return CliExitCodes.FailedToBuildArtifacts;
             }
 
-            await using var serverSession = _serverSessionFactory.Create(appHostServerProject, environmentVariables: null, debug: false, gracefulShutdownSignaler: null, shutdownService: null, isolateConsole: false, cancellationToken);
+            await using var serverSession = _serverSessionFactory.Create(appHostServerProject, environmentVariables: null, debug: false, gracefulShutdownSignaler: null, shutdownService: null, isolateConsole: false, ownsProject: true, cancellationToken);
             // Short-lived RPC session: StartAsync() spawns the server. We never observe the
             // exit-code task (WaitForExitAsync) because disposal flows the exit code through the
             // activity scope and the only failure mode we care about surfaces via the RPC call below.
@@ -382,7 +389,7 @@ internal sealed class SdkDumpCommand : BaseCommand
         capabilities.Diagnostics.RemoveAll(d => d.Severity == "Info");
 
         var packageVersions = integrations
-            .Where(i => i.IsPackageReference)
+            .Where(i => i.Source == IntegrationSource.Nuget)
             .Select(i => new PackageInfo { Name = i.Name, Version = i.Version! })
             .ToList();
         if (packageVersions.Count > 0)
@@ -741,6 +748,7 @@ internal sealed class CapabilityInfo
     public string QualifiedMethodName { get; set; } = "";
     public string? Description { get; set; }
     public DocumentationInfo? Documentation { get; set; }
+    public bool IsExperimental { get; set; }
     public string CapabilityKind { get; set; } = "";
     public string? TargetTypeId { get; set; }
     public string? TargetParameterName { get; set; }
@@ -776,6 +784,7 @@ internal sealed class TypeRefInfo
     public string TypeId { get; set; } = "";
     public string Category { get; set; } = "";
     public bool IsInterface { get; set; }
+    public bool? IsNullable { get; set; }
     public bool IsReadOnly { get; set; }
     public TypeRefInfo? ElementType { get; set; }
     public TypeRefInfo? KeyType { get; set; }

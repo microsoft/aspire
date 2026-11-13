@@ -28,6 +28,9 @@ public partial class ResourceNameButtonValue
     public required IDashboardClient DashboardClient { get; init; }
 
     [Inject]
+    public required DashboardDataSource DataSource { get; init; }
+
+    [Inject]
     public required IconResolver IconResolver { get; init; }
 
     private ResourceViewModel? _resource;
@@ -39,7 +42,7 @@ public partial class ResourceNameButtonValue
 
         if (DashboardClient.IsEnabled)
         {
-            _resource = DashboardClient.GetResource(Resource.ResourceKey.ToString());
+            _resource = DataSource.ResourceRepository.GetResource(Resource.ResourceKey.ToString());
             if (_resource != null)
             {
                 _resourceIcon = ResourceIconHelpers.GetIconForResource(IconResolver, _resource, IconSize.Size16, IconVariant.Regular);
@@ -51,7 +54,10 @@ public partial class ResourceNameButtonValue
     {
         Debug.Assert(_resource != null, "Should only get here if there is a matched resource.");
 
-        NavigationManager.NavigateTo(DashboardUrls.ResourcesUrl(_resource.Name));
+        // The previous experience keeps main's query-based resource URL, which its resources page supports.
+        NavigationManager.NavigateTo(DashboardExperienceComponents.IsLegacyLocation(NavigationManager)
+            ? DashboardUrls.ResourcesUrl(resource: _resource.Name)
+            : DashboardUrls.ResourceOverviewUrl(_resource.Name));
         return Task.CompletedTask;
     }
 }

@@ -12,13 +12,14 @@ import { CandidateAppHostDisplayInfo } from './appHostCandidateTypes';
  *  - `csharp`     : every detected AppHost reports a C# variant.
  *  - `typescript` : every detected AppHost reports a TypeScript / Node variant.
  *  - `rust`       : every detected AppHost reports Rust.
+ *  - `go`         : every detected AppHost reports Go.
  *  - `polyglot`   : more than one language family is present,
  *                   or an unknown language is mixed with a known one. This is
  *                   the headline signal Damian asked us to capture.
  *  - `unknown`    : we found AppHosts but couldn't classify any of them.
  *  - `none`       : no AppHosts were detected at all.
  */
-export type AppHostLanguage = 'csharp' | 'typescript' | 'rust' | 'java' | 'unknown';
+export type AppHostLanguage = 'csharp' | 'typescript' | 'rust' | 'java' | 'go' | 'unknown';
 export type AppHostLanguageSummary = Exclude<AppHostLanguage, 'unknown'> | 'polyglot' | 'unknown' | 'none';
 
 export function formatAppHostLanguage(language: string): string | undefined {
@@ -60,6 +61,9 @@ function languageFamily(raw: string | null | undefined): AppHostLanguage | 'othe
     if (value === 'java' || value.startsWith('java/')) {
         return 'java';
     }
+    if (value === 'go' || value.startsWith('go/')) {
+        return 'go';
+    }
     return 'other';
 }
 
@@ -72,6 +76,7 @@ export function summarizeAppHostLanguages(candidates: readonly CandidateAppHostD
     let sawTypescript = false;
     let sawRust = false;
     let sawJava = false;
+    let sawGo = false;
     let sawOther = false;
 
     for (const candidate of candidates) {
@@ -88,12 +93,15 @@ export function summarizeAppHostLanguages(candidates: readonly CandidateAppHostD
         else if (family === 'java') {
             sawJava = true;
         }
+        else if (family === 'go') {
+            sawGo = true;
+        }
         else {
             sawOther = true;
         }
     }
 
-    const distinctFamilies = Number(sawCsharp) + Number(sawTypescript) + Number(sawRust) + Number(sawJava) + Number(sawOther);
+    const distinctFamilies = Number(sawCsharp) + Number(sawTypescript) + Number(sawRust) + Number(sawJava) + Number(sawGo) + Number(sawOther);
     if (distinctFamilies > 1) {
         return 'polyglot';
     }
@@ -108,6 +116,9 @@ export function summarizeAppHostLanguages(candidates: readonly CandidateAppHostD
     }
     if (sawJava) {
         return 'java';
+    }
+    if (sawGo) {
+        return 'go';
     }
     return 'unknown';
 }
@@ -140,6 +151,9 @@ export function classifyAppHostPath(appHostPath: string | undefined): AppHostLan
     if (lower.endsWith('.java')) {
         return 'java';
     }
+    if (lower.endsWith('.go')) {
+        return 'go';
+    }
     return 'unknown';
 }
 
@@ -169,6 +183,7 @@ export async function classifyAppHostDirectory(directoryPath: string | undefined
     let sawTypescript = false;
     let sawRust = false;
     let sawJava = false;
+    let sawGo = false;
     for (const entry of entries) {
         if (await isCsharpAppHostMarker(directoryPath, entry)) {
             sawCsharp = true;
@@ -181,6 +196,9 @@ export async function classifyAppHostDirectory(directoryPath: string | undefined
         }
         else if (await isJavaAppHostMarker(directoryPath, entry)) {
             sawJava = true;
+        }
+        else if (entry.toLowerCase() === 'apphost.go') {
+            sawGo = true;
         }
     }
     if (sawCsharp && sawTypescript) {
@@ -200,6 +218,9 @@ export async function classifyAppHostDirectory(directoryPath: string | undefined
     }
     if (sawJava) {
         return 'java';
+    }
+    if (sawGo) {
+        return 'go';
     }
     return 'unknown';
 }

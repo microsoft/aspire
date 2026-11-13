@@ -55,18 +55,21 @@ suite('CLI process termination', () => {
         await termination;
     });
 
-    test('stops tracking immediately when a PID-less child cannot be signaled', async () => {
+    test('rejects when a PID-less child cannot be signaled', async () => {
         sinon.stub(process, 'platform').value('linux');
         const clock = sinon.useFakeTimers();
         const childProcess = createFakeCliProcess(undefined, null);
         childProcess.kill.returns(false);
-        let settled = false;
 
-        void terminateCliProcess(childProcess, 'Aspire CLI').then(() => { settled = true; });
-        await clock.tickAsync(0);
+        const termination = terminateCliProcess(childProcess, 'Aspire CLI');
 
-        assert.strictEqual(settled, true);
+        const rejection = assert.rejects(termination, /Could not terminate Aspire CLI because no process identifier was available/);
+        await clock.tickAsync(5000);
+        await rejection;
         sinon.assert.calledOnceWithExactly(childProcess.kill, undefined);
+        assert.strictEqual(childProcess.listenerCount('close'), 0);
+        assert.strictEqual(childProcess.listenerCount('exit'), 0);
+        assert.strictEqual(clock.countTimers(), 0);
     });
 
     test('forcefully terminates a live process when graceful signaling throws', async () => {
@@ -88,18 +91,21 @@ suite('CLI process termination', () => {
         await termination;
     });
 
-    test('stops tracking immediately when signaling a PID-less child throws', async () => {
+    test('rejects when signaling a PID-less child throws', async () => {
         sinon.stub(process, 'platform').value('linux');
         const clock = sinon.useFakeTimers();
         const childProcess = createFakeCliProcess(undefined, null);
         childProcess.kill.throws(new Error('signal failed'));
-        let settled = false;
 
-        void terminateCliProcess(childProcess, 'Aspire CLI').then(() => { settled = true; });
-        await clock.tickAsync(0);
+        const termination = terminateCliProcess(childProcess, 'Aspire CLI');
 
-        assert.strictEqual(settled, true);
+        const rejection = assert.rejects(termination, /Could not terminate Aspire CLI because no process identifier was available/);
+        await clock.tickAsync(5000);
+        await rejection;
         sinon.assert.calledOnceWithExactly(childProcess.kill, undefined);
+        assert.strictEqual(childProcess.listenerCount('close'), 0);
+        assert.strictEqual(childProcess.listenerCount('exit'), 0);
+        assert.strictEqual(clock.countTimers(), 0);
     });
 });
 

@@ -9,9 +9,9 @@
       role="checkbox"
       aria-checked="@AriaChecked"
       aria-disabled="@AriaDisabled"
-      title="@AccessibleLabel"
+      data-tooltip="@AccessibleLabel"
       aria-label="@AccessibleLabel"
       @onclick="HandleClickAsync"
       @onclick:stopPropagation="@StopPropagation">
-    <FluentIcon Value="@CurrentIcon" aria-hidden="true" />
+   <FluentIcon Value="@CurrentIcon" Color="Color.Primary" aria-hidden="true" />
 </span>

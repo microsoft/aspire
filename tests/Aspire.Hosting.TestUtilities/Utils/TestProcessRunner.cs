@@ -36,6 +36,8 @@ internal sealed class TestProcessRunner : IProcessRunner
 
     public TaskCompletionSource<ProcessSpec> RunStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
+    public Action<ProcessSpec>? RunCallback { get; set; }
+
     public void EnqueueResult(
         int exitCode = 0,
         IReadOnlyList<string>? output = null,
@@ -65,6 +67,15 @@ internal sealed class TestProcessRunner : IProcessRunner
         }
     }
 
+    public Task<ProcessCaptureResult> RunAndCaptureTextAsync(
+        string executablePath,
+        IReadOnlyList<string> arguments,
+        string workingDirectory,
+        IReadOnlyDictionary<string, string>? environmentVariables = null,
+        ReadOnlyMemory<byte> standardInput = default,
+        CancellationToken cancellationToken = default)
+        => throw new NotSupportedException("This test runner supports only line execution.");
+
     public (Task<ProcessResult>, IAsyncDisposable) Run(ProcessSpec processSpec)
     {
         TestProcessRun run;
@@ -79,6 +90,7 @@ internal sealed class TestProcessRunner : IProcessRunner
             run = _runs.Count > 0 ? _runs.Dequeue() : TestProcessRun.Result();
         }
 
+        RunCallback?.Invoke(processSpec);
         RunStarted.TrySetResult(processSpec);
 
         if (run.FailureException is { } exception)
@@ -104,7 +116,13 @@ internal sealed class TestProcessRunner : IProcessRunner
         }
 
         var processOutput = run.OutputEvents.Select(static output => output.Value).ToArray();
-        var processResult = new ProcessResult(run.ExitCode, processOutput, run.TotalOutputLineCount);
+        var totalOutputLineCount = run.TotalOutputLineCount ?? processOutput.Length;
+        if (processSpec.RetainedOutputLineCount is { } retainedOutputLineCount)
+        {
+            processOutput = processOutput.TakeLast(retainedOutputLineCount).ToArray();
+        }
+
+        var processResult = new ProcessResult(run.ExitCode, processOutput, totalOutputLineCount);
 
         return (Task.FromResult(processResult), disposable);
     }
@@ -146,10 +164,12 @@ internal sealed class TestProcessDisposable : IAsyncDisposable
 {
     public int DisposeCallCount { get; private set; }
 
+    public Func<ValueTask>? OnDisposeAsync { get; set; }
+
     public ValueTask DisposeAsync()
     {
         DisposeCallCount++;
 
-        return ValueTask.CompletedTask;
+        return OnDisposeAsync?.Invoke() ?? ValueTask.CompletedTask;
     }
 }

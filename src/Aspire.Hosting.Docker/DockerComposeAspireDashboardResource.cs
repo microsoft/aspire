@@ -13,6 +13,9 @@ namespace Aspire.Hosting.Docker;
 [AspireExport(ExposeProperties = true)]
 public class DockerComposeAspireDashboardResource(string name) : ContainerResource(name)
 {
+    /// <inheritdoc/>
+    public override string ResourceTypeDisplayName => "Aspire Dashboard";
+
     /// <summary>
     /// Gets the primary endpoint of the Aspire Dashboard.
     /// </summary>
@@ -22,4 +25,6 @@ public class DockerComposeAspireDashboardResource(string name) : ContainerResour
     /// Gets the OTLP gRPC endpoint for telemetry data.
     /// </summary>
     public EndpointReference OtlpGrpcEndpoint => new(this, "otlp-grpc");
+
+    internal EndpointReference OtlpHttpEndpoint => new(this, "otlp-http");
 }

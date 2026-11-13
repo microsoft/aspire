@@ -2,10 +2,16 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { spawnSync } from 'child_process';
 import type { AspireExtensionE2EControlCommand, AspireExtensionE2EControlStatus } from '../../types/extensionApi';
-import { lsJsonStreamCapability, type ConfigInfo } from '../../types/configInfo';
+import { getPsFollowProcessLogPath, readPsFollowProcesses, type PsFollowProcessRecord } from '../../testing/psFollowProcessLog';
+import {
+    lsJsonStreamCapability,
+    type ConfigInfo,
+} from '../../types/configInfo';
 import { applyE2eControl, isSamePath, readStateFile, sleepSynchronously, waitForExtensionState } from './assertions';
-import { getCliPath, getPrimaryAppHostProjectPath, getRepoRoot, getRunRoot, getWorkspaceRoot } from './paths';
+import { VSBrowser } from './extester';
+import { getCliPath, getControlFilePath, getPrimaryAppHostProjectPath, getRepoRoot, getRunId, getRunRoot, getStateFilePath, getWorkspaceRoot } from './paths';
 import { ProcessError, runProcess } from './process';
+import { reloadWindow } from './vscode';
 
 const csharpFileHeader = `// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
@@ -87,13 +93,63 @@ export async function executeE2eControlCommand(
     return await applyE2eControl({ command }, options?.waitFor ?? 'applied', timeoutMs);
 }
 
+export async function reloadWorkspaceForE2E(timeoutMs = 120000): Promise<void> {
+    const deadline = Date.now() + timeoutMs;
+    const previousExtensionHostSessionId = readStateFile().extensionHostSessionId;
+    const controlFilePath = getControlFilePath();
+    if (controlFilePath) {
+        fs.rmSync(controlFilePath, { force: true });
+    }
+
+    await reloadWindow();
+    await waitForExtensionState(
+        file => file.extensionHostSessionId !== previousExtensionHostSessionId,
+        'extension host to reload with the E2E workspace open',
+        Math.max(1, deadline - Date.now()));
+    await VSBrowser.instance.waitForWorkbench(Math.max(1, deadline - Date.now()));
+}
+
 export async function setWorkspaceFoldersForE2E(folders: readonly { folderPath: string; name?: string }[]): Promise<Array<{ name: string; uri: string; fileName: string }>> {
     const status = await executeE2eControlCommand({ name: 'setWorkspaceFolders', folders }, { timeoutMs: 30000 });
     return status.result as Array<{ name: string; uri: string; fileName: string }>;
 }
 
-export async function restoreWorkspaceFoldersForE2E(): Promise<void> {
-    await setWorkspaceFoldersForE2E([{ folderPath: getWorkspaceRoot() }]);
+export async function getWorkspaceFoldersForE2E(): Promise<Array<{ name: string; uri: string; fileName: string }>> {
+    const status = await executeE2eControlCommand({ name: 'getWorkspaceFolders' });
+    return status.result as Array<{ name: string; uri: string; fileName: string }>;
+}
+
+export async function setWorkspaceFolderCliPathForE2E(folderPath: string, cliPath: string): Promise<{ targetKey: string; cliPath: string }> {
+    const status = await executeE2eControlCommand({ name: 'setWorkspaceFolderCliPath', folderPath, cliPath });
+    return status.result as { targetKey: string; cliPath: string };
+}
+
+export async function clearWorkspaceFolderCliPathsForE2E(): Promise<void> {
+    await executeE2eControlCommand({ name: 'clearWorkspaceFolderCliPaths' });
+}
+
+export async function restoreWorkspaceFoldersForE2E(options?: { waitForExtensionHostReload?: boolean; timeoutMs?: number }): Promise<void> {
+    const workspaceRoot = getWorkspaceRoot();
+    if (!options?.waitForExtensionHostReload) {
+        await setWorkspaceFoldersForE2E([{ folderPath: workspaceRoot }]);
+        return;
+    }
+
+    const deadline = Date.now() + (options.timeoutMs ?? 120000);
+    const currentWorkspaceFolders = await getWorkspaceFoldersForE2E();
+    const workspaceChangeRequired = currentWorkspaceFolders.length !== 1 || !isSamePath(currentWorkspaceFolders[0].fileName, workspaceRoot);
+    const previousExtensionHostSessionId = readStateFile().extensionHostSessionId;
+
+    await setWorkspaceFoldersForE2E([{ folderPath: workspaceRoot }]);
+    if (!workspaceChangeRequired) {
+        return;
+    }
+
+    await waitForExtensionState(
+        file => file.extensionHostSessionId !== previousExtensionHostSessionId,
+        'extension host to reload with the default E2E workspace open',
+        Math.max(1, deadline - Date.now()));
+    await VSBrowser.instance.waitForWorkbench(Math.max(1, deadline - Date.now()));
 }
 
 export async function snapshotClipboardForE2E(): Promise<void> {
@@ -141,8 +197,7 @@ function redactE2eTeardownFailure(failure: unknown): string {
         .replace(/Last state:[\s\S]*/g, 'Last state: <redacted>');
 }
 
-export async function createEmptyAppHostProject(projectName: string): Promise<string> {
-    const outputPath = getGeneratedProjectRoot(projectName);
+export async function createEmptyAppHostProject(projectName: string, outputPath = getGeneratedProjectRoot(projectName)): Promise<string> {
     removePath(outputPath, { recursive: true, force: true });
     await runProcess(getCliPath(), [
         'new',
@@ -161,7 +216,7 @@ export async function createEmptyAppHostProject(projectName: string): Promise<st
         cwd: getWorkspaceRoot(),
         timeoutMs: 180000,
     });
-    await waitForPath(getGeneratedAppHostPath(projectName), 180000);
+    await waitForPath(path.join(outputPath, 'apphost.cs'), 180000);
     await waitForPath(path.join(outputPath, 'aspire.config.json'), 180000);
 
     return outputPath;
@@ -224,8 +279,61 @@ export function removePrimaryAppHostFixture(): void {
     removeWorkspaceAppHostConfig();
 }
 
-export function writeNoCapabilitiesCliWrapper(name = 'aspire-no-capabilities'): string {
+export function writeBaselineActionCliWrapper(name = 'aspire-baseline-actions'): string {
     return writeCliWrapper(name, {
+        configInfoJson: createConfigInfo(),
+    });
+}
+
+/**
+ * A CLI whose `deploy` blocks until the test releases it. The extension
+ * ends a durable non-Run operation when the CLI process exits, so holding the process is what
+ * keeps one deploy observably in flight for the operating row and duplicate-action assertions.
+ */
+export function writeGatedDeployActionCliWrapper(name = 'aspire-gated-deploy-action'): {
+    cliPath: string;
+    waitForDeployRequest: () => Promise<void>;
+    releaseDeploy: () => void;
+    cleanup: () => void;
+} {
+    const gateDirectory = path.join(getWorkspaceRoot(), '.e2e-cli-wrappers', 'gated-deploy-action');
+    const deployRequestFilePath = path.join(gateDirectory, 'deploy-request');
+    const deployReleaseFilePath = path.join(gateDirectory, 'release-deploy');
+    removePath(gateDirectory, { recursive: true, force: true });
+    fs.mkdirSync(gateDirectory, { recursive: true });
+
+    const cliPath = writeCliWrapper(name, {
+        configInfoJson: createConfigInfo(),
+        deployGateDirectory: gateDirectory,
+        deployRequestFilePath,
+        deployReleaseFilePath,
+    });
+    const scriptPath = path.join(path.dirname(cliPath), `${name}.js`);
+
+    return {
+        cliPath,
+        waitForDeployRequest: () => waitForPath(deployRequestFilePath, 120_000),
+        releaseDeploy: () => writeFileWithRetry(deployReleaseFilePath, ''),
+        cleanup: () => {
+            try {
+                removePath(gateDirectory, { recursive: true, force: true });
+            }
+            finally {
+                try {
+                    removePath(cliPath, { force: true });
+                }
+                finally {
+                    removePath(scriptPath, { force: true });
+                }
+            }
+        },
+    };
+}
+
+export function writeLegacyPipelineActionCliWrapper(name = 'aspire-legacy-pipeline-action'): string {
+    return writeCliWrapper(name, {
+        // Omitting `pipelines` keeps the extension-side input
+        // fallback active for CLIs that cannot select a pipeline step through the interaction API.
         configInfoJson: createConfigInfo(),
     });
 }
@@ -235,6 +343,55 @@ export function writeConfigInfoUnsupportedCliWrapper(name = 'aspire-no-config-in
         configInfoExitCode: 42,
         configInfoStderr: 'config info is not available in this simulated old CLI',
     });
+}
+
+export function writeTokenlessStableCliWrapper(invocationLogPath: string): string {
+    removePath(invocationLogPath, { force: true });
+    if (process.platform !== 'win32') {
+        return writeTokenlessStablePosixCliWrapper(invocationLogPath);
+    }
+
+    return writeCliWrapper('aspire-tokenless-stable-13-2', {
+        configInfoJson: createConfigInfo(),
+        invocationLogPath,
+        versionOutput: '13.2.0',
+    }, path.dirname(getCliPath()));
+}
+
+function writeTokenlessStablePosixCliWrapper(invocationLogPath: string): string {
+    // AppHost targets validate that AspireCliPath belongs to a complete CLI bundle. Keep this
+    // capability/version shim beside the isolated real CLI so the configured path retains that
+    // bundle identity while the wrapper still controls the probe responses.
+    const wrapperDirectory = path.dirname(getCliPath());
+    const wrapperPath = path.join(wrapperDirectory, 'aspire-tokenless-stable-13-2');
+    const logInvocationScript = `require('fs').appendFileSync(process.argv[1], JSON.stringify(process.argv.slice(2)) + '\\n')`;
+    fs.mkdirSync(wrapperDirectory, { recursive: true });
+
+    // The F5 argv assertion is tied to the configured CLI path. After handling the simulated
+    // version and capability probes, replace the shell with the real CLI while preserving that
+    // configured path as argv[0], so the long-lived process has the same identity as a native CLI.
+    fs.writeFileSync(wrapperPath, [
+        '#!/usr/bin/env bash',
+        `${quotePosixShellArgument(process.execPath)} -e ${quotePosixShellArgument(logInvocationScript)} ${quotePosixShellArgument(invocationLogPath)} "$@"`,
+        'if [ "$1" = "--version" ]; then',
+        '  echo "13.2.0"',
+        '  exit 0',
+        'fi',
+        'if [ "$1" = "config" ] && [ "$2" = "info" ]; then',
+        `  printf "%s\\n" ${quotePosixShellArgument(JSON.stringify(createConfigInfo()))}`,
+        '  exit 0',
+        'fi',
+        'for argument in "$@"; do',
+        '  if [ "$argument" = "--include-disabled-commands" ]; then',
+        '    echo "simulated old CLI does not support --include-disabled-commands" >&2',
+        '    exit 123',
+        '  fi',
+        'done',
+        `exec -a "$0" ${quotePosixShellArgument(getCliPath())} "$@"`,
+        '',
+    ].join('\n'), { mode: 0o755 });
+
+    return wrapperPath;
 }
 
 export function writeStreamingDiscoveryCliWrapper(delayMs = 5_000, initialDelayMs = 1_500): string {
@@ -338,8 +495,20 @@ export function touchPrimaryAppHostProject(): void {
     fs.appendFileSync(getPrimaryAppHostProjectPath(), '\n');
 }
 
-export function writeDelayedPsCliWrapper(delayMs = 1_500): string {
-    return writeCliWrapper('aspire-delayed-ps', { psSnapshotDelayMs: delayMs });
+/**
+ * A CLI whose `ps` snapshots block until the test releases them, so a refresh stays observably in
+ * flight for as long as the test needs instead of for a fixed delay that a slow runner can outlast.
+ */
+export function writeGatedPsCliWrapper(): { cliPath: string; releasePsSnapshot: () => void } {
+    const gateDirectory = path.join(getWorkspaceRoot(), '.e2e-cli-wrappers', 'gated-ps');
+    const psSnapshotReleaseFilePath = path.join(gateDirectory, 'release-ps-snapshot');
+    removePath(gateDirectory, { recursive: true, force: true });
+    fs.mkdirSync(gateDirectory, { recursive: true });
+
+    return {
+        cliPath: writeCliWrapper('aspire-gated-ps', { psSnapshotReleaseFilePath }),
+        releasePsSnapshot: () => writeFileWithRetry(psSnapshotReleaseFilePath, ''),
+    };
 }
 
 export function writeTrackedDelayedPsCliWrapper(delayMs = 1_500): { cliPath: string; invocationLogPath: string } {
@@ -350,6 +519,14 @@ export function writeTrackedDelayedPsCliWrapper(delayMs = 1_500): { cliPath: str
         psSnapshotDelayMs: delayMs,
     });
     return { cliPath, invocationLogPath };
+}
+
+export function getPsFollowProcesses(): PsFollowProcessRecord[] {
+    const runId = getRunId();
+    if (!runId) {
+        throw new Error('ASPIRE_EXTENSION_E2E_RUN_ID is required to identify owned ps followers.');
+    }
+    return readPsFollowProcesses(getPsFollowProcessLogPath(getStateFilePath()), runId);
 }
 
 export function getCliWrapperInvocations(invocationLogPath: string): string[][] {
@@ -433,7 +610,7 @@ builder.Build().Run();
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
@@ -815,15 +992,19 @@ function writeCliWrapper(
         streamedLsRequestFilePath?: string;
         streamedLsReleaseFilePath?: string;
         streamedLsInvocationLogPath?: string;
+        deployGateDirectory?: string;
+        deployRequestFilePath?: string;
+        deployReleaseFilePath?: string;
         invocationLogPath?: string;
         psSnapshotDelayMs?: number;
         psSnapshotRequestFilePath?: string;
         psSnapshotReleaseFilePath?: string;
         psSnapshotAppHostPath?: string;
         psSnapshotAppHostPid?: number;
+        versionOutput?: string;
     },
+    wrapperDirectory = path.join(getWorkspaceRoot(), '.e2e-cli-wrappers'),
 ): string {
-    const wrapperDirectory = path.join(getWorkspaceRoot(), '.e2e-cli-wrappers');
     fs.mkdirSync(wrapperDirectory, { recursive: true });
 
     const scriptPath = path.join(wrapperDirectory, `${name}.js`);
@@ -835,9 +1016,12 @@ const realCli = ${JSON.stringify(getCliPath())};
 const args = process.argv.slice(2);
 ${options.invocationLogPath === undefined ? '' : `fs.appendFileSync(${JSON.stringify(options.invocationLogPath)}, JSON.stringify(args) + '\\n');`}
 
-function waitForReleaseFile(filePath, description) {
-  const deadline = Date.now() + 120000;
+function waitForReleaseFile(filePath, description, timeoutMs = 120000, releaseDirectory) {
+  const deadline = Date.now() + timeoutMs;
   while (!fs.existsSync(filePath)) {
+    if (releaseDirectory !== undefined && !fs.existsSync(releaseDirectory)) {
+      return;
+    }
     if (Date.now() >= deadline) {
       console.error(\`Timed out waiting for \${description} release file: \${filePath}\`);
       process.exit(124);
@@ -846,6 +1030,14 @@ function waitForReleaseFile(filePath, description) {
   }
 }
 
+${options.versionOutput === undefined
+        ? ''
+        : `if (args.length === 1 && args[0] === '--version') {
+  console.log(${JSON.stringify(options.versionOutput)});
+  process.exit(0);
+}
+
+`}
 if (args.includes('--include-disabled-commands')) {
   console.error('simulated old CLI does not support --include-disabled-commands');
   process.exit(123);
@@ -859,6 +1051,28 @@ ${options.configInfoJson === undefined
   process.exit(0);`}
 }
 
+${options.deployReleaseFilePath === undefined
+        ? ''
+        : `// The extension keeps a durable deploy operation in flight until this process exits, so
+// blocking here holds the operation open for as long as the test needs. The debug session has
+// already started by then: the launch response is sent before the CLI is awaited.
+if (args[0] === 'deploy') {
+${options.deployRequestFilePath === undefined
+            ? ''
+            : `  try {
+    fs.writeFileSync(${JSON.stringify(options.deployRequestFilePath)}, '');
+  } catch (error) {
+    if (error?.code !== 'ENOENT') {
+      throw error;
+    }
+    process.exit(0);
+  }`}
+  // The test owns release timing. This fail-safe only prevents an orphaned CLI if its host crashes.
+  waitForReleaseFile(${JSON.stringify(options.deployReleaseFilePath)}, 'gated deploy', 900000, ${JSON.stringify(options.deployGateDirectory)});
+  process.exit(0);
+}
+
+`}
 ${options.streamedLsCandidate === undefined
         ? ''
         : `if (args[0] === 'ls') {
@@ -968,6 +1182,10 @@ ${options.streamedLsCandidate === undefined ? '' : '}'}
     fs.chmodSync(wrapperPath, 0o755);
 
     return wrapperPath;
+}
+
+function quotePosixShellArgument(value: string): string {
+    return `'${value.replace(/'/g, "'\\''")}'`;
 }
 
 function getPackageSourceArgs(): string[] {

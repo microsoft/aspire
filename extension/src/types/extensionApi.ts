@@ -1,5 +1,5 @@
 import type * as vscode from 'vscode';
-import type { DebugLaunchSettings, EnvVar, ExecutableLaunchConfiguration } from '../dcp/types';
+import type { DebugLaunchSettings, EnvVar, ExecutableLaunchConfiguration, ProjectLaunchConfiguration } from '../dcp/types';
 import type { ViewMode } from '../data/AppHostDataRepository';
 import type { CommandInvocationEvent } from '../utils/telemetry';
 import type { AspireTerminalCommandEvent } from '../utils/AspireTerminalProvider';
@@ -97,6 +97,7 @@ export interface AspireExtensionApiV2 extends AspireExtensionApiBase {
 export type AspireExtensionApi = AspireExtensionApiV2;
 
 export interface AspireExtensionE2EStateFile {
+    extensionHostSessionId: string;
     updatedAt: string;
     /**
      * Identifies the E2E run whose extension host produced this file. The state and control files
@@ -117,9 +118,10 @@ export interface AspireExtensionE2EStateFile {
 }
 
 /**
- * A browser debug session (`pwa-chrome`, `pwa-msedge`, or `firefox`) that VS Code currently
- * reports as active. Browser sessions are not part of the extension's own state snapshot, so
- * E2E tests use this to observe whether a launched dashboard browser actually terminated.
+ * A browser debug session (`pwa-chrome` or `pwa-msedge`) or managed Blazor WebAssembly root
+ * (`blazorwasm`) that VS Code currently reports as active. These sessions are not part of the
+ * extension's own state snapshot, so E2E tests use this to observe whether a launched browser
+ * and its managed root actually terminated.
  */
 export interface AspireExtensionE2EBrowserDebugSession {
     id: string;
@@ -156,6 +158,12 @@ export interface AspireExtensionE2ETaskProcessEvent extends AspireExtensionE2ESe
     exitCode?: number;
 }
 
+export interface AspireExtensionE2ECodeLensProbeResult {
+    filePath: string;
+    languageId: string;
+    commandTitles: readonly string[];
+}
+
 export interface AspireDebugConsoleOutputEvent {
     debugSessionId: string;
     appHostPath: string | undefined;
@@ -190,6 +198,7 @@ export interface AspireExtensionE2EControlPayload {
 }
 
 export type AspireExtensionE2EControlCommand =
+    | { name: 'probeUsefulnessSurvey'; reset: boolean }
     | { name: 'refreshAppHosts' }
     | { name: 'globalRefreshAppHosts' }
     | { name: 'switchToGlobalView' }
@@ -199,6 +208,10 @@ export type AspireExtensionE2EControlCommand =
     | { name: 'openDashboard'; appHostPath?: string }
     | { name: 'debugAppHost'; appHostPath?: string }
     | { name: 'publishAppHost'; appHostPath?: string }
+    | { name: 'deployAppHostAction'; appHostPath: string }
+    | { name: 'publishAppHostAction'; appHostPath: string }
+    | { name: 'runPipelineStepAppHostAction'; appHostPath: string }
+    | { name: 'debugPipelineStepAppHostAction'; appHostPath: string }
     | { name: 'openAppHostSource'; appHostPath?: string }
     | { name: 'viewAppHostSource'; appHostPath?: string }
     | { name: 'copyAppHostPath'; appHostPath?: string }
@@ -219,16 +232,23 @@ export type AspireExtensionE2EControlCommand =
     | { name: 'setSourceBreakpoint'; filePath: string; line: number; clearExisting?: boolean }
     | { name: 'clearBreakpoints' }
     | { name: 'getBreakpoints' }
+    | { name: 'startDebugging'; configurationName: string }
     | { name: 'stopDebugging' }
     | { name: 'closeAllEditors' }
+    | { name: 'clearAllNotifications' }
     | { name: 'getRegisteredAspireCommands' }
     | { name: 'getRegisteredLanguageModelTools' }
     | { name: 'prepareLanguageModelToolInvocation'; toolName: string; input: Record<string, unknown> }
-    | { name: 'invokeLanguageModelTool'; toolName: string; input: Record<string, unknown>; times?: number }
+    | { name: 'invokeLanguageModelTool'; toolName: string; input: Record<string, unknown>; times?: number; cancelAfterMs?: number; cancelBeforeInvocation?: boolean; invokeRegisteredToolDirectly?: boolean }
+    | { name: 'setDashboardBrowserForE2E'; value: 'integratedBrowser' | null }
     | { name: 'getDebugSessionProcessInfo'; appHostPath?: string }
     | { name: 'getExtensionPackageJson' }
+    | { name: 'getDcpRunSessionInfo' }
     | { name: 'getExtensionFileStatus'; relativePaths: readonly string[] }
     | { name: 'getDiagnostics'; filePath: string }
+    | { name: 'getDefinitions'; filePath: string; line: number; character: number }
+    | { name: 'getJavaProjects' }
+    | { name: 'getCodeLenses'; filePath: string }
     | { name: 'snapshotClipboard' }
     | { name: 'restoreClipboardSnapshot' }
     | { name: 'captureWorkspaceAppHostPathClipboardExpectation' }
@@ -236,14 +256,19 @@ export type AspireExtensionE2EControlCommand =
     | { name: 'openFile'; filePath: string }
     | { name: 'openWorkspaceFolder'; folderPath: string }
     | { name: 'setWorkspaceFolders'; folders: readonly { folderPath: string; name?: string }[] }
+    | { name: 'setWorkspaceFolderCliPath'; folderPath: string; cliPath: string }
+    | { name: 'clearWorkspaceFolderCliPaths' }
     | { name: 'stopOwnedDebugSessionProcesses'; appHostPath?: string }
     | { name: 'getWorkspaceFolders' }
     | { name: 'addWorkspaceFolder'; folderPath: string }
     | { name: 'getActiveEditor' }
+    | { name: 'getOpenEditors' }
+    | { name: 'runAspireCli'; args: readonly string[]; workingDirectory: string; timeoutMs?: number; noExtensionVariables?: boolean; allowNonZeroExit?: boolean }
     | { name: 'getResourceDebuggerExtensions' }
     | { name: 'getSupportedCapabilities' }
     | { name: 'getVisibleExtensionIds' }
     | { name: 'waitForJavaLanguageServer'; timeoutMs?: number }
+    | { name: 'waitForCSharpProjectInitialization'; timeoutMs?: number }
     | {
         name: 'createResourceDebugConfiguration';
         launchConfig: ExecutableLaunchConfiguration;
@@ -253,6 +278,43 @@ export type AspireExtensionE2EControlCommand =
         isApphost?: boolean;
         debuggers?: Readonly<Record<string, DebugLaunchSettings>>;
         environmentKeys?: readonly string[];
+        csharpExtensionVersion?: string | null;
+        expectedErrorMessage?: string;
     }
-    | { name: 'proveAppHostAndResourceDebugging'; appHostPath: string; resourceName: string; appHostSourcePath: string; appHostBreakpointLine: number; resourceSourcePath: string; resourceBreakpointLine: number; resourceRequestPath?: string; timeoutMs?: number }
-    | { name: 'proveMauiResourceDebugging'; appHostPath: string; resourceName: string; sourcePath: string; breakpointLine: number; timeoutMs?: number; pauseOnBreakpointMs?: number };
+    | {
+        name: 'proveAttachedResourceDebugging';
+        appHostPath: string;
+        resourceName: string;
+        sourcePath: string;
+        breakpointLine: number;
+        expectedDebugType: 'coreclr' | 'go';
+        expectedResponse: string;
+        resourceRequestPath?: string;
+        timeoutMs?: number;
+    }
+    | { name: 'proveAppHostAndResourceDebugging'; appHostPath: string; resourceName: string; appHostSourcePath: string; appHostBreakpointLine: number; resourceSourcePath: string; resourceBreakpointLine: number; resourceRequestPath?: string; continueExceptionStops?: boolean; timeoutMs?: number }
+    | {
+        name: 'proveDotnetResourceLaunch';
+        launchConfig: ProjectLaunchConfiguration;
+        sourcePath: string;
+        breakpointLine: number;
+        readyFilePath: string;
+        debug: boolean;
+        args?: readonly string[];
+        env?: readonly EnvVar[];
+        timeoutMs?: number;
+    }
+    | { name: 'prepareBlazorWasmDebugger' }
+    | {
+        name: 'proveBlazorWasmDebugging';
+        appHostPath: string;
+        resourceName: string;
+        sourcePath: string;
+        breakpointLine: number;
+        requestPath: string;
+        expectedBrowser: 'edge' | 'chrome';
+        closeMode: 'explicit' | 'natural';
+        timeoutMs?: number;
+    }
+    | { name: 'proveMauiResourceDebugging'; appHostPath: string; resourceName: string; sourcePath: string; breakpointLine: number; timeoutMs?: number; pauseOnBreakpointMs?: number }
+    | { name: 'proveDenoResourceDebugging'; appHostPath: string; resourceName: string; sourcePath: string; breakpointLine: number; timeoutMs?: number; pauseOnBreakpointMs?: number };

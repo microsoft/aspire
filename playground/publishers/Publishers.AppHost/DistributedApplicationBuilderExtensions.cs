@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREPIPELINES001
-
 using Aspire.Hosting.Pipelines;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -129,7 +127,7 @@ internal static class IDistributedApplicationBuilderExtensions
             var appName = multiInputResult.Canceled ? "default-app" : (multiInputResult.Data?["ApplicationName"]?.Value ?? "default-app");
             var appVersion = multiInputResult.Canceled ? "1.0.0" : (multiInputResult.Data?["ApplicationVersion"]?.Value ?? "1.0.0");
             var sslType = multiInputResult.Canceled ? "self-signed" : (multiInputResult.Data?["SSLCertificateType"]?.Value ?? "self-signed");
-            var certFiles = multiInputResult.Canceled ? null : multiInputResult.Data?["CertificateFile"]?.Files;
+            using var certFiles = multiInputResult.Canceled ? null : multiInputResult.Data?["CertificateFile"]?.GetFiles();
 
             if (certFiles is { Count: > 0 })
             {

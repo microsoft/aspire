@@ -1,10 +1,13 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Json;
 using Aspire.TypeSystem;
+using Aspire.Hosting.RemoteHost.Ats;
 using Aspire.Hosting.RemoteHost.Diagnostics;
 using Microsoft.Extensions.Logging;
 using StreamJsonRpc;
+using StreamJsonRpc.Protocol;
 
 namespace Aspire.Hosting.RemoteHost.CodeGeneration;
 
@@ -15,9 +18,12 @@ internal sealed class CodeGenerationService
 {
     private const string GetCapabilitiesMethodName = "getCapabilities";
     private const string GenerateCodeMethodName = "generateCode";
+    private const string ExportApiMethodName = "exportApi";
 
     private readonly JsonRpcAuthenticationState _authenticationState;
     private readonly AtsContextFactory _atsContextFactory;
+    private readonly ExternalCapabilityRegistry _externalCapabilityRegistry;
+    private readonly Aspire.Hosting.RemoteHost.Language.IntegrationHostLauncher _integrationHostLauncher;
     private readonly CodeGeneratorResolver _resolver;
     private readonly AssemblyLoader _assemblyLoader;
     private readonly ILogger<CodeGenerationService> _logger;
@@ -26,6 +32,8 @@ internal sealed class CodeGenerationService
     public CodeGenerationService(
         JsonRpcAuthenticationState authenticationState,
         AtsContextFactory atsContextFactory,
+        ExternalCapabilityRegistry externalCapabilityRegistry,
+        Aspire.Hosting.RemoteHost.Language.IntegrationHostLauncher integrationHostLauncher,
         CodeGeneratorResolver resolver,
         AssemblyLoader assemblyLoader,
         ILogger<CodeGenerationService> logger,
@@ -33,6 +41,8 @@ internal sealed class CodeGenerationService
     {
         _authenticationState = authenticationState;
         _atsContextFactory = atsContextFactory;
+        _externalCapabilityRegistry = externalCapabilityRegistry;
+        _integrationHostLauncher = integrationHostLauncher;
         _resolver = resolver;
         _assemblyLoader = assemblyLoader;
         _logger = logger;
@@ -49,7 +59,7 @@ internal sealed class CodeGenerationService
     /// </param>
     /// <returns>The capabilities information.</returns>
     [JsonRpcMethod(GetCapabilitiesMethodName)]
-    public CapabilitiesResponse GetCapabilities(string[]? assemblyNames = null)
+    public async Task<CapabilitiesResponse> GetCapabilities(string[]? assemblyNames = null)
     {
         using var rpcActivity = _profilingTelemetry.StartJsonRpcServerCall(GetCapabilitiesMethodName);
         using var activity = _profilingTelemetry.StartCodeGenerationGetCapabilities();
@@ -58,11 +68,12 @@ internal sealed class CodeGenerationService
             _authenticationState.ThrowIfNotAuthenticated();
             _logger.LogDebug(">> getCapabilities()");
             var sw = System.Diagnostics.Stopwatch.StartNew();
-            var context = _atsContextFactory.GetContext();
-            if (assemblyNames is { Length: > 0 })
-            {
-                context = AtsContextFilter.FilterByExportingAssemblies(context, assemblyNames);
-            }
+
+            // Make sure server-spawned integration hosts have registered and their
+            // getCapabilities payloads are merged before codegen callers observe ATS.
+            await _integrationHostLauncher.ReadyAsync().ConfigureAwait(false);
+
+            var context = GetCodeGenerationContext(assemblyNames);
             activity.SetAtsCounts(
                 context.Capabilities.Count,
                 context.HandleTypes.Count,
@@ -105,6 +116,7 @@ internal sealed class CodeGenerationService
         QualifiedMethodName = c.QualifiedMethodName,
         Description = c.Description,
         Documentation = MapDocumentation(c.Documentation),
+        IsExperimental = c.IsExperimental,
         CapabilityKind = c.CapabilityKind.ToString(),
         TargetTypeId = c.TargetTypeId,
         TargetParameterName = c.TargetParameterName,
@@ -138,6 +150,7 @@ internal sealed class CodeGenerationService
         TypeId = t.TypeId,
         Category = t.Category.ToString(),
         IsInterface = t.IsInterface,
+        IsNullable = t.IsNullable,
         IsReadOnly = t.IsReadOnly,
         ElementType = t.ElementType != null ? MapTypeRef(t.ElementType) : null,
         KeyType = t.KeyType != null ? MapTypeRef(t.KeyType) : null,
@@ -228,7 +241,7 @@ internal sealed class CodeGenerationService
     /// <param name="assemblyName">The exporting assembly to scope the generated SDK to, or null to use the full ATS context.</param>
     /// <returns>A dictionary of file paths to file contents.</returns>
     [JsonRpcMethod(GenerateCodeMethodName)]
-    public Dictionary<string, string> GenerateCode(string language, string? assemblyName = null)
+    public async Task<Dictionary<string, string>> GenerateCode(string language, string? assemblyName = null)
     {
         using var rpcActivity = _profilingTelemetry.StartJsonRpcServerCall(GenerateCodeMethodName);
         using var activity = _profilingTelemetry.StartCodeGenerationGenerate(language);
@@ -237,17 +250,18 @@ internal sealed class CodeGenerationService
             _authenticationState.ThrowIfNotAuthenticated();
             _logger.LogDebug(">> generateCode({Language})", language);
             var sw = System.Diagnostics.Stopwatch.StartNew();
+
+            // Wait for server-spawned integration hosts to be ready so their capabilities are
+            // present in the AtsContext before we run codegen.
+            await _integrationHostLauncher.ReadyAsync().ConfigureAwait(false);
+
             var generator = _resolver.GetCodeGenerator(language);
             if (generator == null)
             {
                 throw new ArgumentException(BuildNoCodeGeneratorMessage(language));
             }
 
-            var context = _atsContextFactory.GetContext();
-            if (!string.IsNullOrWhiteSpace(assemblyName))
-            {
-                context = AtsContextFilter.FilterByExportingAssembliesWithReferences(context, [assemblyName]);
-            }
+            var context = GetCodeGenerationContext(string.IsNullOrWhiteSpace(assemblyName) ? null : [assemblyName], includeReferencedTypes: true);
 
             var files = generator.GenerateDistributedApplication(context);
             activity.SetFileCount(files.Count);
@@ -268,6 +282,181 @@ internal sealed class CodeGenerationService
         }
     }
 
+    private AtsContext GetCodeGenerationContext(string[]? assemblyNames, bool includeReferencedTypes = false)
+    {
+        var context = _atsContextFactory.GetContext();
+
+        if (assemblyNames is { Length: > 0 })
+        {
+            // Scoped source generation must not use the API-export filter: its synthetic
+            // supporting capabilities are projection-only metadata and would otherwise become
+            // executable members in the generated SDK.
+            return includeReferencedTypes
+                ? AtsContextFilter.FilterByExportingAssembliesWithReferences(context, assemblyNames)
+                : AtsContextFilter.FilterByExportingAssemblies(context, assemblyNames);
+        }
+
+        return _externalCapabilityRegistry.AugmentContext(context);
+    }
+
+    /// <summary>
+    /// Exports the canonical API reference for the specified language and package.
+    /// </summary>
+    /// <param name="language">The target language (e.g., "TypeScript").</param>
+    /// <param name="packageName">The package to export documentation for.</param>
+    /// <param name="packageVersion">
+    /// The version label to record for <paramref name="packageName"/>. The caller owns its accuracy;
+    /// see <see cref="ApiReferenceExportOptions.PackageVersion"/>.
+    /// </param>
+    /// <param name="cancellationToken">A token to cancel the export.</param>
+    /// <returns>The language provider's API reference document, verbatim.</returns>
+    [JsonRpcMethod(ExportApiMethodName)]
+    public JsonElement ExportApi(
+        string language,
+        string packageName,
+        string packageVersion,
+        CancellationToken cancellationToken)
+    {
+        using var rpcActivity = _profilingTelemetry.StartJsonRpcServerCall(ExportApiMethodName);
+        try
+        {
+            _authenticationState.ThrowIfNotAuthenticated();
+            if (string.IsNullOrWhiteSpace(language))
+            {
+                throw CreateInvalidExportRequest("The export language cannot be empty.");
+            }
+            if (string.IsNullOrWhiteSpace(packageName))
+            {
+                throw CreateInvalidExportRequest("The export package name cannot be empty.");
+            }
+            if (string.IsNullOrWhiteSpace(packageVersion))
+            {
+                throw CreateInvalidExportRequest("The export package version cannot be empty.");
+            }
+
+            _logger.LogDebug(">> exportApi({Language}, {PackageName}, {PackageVersion})", language, packageName, packageVersion);
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+
+            var generator = _resolver.GetCodeGenerator(language);
+            if (generator is null)
+            {
+                throw CreateInvalidExportRequest(BuildNoCodeGeneratorMessage(language));
+            }
+
+            // Resolved through the resolver rather than cast off the generator: the exporter is
+            // discovered as its own type so that adding the interface never changes the generator
+            // type's eagerly resolved interface list. See AtsTypeScriptApiReferenceExporter.
+            if (_resolver.GetApiReferenceExporter(language) is not { } exporter)
+            {
+                throw CreateInvalidExportRequest(
+                    $"The '{generator.Language}' language provides no {nameof(IApiReferenceExporter)}, " +
+                    "so it cannot produce an API reference export. " +
+                    $"Supported languages for API export: {BuildApiExportLanguageList()}.");
+            }
+
+            // Referenced handle capabilities determine wrapper and resource-union signatures.
+            // Keep only their projection support shape without publishing their API as part of this
+            // package.
+            var fullContext = _atsContextFactory.GetContext();
+
+            var exportingAssemblyNames = ResolvePackageExportingAssemblyNames(
+                fullContext,
+                packageName,
+                packageVersion,
+                out var canonicalPackageName);
+
+            var context = AtsContextFilter.FilterForApiExport(
+                fullContext,
+                exportingAssemblyNames);
+
+            var export = exporter.ExportApi(
+                context,
+                new ApiReferenceExportOptions(canonicalPackageName, packageVersion, exportingAssemblyNames),
+                cancellationToken);
+
+            _logger.LogDebug("<< exportApi({Language}, {PackageName}) completed in {ElapsedMs}ms", language, packageName, sw.ElapsedMilliseconds);
+
+            // Returned verbatim: the payload schema belongs to the language provider, and reshaping
+            // it here would silently fork the contract documentation consumers bind to.
+            return export;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "<< exportApi({Language}, {PackageName}) failed", language, packageName);
+            var wrapped = CodeGenerationDiagnosticBuilder.TryCreateRpcException(ex, _assemblyLoader, _logger);
+            if (wrapped is not null)
+            {
+                throw wrapped;
+            }
+            throw;
+        }
+    }
+
+    private static LocalRpcException CreateInvalidExportRequest(string message)
+        => new(message)
+        {
+            ErrorCode = (int)JsonRpcErrorCode.InvalidParams
+        };
+
+    private IReadOnlyList<string> ResolvePackageExportingAssemblyNames(
+        AtsContext fullContext,
+        string packageName,
+        string packageVersion,
+        out string canonicalPackageName)
+    {
+        if (_assemblyLoader.TryGetPackageAssemblyNamesFromProbePaths(
+            packageName,
+            packageVersion,
+            out var manifestAssemblyNames,
+            out var manifestPackageName))
+        {
+            var exportingAssemblyNames = new List<string>(manifestAssemblyNames.Count);
+            foreach (var assemblyName in manifestAssemblyNames)
+            {
+                if (AtsContextFilter.TryResolveCanonicalAssemblyName(fullContext, assemblyName, out var canonicalAssemblyName))
+                {
+                    exportingAssemblyNames.Add(canonicalAssemblyName);
+                }
+            }
+
+            if (exportingAssemblyNames.Count == 0)
+            {
+                throw new InvalidOperationException(
+                    $"Package '{packageName}' version '{packageVersion}' was mapped from restored asset paths, " +
+                    "but none of its assemblies reached the scanned API surface.");
+            }
+
+            canonicalPackageName = manifestPackageName;
+            return exportingAssemblyNames;
+        }
+
+        // A NuGet package id is case-insensitive
+        // (https://learn.microsoft.com/nuget/consume-packages/finding-and-choosing-packages#package-identifiers)
+        // but the exported document records this string verbatim as the identity consumers key
+        // on, so `aspire.hosting.redis` would publish a document naming a package nobody looks
+        // up. For local project references and older probe manifests we do not have package-to-
+        // assembly metadata, so the loaded assembly settles the spelling as before.
+        if (!AtsContextFilter.TryResolveCanonicalAssemblyName(fullContext, packageName, out var canonicalAssemblyNameFromContext))
+        {
+            throw new InvalidOperationException(
+                $"No managed assemblies for package '{packageName}' version '{packageVersion}' could be mapped from the restored asset paths, " +
+                "and the scanned API surface contains no assembly with the package id as its name.");
+        }
+
+        canonicalPackageName = canonicalAssemblyNameFromContext;
+        return [canonicalAssemblyNameFromContext];
+    }
+
+    private string BuildApiExportLanguageList()
+    {
+        var exportable = _resolver.GetSupportedLanguages()
+            .Where(language => _resolver.GetApiReferenceExporter(language) is not null)
+            .OrderBy(language => language, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        return exportable.Length == 0 ? "(none)" : string.Join(", ", exportable);
+    }
+
     private string BuildNoCodeGeneratorMessage(string language)
     {
         var available = _resolver.GetSupportedLanguages()
@@ -284,7 +473,6 @@ internal sealed class CodeGenerationService
                    "This usually indicates a binary mismatch between the bundled apphost server and the integration assemblies on disk; " +
                    "check the apphost server log for 'LoaderExceptions' Warnings.";
         }
-
         return $"No code generator found for language: {language}. Available languages: {string.Join(", ", available)}.";
     }
 }
@@ -309,6 +497,7 @@ internal sealed class CapabilityResponse
     public string QualifiedMethodName { get; set; } = "";
     public string? Description { get; set; }
     public DocumentationResponse? Documentation { get; set; }
+    public bool IsExperimental { get; set; }
     public string CapabilityKind { get; set; } = "";
     public string? TargetTypeId { get; set; }
     public string? TargetParameterName { get; set; }
@@ -344,6 +533,7 @@ internal sealed class TypeRefResponse
     public string TypeId { get; set; } = "";
     public string Category { get; set; } = "";
     public bool IsInterface { get; set; }
+    public bool? IsNullable { get; set; }
     public bool IsReadOnly { get; set; }
     public TypeRefResponse? ElementType { get; set; }
     public TypeRefResponse? KeyType { get; set; }

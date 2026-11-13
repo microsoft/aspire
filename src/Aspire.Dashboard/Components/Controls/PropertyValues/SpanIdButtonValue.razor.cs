@@ -24,7 +24,9 @@ public partial class SpanIdButtonValue
     public required DashboardDialogService DialogService { get; init; }
 
     [Inject]
-    public required TelemetryRepository TelemetryRepository { get; init; }
+    public required DashboardDataSource DataSource { get; init; }
+
+    public ITelemetryRepository TelemetryRepository => DataSource.TelemetryRepository;
 
     [Inject]
     public required IStringLocalizer<Resources.Dialogs> Loc { get; init; }

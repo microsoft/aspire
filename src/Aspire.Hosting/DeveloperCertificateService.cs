@@ -1,10 +1,10 @@
 #pragma warning disable ASPIRECERTIFICATES001
-#pragma warning disable ASPIREFILESYSTEM001
 
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.Utils;
+using Aspire.Shared;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using System.Collections.Immutable;
@@ -152,9 +152,8 @@ internal class DeveloperCertificateService : IDeveloperCertificateService
     /// <summary>
     /// Returns the certificate PEM format key and/or PFX bytes for the specified certificate.
     /// On macOS, both outputs are cached as separate files to avoid triggering repeated
-    /// keychain prompts. The cache is read without loading any PFX into an X509Certificate2,
-    /// because EphemeralKeySet is not supported on macOS with net8.0 and loading without it
-    /// imports the private key into the keychain.
+    /// keychain prompts. Reading the cached bytes without loading a PFX into an X509Certificate2
+    /// avoids importing its private key into the keychain.
     /// </summary>
     /// <param name="certificate">The certificate to export key material from.</param>
     /// <param name="password">The password for the private key, or <c>null</c> for unencrypted export.</param>
@@ -390,14 +389,7 @@ internal class DeveloperCertificateService : IDeveloperCertificateService
     {
         try
         {
-            if (OperatingSystem.IsWindows())
-            {
-                Directory.CreateDirectory(s_userDevCertificateLocation);
-            }
-            else
-            {
-                Directory.CreateDirectory(s_userDevCertificateLocation, UnixFileMode.UserExecute | UnixFileMode.UserWrite | UnixFileMode.UserRead);
-            }
+            DirectoryHelper.CreateWithOwnerOnlyPermissions(s_userDevCertificateLocation);
 
             File.WriteAllText(certFileName, certificate.ExportCertificatePem());
 

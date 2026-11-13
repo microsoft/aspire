@@ -3,8 +3,6 @@
 
 #pragma warning disable ASPIRECOMPUTE003
 #pragma warning disable ASPIRECONTAINERRUNTIME001
-#pragma warning disable ASPIREPIPELINES001
-#pragma warning disable ASPIREPIPELINES002
 #pragma warning disable ASPIREPIPELINES003
 
 using System.Diagnostics;
@@ -12,6 +10,7 @@ using System.Globalization;
 using System.Runtime.ExceptionServices;
 using System.Text;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Pipelines.Internal;
 using Aspire.Hosting.Publishing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -74,45 +73,42 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
                 context.Logger.LogInformation("Initializing deployment for environment '{EnvironmentName}'", hostEnvironment.EnvironmentName);
                 var deploymentStateManager = context.Services.GetRequiredService<IDeploymentStateManager>();
 
-                if (deploymentStateManager.StateFilePath is string stateFilePath && File.Exists(stateFilePath))
+                if (deploymentStateManager.StateFilePath is string stateFilePath &&
+                    File.Exists(stateFilePath) &&
+                    !options.Value.ClearCache)
                 {
-                    // Check if --clear-cache flag is set and prompt user before deleting deployment state
-                    if (!options.Value.ClearCache)
+                    context.Logger.LogInformation("Deployment state will be loaded from: {StateFilePath}", stateFilePath);
+                }
+                else if (options.Value.ClearCache &&
+                    deploymentStateManager.StateFilePath is string existingStateFilePath &&
+                    (File.Exists(existingStateFilePath) ||
+                     File.Exists(FileDeploymentStateManager.GetMigrationStatePath(existingStateFilePath))))
+                {
+                    var interactionService = context.Services.GetRequiredService<IInteractionService>();
+                    if (interactionService.IsAvailable)
                     {
-                        // Add a task to show the deployment state file path if available
-                        context.Logger.LogInformation("Deployment state will be loaded from: {StateFilePath}", stateFilePath);
-                    }
-                    else
-                    {
-                        var interactionService = context.Services.GetRequiredService<IInteractionService>();
-                        if (interactionService.IsAvailable)
+                        var result = await interactionService.PromptNotificationAsync(
+                            "Clear Deployment State",
+                            $"The deployment state for the '{hostEnvironment.EnvironmentName}' environment will be cleared. Do you want to continue?",
+                            new NotificationInteractionOptions
                         {
-                            var result = await interactionService.PromptNotificationAsync(
-                                "Clear Deployment State",
-                                $"The deployment state for the '{hostEnvironment.EnvironmentName}' environment will be deleted. Do you want to continue?",
-                                new NotificationInteractionOptions
-                                {
-                                    Intent = MessageIntent.Confirmation,
-                                    ShowSecondaryButton = true,
-                                    ShowDismiss = false,
-                                    PrimaryButtonText = "Yes",
-                                    SecondaryButtonText = "No"
-                                },
-                                context.CancellationToken).ConfigureAwait(false);
+                            Intent = MessageIntent.Confirmation,
+                            ShowSecondaryButton = true,
+                            ShowDismiss = false,
+                            PrimaryButtonText = "Yes",
+                            SecondaryButtonText = "No"
+                        },
+                        context.CancellationToken).ConfigureAwait(false);
 
-                            if (result.Canceled || !result.Data)
-                            {
-                                // User declined or canceled - exit the deployment
-                                context.Logger.LogInformation("User declined to clear deployment state. Canceling pipeline execution.");
-
-                                throw new OperationCanceledException("Pipeline execution canceled by user.");
-                            }
-
-                            // User confirmed - delete the deployment state file
-                            context.Logger.LogInformation("Deleting deployment state file at {Path} due to --clear-cache flag", stateFilePath);
-                            await deploymentStateManager.ClearAllStateAsync(context.CancellationToken).ConfigureAwait(false);
+                        if (result.Canceled || !result.Data)
+                        {
+                            context.Logger.LogInformation("User declined to clear deployment state. Canceling pipeline execution.");
+                            throw new OperationCanceledException("Pipeline execution canceled by user.");
                         }
                     }
+
+                    context.Logger.LogInformation("Clearing deployment state due to --clear-cache flag.");
+                    await deploymentStateManager.ClearAllStateAsync(context.CancellationToken).ConfigureAwait(false);
                 }
 
                 var computeResources = context.Model.Resources
@@ -165,52 +161,8 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
             {
                 var runtimeResolver = context.Services.GetRequiredService<IContainerRuntimeResolver>();
                 var containerRuntime = await runtimeResolver.ResolveAsync(context.CancellationToken).ConfigureAwait(false);
-
-                if (await containerRuntime.CheckIfRunningAsync(context.CancellationToken).ConfigureAwait(false))
-                {
-                    return;
-                }
-
-                // In interactive mode, prompt the user to start the runtime and retry
-                var interactionService = context.Services.GetService<IInteractionService>();
-                if (interactionService?.IsAvailable == true)
-                {
-                    var result = await interactionService.PromptNotificationAsync(
-                        $"{containerRuntime.Name} is not running",
-                        $"Start {containerRuntime.Name} and confirm to continue.",
-                        new NotificationInteractionOptions
-                        {
-                            Intent = MessageIntent.Warning
-                        },
-                        cancellationToken: context.CancellationToken).ConfigureAwait(false);
-
-                    if (!result.Canceled && result.Data)
-                    {
-                        // Poll for the runtime to become available — Docker can take
-                        // a while to start, especially on slower machines.
-                        // Give it up to 5 minutes before giving up.
-                        var timeProvider = context.Services.GetRequiredService<TimeProvider>();
-                        using var waitCts = CancellationTokenSource.CreateLinkedTokenSource(context.CancellationToken);
-                        waitCts.CancelAfter(TimeSpan.FromMinutes(5));
-
-                        try
-                        {
-                            while (!await containerRuntime.CheckIfRunningAsync(waitCts.Token).ConfigureAwait(false))
-                            {
-                                await Task.Delay(TimeSpan.FromSeconds(2), timeProvider, waitCts.Token).ConfigureAwait(false);
-                            }
-
-                            return;
-                        }
-                        catch (OperationCanceledException) when (!context.CancellationToken.IsCancellationRequested)
-                        {
-                            // Timed out waiting for the runtime to start — fall through to the error below
-                        }
-                    }
-                }
-
-                throw new DistributedApplicationException(
-                    $"{containerRuntime.Name} is not running. Start {containerRuntime.Name} and try again.");
+                var readiness = context.Services.GetRequiredService<ContainerRuntimeReadiness>();
+                await readiness.EnsureRunningAsync(containerRuntime, context.CancellationToken).ConfigureAwait(false);
             }
         });
 
@@ -547,8 +499,8 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
     /// <summary>
     /// Creates a clone of this pipeline whose built-in steps are independent
     /// copies (with fresh <see cref="PipelineStep.DependsOnSteps"/> /
-    /// <see cref="PipelineStep.RequiredBySteps"/> lists). Configuration callbacks
-    /// are shallow-copied — the same delegates are reused.
+    /// <see cref="PipelineStep.RequiredBySteps"/> and final action lists).
+    /// Configuration callbacks are shallow-copied — the same delegates are reused.
     /// </summary>
     /// <remarks>
     /// Used by <c>DistributedApplication</c> to run the BeforeStart phase against
@@ -580,6 +532,7 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
         }
 
         var (stepsToExecute, stepsByName) = FilterStepsForExecution(allSteps, context);
+        context.SelectedSteps = stepsToExecute.AsReadOnly();
 
         // Build dependency graph and execute with readiness-based scheduler
         await ExecuteStepsAsTaskDag(stepsToExecute, stepsByName, context).ConfigureAwait(false);
@@ -595,7 +548,10 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
         string stepName,
         PipelineContext context)
     {
-        var allSteps = await ResolveStepsAsync(context).ConfigureAwait(false);
+        // Validate references only for the steps that will execute. Steps outside the target's
+        // closure may depend on steps that do not exist yet, such as deployment-target provisioning
+        // steps materialized while before-start runs; ExecuteAsync validates the full graph later.
+        var allSteps = await ResolveStepsAsync(context, validateStepReferences: false).ConfigureAwait(false);
 
         if (allSteps.Count == 0)
         {
@@ -612,6 +568,8 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
         }
 
         var stepsToExecute = ComputeTransitiveDependencies(targetStep, allStepsByName);
+        ValidateStepReferences(stepsToExecute, allStepsByName);
+        context.SelectedSteps = stepsToExecute.AsReadOnly();
 
         await ExecuteStepsSequentially(stepsToExecute, context).ConfigureAwait(false);
     }
@@ -622,10 +580,18 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
     /// without executing them. The returned list is in collection order; use
     /// <see cref="GetTopologicalOrder"/> to obtain execution order.
     /// </summary>
-    internal async Task<List<PipelineStep>> ResolveStepsAsync(PipelineContext context)
+    /// <param name="context">The pipeline context used to resolve the steps.</param>
+    /// <param name="validateStepReferences">
+    /// <see langword="true"/> to require every DependsOn and RequiredBy reference in the pipeline to name
+    /// a resolved step. <see langword="false"/> skips that check (and RequiredBy references to unresolved
+    /// steps) so the caller can validate only the steps it executes.
+    /// </param>
+    internal async Task<List<PipelineStep>> ResolveStepsAsync(PipelineContext context, bool validateStepReferences = true)
     {
         var annotationSteps = await CollectStepsFromAnnotationsAsync(context).ConfigureAwait(false);
-        var allSteps = _steps.Concat(annotationSteps).ToList();
+        // Configuration callbacks are run on every resolution, so give them fresh built-in steps instead
+        // of retaining dependency and final-action mutations from an earlier list or execute request.
+        var allSteps = _steps.Select(step => step.Clone()).Concat(annotationSteps).ToList();
 
         // Execute configuration callbacks even if there are no steps
         // This allows callbacks to run validation or other logic
@@ -636,11 +602,15 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
             return allSteps;
         }
 
-        ValidateSteps(allSteps);
+        var allStepsByName = ValidateUniqueStepNames(allSteps);
+
+        if (validateStepReferences)
+        {
+            ValidateStepReferences(allSteps, allStepsByName);
+        }
 
         // Convert RequiredBy relationships to DependsOn relationships before filtering
-        var allStepsByName = allSteps.ToDictionary(s => s.Name, StringComparer.Ordinal);
-        NormalizeRequiredByToDependsOn(allSteps, allStepsByName);
+        NormalizeRequiredByToDependsOn(allSteps, allStepsByName, ignoreUnknownRequiredBy: !validateStepReferences);
 
         // Capture resolved pipeline data for diagnostics (before filtering)
         _lastResolvedSteps = allSteps;
@@ -654,7 +624,8 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
     /// </summary>
     private static void NormalizeRequiredByToDependsOn(
         List<PipelineStep> steps,
-        Dictionary<string, PipelineStep> stepsByName)
+        Dictionary<string, PipelineStep> stepsByName,
+        bool ignoreUnknownRequiredBy = false)
     {
         foreach (var step in steps)
         {
@@ -662,6 +633,11 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
             {
                 if (!stepsByName.TryGetValue(requiredByStep, out var requiredByStepObj))
                 {
+                    if (ignoreUnknownRequiredBy)
+                    {
+                        continue;
+                    }
+
                     throw new InvalidOperationException(
                         $"Step '{step.Name}' is required by unknown step '{requiredByStep}'");
                 }
@@ -804,24 +780,31 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
         }
     }
 
-    private static void ValidateSteps(IEnumerable<PipelineStep> steps)
+    private static Dictionary<string, PipelineStep> ValidateUniqueStepNames(IEnumerable<PipelineStep> steps)
     {
-        var stepNames = new HashSet<string>(StringComparer.Ordinal);
+        var stepsByName = new Dictionary<string, PipelineStep>(StringComparer.Ordinal);
 
         foreach (var step in steps)
         {
-            if (!stepNames.Add(step.Name))
+            if (!stepsByName.TryAdd(step.Name, step))
             {
                 throw new InvalidOperationException(
                     $"Duplicate step name: '{step.Name}'");
             }
         }
 
+        return stepsByName;
+    }
+
+    private static void ValidateStepReferences(
+        IEnumerable<PipelineStep> steps,
+        Dictionary<string, PipelineStep> stepsByName)
+    {
         foreach (var step in steps)
         {
             foreach (var dependency in step.DependsOnSteps)
             {
-                if (!stepNames.Contains(dependency))
+                if (!stepsByName.ContainsKey(dependency))
                 {
                     throw new InvalidOperationException(
                         $"Step '{step.Name}' depends on unknown step '{dependency}'");
@@ -830,7 +813,7 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
 
             foreach (var requiredBy in step.RequiredBySteps)
             {
-                if (!stepNames.Contains(requiredBy))
+                if (!stepsByName.ContainsKey(requiredBy))
                 {
                     throw new InvalidOperationException(
                         $"Step '{step.Name}' is required by unknown step '{requiredBy}'");
@@ -1134,6 +1117,10 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
         try
         {
             await step.Action(stepContext).ConfigureAwait(false);
+            foreach (var finalAction in step.FinalActions)
+            {
+                await finalAction(stepContext).ConfigureAwait(false);
+            }
         }
         catch (DistributedApplicationException)
         {

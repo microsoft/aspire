@@ -2,12 +2,16 @@ import * as fs from 'fs';
 import http = require('http');
 import https = require('https');
 import * as path from 'path';
+import * as net from 'node:net';
 import * as vscode from 'vscode';
-import { AspireResourceExtendedDebugConfiguration, ExecutableLaunchConfiguration, isAzureFunctionsLaunchConfiguration } from '../../dcp/types';
+import { azureFunctionsExtensionId, csharpExtensionId } from '../../capabilities';
+import { AspireResourceExtendedDebugConfiguration, ExecutableLaunchConfiguration, isAzureFunctionsLaunchConfiguration, isAzureFunctionsNodeLaunchConfiguration } from '../../dcp/types';
 import {
     azureFunctionsCmdDelayedExpansion,
     azureFunctionsCmdPercentArgument,
     azureFunctionsHostStartupTimedOut,
+    azureFunctionsInvalidProcessId,
+    azureFunctionsNodeInspectorPortAllocationFailed,
     azureFunctionsTaskExitedBeforeStartup,
     azureFunctionsUnsupportedTaskShell,
     azureFunctionsWorkerStartupTimedOut,
@@ -20,7 +24,10 @@ import { AlreadyStartedResourceDebugSession, ResourceDebuggerExtension } from '.
 import { DotNetService } from './dotnet';
 import { cleanupRun, registerRunCleanup } from '../runCleanupRegistry';
 
-const AF_EXTENSION_ID = 'ms-azuretools.vscode-azurefunctions';
+const AF_EXTENSION_ID = azureFunctionsExtensionId;
+const NODE_WORKER_ARGUMENTS_ENV = 'languageWorkers__node__arguments';
+const NODE_INSPECTOR_HOST = '127.0.0.1';
+const reservedNodeInspectorPorts = new Set<number>();
 const DEFAULT_PICK_PROCESS_TIMEOUT_SECONDS = 30;
 const FUNC_HOST_DEFAULT_PORT = 7071;
 const POLL_INTERVAL_MS = 100;
@@ -28,6 +35,9 @@ const REQUEST_TIMEOUT_MS = 1_000;
 const TASK_SHUTDOWN_TIMEOUT_MS = 30_000;
 const TEMP_DIRECTORY_CLEANUP_TIMEOUT_MS = 30_000;
 const TEMP_DIRECTORY_CLEANUP_RETRY_DELAY_MS = 100;
+// Node validates process IDs by signed 32-bit coercion before dispatching to the OS.
+// Keep debugger attach within that same supported range.
+const MAX_WORKER_PROCESS_ID = 0x7fffffff;
 const TEMP_DIRECTORY_CLEANUP_MAX_ATTEMPTS =
     TEMP_DIRECTORY_CLEANUP_TIMEOUT_MS / TEMP_DIRECTORY_CLEANUP_RETRY_DELAY_MS;
 
@@ -41,6 +51,17 @@ type TerminalProfileConfiguration = {
 type WorkerProcessIdDiscovery = {
     jsonOutputFile: string;
     initialContents: string;
+};
+
+type NodeInspectorPortProbe = {
+    port: number;
+    close: () => Promise<void>;
+};
+
+type NodeInspectorPortReservation = {
+    port: number;
+    releaseForLaunch: () => Promise<void>;
+    release: () => void;
 };
 
 type FuncRunState = {
@@ -492,17 +513,31 @@ function readWorkerProcessId(discovery: WorkerProcessIdDiscovery): number | unde
             continue;
         }
 
+        let parsed: unknown;
         try {
-            const event = JSON.parse(line) as { name?: unknown; workerProcessId?: unknown };
-            if (event.name === 'dotnet-worker-startup' &&
-                typeof event.workerProcessId === 'number' &&
-                Number.isInteger(event.workerProcessId) &&
-                event.workerProcessId > 0) {
-                workerProcessId = event.workerProcessId;
-            }
+            parsed = JSON.parse(line) as unknown;
         } catch {
             // The final NDJSON line may still be in flight.
+            continue;
         }
+
+        if (typeof parsed !== 'object' || parsed === null) {
+            continue;
+        }
+
+        const event = parsed as { name?: unknown; workerProcessId?: unknown };
+        if (event.name !== 'dotnet-worker-startup') {
+            continue;
+        }
+
+        if (typeof event.workerProcessId !== 'number' ||
+            !Number.isInteger(event.workerProcessId) ||
+            event.workerProcessId <= 0 ||
+            event.workerProcessId > MAX_WORKER_PROCESS_ID) {
+            throw new Error(azureFunctionsInvalidProcessId(String(event.workerProcessId)));
+        }
+
+        workerProcessId = event.workerProcessId;
     }
 
     return workerProcessId;
@@ -620,7 +655,7 @@ function classifyFuncHostTaskShell(profile: TerminalProfileConfiguration | undef
     }
 
     if (identity.includes('git bash') || identity.includes('wsl') || identity.includes('cygwin') || identity.includes('msys') ||
-        /(?:^|[\\/\s])(ba|z|fi|k)?sh(?:\.exe)?(?:$|\s)/.test(identity)) {
+        /(?:^|[\\/\s])(ba|da|a|z|fi|k)?sh(?:\.exe)?(?:$|\s)/.test(identity)) {
         return 'posix';
     }
 
@@ -631,10 +666,201 @@ function throwUnsupportedTaskShell(): never {
     throw new Error(azureFunctionsUnsupportedTaskShell);
 }
 
+async function createNodeInspectorPortProbe(): Promise<NodeInspectorPortProbe> {
+    return await new Promise<NodeInspectorPortProbe>((resolve, reject) => {
+        const server = net.createServer();
+
+        server.once('error', error => reject(new Error(azureFunctionsNodeInspectorPortAllocationFailed, { cause: error })));
+        server.listen(0, NODE_INSPECTOR_HOST, () => {
+            const address = server.address();
+            if (typeof address !== 'object' || address === null) {
+                server.close();
+                reject(new Error(azureFunctionsNodeInspectorPortAllocationFailed));
+                return;
+            }
+
+            let closePromise: Promise<void> | undefined;
+            resolve({
+                port: address.port,
+                close: () => closePromise ??= new Promise<void>((resolveClose, rejectClose) => {
+                    server.close(error => {
+                        if (error) {
+                            rejectClose(new Error(azureFunctionsNodeInspectorPortAllocationFailed, { cause: error }));
+                            return;
+                        }
+
+                        resolveClose();
+                    });
+                })
+            });
+        });
+    });
+}
+
+async function reserveNodeInspectorPort(): Promise<NodeInspectorPortReservation> {
+    for (let attempt = 0; attempt < 20; attempt++) {
+        const probe = await createNodeInspectorPortProbe();
+        if (!reservedNodeInspectorPorts.has(probe.port)) {
+            reservedNodeInspectorPorts.add(probe.port);
+            let released = false;
+            return {
+                port: probe.port,
+                // Keep the OS listener open until the task is ready to start. The Node worker
+                // must bind this same port, so the listener cannot remain open after launch.
+                releaseForLaunch: probe.close,
+                release: () => {
+                    if (released) {
+                        return;
+                    }
+
+                    released = true;
+                    reservedNodeInspectorPorts.delete(probe.port);
+                    void probe.close().catch(error => extensionLogOutputChannel.error(
+                        `Failed to release Azure Functions Node inspector port ${probe.port}: ${error}`));
+                }
+            };
+        }
+
+        await probe.close();
+    }
+
+    throw new Error(azureFunctionsNodeInspectorPortAllocationFailed);
+}
+
+export const azureFunctionsNodeDebuggerExtension: ResourceDebuggerExtension = {
+    resourceType: 'azure-functions-node',
+    debugAdapter: 'pwa-node',
+    extensionId: null,
+    getDisplayName: (launchConfig: ExecutableLaunchConfiguration) => {
+        if (isAzureFunctionsNodeLaunchConfiguration(launchConfig)) {
+            return `Azure Functions: ${path.basename(launchConfig.app_directory)}`;
+        }
+
+        return 'Azure Functions';
+    },
+    getSupportedFileTypes: () => ['.ts', '.js'],
+    getProjectFile: (launchConfig) => {
+        if (isAzureFunctionsNodeLaunchConfiguration(launchConfig)) {
+            return launchConfig.app_directory;
+        }
+
+        throw new Error(invalidLaunchConfiguration(JSON.stringify(launchConfig)));
+    },
+    createDebugSessionConfigurationCallback: async (launchConfig, args, env, launchOptions, debugConfiguration: AspireResourceExtendedDebugConfiguration): Promise<void> => {
+        if (!isAzureFunctionsNodeLaunchConfiguration(launchConfig)) {
+            extensionLogOutputChannel.info(`The resource type was not azure-functions-node for ${JSON.stringify(launchConfig)}`);
+            throw new Error(invalidLaunchConfiguration(JSON.stringify(launchConfig)));
+        }
+
+        if (!launchConfig.app_directory || !launchConfig.command) {
+            throw new Error(invalidLaunchConfiguration(JSON.stringify(launchConfig)));
+        }
+
+        const dcpEnv = Object.fromEntries(
+            (env ?? []).filter(e => e.value !== undefined).map(e => [e.name, e.value])
+        );
+        const effectiveEnv = {
+            ...dcpEnv,
+            ...debugConfiguration.env
+        };
+
+        if (!launchOptions.debug) {
+            debugConfiguration.type = 'pwa-node';
+            debugConfiguration.request = 'launch';
+            debugConfiguration.runtimeExecutable = launchConfig.command;
+            debugConfiguration.runtimeArgs = args ?? [];
+            debugConfiguration.cwd = launchConfig.app_directory;
+            debugConfiguration.env = effectiveEnv;
+            debugConfiguration.noDebug = true;
+
+            delete debugConfiguration.program;
+            delete debugConfiguration.args;
+            return;
+        }
+
+        const inspectorPortReservation = await reserveNodeInspectorPort();
+        const debugPort = inspectorPortReservation.port;
+        const debugEnv = {
+            ...effectiveEnv,
+            // Microsoft Learn documents Node Functions debugging as the Functions host
+            // passing inspector arguments to the language worker with
+            // `languageWorkers__node__arguments`, and the Azure Functions VS Code
+            // extension uses the same setting for its "Attach to Node Functions" flow.
+            // Keep this scoped to the VS Code debug task instead of modeling a resource
+            // endpoint so normal `aspire start`, service discovery, and publish never
+            // expose an inspector port.
+            // See:
+            // - https://learn.microsoft.com/azure/azure-functions/functions-reference-node#debugging
+            // - https://github.com/microsoft/vscode-azurefunctions/blob/2f16b4b6ac536842ac69d06d088fdff47f7421e4/src/debug/NodeDebugProvider.ts
+            [NODE_WORKER_ARGUMENTS_ENV]: `--inspect=${NODE_INSPECTOR_HOST}:${debugPort}`
+        };
+
+        // The Node worker uses the built-in JavaScript debugger, independently of the
+        // .NET Functions build, worker-PID discovery, and Azure Functions extension.
+        const task = new vscode.Task(
+            { type: 'shell', task: 'azure-functions-node' },
+            vscode.TaskScope.Workspace,
+            `func: ${path.basename(launchConfig.app_directory)}`,
+            'aspire',
+            new vscode.ShellExecution(launchConfig.command, args ?? [], {
+                cwd: launchConfig.app_directory,
+                env: debugEnv
+            })
+        );
+        task.presentationOptions = {
+            reveal: vscode.TaskRevealKind.Always,
+            panel: vscode.TaskPanelKind.Dedicated
+        };
+
+        let taskExecution: vscode.TaskExecution | undefined;
+        let stopped = false;
+        registerRunCleanup(debugConfiguration.runId, () => {
+            stopped = true;
+            taskExecution?.terminate();
+            inspectorPortReservation.release();
+        });
+        try {
+            await inspectorPortReservation.releaseForLaunch();
+            if (stopped) {
+                throw new Error(invalidLaunchConfiguration(JSON.stringify(launchConfig)));
+            }
+
+            taskExecution = await vscode.tasks.executeTask(task);
+            // Cleanup can run while executeTask is pending. Do not leave that late
+            // task running after its parent Aspire session has already stopped.
+            if (stopped) {
+                taskExecution.terminate();
+                throw new Error(invalidLaunchConfiguration(JSON.stringify(launchConfig)));
+            }
+        } catch (error) {
+            cleanupRun(debugConfiguration.runId);
+            throw error;
+        }
+
+        debugConfiguration.type = 'pwa-node';
+        debugConfiguration.request = 'attach';
+        debugConfiguration.address = NODE_INSPECTOR_HOST;
+        debugConfiguration.port = debugPort;
+        debugConfiguration.restart = true;
+        debugConfiguration.sourceMaps = true;
+        debugConfiguration.continueOnAttach = true;
+        if (launchConfig.language === 'typescript' && debugConfiguration.outFiles === undefined) {
+            debugConfiguration.outFiles = [path.join(launchConfig.app_directory, 'dist/**/*.js')];
+        }
+        debugConfiguration.resolveSourceMapLocations = ['**', '!**/node_modules/**'];
+        debugConfiguration.cwd = launchConfig.app_directory;
+
+        delete debugConfiguration.program;
+        delete debugConfiguration.args;
+        delete debugConfiguration.console;
+        delete debugConfiguration.env;
+    }
+};
+
 export const azureFunctionsDebuggerExtension: ResourceDebuggerExtension = {
     resourceType: 'azure-functions',
     debugAdapter: 'coreclr',
-    extensionId: 'ms-dotnettools.csharp',
+    extensionId: csharpExtensionId,
     getDisplayName: (launchConfig: ExecutableLaunchConfiguration) => {
         if (isAzureFunctionsLaunchConfiguration(launchConfig) && launchConfig.project_path) {
             return `Azure Functions: ${path.basename(launchConfig.project_path)}`;
@@ -653,6 +879,11 @@ export const azureFunctionsDebuggerExtension: ResourceDebuggerExtension = {
             extensionLogOutputChannel.info(`The resource type was not azure-functions for ${JSON.stringify(launchConfig)}`);
             throw new Error(invalidLaunchConfiguration(JSON.stringify(launchConfig)));
         }
+
+        const rawArgs = [...(args ?? [])];
+        // Validate caller-provided arguments before building the project. The final
+        // argument list is quoted again after generated Core Tools flags are appended.
+        quoteFuncHostArguments(rawArgs);
 
         const runId = debugConfiguration.runId;
         const projectPath = launchConfig.project_path;
@@ -679,7 +910,6 @@ export const azureFunctionsDebuggerExtension: ResourceDebuggerExtension = {
         registerRunCleanup(runId, () => {
             void cleanupFuncRun(state);
         });
-        const rawArgs = [...(args ?? [])];
         const jsonOutputFileArgument = getJsonOutputFileArgument(rawArgs);
         let workerProcessIdDiscovery: WorkerProcessIdDiscovery;
         let ownedJsonOutputFileArgument: string | undefined;

@@ -92,11 +92,9 @@ public class PrebuiltAppHostServerChannelResolutionTests(ITestOutputHelper outpu
     private static PrebuiltAppHostServer CreateServer(string appPath)
     {
         var nugetService = new BundleNuGetService(
-            new NullLayoutDiscovery(),
-            new LayoutProcessRunner(new TestProcessExecutionFactory()),
-            new TestFeatures(),
-            new TestEnvironment(),
-            NullLogger<BundleNuGetService>.Instance);
+            NullLogger<BundleNuGetService>.Instance,
+            new FakeNuGetClient(),
+            new TestConfigurationService { SettingsFilePath = Path.Combine(appPath, "global.json") });
 
         return new PrebuiltAppHostServer(
             appPath,
@@ -112,4 +110,3 @@ public class PrebuiltAppHostServerChannelResolutionTests(ITestOutputHelper outpu
             NullLogger.Instance);
     }
 }
-

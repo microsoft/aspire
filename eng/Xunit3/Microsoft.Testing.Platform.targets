@@ -23,7 +23,7 @@
       <_TestRunnerAdditionalArguments>%(TestToRun.TestRunnerAdditionalArguments)</_TestRunnerAdditionalArguments>
 
       <_TestRunner>$(_TestAssembly)</_TestRunner>
-      <_TestRunnerArgs>$(_TestRunnerAdditionalArguments) --results-directory "$(_TestResultDirectory)" --report-xunit --report-xunit-filename "$(_TestResultXmlFileName)" --report-xunit-html --report-xunit-html-filename "$(_TestResultHtmlFileName)" --report-trx --report-trx-filename "$(_TestResultTrxFileName)"</_TestRunnerArgs>
+      <_TestRunnerArgs>$(_TestRunnerAdditionalArguments) --results-directory "$(_TestResultDirectory)" --report-xunit-xml --report-xunit-xml-filename "$(_TestResultXmlFileName)" --report-xunit-html --report-xunit-html-filename "$(_TestResultHtmlFileName)" --report-trx --report-trx-filename "$(_TestResultTrxFileName)"</_TestRunnerArgs>
     </PropertyGroup>
 
     <PropertyGroup Condition="'$(_TestRuntime)' == 'Core'">

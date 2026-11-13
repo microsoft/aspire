@@ -1,8 +1,16 @@
-// Licensed to the .NET Foundation under one or more agreements.
+﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable AAIP001 // Toolbox APIs are experimental.
+
+using System.ClientModel.Primitives;
+using System.Net.Http.Headers;
+using System.Text.Json;
 using Aspire.Cli.Resources;
 using Aspire.Deployment.EndToEnd.Tests.Helpers;
+using Azure.AI.Projects;
+using Azure.AI.Projects.Agents;
+using Azure.Core;
 using Hex1b.Automation;
 using Xunit;
 
@@ -17,6 +25,9 @@ public sealed class FoundryHostedAgentDeploymentTests(ITestOutputHelper output)
     // Foundry deployments can take longer than standard ACA due to AI resource provisioning.
     private static readonly TimeSpan s_testTimeout = TimeSpan.FromMinutes(45);
 
+    // This scenario deploys twice; its two phase limits total 50 minutes before setup and inspection.
+    private static readonly TimeSpan s_toolboxTestTimeout = TimeSpan.FromMinutes(70);
+
     [Fact]
     [ActiveIssue("https://github.com/microsoft/aspire/issues/16330")]
     public async Task DeployFoundryHostedAgentToAzure()
@@ -27,6 +38,355 @@ public sealed class FoundryHostedAgentDeploymentTests(ITestOutputHelper output)
         var cancellationToken = linkedCts.Token;
 
         await DeployFoundryHostedAgentToAzureCore(cancellationToken);
+    }
+
+    [Fact]
+    [ActiveIssue("https://github.com/microsoft/aspire/issues/20778")]
+    public async Task DeployFoundryToolboxToAzure()
+    {
+        using var cts = new CancellationTokenSource(s_toolboxTestTimeout);
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
+            cts.Token, TestContext.Current.CancellationToken);
+        var cancellationToken = linkedCts.Token;
+
+        var subscriptionId = AzureAuthenticationHelpers.TryGetSubscriptionId();
+        if (string.IsNullOrEmpty(subscriptionId))
+        {
+            Assert.Skip("Azure subscription not configured. Set ASPIRE_DEPLOYMENT_TEST_SUBSCRIPTION.");
+        }
+
+        if (!AzureAuthenticationHelpers.IsAzureAuthAvailable())
+        {
+            if (DeploymentE2ETestHelpers.IsRunningInCI)
+            {
+                Assert.Fail("Azure authentication not available in CI. Check OIDC configuration.");
+            }
+            else
+            {
+                Assert.Skip("Azure authentication not available. Run 'az login' to authenticate.");
+            }
+        }
+
+        var workspace = TemporaryWorkspace.Create(output);
+        var startTime = DateTime.UtcNow;
+        var resourceGroupName = DeploymentE2ETestHelpers.GenerateResourceGroupName("foundry-toolbox");
+        const string projectName = "FoundryToolbox";
+
+        try
+        {
+            using var terminal = DeploymentE2ETestHelpers.CreateTestTerminal();
+            var pendingRun = terminal.RunAsync(cancellationToken);
+            var counter = new SequenceCounter();
+            var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+
+            await auto.PrepareEnvironmentAsync(workspace, counter);
+            await auto.InstallCurrentBuildAspireCliAsync(counter, output);
+            await auto.AspireNewAsync(projectName, counter, useRedisCache: false);
+            await auto.TypeAsync($"cd {projectName}");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter);
+
+            await auto.TypeAsync("aspire add Aspire.Hosting.Foundry");
+            await auto.EnterAsync();
+            await auto.WaitForAspireAddCompletionAsync(counter);
+
+            var appHostFilePath = Path.Combine(
+                workspace.WorkspaceRoot.FullName,
+                projectName,
+                $"{projectName}.AppHost",
+                "AppHost.cs");
+            var appHostContent = File.ReadAllText(appHostFilePath);
+            appHostContent = "using Aspire.Hosting.Foundry;\n" + appHostContent;
+            appHostContent = appHostContent.Replace(
+                "builder.Build().Run();",
+                """
+                var foundry = builder.AddFoundry("aif-myfoundry");
+                var foundryProject = foundry.AddProject("proj-myproject");
+                var search = builder.AddAzureSearch("search");
+
+                foundryProject.AddToolbox("field-tools")
+                    .WithDescription("Tools for field technicians.")
+                    .WithWebSearchTool("web-search", "Search the public web.")
+                    .WithMcpTool(
+                        "microsoft-learn",
+                        "https://learn.microsoft.com/api/mcp",
+                        new FoundryToolboxMcpToolOptions
+                        {
+                            ServerDescription = "Search Microsoft Learn.",
+                            ApprovalPolicy = new()
+                            {
+                                Global = FoundryToolboxMcpGlobalApprovalMode.Always
+                            }
+                        })
+                    .WithAISearchTool(
+                        "knowledge-base",
+                        search,
+                        "docs",
+                        "Search the internal knowledge base.");
+
+                builder.Build().Run();
+                """);
+            File.WriteAllText(appHostFilePath, appHostContent);
+
+            await auto.TypeAsync($"cd {projectName}.AppHost");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter);
+            await auto.TypeAsync(
+                $"unset ASPIRE_PLAYGROUND && export AZURE__LOCATION=swedencentral && export AZURE__RESOURCEGROUP={resourceGroupName}" +
+                $" && export AZURE__SUBSCRIPTIONID={subscriptionId}" +
+                " && export AZURE__TENANTID=$(az account show --query tenantId -o tsv)");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter);
+
+            // The first deployment creates a Toolbox version; the second must reconcile to the same
+            // immutable version rather than producing another one.
+            await auto.TypeAsync("aspire deploy --clear-cache");
+            await auto.EnterAsync();
+            await auto.WaitForPipelineSuccessAsync(timeout: TimeSpan.FromMinutes(35), counter: counter);
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
+
+            var credential = AzureAuthenticationHelpers.GetAzureCredential();
+            var resources = await GetToolboxTestResourcesAsync(
+                subscriptionId,
+                resourceGroupName,
+                credential,
+                cancellationToken);
+            // Validate Aspire's persisted deployment contract, not Foundry's MCP discovery.
+            // No Search index or agent invocation is needed to inspect the configured tools.
+            var firstDeployment = await InspectToolboxAsync(
+                resources.ProjectEndpoint,
+                credential,
+                cancellationToken);
+            AssertToolboxDefinition(firstDeployment, resources.SearchConnectionId);
+            Assert.Equal(1, firstDeployment.VersionCount);
+
+            // The first pipeline banner remains visible, so clear it before waiting for the redeploy.
+            await auto.TypeAsync("clear");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter);
+
+            await auto.TypeAsync("aspire deploy --clear-cache");
+            await auto.EnterAsync();
+            await auto.WaitForPipelineSuccessAsync(timeout: TimeSpan.FromMinutes(15), counter: counter);
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
+
+            var secondDeployment = await InspectToolboxAsync(
+                resources.ProjectEndpoint,
+                credential,
+                cancellationToken);
+            AssertToolboxDefinition(secondDeployment, resources.SearchConnectionId);
+            Assert.Equal(firstDeployment.DefaultVersion, secondDeployment.DefaultVersion);
+            Assert.Equal(firstDeployment.ConfigurationHash, secondDeployment.ConfigurationHash);
+            Assert.Equal(firstDeployment.VersionCount, secondDeployment.VersionCount);
+
+            await auto.TypeAsync(
+                $"az group show -n \"{resourceGroupName}\" --query name -o tsv");
+            await auto.EnterAsync();
+            await auto.WaitUntilTextAsync(resourceGroupName, timeout: TimeSpan.FromMinutes(2));
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
+
+            await auto.TypeAsync("exit");
+            await auto.EnterAsync();
+            await pendingRun;
+
+            DeploymentReporter.ReportDeploymentSuccess(
+                nameof(DeployFoundryToolboxToAzure),
+                resourceGroupName,
+                new Dictionary<string, string>(),
+                DateTime.UtcNow - startTime);
+        }
+        catch (Exception ex)
+        {
+            DeploymentReporter.ReportDeploymentFailure(
+                nameof(DeployFoundryToolboxToAzure),
+                resourceGroupName,
+                ex.Message,
+                ex.StackTrace);
+            throw;
+        }
+        finally
+        {
+            TriggerCleanupResourceGroup(resourceGroupName, output);
+            DeploymentReporter.ReportCleanupStatus(
+                resourceGroupName,
+                success: true,
+                "Cleanup triggered (fire-and-forget)");
+        }
+    }
+
+    private static async Task<ToolboxTestResources> GetToolboxTestResourcesAsync(
+        string subscriptionId,
+        string resourceGroupName,
+        TokenCredential credential,
+        CancellationToken cancellationToken)
+    {
+        var managementToken = await credential.GetTokenAsync(
+            new TokenRequestContext(["https://management.azure.com/.default"]),
+            cancellationToken);
+        using var client = new HttpClient();
+        var resourcesUri = new Uri(
+            $"https://management.azure.com/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/resources?api-version=2021-04-01");
+        using var resourcesRequest = new HttpRequestMessage(HttpMethod.Get, resourcesUri);
+        resourcesRequest.Headers.Authorization =
+            new AuthenticationHeaderValue("Bearer", managementToken.Token);
+        using var resourcesResponse = await client.SendAsync(resourcesRequest, cancellationToken);
+        resourcesResponse.EnsureSuccessStatusCode();
+        using var resourcesDocument = JsonDocument.Parse(
+            await resourcesResponse.Content.ReadAsStringAsync(cancellationToken));
+
+        var resources = resourcesDocument.RootElement.GetProperty("value").EnumerateArray().ToArray();
+        var project = resources.Single(resource =>
+            string.Equals(
+                resource.GetProperty("type").GetString(),
+                "Microsoft.CognitiveServices/accounts/projects",
+                StringComparison.OrdinalIgnoreCase));
+        var projectId = project.GetProperty("id").GetString()
+            ?? throw new InvalidOperationException("The deployed Foundry project did not have a resource ID.");
+        using var projectRequest = new HttpRequestMessage(
+            HttpMethod.Get,
+            $"https://management.azure.com{projectId}?api-version=2025-06-01");
+        projectRequest.Headers.Authorization =
+            new AuthenticationHeaderValue("Bearer", managementToken.Token);
+        using var projectResponse = await client.SendAsync(projectRequest, cancellationToken);
+        projectResponse.EnsureSuccessStatusCode();
+        using var projectDocument = JsonDocument.Parse(
+            await projectResponse.Content.ReadAsStringAsync(cancellationToken));
+        var projectEndpoint = projectDocument.RootElement
+            .GetProperty("properties")
+            .GetProperty("endpoints")
+            .GetProperty("AI Foundry API")
+            .GetString();
+
+        using var connectionsRequest = new HttpRequestMessage(
+            HttpMethod.Get,
+            $"https://management.azure.com{projectId}/connections?api-version=2025-06-01");
+        connectionsRequest.Headers.Authorization =
+            new AuthenticationHeaderValue("Bearer", managementToken.Token);
+        using var connectionsResponse = await client.SendAsync(connectionsRequest, cancellationToken);
+        connectionsResponse.EnsureSuccessStatusCode();
+        using var connectionsDocument = JsonDocument.Parse(
+            await connectionsResponse.Content.ReadAsStringAsync(cancellationToken));
+        var searchConnection = connectionsDocument.RootElement.GetProperty("value")
+            .EnumerateArray().Single(connection =>
+                connection.GetProperty("properties").GetProperty("category").GetString() == "CognitiveSearch");
+
+        return new(
+            new Uri(projectEndpoint
+                ?? throw new InvalidOperationException("The deployed Foundry project did not expose an endpoint.")),
+            searchConnection.GetProperty("id").GetString()
+                ?? throw new InvalidOperationException("The deployed Search connection did not have a resource ID."));
+    }
+
+    private static async Task<ToolboxDeploymentSnapshot> InspectToolboxAsync(
+        Uri projectEndpoint,
+        TokenCredential credential,
+        CancellationToken cancellationToken)
+    {
+        var options = new AIProjectClientOptions();
+        options.AddPolicy(new ToolboxFeaturesPolicy(), PipelinePosition.PerCall);
+        var projectClient = new AIProjectClient(projectEndpoint, credential, options);
+        var toolboxes = projectClient.AgentAdministrationClient.GetAgentToolboxes();
+        var toolbox = (await toolboxes.GetAsync("field-tools", cancellationToken)).Value;
+        var versions = new List<ToolboxVersion>();
+        await foreach (var version in toolboxes.GetVersionsAsync(
+            "field-tools",
+            cancellationToken: cancellationToken))
+        {
+            versions.Add(version);
+        }
+
+        var defaultVersion = (await toolboxes.GetVersionAsync(
+            "field-tools",
+            toolbox.DefaultVersion,
+            cancellationToken)).Value;
+        Assert.Equal(toolbox.DefaultVersion, defaultVersion.Version);
+        Assert.Single(versions, version => version.Version == toolbox.DefaultVersion);
+        var configurationHash = defaultVersion.Metadata["aspire-configuration-hash"];
+        var serializedTools = defaultVersion.Tools
+            .Select(SerializeTool)
+            .ToArray();
+
+        return new(
+            toolbox.DefaultVersion,
+            configurationHash,
+            versions.Count,
+            defaultVersion.Description,
+            new Dictionary<string, string>(defaultVersion.Metadata, StringComparer.Ordinal),
+            serializedTools);
+    }
+
+    private static JsonElement SerializeTool(ToolboxTool tool)
+    {
+        using var document = JsonDocument.Parse(ModelReaderWriter.Write(
+            tool,
+            ModelReaderWriterOptions.Json,
+            AzureAIProjectsAgentsContext.Default));
+
+        return document.RootElement.Clone();
+    }
+
+    private static void AssertToolboxDefinition(ToolboxDeploymentSnapshot snapshot, string searchConnectionId)
+    {
+        Assert.Equal("Tools for field technicians.", snapshot.Description);
+        Assert.Equal("Aspire.Hosting.Foundry", snapshot.Metadata["aspire-managed-by"]);
+        Assert.Equal("1", snapshot.Metadata["aspire-schema-version"]);
+        Assert.Equal(3, snapshot.Tools.Count);
+
+        var webSearch = snapshot.Tools.Single(tool =>
+            tool.GetProperty("type").GetString() == "web_search");
+        Assert.Equal("web-search", webSearch.GetProperty("name").GetString());
+        Assert.Equal("Search the public web.", webSearch.GetProperty("description").GetString());
+
+        var mcp = snapshot.Tools.Single(tool =>
+            tool.GetProperty("type").GetString() == "mcp");
+        Assert.Equal("microsoft-learn", mcp.GetProperty("name").GetString());
+        Assert.Equal("microsoft-learn", mcp.GetProperty("server_label").GetString());
+        Assert.Equal(
+            "https://learn.microsoft.com/api/mcp",
+            mcp.GetProperty("server_url").GetString());
+        Assert.Equal("Search Microsoft Learn.", mcp.GetProperty("server_description").GetString());
+        Assert.Equal("always", mcp.GetProperty("require_approval").GetString());
+
+        var search = snapshot.Tools.Single(tool =>
+            tool.GetProperty("type").GetString() == "azure_ai_search");
+        Assert.Equal("knowledge-base", search.GetProperty("name").GetString());
+        Assert.Equal("Search the internal knowledge base.", search.GetProperty("description").GetString());
+        var index = Assert.Single(search.GetProperty("azure_ai_search").GetProperty("indexes").EnumerateArray());
+        Assert.Equal("docs", index.GetProperty("index_name").GetString());
+        Assert.Equal(searchConnectionId, index.GetProperty("project_connection_id").GetString());
+    }
+
+    private sealed record ToolboxTestResources(
+        Uri ProjectEndpoint,
+        string SearchConnectionId);
+
+    private sealed record ToolboxDeploymentSnapshot(
+        string DefaultVersion,
+        string ConfigurationHash,
+        int VersionCount,
+        string Description,
+        IReadOnlyDictionary<string, string> Metadata,
+        IReadOnlyList<JsonElement> Tools);
+
+    private sealed class ToolboxFeaturesPolicy : PipelinePolicy
+    {
+        public override void Process(
+            PipelineMessage message,
+            IReadOnlyList<PipelinePolicy> pipeline,
+            int currentIndex)
+        {
+            message.Request.Headers.Add("Foundry-Features", "Toolboxes=V1Preview");
+            ProcessNext(message, pipeline, currentIndex);
+        }
+
+        public override ValueTask ProcessAsync(
+            PipelineMessage message,
+            IReadOnlyList<PipelinePolicy> pipeline,
+            int currentIndex)
+        {
+            message.Request.Headers.Add("Foundry-Features", "Toolboxes=V1Preview");
+            return ProcessNextAsync(message, pipeline, currentIndex);
+        }
     }
 
     private async Task DeployFoundryHostedAgentToAzureCore(CancellationToken cancellationToken)
@@ -109,8 +469,9 @@ public sealed class FoundryHostedAgentDeploymentTests(ITestOutputHelper output)
             // The package set and explicit versions below must stay in sync with
             // playground/FoundryAgents/DotNetHostedAgent/DotNetHostedAgent.csproj.
             // This project is materialized at test runtime outside the repo, so it does not
-            // participate in central package management; the playground's `VersionOverride`
-            // values become explicit `Version` values here. Update both files together.
+            // participate in central package management; the playground's central versions
+            // and `VersionOverride` values become explicit `Version` values here.
+            // Keep the Azure AI SDK trio and OpenAI aligned with Directory.Packages.props.
             File.WriteAllText(Path.Combine(hostedAgentDir, "DotNetHostedAgent.csproj"), """
                 <Project Sdk="Microsoft.NET.Sdk.Web">
                   <PropertyGroup>
@@ -121,12 +482,15 @@ public sealed class FoundryHostedAgentDeploymentTests(ITestOutputHelper output)
                     <NoWarn>$(NoWarn);OPENAI001;MAIF001;MAAI001</NoWarn>
                   </PropertyGroup>
                   <ItemGroup>
-                    <PackageReference Include="Azure.AI.Projects" Version="2.1.0-beta.3" />
+                    <PackageReference Include="Azure.AI.Projects" Version="3.0.0-beta.3" />
+                    <PackageReference Include="Azure.AI.Projects.Agents" Version="3.0.0-beta.3" />
+                    <PackageReference Include="Azure.AI.Extensions.OpenAI" Version="3.0.0-beta.3" />
+                    <PackageReference Include="OpenAI" Version="2.14.0" />
                     <PackageReference Include="Azure.Identity" Version="1.21.0" />
                     <PackageReference Include="Microsoft.Agents.AI.Foundry.Hosting" Version="1.12.0-preview.260629.1" />
                     <PackageReference Include="Microsoft.Extensions.AI" Version="10.7.0" />
-                    <PackageReference Include="ModelContextProtocol" Version="1.1.0" />
-                    <PackageReference Include="Azure.Core" Version="1.59.0" />
+                    <PackageReference Include="ModelContextProtocol" Version="1.4.1" />
+                    <PackageReference Include="Azure.Core" Version="1.62.0" />
                   </ItemGroup>
                 </Project>
                 """);
@@ -144,11 +508,11 @@ public sealed class FoundryHostedAgentDeploymentTests(ITestOutputHelper output)
                 using Microsoft.Agents.AI.Foundry.Hosting;
                 using Microsoft.Extensions.AI;
 
-                string projectConnectionString = Environment.GetEnvironmentVariable("ConnectionStrings__projmyproject")
-                    ?? throw new InvalidOperationException("ConnectionStrings__projmyproject is not set.");
+                string projectConnectionString = Environment.GetEnvironmentVariable("ConnectionStrings__proj_myproject")
+                    ?? throw new InvalidOperationException("ConnectionStrings__proj_myproject is not set.");
 
-                string chatConnectionString = Environment.GetEnvironmentVariable("ConnectionStrings__chat")
-                    ?? throw new InvalidOperationException("ConnectionStrings__chat is not set.");
+                string chatConnectionString = Environment.GetEnvironmentVariable("ConnectionStrings__chat_model")
+                    ?? throw new InvalidOperationException("ConnectionStrings__chat_model is not set.");
 
                 DbConnectionStringBuilder projectConnectionBuilder = new() { ConnectionString = projectConnectionString };
                 DbConnectionStringBuilder chatConnectionBuilder = new() { ConnectionString = chatConnectionString };
@@ -158,7 +522,7 @@ public sealed class FoundryHostedAgentDeploymentTests(ITestOutputHelper output)
 
                 if (!Uri.TryCreate(projectEndpoint, UriKind.Absolute, out Uri? projectUri) || projectUri is null)
                 {
-                    throw new InvalidOperationException("ConnectionStrings__projmyproject contains an invalid Endpoint value.");
+                    throw new InvalidOperationException("ConnectionStrings__proj_myproject contains an invalid Endpoint value.");
                 }
 
                 [Description("Get a weather forecast")]
@@ -240,9 +604,9 @@ public sealed class FoundryHostedAgentDeploymentTests(ITestOutputHelper output)
                 """
                 var foundry = builder.AddFoundry("aif-myfoundry");
                 var foundryProject = foundry.AddProject("proj-myproject");
-                var chat = foundryProject.AddModelDeployment("chat", FoundryModel.OpenAI.Gpt41);
+                var chat = foundryProject.AddModelDeployment("chat-model", FoundryModel.OpenAI.Gpt41);
 
-                builder.AddProject<Projects.DotNetHostedAgent>("dotnet-hosted-agent")
+                builder.AddDotnetProject("dotnet-hosted-agent", "../DotNetHostedAgent/DotNetHostedAgent.csproj")
                     .WithReference(chat).WaitFor(chat)
                     .AsHostedAgent(foundryProject, HostedAgentProtocol.Responses, "2.0.0");
 

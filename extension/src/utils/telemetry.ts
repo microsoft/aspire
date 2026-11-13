@@ -36,8 +36,12 @@ let reporter: TelemetryReporter | undefined;
 let telemetryLogger: vscode.TelemetryLogger | undefined;
 let telemetryReporterFactory: TelemetryReporterFactory = defaultTelemetryReporterFactory;
 let telemetryLoggerFactory: TelemetryLoggerFactory = defaultTelemetryLoggerFactory;
+let telemetryEnrichmentTask: Promise<void> | undefined;
+let usageTelemetryEnrichmentGeneration = 0;
+let errorTelemetryEnrichmentGeneration = 0;
 const commonProperties: Partial<Record<CommonTelemetryProperty, string>> = {};
 let commandInvocationListener: (() => void) | undefined;
+let activeCommandCount = 0;
 const telemetryClientVersion = (require('@vscode/extension-telemetry/package.json') as { version: string }).version;
 
 /**
@@ -141,10 +145,19 @@ export function isExtensionTelemetryEnabled(): boolean {
     return telemetryLogger?.isUsageEnabled === true || telemetryLogger?.isErrorsEnabled === true;
 }
 
+export function isExtensionUsageTelemetryEnabled(): boolean {
+    return telemetryLogger?.isUsageEnabled === true;
+}
+
+export function onDidChangeExtensionUsageTelemetryEnabled(listener: (enabled: boolean) => void): vscode.Disposable {
+    return telemetryLogger?.onDidChangeEnableStates(() => listener(isExtensionUsageTelemetryEnabled())) ??
+        { dispose() { } };
+}
+
 /**
  * Replace the current set of common properties. Passing `undefined` for a
- * property removes it. Values should already be bounded, non-PII summaries
- * (e.g. `csharp;typescript`, not project paths).
+ * property removes it. Values must conform to the telemetry registry's data-classification
+ * contract and should be normalized before they reach this shared property bag.
  */
 export function setCommonTelemetryProperties(properties: CommonTelemetryProperties): void {
     for (const [key, value] of Object.entries(properties) as [CommonTelemetryProperty, string | undefined][]) {
@@ -161,9 +174,47 @@ export function getCommonTelemetryProperties(): Readonly<Partial<Record<CommonTe
     return commonProperties;
 }
 
+export function setTelemetryEnrichmentTask(task: Promise<void>): void {
+    usageTelemetryEnrichmentGeneration++;
+    const readyTask = task.catch(() => { });
+    telemetryEnrichmentTask = readyTask;
+    void readyTask.finally(() => {
+        if (telemetryEnrichmentTask === readyTask) {
+            telemetryEnrichmentTask = undefined;
+        }
+    });
+}
+
+export function clearTelemetryEnrichmentTask(): void {
+    // Identity enrichment is usage-only. Preserve queued error events when the
+    // user changes from all telemetry to error-only telemetry.
+    usageTelemetryEnrichmentGeneration++;
+    if (telemetryLogger?.isErrorsEnabled !== true) {
+        errorTelemetryEnrichmentGeneration++;
+    }
+    telemetryEnrichmentTask = undefined;
+}
+
 function mergeProperties<E extends KnownTelemetryEventName>(
-    eventProperties?: EventProperties<E>
+    eventName: E,
+    eventProperties?: EventProperties<E>,
 ): Record<string, TelemetryPropertyValue> {
+    // Survey responses must not inherit employee alias/domain or future additions to the
+    // shared property bag. VS Code still owns platform properties and consent enforcement.
+    const isSurvey = eventName === 'aspire/vscode/survey/invitation' || eventName === 'aspire/vscode/survey/result';
+    if (isSurvey) {
+        const allowedProperties = eventName === 'aspire/vscode/survey/invitation'
+            ? ['campaign_id', 'question_id', 'is_microsoft_internal']
+            : ['campaign_id', 'question_id', 'outcome', 'is_microsoft_internal'];
+        const surveyProperties = Object.fromEntries(
+            Object.entries(eventProperties ?? {}).filter(([key]) => allowedProperties.includes(key)),
+        );
+        return {
+            ...(commonProperties.is_microsoft_internal === undefined ? {} : { is_microsoft_internal: commonProperties.is_microsoft_internal }),
+            ...surveyProperties,
+        } as Record<string, TelemetryPropertyValue>;
+    }
+
     return {
         ...commonProperties,
         ...(eventProperties ?? {}),
@@ -181,10 +232,24 @@ export function sendTelemetryEvent<E extends KnownTelemetryEventName>(
     properties?: EventProperties<E>,
     measurements?: EventMeasurements<E>
 ): void {
-    telemetryLogger?.logUsage(eventName, {
-        properties: mergeProperties(properties),
-        measurements,
-    });
+    if (telemetryLogger?.isUsageEnabled !== true) {
+        return;
+    }
+
+    const emit = () => {
+        telemetryLogger?.logUsage(eventName, {
+            properties: mergeProperties(eventName, properties),
+            measurements,
+        });
+    };
+    // Feedback permission can be withdrawn independently of usage telemetry. Do not queue
+    // survey events behind identity enrichment after the producer's final permission check.
+    if (eventName === 'aspire/vscode/survey/invitation' || eventName === 'aspire/vscode/survey/result') {
+        emit();
+    }
+    else {
+        emitWhenEnriched('usage', emit);
+    }
 }
 
 /**
@@ -196,10 +261,36 @@ export function sendTelemetryErrorEvent<E extends KnownTelemetryEventName>(
     properties?: EventProperties<E>,
     measurements?: EventMeasurements<E>
 ): void {
-    telemetryLogger?.logError(eventName, {
-        properties: mergeProperties(properties),
-        measurements,
+    if (telemetryLogger?.isErrorsEnabled !== true) {
+        return;
+    }
+
+    emitWhenEnriched('error', () => {
+        telemetryLogger?.logError(eventName, {
+            properties: mergeProperties(eventName, properties),
+            measurements,
+        });
     });
+}
+
+function emitWhenEnriched(channel: 'usage' | 'error', emit: () => void): void {
+    const enrichmentTask = telemetryEnrichmentTask;
+    if (enrichmentTask) {
+        const enrichmentGeneration = channel === 'usage'
+            ? usageTelemetryEnrichmentGeneration
+            : errorTelemetryEnrichmentGeneration;
+        void enrichmentTask.then(() => {
+            const currentGeneration = channel === 'usage'
+                ? usageTelemetryEnrichmentGeneration
+                : errorTelemetryEnrichmentGeneration;
+            if (currentGeneration === enrichmentGeneration) {
+                emit();
+            }
+        });
+        return;
+    }
+
+    emit();
 }
 
 /**
@@ -213,6 +304,12 @@ export function sendTelemetryErrorEvent<E extends KnownTelemetryEventName>(
  */
 export type CommandOutcome = 'success' | 'canceled' | 'error';
 
+export interface HandledCommandOutcome {
+    readonly success: false;
+    readonly canceled?: boolean;
+    readonly errorKind?: string;
+}
+
 export interface CommandInvocationEvent {
     command: string;
     outcome: CommandOutcome;
@@ -223,6 +320,10 @@ export interface CommandInvocationEvent {
 
 const commandInvocationEmitter = new vscode.EventEmitter<CommandInvocationEvent>();
 export const onDidInvokeCommand = commandInvocationEmitter.event;
+
+export function getActiveCommandCount(): number {
+    return activeCommandCount;
+}
 
 /**
  * Wraps an extension command invocation so we capture invocation, outcome and
@@ -247,12 +348,16 @@ export async function withCommandTelemetry<T>(
     additionalProperties?: Partial<Record<'source', string>>
 ): Promise<T> {
     commandInvocationListener?.();
+    activeCommandCount++;
     const startTime = Date.now();
     let outcome: CommandOutcome = 'success';
     let errorKind: string | undefined;
     try {
         const result = await Promise.resolve(fn());
-        if (isHandledCommandFailure(result)) {
+        if (isHandledCommandCancellation(result)) {
+            outcome = 'canceled';
+        }
+        else if (isHandledCommandFailure(result)) {
             outcome = 'error';
             errorKind = getHandledCommandFailureKind(result);
         }
@@ -270,6 +375,7 @@ export async function withCommandTelemetry<T>(
         throw err;
     }
     finally {
+        activeCommandCount--;
         const durationMs = Date.now() - startTime;
         const properties: EventProperties<'aspire/vscode/command/invoked'> = {
             command: commandName,
@@ -321,7 +427,7 @@ function normalizeErrorKind(errorKind: string): string {
     return /^[A-Za-z_][A-Za-z0-9_]{0,63}$/.test(errorKind) ? errorKind : 'Error';
 }
 
-function isHandledCommandFailure(value: unknown): value is { success: false; errorKind?: unknown } {
+function isHandledCommandFailure(value: unknown): value is HandledCommandOutcome {
     if (typeof value !== 'object' || value === null || !('success' in value)) {
         return false;
     }
@@ -331,7 +437,11 @@ function isHandledCommandFailure(value: unknown): value is { success: false; err
     return (value as { success?: unknown }).success === false;
 }
 
-function getHandledCommandFailureKind(value: { errorKind?: unknown }): string {
+function isHandledCommandCancellation(value: unknown): value is HandledCommandOutcome & { readonly canceled: true } {
+    return isHandledCommandFailure(value) && value.canceled === true;
+}
+
+function getHandledCommandFailureKind(value: HandledCommandOutcome): string {
     return typeof value.errorKind === 'string' && value.errorKind.length > 0
         ? normalizeErrorKind(value.errorKind)
         : 'HandledError';
@@ -505,6 +615,9 @@ export function __resetTelemetryLoggerFactoryForTests(): void {
 
 /** Test seam: clear common properties so tests don't bleed into each other. */
 export function __resetCommonPropertiesForTests(): void {
+    usageTelemetryEnrichmentGeneration++;
+    errorTelemetryEnrichmentGeneration++;
+    telemetryEnrichmentTask = undefined;
     for (const key of Object.keys(commonProperties) as CommonTelemetryProperty[]) {
         delete commonProperties[key];
     }

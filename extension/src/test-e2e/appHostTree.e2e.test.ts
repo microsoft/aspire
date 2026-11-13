@@ -1,11 +1,16 @@
 import * as assert from 'assert';
+import * as fs from 'fs';
 import { findRunningAppHost, getCommandInvocationCount, getResources, getTreeAppHostLabel, isSamePath, waitForCommandOutcome, waitForDashboardUrl, waitForExtensionState, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForResource, waitForRunningAppHost, waitForWorkspaceAppHost } from './helpers/assertions';
-import { assertClipboardMatchesLastExpectationForE2E, captureWorkspaceAppHostPathClipboardExpectationForE2E, executeE2eControlCommand, getCliWrapperInvocationCount, getCliWrapperInvocations, restoreClipboardSnapshotForE2E, restoreE2eCliPathForE2E, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setE2eCliPathForE2E, setTerminalCommandExecutionSuppressedForE2E, snapshotClipboardForE2E, stopAppHostIfRunning, stopPrimaryAppHostIfRunning, touchPrimaryAppHostProject, writeDelayedPsCliWrapper, writeGatedStreamingDiscoveryCliWrapper, writeStreamingDiscoveryCliWrapper, writeTrackedDelayedPsCliWrapper, writeTrackedStreamingDiscoveryCliWrapper } from './helpers/fixtures';
+import { assertClipboardMatchesLastExpectationForE2E, captureWorkspaceAppHostPathClipboardExpectationForE2E, executeE2eControlCommand, getCliWrapperInvocationCount, getCliWrapperInvocations, getPsFollowProcesses, getWorkspaceSettingsPath, isProcessAlive, reloadWorkspaceForE2E, restoreClipboardSnapshotForE2E, restoreE2eCliPathForE2E, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setE2eCliPathForE2E, setTerminalCommandExecutionSuppressedForE2E, snapshotClipboardForE2E, stopAppHostIfRunning, stopPrimaryAppHostIfRunning, touchPrimaryAppHostProject, writeGatedPsCliWrapper, writeGatedStreamingDiscoveryCliWrapper, writeStreamingDiscoveryCliWrapper, writeTrackedDelayedPsCliWrapper, writeTrackedStreamingDiscoveryCliWrapper, writeWorkspaceSetting } from './helpers/fixtures';
 import { getPrimaryAppHostProjectPath } from './helpers/paths';
-import { cancelActiveInput, cancelAppHostsSectionTextTransition, clickTreeItem, executeCommandFromPalette, getNotificationMessages, openAspireView, startAppHostsSectionTextTransition, waitForAppHostsSectionTextAfterTransition, waitForChildTreeItem, waitForNotificationMessage, waitForTreeItem, waitForWorkbenchText } from './helpers/vscode';
+import { cancelActiveInput, cancelAppHostsSectionTextTransition, clickTreeItem, executeCommandFromPalette, getNotificationMessages, observeVisibleSideBarSectionTitles, openAspireView, startAppHostsSectionTextTransition, waitForAppHostsSectionTextAfterTransition, waitForAppHostsTreePath, waitForChildTreeItem, waitForNotificationMessage, waitForTreeItem, waitForTreeItemDescription, waitForWorkbenchText } from './helpers/vscode';
+
+const cliStartupTimeoutMs = getCliStartupTimeoutMs();
 
 suite('Aspire AppHost tree E2E', function () {
-    this.timeout(240000);
+    // The first real AppHost launch pays for an isolated CLI bundle extraction and cold build.
+    // Leave the CLI's full startup budget plus another budget for the scenario and its cleanup.
+    this.timeout(cliStartupTimeoutMs * 2);
 
     teardown(async () => {
         await runE2eTeardown([
@@ -24,14 +29,129 @@ suite('Aspire AppHost tree E2E', function () {
 
     test('discovers the workspace AppHost and renders it in the Aspire view', async () => {
         await openAspireView();
-        await waitForRepositoryIdle();
-        const stateFile = await waitForWorkspaceAppHost();
+        await waitForWorkspaceAppHost();
+        const stateFile = await waitForRepositoryIdle();
         const label = getTreeAppHostLabel(stateFile.state);
-        const section = await openAspireView();
+        await openAspireView();
 
-        const item = await waitForTreeItem(section, label);
-        assert.strictEqual(await item.getLabel(), label);
+        assert.deepStrictEqual(await waitForAppHostsTreePath([label, 'Run AppHost']), [label, 'Run AppHost']);
         assert.ok(stateFile.state.workspaceAppHostCandidatePaths.length >= 1);
+    });
+
+    test('does not activate the Aspire view when the window reloads with Explorer selected', async () => {
+        await openAspireView();
+        await waitForRepositoryIdle();
+        await waitForWorkspaceAppHost();
+        await executeE2eControlCommand({ name: 'openFile', filePath: getPrimaryAppHostProjectPath() });
+
+        try {
+            await executeCommandFromPalette('workbench.view.explorer');
+            await reloadWorkspaceForE2E();
+            await waitForRepositoryIdle();
+            await waitForWorkspaceAppHost();
+
+            const visibleSectionTitles = await observeVisibleSideBarSectionTitles();
+            assert.ok(
+                !visibleSectionTitles.includes('AppHosts'),
+                `Aspire stole sidebar focus after reload. Visible sections: ${visibleSectionTitles.join(', ')}`);
+        } finally {
+            await executeE2eControlCommand({ name: 'closeAllEditors' });
+        }
+    });
+
+    test('owns at most one ps follower through view, editor, settings, and reload transitions', async () => {
+        await openAspireView();
+        await waitForWorkspaceAppHost();
+        await waitForRepositoryIdle();
+
+        const pollingSetting = 'aspire.appHostsPollingInterval';
+        const settings: unknown = JSON.parse(fs.readFileSync(getWorkspaceSettingsPath(), 'utf8'));
+        assert.ok(settings !== null && typeof settings === 'object' && !Array.isArray(settings));
+        const previousPollingInterval = pollingSetting in settings ? settings[pollingSetting] : undefined;
+        let observationFailure: unknown;
+        const liveFollowers = () => {
+            const live = getPsFollowProcesses()
+                .filter(record => !record.exited && isProcessAlive(record.pid));
+            assert.ok(live.length <= 1, `Overlapping owned ps followers: ${JSON.stringify(live)}`);
+            return live;
+        };
+        const observe = setInterval(() => {
+            try {
+                liveFollowers();
+            } catch (error) {
+                // Timers cannot reject the awaited UI operation. Preserve and surface the first
+                // failure at its next boundary instead of losing a short-lived overlap.
+                observationFailure ??= error;
+            }
+        }, 10);
+        const waitForFollowers = async (count: number, minimumInvocations = 0) => {
+            await waitForExtensionState(() => {
+                if (observationFailure !== undefined) {
+                    throw observationFailure;
+                }
+                const live = liveFollowers();
+                return live.length === count
+                    && getPsFollowProcesses().length >= minimumInvocations;
+            }, `${count} owned ps follower(s) after at least ${minimumInvocations} starts`, 30_000);
+        };
+
+        try {
+            await executeE2eControlCommand({ name: 'closeAllEditors' });
+            await openAspireView();
+            await waitForRepositoryIdle();
+            writeWorkspaceSetting(pollingSetting, 1000);
+            await waitForFollowers(1);
+
+            await executeCommandFromPalette('workbench.view.explorer');
+            await waitForFollowers(0);
+            await openAspireView();
+            await waitForFollowers(1);
+            await executeE2eControlCommand({ name: 'switchToGlobalView' });
+            await waitForFollowers(1);
+            await executeE2eControlCommand({ name: 'switchToWorkspaceView' });
+            await waitForFollowers(1);
+
+            await executeE2eControlCommand({ name: 'openFile', filePath: getPrimaryAppHostProjectPath() });
+            await executeE2eControlCommand({ name: 'openFile', filePath: getWorkspaceSettingsPath() });
+            await executeCommandFromPalette('workbench.view.explorer');
+            await waitForFollowers(0);
+            await executeE2eControlCommand({ name: 'closeAllEditors' });
+            await waitForFollowers(0);
+
+            await openAspireView();
+            await waitForFollowers(1);
+            const startsBeforeSettingsChange = getPsFollowProcesses().length;
+            writeWorkspaceSetting(pollingSetting, 1100);
+            await waitForFollowers(1, startsBeforeSettingsChange + 1);
+
+            await executeE2eControlCommand({ name: 'openFile', filePath: getPrimaryAppHostProjectPath() });
+            await executeCommandFromPalette('workbench.view.explorer');
+            const previousOwner = liveFollowers();
+            const previousStarts = getPsFollowProcesses().length;
+            await reloadWorkspaceForE2E();
+            await waitForExtensionState(() => previousOwner.every(previous =>
+                getPsFollowProcesses().some(current => current.id === previous.id && current.exited)),
+            'previous extension-host ps followers to exit', 30_000);
+            await waitForFollowers(1, previousStarts + 1);
+            await executeE2eControlCommand({ name: 'closeAllEditors' });
+            await waitForFollowers(0);
+            assert.strictEqual(observationFailure, undefined);
+        } finally {
+            try {
+                await runE2eTeardown([
+                    () => executeE2eControlCommand({ name: 'closeAllEditors' }),
+                    () => executeCommandFromPalette('workbench.view.explorer'),
+                    async () => { writeWorkspaceSetting(pollingSetting, previousPollingInterval); },
+                    async () => {
+                        await reloadWorkspaceForE2E();
+                        await waitForWorkspaceAppHost();
+                        await waitForFollowers(0);
+                    },
+                ], 'ps follower lifecycle cleanup failed.');
+            } finally {
+                clearInterval(observe);
+            }
+        }
     });
 
     test('shows streamed candidates while AppHost discovery is still running', async () => {
@@ -48,9 +168,9 @@ suite('Aspire AppHost tree E2E', function () {
             'streamed AppHost candidate before discovery completes',
             30000);
         assert.strictEqual(partialState.state.isWorkspaceAppHostDiscoveryComplete, false);
-        const partialSection = await openAspireView();
-        const partialItem = await waitForTreeItem(partialSection, getTreeAppHostLabel(partialState.state));
-        assert.strictEqual(await partialItem.getLabel(), getTreeAppHostLabel(partialState.state));
+        await openAspireView();
+        const partialLabel = getTreeAppHostLabel(partialState.state);
+        assert.deepStrictEqual(await waitForAppHostsTreePath([partialLabel]), [partialLabel]);
         await waitForWorkbenchText('Discovering AppHosts...');
         // Discovery progress must render in the status bar. A progress notification stays on screen
         // for as long as discovery runs and cannot be dismissed
@@ -153,19 +273,26 @@ suite('Aspire AppHost tree E2E', function () {
             file => file.state.viewMode === 'global' && !file.state.isRepositoryLoading,
             'global AppHost view to become idle');
 
-        await setE2eCliPathForE2E(writeDelayedPsCliWrapper(3_000));
-        await executeE2eControlCommand({ name: 'globalRefreshAppHosts' }, { waitFor: 'started' });
-        await waitForExtensionState(
-            file => file.state.viewMode === 'global' && file.state.isRepositoryLoading,
-            'global AppHost refresh loading state',
-            30000);
+        const psGate = writeGatedPsCliWrapper();
+        try {
+            await setE2eCliPathForE2E(psGate.cliPath);
+            await executeE2eControlCommand({ name: 'globalRefreshAppHosts' }, { waitFor: 'started' });
+            await waitForExtensionState(
+                file => file.state.viewMode === 'global' && file.state.isRepositoryLoading,
+                'global AppHost refresh loading state',
+                30000);
 
-        await executeE2eControlCommand({ name: 'switchToWorkspaceView' });
-        const workspaceLoadingState = await waitForExtensionState(
-            file => file.state.viewMode === 'workspace' && file.state.isRepositoryLoading,
-            'workspace view to retain the shared ps refresh loading state',
-            30000);
-        assert.strictEqual(workspaceLoadingState.state.isRepositoryLoading, true);
+            await executeE2eControlCommand({ name: 'switchToWorkspaceView' });
+            const workspaceLoadingState = await waitForExtensionState(
+                file => file.state.viewMode === 'workspace' && file.state.isRepositoryLoading,
+                'workspace view to retain the shared ps refresh loading state',
+                30000);
+            assert.strictEqual(workspaceLoadingState.state.isRepositoryLoading, true);
+        }
+        finally {
+            // The shared ps refresh stays in flight until this release, however slow the view switch is.
+            psGate.releasePsSnapshot();
+        }
 
         const freshWorkspaceState = await waitForExtensionState(
             file => file.state.viewMode === 'workspace' && !file.state.isRepositoryLoading,
@@ -185,14 +312,16 @@ suite('Aspire AppHost tree E2E', function () {
         await openAspireView();
         await waitForRepositoryIdle();
         const discovered = await waitForWorkspaceAppHost();
+        const appHostPath = discovered.state.workspaceAppHostPath ?? getPrimaryAppHostProjectPath();
         const appHostLabel = getTreeAppHostLabel(discovered.state);
-        const section = await openAspireView();
+        await openAspireView();
 
-        const idleItem = await waitForTreeItem(section, appHostLabel);
-        await idleItem.expand();
-        await clickTreeItem(section, 'Run AppHost');
-        await waitForCommandOutcome('aspire-vscode.runAppHost', 'success');
-        const running = await waitForRunningAppHost();
+        const runInvocationBefore = getCommandInvocationCount('aspire-vscode.runAppHost');
+        await executeE2eControlCommand({ name: 'runAppHost', appHostPath }, { waitFor: 'started' });
+        await waitForCommandOutcome('aspire-vscode.runAppHost', 'success', 60000, runInvocationBefore);
+        // Match the E2E runner's CLI startup budget so CI contention cannot make the test abandon a
+        // launch that the CLI still legitimately considers in progress.
+        const running = await waitForRunningAppHost(cliStartupTimeoutMs);
         const runningAppHost = findRunningAppHost(running.state);
         assert.ok(runningAppHost);
         const authoritativeSnapshotAppHostPid = runningAppHost.appHostPid + 1_000_000;
@@ -256,6 +385,10 @@ suite('Aspire AppHost tree E2E', function () {
         const idleItem = await waitForTreeItem(section, appHostLabel);
         await idleItem.expand();
 
+        for (const actionLabel of ['Deploy AppHost', 'Publish AppHost', 'Run pipeline step', 'Debug pipeline step']) {
+            assert.ok(await waitForChildTreeItem(idleItem, actionLabel), `Expected '${actionLabel}' under the idle AppHost.`);
+        }
+
         // Labels below match loc/strings.ts (appHostPathLabel / appHostPathCopiedToClipboard); the
         // E2E host runs in English so the literals are stable, mirroring other tree-item labels
         // asserted in this suite (e.g. 'Run AppHost').
@@ -294,6 +427,16 @@ suite('Aspire AppHost tree E2E', function () {
         const workerItem = await waitForTreeItem(section, 'e2e-worker');
         assert.ok(workerItem);
         assert.ok(getResources(workerState.state).some(resource => (resource.displayName ?? resource.name) === 'e2e-worker'));
+
+        // The resource row ends with the CLI-reported source. For a project resource that is the
+        // project file name, so the row identifies what the resource actually runs without
+        // rendering an absolute path. Waiting on the description also pins the segment order
+        // (type, state, then source) rather than just the presence of the file name.
+        const workerDescription = await waitForTreeItemDescription(
+            section,
+            'e2e-worker',
+            'Project · Running · AspireE2E.Worker.csproj');
+        assert.strictEqual(await workerDescription.getDescription(), 'Project · Running · AspireE2E.Worker.csproj');
 
         await executeE2eControlCommand({ name: 'executeResourceCommand', resourceName: 'e2e-worker' }, { waitFor: 'started' });
         await cancelActiveInput();
@@ -377,5 +520,15 @@ suite('Aspire AppHost tree E2E', function () {
         await openAspireView();
         await waitForNoRunningAppHost(120000, appHostPath);
     });
-
 });
+
+function getCliStartupTimeoutMs(): number {
+    // run-e2e.js forwards the effective CLI timeout as a positive integer number of seconds,
+    // for example ASPIRE_CLI_START_TIMEOUT=300.
+    const configuredSeconds = Number(process.env.ASPIRE_CLI_START_TIMEOUT);
+    if (!Number.isInteger(configuredSeconds) || configuredSeconds <= 0) {
+        throw new Error(`ASPIRE_CLI_START_TIMEOUT must be a positive integer for AppHost tree E2E tests. Got '${process.env.ASPIRE_CLI_START_TIMEOUT ?? '<unset>'}'.`);
+    }
+
+    return configuredSeconds * 1000;
+}

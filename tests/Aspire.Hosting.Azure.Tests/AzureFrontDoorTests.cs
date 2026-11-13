@@ -1,8 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource Azure publishing/provisioning contracts with synthetic metadata.
 #pragma warning disable ASPIRECOMPUTE002
-#pragma warning disable ASPIREPROBES001
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Utils;
@@ -10,12 +10,12 @@ using static Aspire.Hosting.Utils.AzureManifestUtils;
 
 namespace Aspire.Hosting.Azure.Tests;
 
-public class AzureFrontDoorTests
+public class AzureFrontDoorTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public void AddAzureFrontDoorCreatesResource()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var frontDoor = builder.AddAzureFrontDoor("frontdoor");
 
@@ -27,7 +27,7 @@ public class AzureFrontDoorTests
     [Fact]
     public void WithOriginAddsAnnotation()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var api = builder.AddProject<Project>("api", launchProfileName: null)
             .WithHttpsEndpoint();
@@ -42,7 +42,7 @@ public class AzureFrontDoorTests
     [Fact]
     public void WithOriginSupportsMultipleOrigins()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var api = builder.AddProject<Project>("api", launchProfileName: null)
             .WithHttpsEndpoint();
@@ -60,7 +60,7 @@ public class AzureFrontDoorTests
     [Fact]
     public async Task AddAzureFrontDoorWithSingleOriginGeneratesBicep()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         builder.AddAzureContainerAppEnvironment("env");
 
@@ -87,7 +87,7 @@ public class AzureFrontDoorTests
     [Fact]
     public async Task AddAzureFrontDoorWithMultipleOriginsGeneratesBicep()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         builder.AddAzureContainerAppEnvironment("env");
 
@@ -114,7 +114,7 @@ public class AzureFrontDoorTests
     [Fact]
     public async Task AddAzureFrontDoorThrowsWhenOriginHasNoExternalEndpoints()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         builder.AddAzureContainerAppEnvironment("env");
 
@@ -133,7 +133,7 @@ public class AzureFrontDoorTests
     [Fact]
     public void EndpointUrlOutputReferenceIsAvailable()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var frontDoor = builder.AddAzureFrontDoor("frontdoor");
 
@@ -142,10 +142,25 @@ public class AzureFrontDoorTests
         Assert.Equal("api_endpointUrl", endpointUrl.Name);
     }
 
+    [Theory]
+    [InlineData("api", "api_endpointId")]
+    [InlineData("web", "web_endpointId")]
+    [InlineData("my-api", "my_api_endpointId")]
+    public void EndpointIdOutputReferenceIsAvailable(string originResourceName, string outputName)
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
+
+        var frontDoor = builder.AddAzureFrontDoor("frontdoor");
+
+        var endpointId = frontDoor.Resource.GetEndpointId(originResourceName);
+        Assert.Equal(outputName, endpointId.Name);
+        Assert.Equal($"{{frontdoor.outputs.{outputName}}}", endpointId.ValueExpression);
+    }
+
     [Fact]
     public void AddAzureFrontDoorThrowsOnNullName()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         Assert.Throws<ArgumentNullException>(() => builder.AddAzureFrontDoor(null!));
     }
@@ -153,7 +168,7 @@ public class AzureFrontDoorTests
     [Fact]
     public void WithOriginThrowsOnNullResource()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
         var frontDoor = builder.AddAzureFrontDoor("frontdoor");
 
         Assert.Throws<ArgumentNullException>(() => frontDoor.WithOrigin((IResourceBuilder<ProjectResource>)null!));
@@ -162,7 +177,7 @@ public class AzureFrontDoorTests
     [Fact]
     public async Task HealthProbePathUsesResourceProbeAnnotation()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         builder.AddAzureContainerAppEnvironment("env");
 
@@ -186,7 +201,7 @@ public class AzureFrontDoorTests
     [Fact]
     public async Task HealthProbePathDefaultsToSlashWhenNoProbeAnnotation()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         builder.AddAzureContainerAppEnvironment("env");
 
@@ -209,7 +224,7 @@ public class AzureFrontDoorTests
     [Fact]
     public async Task WithOriginSkipsNonHttpEndpoints()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         builder.AddAzureContainerAppEnvironment("env");
 
@@ -235,7 +250,7 @@ public class AzureFrontDoorTests
     [Fact]
     public void WithOriginThrowsOnDuplicateOrigin()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var api = builder.AddProject<Project>("api", launchProfileName: null)
             .WithHttpsEndpoint()
@@ -254,3 +269,4 @@ public class AzureFrontDoorTests
         public string ProjectPath => "project";
     }
 }
+#pragma warning restore CS0618

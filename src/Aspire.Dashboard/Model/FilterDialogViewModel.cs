@@ -9,6 +9,6 @@ public sealed class FilterDialogViewModel
 {
     public required FieldTelemetryFilter? Filter { get; init; }
     public required List<string> KnownKeys { get; init; }
-    public required List<string> PropertyKeys { get; init; }
-    public required Func<string, Dictionary<string, int>> GetFieldValues { get; init; }
+    public required Func<CancellationToken, Task<List<string>>> GetPropertyKeysAsync { get; init; }
+    public required Func<string, CancellationToken, Task<Dictionary<string, int>>> GetFieldValuesAsync { get; init; }
 }

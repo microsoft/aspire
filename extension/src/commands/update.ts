@@ -13,6 +13,11 @@ export async function updateCommand(
     await terminalProvider.sendAspireCommandToAspireTerminal('update', true, appHost.args, { target, cliPath });
 }
 
-export async function updateSelfCommand(terminalProvider: AspireTerminalProvider) {
-    await terminalProvider.sendAspireCommandToAspireTerminal('update --self', true, undefined, { target: windowCliPathTarget });
+export async function updateSelfCommand(
+    terminalProvider: AspireTerminalProvider,
+    target: CliPathResolutionTarget = windowCliPathTarget,
+    cliPath?: string,
+) {
+    const resolvedCliPath = cliPath ?? await terminalProvider.getAspireCliExecutablePath(target);
+    await terminalProvider.sendAspireCommandToAspireTerminal('update --self', true, undefined, { target, cliPath: resolvedCliPath });
 }

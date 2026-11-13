@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREPIPELINES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-
 using System.Text.Json;
 using Aspire.Components.Common.TestUtilities;
 using Aspire.Hosting.Pipelines;
@@ -117,7 +115,9 @@ public class ManifestGenerationTests(ITestOutputHelper testOutputHelper)
         var appBuilder = CreateBuilder(new DistributedApplicationOptions
         { Args = GetJsonManifestArgs(), DisableDashboard = true, AssemblyName = typeof(ManifestGenerationTests).Assembly.FullName });
         var manifestStore = new JsonDocumentManifestStore();
+#pragma warning disable CS0618 // Retain legacy ProjectResource manifest serialization compatibility.
         appBuilder.AddProject<Projects.ServiceA>("servicea", launchProfileName: null);
+#pragma warning restore CS0618
 
         appBuilder.Services.AddSingleton(manifestStore);
         appBuilder.Pipeline.AddJsonDocumentManifestPublishing();
@@ -412,7 +412,8 @@ public class ManifestGenerationTests(ITestOutputHelper testOutputHelper)
                   "entrypoint": "/bin/sh",
                   "args": [
                     "-c",
-                    "redis-server --requirepass $REDIS_PASSWORD"
+                    "redis-server --requirepass $REDIS_PASSWORD \u0022$@\u0022",
+                    "redis-server"
                   ],
                   "env": {
                     "REDIS_PASSWORD": "{redis-password.value}"

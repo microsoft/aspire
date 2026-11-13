@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.CommandLine;
-using System.Diagnostics;
 using System.Globalization;
 using System.Net.Sockets;
 using Aspire.Cli.Backchannel;
@@ -24,8 +23,7 @@ namespace Aspire.Cli.Commands;
 /// <item>Verifies the AppHost advertises the <c>terminals.v1</c> capability.</item>
 /// <item>Looks up the resource (by Name or DisplayName) and asks the AppHost for the
 ///   list of terminal replicas via <see cref="IAppHostAuxiliaryBackchannel.GetTerminalInfoAsync"/>.</item>
-/// <item>Picks a replica (auto if 1; <c>--replica N</c> if specified; interactive prompt
-///   otherwise; errors in non-interactive contexts when no <c>--replica</c> is given).</item>
+/// <item>Resolves a resource instance, retaining hidden numeric replica selection for older callers.</item>
 /// <item>Hands the local console off to <see cref="TerminalViewerApp"/>, which owns the
 ///   embedded HMP v1 wire-up and the role-aware InfoBar TUI.</item>
 /// </list>
@@ -36,19 +34,21 @@ internal sealed class TerminalAttachCommand : BaseCommand
 
     private readonly IInteractionService _interactionService;
     private readonly AppHostConnectionResolver _connectionResolver;
+    private readonly TerminalResourceResolver _terminalResolver;
     private readonly ILogger<TerminalAttachCommand> _logger;
 
     private static readonly Argument<string> s_resourceArgument = new("resource")
     {
-        Description = "The name of the resource to attach a terminal to."
+        Description = TerminalCommandStrings.ResourceArgumentDescription
     };
 
     private static readonly OptionWithLegacy<FileInfo?> s_appHostOption =
         new("--apphost", "--project", SharedCommandStrings.AppHostOptionDescription);
 
+    // Older VS Code extensions still pass a numeric replica index.
     private static readonly Option<int?> s_replicaOption = new("--replica", "-r")
     {
-        Description = "The 0-based replica index to attach to. Required when the resource has more than one replica and the CLI is not running interactively."
+        Hidden = true
     };
 
     private static readonly Option<bool> s_viewerOption = new("--viewer")
@@ -58,6 +58,7 @@ internal sealed class TerminalAttachCommand : BaseCommand
 
     public TerminalAttachCommand(
         AppHostConnectionResolver connectionResolver,
+        TerminalResourceResolver terminalResolver,
         ILogger<TerminalAttachCommand> logger,
         CommonCommandServices services)
         : base("attach", "Attach the local terminal to an interactive PTY session for a resource.", services)
@@ -65,6 +66,7 @@ internal sealed class TerminalAttachCommand : BaseCommand
         _interactionService = services.InteractionService;
         _logger = logger;
         _connectionResolver = connectionResolver;
+        _terminalResolver = terminalResolver;
 
         Arguments.Add(s_resourceArgument);
         Options.Add(s_appHostOption);
@@ -78,12 +80,11 @@ internal sealed class TerminalAttachCommand : BaseCommand
 
         var resourceName = parseResult.GetValue(s_resourceArgument)!;
         var passedAppHostProjectFile = parseResult.GetValue(s_appHostOption);
-        var requestedReplica = parseResult.GetValue(s_replicaOption);
         var viewerOnly = parseResult.GetValue(s_viewerOption);
 
         if (string.IsNullOrWhiteSpace(resourceName))
         {
-            _interactionService.DisplayError("A resource name is required.");
+            _interactionService.DisplayError(TerminalCommandStrings.ResourceRequired);
             return CommandResult.Failure(CliExitCodes.InvalidCommand);
         }
 
@@ -108,47 +109,16 @@ internal sealed class TerminalAttachCommand : BaseCommand
             return CommandResult.Failure(CliExitCodes.AppHostIncompatible);
         }
 
-        var snapshots = await _interactionService.ShowStatusAsync(
-            "Looking up resource...",
-            async () => await connection.GetResourceSnapshotsAsync(includeHidden: true, cancellationToken).ConfigureAwait(false));
-
-        var matches = ResourceSnapshotMapper.WhereMatchesResourceName(snapshots, resourceName).ToList();
-        if (matches.Count == 0)
+        var (canonicalName, replica) = await _terminalResolver.ResolveAsync(
+            connection, resourceName, parseResult.GetValue(s_replicaOption), cancellationToken).ConfigureAwait(false);
+        if (replica is null)
         {
-            _interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture,
-                "Resource '{0}' was not found.", resourceName));
             return CommandResult.Failure(CliExitCodes.InvalidCommand);
         }
 
-        // For replicated resources, all snapshots share the same DisplayName which
-        // matches the parent resource name (the one carrying the TerminalAnnotation).
-        // Fall back to Name for non-replicated resources where DisplayName is null/equal.
-        var canonicalName = !string.IsNullOrEmpty(matches[0].DisplayName)
-            ? matches[0].DisplayName!
-            : matches[0].Name;
-
-        var info = await _interactionService.ShowStatusAsync(
-            "Discovering terminal sessions...",
-            async () => await connection.GetTerminalInfoAsync(canonicalName, cancellationToken).ConfigureAwait(false));
-
-        if (!info.IsAvailable || info.Replicas is null || info.Replicas.Length == 0)
+        if (!replica.IsAlive)
         {
-            _interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture,
-                "Resource '{0}' is not available for terminal attachment. Make sure the resource was registered with '.WithTerminal()' and that the terminal host has started.",
-                canonicalName));
-            return CommandResult.Failure(CliExitCodes.InvalidCommand);
-        }
-
-        var (replica, selectionError) = await SelectReplicaAsync(info.Replicas, requestedReplica, canonicalName, cancellationToken).ConfigureAwait(false);
-        if (selectionError != CliExitCodes.Success)
-        {
-            return CommandResult.Failure(selectionError);
-        }
-        Debug.Assert(replica is not null, "SelectReplicaAsync returns a non-null replica when error == Success.");
-
-        if (!replica!.IsAlive)
-        {
-            _interactionService.DisplayMessage(KnownEmojis.Warning,
+            _interactionService.DisplayMessage(KnownEmojis.PoliceCarLight,
                 string.Format(CultureInfo.CurrentCulture,
                     "Replica {0} of '{1}' has exited (code {2}). Attaching to the historical buffer; no live input will be sent.",
                     replica.ReplicaIndex,
@@ -205,51 +175,5 @@ internal sealed class TerminalAttachCommand : BaseCommand
                     canonicalName, replica.ReplicaIndex));
             return CommandResult.Success();
         }
-    }
-
-    private async Task<(TerminalReplicaInfo? Replica, int ErrorExitCode)> SelectReplicaAsync(
-        TerminalReplicaInfo[] replicas,
-        int? requestedReplica,
-        string canonicalName,
-        CancellationToken cancellationToken)
-    {
-        if (requestedReplica.HasValue)
-        {
-            var match = Array.Find(replicas, r => r.ReplicaIndex == requestedReplica.Value);
-            if (match is null)
-            {
-                _interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture,
-                    "Replica index {0} is not available for resource '{1}'. Available indices: {2}.",
-                    requestedReplica.Value,
-                    canonicalName,
-                    string.Join(", ", replicas.Select(r => r.ReplicaIndex.ToString(CultureInfo.InvariantCulture)))));
-                return (null, CliExitCodes.InvalidCommand);
-            }
-            return (match, CliExitCodes.Success);
-        }
-
-        if (replicas.Length == 1)
-        {
-            return (replicas[0], CliExitCodes.Success);
-        }
-
-        if (Console.IsInputRedirected || Console.IsOutputRedirected)
-        {
-            _interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture,
-                "Resource '{0}' has {1} replicas. Pass --replica <index> to choose one in non-interactive mode.",
-                canonicalName,
-                replicas.Length));
-            return (null, CliExitCodes.InvalidCommand);
-        }
-
-        var picked = await _interactionService.PromptForSelectionAsync(
-            string.Format(CultureInfo.CurrentCulture, "Select a replica of '{0}' to attach to:", canonicalName),
-            replicas,
-            r => r.IsAlive
-                ? string.Format(CultureInfo.CurrentCulture, "{0} (running)", r.Label)
-                : string.Format(CultureInfo.CurrentCulture, "{0} (exited code={1})", r.Label, r.ExitCode?.ToString(CultureInfo.InvariantCulture) ?? "unknown"),
-            cancellationToken: cancellationToken).ConfigureAwait(false);
-
-        return (picked, CliExitCodes.Success);
     }
 }

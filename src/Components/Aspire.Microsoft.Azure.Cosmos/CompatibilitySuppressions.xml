@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- https://learn.microsoft.com/dotnet/fundamentals/package-validation/diagnostic-ids -->
+<Suppressions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <!-- Intentional major-release break: client-options callbacks now receive IServiceProvider. -->
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:Microsoft.Extensions.Hosting.AspireMicrosoftAzureCosmosExtensions.AddAzureCosmosClient(Microsoft.Extensions.Hosting.IHostApplicationBuilder,System.String,System.Action{Aspire.Microsoft.Azure.Cosmos.MicrosoftAzureCosmosSettings},System.Action{Microsoft.Azure.Cosmos.CosmosClientOptions})</Target>
+    <Left>lib/net10.0/Aspire.Microsoft.Azure.Cosmos.dll</Left>
+    <Right>lib/net10.0/Aspire.Microsoft.Azure.Cosmos.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:Microsoft.Extensions.Hosting.AspireMicrosoftAzureCosmosExtensions.AddAzureCosmosContainer(Microsoft.Extensions.Hosting.IHostApplicationBuilder,System.String,System.Action{Aspire.Microsoft.Azure.Cosmos.MicrosoftAzureCosmosSettings},System.Action{Microsoft.Azure.Cosmos.CosmosClientOptions})</Target>
+    <Left>lib/net10.0/Aspire.Microsoft.Azure.Cosmos.dll</Left>
+    <Right>lib/net10.0/Aspire.Microsoft.Azure.Cosmos.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:Microsoft.Extensions.Hosting.AspireMicrosoftAzureCosmosExtensions.AddAzureCosmosDatabase(Microsoft.Extensions.Hosting.IHostApplicationBuilder,System.String,System.Action{Aspire.Microsoft.Azure.Cosmos.MicrosoftAzureCosmosSettings},System.Action{Microsoft.Azure.Cosmos.CosmosClientOptions})</Target>
+    <Left>lib/net10.0/Aspire.Microsoft.Azure.Cosmos.dll</Left>
+    <Right>lib/net10.0/Aspire.Microsoft.Azure.Cosmos.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:Microsoft.Extensions.Hosting.AspireMicrosoftAzureCosmosExtensions.AddKeyedAzureCosmosClient(Microsoft.Extensions.Hosting.IHostApplicationBuilder,System.String,System.Action{Aspire.Microsoft.Azure.Cosmos.MicrosoftAzureCosmosSettings},System.Action{Microsoft.Azure.Cosmos.CosmosClientOptions})</Target>
+    <Left>lib/net10.0/Aspire.Microsoft.Azure.Cosmos.dll</Left>
+    <Right>lib/net10.0/Aspire.Microsoft.Azure.Cosmos.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:Microsoft.Extensions.Hosting.AspireMicrosoftAzureCosmosExtensions.AddKeyedAzureCosmosContainer(Microsoft.Extensions.Hosting.IHostApplicationBuilder,System.String,System.Action{Aspire.Microsoft.Azure.Cosmos.MicrosoftAzureCosmosSettings},System.Action{Microsoft.Azure.Cosmos.CosmosClientOptions})</Target>
+    <Left>lib/net10.0/Aspire.Microsoft.Azure.Cosmos.dll</Left>
+    <Right>lib/net10.0/Aspire.Microsoft.Azure.Cosmos.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:Microsoft.Extensions.Hosting.AspireMicrosoftAzureCosmosExtensions.AddKeyedAzureCosmosDatabase(Microsoft.Extensions.Hosting.IHostApplicationBuilder,System.String,System.Action{Aspire.Microsoft.Azure.Cosmos.MicrosoftAzureCosmosSettings},System.Action{Microsoft.Azure.Cosmos.CosmosClientOptions})</Target>
+    <Left>lib/net10.0/Aspire.Microsoft.Azure.Cosmos.dll</Left>
+    <Right>lib/net10.0/Aspire.Microsoft.Azure.Cosmos.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
+  </Suppression>
+</Suppressions>

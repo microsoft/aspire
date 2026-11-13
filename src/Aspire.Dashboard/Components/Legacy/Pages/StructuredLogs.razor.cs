@@ -1,0 +1,612 @@
+﻿// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+
+using System.Globalization;
+using Aspire.Dashboard.Components.Controls.Grid;
+using Aspire.Dashboard.Components.Dialogs;
+using Aspire.Dashboard.Components.Layout;
+using Aspire.Dashboard.Configuration;
+using Aspire.Dashboard.Extensions;
+using Aspire.Dashboard.Model;
+using Aspire.Dashboard.Model.GenAI;
+using Aspire.Dashboard.Model.Otlp;
+using Aspire.Dashboard.Otlp.Model;
+using Aspire.Dashboard.Otlp.Storage;
+using Aspire.Dashboard.Resources;
+using Aspire.Dashboard.Telemetry;
+using Aspire.Dashboard.Utils;
+using Microsoft.AspNetCore.Components;
+using Microsoft.Extensions.Options;
+using Microsoft.FluentUI.AspNetCore.Components;
+using Microsoft.JSInterop;
+
+namespace Aspire.Dashboard.Components.Legacy.Pages;
+
+public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionAndUrlState<StructuredLogs.StructuredLogsPageViewModel, StructuredLogs.StructuredLogsPageState>
+{
+    private static readonly IEqualityComparer<LogSummary> s_logSummaryComparer = EqualityComparer<LogSummary>.Create(
+        static (x, y) => ReferenceEquals(x, y) || (x is not null && y is not null && x.InternalId == y.InternalId),
+        static item => item.InternalId.GetHashCode());
+
+    private const string ScrollContainerId = "structuredLogsScrollContainer";
+    private const string ResourceColumn = nameof(ResourceColumn);
+    private const string LogLevelColumn = nameof(LogLevelColumn);
+    private const string TimestampColumn = nameof(TimestampColumn);
+    private const string MessageColumn = nameof(MessageColumn);
+    private const string TraceColumn = nameof(TraceColumn);
+    private const string ActionsColumn = nameof(ActionsColumn);
+
+    private SelectViewModel<ResourceTypeDetails> _allResource = default!;
+
+    private TotalItemsFooter _totalItemsFooter = default!;
+    private int _totalItemsCount;
+    private List<OtlpResource> _resources = default!;
+    private List<SelectViewModel<ResourceTypeDetails>> _resourceViewModels = default!;
+    private List<SelectViewModel<LogLevel?>> _logLevels = default!;
+    private readonly CancellationTokenSource _cts = new();
+    private Subscription? _resourcesSubscription;
+    private Subscription? _logsSubscription;
+    private int? _displayedItemCount;
+    private string? _elementIdBeforeDetailsViewOpened;
+    private string? _pendingFocusElementId;
+    private AspirePageContentLayout? _contentLayout;
+    private string _filter = string.Empty;
+    private AspireFluentDataGrid<LogSummary>? _dataGrid;
+    private GridColumnManager _manager = null!;
+    private IList<GridColumn> _gridColumns = null!;
+
+    public string BasePath => DashboardUrls.StructuredLogsBasePath;
+    public string SessionStorageKey => BrowserStorageKeys.StructuredLogsPageState;
+    public StructuredLogsPageViewModel PageViewModel { get; set; } = null!;
+
+    [Inject]
+    public required DashboardDataSource DataSource { get; init; }
+
+    public ITelemetryRepository TelemetryRepository => DataSource.TelemetryRepository;
+
+    [Inject]
+    public required ITelemetryRepositoryWriter TelemetryRepositoryWriter { get; init; }
+
+    [Inject]
+    public required StructuredLogsViewModel ViewModel { get; init; }
+
+    [Inject]
+    public required DashboardDialogService DialogService { get; init; }
+
+    [Inject]
+    public required ISessionStorage SessionStorage { get; init; }
+
+    [Inject]
+    public required NavigationManager NavigationManager { get; init; }
+
+    [Inject]
+    public required BrowserTimeProvider TimeProvider { get; init; }
+
+    [Inject]
+    public required ILogger<StructuredLogs> Logger { get; init; }
+
+    [Inject]
+    public required ITelemetryErrorRecorder ErrorRecorder { get; init; }
+
+    [Inject]
+    public required IOptions<DashboardOptions> DashboardOptions { get; init; }
+
+    [Inject]
+    public required DashboardMessageBarService MessageService { get; init; }
+
+    [Inject]
+    public required PauseManager PauseManager { get; init; }
+
+    [Inject]
+    public required ComponentTelemetryContextProvider TelemetryContextProvider { get; init; }
+
+    [CascadingParameter]
+    public required ViewportInformation ViewportInformation { get; set; }
+
+    [Parameter]
+    public string? ResourceName { get; set; }
+
+    [Parameter]
+    [SupplyParameterFromQuery]
+    public string? TraceId { get; set; }
+
+    [Parameter]
+    [SupplyParameterFromQuery]
+    public string? SpanId { get; set; }
+
+    [Parameter]
+    [SupplyParameterFromQuery(Name = "logLevel")]
+    public string? LogLevelText { get; set; }
+
+    [Parameter]
+    [SupplyParameterFromQuery(Name = "filters")]
+    public string? SerializedFilters { get; set; }
+
+    [Parameter]
+    [SupplyParameterFromQuery]
+    public long? LogEntryId { get; set; }
+
+    private async ValueTask<GridItemsProviderResult<LogSummary>> GetData(GridItemsProviderRequest<LogSummary> request)
+    {
+        ViewModel.StartIndex = request.StartIndex;
+        ViewModel.Count = request.Count is > 0 ? request.Count.Value : DashboardUIHelpers.DefaultDataGridResultCount;
+
+        var logs = await ViewModel.GetLogsAsync(request.CancellationToken);
+
+        if (!TelemetryRepository.IsReadOnly)
+        {
+            if (logs.IsFull && !TelemetryRepository.HasDisplayedMaxLogLimitMessage)
+            {
+                TelemetryRepository.MaxLogLimitMessage = await DashboardUIHelpers.DisplayMaxLimitMessageAsync(
+                    MessageService,
+                    Loc[nameof(Dashboard.Resources.StructuredLogs.MessageExceededLimitTitle)],
+                    string.Format(CultureInfo.InvariantCulture, Loc[nameof(Dashboard.Resources.StructuredLogs.MessageExceededLimitBody)], DashboardOptions.Value.TelemetryLimits.MaxLogCount),
+                    () => TelemetryRepository.MaxLogLimitMessage = null);
+
+                TelemetryRepository.HasDisplayedMaxLogLimitMessage = true;
+            }
+            else if (!logs.IsFull && TelemetryRepository.MaxLogLimitMessage is { } message)
+            {
+                // Telemetry could have been cleared from the dashboard. Automatically remove full message on data update.
+                await message.CloseAsync();
+            }
+        }
+
+        var virtualizedLogCount = DashboardUIHelpers.GetVirtualizedItemCount(logs.TotalItemCount);
+        _displayedItemCount = virtualizedLogCount < logs.TotalItemCount ? virtualizedLogCount : null;
+
+        // Updating the total item count as a field doesn't work because it isn't updated with the grid.
+        // The workaround is to explicitly update and refresh the control.
+        _totalItemsCount = logs.TotalItemCount;
+        _totalItemsFooter?.UpdateDisplayedCount(_totalItemsCount, _displayedItemCount);
+
+        TelemetryRepository.MarkViewedErrorLogs(ViewModel.ResourceKey);
+
+        return GridItemsProviderResult.From(logs.Items, virtualizedLogCount);
+    }
+
+    protected override void OnInitialized()
+    {
+        TelemetryContextProvider.Initialize(TelemetryContext);
+
+        _gridColumns = [
+            new GridColumn(Name: ResourceColumn, DesktopWidth: "2fr", MobileWidth: "1fr"),
+            new GridColumn(Name: LogLevelColumn, DesktopWidth: "1fr"),
+            new GridColumn(Name: TimestampColumn, DesktopWidth: "1.5fr"),
+            new GridColumn(Name: MessageColumn, DesktopWidth: "5fr", "2.5fr"),
+            new GridColumn(Name: TraceColumn, DesktopWidth: "1fr"),
+            new GridColumn(Name: ActionsColumn, DesktopWidth: "1fr", MobileWidth: "0.8fr")
+        ];
+
+        if (!string.IsNullOrEmpty(TraceId))
+        {
+            ViewModel.AddFilter(new FieldTelemetryFilter
+            {
+                Field = KnownStructuredLogFields.TraceIdField, Condition = FilterCondition.Equals, Value = TraceId
+            });
+        }
+        if (!string.IsNullOrEmpty(SpanId))
+        {
+            ViewModel.AddFilter(new FieldTelemetryFilter
+            {
+                Field = KnownStructuredLogFields.SpanIdField, Condition = FilterCondition.Equals, Value = SpanId
+            });
+        }
+
+        _allResource = new()
+        {
+            Id = null,
+            Name = ControlsStringsLoc[nameof(ControlsStrings.LabelAll)]
+        };
+
+        _logLevels =
+        [
+            new() { Id = null, Name = ControlsStringsLoc[nameof(ControlsStrings.LabelAll)] },
+            new() { Id = LogLevel.Trace, Name = "Trace" },
+            new() { Id = LogLevel.Debug, Name = "Debug" },
+            new() { Id = LogLevel.Information, Name = "Information" },
+            new() { Id = LogLevel.Warning, Name = "Warning" },
+            new() { Id = LogLevel.Error, Name = "Error" },
+            new() { Id = LogLevel.Critical, Name = "Critical" },
+        ];
+
+        PageViewModel = new StructuredLogsPageViewModel
+        {
+            SelectedLogLevel = _logLevels[0],
+            SelectedResource = _allResource
+        };
+
+        UpdateResources();
+        _resourcesSubscription = TelemetryRepository.OnNewResources(() => InvokeAsync(() =>
+        {
+            UpdateResources();
+            StateHasChanged();
+        }));
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (await this.InitializeViewModelAsync())
+        {
+            return;
+        }
+
+        UpdateSubscription();
+        UpdateTelemetryProperties();
+
+        if (LogEntryId is not null)
+        {
+            var logEntryId = TelemetryRepository.GetLog(LogEntryId.Value);
+            if (logEntryId != null)
+            {
+                await OnShowPropertiesAsync(logEntryId, focusElementId: null);
+            }
+
+            // Navigate to remove ?logEntryId=xxx in the URL. A small delay is required here, otherwise the page rendering breaks.
+            await Task.Delay(200, _cts.Token);
+
+            NavigationManager.NavigateTo(DashboardUrls.StructuredLogsUrl(), new NavigationOptions { ReplaceHistoryEntry = true });
+        }
+    }
+
+    private void UpdateResources()
+    {
+        _resources = TelemetryRepository.GetResources();
+        _resourceViewModels = ResourcesSelectHelpers.CreateResources(_resources);
+        _resourceViewModels.Insert(0, _allResource);
+    }
+
+    private Task HandleSelectedResourceChangedAsync()
+    {
+        return this.AfterViewModelChangedAsync(_contentLayout, waitToApplyMobileChange: true);
+    }
+
+    private async Task HandleSelectedLogLevelChangedAsync()
+    {
+        await ClearSelectedLogEntryIfExcludedAsync(_filter, ViewModel.Filters);
+
+        await this.AfterViewModelChangedAsync(_contentLayout, waitToApplyMobileChange: true);
+    }
+
+    private void UpdateSubscription()
+    {
+        // Subscribe to updates.
+        if (_logsSubscription is null || _logsSubscription.ResourceKey != PageViewModel.SelectedResource.Id?.GetResourceKey())
+        {
+            _logsSubscription?.Dispose();
+            _logsSubscription = TelemetryRepository.OnNewLogs(PageViewModel.SelectedResource.Id?.GetResourceKey(), SubscriptionType.Read, async () =>
+            {
+                ViewModel.ClearData();
+                await InvokeAsync(_dataGrid.SafeRefreshDataAsync);
+            });
+        }
+    }
+
+    private async Task OnShowPropertiesAsync(OtlpLogEntry entry, string? focusElementId)
+    {
+        _elementIdBeforeDetailsViewOpened = focusElementId;
+
+        if (PageViewModel.SelectedLogEntry?.LogEntry.InternalId == entry.InternalId)
+        {
+            await ClearSelectedLogEntryAsync();
+        }
+        else
+        {
+            var logEntryViewModel = new StructureLogsDetailsViewModel
+            {
+                LogEntry = entry
+            };
+
+            PageViewModel.SelectedLogEntry = logEntryViewModel;
+        }
+    }
+
+    private Task OnShowPropertiesAsync(LogSummary summary, string? focusElementId)
+    {
+        var entry = TelemetryRepository.GetLog(summary.InternalId);
+        return entry is null ? Task.CompletedTask : OnShowPropertiesAsync(entry, focusElementId);
+    }
+
+    private Task ClearSelectedLogEntryAsync(bool causedByUserAction = false)
+    {
+        PageViewModel.SelectedLogEntry = null;
+
+        if (_elementIdBeforeDetailsViewOpened is not null && causedByUserAction)
+        {
+            _pendingFocusElementId = _elementIdBeforeDetailsViewOpened;
+        }
+
+        _elementIdBeforeDetailsViewOpened = null;
+
+        return Task.CompletedTask;
+    }
+
+    private async Task OpenFilterAsync(FieldTelemetryFilter? entry)
+    {
+        if (_contentLayout is not null)
+        {
+            await _contentLayout.CloseMobileToolbarAsync();
+        }
+
+        var resourceKey = PageViewModel.SelectedResource.Id?.GetResourceKey();
+        await FilterHelpers.OpenFilterAsync(
+            entry,
+            DialogService,
+            DialogService.CreateDialogCallback(this, HandleFilterDialog),
+            getPropertyKeysAsync: cancellationToken => TelemetryRepository.GetLogPropertyKeysAsync(resourceKey, cancellationToken),
+            knownKeys: KnownStructuredLogFields.AllFields,
+            getFieldValuesAsync: TelemetryRepository.GetLogsFieldValuesAsync,
+            FilterLoc);
+    }
+
+    private async Task HandleFilterDialog(DialogResult result)
+    {
+        if (result.Value is FilterDialogResult filterResult && filterResult.Filter is FieldTelemetryFilter filter)
+        {
+            if (filterResult.Delete)
+            {
+                ViewModel.RemoveFilter(filter);
+            }
+            else if (filterResult.Add)
+            {
+                ViewModel.AddFilter(filter);
+            }
+            else if (filterResult.Enable)
+            {
+                filter.Enabled = true;
+            }
+            else if (filterResult.Disable)
+            {
+                filter.Enabled = false;
+            }
+        }
+
+        await ClearSelectedLogEntryIfExcludedAsync(_filter, ViewModel.Filters);
+
+        await this.AfterViewModelChangedAsync(_contentLayout, waitToApplyMobileChange: false);
+    }
+
+    private async Task HandleAfterFilterBindAsync()
+    {
+        ViewModel.FilterText = _filter;
+        await InvokeAsync(_dataGrid.SafeRefreshDataAsync);
+
+        await ClearSelectedLogEntryIfExcludedAsync(_filter, ViewModel.Filters);
+    }
+
+    internal async Task ClearSelectedLogEntryIfExcludedAsync(string textFilter, IReadOnlyList<FieldTelemetryFilter> fieldFilters)
+    {
+        if (PageViewModel.SelectedLogEntry is null)
+        {
+            return;
+        }
+
+        // An older filter query could finish after a newer query and clear the selection using stale filters.
+        // The query is constrained to one log and filter changes are user-driven, so this is unlikely and not
+        // worth the additional state and coordination required to guard against it.
+        var isExcluded = await PageViewModel.IsSelectedLogEntryExcludedByFiltersAsync(
+            TelemetryRepository,
+            textFilter,
+            fieldFilters,
+            _cts.Token);
+        if (isExcluded)
+        {
+            await ClearSelectedLogEntryAsync();
+        }
+    }
+
+    private string GetResourceName(OtlpResource resource) => OtlpHelpers.GetResourceName(resource, _resources);
+
+    private string GetRowClass(LogSummary entry)
+    {
+        if (entry.InternalId == PageViewModel.SelectedLogEntry?.LogEntry.InternalId)
+        {
+            return "selected-row";
+        }
+        else
+        {
+            return $"log-row-{entry.Severity.ToString().ToLowerInvariant()}";
+        }
+    }
+
+    private List<MenuButtonItem> GetFilterMenuItems()
+    {
+        return FilterHelpers.GetFilterMenuItems(
+            ViewModel.Filters,
+            ViewModel.ClearFilters,
+            OpenFilterAsync,
+            afterChangeAsync: () => this.AfterViewModelChangedAsync(_contentLayout, waitToApplyMobileChange: false),
+            FilterLoc,
+            DialogsLoc);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            // Focus the scroll container without showing the focus ring. The container is a large
+            // content area where a visible focus indicator would be visually noisy on initial load.
+            await JS.InvokeVoidAsync("focusElement", ScrollContainerId, true);
+        }
+
+        if (_pendingFocusElementId is { } pendingFocusElementId)
+        {
+            _pendingFocusElementId = null;
+            await JS.InvokeVoidAsync("focusElement", pendingFocusElementId);
+        }
+
+    }
+
+    private string? PauseText => PauseManager.AreStructuredLogsPaused(out var startTime)
+        ? string.Format(
+            CultureInfo.CurrentCulture,
+            Loc[nameof(Dashboard.Resources.StructuredLogs.PauseInProgressText)],
+            FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, startTime.Value))
+        : null;
+
+    public void Dispose()
+    {
+        _cts.Cancel();
+        _resourcesSubscription?.Dispose();
+        _logsSubscription?.Dispose();
+        TelemetryContext.Dispose();
+    }
+
+    public string GetUrlFromSerializableViewModel(StructuredLogsPageState serializable)
+    {
+        var filters = (serializable.Filters.Count > 0) ? TelemetryFilterFormatter.SerializeFiltersToString(serializable.Filters) : null;
+
+        var url = DashboardUrls.StructuredLogsUrl(
+            resource: serializable.SelectedResource,
+            logLevel: serializable.LogLevelText,
+            filters: filters);
+
+        return url;
+    }
+
+    public StructuredLogsPageState ConvertViewModelToSerializable()
+    {
+        return new StructuredLogsPageState
+        {
+            LogLevelText = PageViewModel.SelectedLogLevel.Id?.ToString().ToLowerInvariant(),
+            SelectedResource = PageViewModel.SelectedResource.Id is not null ? PageViewModel.SelectedResource.Name : null,
+            Filters = ViewModel.Filters
+        };
+    }
+
+    public async Task UpdateViewModelFromQueryAsync(StructuredLogsPageViewModel viewModel)
+    {
+        viewModel.SelectedResource = _resourceViewModels.GetResource(Logger, ResourceName, canSelectGrouping: true, _allResource);
+        ViewModel.ResourceKey = PageViewModel.SelectedResource.Id?.GetResourceKey();
+
+        if (LogLevelText is not null && Enum.TryParse<LogLevel>(LogLevelText, ignoreCase: true, out var logLevel))
+        {
+            PageViewModel.SelectedLogLevel = _logLevels.SingleOrDefault(e => e.Id == logLevel) ?? _logLevels[0];
+        }
+        else
+        {
+            PageViewModel.SelectedLogLevel = _logLevels[0];
+        }
+
+        ViewModel.LogLevel = PageViewModel.SelectedLogLevel.Id;
+
+        if (SerializedFilters is not null)
+        {
+            var filters = TelemetryFilterFormatter.DeserializeFiltersFromString(SerializedFilters);
+
+            if (filters.Count > 0)
+            {
+                ViewModel.ClearFilters();
+                foreach (var filter in filters)
+                {
+                    ViewModel.AddFilter(filter);
+                }
+            }
+        }
+
+        await InvokeAsync(_dataGrid.SafeRefreshDataAsync);
+    }
+
+    private async Task LaunchGenAIVisualizerAsync(LogSummary logEntry)
+    {
+        var available = await TraceLinkHelpers.WaitForSpanToBeAvailableAsync(
+            logEntry.TraceId,
+            logEntry.SpanId,
+            TelemetryRepository.GetSpan,
+            DialogService,
+            InvokeAsync,
+            DialogsLoc,
+            _cts.Token).ConfigureAwait(false);
+
+        if (available)
+        {
+            var span = TelemetryRepository.GetSpan(logEntry.TraceId, logEntry.SpanId)!;
+
+            await GenAIVisualizerDialog.OpenDialogAsync(
+                DialogService,
+                span,
+                logEntry.InternalId,
+                TelemetryRepository,
+                ErrorRecorder,
+                _resources,
+                () =>
+                {
+                    var trace = TelemetryRepository.GetTrace(logEntry.TraceId);
+                    if (trace is null)
+                    {
+                        return [];
+                    }
+
+                    var genAISpans = new List<OtlpSpan>();
+                    foreach (var s in trace.Spans)
+                    {
+                        if (GenAIHelpers.HasGenAIAttribute(s.Attributes))
+                        {
+                            genAISpans.Add(s);
+                        }
+                    }
+
+                    return genAISpans;
+                },
+                _cts.Token);
+        }
+    }
+
+    private Task ClearStructureLogs(ResourceKey? key)
+    {
+        DataSource.EnsureWritable();
+        return TelemetryRepositoryWriter.ClearStructuredLogsAsync(key);
+    }
+
+    public class StructuredLogsPageViewModel
+    {
+        public required SelectViewModel<ResourceTypeDetails> SelectedResource { get; set; }
+        public SelectViewModel<LogLevel?> SelectedLogLevel { get; set; } = default!;
+        public StructureLogsDetailsViewModel? SelectedLogEntry { get; set; }
+
+        /// <summary>
+        /// Returns <see langword="true"/> when the selected log entry is excluded by the active filters.
+        /// </summary>
+        public async Task<bool> IsSelectedLogEntryExcludedByFiltersAsync(
+            ITelemetryRepository telemetryRepository,
+            string textFilter,
+            IReadOnlyList<FieldTelemetryFilter> fieldFilters,
+            CancellationToken cancellationToken)
+        {
+            if (SelectedLogEntry is null)
+            {
+                return false;
+            }
+
+            var entry = SelectedLogEntry.LogEntry;
+            var filters = StructuredLogsViewModel.BuildFilters(fieldFilters, textFilter, SelectedLogLevel.Id);
+            var matchingLogs = await telemetryRepository.GetLogsAsync(new GetLogsContext
+            {
+                ResourceKeys = [],
+                StartIndex = 0,
+                Count = 1,
+                Filters = filters,
+                LogIds = [entry.InternalId]
+            }, cancellationToken).ConfigureAwait(false);
+            return matchingLogs.Items.Count == 0;
+        }
+    }
+
+    public class StructuredLogsPageState
+    {
+        public string? SelectedResource { get; set; }
+        public string? LogLevelText { get; set; }
+        public required IReadOnlyCollection<FieldTelemetryFilter> Filters { get; set; }
+    }
+
+    // IComponentWithTelemetry impl
+    public ComponentTelemetryContext TelemetryContext { get; } = new(ComponentType.Page, TelemetryComponentIds.StructuredLogs);
+
+    public void UpdateTelemetryProperties()
+    {
+        TelemetryContext.UpdateTelemetryProperties([
+            new ComponentTelemetryProperty(TelemetryPropertyKeys.StructuredLogsSelectedLogLevel, new AspireTelemetryProperty(PageViewModel.SelectedLogLevel.Id?.ToString() ?? string.Empty, AspireTelemetryPropertyType.UserSetting)),
+            new ComponentTelemetryProperty(TelemetryPropertyKeys.StructuredLogsFilterCount, new AspireTelemetryProperty(ViewModel.Filters.Count.ToString(CultureInfo.InvariantCulture), AspireTelemetryPropertyType.Metric))
+        ], Logger);
+    }
+}

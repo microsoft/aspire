@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREPIPELINES001
-#pragma warning disable ASPIREAZURE001
 #pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 using System.Diagnostics;
@@ -279,6 +277,28 @@ public static class AzureContainerAppExtensions
         {
             var appEnvResource = (AzureContainerAppEnvironmentResource)infra.AspireResource;
 
+            if (appEnvResource.IsExpress && appEnvResource.PreserveHttpEndpoints)
+            {
+                throw new InvalidOperationException(
+                    $"Azure Container Apps Express environment '{appEnvResource.Name}' cannot use {nameof(WithHttpsUpgrade)}(false) because Express requires HTTPS ingress. " +
+                    $"Remove {nameof(WithHttpsUpgrade)}(false) or use {nameof(WithHttpsUpgrade)}(true).");
+            }
+
+            if (appEnvResource.IsExpress && appEnvResource.IsPublicNetworkAccessDisabled)
+            {
+                throw new InvalidOperationException(
+                    $"Azure Container Apps Express environment '{appEnvResource.Name}' cannot be the target of a private link, such as Azure Front Door Private Link, " +
+                    "because Express environments don't support private endpoints. Remove AsExpress() to use a workload profiles environment. " +
+                    "See https://learn.microsoft.com/azure/container-apps/express-overview#considerations.");
+            }
+
+            if (appEnvResource.IsExpress && appEnvResource.HasAnnotationOfType<InternalLoadBalancerAnnotation>())
+            {
+                throw new InvalidOperationException(
+                    $"Azure Container Apps Express environment '{appEnvResource.Name}' cannot use an internal load balancer because the required static IP output is unavailable for Express environments. " +
+                    "Remove AsExpress() to use a workload profiles environment with internal networking.");
+            }
+
             // When the user has marked this environment as existing (via AsExisting / PublishAsExisting),
             // we must not generate a brand-new managed environment + Log Analytics + Dashboard. Instead,
             // emit a thin module that references the existing environment and still wires up the ACR pull
@@ -379,13 +399,6 @@ public static class AzureContainerAppExtensions
 
             var containerAppEnvironment = new ContainerAppManagedEnvironment(appEnvResource.GetBicepIdentifier())
             {
-                WorkloadProfiles = [
-                    new ContainerAppWorkloadProfile()
-                    {
-                        WorkloadProfileType = "Consumption",
-                        Name = "consumption"
-                    }
-                ],
                 AppLogsConfiguration = new()
                 {
                     Destination = "log-analytics",
@@ -398,16 +411,47 @@ public static class AzureContainerAppExtensions
                 Tags = tags
             };
 
+            if (appEnvResource.IsExpress)
+            {
+                containerAppEnvironment.EnvironmentMode = ManagedEnvironmentMode.Express;
+            }
+            else
+            {
+                containerAppEnvironment.WorkloadProfiles = [
+                    new ContainerAppWorkloadProfile()
+                    {
+                        WorkloadProfileType = "Consumption",
+                        Name = "consumption"
+                    }
+                ];
+            }
+
             // Configure VNet integration if a subnet is specified
             if (appEnvResource.TryGetLastAnnotation<DelegatedSubnetAnnotation>(out var subnetAnnotation))
             {
                 containerAppEnvironment.VnetConfiguration = new ContainerAppVnetConfiguration
                 {
-                    InfrastructureSubnetId = subnetAnnotation.SubnetId.AsProvisioningParameter(infra)
+                    InfrastructureSubnetId = subnetAnnotation.SubnetId.AsProvisioningParameter(infra),
                 };
+
+                if (appEnvResource.HasAnnotationOfType<InternalLoadBalancerAnnotation>())
+                {
+                    containerAppEnvironment.VnetConfiguration.IsInternal = true;
+                }
+            }
+            else if (appEnvResource.HasAnnotationOfType<InternalLoadBalancerAnnotation>())
+            {
+                throw new InvalidOperationException(
+                    $"Azure Container App environment '{appEnvResource.Name}' must use a delegated subnet before it can use an internal load balancer.");
             }
 
             infra.Add(containerAppEnvironment);
+
+            if (appEnvResource.IsPublicNetworkAccessDisabled)
+            {
+                // The environment is the target of a private link, so it's reachable only through that link.
+                containerAppEnvironment.PublicNetworkAccess = ContainerAppPublicNetworkAccess.Disabled;
+            }
 
             if (appEnvResource.EnableDashboard)
             {
@@ -434,7 +478,7 @@ public static class AzureContainerAppExtensions
                     Sku = new StorageSku() { Name = StorageSkuName.StandardLrs },
                     Kind = StorageKind.StorageV2,
                     LargeFileSharesState = LargeFileSharesState.Enabled,
-                    MinimumTlsVersion = StorageMinimumTlsVersion.Tls1_2,
+                    MinimumTlsVersion = StorageMinimumTlsVersion.Tls12,
                 };
 
                 infra.Add(storageVolume);
@@ -466,12 +510,15 @@ public static class AzureContainerAppExtensions
                     var containerAppStorage = new ContainerAppManagedEnvironmentStorage(managedStorageName)
                     {
                         Parent = containerAppEnvironment,
-                        ManagedEnvironmentStorageAzureFile = new()
+                        Properties = new()
                         {
-                            ShareName = share.Name,
-                            AccountName = storageVolume.Name,
-                            AccountKey = keyValue,
-                            AccessMode = ContainerAppAccessMode.ReadWrite
+                            AzureFile = new()
+                            {
+                                ShareName = share.Name,
+                                AccountName = storageVolume.Name,
+                                AccountKey = keyValue,
+                                AccessMode = ContainerAppAccessMode.ReadWrite
+                            }
                         }
                     };
 
@@ -590,8 +637,8 @@ public static class AzureContainerAppExtensions
                 }
             }
 
-            // By default the managed environment name is left to Azure.Provisioning, whose sanitizer keeps
-            // only lowercase letters (ContainerAppManagedEnvironment inherits ResourceNameRequirements(1, 24,
+            // By default the managed environment name preserves Azure.Provisioning.AppContainers 1.2.0's
+            // sanitizer, which keeps only lowercase letters (ResourceNameRequirements(1, 24,
             // ResourceNameCharacters.LowercaseLetters)). That drops digits from the bicep identifier, so
             // environments named e.g. "cae1"/"cae2" in the same resource group both resolve to
             // take('cae${uniqueString(resourceGroup().id)}', 24) and collapse onto a single physical
@@ -618,7 +665,11 @@ public static class AzureContainerAppExtensions
                 Value = laWorkspace.Id.ToBicepExpression()
             });
 
-            AddSharedContainerAppEnvironmentOutputs(infra, containerRegistry, containerAppEnvironment, managedIdentityIdOutputValue);
+            AddSharedContainerAppEnvironmentOutputs(
+                infra,
+                containerRegistry,
+                containerAppEnvironment,
+                managedIdentityIdOutputValue);
         });
 
         // Create the default container registry resource before creating the environment
@@ -749,7 +800,8 @@ public static class AzureContainerAppExtensions
     ///   <item><description>Creating a new <c>ContainerAppManagedEnvironment</c> — the existing one is referenced.</description></item>
     ///   <item><description>Creating a new <c>OperationalInsightsWorkspace</c> — the existing env already has logging configured.</description></item>
     ///   <item><description>Creating the Aspire Dashboard <c>dotNetComponent</c> — the existing env already owns its dashboard configuration.</description></item>
-    ///   <item><description>Storage accounts / file shares for container volumes and VNet configuration — these cannot be
+    ///   <item><description>Storage accounts / file shares for container volumes, VNet configuration, and disabling public network
+    ///   access for a private link — these cannot be
     ///   added to an env that already exists without mutating it. If the user attempts to combine these features with
     ///   <c>AsExisting</c>, we throw a clear error.</description></item>
     /// </list>
@@ -784,6 +836,15 @@ public static class AzureContainerAppExtensions
                 "configured with a Log Analytics workspace via WithAzureLogAnalyticsWorkspace. The existing managed " +
                 "environment already owns its Log Analytics workspace and Aspire cannot reconfigure it. Remove the " +
                 "WithAzureLogAnalyticsWorkspace call or stop marking the environment as existing.");
+        }
+
+        if (appEnvResource.IsPublicNetworkAccessDisabled)
+        {
+            throw new InvalidOperationException(
+                $"The Azure Container App Environment '{appEnvResource.Name}' is marked as existing but is also " +
+                "the target of a private link, such as Azure Front Door Private Link. Aspire must disable public network access " +
+                "on the managed environment for the private link, which it cannot do for an existing environment. Remove the " +
+                "private link or stop marking the environment as existing.");
         }
 
         // This tells azd to avoid creating infrastructure.
@@ -848,7 +909,11 @@ public static class AzureContainerAppExtensions
             infra.Add(pullRa);
         }
 
-        AddSharedContainerAppEnvironmentOutputs(infra, containerRegistry, containerAppEnvironment, managedIdentityIdOutputValue);
+        AddSharedContainerAppEnvironmentOutputs(
+            infra,
+            containerRegistry,
+            containerAppEnvironment,
+            managedIdentityIdOutputValue);
     }
 
     /// <summary>
@@ -894,6 +959,33 @@ public static class AzureContainerAppExtensions
         infra.Add(new ProvisioningOutput("AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN", typeof(string))
         {
             Value = containerAppEnvironment.DefaultDomain.ToBicepExpression()
+        });
+
+        // Express environments do not expose properties.staticIp; ARM fails output evaluation
+        // when a missing property is read. Only internal environments need this DNS output.
+        if (infra.AspireResource is AzureContainerAppEnvironmentResource { IsExpress: false } appEnvironment &&
+            appEnvironment.HasAnnotationOfType<InternalLoadBalancerAnnotation>())
+        {
+            infra.Add(new ProvisioningOutput("AZURE_CONTAINER_APPS_ENVIRONMENT_STATIC_IP", typeof(string))
+            {
+                Value = containerAppEnvironment.StaticIP.ToBicepExpression()
+            });
+        }
+
+        // The region of the environment, for resources that connect to it, such as the private endpoint that
+        // Azure Front Door Private Link creates. A managed environment returns a display name such as 'West US 2',
+        // but Front Door takes the programmatic name, 'westus2', so emit that. Terraform's provider normalizes the
+        // same way before it calls the Front Door API:
+        // https://github.com/hashicorp/terraform-provider-azurerm/blob/main/internal/services/cdn/resources/cdn_frontdoor_origin/r_create.go
+        infra.Add(new ProvisioningOutput(AzureContainerAppEnvironmentResource.LocationOutputName, typeof(string))
+        {
+            Value = new FunctionCallExpression(
+                new IdentifierExpression("toLower"),
+                new FunctionCallExpression(
+                    new IdentifierExpression("replace"),
+                    containerAppEnvironment.Location.ToBicepExpression(),
+                    new StringLiteralExpression(" "),
+                    new StringLiteralExpression(string.Empty)))
         });
     }
 
@@ -941,7 +1033,6 @@ public static class AzureContainerAppExtensions
     /// </para>
     /// </remarks>
     [AspireExport]
-    [Experimental("ASPIREACANAMING001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<AzureContainerAppEnvironmentResource> WithCompactResourceNaming(this IResourceBuilder<AzureContainerAppEnvironmentResource> builder)
     {
         builder.Resource.UseCompactResourceNaming = true;
@@ -995,12 +1086,41 @@ public static class AzureContainerAppExtensions
     /// </code>
     /// </example>
     [AspireExport]
-    [Experimental("ASPIREACANAMING002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<AzureContainerAppEnvironmentResource> WithUniqueResourceNaming(this IResourceBuilder<AzureContainerAppEnvironmentResource> builder)
     {
         ArgumentNullException.ThrowIfNull(builder);
 
         builder.Resource.UseUniqueResourceNaming = true;
+        return builder;
+    }
+
+    /// <summary>
+    /// Configures the container app environment to publish and deploy HTTP applications using Azure Container Apps Express.
+    /// </summary>
+    /// <param name="builder">The container app environment to configure.</param>
+    /// <returns>The resource builder for chaining.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> is null.</exception>
+    /// <remarks>
+    /// Express defaults to zero minimum replicas and does not provision the managed Aspire dashboard.
+    /// Explicit replica settings and infrastructure customization are preserved. Azure validates service compatibility.
+    /// App-to-app references require explicitly public HTTP endpoints. References to apps in Express environments use HTTPS; cross-environment references preserve the producer's configured scheme.
+    /// Local execution is unchanged.
+    /// When combined with existing-resource configuration, the existing environment must already use Express.
+    /// Internal load balancer configuration is rejected during infrastructure generation because Express environments do not provide the static IP output required by private DNS.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// builder.AddAzureContainerAppEnvironment("env").AsExpress();
+    /// </code>
+    /// </example>
+    /// <seealso href="https://learn.microsoft.com/azure/container-apps/express-overview">Azure Container Apps Express preview</seealso>
+    [AspireExport]
+    [Experimental("ASPIREACAEXPRESS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public static IResourceBuilder<AzureContainerAppEnvironmentResource> AsExpress(this IResourceBuilder<AzureContainerAppEnvironmentResource> builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        builder.Resource.IsExpress = true;
         return builder;
     }
 
@@ -1030,6 +1150,7 @@ public static class AzureContainerAppExtensions
     /// When disabled (<c>false</c>), HTTP endpoints will use HTTP scheme and port 80 in Azure Container Apps.
     /// Note that explicit ports specified for development (e.g., port 8080) are still normalized
     /// to standard ports (80/443) as required by Azure Container Apps.
+    /// Disabling HTTPS upgrade for an Express environment is rejected during publishing or deployment.
     /// </remarks>
     [AspireExport]
     public static IResourceBuilder<AzureContainerAppEnvironmentResource> WithHttpsUpgrade(this IResourceBuilder<AzureContainerAppEnvironmentResource> builder, bool upgrade = true)
@@ -1121,20 +1242,11 @@ public static class AzureContainerAppExtensions
         bool useUniqueResourceNaming,
         ContainerAppsPipelineStepMarker marker) : DynamicResourceNamePropertyResolver
     {
-        // Azure Container Apps managed environment names allow lowercase letters, digits, and hyphens and are
-        // 2-60 characters long. These are the managed-environment limits, not the 2-32 character container-app
-        // limits:
-        // https://azure.github.io/PSRule.Rules.Azure/en/rules/Azure.ContainerApp.EnvNaming/
-        //
-        // Azure.Provisioning.AppContainers does not override GetResourceNameRequirements for
-        // ContainerAppManagedEnvironment, so it inherits ProvisionableResource's conservative default of
-        // (1, 24, LowercaseLetters). That default silently drops the digits Aspire relies on to keep sibling
-        // environment names distinct, so "cae1"/"cae2" both sanitize to "cae" and collide in a shared resource
-        // group (https://github.com/microsoft/aspire/issues/18722).
-        private static readonly ResourceNameRequirements s_requirements = new(
-            minLength: 2,
-            maxLength: 60,
-            validCharacters: ResourceNameCharacters.LowercaseLetters | ResourceNameCharacters.Numbers | ResourceNameCharacters.Hyphen);
+        // Preserve existing deployment names even when the SDK changes its default naming requirements.
+        private static readonly ResourceNameRequirements s_legacyRequirements = new(
+            minLength: 1,
+            maxLength: 24,
+            validCharacters: ResourceNameCharacters.LowercaseLetters);
 
         public ContainerAppManagedEnvironment ManagedEnvironment { get; } = managedEnvironment;
 
@@ -1149,14 +1261,14 @@ public static class AzureContainerAppExtensions
                 return null;
             }
 
-            // Delegate to the standard dynamic naming algorithm. The opt-in substitutes the requirements that
-            // Azure.Provisioning failed to declare; otherwise the supplied requirements preserve the legacy output
+            // Delegate to the standard dynamic naming algorithm. The opt-in uses the SDK's corrected
+            // requirements; otherwise the legacy requirements preserve the output
             // byte-for-byte. Recording the returned expression here means caller-configured resolvers still take
             // precedence and only names produced by this fallback participate in collision validation.
             var resolvedName = base.ResolveName(
                 options,
                 resource,
-                useUniqueResourceNaming ? s_requirements : requirements);
+                useUniqueResourceNaming ? requirements : s_legacyRequirements);
 
             if (resolvedName is not null)
             {

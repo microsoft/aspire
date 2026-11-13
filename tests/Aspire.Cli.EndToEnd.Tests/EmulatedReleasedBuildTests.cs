@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using Aspire.Cli.EndToEnd.Tests.Helpers;
 using Aspire.Cli.Resources;
 using Hex1b.Automation;
@@ -74,15 +73,15 @@ public sealed class EmulatedReleasedBuildTests(ITestOutputHelper output)
         // must not pin a custom feed via NuGet.config. A non-stable channel (daily/staging/pr) would.
         AssertNoNuGetConfig(projectDir);
 
-        // The exact-version match against the emulated identity pins the AppHost SDK to that version.
+        // The exact-version match against the emulated identity pins the AppHost to that version.
         var appHostCsproj = Path.Combine(projectDir.FullName, $"{projectName}.AppHost", $"{projectName}.AppHost.csproj");
-        var sdkVersion = GetAppHostSdkVersionFromCsproj(appHostCsproj);
-        output.WriteLine($"Generated AppHost SDK version: {sdkVersion}");
-        Assert.Equal(stableVersion, sdkVersion);
+        var appHostVersion = CliE2ETestHelpers.GetAppHostVersion(File.ReadAllText(appHostCsproj));
+        output.WriteLine($"Generated AppHost version: {appHostVersion}");
+        Assert.Equal(stableVersion, appHostVersion);
 
         // `aspire add` must resolve a restorable version (no custom feed available) and complete.
         await auto.RunCommandAsync($"cd {projectName}/{projectName}.AppHost", counter);
-        await AddIntegrationInteractivelyAsync(auto, counter, "redis");
+        await AddRedisInteractivelyAsync(auto, counter, stableVersion!);
     }
 
     /// <summary>
@@ -143,7 +142,7 @@ public sealed class EmulatedReleasedBuildTests(ITestOutputHelper output)
         AssertStableShaped(sdkVersion, configPath);
 
         await auto.RunCommandAsync($"cd {projectName}", counter);
-        await AddIntegrationInteractivelyAsync(auto, counter, "redis");
+        await AddRedisInteractivelyAsync(auto, counter, stableVersion!);
     }
 
     /// <summary>
@@ -176,23 +175,28 @@ public sealed class EmulatedReleasedBuildTests(ITestOutputHelper output)
     }
 
     /// <summary>
-    /// Runs <c>aspire add</c> interactively, filters the integration list by <paramref name="filter"/>,
-    /// accepts the default version if a version picker appears, and waits for the success message.
-    /// Mirrors the proven interactive add flow used elsewhere in the E2E suite.
+    /// Runs <c>aspire add</c> interactively, selects the Redis integration, and verifies that the
+    /// default version is the emulated stable version rather than a package from the installed PR hive.
     /// </summary>
-    private static async Task AddIntegrationInteractivelyAsync(Hex1bTerminalAutomator auto, SequenceCounter counter, string filter)
+    private static async Task AddRedisInteractivelyAsync(Hex1bTerminalAutomator auto, SequenceCounter counter, string stableVersion)
     {
         await auto.TypeAsync("aspire add");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync(AddCommandStrings.SelectAnIntegrationToAdd, timeout: TimeSpan.FromMinutes(1));
-        await auto.TypeAsync(filter);
+
+        // Searching for just "redis" also matches azure-provisioning-redis from the PR hive.
+        // Wait for the intended row to be selected before accepting the interactive search.
+        const string integrationLabel = "redis (Aspire.Hosting.Redis)";
+        await auto.TypeAsync("Aspire.Hosting.Redis");
+        await auto.WaitUntilTextAsync($"> {integrationLabel}", timeout: TimeSpan.FromMinutes(1));
         await auto.EnterAsync();
 
+        var successMessage = $"Aspire.Hosting.Redis::{stableVersion} was added successfully.";
         var waitingForVersionSelection = false;
         await auto.WaitUntilAsync(snapshot =>
         {
             waitingForVersionSelection = snapshot.ContainsText("Select a version of");
-            return waitingForVersionSelection || snapshot.ContainsText("was added successfully.");
+            return waitingForVersionSelection || snapshot.ContainsText(successMessage);
         }, timeout: TimeSpan.FromMinutes(2), description: "version prompt or add success");
 
         if (waitingForVersionSelection)
@@ -200,7 +204,7 @@ public sealed class EmulatedReleasedBuildTests(ITestOutputHelper output)
             await auto.EnterAsync();
         }
 
-        await auto.WaitUntilTextAsync("was added successfully.", timeout: TimeSpan.FromMinutes(2));
+        await auto.WaitUntilTextAsync(successMessage, timeout: TimeSpan.FromMinutes(2));
         await auto.WaitForSuccessPromptAsync(counter);
     }
 
@@ -218,21 +222,6 @@ public sealed class EmulatedReleasedBuildTests(ITestOutputHelper output)
         Assert.True(
             nuGetConfigs.Count == 0,
             $"Emulating a stable build, 'aspire new' must not drop a NuGet.config (stable packages live on nuget.org). Found: {string.Join(", ", nuGetConfigs)}");
-    }
-
-    private static string GetAppHostSdkVersionFromCsproj(string csprojPath)
-    {
-        if (!File.Exists(csprojPath))
-        {
-            throw new FileNotFoundException($"Expected AppHost project to exist: {csprojPath}", csprojPath);
-        }
-
-        // The generated AppHost csproj opens with: <Project Sdk="Aspire.AppHost.Sdk/13.4.3">
-        var content = File.ReadAllText(csprojPath);
-        var match = Regex.Match(content, "Sdk=\"Aspire\\.AppHost\\.Sdk/(?<version>[^\"]+)\"");
-        return match.Success
-            ? match.Groups["version"].Value
-            : throw new InvalidOperationException($"Could not find an Aspire.AppHost.Sdk reference in {csprojPath}.");
     }
 
     private static string GetSdkVersionFromAspireConfig(string configPath)

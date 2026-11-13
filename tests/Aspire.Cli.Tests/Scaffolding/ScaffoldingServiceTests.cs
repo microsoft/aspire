@@ -26,6 +26,36 @@ public class ScaffoldingServiceTests
         CodeGenerator: "python",
         AppHostFileName: "apphost.py");
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void GetScaffoldDirectory_IsolatesGoAppHost_FromExistingModule(bool hasModule)
+    {
+        var rootDirectory = Directory.CreateTempSubdirectory();
+        var language = DefaultLanguageDiscovery.AllLanguages.Single(language => language.LanguageId.Value == KnownLanguageId.Go);
+
+        try
+        {
+            if (hasModule)
+            {
+                File.WriteAllText(Path.Combine(rootDirectory.FullName, "go.mod"), "module existing\n\ngo 1.26\n");
+            }
+
+            var scaffoldDirectory = ScaffoldingService.GetScaffoldDirectory(rootDirectory, language);
+
+            Assert.Equal(
+                hasModule ? Path.Combine(rootDirectory.FullName, "aspire-apphost") : rootDirectory.FullName,
+                scaffoldDirectory.FullName);
+            Assert.Equal(
+                Path.Combine(scaffoldDirectory.FullName, "apphost.go"),
+                ScaffoldingService.GetAppHostPath(rootDirectory, language));
+        }
+        finally
+        {
+            rootDirectory.Delete(recursive: true);
+        }
+    }
+
     [Fact]
     public void GetScaffoldDirectory_UsesNestedPackage_ForBrownfieldTypeScript()
     {
@@ -128,6 +158,22 @@ public class ScaffoldingServiceTests
         Assert.Equal("pnpm --dir apps/web/aspire-apphost run aspire:start", scripts["aspire:start"]?.GetValue<string>());
         Assert.Equal("pnpm --dir apps/web/aspire-apphost run aspire:build", scripts["aspire:build"]?.GetValue<string>());
         Assert.Equal("pnpm --dir apps/web/aspire-apphost run aspire:dev", scripts["aspire:dev"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public void AddRootTypeScriptAppHostDelegateScripts_UsesDenoTasks()
+    {
+        var scripts = new JsonObject();
+
+        var preservedScriptNames = ScaffoldingService.AddRootTypeScriptAppHostDelegateScripts(
+            scripts,
+            TypeScriptAppHostToolchain.Deno,
+            "apps/web/aspire-apphost");
+
+        Assert.Empty(preservedScriptNames);
+        Assert.Equal("deno task --cwd apps/web/aspire-apphost aspire:start", scripts["aspire:start"]?.GetValue<string>());
+        Assert.Equal("deno task --cwd apps/web/aspire-apphost aspire:build", scripts["aspire:build"]?.GetValue<string>());
+        Assert.Equal("deno task --cwd apps/web/aspire-apphost aspire:dev", scripts["aspire:dev"]?.GetValue<string>());
     }
 
     [Fact]

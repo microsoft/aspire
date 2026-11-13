@@ -202,6 +202,32 @@ public class PackageJsonMergerTests
     }
 
     [Fact]
+    public void ConvenienceAliases_UseDenoTasks()
+    {
+        var existing = """
+            {
+              "name": "my-app",
+              "packageManager": "deno@2.9.0"
+            }
+            """;
+
+        var scaffold = """
+            {
+              "scripts": {
+                "aspire:start": "aspire run",
+                "aspire:dev": "tsc --watch -p tsconfig.apphost.json"
+              }
+            }
+            """;
+
+        var result = MergeJson(existing, scaffold, toolchainCommand: "deno");
+        var scripts = GetScripts(result);
+
+        Assert.Equal("deno task aspire:start", scripts["start"]?.GetValue<string>());
+        Assert.Equal("deno task aspire:dev", scripts["dev"]?.GetValue<string>());
+    }
+
+    [Fact]
     public void NoAliasWhenNameTaken()
     {
         var existing = """

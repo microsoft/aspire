@@ -1,15 +1,15 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREPIPELINES002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-
 using System.IO.Hashing;
 using System.Text;
 using System.Text.Json.Nodes;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Azure.Provisioning.Internal;
 using Aspire.Hosting.Pipelines;
-using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Aspire.Hosting.Azure.Provisioning;
 
@@ -37,13 +37,32 @@ internal static class BicepUtilities
     /// <summary>
     /// Converts the parameters to a JSON object compatible with the ARM template.
     /// </summary>
-    public static async Task SetParametersAsync(JsonObject parameters, AzureBicepResource resource, bool skipKnownValues = false, CancellationToken cancellationToken = default)
+    public static async Task SetParametersAsync(JsonObject parameters, AzureBicepResource resource, DistributedApplicationExecutionContext executionContext, bool skipKnownValues = false, CancellationToken cancellationToken = default)
     {
+        var valueProviderContext = new ValueProviderContext { ExecutionContext = executionContext, Caller = resource };
+
         // Convert the parameters to a JSON object
         foreach (var parameter in resource.Parameters)
         {
             // Execute parameter values which are deferred.
             var parameterValue = parameter.Value is Func<object?> f ? f() : parameter.Value;
+
+            if (parameter.Key == AzureBicepResource.KnownParameters.TenantResourceSuffix && parameterValue is null)
+            {
+                // Unlike principal parameters, the suffix must resolve even during checksum evaluation:
+                // changing it targets a different tenant-wide resource and must invalidate cached outputs.
+                if (executionContext.IsRunMode)
+                {
+                    var optionsManager = executionContext.Services.GetRequiredService<IAzureProvisioningOptionsManager>();
+                    await optionsManager.EnsureProvisioningOptionsAsync(forcePrompt: false, cancellationToken).ConfigureAwait(false);
+                    parameterValue = (await optionsManager.GetProvisioningOptionsAsync(cancellationToken).ConfigureAwait(false))
+                        .TenantResourceSuffix ?? string.Empty;
+                }
+                else
+                {
+                    parameterValue = executionContext.Services.GetRequiredService<IOptions<AzureProvisionerOptions>>().Value.TenantResourceSuffix ?? string.Empty;
+                }
+            }
 
             // Skip known parameters with 'null' values, like PrincipalType and PrincipalId, since they are filled in by the provisioner
             // and are not available at this time. If we don't do this, the "roles" resources will be re-deployed every run.
@@ -62,7 +81,7 @@ internal static class BicepUtilities
                     bool b => b,
                     Guid g => g.ToString(),
                     JsonNode node => node,
-                    IValueProvider v => await v.GetValueAsync(cancellationToken).ConfigureAwait(false),
+                    IValueProvider v => await v.GetValueAsync(valueProviderContext, cancellationToken).ConfigureAwait(false),
                     null => null,
                     _ => throw new NotSupportedException($"The parameter value type {parameterValue.GetType()} is not supported.")
                 }
@@ -119,54 +138,9 @@ internal static class BicepUtilities
     }
 
     /// <summary>
-    /// Gets the current checksum for a Bicep resource from configuration.
-    /// </summary>
-    public static async ValueTask<string?> GetCurrentChecksumAsync(AzureBicepResource resource, IConfiguration section, CancellationToken cancellationToken = default)
-    {
-        // Fill in parameters from configuration
-        if (section[DeploymentStateParametersKey] is not string jsonString)
-        {
-            return null;
-        }
-
-        try
-        {
-            var parameters = JsonNode.Parse(jsonString)?.AsObject();
-            var scope = section[DeploymentStateScopeKey] is string scopeString
-                ? JsonNode.Parse(scopeString)?.AsObject()
-                : GetExistingResourceScope(resource) is not null
-                    ? new JsonObject()
-                    : null;
-
-            if (parameters is null)
-            {
-                return null;
-            }
-
-            // Force evaluation of the Bicep template to ensure parameters are expanded
-            _ = resource.GetBicepTemplateString();
-
-            // Now overwrite with live object values skipping known values.
-            await SetParametersAsync(parameters, resource, skipKnownValues: true, cancellationToken: cancellationToken).ConfigureAwait(false);
-            if (scope is not null)
-            {
-                await SetScopeAsync(scope, resource, cancellationToken).ConfigureAwait(false);
-            }
-
-            // Get the checksum of the new values
-            return GetChecksum(resource, parameters, scope);
-        }
-        catch
-        {
-            // Unable to parse the JSON, to treat it as not existing
-            return null;
-        }
-    }
-
-    /// <summary>
     /// Gets the current checksum for a Bicep resource from deployment state.
     /// </summary>
-    public static async ValueTask<string?> GetCurrentChecksumAsync(AzureBicepResource resource, DeploymentStateSection section, ILogger logger, CancellationToken cancellationToken = default)
+    public static async ValueTask<string?> GetCurrentChecksumAsync(AzureBicepResource resource, DeploymentStateSection section, DistributedApplicationExecutionContext executionContext, ILogger logger, CancellationToken cancellationToken = default)
     {
         if (section.Data[DeploymentStateParametersKey]?.GetValue<string>() is not { Length: > 0 } jsonString)
         {
@@ -189,7 +163,7 @@ internal static class BicepUtilities
 
             _ = resource.GetBicepTemplateString();
 
-            await SetParametersAsync(parameters, resource, skipKnownValues: true, cancellationToken: cancellationToken).ConfigureAwait(false);
+            await SetParametersAsync(parameters, resource, executionContext, skipKnownValues: true, cancellationToken: cancellationToken).ConfigureAwait(false);
             if (scope is not null)
             {
                 await SetScopeAsync(scope, resource, cancellationToken).ConfigureAwait(false);
@@ -206,14 +180,27 @@ internal static class BicepUtilities
 
     internal static AzureBicepResourceScope? GetExistingResourceScope(AzureBicepResource resource)
     {
+        if (resource is IAzureComputeEnvironmentResource &&
+            resource is AzureProvisioningResource provisioningResource &&
+            resource.HasAnnotationOfType<ExistingAzureResourceAnnotation>())
+        {
+            // The compute template chooses whether the existing reference or its supporting
+            // infrastructure sets the module scope. Run callbacks before reading that scope.
+            _ = provisioningResource.GetBicepTemplateString();
+            return provisioningResource.Scope;
+        }
+
         if (resource.Scope is not null)
         {
             return resource.Scope;
         }
 
-        return resource.TryGetLastAnnotation<ExistingAzureResourceAnnotation>(out var existingResource)
-            ? AzureBicepResourceScope.FromExistingResourceAnnotation(existingResource)
-            : null;
+        if (!resource.TryGetLastAnnotation<ExistingAzureResourceAnnotation>(out var existingResource))
+        {
+            return null;
+        }
+
+        return AzureBicepResourceScope.FromExistingResourceAnnotation(existingResource);
     }
 
     private static async Task SetScopeValueAsync(JsonObject scope, string propertyName, object? value, CancellationToken cancellationToken)

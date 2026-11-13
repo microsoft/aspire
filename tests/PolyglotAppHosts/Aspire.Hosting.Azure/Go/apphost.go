@@ -9,66 +9,65 @@ import (
 func main() {
 	builder, err := aspire.CreateBuilder()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	_ = builder.AddAzureProvisioning()
 
 	location := builder.AddParameter("location")
 	if location.Err() != nil {
-		log.Fatalf(aspire.FormatError(location.Err()))
+		log.Fatal(aspire.FormatError(location.Err()))
 	}
 	resourceGroup := builder.AddParameter("resource-group")
 	if resourceGroup.Err() != nil {
-		log.Fatalf(aspire.FormatError(resourceGroup.Err()))
+		log.Fatal(aspire.FormatError(resourceGroup.Err()))
 	}
 	existingName := builder.AddParameter("existing-name")
 	if existingName.Err() != nil {
-		log.Fatalf(aspire.FormatError(existingName.Err()))
+		log.Fatal(aspire.FormatError(existingName.Err()))
 	}
 	existingResourceGroup := builder.AddParameter("existing-resource-group")
 	if existingResourceGroup.Err() != nil {
-		log.Fatalf(aspire.FormatError(existingResourceGroup.Err()))
+		log.Fatal(aspire.FormatError(existingResourceGroup.Err()))
 	}
 
 	connectionString := builder.AddConnectionString("azure-validation", &aspire.AddConnectionStringOptions{
 		EnvironmentVariableNameOrExpression: "AZURE_VALIDATION_CONNECTION_STRING",
 	})
 	if connectionString.Err() != nil {
-		log.Fatalf(aspire.FormatError(connectionString.Err()))
+		log.Fatal(aspire.FormatError(connectionString.Err()))
 	}
 
 	azureEnvironment := builder.AddAzureEnvironment()
 	if azureEnvironment.Err() != nil {
-		log.Fatalf(aspire.FormatError(azureEnvironment.Err()))
+		log.Fatal(aspire.FormatError(azureEnvironment.Err()))
 	}
 	azureEnvironment.WithLocation(location).WithResourceGroup(resourceGroup)
 
 	container := builder.AddContainer("api", "mcr.microsoft.com/dotnet/samples:aspnetapp").
 		WithHttpEndpoint(&aspire.WithHttpEndpointOptions{
 			Name:       aspire.StringPtr("http"),
-			TargetPort: aspire.Float64Ptr(8080),
+			TargetPort: aspire.IntPtr(8080),
 		})
 	if container.Err() != nil {
-		log.Fatalf(aspire.FormatError(container.Err()))
+		log.Fatal(aspire.FormatError(container.Err()))
 	}
 
 	executable := builder.AddExecutable("worker", "dotnet", ".", []string{"--info"}).
 		WithHttpEndpoint(&aspire.WithHttpEndpointOptions{
 			Name:       aspire.StringPtr("http"),
-			TargetPort: aspire.Float64Ptr(8081),
+			TargetPort: aspire.IntPtr(8081),
 		})
 	if executable.Err() != nil {
-		log.Fatalf(aspire.FormatError(executable.Err()))
+		log.Fatal(aspire.FormatError(executable.Err()))
 	}
 
 	endpoint := container.GetEndpoint("http")
 
 	fileBicep := builder.AddBicepTemplate("file-bicep", "./validation.bicep")
 	if fileBicep.Err() != nil {
-		log.Fatalf(aspire.FormatError(fileBicep.Err()))
+		log.Fatal(aspire.FormatError(fileBicep.Err()))
 	}
-	_ = fileBicep.PublishAsConnectionString()
 	_ = fileBicep.ClearDefaultRoleAssignments()
 	_, _ = fileBicep.GetBicepIdentifier()
 	_, _ = fileBicep.IsExisting()
@@ -88,29 +87,43 @@ func main() {
 		ResourceGroup: existingResourceGroup,
 	})
 	if fileBicep.Err() != nil {
-		log.Fatalf(aspire.FormatError(fileBicep.Err()))
+		log.Fatal(aspire.FormatError(fileBicep.Err()))
 	}
 
 	inlineBicep := builder.AddBicepTemplateString("inline-bicep", `
 output inlineUrl string = 'https://inline.example.com'
 `)
 	if inlineBicep.Err() != nil {
-		log.Fatalf(aspire.FormatError(inlineBicep.Err()))
+		log.Fatal(aspire.FormatError(inlineBicep.Err()))
 	}
-	_ = inlineBicep.PublishAsConnectionString()
 	_ = inlineBicep.ClearDefaultRoleAssignments()
 	_, _ = inlineBicep.GetBicepIdentifier()
 	_, _ = inlineBicep.IsExisting()
 	if inlineBicep.Err() != nil {
-		log.Fatalf(aspire.FormatError(inlineBicep.Err()))
+		log.Fatal(aspire.FormatError(inlineBicep.Err()))
+	}
+
+	frontDoor := builder.AddAzureFrontDoor("frontdoor")
+	frontDoor.ConfigureInfrastructure(func(infrastructure aspire.AzureResourceInfrastructure) {
+		profile := infrastructure.GetCdnProfile()
+		if err := profile.SetOriginResponseTimeoutSeconds(float64(60)).Err(); err != nil {
+			log.Fatal(aspire.FormatError(err))
+		}
+		if _, err := profile.OriginResponseTimeoutSeconds(); err != nil {
+			log.Fatal(aspire.FormatError(err))
+		}
+	})
+	if frontDoor.Err() != nil {
+		log.Fatal(aspire.FormatError(frontDoor.Err()))
 	}
 
 	infra := builder.AddAzureInfrastructure("infra", func(ctx aspire.AzureResourceInfrastructure) {
 		_, _ = ctx.BicepName()
-		_ = ctx.SetTargetScope(aspire.DeploymentScopeSubscription)
+		targetScope := aspire.DeploymentScopeSubscription
+		_ = ctx.SetTargetScope(&targetScope)
 	})
 	if infra.Err() != nil {
-		log.Fatalf(aspire.FormatError(infra.Err()))
+		log.Fatal(aspire.FormatError(infra.Err()))
 	}
 
 	infrastructureOutput := infra.GetOutput("serviceUrl")
@@ -126,7 +139,6 @@ output inlineUrl string = 'https://inline.example.com'
 	infra.WithParameter("fromOutput", &aspire.WithParameterOptions{Value: infrastructureOutput})
 	infra.WithParameter("fromExpression", &aspire.WithParameterOptions{Value: aspire.RefExpr("https://{0}", endpoint)})
 	infra.WithParameter("fromEndpoint", &aspire.WithParameterOptions{Value: endpoint})
-	_ = infra.PublishAsConnectionString()
 	_ = infra.ClearDefaultRoleAssignments()
 	_, _ = infra.GetBicepIdentifier()
 	_, _ = infra.IsExisting()
@@ -136,16 +148,25 @@ output inlineUrl string = 'https://inline.example.com'
 	_ = infra.PublishAsExisting(existingName, &aspire.PublishAsExistingOptions{ResourceGroup: existingResourceGroup})
 	_ = infra.AsExisting(existingName, &aspire.AsExistingOptions{ResourceGroup: existingResourceGroup})
 	if infra.Err() != nil {
-		log.Fatalf(aspire.FormatError(infra.Err()))
+		log.Fatal(aspire.FormatError(infra.Err()))
 	}
 
 	identity := builder.AddAzureUserAssignedIdentity("identity")
 	if identity.Err() != nil {
-		log.Fatalf(aspire.FormatError(identity.Err()))
+		log.Fatal(aspire.FormatError(identity.Err()))
+	}
+	identityBicepIdentifier, err := identity.GetBicepIdentifier()
+	if err != nil {
+		log.Fatal(aspire.FormatError(err))
 	}
 	_ = identity.ConfigureInfrastructure(func(ctx aspire.AzureResourceInfrastructure) {
 		_, _ = ctx.BicepName()
-		_ = ctx.SetTargetScope(aspire.DeploymentScopeSubscription)
+		targetScope := aspire.DeploymentScopeSubscription
+		_ = ctx.SetTargetScope(&targetScope)
+		provisionedIdentity := ctx.GetSqlUserAssignedIdentityByIdentifier(identityBicepIdentifier)
+		deploymentLocation := ctx.Bicep().Location("westus2")
+		_ = provisionedIdentity.SetName("polyglot-identity")
+		_ = provisionedIdentity.SetLocation(deploymentLocation)
 	})
 
 	identity.WithParameter("identityEmpty")
@@ -156,9 +177,7 @@ output inlineUrl string = 'https://inline.example.com'
 	identity.WithParameter("identityFromOutput", &aspire.WithParameterOptions{Value: infrastructureOutput})
 	identity.WithParameter("identityFromExpression", &aspire.WithParameterOptions{Value: aspire.RefExpr("{0}", location)})
 	identity.WithParameter("identityFromEndpoint", &aspire.WithParameterOptions{Value: endpoint})
-	_ = identity.PublishAsConnectionString()
 	_ = identity.ClearDefaultRoleAssignments()
-	_, _ = identity.GetBicepIdentifier()
 	_, _ = identity.IsExisting()
 	_ = identity.RunAsExisting("identity-existing", &aspire.RunAsExistingOptions{ResourceGroup: "rg-identity"})
 	_ = identity.RunAsExisting(existingName, &aspire.RunAsExistingOptions{ResourceGroup: existingResourceGroup})
@@ -168,7 +187,7 @@ output inlineUrl string = 'https://inline.example.com'
 
 	identityClientId := identity.GetOutput("clientId")
 	if identity.Err() != nil {
-		log.Fatalf(aspire.FormatError(identity.Err()))
+		log.Fatal(aspire.FormatError(identity.Err()))
 	}
 
 	container.WithEnvironment("INFRA_URL", infrastructureOutput)
@@ -181,9 +200,9 @@ output inlineUrl string = 'https://inline.example.com'
 
 	app, err := builder.Build()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 	if err := app.Run(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 }

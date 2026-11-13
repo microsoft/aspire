@@ -1,21 +1,206 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource Compose projection alongside executable/V2 deployment coverage.
 #pragma warning disable ASPIREPIPELINES003
 #pragma warning disable ASPIRECONTAINERRUNTIME001
 
 using System.Text.RegularExpressions;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Docker.Resources.ComposeNodes;
+using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Publishing;
+using Aspire.Hosting.Tests;
 using Aspire.Hosting.Tests.Publishing;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Hosting.Docker.Tests;
 
 public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
 {
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task BrowserOriginInputsAvoidDeclaredParameterNames(bool originFirst, bool normalizedCollision)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path, step: "prepare-env");
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        var environment = builder.AddDockerComposeEnvironment("env").WithDashboard(false);
+        var declaredName = normalizedCollision ? "WEB-HTTP-BROWSERORIGINS" : "web-http-BrowserOrigins";
+        var declared = builder.AddParameter(declaredName, "https://override.example");
+        var reservedSuffix = builder.AddParameter("web-http-BrowserOrigins-1", "reserved");
+        var web = builder.AddContainer("web", "image").WithHttpEndpoint(port: 8080, targetPort: 80).WithExternalHttpEndpoints();
+        var consumer = builder.AddContainer("consumer", "image");
+        if (originFirst)
+        {
+            consumer.WithEnvironment("ORIGIN", web.GetEndpoint("http").BrowserOrigins)
+                .WithEnvironment("DECLARED", declared);
+        }
+        else
+        {
+            consumer.WithEnvironment("DECLARED", declared)
+                .WithEnvironment("ORIGIN", web.GetEndpoint("http").BrowserOrigins);
+        }
+        consumer.WithEnvironment("REPEATED", web.GetEndpoint("http").BrowserOrigins)
+            .WithEnvironment("RESERVED", reservedSuffix);
+        using var app = builder.Build();
+
+        app.Run();
+
+        var captured = environment.Resource.CapturedEnvironmentVariables;
+        Assert.Equal(3, captured.Count);
+        Assert.Same(declared.Resource, captured["WEB_HTTP_BROWSERORIGINS"].Source);
+        Assert.Same(reservedSuffix.Resource, captured["WEB_HTTP_BROWSERORIGINS_1"].Source);
+        var generated = Assert.IsType<ParameterResource>(captured["WEB_HTTP_BROWSERORIGINS_2"].Source);
+        Assert.Equal("web-http-BrowserOrigins-2", generated.Name);
+        Assert.Equal("https://override.example", await declared.Resource.GetValueAsync(default));
+        Assert.Equal("http://localhost:8080", await generated.GetValueAsync(default));
+        await Verify(await File.ReadAllTextAsync(Path.Combine(workspace.Path, ".env.Production")), "env")
+            .UseParameters(originFirst, normalizedCollision);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task BrowserOriginInputsKeepDistinctEndpointIdentities(bool longNames)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        var environment = builder.AddDockerComposeEnvironment("env").WithDashboard(false);
+        var prefix = longNames ? new string('a', 45) : "a";
+        var first = builder.AddContainer($"{prefix}-b", "image").WithHttpEndpoint(name: "c", port: 8080, targetPort: 80).WithExternalHttpEndpoints();
+        var second = builder.AddContainer(prefix, "image").WithHttpEndpoint(name: "b-c", port: 8081, targetPort: 80).WithExternalHttpEndpoints();
+        builder.AddContainer("consumer", "image")
+            .WithEnvironment("FIRST", first.GetEndpoint("c").BrowserOrigins)
+            .WithEnvironment("SECOND", second.GetEndpoint("b-c").BrowserOrigins)
+            .WithEnvironment("REPEATED", first.GetEndpoint("c").BrowserOrigins);
+        using var app = builder.Build();
+
+        app.Run();
+
+        var inputs = environment.Resource.CapturedEnvironmentVariables.Values
+            .Select(value => Assert.IsType<ParameterResource>(value.Source)).ToArray();
+        var values = await Task.WhenAll(inputs.Select(async parameter => await parameter.GetValueAsync(default)));
+        Assert.Equal(["http://localhost:8080", "http://localhost:8081"], values);
+        Assert.All(inputs, parameter => Assert.InRange(parameter.Name.Length, 1, 64));
+        await Verify(await File.ReadAllTextAsync(Path.Combine(workspace.Path, "docker-compose.yaml")), "yaml").UseParameters(longNames);
+    }
+
+    [Theory]
+    [InlineData("http", false, EndpointProperty.BrowserOrigins)]
+    [InlineData("tcp", true, EndpointProperty.BrowserOrigins)]
+    [InlineData("tcp", false, EndpointProperty.BrowserOrigins)]
+    [InlineData("http", false, EndpointProperty.PrimaryBrowserOrigin)]
+    [InlineData("tcp", true, EndpointProperty.PrimaryBrowserOrigin)]
+    [InlineData("tcp", false, EndpointProperty.PrimaryBrowserOrigin)]
+    public async Task BrowserOriginsRejectInternalOrNonHttpEndpoints(string scheme, bool external, EndpointProperty property)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        var environment = builder.AddDockerComposeEnvironment("env").WithDashboard(false);
+        var web = builder.AddContainer("web", "image")
+            .WithEndpoint(name: "endpoint", scheme: scheme, targetPort: 8080, isExternal: external);
+        var consumer = builder.AddContainer("consumer", "image").WithEnvironment("ORIGINS", web.GetEndpoint("endpoint").Property(property));
+        using var app = builder.Build();
+        var context = new DockerComposeEnvironmentContext(environment.Resource, NullLogger.Instance);
+        await context.CreateDockerComposeServiceResourceAsync(web.Resource, builder.ExecutionContext, default);
+        var target = await context.CreateDockerComposeServiceResourceAsync(consumer.Resource, builder.ExecutionContext, default);
+
+        var error = await Assert.ThrowsAsync<NotSupportedException>(() => target.BuildComposeServiceAsync(builder.Configuration));
+
+        Assert.Equal(
+            "Docker Compose cannot provide browser origins for endpoint 'endpoint' on resource 'web' because it is not an external HTTP(S) endpoint. " +
+            "Reference an external HTTP(S) endpoint or supply an explicit origin parameter.", error.GetBaseException().Message);
+        Assert.Empty(environment.Resource.CapturedEnvironmentVariables);
+    }
+
+    [Fact]
+    public void BrowserOriginWithoutPublishedPortRequiresInput()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        var environment = builder.AddDockerComposeEnvironment("env").WithDashboard(false);
+        var web = builder.AddContainer("web", "image").WithHttpEndpoint(targetPort: 80).WithExternalHttpEndpoints();
+        builder.AddContainer("consumer", "image").WithEnvironment("ORIGIN", web.GetEndpoint("http").BrowserOrigins);
+        using var app = builder.Build();
+
+        app.Run();
+
+        var parameter = Assert.IsType<ParameterResource>(Assert.Single(environment.Resource.CapturedEnvironmentVariables).Value.Source);
+        Assert.Null(parameter.Default);
+        Assert.True(parameter.Required);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task BrowserOriginInputsDefaultToPublishedLocalhost(bool overridden)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path, step: "prepare-env");
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        var environment = builder.AddDockerComposeEnvironment("env").WithDashboard(false);
+        var web = builder.AddContainer("web", "image").WithHttpEndpoint(port: 8080, targetPort: 80).WithExternalHttpEndpoints();
+        builder.AddContainer("consumer", "image")
+            .WithEnvironment("ORIGIN", web.GetEndpoint("http").PrimaryBrowserOrigin)
+            .WithEnvironment("ORIGINS", web.GetEndpoint("http").BrowserOrigins);
+        if (overridden)
+        {
+            builder.Configuration["Parameters:web-http-PrimaryBrowserOrigin"] = "https://primary.example";
+            builder.Configuration["Parameters:web-http-BrowserOrigins"] = "https://public.example";
+        }
+        using var app = builder.Build();
+
+        app.Run();
+
+        var inputs = environment.Resource.CapturedEnvironmentVariables.Values.Select(value => Assert.IsType<ParameterResource>(value.Source)).ToArray();
+        var primary = Assert.Single(inputs, input => input.Name == "web-http-PrimaryBrowserOrigin");
+        var origins = Assert.Single(inputs, input => input.Name == "web-http-BrowserOrigins");
+        Assert.Equal("http://localhost:8080", primary.Default!.GetDefaultValue());
+        Assert.Equal(overridden ? "https://primary.example" : "http://localhost:8080", await primary.GetValueAsync(default));
+        Assert.Equal(overridden ? "https://public.example" : "http://localhost:8080", await origins.GetValueAsync(default));
+        await Verify(await File.ReadAllTextAsync(Path.Combine(workspace.Path, ".env.Production")), "env").UseParameters(overridden);
+    }
+
+    [Fact]
+    public async Task BrowserUrlProjectionUsesPublisherExpression()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path, step: "prepare-env");
+        builder.Services.AddSingleton<IDeploymentStateManager>(new InMemoryDeploymentStateManager());
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        var environment = builder.AddDockerComposeEnvironment("env");
+        builder.Configuration["Parameters:frontend-http-BrowserOrigins"] = "https://public.example,https://alias.example";
+        var frontend = builder.AddContainer("frontend", "nginx:alpine").WithHttpEndpoint(port: 8080, targetPort: 8080).WithExternalHttpEndpoints();
+        var origin = frontend.GetEndpoint("HTTP").BrowserOrigins;
+        builder.AddContainer("backend", "nginx:alpine")
+            .WithEnvironment("ORIGIN", origin)
+            .WithEnvironment("ORIGINS", frontend.GetEndpoint("http").BrowserOrigins)
+            .WithEnvironment("CONFIG", ReferenceExpression.Create($"origin={origin}"));
+        using var app = builder.Build();
+
+        app.Run();
+
+        var inputs = environment.Resource.CapturedEnvironmentVariables.Values.ToArray();
+        Assert.Single(inputs);
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var values = await Task.WhenAll(inputs.Select(async input =>
+            await Assert.IsType<ParameterResource>(input.Source).GetValueAsync(cts.Token)));
+        Assert.Equal(["https://public.example,https://alias.example"], values);
+
+        await Verify(await File.ReadAllTextAsync(Path.Combine(workspace.Path, "docker-compose.yaml")), "yaml")
+            .AppendContentAsFile(await File.ReadAllTextAsync(Path.Combine(workspace.Path, ".env")), "env")
+            .AppendContentAsFile(await File.ReadAllTextAsync(Path.Combine(workspace.Path, ".env.Production")), "env");
+    }
+
     [Fact]
     public async Task PublishAsync_GeneratesValidDockerComposeFile()
     {
@@ -107,6 +292,30 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void ConnectionStringNamesWithHyphens_PreserveBothAliases()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        builder.AddDockerComposeEnvironment("docker-compose");
+        var connection = builder.AddConnectionString("my-db", ReferenceExpression.Create($"Host=example"));
+        builder.AddContainer("api", "myimage")
+            .WithReference(connection);
+
+        using var app = builder.Build();
+        app.Run();
+
+        var compose = File.ReadAllText(Path.Combine(workspace.Path, "docker-compose.yaml"));
+        var aliases = Regex.Matches(compose, @"(?m)^\s+(ConnectionStrings__[^:]+):")
+            .Select(static match => match.Groups[1].Value)
+            .Order(StringComparer.Ordinal);
+
+        Assert.Equal(
+            ["ConnectionStrings__my-db", "ConnectionStrings__my_db"],
+            aliases);
+    }
+
+    [Fact]
     public async Task DockerComposeWithProjectResources()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -141,6 +350,26 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
 
         await Verify(File.ReadAllText(composePath), "yaml")
             .AppendContentAsFile(File.ReadAllText(envPath), "env");
+    }
+
+    [Fact]
+    public async Task DockerComposeWithDotnetProjectUsesImagePlaceholderAndWaitDependency()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        builder.AddDockerComposeEnvironment("docker-compose").WithDashboard(false);
+        var api = builder.AddDotnetProject("api", "api.csproj", options => options.ExcludeLaunchProfile = true);
+        builder.AddDotnetProject("worker", "worker.csproj", options => options.ExcludeLaunchProfile = true)
+            .WaitFor(api);
+        using var app = builder.Build();
+
+        app.Run();
+
+        var compose = File.ReadAllText(Path.Combine(workspace.Path, "docker-compose.yaml"));
+        var environment = File.ReadAllText(Path.Combine(workspace.Path, ".env"));
+        await Verify(compose, "yaml")
+            .AppendContentAsFile(environment, "env");
     }
 
     [Fact]
@@ -324,6 +553,25 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task DockerComposePreservesMultilineEnvValuesOnPublish()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var envFilePath = Path.Combine(workspace.Path, ".env");
+        File.WriteAllLines(envFilePath, ["BANNER='hello", "world'", "TAIL=preserved"]);
+
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        builder.AddDockerComposeEnvironment("docker-compose");
+        var parameter = builder.AddParameter("param1");
+        builder.AddContainer("app", "busybox").WithEnvironment("param1", parameter);
+
+        using var app = builder.Build();
+        app.Run();
+
+        await Verify(File.ReadAllText(envFilePath), "env");
+    }
+
+    [Fact]
     public async Task DockerComposeMapsPortsProperly()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -467,6 +715,38 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task PublishAsync_WithDashboard_HonorsRequiredOtlpProtocols()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+
+        builder.AddDockerComposeEnvironment("docker-compose")
+            .WithDashboard();
+
+        builder.AddContainer("default", "my-default")
+            .WithOtlpExporter();
+
+        builder.AddContainer("grpc", "my-grpc")
+            .WithOtlpExporter(OtlpProtocol.Grpc);
+
+        builder.AddContainer("http-protobuf", "my-http-protobuf")
+            .WithOtlpExporter(OtlpProtocol.HttpProtobuf);
+
+        builder.AddContainer("http-json", "my-http-json")
+            .WithOtlpExporter(OtlpProtocol.HttpJson);
+
+        var app = builder.Build();
+        app.Run();
+
+        var composePath = Path.Combine(workspace.Path, "docker-compose.yaml");
+        Assert.True(File.Exists(composePath));
+
+        await Verify(File.ReadAllText(composePath), "yaml");
+    }
+
+    [Fact]
     public async Task PublishAsync_WithDashboardDisabled_DoesNotIncludeDashboardService()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -490,6 +770,65 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
         var composeContent = File.ReadAllText(composePath);
 
         await Verify(composeContent, "yaml");
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task PublishAsync_DenoNativeOpenTelemetryFollowsInjectedEndpoint(bool dashboardEnabled)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+
+        builder.AddDockerComposeEnvironment("docker-compose")
+            .WithDashboard(dashboardEnabled);
+
+        builder.AddContainer("deno", "denoland/deno")
+            .WithOtlpExporterIfEndpointAvailable(OtlpProtocol.HttpProtobuf)
+            .WithOtlpExporterActivationEnvironmentVariable("OTEL_DENO", "true");
+
+        using var app = builder.Build();
+        await app.RunAsync();
+
+        var composePath = Path.Combine(workspace.Path, "docker-compose.yaml");
+        Assert.True(File.Exists(composePath));
+        var compose = await File.ReadAllTextAsync(composePath);
+
+        var hasEndpoint = compose.Contains("OTEL_EXPORTER_OTLP_ENDPOINT", StringComparison.Ordinal);
+        var hasNativeDenoTelemetry = compose.Contains("OTEL_DENO", StringComparison.Ordinal);
+
+        Assert.Equal(dashboardEnabled, hasEndpoint);
+        Assert.Equal(hasEndpoint, hasNativeDenoTelemetry);
+    }
+
+    [Fact]
+    public async Task PublishAsync_LastOtlpExporterAnnotationDoesNotApplySupersededActivation()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+
+        builder.AddDockerComposeEnvironment("docker-compose")
+            .WithDashboard();
+
+        builder.AddContainer("deno", "denoland/deno")
+            .WithOtlpExporterIfEndpointAvailable(OtlpProtocol.HttpProtobuf)
+            .WithOtlpExporterActivationEnvironmentVariable("OTEL_DENO", "true")
+            .WithOtlpExporter();
+
+        using var app = builder.Build();
+        await app.RunAsync();
+
+        var composePath = Path.Combine(workspace.Path, "docker-compose.yaml");
+        Assert.True(File.Exists(composePath));
+        var compose = await File.ReadAllTextAsync(composePath);
+
+        Assert.Contains("OTEL_EXPORTER_OTLP_ENDPOINT", compose);
+        Assert.Contains("OTEL_EXPORTER_OTLP_PROTOCOL: \"grpc\"", compose);
+        Assert.False(compose.Contains("OTEL_DENO", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -907,7 +1246,7 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
 
         // Add a container with both bind mounts and volumes
         builder.AddContainer("my-service", "my-image")
-            .WithVolume("my-volume", "/container/volume-data")
+            .WithVolume("my-volume", "/container/volume-data", env: "DATA_PATH")
             .WithBindMount("/host/path/data", "/container/bind-data")
             .WithBindMount("/var/run/docker.sock", "/var/run/docker.sock");
 
@@ -921,6 +1260,31 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
 
         await Verify(File.ReadAllText(composePath), "yaml")
             .AppendContentAsFile(File.ReadAllText(envPath), "env");
+    }
+
+    [Fact]
+    public async Task PublishAsync_ProjectAndExecutableVolumesIncludeEnvironmentPaths()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+
+        builder.AddDockerComposeEnvironment("docker-compose")
+            .WithDashboard(false);
+
+        builder.AddProject<TestProject>("project", launchProfileName: null)
+            .WithVolume("project-data", "/srv/project", env: "DATA_PATH");
+        builder.AddExecutable("executable", "node", ".")
+            .PublishAsDockerFile()
+            .WithVolume("executable-data", "/srv/executable", env: "DATA_PATH");
+
+        var app = builder.Build();
+        app.Run();
+
+        var composePath = Path.Combine(workspace.Path, "docker-compose.yaml");
+        Assert.True(File.Exists(composePath));
+
+        await Verify(File.ReadAllText(composePath), "yaml");
     }
 
     [Fact]
@@ -1119,6 +1483,37 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
         await Verify(File.ReadAllText(composePath), "yaml");
     }
 
+    [Fact]
+    public async Task PublishAsync_ResolvesEndpointTlsEnabledProperty()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+
+        builder.AddDockerComposeEnvironment("docker-compose");
+
+        var cache = builder.AddContainer("cache", "redis")
+            .WithEndpoint(targetPort: 6379, name: "tcp", scheme: "tcp")
+            .WithEndpoint(targetPort: 6380, name: "tls", scheme: "tcp")
+            .WithEndpoint("tls", endpoint => endpoint.TlsEnabled = true);
+
+        builder.AddContainer("myapp", "mcr.microsoft.com/dotnet/aspnet:8.0")
+            .WithEnvironment("CACHE_TLS", cache.GetEndpoint("tls").Property(EndpointProperty.TlsEnabled))
+            .WithEnvironment("CACHE_PLAIN_TLS", cache.GetEndpoint("tcp").Property(EndpointProperty.TlsEnabled));
+
+        var app = builder.Build();
+        app.Run();
+
+        var composePath = Path.Combine(workspace.Path, "docker-compose.yaml");
+        Assert.True(File.Exists(composePath));
+
+        var composeContent = await File.ReadAllTextAsync(composePath);
+
+        Assert.Contains("CACHE_TLS: \"True\"", composeContent);
+        Assert.Contains("CACHE_PLAIN_TLS: \"False\"", composeContent);
+    }
+
     private sealed class TestConditionProvider(string value) : IValueProvider, IManifestExpressionProvider
     {
         public string ValueExpression => "test-condition";
@@ -1198,3 +1593,4 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
         public Microsoft.Extensions.FileProviders.IFileProvider ContentRootFileProvider { get; set; } = null!;
     }
 }
+#pragma warning restore CS0618

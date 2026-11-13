@@ -15,7 +15,7 @@ using Microsoft.Extensions.Configuration;
 namespace Aspire.Hosting.Tests;
 
 [Trait("Partition", "2")]
-public class DebugSupportExtensionsTests
+public class DebugSupportExtensionsTests(ITestOutputHelper outputHelper)
 {
     [Fact]
     public void LaunchConfigurationCallbackContextExposesOnlyLaunchProducerInputs()
@@ -99,7 +99,9 @@ public class DebugSupportExtensionsTests
     public async Task CreateLaunchConfigurationResolvesTheLaunchProfileForProjectResources()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
+#pragma warning disable CS0618 // Retain legacy ProjectResource IDE launch-configuration compatibility.
         var project = builder.AddProject<Projects.ServiceA>("proj", launchProfileName: "http");
+#pragma warning restore CS0618
 
         var launchConfiguration = Assert.IsType<ProjectLaunchConfiguration>(await CreateLaunchConfigurationForTestAsync(project.Resource, ExecutableLaunchMode.Debug));
 
@@ -107,6 +109,10 @@ public class DebugSupportExtensionsTests
         Assert.Equal(GetProjectPath(project.Resource), launchConfiguration.ProjectPath);
         Assert.Equal("http", launchConfiguration.LaunchProfile);
         Assert.False(launchConfiguration.DisableLaunchProfile);
+        Assert.Equal(
+            builder.AppHostAssembly?.GetCustomAttribute<AssemblyConfigurationAttribute>()?.Configuration,
+            launchConfiguration.BuildConfiguration);
+        Assert.False(launchConfiguration.SuppressBuild);
     }
 
     [Fact]
@@ -116,7 +122,9 @@ public class DebugSupportExtensionsTests
         // ExcludeLaunchProfileAnnotation when the configuration is finalized. Passing a null launch profile
         // name applies that annotation.
         using var builder = TestDistributedApplicationBuilder.Create();
+#pragma warning disable CS0618 // Retain legacy ProjectResource IDE launch-configuration compatibility.
         var project = builder.AddProject<Projects.ServiceA>("proj", launchProfileName: null);
+#pragma warning restore CS0618
 
         var launchConfiguration = Assert.IsType<ProjectLaunchConfiguration>(await CreateLaunchConfigurationForTestAsync(project.Resource, ExecutableLaunchMode.Debug));
 
@@ -128,7 +136,9 @@ public class DebugSupportExtensionsTests
     public void AddProjectRegistersProjectDebugSupportOnce()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
+#pragma warning disable CS0618 // Retain legacy ProjectResource IDE launch-configuration compatibility.
         var project = builder.AddProject<Projects.ServiceA>("proj", launchProfileName: "http");
+#pragma warning restore CS0618
 
         var debugSupport = Assert.Single(project.Resource.Annotations.OfType<SupportsDebuggingAnnotation>());
 
@@ -141,7 +151,9 @@ public class DebugSupportExtensionsTests
         // A resource can replace the project debug support that WithProjectDefaults registers. The producer
         // owns the whole configuration, so its output is returned (and sent) verbatim.
         using var builder = TestDistributedApplicationBuilder.Create();
+#pragma warning disable CS0618 // Retain legacy ProjectResource IDE launch-configuration compatibility.
         var project = builder.AddProject<Projects.ServiceA>("proj", launchProfileName: "http")
+#pragma warning restore CS0618
                              .WithDebugSupport(mode => new ProjectLaunchConfiguration
                              {
                                  Mode = mode,
@@ -346,12 +358,50 @@ public class DebugSupportExtensionsTests
     [Fact]
     public void SupportsDebuggingTreatsProjectAsSupportedWhenTheIdeSendsNoCapabilityList()
     {
-        // Visual Studio does not send DEBUG_SESSION_INFO at all. It launches every project resource
-        // natively, so "project" stays implicitly supported instead of falling back to a plain process.
+        // Visual Studio does not send DEBUG_SESSION_INFO at all. It launches loaded project files natively,
+        // so "project" stays implicitly supported instead of using a plain process.
         using var builder = TestDistributedApplicationBuilder.Create();
+#pragma warning disable CS0618 // Retain legacy ProjectResource IDE launch-configuration compatibility.
         var project = builder.AddProject<Projects.ServiceA>("proj", launchProfileName: "http");
+#pragma warning restore CS0618
 
         Assert.True(project.Resource.SupportsDebugging(CreateConfiguration(), out var annotation));
+        Assert.Equal(KnownLaunchConfigurationTypes.Project, annotation.LaunchConfigurationType);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("{ not json")]
+    public void SupportsDebuggingDoesNotTreatFileBasedAppsAsImplicitlySupported(string? debugSessionInfo)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var appPath = Path.Combine(workspace.WorkspaceRoot.FullName, "app.cs");
+        File.WriteAllText(appPath, "");
+        using var builder = TestDistributedApplicationBuilder.Create();
+#pragma warning disable CS0618 // Verify debugging compatibility for legacy CSharpApp resources.
+        var fileApp = builder.AddCSharpApp("file-app", appPath);
+#pragma warning restore CS0618
+
+        var configuration = CreateConfiguration(debugSessionInfo: debugSessionInfo);
+
+        Assert.False(fileApp.Resource.SupportsDebugging(configuration, out _));
+    }
+
+    [Fact]
+    public void SupportsDebuggingTreatsFileBasedAppsAsSupportedWhenTheIdeAdvertisesProject()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var appPath = Path.Combine(workspace.WorkspaceRoot.FullName, "app.cs");
+        File.WriteAllText(appPath, "");
+        using var builder = TestDistributedApplicationBuilder.Create();
+#pragma warning disable CS0618 // Verify debugging compatibility for legacy CSharpApp resources.
+        var fileApp = builder.AddCSharpApp("file-app", appPath);
+#pragma warning restore CS0618
+
+        var configuration = CreateConfiguration(
+            debugSessionInfo: CreateDebugSessionInfo([KnownLaunchConfigurationTypes.Project]));
+
+        Assert.True(fileApp.Resource.SupportsDebugging(configuration, out var annotation));
         Assert.Equal(KnownLaunchConfigurationTypes.Project, annotation.LaunchConfigurationType);
     }
 
@@ -390,7 +440,9 @@ public class DebugSupportExtensionsTests
         // includes it when the C# extension is installed; treating it as implicit would route the
         // resource to an IDE that cannot launch it and leave it stuck.
         using var builder = TestDistributedApplicationBuilder.Create();
+#pragma warning disable CS0618 // Retain legacy ProjectResource IDE launch-configuration compatibility.
         var project = builder.AddProject<Projects.ServiceA>("proj", launchProfileName: "http");
+#pragma warning restore CS0618
 
         var configuration = CreateConfiguration(debugSessionInfo: CreateDebugSessionInfo(["go", "python"]));
 
@@ -401,7 +453,9 @@ public class DebugSupportExtensionsTests
     public void SupportsDebuggingReturnsFalseWhenTheResourceForcesProcessExecution()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
+#pragma warning disable CS0618 // Retain legacy ProjectResource IDE launch-configuration compatibility.
         var project = builder.AddProject<Projects.ServiceA>("proj", launchProfileName: "http")
+#pragma warning restore CS0618
                              .WithAnnotation(new ForceProcessExecutionAnnotation());
 
         Assert.False(project.Resource.SupportsDebugging(CreateConfiguration(), out _));
@@ -411,7 +465,9 @@ public class DebugSupportExtensionsTests
     public void SupportsDebuggingReturnsFalseForAPersistentResource()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
+#pragma warning disable CS0618 // Retain legacy ProjectResource IDE launch-configuration compatibility.
         var project = builder.AddProject<Projects.ServiceA>("proj", launchProfileName: "http")
+#pragma warning restore CS0618
                              .WithPersistentLifetime();
 
         Assert.False(project.Resource.SupportsDebugging(CreateConfiguration(), out _));
@@ -423,7 +479,9 @@ public class DebugSupportExtensionsTests
         // Malformed DEBUG_SESSION_INFO is swallowed and treated as "no capability list", so the resource
         // keeps the Visual Studio behavior instead of failing the run outright.
         using var builder = TestDistributedApplicationBuilder.Create();
+#pragma warning disable CS0618 // Retain legacy ProjectResource IDE launch-configuration compatibility.
         var project = builder.AddProject<Projects.ServiceA>("proj", launchProfileName: "http");
+#pragma warning restore CS0618
         var executable = builder.AddExecutable("app", "go", ".")
                                 .WithDebugSupport(mode => new TestGoLaunchConfiguration { Mode = mode }, "go");
 

@@ -215,7 +215,7 @@ internal class ConsoleInteractionService : IInteractionService
         }
     }
 
-    public async Task<string> PromptForStringAsync(string promptText, Func<string, ValidationResult>? validator = null, bool isSecret = false, bool required = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default)
+    public async Task<string> PromptForStringAsync(string promptText, Func<string, ValidationResult>? validator = null, bool isSecret = false, bool required = false, PromptBinding<string?>? binding = null, bool logResponse = true, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(promptText, nameof(promptText));
 
@@ -246,7 +246,7 @@ internal class ConsoleInteractionService : IInteractionService
         // background debug output doesn't drown the prompt UI.
         using var promptScope = _logBufferContext.BeginInteractivePromptScope();
 
-        MessageLogger.LogInformation("Prompt: {PromptText} (default: {DefaultValue}, secret: {IsSecret})", promptText, isSecret ? "****" : defaultValue ?? "(none)", isSecret);
+        MessageLogger.LogInformation("Prompt: {PromptText} (default: {DefaultValue}, secret: {IsSecret})", promptText, isSecret || !logResponse ? "****" : defaultValue ?? "(none)", isSecret);
 
         var displayDefaultValue = defaultValue?.EscapeMarkup();
 
@@ -269,7 +269,7 @@ internal class ConsoleInteractionService : IInteractionService
         }
 
         var result = await MessageConsole.PromptAsync(prompt, cancellationToken);
-        MessageLogger.LogInformation("Prompt result: {Result}", isSecret ? "****" : result);
+        MessageLogger.LogInformation("Prompt result: {Result}", isSecret || !logResponse ? "****" : result);
         if (defaultValue is not null && string.Equals(result, displayDefaultValue, StringComparison.Ordinal))
         {
             return defaultValue;
@@ -278,16 +278,23 @@ internal class ConsoleInteractionService : IInteractionService
         return result;
     }
 
-    public Task<string> PromptForFilePathAsync(string promptText, Func<string, ValidationResult>? validator = null, bool directory = false, bool required = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default)
+    public Task<string> PromptForFilePathAsync(string promptText, Func<string, ValidationResult>? validator = null, bool directory = false, bool required = false, PromptBinding<string?>? binding = null, bool retryOnValidationFailure = false, CancellationToken cancellationToken = default)
     {
-        return PromptForStringAsync(promptText, validator, isSecret: false, required, binding, cancellationToken);
+        return PromptForStringAsync(promptText, validator, isSecret: false, required, binding, cancellationToken: cancellationToken);
     }
 
-    public async Task<T> PromptForSelectionAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, PromptBinding<string?>? binding = null, bool echoSelected = true, CancellationToken cancellationToken = default) where T : notnull
+    public Task<T> PromptForSelectionAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, PromptBinding<string?>? binding = null, bool echoSelected = true, CancellationToken cancellationToken = default) where T : notnull
+        => PromptForSelectionCoreAsync(promptText, choices, choiceFormatter, null, choiceFormatter, binding, echoSelected, cancellationToken);
+
+    public Task<T> PromptForSelectionAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, Func<T, SelectionChoiceGroup?> choiceGroup, Func<T, string> groupedChoiceFormatter, PromptBinding<string?>? binding = null, bool echoSelected = true, CancellationToken cancellationToken = default) where T : notnull
+        => PromptForSelectionCoreAsync(promptText, choices, choiceFormatter, choiceGroup, groupedChoiceFormatter, binding, echoSelected, cancellationToken);
+
+    private async Task<T> PromptForSelectionCoreAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, Func<T, SelectionChoiceGroup?>? choiceGroup, Func<T, string> groupedChoiceFormatter, PromptBinding<string?>? binding, bool echoSelected, CancellationToken cancellationToken) where T : notnull
     {
         ArgumentNullException.ThrowIfNull(promptText, nameof(promptText));
         ArgumentNullException.ThrowIfNull(choices, nameof(choices));
         ArgumentNullException.ThrowIfNull(choiceFormatter, nameof(choiceFormatter));
+        ArgumentNullException.ThrowIfNull(groupedChoiceFormatter, nameof(groupedChoiceFormatter));
 
         // Materialize once to avoid re-enumerating the choices enumerable.
         var choicesList = choices as IReadOnlyList<T> ?? choices.ToList();
@@ -325,26 +332,104 @@ internal class ConsoleInteractionService : IInteractionService
 
         MessageLogger.LogInformation("Selection prompt: {PromptText}", promptText);
 
-        var prompt = new SelectionPrompt<T>()
-            .Title(promptText)
-            .UseConverter(choiceFormatter)
-            .AddChoices(choicesList)
-            .PageSize(10)
-            .EnableSearch();
+        T result;
+        if (choiceGroup is null)
+        {
+            var prompt = new SelectionPrompt<T>()
+                .Title(promptText)
+                .UseConverter(choiceFormatter)
+                .AddChoices(choicesList)
+                .PageSize(10)
+                .EnableSearch();
+            prompt.SearchHighlightStyle = s_searchHighlightStyle;
+            result = await MessageConsole.PromptAsync(prompt, cancellationToken);
+        }
+        else
+        {
+            var prompt = new SelectionPrompt<SelectionPromptItem>()
+                .Title(promptText)
+                // Spectre reserves a cell for the arrow, a space, right padding, and
+                // two more cells for grouped children. Its converter also controls
+                // search, so only the visible prefix remains searchable after cropping.
+                // https://github.com/spectreconsole/spectre.console/blob/0.57.2/src/Spectre.Console/Prompts/SelectionPrompt.cs
+                .UseConverter(item =>
+                {
+                    var label = FormatSelectionLabel(item.Label, MessageConsole.Profile.Width - item.Indent - 3);
+                    // Apply the trusted presentation style after cropping and escaping the
+                    // source label so source-provided markup cannot change its appearance.
+                    return item is SelectionPromptGroup { Style: { } style }
+                        ? $"[{style.ToMarkup()}]{label}[/]"
+                        : label;
+                })
+                .PageSize(10)
+                .EnableSearch();
+            prompt.Mode = SelectionMode.Leaf;
+            prompt.DisabledStyle = new Style(decoration: Decoration.Bold);
+            prompt.SearchHighlightStyle = s_searchHighlightStyle;
+            Dictionary<string, ISelectionItem<SelectionPromptItem>> groups = [];
+            foreach (var choice in choicesList)
+            {
+                var group = choiceGroup(choice);
+                var item = new SelectionPromptValue<T>(choice, groupedChoiceFormatter(choice), group is not null);
+                // Spectre starts value-type prompts on default(T), if present (e.g. false
+                // for a confirmation). Wrapping choices must not change that default.
+                if (prompt.DefaultValue is null && default(T) is { } typeDefaultValue && EqualityComparer<T>.Default.Equals(choice, typeDefaultValue))
+                {
+                    prompt.DefaultValue = item;
+                }
+                if (group is not null)
+                {
+                    if (!groups.TryGetValue(group.Id, out var header))
+                    {
+                        // Only create headers for populated groups. An empty Spectre group is
+                        // a leaf and would otherwise become a selectable value.
+                        header = prompt.AddChoice(new SelectionPromptGroup(group.Label.EscapeMarkup(), group.Style));
+                        groups.Add(group.Id, header);
+                    }
+                    header.AddChild(item);
+                }
+                else
+                {
+                    prompt.AddChoice(item);
+                }
+            }
 
-        prompt.SearchHighlightStyle = s_searchHighlightStyle;
+            var selected = await MessageConsole.PromptAsync(prompt, cancellationToken);
+            if (selected is not SelectionPromptValue<T> selectedValue)
+            {
+                throw new InvalidOperationException("A selection group cannot be selected.");
+            }
+            result = selectedValue.Value;
+        }
 
-        var result = await MessageConsole.PromptAsync(prompt, cancellationToken);
         MessageLogger.LogInformation("Selection result: {Result}", choiceFormatter(result));
 
         // The SelectionPrompt clears its display after the user selects.
         // Echo the prompt text and selected value so the user can see what was chosen.
         if (echoSelected)
         {
-            MessageConsole.MarkupLine($"{promptText} {choiceFormatter(result)}");
+            var message = $"{promptText} {groupedChoiceFormatter(result)}";
+            MessageConsole.MarkupLine(choiceGroup is null ? message : FormatSelectionLabel(message, MessageConsole.Profile.Width));
         }
 
         return result;
+    }
+
+    internal static string FormatSelectionLabel(string markup, int maxWidth)
+    {
+        if (maxWidth <= 0)
+        {
+            return string.Empty;
+        }
+
+        // Measure decoded text, not markup escapes (e.g. "[[services]]"), and
+        // normalize metadata such as "Frontend\r\n  and API" to a single line.
+        var text = string.Join(' ', Emoji.Replace(markup.RemoveMarkup()).Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+        text = string.Concat(text.Where(ch => !char.IsControl(ch)));
+        var segment = new Segment(text);
+        // Spectre crops by terminal cells and grapheme clusters, preserving wide
+        // characters and combining sequences instead of slicing UTF-16 code units.
+        return Segment.SplitOverflow(segment, Overflow.Ellipsis, maxWidth)[0].Text.EscapeMarkup();
     }
 
     public async Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, IEnumerable<T>? preSelected = null, bool optional = false, PromptBinding<string?>? binding = null, bool echoSelected = true, IEnumerable<T>? bindingChoices = null, CancellationToken cancellationToken = default) where T : notnull
@@ -641,6 +726,13 @@ internal class ConsoleInteractionService : IInteractionService
 
     public async Task DisplayLiveAsync(IRenderable initialRenderable, Func<Action<IRenderable>, Task> callback)
     {
+        if (!_hostEnvironment.SupportsInteractiveOutput)
+        {
+            // The callback supplies replacement snapshots, so appending them would duplicate prior
+            // content. Callers must define incremental static output when a live region is unavailable.
+            throw new InvalidOperationException("Live rendering requires interactive output.");
+        }
+
         await MessageConsole.Live(initialRenderable)
             .AutoClear(false)
             .StartAsync(async ctx =>
@@ -652,7 +744,7 @@ internal class ConsoleInteractionService : IInteractionService
     public void DisplayCancellationMessage(string? message = null, ConsoleOutput? consoleOverride = null)
     {
         GetConsoleOutput(consoleOverride).WriteLine();
-        DisplayMessage(KnownEmojis.StopSign, $"[teal bold]{message ?? InteractionServiceStrings.StoppingAspire}[/]", allowMarkup: true, consoleOverride: consoleOverride);
+        DisplayMessage(KnownEmojis.StopSign, $"[teal bold]{message ?? InteractionServiceStrings.OperationCancelled}[/]", allowMarkup: true, consoleOverride: consoleOverride);
     }
 
     public async Task<bool> PromptConfirmAsync(string promptText, PromptBinding<bool>? binding = null, CancellationToken cancellationToken = default)
@@ -861,4 +953,8 @@ internal class ConsoleInteractionService : IInteractionService
         ThrowNonInteractiveInvalidValue(value, binding.SymbolDisplayName, choicesList, choiceFormatter);
         return default; // unreachable
     }
+
+    private abstract record SelectionPromptItem(string Label, int Indent);
+    private sealed record SelectionPromptValue<T>(T Value, string Text, bool Grouped) : SelectionPromptItem(Text, Grouped ? 2 : 0) where T : notnull;
+    private sealed record SelectionPromptGroup(string Text, Style? Style) : SelectionPromptItem(Text, 0);
 }

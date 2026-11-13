@@ -1,16 +1,19 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
 using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Eventing;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Aspire.TestUtilities;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 
 #pragma warning disable ASPIRECERTIFICATES001
 #pragma warning disable ASPIREPERSISTENCE001
@@ -264,6 +267,78 @@ public class AddRedisTests(ITestOutputHelper testOutputHelper)
         var redisinsight = builder.Resources.Single(r => r.Name.Equals("redisinsight"));
 
         Assert.NotNull(redisinsight);
+    }
+
+    [Fact]
+    public void WithRedisCommanderHidesTheCommanderResource()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.AddRedis("myredis").WithRedisCommander();
+
+        var commander = Assert.Single(builder.Resources.OfType<RedisCommanderResource>());
+        var hidden = Assert.Single(commander.Annotations.OfType<HiddenAnnotation>());
+        Assert.Equal(HiddenBehavior.Always, hidden.Behavior);
+    }
+
+    [Fact]
+    public void WithRedisInsightHidesTheInsightResource()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.AddRedis("myredis").WithRedisInsight();
+
+        var insight = Assert.Single(builder.Resources.OfType<RedisInsightResource>());
+        var hidden = Assert.Single(insight.Annotations.OfType<HiddenAnnotation>());
+        Assert.Equal(HiddenBehavior.Always, hidden.Behavior);
+    }
+
+    [Fact]
+    public async Task WithRedisInsightAddsManagementLinkToEveryRedisResourceInTheApp()
+    {
+        using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
+        var redis1 = builder.AddRedis("myredis1").WithRedisInsight();
+        var redis2 = builder.AddRedis("myredis2");
+
+        using var app = builder.Build();
+        var eventing = app.Services.GetRequiredService<IDistributedApplicationEventing>();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var insight = Assert.Single(model.Resources.OfType<RedisInsightResource>());
+
+        await eventing.PublishAsync(new BeforeStartEvent(app.Services, model));
+
+        foreach (var redis in new[] { redis1.Resource, redis2.Resource })
+        {
+            var managementUrl = await GetManagementUrlAsync(redis, "Manage (Insights)");
+            Assert.Equal(insight.Name, managementUrl.Endpoint?.Resource.Name);
+            Assert.Equal("http", managementUrl.Endpoint?.EndpointName);
+            Assert.Equal("/", managementUrl.Url);
+            Assert.Single(insight.Annotations.OfType<ResourceRelationshipAnnotation>(), r => r.Type == "Manages" && r.Resource == redis);
+        }
+    }
+
+    [Fact]
+    public async Task WithRedisCommanderAddsManagementLinkToEveryRedisResourceInTheApp()
+    {
+        using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
+        var redis1 = builder.AddRedis("myredis1").WithRedisCommander();
+        var redis2 = builder.AddRedis("myredis2").WithRedisCommander();
+        // redis3 never calls WithRedisCommander() itself, but Commander manages every Redis resource in the app.
+        var redis3 = builder.AddRedis("myredis3");
+
+        using var app = builder.Build();
+        var eventing = app.Services.GetRequiredService<IDistributedApplicationEventing>();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var commander = Assert.Single(model.Resources.OfType<RedisCommanderResource>());
+
+        await eventing.PublishAsync(new BeforeStartEvent(app.Services, model));
+
+        foreach (var redis in new[] { redis1.Resource, redis2.Resource, redis3.Resource })
+        {
+            var managementUrl = await GetManagementUrlAsync(redis, "Manage (Commander)");
+            Assert.Equal(commander.Name, managementUrl.Endpoint?.Resource.Name);
+            Assert.Equal("http", managementUrl.Endpoint?.EndpointName);
+            Assert.Equal("/", managementUrl.Url);
+            Assert.Single(commander.Annotations.OfType<ResourceRelationshipAnnotation>(), r => r.Type == "Manages" && r.Resource == redis);
+        }
     }
 
     [Fact]
@@ -707,6 +782,66 @@ public class AddRedisTests(ITestOutputHelper testOutputHelper)
         Assert.Equal(1, args.Count(arg => arg == "/usr/local/lib/redis/modules/rejson.so"));
     }
 
+    [Fact]
+    [SkipOnPlatform(TestPlatforms.Windows, "Executes the published /bin/sh command line.")]
+    public async Task PublishModeArgsPassWithArgsValuesToRedisServer()
+    {
+        // https://github.com/microsoft/aspire/issues/21400
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var redis = builder.AddRedis("myRedis")
+            .WithDataVolume()
+            .WithArgs("--dir", "/data", "--appendonly", "yes", "--save", "");
+
+        Assert.Equal("/bin/sh", redis.Resource.Entrypoint);
+
+        var executionContext = new DistributedApplicationExecutionContext(
+            new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Publish));
+        var configuration = await ExecutionConfigurationBuilder.Create(redis.Resource)
+            .WithArgumentsConfig()
+            .BuildAsync(executionContext, NullLogger.Instance, CancellationToken.None);
+        Assert.Null(configuration.Exception);
+        var args = configuration.Arguments.Select(a => a.Value).ToList();
+
+        // Run the published command line through the real shell with a stub redis-server that
+        // reports the arguments it receives, one per line.
+        var binDirectory = Directory.CreateTempSubdirectory("aspire-redis-args");
+        try
+        {
+            var stubPath = Path.Combine(binDirectory.FullName, "redis-server");
+            File.WriteAllText(stubPath, "#!/bin/sh\nfor arg in \"$@\"; do printf '[%s]\\n' \"$arg\"; done\n");
+            // The analyzer cannot see through [SkipOnPlatform].
+#pragma warning disable CA1416
+            File.SetUnixFileMode(stubPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+#pragma warning restore CA1416
+
+            var startInfo = new ProcessStartInfo(redis.Resource.Entrypoint!)
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+            };
+            foreach (var arg in args)
+            {
+                startInfo.ArgumentList.Add(arg);
+            }
+            startInfo.Environment["PATH"] = $"{binDirectory.FullName}:{Environment.GetEnvironmentVariable("PATH")}";
+            startInfo.Environment["REDIS_PASSWORD"] = "p@ss";
+
+            using var process = Process.Start(startInfo)!;
+            var stdout = await process.StandardOutput.ReadToEndAsync();
+            var stderr = await process.StandardError.ReadToEndAsync();
+            await process.WaitForExitAsync();
+
+            Assert.True(process.ExitCode == 0, $"Shell exited with {process.ExitCode}: {stderr}");
+            Assert.Equal(
+                ["[--requirepass]", "[p@ss]", "[--save]", "[60]", "[1]", "[--dir]", "[/data]", "[--appendonly]", "[yes]", "[--save]", "[]"],
+                stdout.Split('\n', StringSplitOptions.RemoveEmptyEntries));
+        }
+        finally
+        {
+            binDirectory.Delete(recursive: true);
+        }
+    }
+
     private static async Task<string> GetCommandLineArgs(IResourceBuilder<RedisResource> builder)
     {
         var args = await ArgumentEvaluator.GetArgumentListAsync(builder.Resource);
@@ -969,6 +1104,20 @@ public class AddRedisTests(ITestOutputHelper testOutputHelper)
         var connectionStringExpression = redis.Resource.ConnectionStringExpression;
         AssertContainsConditionalReference(connectionStringExpression.ValueExpression);
         Assert.DoesNotContain(",ssl=true", connectionStringExpression.ValueExpression);
+    }
+
+    private static async Task<ResourceUrlAnnotation> GetManagementUrlAsync(IResource resource, string displayText)
+    {
+        var context = new ResourceUrlsCallbackContext(
+            new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run),
+            resource);
+
+        foreach (var callback in resource.Annotations.OfType<ResourceUrlsCallbackAnnotation>())
+        {
+            await callback.Callback(context);
+        }
+
+        return Assert.Single(context.Urls, url => url.DisplayText == displayText);
     }
 
     private static X509Certificate2 CreateTestCertificate()

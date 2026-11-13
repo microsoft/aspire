@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Json;
 using Microsoft.DotNet.XUnitExtensions;
 using Xunit;
 
@@ -27,6 +28,20 @@ public class ReleaseScriptShellTests(ITestOutputHelper testOutput)
         result.EnsureSuccessful();
         Assert.Contains("Usage", result.Output, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Aspire CLI", result.Output);
+        Assert.Contains("--skip-completions", result.Output);
+    }
+
+    [Fact]
+    public async Task SkipCompletions_DryRun_DoesNotGenerateOrRegister()
+    {
+        using var env = new TestEnvironment();
+        using var cmd = new ScriptToolCommand(s_scriptPath, env, _testOutput);
+
+        var result = await cmd.ExecuteAsync("--dry-run", "--skip-path", "--skip-completions");
+
+        result.EnsureSuccessful();
+        Assert.Contains("Skipping shell completions due to --skip-completions", result.Output);
+        Assert.Empty(Directory.GetFileSystemEntries(env.MockHome));
     }
 
     [Fact]
@@ -85,6 +100,223 @@ public class ReleaseScriptShellTests(ITestOutputHelper testOutput)
         Assert.Contains(customPath, result.Output);
     }
 
+    [Fact]
+    public async Task DefaultReleaseInstall_DownloadsFromLatestGitHubRelease()
+    {
+        using var env = new TestEnvironment();
+        var installPath = Path.Combine(env.TempDirectory, "install");
+        var tempDir = Path.Combine(env.TempDirectory, "download");
+        var capturePath = Path.Combine(env.TempDirectory, "downloads.txt");
+        Directory.CreateDirectory(tempDir);
+        using var cmd = new ScriptFunctionCommand(
+            s_scriptPath,
+            $$"""
+            INSTALL_PATH='{{installPath}}'
+            VERSION=''
+            QUALITY='release'
+            OS='linux'
+            ARCH='x64'
+            DRY_RUN=false
+            get_latest_stable_version() { printf '13.5.4'; }
+            download_file() { printf '%s\n' "$1" >> '{{capturePath}}'; return 0; }
+            validate_checksum() { return 0; }
+            install_archive() {
+                mkdir -p "$2"
+                printf '#!/bin/sh\nexit 0\n' > "$2/aspire"
+                chmod +x "$2/aspire"
+            }
+            download_and_install_archive '{{tempDir}}'
+            """,
+            env,
+            _testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+        var downloads = await File.ReadAllLinesAsync(capturePath);
+        Assert.Equal(
+            [
+                "https://github.com/microsoft/aspire/releases/download/v13.5.4/aspire-cli-linux-x64-13.5.4.tar.gz",
+                "https://github.com/microsoft/aspire/releases/download/v13.5.4/aspire-cli-linux-x64-13.5.4.tar.gz.sha512"
+            ],
+            downloads);
+    }
+
+    [Fact]
+    public async Task DefaultReleaseInstall_FallsBackToStableChannelWhenReleaseResolutionFails()
+    {
+        using var env = new TestEnvironment();
+        var installPath = Path.Combine(env.TempDirectory, "install");
+        var tempDir = Path.Combine(env.TempDirectory, "download");
+        var capturePath = Path.Combine(env.TempDirectory, "downloads.txt");
+        Directory.CreateDirectory(tempDir);
+        using var cmd = new ScriptFunctionCommand(
+            s_scriptPath,
+            $$"""
+            INSTALL_PATH='{{installPath}}'
+            VERSION=''
+            QUALITY='release'
+            OS='linux'
+            ARCH='x64'
+            DRY_RUN=false
+            get_latest_stable_version() { return 1; }
+            download_file() { printf '%s\n' "$1" >> '{{capturePath}}'; return 0; }
+            validate_checksum() { return 0; }
+            install_archive() {
+                mkdir -p "$2"
+                printf '#!/bin/sh\nexit 0\n' > "$2/aspire"
+                chmod +x "$2/aspire"
+            }
+            download_and_install_archive '{{tempDir}}'
+            """,
+            env,
+            _testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+        var downloads = await File.ReadAllLinesAsync(capturePath);
+        Assert.Equal(
+            [
+                "https://aka.ms/dotnet/9/aspire/ga/daily/aspire-cli-linux-x64.tar.gz",
+                "https://aka.ms/dotnet/9/aspire/ga/daily/aspire-cli-linux-x64.tar.gz.sha512"
+            ],
+            downloads);
+    }
+
+    [Fact]
+    public async Task ExplicitVersionInstall_DoesNotCallReleaseResolution()
+    {
+        // Supplying an explicit --version must be hermetic: it must never trigger the
+        // GitHub "latest release" network resolution, even though QUALITY stays 'release'.
+        using var env = new TestEnvironment();
+        var installPath = Path.Combine(env.TempDirectory, "install");
+        var tempDir = Path.Combine(env.TempDirectory, "download");
+        var capturePath = Path.Combine(env.TempDirectory, "downloads.txt");
+        Directory.CreateDirectory(tempDir);
+        using var cmd = new ScriptFunctionCommand(
+            s_scriptPath,
+            $$"""
+            INSTALL_PATH='{{installPath}}'
+            VERSION='13.5.3'
+            QUALITY='release'
+            OS='linux'
+            ARCH='x64'
+            DRY_RUN=false
+            get_latest_stable_version() { echo "should not be called" >&2; return 1; }
+            download_file() { printf '%s\n' "$1" >> '{{capturePath}}'; return 0; }
+            validate_checksum() { return 0; }
+            install_archive() {
+                mkdir -p "$2"
+                printf '#!/bin/sh\nexit 0\n' > "$2/aspire"
+                chmod +x "$2/aspire"
+            }
+            download_and_install_archive '{{tempDir}}'
+            """,
+            env,
+            _testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+        Assert.DoesNotContain("should not be called", result.Output);
+        var downloads = await File.ReadAllLinesAsync(capturePath);
+        Assert.Equal(
+            [
+                "https://github.com/microsoft/aspire/releases/download/v13.5.3/aspire-cli-linux-x64-13.5.3.tar.gz",
+                "https://github.com/microsoft/aspire/releases/download/v13.5.3/aspire-cli-linux-x64-13.5.3.tar.gz.sha512"
+            ],
+            downloads);
+    }
+
+    [Theory]
+    [InlineData("dev", "https://aka.ms/dotnet/9/aspire/daily")]
+    [InlineData("staging", "https://aka.ms/dotnet/9/aspire/rc/daily")]
+    public async Task NonReleaseQuality_DoesNotCallReleaseResolution(string quality, string expectedBaseUrl)
+    {
+        // GitHub release resolution (and therefore the github.com/.../releases/download URL) is
+        // reserved for the stable 'release' quality. dev/staging installs must always use their
+        // aka.ms channel URL and never resolve or land on a GitHub release asset.
+        using var env = new TestEnvironment();
+        var installPath = Path.Combine(env.TempDirectory, "install");
+        var tempDir = Path.Combine(env.TempDirectory, "download");
+        var capturePath = Path.Combine(env.TempDirectory, "downloads.txt");
+        Directory.CreateDirectory(tempDir);
+        using var cmd = new ScriptFunctionCommand(
+            s_scriptPath,
+            $$"""
+            INSTALL_PATH='{{installPath}}'
+            VERSION=''
+            QUALITY='{{quality}}'
+            OS='linux'
+            ARCH='x64'
+            DRY_RUN=false
+            get_latest_stable_version() { echo "should not be called" >&2; return 1; }
+            download_file() { printf '%s\n' "$1" >> '{{capturePath}}'; return 0; }
+            validate_checksum() { return 0; }
+            install_archive() {
+                mkdir -p "$2"
+                printf '#!/bin/sh\nexit 0\n' > "$2/aspire"
+                chmod +x "$2/aspire"
+            }
+            download_and_install_archive '{{tempDir}}'
+            """,
+            env,
+            _testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+        Assert.DoesNotContain("should not be called", result.Output);
+        var downloads = await File.ReadAllLinesAsync(capturePath);
+        Assert.Equal(
+            [
+                $"{expectedBaseUrl}/aspire-cli-linux-x64.tar.gz",
+                $"{expectedBaseUrl}/aspire-cli-linux-x64.tar.gz.sha512"
+            ],
+            downloads);
+    }
+
+    [Fact]
+    public async Task DryRun_DoesNotCallReleaseResolution()
+    {
+        // Dry-run intentionally skips the live "latest release" HEAD request so it stays usable
+        // without network access (e.g. offline previews, corporate proxies); it shows the
+        // pre-resolution aka.ms channel URL instead of the resolved GitHub release URL.
+        using var env = new TestEnvironment();
+        var installPath = Path.Combine(env.TempDirectory, "install");
+        var tempDir = Path.Combine(env.TempDirectory, "download");
+        var capturePath = Path.Combine(env.TempDirectory, "downloads.txt");
+        Directory.CreateDirectory(tempDir);
+        using var cmd = new ScriptFunctionCommand(
+            s_scriptPath,
+            $$"""
+            INSTALL_PATH='{{installPath}}'
+            VERSION=''
+            QUALITY='release'
+            OS='linux'
+            ARCH='x64'
+            DRY_RUN=true
+            get_latest_stable_version() { echo "should not be called" >&2; return 1; }
+            download_file() { printf '%s\n' "$1" >> '{{capturePath}}'; return 0; }
+            download_and_install_archive '{{tempDir}}'
+            """,
+            env,
+            _testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+        Assert.DoesNotContain("should not be called", result.Output);
+        var downloads = await File.ReadAllLinesAsync(capturePath);
+        Assert.Equal(
+            [
+                "https://aka.ms/dotnet/9/aspire/ga/daily/aspire-cli-linux-x64.tar.gz",
+                "https://aka.ms/dotnet/9/aspire/ga/daily/aspire-cli-linux-x64.tar.gz.sha512"
+            ],
+            downloads);
+    }
+
     [Theory]
     [InlineData("--verbose")]
     [InlineData("-v")]
@@ -128,6 +360,94 @@ public class ReleaseScriptShellTests(ITestOutputHelper testOutput)
         Assert.DoesNotContain("dotnet", result.Output, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("ga/daily", result.Output, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("rc/daily", result.Output, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
+    [InlineData("dev", "daily")]
+    [InlineData("staging", "staging")]
+    [InlineData("release", "stable")]
+    [InlineData("", null)]
+    public async Task WriteInstallSidecar_PersistsQualityChannel(string quality, string? expectedChannel)
+    {
+        using var env = new TestEnvironment();
+        var installPath = Path.Combine(env.TempDirectory, "install");
+        using var cmd = new ScriptFunctionCommand(
+            s_scriptPath,
+            $"write_install_sidecar '{installPath}' '{quality}'",
+            env,
+            _testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+        using var document = JsonDocument.Parse(
+            await File.ReadAllBytesAsync(Path.Combine(installPath, ".aspire-install.json")));
+        Assert.Equal("script", document.RootElement.GetProperty("source").GetString());
+        if (expectedChannel is null)
+        {
+            Assert.False(document.RootElement.TryGetProperty("channel", out _));
+        }
+        else
+        {
+            Assert.Equal(expectedChannel, document.RootElement.GetProperty("channel").GetString());
+        }
+    }
+
+    [Fact]
+    public async Task WriteInstallSidecar_UsesPortableMktempTemplate()
+    {
+        using var env = new TestEnvironment();
+        var installPath = Path.Combine(env.TempDirectory, "install");
+
+        // BSD mktemp only expands a trailing X run. Reject non-portable templates even on
+        // GNU mktemp, which also accepts a suffix after the X run.
+        using var cmd = new ScriptFunctionCommand(
+            s_scriptPath,
+            $"mktemp() {{ case \"$1\" in *XXXXXXXX) command mktemp \"$1\" ;; *) return 64 ;; esac; }}; write_install_sidecar '{installPath}' 'staging'",
+            env,
+            _testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+        Assert.True(File.Exists(Path.Combine(installPath, ".aspire-install.json")));
+    }
+
+    [Fact]
+    public async Task ExplicitVersionInstall_WritesSourceOnlySidecar()
+    {
+        using var env = new TestEnvironment();
+        var installPath = Path.Combine(env.TempDirectory, "install");
+
+        // Exercise main's --version routing while replacing only the network/archive work.
+        // main defaults QUALITY to release even for explicit versions, so this catches that
+        // default accidentally leaking into the install sidecar as channel: stable.
+        using var cmd = new ScriptFunctionCommand(
+            s_scriptPath,
+            $$"""
+            download_and_install_archive() {
+                mkdir -p "$INSTALL_PATH"
+                printf '#!/bin/sh\nexit 0\n' > "$INSTALL_PATH/aspire"
+                chmod +x "$INSTALL_PATH/aspire"
+            }
+            setup_cli_bundle() { return 0; }
+            main --version '13.2.0-preview.1.25366.3' --install-path '{{installPath}}' --skip-path
+            """,
+            env,
+            _testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+        using var document = JsonDocument.Parse(
+            await File.ReadAllBytesAsync(Path.Combine(installPath, ".aspire-install.json")));
+        Assert.Collection(
+            document.RootElement.EnumerateObject(),
+            property =>
+            {
+                Assert.Equal("source", property.Name);
+                Assert.Equal("script", property.Value.GetString());
+            });
     }
 
     [Fact]
@@ -208,7 +528,7 @@ public class ReleaseScriptShellTests(ITestOutputHelper testOutput)
         var globalConfig = Path.Combine(env.MockHome, ".aspire", "aspire.config.json");
         Assert.False(
             File.Exists(globalConfig),
-            $"Release script must not write {globalConfig}; channel is baked into the CLI binary, not stored globally.");
+            $"Release script must not write {globalConfig}; channel belongs to the install-scoped sidecar.");
 
         // The script should not even plan a global-channel write in its dry-run output.
         Assert.DoesNotContain("aspire.config.json", result.Output, StringComparison.OrdinalIgnoreCase);
@@ -217,10 +537,8 @@ public class ReleaseScriptShellTests(ITestOutputHelper testOutput)
     [Fact]
     public async Task Install_DryRun_DoesNotWriteGlobalChannelField()
     {
-        // Install scripts must not write a global aspire.config.json — the channel
-        // is baked into the CLI binary at build time and read via
-        // IdentityChannelReader. A global channel field would shadow the baked value.
-        // Asserts both dry-run stdout shape and absence of the global config file.
+        // Install scripts must not write channel identity to global application config.
+        // The install-scoped sidecar carries it without contaminating unrelated projects.
         using var env = new TestEnvironment();
         using var cmd = new ScriptToolCommand(s_scriptPath, env, _testOutput);
 
@@ -228,7 +546,6 @@ public class ReleaseScriptShellTests(ITestOutputHelper testOutput)
 
         result.EnsureSuccessful();
         Assert.DoesNotContain("config set channel", result.Output, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("\"channel\"", result.Output);
 
         var configPath = Path.Combine(env.MockHome, ".aspire", "aspire.config.json");
         Assert.False(

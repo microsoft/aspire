@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
+using System.Net;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.DevTunnels;
 using Aspire.Hosting.Eventing;
@@ -8,6 +10,8 @@ using Aspire.Hosting.Maui;
 using Aspire.Hosting.Maui.Annotations;
 using Aspire.Hosting.Maui.Otlp;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting;
 
@@ -16,6 +20,10 @@ namespace Aspire.Hosting;
 /// </summary>
 public static class MauiOtlpExtensions
 {
+    private const string DcpExecutableTerminatedState = "Terminated";
+    private const string OtlpGrpcProtocol = "grpc";
+    private const string OtlpHttpProtobufProtocol = "http/protobuf";
+
     /// <summary>
     /// Configures the MAUI platform resource to send OpenTelemetry data through an automatically created dev tunnel.
     /// This is the easiest option for most scenarios, as it handles tunnel creation, configuration, and endpoint
@@ -101,6 +109,8 @@ public static class MauiOtlpExtensions
 
         // Create OtlpLoopbackResource - a synthetic IResourceWithEndpoints for service discovery
         var stubResource = new OtlpLoopbackResource(stubName, configuredOtlpEndpoint?.Port, initialOtlpScheme);
+        stubResource.OtlpEndpoint.Transport = GetEndpointTransport(configuredOtlpEndpoint?.Protocol);
+        OtlpDevTunnelConfigurationAnnotation? tunnelConfig = null;
 
         var stubBuilder = appBuilder.AddResource(stubResource)
             .ExcludeFromManifest();
@@ -114,32 +124,83 @@ public static class MauiOtlpExtensions
 
         if (configuredOtlpEndpoint is null)
         {
-            appBuilder.Eventing.Subscribe<BeforeResourceStartedEvent>((evt, _) =>
+            appBuilder.Eventing.Subscribe<BeforeResourceStartedEvent>(async (evt, ct) =>
             {
                 if (evt.Resource is DevTunnelResource devTunnelResource &&
-                    string.Equals(devTunnelResource.Name, tunnelName, StringComparisons.ResourceName) &&
-                    stubResource.OtlpEndpoint.AllocatedEndpoint is null)
+                    string.Equals(devTunnelResource.Name, tunnelName, StringComparisons.ResourceName))
                 {
-                    var hasDashboardResource = appBuilder.Resources.Any(resource => string.Equals(resource.Name, KnownResourceNames.AspireDashboard, StringComparisons.ResourceName));
-                    if (!hasDashboardResource)
+                    var currentTunnelConfig = tunnelConfig ?? throw new InvalidOperationException("The MAUI OTLP dev tunnel configuration was not initialized before tunnel startup.");
+                    if (currentTunnelConfig.IsOtlpEndpointResolved)
                     {
-                        throw new DistributedApplicationException($"The MAUI OTLP dev tunnel for resource '{parentBuilder.Resource.Name}' requires the Aspire dashboard to be enabled or an explicit OTLP endpoint URL to be configured.");
+                        return;
                     }
 
-                    throw new DistributedApplicationException($"The Aspire dashboard resource '{KnownResourceNames.AspireDashboard}' does not have an allocated OTLP endpoint named '{KnownEndpointNames.OtlpGrpcEndpointName}' or '{KnownEndpointNames.OtlpHttpEndpointName}', so the MAUI OTLP dev tunnel for resource '{parentBuilder.Resource.Name}' cannot start. Ensure dashboard OTLP ingestion is enabled, or configure an explicit OTLP endpoint URL.");
-                }
+                    var dashboardResource = appBuilder.Resources.FirstOrDefault(resource =>
+                        string.Equals(resource.Name, KnownResourceNames.AspireDashboard, StringComparisons.ResourceName));
+                    if (dashboardResource is null)
+                    {
+                        var exception = new DistributedApplicationException($"The MAUI OTLP dev tunnel for resource '{parentBuilder.Resource.Name}' requires the Aspire dashboard to be enabled or an explicit OTLP endpoint URL to be configured.");
+                        if (currentTunnelConfig.TryFailOtlpEndpointResolution(exception))
+                        {
+                            throw exception;
+                        }
 
-                return Task.CompletedTask;
+                        return;
+                    }
+
+                    evt.Services.GetRequiredService<ResourceLoggerService>()
+                        .GetLogger(devTunnelResource)
+                        .LogInformation(
+                            "Waiting up to {Timeout} for the Aspire dashboard to publish a concrete OTLP listener.",
+                            currentTunnelConfig.RuntimeSnapshotResolutionTimeout);
+
+                    OtlpEndpointTarget? dashboardOtlpEndpoint;
+                    try
+                    {
+                        dashboardOtlpEndpoint = await TryResolveDashboardOtlpEndpointAsync(
+                            dashboardResource,
+                            evt.Services,
+                            waitForRuntimeSnapshot: true,
+                            currentTunnelConfig.RuntimeSnapshotResolutionTimeout,
+                            ct).ConfigureAwait(false);
+                    }
+                    catch (DistributedApplicationException exception)
+                    {
+                        if (currentTunnelConfig.TryFailOtlpEndpointResolution(exception))
+                        {
+                            throw;
+                        }
+
+                        return;
+                    }
+
+                    if (dashboardOtlpEndpoint is null)
+                    {
+                        var exception = new DistributedApplicationException($"The Aspire dashboard resource '{KnownResourceNames.AspireDashboard}' terminated or does not have a concrete OTLP endpoint named '{KnownEndpointNames.OtlpHttpEndpointName}' or '{KnownEndpointNames.OtlpGrpcEndpointName}', so the MAUI OTLP dev tunnel for resource '{parentBuilder.Resource.Name}' cannot start. Ensure dashboard OTLP ingestion is enabled, or configure an explicit OTLP endpoint URL.");
+                        if (currentTunnelConfig.TryFailOtlpEndpointResolution(exception))
+                        {
+                            throw exception;
+                        }
+
+                        return;
+                    }
+
+                    await AllocateOtlpStubEndpointAsync(currentTunnelConfig, dashboardOtlpEndpoint.Value, evt.Services, appBuilder.Eventing, ct).ConfigureAwait(false);
+                }
             });
 
-            appBuilder.Eventing.Subscribe<ResourceEndpointsAllocatedEvent>((evt, ct) =>
+            appBuilder.Eventing.Subscribe<ResourceEndpointsAllocatedEvent>(async (evt, ct) =>
             {
-                if (TryResolveDashboardOtlpEndpoint(evt.Resource, out var dashboardOtlpEndpoint))
+                var currentTunnelConfig = tunnelConfig ?? throw new InvalidOperationException("The MAUI OTLP dev tunnel configuration was not initialized before endpoint allocation.");
+                if (await TryResolveDashboardOtlpEndpointAsync(
+                    evt.Resource,
+                    evt.Services,
+                    waitForRuntimeSnapshot: false,
+                    currentTunnelConfig.RuntimeSnapshotResolutionTimeout,
+                    ct).ConfigureAwait(false) is { } dashboardOtlpEndpoint)
                 {
-                    return AllocateOtlpStubEndpointAsync(stubResource, dashboardOtlpEndpoint, evt.Services, appBuilder.Eventing, ct);
+                    await AllocateOtlpStubEndpointAsync(currentTunnelConfig, dashboardOtlpEndpoint, evt.Services, appBuilder.Eventing, ct).ConfigureAwait(false);
                 }
-
-                return Task.CompletedTask;
             });
         }
         else
@@ -150,11 +211,20 @@ public static class MauiOtlpExtensions
 
         // Create dev tunnel with anonymous access for OTLP. The dynamic unresolved-endpoint guard above
         // must be registered first so it can fail fast before the dev tunnel waits on the target endpoint.
+        var tunnelPortOptions = new DevTunnelPortOptions { Protocol = initialOtlpScheme };
         var devTunnel = appBuilder.AddDevTunnel(tunnelName)
             .WithAnonymousAccess()
-            .WithReference(stubBuilder, new DevTunnelPortOptions { Protocol = "https" });
+            .WithReference(stubBuilder, tunnelPortOptions);
+        var tunnelEndpoint = devTunnel.GetEndpoint(stubResource, "otlp");
 
-        return new OtlpDevTunnelConfigurationAnnotation(stubResource, stubBuilder, devTunnel);
+        tunnelConfig = new OtlpDevTunnelConfigurationAnnotation(
+            stubResource,
+            stubBuilder,
+            devTunnel,
+            tunnelPortOptions,
+            tunnelEndpoint,
+            isOtlpEndpointResolved: configuredOtlpEndpoint is not null);
+        return tunnelConfig;
     }
 
     private static OtlpEndpointTarget? ResolveConfiguredOtlpEndpoint(IConfiguration configuration)
@@ -167,78 +237,291 @@ public static class MauiOtlpExtensions
             return null;
         }
 
-        return !string.IsNullOrWhiteSpace(configuredGrpcUrl)
-            ? CreateConfiguredOtlpEndpointTarget(configuredGrpcUrl, KnownConfigNames.DashboardOtlpGrpcEndpointUrl)
-            : CreateConfiguredOtlpEndpointTarget(configuredHttpUrl!, KnownConfigNames.DashboardOtlpHttpEndpointUrl);
+        return !string.IsNullOrWhiteSpace(configuredHttpUrl)
+            ? CreateConfiguredOtlpEndpointTarget(configuredHttpUrl, KnownConfigNames.DashboardOtlpHttpEndpointUrl, OtlpHttpProtobufProtocol)
+            : CreateConfiguredOtlpEndpointTarget(configuredGrpcUrl!, KnownConfigNames.DashboardOtlpGrpcEndpointUrl, OtlpGrpcProtocol);
     }
 
-    private static OtlpEndpointTarget CreateConfiguredOtlpEndpointTarget(string url, string configKey)
+    private static OtlpEndpointTarget CreateConfiguredOtlpEndpointTarget(string url, string configKey, string protocol)
     {
         if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) ||
-            uri.Scheme is not ("http" or "https"))
+            uri.Scheme is not ("http" or "https") ||
+            !IsLocalDashboardBinding(uri) ||
+            uri.Port is < 1 or > 65535)
         {
-            throw new DistributedApplicationException($"The configured OTLP endpoint URL '{url}' from '{configKey}' must be an absolute HTTP or HTTPS URL.");
+            throw new DistributedApplicationException($"The configured OTLP endpoint URL '{url}' from '{configKey}' must be an absolute locally reachable HTTP or HTTPS URL with a port between 1 and 65535.");
         }
 
-        return new OtlpEndpointTarget(uri.Scheme, uri.Port);
+        return new OtlpEndpointTarget(uri.Scheme, uri.Port, protocol);
     }
 
     private static string ResolveDynamicDashboardOtlpScheme(IConfiguration configuration)
         => configuration.GetBool(KnownConfigNames.AllowUnsecuredTransport) is true ? "http" : "https";
 
-    private static bool TryResolveDashboardOtlpEndpoint(IResource resource, out OtlpEndpointTarget target)
+    private static async ValueTask<OtlpEndpointTarget?> TryResolveDashboardOtlpEndpointAsync(
+        IResource resource,
+        IServiceProvider services,
+        bool waitForRuntimeSnapshot,
+        TimeSpan runtimeSnapshotResolutionTimeout,
+        CancellationToken cancellationToken)
     {
-        target = default;
-
         if (!string.Equals(resource.Name, KnownResourceNames.AspireDashboard, StringComparisons.ResourceName) || resource is not IResourceWithEndpoints dashboardResource)
+        {
+            return null;
+        }
+
+        // Mobile runtimes use the dev tunnel's HTTPS forwarding path most reliably with OTLP/HTTP.
+        // An existing but unresolved HTTP endpoint is not a reason to fall back to gRPC.
+        var httpEndpoint = dashboardResource.GetEndpoint(KnownEndpointNames.OtlpHttpEndpointName);
+        if (httpEndpoint.Exists)
+        {
+            if (await TryResolveEndpointAsync(httpEndpoint, OtlpHttpProtobufProtocol, cancellationToken).ConfigureAwait(false) is { } httpTarget)
+            {
+                return httpTarget;
+            }
+
+            if (await HasUnresolvedTargetPortExpressionAsync(httpEndpoint, cancellationToken).ConfigureAwait(false))
+            {
+                return await TryResolveDashboardOtlpEndpointFromRuntimeSnapshotAsync(
+                    httpEndpoint,
+                    services,
+                    waitForRuntimeSnapshot,
+                    runtimeSnapshotResolutionTimeout,
+                    cancellationToken).ConfigureAwait(false);
+            }
+
+            return null;
+        }
+
+        var grpcEndpoint = dashboardResource.GetEndpoint(KnownEndpointNames.OtlpGrpcEndpointName);
+        if (await TryResolveEndpointAsync(grpcEndpoint, OtlpGrpcProtocol, cancellationToken).ConfigureAwait(false) is { } grpcTarget)
+        {
+            return grpcTarget;
+        }
+
+        if (!await HasUnresolvedTargetPortExpressionAsync(grpcEndpoint, cancellationToken).ConfigureAwait(false))
+        {
+            return null;
+        }
+
+        return await TryResolveDashboardOtlpEndpointFromRuntimeSnapshotAsync(
+            grpcEndpoint,
+            services,
+            waitForRuntimeSnapshot,
+            runtimeSnapshotResolutionTimeout,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private static async ValueTask<OtlpEndpointTarget?> TryResolveEndpointAsync(
+        EndpointReference endpointReference,
+        string protocol,
+        CancellationToken cancellationToken)
+    {
+        if (!endpointReference.Exists || endpointReference.EndpointAnnotation.AllocatedEndpoint is not { } allocatedEndpoint)
+        {
+            return null;
+        }
+
+        var port = allocatedEndpoint.Port;
+        if (endpointReference.Resource.IsContainer())
+        {
+            var allocatedPort = await TryGetEndpointPortAsync(endpointReference, EndpointProperty.Port, cancellationToken).ConfigureAwait(false);
+            if (allocatedPort.Port is { } resolvedAllocatedPort)
+            {
+                port = resolvedAllocatedPort;
+            }
+        }
+        else
+        {
+            // DCP-proxied executable endpoints expose the proxy as Port. Dev tunnels run on the host
+            // and must forward to the dashboard's concrete target listener instead.
+            var targetPort = await TryGetEndpointPortAsync(endpointReference, EndpointProperty.TargetPort, cancellationToken).ConfigureAwait(false);
+            if (IsLocalTunnelTargetHost(endpointReference.EndpointAnnotation.TargetHost) &&
+                targetPort.Port is { } resolvedTargetPort)
+            {
+                port = resolvedTargetPort;
+            }
+            else if (IsLocalTunnelTargetHost(endpointReference.EndpointAnnotation.TargetHost) &&
+                     targetPort.HasUnresolvedExpression)
+            {
+                return null;
+            }
+        }
+
+        return new OtlpEndpointTarget(allocatedEndpoint.UriScheme, port, protocol);
+    }
+
+    private static async ValueTask<bool> HasUnresolvedTargetPortExpressionAsync(
+        EndpointReference endpointReference,
+        CancellationToken cancellationToken)
+    {
+        if (!endpointReference.Exists ||
+            endpointReference.EndpointAnnotation.AllocatedEndpoint is null ||
+            endpointReference.Resource.IsContainer())
         {
             return false;
         }
 
-        var grpcEndpoint = dashboardResource.GetEndpoint(KnownEndpointNames.OtlpGrpcEndpointName);
-        if (TryResolveEndpoint(grpcEndpoint, out target))
+        var targetPort = await TryGetEndpointPortAsync(endpointReference, EndpointProperty.TargetPort, cancellationToken).ConfigureAwait(false);
+        return targetPort.HasUnresolvedExpression;
+    }
+
+    private static async ValueTask<EndpointPortResolution> TryGetEndpointPortAsync(
+        EndpointReference endpointReference,
+        EndpointProperty property,
+        CancellationToken cancellationToken)
+    {
+        string? portValue;
+        try
+        {
+            portValue = await endpointReference.Property(property).GetValueAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (InvalidOperationException) when (property == EndpointProperty.TargetPort && endpointReference.IsAllocated)
+        {
+            return default;
+        }
+
+        if (int.TryParse(portValue, NumberStyles.None, CultureInfo.InvariantCulture, out var port))
+        {
+            return new(port, HasUnresolvedExpression: false);
+        }
+
+        // DCP reports dynamically assigned target listener ports as expressions such as:
+        //   {{- portForServing "dashboard-otlp-http" -}}
+        return string.IsNullOrWhiteSpace(portValue)
+            ? default
+            : new(null, HasUnresolvedExpression: true);
+    }
+
+    private static async ValueTask<OtlpEndpointTarget?> TryResolveDashboardOtlpEndpointFromRuntimeSnapshotAsync(
+        EndpointReference endpointReference,
+        IServiceProvider services,
+        bool waitForRuntimeSnapshot,
+        TimeSpan runtimeSnapshotResolutionTimeout,
+        CancellationToken cancellationToken)
+    {
+        var notificationService = services.GetService<ResourceNotificationService>();
+        if (notificationService is null)
+        {
+            return null;
+        }
+
+        var resourceName = endpointReference.Resource.Name;
+        if (notificationService.TryGetCurrentState(resourceName, out var currentState) &&
+            TryResolveDashboardOtlpEndpointFromSnapshot(endpointReference, currentState) is { } currentTarget)
+        {
+            return currentTarget;
+        }
+
+        if (!waitForRuntimeSnapshot)
+        {
+            return null;
+        }
+
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeoutCts.CancelAfter(runtimeSnapshotResolutionTimeout);
+
+        ResourceEvent resourceEvent;
+        try
+        {
+            resourceEvent = await notificationService.WaitForResourceAsync(
+                resourceName,
+                resourceEvent => TryResolveDashboardOtlpEndpointFromSnapshot(endpointReference, resourceEvent) is not null ||
+                    IsUnavailableState(resourceEvent.Snapshot.State?.Text),
+                timeoutCts.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw new DistributedApplicationException(
+                $"The Aspire dashboard resource '{resourceName}' did not publish a concrete OTLP listener within {runtimeSnapshotResolutionTimeout:c}.",
+                ex);
+        }
+
+        return TryResolveDashboardOtlpEndpointFromSnapshot(endpointReference, resourceEvent);
+    }
+
+    private static OtlpEndpointTarget? TryResolveDashboardOtlpEndpointFromSnapshot(
+        EndpointReference endpointReference,
+        ResourceEvent resourceEvent)
+    {
+        if (IsUnavailableState(resourceEvent.Snapshot.State?.Text) ||
+            !endpointReference.Exists ||
+            endpointReference.EndpointAnnotation.AllocatedEndpoint is null)
+        {
+            return null;
+        }
+
+        if (endpointReference.Resource.IsContainer())
+        {
+            var allocatedEndpoint = endpointReference.EndpointAnnotation.AllocatedEndpoint;
+            return new OtlpEndpointTarget(
+                allocatedEndpoint.UriScheme,
+                allocatedEndpoint.Port,
+                GetOtlpProtocol(endpointReference.EndpointAnnotation));
+        }
+
+        string[]? environmentVariableNames =
+            string.Equals(endpointReference.EndpointName, KnownEndpointNames.OtlpHttpEndpointName, StringComparisons.EndpointAnnotationName)
+                ? [KnownConfigNames.DashboardOtlpHttpEndpointUrl, KnownConfigNames.Legacy.DashboardOtlpHttpEndpointUrl]
+                : string.Equals(endpointReference.EndpointName, KnownEndpointNames.OtlpGrpcEndpointName, StringComparisons.EndpointAnnotationName)
+                    ? [KnownConfigNames.DashboardOtlpGrpcEndpointUrl, KnownConfigNames.Legacy.DashboardOtlpGrpcEndpointUrl]
+                    : null;
+
+        var endpointUrl = resourceEvent.Snapshot.EnvironmentVariables
+            .FirstOrDefault(environmentVariable => environmentVariableNames?.Contains(
+                environmentVariable.Name,
+                StringComparers.EnvironmentVariableName) is true)
+            ?.Value;
+
+        return Uri.TryCreate(endpointUrl, UriKind.Absolute, out var uri) &&
+            IsLocalDashboardBinding(uri) &&
+            uri.Port is >= 1 and <= 65535 &&
+            uri.Scheme is "http" or "https"
+                ? new OtlpEndpointTarget(uri.Scheme, uri.Port, GetOtlpProtocol(endpointReference.EndpointAnnotation))
+                : null;
+    }
+
+    private static bool IsUnavailableState(string? state) =>
+        state is not null &&
+        (KnownResourceStates.TerminalStates.Contains(state, StringComparers.ResourceState) ||
+         // Resource notifications can expose the raw DCP executable state before it is normalized.
+         // DCP emits "Terminated" when the controller kills the dashboard executable.
+         string.Equals(state, DcpExecutableTerminatedState, StringComparisons.ResourceState) ||
+         string.Equals(state, KnownResourceStates.RuntimeUnhealthy, StringComparisons.ResourceState));
+
+    private static bool IsLocalDashboardBinding(Uri uri) =>
+        IsLocalTunnelTargetHost(uri.Host);
+
+    private static bool IsLocalTunnelTargetHost(string? host)
+    {
+        if (string.IsNullOrWhiteSpace(host) ||
+            host is "*" or "+" ||
+            EndpointHostHelpers.IsLocalhostOrLocalhostTld(host))
         {
             return true;
         }
 
-        var httpEndpoint = dashboardResource.GetEndpoint(KnownEndpointNames.OtlpHttpEndpointName);
-        return TryResolveEndpoint(httpEndpoint, out target);
+        return IPAddress.TryParse(host.Trim('[', ']'), out var address) &&
+            (IPAddress.IsLoopback(address) ||
+             address.Equals(IPAddress.Any) ||
+             address.Equals(IPAddress.IPv6Any));
     }
 
-    private static bool TryResolveEndpoint(EndpointReference endpointReference, out OtlpEndpointTarget target)
-    {
-        target = default;
-
-        if (!endpointReference.Exists || endpointReference.EndpointAnnotation.AllocatedEndpoint is not { } allocatedEndpoint)
-        {
-            return false;
-        }
-
-        target = new OtlpEndpointTarget(allocatedEndpoint.UriScheme, allocatedEndpoint.Port);
-        return true;
-    }
-
-    private static Task AllocateOtlpStubEndpointAsync(
-        OtlpLoopbackResource stubResource,
+    private static async Task AllocateOtlpStubEndpointAsync(
+        OtlpDevTunnelConfigurationAnnotation tunnelConfig,
         OtlpEndpointTarget target,
         IServiceProvider services,
         IDistributedApplicationEventing eventing,
         CancellationToken cancellationToken)
     {
-        var endpoint = stubResource.OtlpEndpoint;
-        if (endpoint.AllocatedEndpoint is not null)
+        if (!tunnelConfig.UpdateOtlpEndpoint(target.Scheme, target.Port, GetEndpointTransport(target.Protocol)))
         {
-            return Task.CompletedTask;
+            return;
         }
-
-        endpoint.UriScheme = target.Scheme;
-        endpoint.Port = target.Port;
-        endpoint.TargetPort = target.Port;
-        endpoint.AllocatedEndpoint = new AllocatedEndpoint(endpoint, "localhost", target.Port);
 
         // The stub endpoint is synthetic and not allocated by DCP. Publishing the event keeps
         // endpoint consumers such as dev tunnel ports on the normal endpoint-allocation path.
-        return eventing.PublishAsync(new ResourceEndpointsAllocatedEvent(stubResource, services), cancellationToken);
+        await eventing.PublishAsync(new ResourceEndpointsAllocatedEvent(tunnelConfig.OtlpStub, services), cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -250,15 +533,91 @@ public static class MauiOtlpExtensions
         OtlpDevTunnelConfigurationAnnotation tunnelConfig)
         where T : IMauiPlatformResource, IResourceWithEnvironment
     {
-        // Get the tunnel endpoint for the OTLP stub directly, bypassing service discovery injection
-        var tunnelEndpoint = tunnelConfig.DevTunnel.GetEndpoint(tunnelConfig.OtlpStub, "otlp");
+        if (platformBuilder.ApplicationBuilder.ExecutionContext.IsPublishMode)
+        {
+            return;
+        }
 
         // Ensure the platform resource waits for the tunnel to be ready
         platformBuilder.WithReferenceRelationship(tunnelConfig.DevTunnel);
 
-        // Set OTEL_EXPORTER_OTLP_ENDPOINT directly to the tunnel endpoint URL
-        platformBuilder.WithEnvironment(KnownOtelConfigNames.ExporterOtlpEndpoint, tunnelEndpoint);
+        platformBuilder.WithEnvironment(context =>
+        {
+            context.EnvironmentVariables[KnownOtelConfigNames.ExporterOtlpEndpoint] =
+                new OtlpEndpointValueProvider(
+                    tunnelConfig.TunnelEndpoint,
+                    tunnelConfig.OtlpStub.OtlpEndpoint,
+                    tunnelConfig.RuntimeSnapshotResolutionTimeout);
+            context.EnvironmentVariables[KnownOtelConfigNames.ExporterOtlpProtocol] =
+                new OtlpProtocolValueProvider(
+                    tunnelConfig.OtlpStub.OtlpEndpoint,
+                    tunnelConfig.RuntimeSnapshotResolutionTimeout);
+        });
     }
 
-    private readonly record struct OtlpEndpointTarget(string Scheme, int Port);
+    private static string GetEndpointTransport(string? otlpProtocol)
+        => string.Equals(otlpProtocol, OtlpGrpcProtocol, StringComparison.OrdinalIgnoreCase) ? "http2" : "http";
+
+    private static string GetOtlpProtocol(EndpointAnnotation endpoint)
+        => string.Equals(endpoint.Transport, "http2", StringComparison.OrdinalIgnoreCase) ? OtlpGrpcProtocol : OtlpHttpProtobufProtocol;
+
+    private readonly record struct OtlpEndpointTarget(string Scheme, int Port, string Protocol);
+    private readonly record struct EndpointPortResolution(int? Port, bool HasUnresolvedExpression);
+
+    private sealed class OtlpEndpointValueProvider(
+        EndpointReference tunnelEndpoint,
+        EndpointAnnotation targetEndpoint,
+        TimeSpan resolutionTimeout) : IValueProvider
+    {
+        public async ValueTask<string?> GetValueAsync(CancellationToken cancellationToken = default)
+        {
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutCts.CancelAfter(resolutionTimeout);
+
+            try
+            {
+                // Wait for target resolution first so its failure is propagated immediately instead
+                // of leaving the public tunnel endpoint pending until application cancellation.
+#pragma warning disable CS0618 // Type or member is obsolete
+                await targetEndpoint.AllocatedEndpointSnapshot
+                    .GetValueAsync(timeoutCts.Token)
+                    .ConfigureAwait(false);
+#pragma warning restore CS0618 // Type or member is obsolete
+
+                return await tunnelEndpoint.GetValueAsync(timeoutCts.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested)
+            {
+                throw new DistributedApplicationException(
+                    $"The MAUI OTLP endpoint could not be determined within {resolutionTimeout:c}.",
+                    ex);
+            }
+        }
+    }
+
+    private sealed class OtlpProtocolValueProvider(
+        EndpointAnnotation endpoint,
+        TimeSpan resolutionTimeout) : IValueProvider
+    {
+        public async ValueTask<string?> GetValueAsync(CancellationToken cancellationToken = default)
+        {
+            try
+            {
+#pragma warning disable CS0618 // Type or member is obsolete
+                await endpoint.AllocatedEndpointSnapshot
+                    .GetValueAsync(cancellationToken)
+                    .WaitAsync(resolutionTimeout, cancellationToken)
+                    .ConfigureAwait(false);
+#pragma warning restore CS0618 // Type or member is obsolete
+            }
+            catch (TimeoutException ex)
+            {
+                throw new DistributedApplicationException(
+                    $"The MAUI OTLP protocol could not be determined because the dashboard did not publish a concrete OTLP listener within {resolutionTimeout:c}.",
+                    ex);
+            }
+
+            return GetOtlpProtocol(endpoint);
+        }
+    }
 }

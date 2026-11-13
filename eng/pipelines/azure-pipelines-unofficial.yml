@@ -226,7 +226,9 @@ extends:
                 inputs:
                   targetType: 'inline'
                   script: |
-                    npm install -g @vscode/vsce@3.7.1
+                    # Pin Azure Identity explicitly so VSCE's transitive dependency graph
+                    # remains stable across npm feed updates.
+                    npm install -g @vscode/vsce@3.7.1 @azure/identity@4.13.1
                     vsce --version
                   workingDirectory: '$(Build.SourcesDirectory)'
 
@@ -243,11 +245,6 @@ extends:
                   # stage that owns -publish — so run Arcade's Publish target
                   # inline here to keep Publishing.props validations exercised.
                   runPublish: true
-                  # The unofficial pipeline is monolithic — it has no parallel
-                  # template_tests stage like azure-pipelines.yml — so the
-                  # inline Aspire.Templates.Tests run lives here, matching
-                  # behavior prior to the official pipeline restructure.
-                  runTemplateTests: true
               - pwsh: |
                   $ErrorActionPreference = 'Stop'
                   $shippingDir = "$(Build.SourcesDirectory)/artifacts/packages/$(_BuildConfig)/Shipping"

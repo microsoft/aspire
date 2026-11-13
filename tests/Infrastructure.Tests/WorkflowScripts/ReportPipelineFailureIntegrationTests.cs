@@ -58,7 +58,7 @@ public sealed class ReportPipelineFailureIntegrationTests : IDisposable
 
         Assert.False(result.Threw);
         var issue = Assert.Single(result.Issues);
-        Assert.Equal("Nightly run failing: Deployment E2E Tests", issue.Title);
+        Assert.Equal("Scheduled run failing: Deployment E2E Tests", issue.Title);
         Assert.Contains("ci-failure:deployment-tests.yml:scheduled", issue.Body);
         // Carries the existing labels PLUS automation-broken.
         Assert.Equal(s_deploymentLabels, issue.Labels);

@@ -19,10 +19,17 @@ public enum AspireKeyboardShortcut
     GoToStructuredLogs = 220,
     GoToTraces = 230,
     GoToMetrics = 240,
+    GoToTerminals = 250,
+    GoToParameters = 270,
+    GoToGraph = 280,
+    GoToExtensions = 290,
+    GoToTelemetrySources = 295,
 
     ToggleOrientation = 300,
     ClosePanel = 310,
     ResetPanelSize = 320,
     IncreasePanelSize = 330,
     DecreasePanelSize = 340,
+
+    ToggleTerminalDock = 400,
 }

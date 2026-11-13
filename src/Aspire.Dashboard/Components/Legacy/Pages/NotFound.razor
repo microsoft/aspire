@@ -1,0 +1,10 @@
+﻿@page "/legacy/error/404"
+@inject IStringLocalizer<Dashboard.Resources.Routes> Loc
+
+<PageTitle>@Loc[nameof(Dashboard.Resources.Routes.NotFoundPageTitle)]</PageTitle>
+
+<div class="error-stack">
+    <div class="error-code">404</div>
+    <div class="error-description">@Loc[nameof(Dashboard.Resources.Routes.NotFoundDescription)]</div>
+    <div>@Loc[nameof(Dashboard.Resources.Routes.NotFoundDetails)]</div>
+</div>

@@ -6,6 +6,7 @@ using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Resources;
+using Aspire.Dashboard.Tests.Shared;
 using Aspire.Dashboard.Tests.TelemetryRepositoryTests;
 using Aspire.Tests.Shared;
 using Aspire.Tests.Shared.DashboardModel;
@@ -19,11 +20,14 @@ using Xunit;
 
 namespace Aspire.Dashboard.Tests.Model;
 
-public sealed class ResourceMenuBuilderTests
+public sealed class ResourceMenuBuilderTests : IDisposable
 {
     private static readonly DateTime s_testTime = new(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
     private readonly IconResolver _iconResolver = new IconResolver(NullLogger<IconResolver>.Instance);
     private readonly DashboardDialogService _dialogService;
+    private readonly List<DashboardDataSource> _dataSources = [];
+    private readonly List<DashboardDataSourcePool> _databasePools = [];
+    private readonly List<DirectoryInfo> _temporaryDirectories = [];
 
     public ResourceMenuBuilderTests()
     {
@@ -35,15 +39,46 @@ public sealed class ResourceMenuBuilderTests
             dimensionManager);
     }
 
-    private ResourceMenuBuilder CreateResourceMenuBuilder(TelemetryRepository repository)
+    private ResourceMenuBuilder CreateResourceMenuBuilder(
+        SqliteTelemetryRepository repository,
+        IDashboardClient? dashboardClient = null)
     {
+        dashboardClient ??= new TestDashboardClient();
+        var temporaryDirectory = Directory.CreateTempSubdirectory();
+        _temporaryDirectories.Add(temporaryDirectory);
+        var runStore = new TestDashboardRunStore(databasePath: Path.Combine(temporaryDirectory.FullName, "dashboard.db"));
+        var dataSourcePool = TestDashboardDataSource.CreatePool(repository, dashboardClient, runStore);
+        var dataSource = TestDashboardDataSource.Create(runStore, dataSourcePool);
+        _databasePools.Add(dataSourcePool);
+        _dataSources.Add(dataSource);
+
         return new ResourceMenuBuilder(
             new TestNavigationManager(),
-            repository,
+            dataSource,
             new TestStringLocalizer<ControlsStrings>(),
             new TestStringLocalizer<Resources.Resources>(),
+            new TestStringLocalizer<TerminalStrings>(),
             _iconResolver,
-            _dialogService);
+            _dialogService,
+            dashboardClient);
+    }
+
+    public void Dispose()
+    {
+        foreach (var dataSource in _dataSources)
+        {
+            dataSource.Dispose();
+        }
+
+        foreach (var databasePool in _databasePools)
+        {
+            databasePool.Dispose();
+        }
+
+        foreach (var temporaryDirectory in _temporaryDirectories)
+        {
+            temporaryDirectory.Delete(recursive: true);
+        }
     }
 
     [Fact]
@@ -51,7 +86,8 @@ public sealed class ResourceMenuBuilderTests
     {
         // Arrange
         var resource = ModelTestHelpers.CreateResource();
-        var repository = TelemetryTestHelpers.CreateRepository();
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var repository = repositoryContext.Repository;
         var resourceMenuBuilder = CreateResourceMenuBuilder(repository);
 
         // Act
@@ -64,6 +100,7 @@ public sealed class ResourceMenuBuilderTests
             EventCallback<CommandViewModel>.Empty,
             (_, _) => false,
             showViewDetails: true,
+            showTerminalItem: true,
             showConsoleLogsItem: true,
             showUrls: true);
 
@@ -75,14 +112,15 @@ public sealed class ResourceMenuBuilderTests
     }
 
     [Fact]
-    public void AddMenuItems_UninstrumentedPeer_TraceItem()
+    public async Task AddMenuItems_UninstrumentedPeer_TraceItem()
     {
         // Arrange
         var resource = ModelTestHelpers.CreateResource(resourceName: "test-abc");
         var outgoingPeerResolver = new TestOutgoingPeerResolver(onResolve: attributes => (resource.Name, resource));
-        var repository = TelemetryTestHelpers.CreateRepository(outgoingPeerResolvers: [outgoingPeerResolver]);
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository(outgoingPeerResolvers: [outgoingPeerResolver]);
+        var repository = repositoryContext.Repository;
         var addContext = new AddContext();
-        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>()
+        await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -114,6 +152,7 @@ public sealed class ResourceMenuBuilderTests
             EventCallback<CommandViewModel>.Empty,
             (_, _) => false,
             showViewDetails: true,
+            showTerminalItem: true,
             showConsoleLogsItem: true,
             showUrls: true);
 
@@ -126,14 +165,51 @@ public sealed class ResourceMenuBuilderTests
             e => Assert.Equal("Localized:ResourceActionTracesText", e.Text));
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void AddMenuItems_TerminalVisibilityDoesNotRemoveConsoleLogs(bool showTerminalItem)
+    {
+        var resource = ModelTestHelpers.CreateResource(properties: new Dictionary<string, ResourcePropertyViewModel>
+        {
+            [KnownProperties.Terminal.Enabled] = new ResourcePropertyViewModel(
+                KnownProperties.Terminal.Enabled, Google.Protobuf.WellKnownTypes.Value.ForString("true"),
+                isValueSensitive: false, knownProperty: null, sortOrder: 0, displayName: null, isHighlighted: false)
+        });
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var menuBuilder = CreateResourceMenuBuilder(repositoryContext.Repository, new TestDashboardClient(isEnabled: true));
+        var menuItems = new List<MenuButtonItem>();
+        menuBuilder.AddMenuItems(
+            menuItems,
+            resource,
+            new Dictionary<string, ResourceViewModel> { [resource.Name] = resource },
+            EventCallback.Empty,
+            EventCallback<CommandViewModel>.Empty,
+            (_, _) => false,
+            showViewDetails: true,
+            showTerminalItem: showTerminalItem,
+            showConsoleLogsItem: true,
+            showUrls: false);
+
+        var expectedItems = new List<string> { "Localized:ActionViewDetailsText" };
+        if (showTerminalItem)
+        {
+            expectedItems.Add("Localized:TerminalTitle");
+        }
+        expectedItems.Add("Localized:ResourceActionConsoleLogsText");
+        expectedItems.Add("Localized:ViewJson");
+        Assert.Equal(expectedItems, menuItems.Select(item => item.Text));
+    }
+
     [Fact]
-    public void AddMenuItems_HasTelemetry_TelemetryItems()
+    public async Task AddMenuItems_HasTelemetry_TelemetryItems()
     {
         // Arrange
         var resource = ModelTestHelpers.CreateResource(resourceName: "test-abc");
-        var repository = TelemetryTestHelpers.CreateRepository();
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var repository = repositoryContext.Repository;
         var addContext = new AddContext();
-        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>()
+        await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -164,6 +240,7 @@ public sealed class ResourceMenuBuilderTests
             EventCallback<CommandViewModel>.Empty,
             (_, _) => false,
             showViewDetails: true,
+            showTerminalItem: true,
             showConsoleLogsItem: true,
             showUrls: true);
 
@@ -187,7 +264,8 @@ public sealed class ResourceMenuBuilderTests
                 new EnvironmentVariableViewModel("SPEC_VAR", "spec-value", fromSpec: true),
                 new EnvironmentVariableViewModel("RUNTIME_VAR", "runtime-value", fromSpec: false)
             ]);
-        var repository = TelemetryTestHelpers.CreateRepository();
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var repository = repositoryContext.Repository;
         var resourceMenuBuilder = CreateResourceMenuBuilder(repository);
 
         // Act
@@ -200,6 +278,7 @@ public sealed class ResourceMenuBuilderTests
             EventCallback<CommandViewModel>.Empty,
             (_, _) => false,
             showViewDetails: true,
+            showTerminalItem: true,
             showConsoleLogsItem: true,
             showUrls: true);
 
@@ -220,7 +299,8 @@ public sealed class ResourceMenuBuilderTests
                 new EnvironmentVariableViewModel("RUNTIME_VAR1", "value1", fromSpec: false),
                 new EnvironmentVariableViewModel("RUNTIME_VAR2", "value2", fromSpec: false)
             ]);
-        var repository = TelemetryTestHelpers.CreateRepository();
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var repository = repositoryContext.Repository;
         var resourceMenuBuilder = CreateResourceMenuBuilder(repository);
 
         // Act
@@ -233,6 +313,7 @@ public sealed class ResourceMenuBuilderTests
             EventCallback<CommandViewModel>.Empty,
             (_, _) => false,
             showViewDetails: true,
+            showTerminalItem: true,
             showConsoleLogsItem: true,
             showUrls: true);
 
@@ -267,7 +348,8 @@ public sealed class ResourceMenuBuilderTests
             iconName: string.Empty,
             iconVariant: IconVariant.Regular);
         var resource = ModelTestHelpers.CreateResource(commands: [startCommand, stopCommand]);
-        var repository = TelemetryTestHelpers.CreateRepository();
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var repository = repositoryContext.Repository;
         var resourceMenuBuilder = CreateResourceMenuBuilder(repository);
 
         var menuItems = new List<MenuButtonItem>();
@@ -279,6 +361,7 @@ public sealed class ResourceMenuBuilderTests
             EventCallback<CommandViewModel>.Empty,
             (_, _) => false,
             showViewDetails: false,
+            showTerminalItem: true,
             showConsoleLogsItem: false,
             showUrls: false);
 
@@ -287,6 +370,49 @@ public sealed class ResourceMenuBuilderTests
             e => Assert.True(e.IsDivider),
             e => Assert.Equal("Start", e.Text),
             e => Assert.Equal("Stop", e.Text));
+    }
+
+    [Fact]
+    public void AddMenuItems_ReadOnly_DisablesResourceCommands()
+    {
+        var command = new CommandViewModel(
+            CommandViewModel.StartCommand,
+            CommandViewModelState.Enabled,
+            "Start",
+            "Start the resource.",
+            confirmationMessage: "",
+            argumentInputs: [],
+            isHighlighted: true,
+            iconName: string.Empty,
+            iconVariant: IconVariant.Regular);
+        var resource = ModelTestHelpers.CreateResource(commands: [command]);
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var repository = repositoryContext.Repository;
+        var resourceMenuBuilder = CreateResourceMenuBuilder(
+            repository,
+            new TestDashboardClient(isReadOnly: true));
+
+        var menuItems = new List<MenuButtonItem>();
+        resourceMenuBuilder.AddMenuItems(
+            menuItems,
+            resource,
+            new Dictionary<string, ResourceViewModel>(StringComparer.OrdinalIgnoreCase) { [resource.Name] = resource },
+            EventCallback.Empty,
+            EventCallback<CommandViewModel>.Empty,
+            (_, _) => false,
+            showViewDetails: false,
+            showTerminalItem: true,
+            showConsoleLogsItem: false,
+            showUrls: false);
+
+        Assert.Collection(menuItems,
+            e => Assert.Equal("Localized:ViewJson", e.Text),
+            e => Assert.True(e.IsDivider),
+            e =>
+            {
+                Assert.Equal("Start", e.Text);
+                Assert.True(e.IsDisabled);
+            });
     }
 
     [Fact]
@@ -305,7 +431,8 @@ public sealed class ResourceMenuBuilderTests
             iconName: "NotARealIconName",
             iconVariant: IconVariant.Regular);
         var resource = ModelTestHelpers.CreateResource(commands: [command]);
-        var repository = TelemetryTestHelpers.CreateRepository();
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var repository = repositoryContext.Repository;
         var resourceMenuBuilder = CreateResourceMenuBuilder(repository);
 
         var menuItems = new List<MenuButtonItem>();
@@ -317,6 +444,7 @@ public sealed class ResourceMenuBuilderTests
             EventCallback<CommandViewModel>.Empty,
             (_, _) => false,
             showViewDetails: false,
+            showTerminalItem: true,
             showConsoleLogsItem: false,
             showUrls: false);
 
@@ -346,7 +474,8 @@ public sealed class ResourceMenuBuilderTests
             iconName: string.Empty,
             iconVariant: IconVariant.Regular);
         var resource = ModelTestHelpers.CreateResource(commands: [command]);
-        var repository = TelemetryTestHelpers.CreateRepository();
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var repository = repositoryContext.Repository;
         var resourceMenuBuilder = CreateResourceMenuBuilder(repository);
 
         var menuItems = new List<MenuButtonItem>();
@@ -358,6 +487,7 @@ public sealed class ResourceMenuBuilderTests
             EventCallback<CommandViewModel>.Empty,
             (_, _) => false,
             showViewDetails: false,
+            showTerminalItem: true,
             showConsoleLogsItem: false,
             showUrls: false);
 

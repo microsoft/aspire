@@ -1,0 +1,47 @@
+﻿---
+apiVersion: "apps/v1"
+kind: "Deployment"
+metadata:
+  name: "myapp-deployment"
+  labels:
+    app.kubernetes.io/name: "{{ .Chart.Name }}"
+    app.kubernetes.io/component: "myapp"
+    app.kubernetes.io/instance: "{{ .Release.Name }}"
+spec:
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: "{{ .Chart.Name }}"
+        app.kubernetes.io/component: "myapp"
+        app.kubernetes.io/instance: "{{ .Release.Name }}"
+    spec:
+      containers:
+        - image: "mcr.microsoft.com/dotnet/aspnet:8.0"
+          name: "myapp"
+          volumeMounts:
+            - name: "secrets-store"
+              mountPath: "/mnt/secrets-store"
+              readOnly: true
+          imagePullPolicy: "IfNotPresent"
+      volumes:
+        - name: "secrets-store"
+          csi:
+            driver: "secrets-store.csi.k8s.io"
+            readOnly: true
+            fsType: "ext4"
+            volumeAttributes:
+              secretProviderClass: "my-spc"
+            nodePublishSecretRef:
+              name: "secrets-store-creds"
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: "{{ .Chart.Name }}"
+      app.kubernetes.io/component: "myapp"
+      app.kubernetes.io/instance: "{{ .Release.Name }}"
+  replicas: 1
+  revisionHistoryLimit: 3
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+    type: "RollingUpdate"

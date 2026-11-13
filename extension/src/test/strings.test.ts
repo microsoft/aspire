@@ -1,10 +1,31 @@
 import * as assert from 'assert';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as locStrings from '../loc/strings';
 import { defaultConfigurationNameForWorkspaceFolder, launchingWithAppHost, launchingWithDirectory } from '../loc/strings';
-import { collapseWhitespace, escapeCodicons, formatText } from '../utils/strings';
+import { collapseWhitespace, equalsOrdinalIgnoreCase, escapeCodicons, formatText } from '../utils/strings';
 
 suite('utils/strings tests', () => {
+    test('uses a localized language-neutral .NET debugger display name', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const packageNls = JSON.parse(fs.readFileSync(path.join(extensionRoot, 'package.nls.json'), 'utf8')) as Record<string, string>;
+
+        assert.strictEqual(locStrings.dotnetDisplayName('Worker.fsproj'), '.NET: Worker.fsproj');
+        assert.strictEqual(packageNls['aspire-vscode.strings.dotnetDisplayName'], '.NET: {0}');
+    });
+
+    test('Node Functions inspector failure is present in runtime exports and localization catalogs', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const packageNls = JSON.parse(fs.readFileSync(path.join(extensionRoot, 'package.nls.json'), 'utf8')) as Record<string, string>;
+        const xlf = fs.readFileSync(path.join(extensionRoot, 'loc', 'xlf', 'aspire-vscode.xlf'), 'utf8');
+        const name = 'azureFunctionsNodeInspectorPortAllocationFailed';
+        const message = 'Failed to allocate a Node inspector port.';
+
+        assert.strictEqual(locStrings.azureFunctionsNodeInspectorPortAllocationFailed, message);
+        assert.strictEqual(packageNls[`aspire-vscode.strings.${name}`], message);
+        assert.ok(xlf.includes(`<trans-unit id="aspire-vscode.strings.${name}">`));
+    });
+
 	test('formatText formats correctly ', () => {
         const input = 'This is a test :ice: :rocket: :bug: :microscope: :linked_paperclips: :chart_increasing: :chart_decreasing: :locked_with_key: :play_button: :check_mark: :cross_mark: :hammer_and_wrench:';
         const expectedOutput = 'This is a test 🧊 🚀 🐛 🔬 🔗 📈 📉 🔒 ▶️ ✅ ❌ 🛠️';
@@ -21,6 +42,25 @@ suite('utils/strings tests', () => {
         const resultWithNoEmojis = formatText(inputWithNoEmojis);
         assert.strictEqual(resultWithNoEmojis, expectedOutputWithNoEmojis);
 	});
+
+    for (const [left, right, expected] of [
+        ['', '', true],
+        ['Api', 'API', true],
+        ['Api', 'Other', false],
+        ['\u00e9', '\u00c9', true],
+        ['\u00df', 'ss', false],
+        ['\ufb03', 'ffi', false],
+        ['\u0131', 'I', false],
+        ['\u017f', 'S', false],
+        ['\u0130', 'i', false],
+        ['\u{10428}', '\u{10400}', true],
+        ['\u00df', '\u00df', true],
+    ] as const) {
+        test(`equalsOrdinalIgnoreCase matches ordinal casing for ${JSON.stringify(left)} and ${JSON.stringify(right)}`, () => {
+            assert.strictEqual(equalsOrdinalIgnoreCase(left, right), expected);
+            assert.strictEqual(equalsOrdinalIgnoreCase(right, left), expected);
+        });
+    }
 
     test('collapseWhitespace renders multi-line CLI status as a single line', () => {
         assert.strictEqual(collapseWhitespace('  Building\n  the AppHost\r\n\tnow  '), 'Building the AppHost now');
@@ -61,6 +101,141 @@ suite('utils/strings tests', () => {
         }
     });
 
+    test('resource source command and failure copy are localized', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const packageNls = JSON.parse(fs.readFileSync(path.join(extensionRoot, 'package.nls.json'), 'utf8')) as Record<string, string>;
+
+        assert.strictEqual(packageNls['command.openResourceSource'], 'Open resource source');
+        assert.deepStrictEqual(Object.fromEntries(Object.entries(packageNls).filter(([key]) => key.startsWith('aspire-vscode.strings.resourceSource'))), {
+            'aspire-vscode.strings.resourceSourceNotFound': 'Could not determine the resource source to open.',
+            'aspire-vscode.strings.resourceSourceOpenFailed': 'Failed to open resource source: {0}',
+            'aspire-vscode.strings.resourceSourceOutsideWorkspace': 'Resource source is outside the current workspace: {0}. Add its folder to the workspace to reveal it in Explorer.',
+        });
+        assert.strictEqual(locStrings.resourceSourceNotFound, 'Could not determine the resource source to open.');
+        assert.strictEqual(locStrings.resourceSourceOpenFailed('frontend.ts'), 'Failed to open resource source: frontend.ts');
+        assert.strictEqual(locStrings.resourceSourceOutsideWorkspace('frontend'), 'Resource source is outside the current workspace: frontend. Add its folder to the workspace to reveal it in Explorer.');
+    });
+
+    test('editor assistance invocation and confirmation copy is localized and generated into XLF', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const stringsSource = fs.readFileSync(path.join(extensionRoot, 'src', 'loc', 'strings.ts'), 'utf8');
+        const packageNls = JSON.parse(fs.readFileSync(path.join(extensionRoot, 'package.nls.json'), 'utf8')) as Record<string, string>;
+        const xlf = fs.readFileSync(path.join(extensionRoot, 'loc', 'xlf', 'aspire-vscode.xlf'), 'utf8');
+        const expectedStrings = {
+            editorAssistanceOpenDashboardInvocationMessage: 'Opening Aspire Dashboard for {0}...',
+            editorAssistanceOpenOutputConfirmationTitle: 'Open the VS Code Output panel and select the Aspire Extension output channel',
+            editorAssistanceOpenOutputConfirmationMessage: 'This opens the VS Code Output panel and selects the Aspire Extension output channel.',
+            editorAssistanceOpenOutputInvocationMessage: 'Opening the VS Code Output panel and selecting the Aspire Extension output channel...',
+        };
+
+        for (const [name, value] of Object.entries(expectedStrings)) {
+            assert.ok(
+                stringsSource.includes(`vscode.l10n.t('${value}'`),
+                `Expected ${name} to register "${value}" in strings.ts.`);
+            assert.strictEqual(packageNls[`aspire-vscode.strings.${name}`], value);
+            assert.ok(
+                xlf.includes(`<trans-unit id="aspire-vscode.strings.${name}">`),
+                `Regenerate loc/xlf/aspire-vscode.xlf after adding ${name}.`);
+        }
+
+        assert.strictEqual(expectedStrings.editorAssistanceOpenOutputConfirmationMessage.includes('focused'), false);
+        assert.strictEqual(expectedStrings.editorAssistanceOpenOutputInvocationMessage.includes('focused'), false);
+
+        // Every Open Output surface must say exactly what happens: the VS Code Output panel opens
+        // and the Aspire Extension output channel is selected within it. Guard both TypeScript-side
+        // surfaces (invocation and confirmation) and the package.nls.json model/user descriptions so
+        // none of the five drift back to the older, vaguer "Aspire Output view" wording.
+        const openOutputCopy = {
+            editorAssistanceOpenOutputConfirmationTitle: expectedStrings.editorAssistanceOpenOutputConfirmationTitle,
+            editorAssistanceOpenOutputConfirmationMessage: expectedStrings.editorAssistanceOpenOutputConfirmationMessage,
+            editorAssistanceOpenOutputInvocationMessage: expectedStrings.editorAssistanceOpenOutputInvocationMessage,
+            'languageModelTool.aspireOpenOutput.modelDescription': packageNls['languageModelTool.aspireOpenOutput.modelDescription'],
+            'languageModelTool.aspireOpenOutput.userDescription': packageNls['languageModelTool.aspireOpenOutput.userDescription'],
+        };
+        for (const [name, value] of Object.entries(openOutputCopy)) {
+            assert.ok(value.includes('VS Code Output panel'), `Expected ${name} to mention the VS Code Output panel.`);
+            assert.ok(value.includes('Aspire Extension output channel'), `Expected ${name} to mention the Aspire Extension output channel.`);
+        }
+    });
+
+    test('AppHost isolation compatibility loc strings are present in package.nls.json and the generated XLF catalog', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const stringsSource = fs.readFileSync(path.join(extensionRoot, 'src', 'loc', 'strings.ts'), 'utf8');
+        const packageNls = JSON.parse(fs.readFileSync(path.join(extensionRoot, 'package.nls.json'), 'utf8')) as Record<string, string>;
+        const xlf = fs.readFileSync(path.join(extensionRoot, 'loc', 'xlf', 'aspire-vscode.xlf'), 'utf8');
+        const runtimeStrings = locStrings as Record<string, unknown>;
+
+        const expectedStrings = {
+            appHostLifecycleIsolationModeNotSupported: 'The selected Aspire CLI does not support the requested isolation mode.',
+            appHostLifecycleIsolationCapabilityCouldNotBeVerified: 'The selected Aspire CLI isolation capability could not be verified.',
+        };
+
+        for (const [name, value] of Object.entries(expectedStrings)) {
+            assert.strictEqual(runtimeStrings[name], value, `Expected ${name} to be exported from strings.ts.`);
+
+            const escapedValue = value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const declaration = new RegExp(
+                `export\\s+const\\s+${name}\\s*=\\s*vscode\\.l10n\\.t\\(\\s*(['"\`])${escapedValue}\\1\\s*\\)`);
+            assert.match(stringsSource, declaration, `Expected ${name} to be registered in strings.ts with the value "${value}".`);
+            assert.strictEqual(packageNls[`aspire-vscode.strings.${name}`], value);
+            assert.ok(xlf.includes(`<trans-unit id="aspire-vscode.strings.${name}">`), `Regenerate loc/xlf/aspire-vscode.xlf with "yarn run localize" after adding ${name}.`);
+        }
+    });
+
+    test('managed browser debugging loc strings are present in runtime exports, package.nls.json, and the generated XLF catalog', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const packageNls = JSON.parse(fs.readFileSync(path.join(extensionRoot, 'package.nls.json'), 'utf8')) as Record<string, string>;
+        const xlf = fs.readFileSync(path.join(extensionRoot, 'loc', 'xlf', 'aspire-vscode.xlf'), 'utf8');
+
+        const expectedStrings = {
+            blazorWasmDebugRelayFailed: 'Could not prepare Blazor WebAssembly debugging. See the Aspire output for details, then try again.',
+            csharpExtensionMissingForBlazorDebugging: 'Debugging this Blazor client requires {0} version {1} or later. Install the C# extension, then start debugging again.',
+            csharpExtensionOutdatedForBlazorDebugging: 'Debugging this Blazor client requires {0} version {2} or later. Installed version: {1}. Update the C# extension, then start debugging again.',
+            missingBlazorClientProject: "The Blazor client project '{0}' does not exist. Restore or rebuild the AppHost, then start debugging again.",
+        };
+
+        assert.strictEqual(
+            locStrings.csharpExtensionMissingForBlazorDebugging('ms-dotnettools.csharp', '2.145.15-prerelease'),
+            'Debugging this Blazor client requires ms-dotnettools.csharp version 2.145.15-prerelease or later. Install the C# extension, then start debugging again.');
+        assert.strictEqual(
+            locStrings.csharpExtensionOutdatedForBlazorDebugging('ms-dotnettools.csharp', '2.145.14', '2.145.15-prerelease'),
+            'Debugging this Blazor client requires ms-dotnettools.csharp version 2.145.15-prerelease or later. Installed version: 2.145.14. Update the C# extension, then start debugging again.');
+        assert.strictEqual(
+            locStrings.missingBlazorClientProject('/workspace/Client.csproj'),
+            "The Blazor client project '/workspace/Client.csproj' does not exist. Restore or rebuild the AppHost, then start debugging again.");
+
+        for (const [name, value] of Object.entries(expectedStrings)) {
+            assert.strictEqual(packageNls[`aspire-vscode.strings.${name}`], value);
+            assert.ok(xlf.includes(`<trans-unit id="aspire-vscode.strings.${name}">`), `Regenerate loc/xlf/aspire-vscode.xlf with "yarn run localize" after adding ${name}.`);
+        }
+    });
+
+    test('Set up Aspire loc strings are present in runtime exports, package.nls.json, and the generated XLF catalog', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const packageNls = JSON.parse(fs.readFileSync(path.join(extensionRoot, 'package.nls.json'), 'utf8')) as Record<string, string>;
+        const xlf = fs.readFileSync(path.join(extensionRoot, 'loc', 'xlf', 'aspire-vscode.xlf'), 'utf8');
+        const runtimeStrings = locStrings as Record<string, unknown>;
+
+        const expectedStrings = {
+            createWithAspirePlaceholder: 'Choose how to set up Aspire',
+            createNewAspireAppLabel: 'Create a new Aspire app',
+            createNewAspireAppDescription: 'Start a greenfield application in a new directory using an Aspire template.',
+            addAspireToWorkspaceLabel: 'Add Aspire to this workspace',
+            addAspireToWorkspaceDescription: 'Add an AppHost and Aspire configuration alongside applications already in this workspace.',
+        };
+
+        for (const [name, value] of Object.entries(expectedStrings)) {
+            assert.strictEqual(runtimeStrings[name], value, `Expected ${name} to be exported from strings.ts.`);
+            assert.strictEqual(packageNls[`aspire-vscode.strings.${name}`], value);
+            assert.ok(xlf.includes(`<trans-unit id="aspire-vscode.strings.${name}">`), `Regenerate loc/xlf/aspire-vscode.xlf with "yarn run localize" after adding ${name}.`);
+        }
+
+        assert.strictEqual(packageNls['command.createWithAspire'], 'Set up Aspire');
+        assert.strictEqual(
+            packageNls['views.appHosts.welcome'],
+            'No Aspire AppHosts detected in this workspace.\n[Set up Aspire](command:aspire-vscode.createWithAspire)');
+    });
+
     test('Rust loc strings are present in package.nls.json and the generated XLF catalog', () => {
         // package.nls.json is the only input to the XLF catalog (see gulpfile.js), so a string that
         // only exists in strings.ts is shipped untranslated. Guard the Rust debugger strings, which
@@ -79,6 +254,22 @@ suite('utils/strings tests', () => {
 
         const missingFromXlf = names.filter(name => !xlf.includes(`<trans-unit id="aspire-vscode.strings.${name}">`));
         assert.deepStrictEqual(missingFromXlf, [], 'Regenerate loc/xlf/aspire-vscode.xlf with "yarn run localize" after adding package.nls.json entries.');
+    });
+
+    test('resource debugger strings are present in package.nls.json and the generated XLF catalog', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const packageNls = JSON.parse(fs.readFileSync(path.join(extensionRoot, 'package.nls.json'), 'utf8')) as Record<string, string>;
+        const xlf = fs.readFileSync(path.join(extensionRoot, 'loc', 'xlf', 'aspire-vscode.xlf'), 'utf8');
+        const expectedStrings = {
+            attachingDebugger: 'Attaching debugger to {0}...',
+            attachDebuggerAlreadyDebugging: 'A debugger is already attached to {0}.',
+        };
+
+        for (const [name, value] of Object.entries(expectedStrings)) {
+            const key = `aspire-vscode.strings.${name}`;
+            assert.strictEqual(packageNls[key], value);
+            assert.ok(xlf.includes(`<trans-unit id="${key}">`));
+        }
     });
 
     test('Java loc strings are present in package.nls.json and the generated XLF catalog', () => {
@@ -105,6 +296,45 @@ suite('utils/strings tests', () => {
 
         const missingFromXlf = names.filter(name => !xlf.includes(`<trans-unit id="aspire-vscode.strings.${name}">`));
         assert.deepStrictEqual(missingFromXlf, [], 'Regenerate loc/xlf/aspire-vscode.xlf with "yarn run localize" after adding package.nls.json entries.');
+    });
+
+    test('Go loc strings are present in package.nls.json and the generated XLF catalog', () => {
+        // Same guard as the Rust and Java strings: package.nls.json is the only input to the XLF
+        // catalog (see gulpfile.js), so a Go string that only exists in strings.ts ships untranslated.
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const stringsSource = fs.readFileSync(path.join(extensionRoot, 'src', 'loc', 'strings.ts'), 'utf8');
+        const packageNls = JSON.parse(fs.readFileSync(path.join(extensionRoot, 'package.nls.json'), 'utf8')) as Record<string, string>;
+        const xlf = fs.readFileSync(path.join(extensionRoot, 'loc', 'xlf', 'aspire-vscode.xlf'), 'utf8');
+
+        // The capital letter keeps the scan to goXxx names and away from unrelated words that start with "go".
+        const declarationPattern = /export\s+const\s+(go[A-Z][A-Za-z0-9_]*)\s*=\s*(?:\([^)]*\)\s*=>\s*)?vscode\.l10n\.t\(/g;
+        const names = [...stringsSource.matchAll(declarationPattern)].map(match => match[1]);
+        for (const expectedName of ['goDisplayName', 'goLabel', 'goDebuggerExtensionNotInstalled', 'goAppHostCommandNotRecognized']) {
+            assert.ok(names.includes(expectedName), `Expected ${expectedName} to be declared in strings.ts.`);
+        }
+
+        const missingFromNls = names.filter(name => packageNls[`aspire-vscode.strings.${name}`] === undefined);
+        assert.deepStrictEqual(missingFromNls, [], 'Every Go loc string needs an aspire-vscode.strings.* entry in package.nls.json.');
+
+        const missingFromXlf = names.filter(name => !xlf.includes(`<trans-unit id="aspire-vscode.strings.${name}">`));
+        assert.deepStrictEqual(missingFromXlf, [], 'Regenerate loc/xlf/aspire-vscode.xlf with "yarn run localize" after adding package.nls.json entries.');
+    });
+
+    test('debugger setup strings use neutral wording for missing or disabled extensions', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const packageNls = JSON.parse(fs.readFileSync(path.join(extensionRoot, 'package.nls.json'), 'utf8')) as Record<string, string>;
+
+        assert.strictEqual(packageNls['command.installDebuggerExtension'], 'Set up debugger support');
+        assert.strictEqual(locStrings.debuggerSetupAction, 'Set Up');
+        assert.strictEqual(
+            locStrings.rustDebuggerExtensionNotInstalled('vadimcn.vscode-lldb'),
+            'Rust AppHosts require native debugger support. Set up vadimcn.vscode-lldb in the Extensions view, then start the AppHost again.');
+        assert.strictEqual(
+            locStrings.javaDebuggerExtensionNotInstalled('vscjava.vscode-java-debug'),
+            'Java AppHosts require Java debugger support. Set up vscjava.vscode-java-debug in the Extensions view, then start the AppHost again.');
+        assert.strictEqual(
+            locStrings.goDebuggerExtensionNotInstalled('golang.go'),
+            'Go AppHosts require Go debugger support. Set up golang.go in the Extensions view, then start the AppHost again.');
     });
 });
 

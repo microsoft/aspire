@@ -1,0 +1,15 @@
+﻿{
+  Agents: [
+    GitHub Copilot,
+    Claude Code,
+    OpenCode
+  ],
+  Results: [
+    Installed skills:
+  Skills: dotnet-inspect
+  Locations: ~/.agents/skills (GitHub Copilot, OpenCode)
+  [dim]Shared files may be discovered by agents that aren't selected.[/],
+    Configure Aspire MCP for GitHub Copilot at ~/.copilot/mcp-config.json,
+    Installed Aspire agent telemetry hooks in user-level configuration for: GitHub Copilot. Only Aspire skill, MCP tool, and reference-file usage is recorded. Opt out anytime by setting ASPIRE_CLI_TELEMETRY_OPTOUT=true.
+  ]
+}

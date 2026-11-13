@@ -13,6 +13,7 @@ namespace Aspire.Hosting.Kubernetes.Resources;
 /// with a volume in Kubernetes. It is primarily used to specify the
 /// amount of resources (e.g., storage) requested or capped for a volume.
 /// </remarks>
+[AspireExport]
 [YamlSerializable]
 public sealed class VolumeResourceRequirementsV1
 {
@@ -29,6 +30,7 @@ public sealed class VolumeResourceRequirementsV1
     /// Specifies the resource requests for the volume, such as storage capacity or other resource types.
     /// Used to define guaranteed resource allocation for the volume.
     /// </summary>
+    [AspireExport]
     [YamlMember(Alias = "requests")]
     public Dictionary<string, string> Requests { get; } = [];
 }

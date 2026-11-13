@@ -1,0 +1,2 @@
+{"body":"Documents changes from microsoft/aspire#17235.","title":"Document staging channel refusal on daily/local/pr CLI builds","type":"create_pull_request","head_repo":"microsoft/aspire.dev","base_branch":"release/13.5","branch":"docs/pr-17235-32112079288-1","base_commit":"aa2777825624f037a77160728939e36f7c788eff"}
+{"result":"drafted","source_pr_number":17235,"summary":"Documented the staging-channel refusal behavior.","target_branch":"release/13.5","type":"notify_source_pr"}

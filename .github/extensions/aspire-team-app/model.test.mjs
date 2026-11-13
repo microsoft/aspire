@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { dayMs, personalPickActions, reviewDebtSignalLabel } from "./constants.mjs";
+import { dayMs, hourMs, personalPickActions, reviewDebtSignalLabel } from "./constants.mjs";
 import {
   actorIdentityKey,
   computeCommunityItems,
@@ -70,6 +70,8 @@ function makePr(overrides = {}) {
     authorType: "User",
     authorAvatarUrl: null,
     createdAt: isoAgo(2 * dayMs),
+    readyForReviewAt: null,
+    firstReadyForReviewAt: isoAgo(2 * dayMs),
     updatedAt: isoAgo(dayMs),
     baseRef: "main",
     milestone: null,
@@ -127,6 +129,22 @@ test("createAttentionBuckets only surfaces the My draft PRs bucket when a login 
   assert.equal(withoutLogin.find((b) => b.label === "My draft PRs"), undefined);
 });
 
+test("createAttentionSignals measures open age from the latest ready-for-review transition", () => {
+  const recentlyReady = makePr({
+    createdAt: isoAgo(28 * dayMs),
+    readyForReviewAt: isoAgo(2 * dayMs),
+  });
+  const alwaysReady = makePr({ createdAt: isoAgo(28 * dayMs) });
+
+  const recentlyReadyOpen = createAttentionSignals({ pullRequest: recentlyReady })
+    .find((signal) => signal.label.startsWith("open "));
+  const alwaysReadyOpen = createAttentionSignals({ pullRequest: alwaysReady })
+    .find((signal) => signal.label.startsWith("open "));
+
+  assert.deepEqual(recentlyReadyOpen, { label: "open 2d", tone: "muted" });
+  assert.deepEqual(alwaysReadyOpen, { label: "open 28d", tone: "warning" });
+});
+
 test("computeFocusItems keeps the highest-priority lane per PR and excludes CI-failing PRs", () => {
   const readyAndNeedsReview = makePr({ number: 10, updatedAt: isoAgo(dayMs) });
   const failing = makePr({ number: 11, checks: { state: "failure", failureCount: 2 }, updatedAt: isoAgo(dayMs) });
@@ -158,6 +176,54 @@ test("computeFocusItems keys focus identity by host so same-slug PRs on differen
     "https://ghe.example.com/microsoft/aspire/pull/500",
     "https://github.com/microsoft/aspire/pull/500",
   ]);
+});
+
+test("computeFocusItems breaks first-readiness ties by ordinal host, repository, and PR number", () => {
+  const firstReadyForReviewAt = isoAgo(3 * dayMs);
+  const make = (host, repository, number) => makePr({
+    firstReadyForReviewAt, repository, number, url: `https://${host}/${repository}/pull/${number}`,
+  });
+  const ordered = [
+    make("ghe.example.com", "microsoft/aspire", 1),
+    make("github.com", "Microsoft/Aspire", 2),
+    make("github.com", "microsoft/aspire", 10),
+    make("github.com", "microsoft/dcp", 1),
+  ];
+  for (const input of [ordered, [...ordered].reverse(), [ordered[2], ordered[0], ordered[3], ordered[1]]]) {
+    const focus = computeFocusItems(createAttentionBuckets(input, "joperezr"));
+    assert.deepEqual(focus.map((item) => item.pullRequest.url), ordered.map((pr) => pr.url));
+  }
+});
+
+test("blocked PRs return at their original first-readiness priority", () => {
+  const older = makePr({ number: 1, firstReadyForReviewAt: isoAgo(5 * dayMs) });
+  const newer = makePr({ number: 2, url: "https://github.com/microsoft/aspire/pull/2", firstReadyForReviewAt: isoAgo(3 * dayMs) });
+  const blockers = [
+    { draft: true },
+    { mergeableState: "dirty" },
+    { labels: ["needs-author-action"] },
+    { labels: ["no-merge"] },
+    { checks: { state: "failure" } },
+    { review: { state: "changes_requested", lastReviewedAt: isoAgo(hourMs) } },
+    { review: { state: "reviewed", unresolvedThreadCount: 1, lastReviewedAt: isoAgo(hourMs) } },
+  ];
+  for (const blocker of blockers) {
+    const blocked = makePr({ ...older, ...blocker });
+    const focus = computeFocusItems(createAttentionBuckets([newer, blocked], "joperezr"));
+    assert.deepEqual(focus.map((item) => item.pullRequest.number), [2]);
+    const returned = makePr({ ...older, updatedAt: new Date().toISOString() });
+    const restored = computeFocusItems(createAttentionBuckets([newer, returned], "joperezr"));
+    assert.deepEqual(restored.map((item) => item.pullRequest.number), [1, 2]);
+  }
+});
+
+test("focus omits unavailable first readiness and explains it without using updatedAt or PR age", () => {
+  const unavailable = makePr({ firstReadyForReviewAt: null, isMine: true });
+  const buckets = createAttentionBuckets([unavailable], "davidfowl");
+  const focus = computeFocusItems(buckets);
+  assert.deepEqual(focus, []);
+  const exclusions = computeFocusExclusionItems([unavailable], buckets, focus, "davidfowl");
+  assert.equal(exclusions[0].reason.kind, "readiness-unavailable");
 });
 
 test("computeFocusItems retains review-debt PRs through the full createAttentionBuckets pipeline", () => {
@@ -255,6 +321,27 @@ test("computeCommunityItems includes active external contributors and excludes t
   assert.equal(items[0].reason, "Community");
 });
 
+test("community wait signal starts when a draft becomes ready for review", () => {
+  const recentlyReady = makePr({
+    number: 24,
+    author: "recent-contributor",
+    createdAt: isoAgo(28 * dayMs),
+    readyForReviewAt: isoAgo(11 * hourMs),
+  });
+  const waiting = makePr({
+    number: 25,
+    author: "waiting-contributor",
+    createdAt: isoAgo(28 * dayMs),
+    readyForReviewAt: isoAgo(13 * hourMs),
+  });
+
+  const recentlyReadyAction = createAttentionSignals({ pullRequest: recentlyReady })[0];
+  const waitingAction = createAttentionSignals({ pullRequest: waiting })[0];
+
+  assert.deepEqual(recentlyReadyAction, { label: "community", tone: "accent" });
+  assert.deepEqual(waitingAction, { label: "community wait", tone: "warning" });
+});
+
 test("computeFocusExclusionItems explains why my own PRs are outside the focused queue", () => {
   const failing = makePr({ number: 30, author: "octo", isMine: true, checks: { state: "failure", failureCount: 1 } });
   const notMine = makePr({ number: 31, author: "davidfowl", isMine: false, checks: { state: "failure" } });
@@ -277,6 +364,26 @@ test("createForMeItems returns personal picks only when a login is supplied", ()
   const byNumber = new Map(picks.map((p) => [p.pullRequest.number, p]));
   assert.equal(byNumber.get(40)?.action, personalPickActions.reviewThis);
   assert.equal(byNumber.get(41)?.action, personalPickActions.finishThis);
+});
+
+test("createForMeItems ranks review requests by time waiting for review", () => {
+  const oldDraft = makePr({
+    number: 42,
+    author: "old-draft-author",
+    createdAt: isoAgo(28 * dayMs),
+    readyForReviewAt: isoAgo(dayMs),
+    review: { state: "waiting", reviewRequestedFromViewer: true },
+  });
+  const longerWait = makePr({
+    number: 43,
+    author: "longer-wait-author",
+    createdAt: isoAgo(3 * dayMs),
+    review: { state: "waiting", reviewRequestedFromViewer: true },
+  });
+
+  const picks = createForMeItems([oldDraft, longerWait], ["octo"]);
+
+  assert.deepEqual(picks.map((pick) => pick.pullRequest.number), [43, 42]);
 });
 
 test("createDeveloperPullRequestCounts attributes open PRs to core-team members and honors alias suffixes", () => {
@@ -326,23 +433,24 @@ test("visibleCheckState and isChecksFailing honor non-blocking check rules", () 
   assert.equal(visibleCheckState(normalFailure), "failure");
   assert.equal(isChecksFailing(normalFailure), true);
 
+  const repository = "coreai/aspire-1p";
   // aspire-1p reports a bare aggregate "failure" before per-check detail is fetched. With a
   // non-blocking rule for that repo and zero per-check detail, it is indeterminate, not red.
-  const aggregateFailure = makePr({ repository: "devdiv-microsoft/aspire-1p", checks: { state: "failure" } });
-  assert.equal(visibleCheckState(aggregateFailure), "unknown");
-  assert.equal(isChecksFailing(aggregateFailure), false);
+  const aggregateFailure = makePr({ repository, checks: { state: "failure" } });
+  assert.equal(visibleCheckState(aggregateFailure), "unknown", repository);
+  assert.equal(isChecksFailing(aggregateFailure), false, repository);
 
   // A failure whose only failing check matches the rule downgrades to success (nothing pending).
   const nonBlockingOnly = makePr({
-    repository: "devdiv-microsoft/aspire-1p",
+    repository,
     checks: { state: "failure", totalCount: 1, failureCount: 1, failingChecks: [{ name: "GitOps/GitHubPop" }] },
   });
-  assert.equal(visibleCheckState(nonBlockingOnly), "success");
-  assert.equal(isChecksFailing(nonBlockingOnly), false);
+  assert.equal(visibleCheckState(nonBlockingOnly), "success", repository);
+  assert.equal(isChecksFailing(nonBlockingOnly), false, repository);
 });
 
 test("filterCheckFailureRules drops rules missing a repository, label, or concrete matcher", () => {
-  const valid = { repository: "devdiv-microsoft/aspire-1p", label: "proof of presence", checkNames: ["GitOps/GitHubPop"], checkNameContains: [] };
+  const valid = { repository: "coreai/aspire-1p", label: "proof of presence", checkNames: ["GitOps/GitHubPop"], checkNameContains: [] };
   const containsOnly = { repository: "org/repo", label: "informational", checkNames: [], checkNameContains: ["proof of presence"] };
   const noMatchers = { repository: "org/repo", label: "informational", checkNames: [], checkNameContains: [] };
   const noRepo = { repository: "", label: "informational", checkNames: ["x"], checkNameContains: [] };
@@ -414,4 +522,12 @@ test("createIssueSignals leads with the highest-priority action pill", () => {
   // login has no "bot" substring (normalizeIssue now carries authorType for issues).
   const botTyped = makeIssue({ number: 6, author: "dependa", authorType: "Bot" });
   assert.ok(createIssueSignals(botTyped).some((s) => s.label === "bot"));
+});
+
+test("issue repository labels retain their kind for tooltip explanations", () => {
+  const signals = createIssueSignals(makeIssue({ labels: ["review debt", "custom"] }));
+  assert.deepEqual(signals.filter((signal) => signal.kind === "repo-label"), [
+    { label: "review debt", tone: "accent", kind: "repo-label" },
+    { label: "custom", tone: "accent", kind: "repo-label" },
+  ]);
 });

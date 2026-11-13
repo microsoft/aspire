@@ -1,6 +1,6 @@
 # Aspire.Microsoft.Azure.Cosmos library
 
-Registers [CosmosClient](https://learn.microsoft.com/dotnet/api/microsoft.azure.cosmos.cosmosclient) as a singleton in the DI container for connecting to Azure Cosmos DB. Enables corresponding logging and telemetry.
+Registers [CosmosClient](https://learn.microsoft.com/dotnet/api/microsoft.azure.cosmos.cosmosclient) as a singleton in the DI container for connecting to Azure Cosmos DB. Enables corresponding health check, logging and telemetry.
 
 ## Getting started
 
@@ -102,10 +102,40 @@ You can also pass the `Action<MicrosoftAzureCosmosSettings> configureSettings` d
 builder.AddAzureCosmosClient("cosmosConnectionName", settings => settings.DisableTracing = true);
 ```
 
-You can also setup the [CosmosClientOptions](https://learn.microsoft.com/dotnet/api/microsoft.azure.cosmos.cosmosclientoptions) using the optional `Action<CosmosClientOptions> configureClientOptions` parameter of the `AddAzureCosmosClient` method. For example, to set the `ApplicationName` "User-Agent" header suffix for all requests issues by this client:
+You can also set up the [CosmosClientOptions](https://learn.microsoft.com/dotnet/api/microsoft.azure.cosmos.cosmosclientoptions) using the optional `Action<IServiceProvider, CosmosClientOptions> configureClientOptions` parameter of the `AddAzureCosmosClient` method. The service provider can be used to resolve services needed to configure the client. For example:
 
 ```csharp
-builder.AddAzureCosmosClient("cosmosConnectionName", configureClientOptions: clientOptions => clientOptions.ApplicationName = "myapp");
+builder.AddAzureCosmosClient("cosmosConnectionName", configureClientOptions: (serviceProvider, clientOptions) =>
+{
+    clientOptions.ApplicationName = "myapp";
+    clientOptions.CustomHandlers.Add(serviceProvider.GetRequiredService<MyRequestHandler>());
+});
+```
+
+## Health checks
+
+By default, the Aspire Microsoft Azure Cosmos DB integration registers a health check that verifies the Cosmos DB account is reachable. The health check is included in the application's `/health` endpoint, so dependents that `WaitFor` the service's HTTP health (or Kubernetes readiness probes) won't report healthy while Cosmos DB is unreachable.
+
+The health check can be disabled by setting `MicrosoftAzureCosmosSettings.DisableHealthChecks` to `true`, either through configuration:
+
+```json
+{
+  "Aspire": {
+    "Microsoft": {
+      "Azure": {
+        "Cosmos": {
+          "DisableHealthChecks": true
+        }
+      }
+    }
+  }
+}
+```
+
+or in code:
+
+```csharp
+builder.AddAzureCosmosClient("cosmosConnectionName", settings => settings.DisableHealthChecks = true);
 ```
 
 ## AppHost extensions
@@ -114,16 +144,19 @@ In your AppHost project, install the Aspire Azure CosmosDB Hosting library with 
 
 ```dotnetcli
 dotnet add package Aspire.Hosting.Azure.CosmosDB
+dotnet add package Aspire.Hosting.Dotnet
 ```
 
 Then, in the _AppHost.cs_ file of `AppHost`, add a Cosmos DB connection and consume the connection using the following methods:
 
 ```csharp
-var cosmosdb = builder.ExecutionContext.IsPublishMode
+using Aspire.Hosting.ApplicationModel;
+
+IResourceBuilder<IResourceWithConnectionString> cosmosdb = builder.ExecutionContext.IsPublishMode
     ? builder.AddAzureCosmosDB("cdb").AddCosmosDatabase("cosmosdb")
     : builder.AddConnectionString("cosmosdb");
 
-var myService = builder.AddProject<Projects.MyService>()
+var myService = builder.AddDotnetProject("myservice", "../MyService/MyService.csproj")
                        .WithReference(cosmosdb);
 ```
 

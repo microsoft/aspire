@@ -4,7 +4,6 @@
 #pragma warning disable AZPROVISION001 // Type is for evaluation purposes only and is subject to change or removal in future updates.
 #pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates.
 #pragma warning disable ASPIRECOMPUTE002 // IComputeEnvironmentResource.GetHostAddressExpression is experimental
-#pragma warning disable ASPIREPROBES001 // EndpointProbeAnnotation is experimental
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
@@ -39,12 +38,16 @@ public static class AzureFrontDoorExtensions
     /// <see cref="AzureProvisioningResourceExtensions.ConfigureInfrastructure{T}"/> to customize the
     /// generated infrastructure directly.
     /// </para>
+    /// <para>
+    /// To reach apps in Azure Container Apps or Azure App Service over Private Link instead of the public Internet, see
+    /// <see cref="AzureFrontDoorPrivateLinkExtensions.WithAzureFrontDoorPrivateLink"/>.
+    /// </para>
     /// <example>
     /// Add an Azure Front Door resource with origins:
     /// <code lang="C#">
-    /// var api = builder.AddProject&lt;Projects.Api&gt;("api")
+    /// var api = builder.AddDotnetProject("api", "../Api/Api.csproj")
     ///     .WithExternalHttpEndpoints();
-    /// var web = builder.AddProject&lt;Projects.Web&gt;("web")
+    /// var web = builder.AddDotnetProject("web", "../Web/Web.csproj")
     ///     .WithExternalHttpEndpoints();
     /// var frontDoor = builder.AddAzureFrontDoor("frontdoor")
     ///     .WithOrigin(api)
@@ -79,6 +82,7 @@ public static class AzureFrontDoorExtensions
             // Create a separate endpoint → origin group → origin → route per WithOrigin call.
             // This gives each backend app its own Front Door hostname.
             var originAnnotations = azureResource.Annotations.OfType<AzureFrontDoorOriginAnnotation>().ToList();
+            var privateLink = new PrivateLinkConfigurator(infrastructure, azureResource);
             foreach (var originAnnotation in originAnnotations)
             {
                 var originResource = originAnnotation.Resource;
@@ -120,14 +124,22 @@ public static class AzureFrontDoorExtensions
                 };
                 infrastructure.Add(originGroup);
 
-                // Origin
                 var origin = new FrontDoorOrigin($"{originBicepId}Origin")
                 {
                     Parent = originGroup,
                     HostName = hostParam,
                     OriginHostHeader = hostParam
                 };
+                // The same Aspire resource can resolve to a different backend hostname between deployments.
+                // Include the hostname in the resource-group-scoped hash so a backend change creates a new
+                // origin instead of reusing the existing origin's Azure identity.
+                origin.Name = BicepFunction.Take(
+                    BicepFunction.Interpolate($"{originBicepId.Replace('_', '-')}Origin-{BicepFunction.GetUniqueString(BicepFunction.GetResourceGroup().Id, hostParam)}"),
+                    origin.GetResourceNameRequirements().MaxLength);
                 infrastructure.Add(origin);
+
+                // Reach origins in an environment connected through Private Link over the private endpoint.
+                privateLink.ConfigureOrigin(computeEnv, originResource, origin);
 
                 // Route
                 var route = new FrontDoorRoute($"{originBicepId}Route")
@@ -149,7 +161,13 @@ public static class AzureFrontDoorExtensions
                 {
                     Value = BicepFunction.Interpolate($"https://{endpoint.HostName}")
                 });
+                infrastructure.Add(new ProvisioningOutput($"{originBicepId}_endpointId", typeof(string))
+                {
+                    Value = endpoint.Id
+                });
             }
+
+            privateLink.Complete(profile);
         };
 
         var resource = new AzureFrontDoorResource(name, configureInfrastructure);
@@ -246,5 +264,124 @@ public static class AzureFrontDoorExtensions
         }
 
         return ("/", HealthProbeProtocol.Https);
+    }
+
+    // Converts the origins of one Front Door template that run in a compute environment connected with
+    // WithAzureFrontDoorPrivateLink into Private Link origins.
+    private sealed class PrivateLinkConfigurator(AzureResourceInfrastructure infrastructure, AzureFrontDoorResource frontDoor)
+    {
+        // Container Apps origins share an environment target; App Service origins each target their own website.
+        // Keyed by the output's resource and name rather than the reference, because a target can return a new reference per call.
+        private readonly Dictionary<(string Resource, string Output), (ProvisioningParameter ResourceId, BicepValue<string> Location)> _targets = [];
+        private readonly HashSet<string> _parameterNames = [];
+        private readonly HashSet<AzureFrontDoorPrivateLinkAnnotation> _usedConnections = [];
+
+        private ProvisioningVariable? _regions;
+
+        // Converts the origin into a Private Link origin when it runs in a connected environment.
+        public void ConfigureOrigin(
+            IComputeEnvironmentResource computeEnvironment,
+            IResource originResource,
+            FrontDoorOrigin origin)
+        {
+            if (computeEnvironment is not IAzureCdnPrivateLinkTarget environment ||
+                !environment.Annotations.OfType<PrivateEndpointTargetAnnotation>().Any(annotation => annotation.PrivateEndpointResource is AzureFrontDoorResource))
+            {
+                return;
+            }
+
+            var connection = frontDoor.Annotations
+                .OfType<AzureFrontDoorPrivateLinkAnnotation>()
+                .FirstOrDefault(annotation => ReferenceEquals(annotation.Environment, environment));
+            if (connection is null)
+            {
+                // The environment refuses public traffic, so a Front Door that isn't connected to it can't reach the origin.
+                throw new InvalidOperationException(
+                    $"Origin '{originResource.Name}' of Azure Front Door '{frontDoor.Name}' runs in compute environment '{environment.Name}', " +
+                    $"which is connected to another Azure Front Door through Private Link and has public network access disabled. " +
+                    $"Call {nameof(AzureFrontDoorPrivateLinkExtensions.WithAzureFrontDoorPrivateLink)} on '{environment.Name}' with '{frontDoor.Name}' to connect it.");
+            }
+
+            var resourceId = environment.GetPrivateLinkResourceId(originResource);
+            var key = (resourceId.Resource.Name, resourceId.Name);
+            if (!_targets.TryGetValue(key, out var target))
+            {
+                target = CreateTarget(resourceId, environment.GetPrivateLinkLocation(originResource));
+                _targets.Add(key, target);
+            }
+            _usedConnections.Add(connection);
+
+            // The compute environment routes requests by host name, so the origin host header must be the app's own host name,
+            // which AddAzureFrontDoor already sets. The certificate name check must stay on for a Private Link origin.
+            origin.EnforceCertificateNameCheck = true;
+            origin.SharedPrivateLinkResource = new SharedPrivateLinkResourceProperties
+            {
+                PrivateLinkId = target.ResourceId,
+                PrivateLinkLocation = target.Location,
+                GroupId = connection.Environment.PrivateLinkGroupId,
+                RequestMessage = connection.RequestMessage,
+            };
+        }
+
+        // Finishes the template after every origin is added: Private Link needs the Premium SKU, and a connection
+        // that no origin uses is a mistake, because Front Door would never request it.
+        public void Complete(CdnProfile profile)
+        {
+            foreach (var connection in frontDoor.Annotations.OfType<AzureFrontDoorPrivateLinkAnnotation>())
+            {
+                if (!_usedConnections.Contains(connection))
+                {
+                    throw new InvalidOperationException(
+                        $"Azure Front Door '{frontDoor.Name}' is connected to compute environment '{connection.Environment.Name}' through Private Link, " +
+                        $"but none of its origins run in that environment. Add apps in '{connection.Environment.Name}' with " +
+                        $"{nameof(WithOrigin)}, or remove the {nameof(AzureFrontDoorPrivateLinkExtensions.WithAzureFrontDoorPrivateLink)} call.");
+                }
+            }
+
+            if (_targets.Count > 0)
+            {
+                // Private Link isn't supported for origins of a Standard profile.
+                // https://learn.microsoft.com/azure/frontdoor/private-link
+                profile.SkuName = CdnSkuName.PremiumAzureFrontDoor;
+            }
+        }
+
+        private (ProvisioningParameter ResourceId, BicepValue<string> Location) CreateTarget(
+            BicepOutputReference resourceId,
+            BicepOutputReference location)
+        {
+            var targetIdentifier = Infrastructure.NormalizeBicepIdentifier(resourceId.Resource.Name);
+
+            // Distinct outputs of one module, such as per-origin IDs, must not share a parameter, because the parameter
+            // name identifies the binding and a repeated name would replace the earlier one. The fallback names can
+            // collide too, so keep probing with a numeric suffix until a name is reserved.
+            var baseIdentifier = targetIdentifier;
+            if (!_parameterNames.Add($"{targetIdentifier}_environment_id"))
+            {
+                targetIdentifier = Infrastructure.NormalizeBicepIdentifier($"{baseIdentifier}_{resourceId.Name}");
+                for (var i = 2; !_parameterNames.Add($"{targetIdentifier}_environment_id"); i++)
+                {
+                    targetIdentifier = Infrastructure.NormalizeBicepIdentifier($"{baseIdentifier}_{resourceId.Name}_{i}");
+                }
+            }
+
+            var targetId = resourceId.AsProvisioningParameter(infrastructure, $"{targetIdentifier}_environment_id");
+
+            // The environment's region is an output of the environment module, so it is only known at deployment. The output
+            // is already the programmatic region name, such as 'westus2'. Front Door Private Link isn't available in every
+            // region, so the private endpoint goes to the supported region in the same geography when there is one.
+            var environmentLocation = location.AsProvisioningParameter(infrastructure, $"{targetIdentifier}_location");
+
+            if (_regions is null)
+            {
+                _regions = new ProvisioningVariable(FrontDoorPrivateLinkRegions.BicepVariableName, typeof(object))
+                {
+                    Value = FrontDoorPrivateLinkRegions.CreateBicepObject()
+                };
+                infrastructure.Add(_regions);
+            }
+
+            return (targetId, FrontDoorPrivateLinkRegions.CreateLookup(_regions.BicepIdentifier, environmentLocation.BicepIdentifier));
+        }
     }
 }

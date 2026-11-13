@@ -6,8 +6,12 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
+using Aspire.Hosting.ApplicationModel;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+
+#pragma warning disable ASPIRETERMINAL001 // Internal consumer of the experimental AppHost terminal API.
 
 namespace Aspire.Hosting;
 
@@ -28,14 +32,16 @@ internal class InteractionService : IInteractionService
     private readonly IServiceProvider _serviceProvider;
     private readonly IConfiguration _configuration;
     private readonly IInteractionFileUploadStore _fileUploadStore;
+    private readonly InteractionServiceConsumerState _consumerState;
 
-    public InteractionService(ILogger<InteractionService> logger, DistributedApplicationOptions distributedApplicationOptions, IServiceProvider serviceProvider, IConfiguration configuration, IInteractionFileUploadStore fileUploadStore)
+    public InteractionService(ILogger<InteractionService> logger, DistributedApplicationOptions distributedApplicationOptions, IServiceProvider serviceProvider, IConfiguration configuration, IInteractionFileUploadStore fileUploadStore, InteractionServiceConsumerState consumerState)
     {
         _logger = logger;
         _distributedApplicationOptions = distributedApplicationOptions;
         _serviceProvider = serviceProvider;
         _configuration = configuration;
         _fileUploadStore = fileUploadStore;
+        _consumerState = consumerState;
     }
 
     public bool IsAvailable
@@ -48,6 +54,11 @@ internal class InteractionService : IInteractionService
             }
 
             if (_distributedApplicationOptions.DisableDashboard)
+            {
+                return false;
+            }
+
+            if (!_consumerState.Ready)
             {
                 return false;
             }
@@ -125,7 +136,7 @@ internal class InteractionService : IInteractionService
 
             var completion = await newState.CompletionTcs.Task.ConfigureAwait(false);
             var promptState = completion.State as bool?;
-            return promptState == null
+            return promptState is null
                 ? InteractionResult.Cancel<bool>()
                 : InteractionResult.Ok(promptState.Value);
         }
@@ -195,7 +206,11 @@ internal class InteractionService : IInteractionService
             var newState = new Interaction(title, message, options, new Interaction.InputsInteractionInfo(inputCollection), interactionCts.Token);
             if (hasFileInputs)
             {
-                _fileUploadStore.StartInteraction(newState.InteractionId);
+                var fileInputs = inputs
+                    .Where(input => input.InputType == InputType.File)
+                    .Select(input => (input.Name, InteractionHelpers.GetMaxFileCount(input.AllowMultipleFiles)))
+                    .ToArray();
+                _fileUploadStore.StartInteraction(newState.InteractionId, fileInputs);
             }
             AddInteractionUpdate(newState);
 
@@ -267,7 +282,7 @@ internal class InteractionService : IInteractionService
         {
             options ??= NotificationInteractionOptions.CreateDefault();
 
-            var newState = new Interaction(title, message, options, new Interaction.NotificationInteractionInfo(intent: options.Intent ?? MessageIntent.None, linkText: options.LinkText, linkUrl: options.LinkUrl), interactionCts.Token);
+            var newState = new Interaction(title, message, options, new Interaction.NotificationInteractionInfo(intent: options.Intent ?? MessageIntent.None, linkText: options.LinkText, linkUrl: options.LinkUrl, relatedResourceNames: options.RelatedResourceNames ?? []), interactionCts.Token);
             AddInteractionUpdate(newState);
 
             using var _ = cancellationToken.Register(OnInteractionCancellation, state: newState);
@@ -286,6 +301,47 @@ internal class InteractionService : IInteractionService
 
     public async Task<InteractionResult<bool>> PromptProgressAsync(string message, ProgressInteractionOptions? options = null, CancellationToken cancellationToken = default)
     {
+        options ??= ProgressInteractionOptions.CreateDefault();
+        return await PromptWorkAsync(
+            options.Title ?? string.Empty, message, options, new Interaction.ProgressInteractionInfo(),
+            options.Work is { } work ? token => work(new ProgressContext { CancellationToken = token }) : null,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<InteractionResult<bool>> PromptTerminalAsync(string message, AspireTerminal terminal, TerminalInteractionOptions? options = null, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(message);
+        ArgumentNullException.ThrowIfNull(terminal);
+        EnsureServiceAvailable();
+        cancellationToken.ThrowIfCancellationRequested();
+
+        // A dock terminal already has a presentation that outlives a prompt. Only a dialog terminal can be borrowed.
+        if (terminal.Placement != TerminalPlacement.Dialog)
+        {
+            throw new InvalidOperationException($"Terminals shown by an interaction must be created with {nameof(TerminalPlacement)}.{nameof(TerminalPlacement.Dialog)}; the supplied terminal has placement {terminal.Placement}.");
+        }
+
+        // The dashboard resolves IDs in this AppHost's registry rather than using the supplied object.
+        // Require reference identity as well as registration and resolve the service only for terminal prompts.
+        // Callers can still dispose after this check, so attachment must continue validating availability.
+        if (_serviceProvider.GetService<TerminalService>() is not { } terminalService ||
+            !terminalService.TryGetTerminal(terminal.Id, out var registeredTerminal) ||
+            !ReferenceEquals(terminal, registeredTerminal))
+        {
+            throw new InvalidOperationException($"The terminal must be the instance registered with this AppHost's {nameof(TerminalService)}.");
+        }
+
+        options ??= new TerminalInteractionOptions();
+        return await PromptWorkAsync(
+            options.Title ?? string.Empty, message, options, new Interaction.TerminalInteractionInfo(terminal.Id),
+            options.Work is { } work ? token => work(new TerminalContext { CancellationToken = token }) : null,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<InteractionResult<bool>> PromptWorkAsync(
+        string title, string message, InteractionOptions options, Interaction.InteractionInfoBase interactionInfo,
+        Func<CancellationToken, Task>? work, CancellationToken cancellationToken)
+    {
         EnsureServiceAvailable();
 
         cancellationToken.ThrowIfCancellationRequested();
@@ -293,14 +349,12 @@ internal class InteractionService : IInteractionService
 
         try
         {
-            options ??= ProgressInteractionOptions.CreateDefault();
-
-            var newState = new Interaction(options.Title ?? string.Empty, message, options, new Interaction.ProgressInteractionInfo(), interactionCts.Token);
+            var newState = new Interaction(title, message, options, interactionInfo, interactionCts.Token);
             AddInteractionUpdate(newState);
 
             using var ctRegistration = cancellationToken.Register(OnInteractionCancellation, state: newState);
 
-            if (options.Work is { } work)
+            if (work is not null)
             {
                 // When the button is clicked, CompletionTcs fires. Cancel the work's CT so it can stop.
                 // Don't dispose the continuation task — it may not have completed when scope exits
@@ -325,36 +379,23 @@ internal class InteractionService : IInteractionService
 
                 try
                 {
-                    await work(new ProgressContext { CancellationToken = interactionCts.Token }).ConfigureAwait(false);
+                    await work(interactionCts.Token).ConfigureAwait(false);
 
-                    // Work completed successfully. Complete the interaction.
-                    if (!newState.CompletionTcs.TrySetResult(new InteractionCompletionState { Complete = true, State = true }))
-                    {
-                        var completion = await newState.CompletionTcs.Task.ConfigureAwait(false);
-                        return CreateProgressResult(completion);
-                    }
-
-                    newState.State = Interaction.InteractionState.Complete;
-                    AddInteractionUpdate(newState);
-
-                    return InteractionResult.Ok(true);
+                    CompleteWorkInteraction(newState, new InteractionCompletionState { Complete = true, State = true });
+                    return CreateWorkResult(await newState.CompletionTcs.Task.ConfigureAwait(false));
                 }
                 catch (OperationCanceledException) when (interactionCts.IsCancellationRequested)
                 {
                     // The work was canceled. Complete the interaction if not already done.
-                    newState.State = Interaction.InteractionState.Complete;
-                    newState.CompletionTcs.TrySetResult(new InteractionCompletionState { Complete = true });
-                    AddInteractionUpdate(newState);
+                    CompleteWorkInteraction(newState, new InteractionCompletionState { Complete = true });
 
                     return InteractionResult.Cancel<bool>();
                 }
                 catch
                 {
                     // If work throws a non-cancellation exception, ensure the interaction is
-                    // completed and removed so the progress dialog doesn't stay open indefinitely.
-                    newState.State = Interaction.InteractionState.Complete;
-                    newState.CompletionTcs.TrySetResult(new InteractionCompletionState { Complete = true });
-                    AddInteractionUpdate(newState);
+                    // completed and removed so the dialog doesn't stay open indefinitely.
+                    CompleteWorkInteraction(newState, new InteractionCompletionState { Complete = true });
 
                     throw;
                 }
@@ -365,7 +406,7 @@ internal class InteractionService : IInteractionService
                 // - The user clicking the button (sends response from dashboard)
                 // - External cancellation via cancellationToken (handled by OnInteractionCancellation registration)
                 var completion = await newState.CompletionTcs.Task.ConfigureAwait(false);
-                return CreateProgressResult(completion);
+                return CreateWorkResult(completion);
             }
         }
         finally
@@ -374,7 +415,20 @@ internal class InteractionService : IInteractionService
         }
     }
 
-    private static InteractionResult<bool> CreateProgressResult(InteractionCompletionState completion)
+    private void CompleteWorkInteraction(Interaction interaction, InteractionCompletionState completion)
+    {
+        // Serialize work completion with client/external cancellation so only the winner removes and publishes
+        // completion. In particular, work that handles cancellation must not overwrite a canceled result.
+        lock (_onInteractionUpdatedLock)
+        {
+            if (_interactionCollection.Contains(interaction.InteractionId))
+            {
+                CompleteInteractionCore(interaction, completion);
+            }
+        }
+    }
+
+    private static InteractionResult<bool> CreateWorkResult(InteractionCompletionState completion)
     {
         var promptState = completion.State as bool?;
 
@@ -558,7 +612,23 @@ internal class InteractionService : IInteractionService
                 {
                     var value = input.Value = input.Value?.Trim();
 
-                    if (string.IsNullOrEmpty(value))
+                    if (input.InputType == InputType.File)
+                    {
+                        var files = input.GetFiles();
+                        if (input.Required && files.Count == 0)
+                        {
+                            context.AddValidationError(input, "Value is required.");
+                        }
+                        else
+                        {
+                            var maxFileCount = InteractionHelpers.GetMaxFileCount(input.AllowMultipleFiles);
+                            if (files.Count > maxFileCount)
+                            {
+                                context.AddValidationError(input, $"File count exceeds the maximum of {maxFileCount}.");
+                            }
+                        }
+                    }
+                    else if (string.IsNullOrEmpty(value))
                     {
                         if (input.Required)
                         {
@@ -598,16 +668,6 @@ internal class InteractionService : IInteractionService
                                 if (!int.TryParse(value, CultureInfo.InvariantCulture, out _))
                                 {
                                     context.AddValidationError(input, "Value must be a valid number.");
-                                }
-                                break;
-                            case InputType.File:
-                                // File input values contain serialized JSON file references (id + name).
-                                // The consumer reads files via InteractionFile.OpenRead() / ReadAllBytesAsync() on the Files collection.
-                                // Validate that required file inputs actually have resolved files, not just
-                                // a non-empty JSON string like "[]".
-                                if (input.Required && (input.Files is null || input.Files.Count == 0))
-                                {
-                                    context.AddValidationError(input, "Value is required.");
                                 }
                                 break;
                             default:
@@ -676,7 +736,7 @@ internal class InteractionService : IInteractionService
     {
         if (!IsAvailable)
         {
-            throw new InvalidOperationException($"{nameof(InteractionService)} is not available because the dashboard is not enabled or because this command is running in non-interactive CLI mode.");
+            throw new InvalidOperationException($"{nameof(InteractionService)} is not available because the dashboard is not enabled, because the app host has not started yet (for example, during {nameof(BeforeStartEvent)}), or because this command is running in non-interactive CLI mode.");
         }
     }
 }
@@ -740,16 +800,18 @@ internal class Interaction
 
     internal sealed class NotificationInteractionInfo : InteractionInfoBase
     {
-        public NotificationInteractionInfo(MessageIntent intent, string? linkText, string? linkUrl)
+        public NotificationInteractionInfo(MessageIntent intent, string? linkText, string? linkUrl, IReadOnlyList<string> relatedResourceNames)
         {
             Intent = intent;
             LinkText = linkText;
             LinkUrl = linkUrl;
+            RelatedResourceNames = relatedResourceNames;
         }
 
         public MessageIntent Intent { get; }
         public string? LinkText { get; }
         public string? LinkUrl { get; }
+        public IReadOnlyList<string> RelatedResourceNames { get; }
     }
 
     internal sealed class InputsInteractionInfo : InteractionInfoBase
@@ -764,5 +826,10 @@ internal class Interaction
 
     internal sealed class ProgressInteractionInfo : InteractionInfoBase
     {
+    }
+
+    internal sealed class TerminalInteractionInfo(string terminalId) : InteractionInfoBase
+    {
+        public string TerminalId { get; } = terminalId;
     }
 }

@@ -35,6 +35,13 @@ internal sealed class JavaLaunchConfiguration() : ExecutableLaunchConfiguration(
     public string Request { get; set; } = "launch";
 
     /// <summary>
+    /// The absolute Java executable selected by the resource model. Omitted when the resource uses the
+    /// ambient <c>java</c> command or launches through a build tool.
+    /// </summary>
+    [JsonPropertyName("java_exec")]
+    public string? JavaExec { get; set; }
+
+    /// <summary>
     /// The working directory of the Java project. The IDE uses it as the debug session's working
     /// directory and to scope main class resolution to this resource's project.
     /// </summary>

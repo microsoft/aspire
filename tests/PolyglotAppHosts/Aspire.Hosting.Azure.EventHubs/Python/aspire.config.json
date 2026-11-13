@@ -4,9 +4,10 @@
     "language": "python"
   },
   "features": {
-    "experimentalPolyglot:python": true
+    "experimentalPolyglotPython": true
   },
   "packages": {
-    "Aspire.Hosting.Azure.EventHubs": ""
+    "Aspire.Hosting.Azure.EventHubs": "",
+    "Aspire.Hosting.Azure.Provisioning.EventHubs": ""
   }
 }

@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
 using System.Globalization;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
@@ -43,6 +44,21 @@ internal static class InteractionCommands
                 _ = interactionService.PromptNotificationAsync("No dismiss", "The command successfully executed.", new NotificationInteractionOptions { Intent = MessageIntent.Information, ShowDismiss = false });
 
                 return CommandResults.Success();
+            })
+            .WithCommand("code-block-interaction", "Code block interactions", executeCommand: commandContext =>
+            {
+                var interactionService = commandContext.Services.GetRequiredService<IInteractionService>();
+                var message = $"""
+                    Docker desktop failed to start. Please start it manually.
+                    ```
+                    {new StackTrace()}
+                    ```
+                    """;
+
+                _ = interactionService.PromptNotificationAsync("Container runtime unhealthy", message, new NotificationInteractionOptions { Intent = MessageIntent.Error, EnableMessageMarkdown = true });
+                _ = interactionService.PromptMessageBoxAsync("Container runtime unhealthy", message, new MessageBoxInteractionOptions { Intent = MessageIntent.Error, EnableMessageMarkdown = true });
+
+                return Task.FromResult(CommandResults.Success());
             })
             .WithCommand("html-interaction", "HTML interactions", executeCommand: async commandContext =>
             {
@@ -236,8 +252,8 @@ internal static class InteractionCommands
                 var numberOfPeopleInput = new InteractionInput { Name = "NumberOfPeople", InputType = InputType.Number, Label = "Number of people", Placeholder = "Enter number of people", Value = "2", Required = true };
                 var inputs = new List<InteractionInput>
                 {
-                    new InteractionInput { Name = "Name", InputType = InputType.Text, Label = "Name", Placeholder = "Enter name", Required = true, MaxLength = 50 },
-                    new InteractionInput { Name = "Password", InputType = InputType.SecretText, Label = "Password", Placeholder = "Enter password", Required = true, MaxLength = 20 },
+                    new InteractionInput { Name = "Name", InputType = InputType.Text, Label = "Name", Description = "The name for the dinner reservation. Maximum 50 characters.", Placeholder = "Enter name", Required = true, MaxLength = 50 },
+                    new InteractionInput { Name = "Password", InputType = InputType.SecretText, Label = "Password", Description = "The password for the reservation. Maximum 20 characters.", Placeholder = "Enter password", Required = true, MaxLength = 20 },
                     dinnerInput,
                     numberOfPeopleInput,
                     requirementsInput,
@@ -274,6 +290,87 @@ internal static class InteractionCommands
                 }
 
                 return CommandResults.Success();
+            })
+            .WithCommand("disabled-input-interaction", "Disabled input interactions", executeCommand: async commandContext =>
+            {
+                var interactionService = commandContext.Services.GetRequiredService<IInteractionService>();
+                var inputs = new List<InteractionInput>
+                {
+                    new InteractionInput
+                    {
+                        Name = "Text",
+                        InputType = InputType.Text,
+                        Label = "Text",
+                        Description = "The name for the dinner reservation.",
+                        Value = "Alex",
+                        Disabled = true
+                    },
+                    new InteractionInput
+                    {
+                        Name = "Password",
+                        InputType = InputType.SecretText,
+                        Label = "Password",
+                        Description = "The password for the reservation.",
+                        Value = "example-password",
+                        Disabled = true
+                    },
+                    new InteractionInput
+                    {
+                        Name = "Choice",
+                        InputType = InputType.Choice,
+                        Label = "Choice",
+                        Description = "The selected dinner from the available menu.",
+                        AllowCustomChoice = false,
+                        Options = [KeyValuePair.Create("pizza", "Pizza"), KeyValuePair.Create("salad", "Salad")],
+                        Value = "pizza",
+                        Disabled = true
+                    },
+                    new InteractionInput
+                    {
+                        Name = "CustomChoice",
+                        InputType = InputType.Choice,
+                        Label = "Custom choice",
+                        Description = "Dietary requirements, including values outside the suggested options.",
+                        AllowCustomChoice = true,
+                        Options = [KeyValuePair.Create("vegetarian", "Vegetarian"), KeyValuePair.Create("vegan", "Vegan")],
+                        Value = "Gluten-free",
+                        Disabled = true
+                    },
+                    new InteractionInput
+                    {
+                        Name = "Number",
+                        InputType = InputType.Number,
+                        Label = "Number of people",
+                        Description = "The number of guests included in the reservation.",
+                        Value = "2",
+                        Disabled = true
+                    },
+                    new InteractionInput
+                    {
+                        Name = "Boolean",
+                        InputType = InputType.Boolean,
+                        Label = "Remember me",
+                        Description = "Whether to remember these reservation details.",
+                        Value = "true",
+                        Disabled = true
+                    },
+                    new InteractionInput
+                    {
+                        Name = "File",
+                        InputType = InputType.File,
+                        Label = "Attachment",
+                        Description = "An attachment with additional reservation details.",
+                        Placeholder = "Select a file",
+                        Disabled = true
+                    }
+                };
+                var result = await interactionService.PromptInputsAsync(
+                    "Disabled inputs",
+                    "Reservation details",
+                    inputs,
+                    cancellationToken: commandContext.CancellationToken);
+
+                return result.Canceled ? CommandResults.Failure("Canceled") : CommandResults.Success();
             })
             .WithCommand("choice-interaction", "Choice interactions", executeCommand: async commandContext =>
             {
@@ -510,9 +607,10 @@ internal static class InteractionCommands
                 foreach (var updatedInput in result.Data)
                 {
                     var value = updatedInput.Value;
-                    if (updatedInput.InputType == InputType.File && updatedInput.Files is { Count: > 0 })
+                    using var files = updatedInput.GetFiles();
+                    if (updatedInput.InputType == InputType.File && files.Count > 0)
                     {
-                        value += $" (Files: {string.Join(", ", updatedInput.Files.Select(f => f.Name))})";
+                        value += $" (Files: {string.Join(", ", files.Select(f => f.Name))})";
                     }
                     logger.LogInformation("Input: {Name} = {Value}", updatedInput.Name, value);
                 }
@@ -1008,12 +1106,13 @@ internal static class InteractionCommands
                 }
 
                 var input = result.Data;
-                if (input.Files is not { Count: > 0 })
+                using var files = input.GetFiles();
+                if (files.Count == 0)
                 {
                     return CommandResults.Failure("No file was uploaded.");
                 }
 
-                var file = input.Files[0];
+                var file = files[0];
                 var content = await file.ReadAllBytesAsync(commandContext.CancellationToken);
 
                 var resourceLoggerService = commandContext.Services.GetRequiredService<ResourceLoggerService>();
@@ -1054,7 +1153,8 @@ internal static class InteractionCommands
                 }
 
                 var input = result.Data;
-                if (input.Files is not { Count: > 0 })
+                using var files = input.GetFiles();
+                if (files.Count == 0)
                 {
                     return CommandResults.Failure("No certificates were uploaded.");
                 }
@@ -1063,7 +1163,7 @@ internal static class InteractionCommands
                 var logger = resourceLoggerService.GetLogger(commandContext.ResourceName);
 
                 var fileDetails = new List<object>();
-                foreach (var file in input.Files)
+                foreach (var file in files)
                 {
                     var bytes = await file.ReadAllBytesAsync(commandContext.CancellationToken);
                     logger.LogInformation("Installed certificate '{FileName}' ({Size} bytes)", file.Name, bytes.Length);
@@ -1076,7 +1176,7 @@ internal static class InteractionCommands
                     Value = json,
                     Format = CommandResultFormat.Json
                 };
-                return CommandResults.Success($"Installed {input.Files.Count} certificate(s).", resultData);
+                return CommandResults.Success($"Installed {files.Count} certificate(s).", resultData);
             }, new CommandOptions
             {
                 Description = "Upload TLS certificate files to install on the resource.",

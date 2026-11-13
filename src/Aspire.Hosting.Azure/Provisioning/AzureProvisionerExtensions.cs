@@ -25,9 +25,7 @@ public static class AzureProvisionerExtensions
     public static IDistributedApplicationBuilder AddAzureProvisioning(this IDistributedApplicationBuilder builder)
     {
         // Always add the Azure environment, even if the user doesn't explicitly add it.
-#pragma warning disable ASPIREAZURE001
         builder.AddAzureEnvironment();
-#pragma warning restore ASPIREAZURE001
 
         builder.Services.TryAddSingleton<AzureResourcePreparer>();
         builder.Services.TryAddSingleton<AzureProvisioner>();
@@ -58,7 +56,7 @@ public static class AzureProvisionerExtensions
             new DefaultArmClientProvider(new ArmClientOptions(), sp.GetService<TimeProvider>() ?? TimeProvider.System));
         builder.Services.TryAddSingleton<ISecretClientProvider, DefaultSecretClientProvider>();
         builder.Services.TryAddSingleton<IBicepCompiler, BicepCliCompiler>();
-        builder.Services.TryAddSingleton<IUserPrincipalProvider, DefaultUserPrincipalProvider>();
+        builder.Services.TryAddSingleton<IAzurePrincipalProvider, DefaultAzurePrincipalProvider>();
 
         if (builder.ExecutionContext.IsPublishMode)
         {

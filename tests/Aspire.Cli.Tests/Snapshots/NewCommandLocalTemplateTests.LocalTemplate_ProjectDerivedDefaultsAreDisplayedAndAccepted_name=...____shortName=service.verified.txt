@@ -1,0 +1,8 @@
+﻿{
+  names.txt:
+Display=...___
+Short=service
+RawDisplay=
+RawShort=
+
+}

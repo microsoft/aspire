@@ -1,0 +1,29 @@
+{
+  "name": "@aspire/nuxt",
+  "version": "0.1.0-preview.1",
+  "description": "Preview Nuxt hosting integration authored in TypeScript for Aspire",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "exports": {
+    "./host": "./dist/src/host.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc --project tsconfig.json",
+    "prepack": "npm run build"
+  },
+  "dependencies": {
+    "tsx": "^4.21.0",
+    "vscode-jsonrpc": "8.2.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.9.0"
+  }
+}

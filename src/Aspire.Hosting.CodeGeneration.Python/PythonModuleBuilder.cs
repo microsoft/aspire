@@ -242,6 +242,7 @@ internal sealed class PythonModuleBuilder
         import base64
         import sys
         import json
+        import copy
         import logging
         import secrets
         import signal
@@ -256,6 +257,9 @@ internal sealed class PythonModuleBuilder
         from contextlib import AbstractContextManager
 
         _logger = logging.getLogger(__name__)
+
+        # Optional parameters with non-null defaults use this sentinel so omission remains distinct from explicit None.
+        _ASPIRE_UNSET = object()
 
         # Maximum allowed message size (64 MB) to prevent memory exhaustion from malicious Content-Length
         _MAX_MESSAGE_SIZE = 64 * 1024 * 1024
@@ -587,10 +591,17 @@ internal sealed class PythonModuleBuilder
             _handle_wrapper_registry[type_id] = factory
 
 
-        def _wrap_if_handle(value: typing.Any, client: AspireClient | None = None, kwargs: typing.Mapping[str, typing.Any] | None = None) -> typing.Any:
+        def _wrap_if_handle(
+            value: typing.Any,
+            client: AspireClient | None = None,
+            kwargs: typing.Mapping[str, typing.Any] | None = None,
+            fallback_type_id: str | None = None
+        ) -> typing.Any:
             '''
             Checks if a value is a marshalled handle and wraps it appropriately.
-            Uses the wrapper registry to create typed wrapper instances when available.
+            Uses the wrapper registry to create typed wrapper instances when available. The fallback
+            type ID lets callbacks use their generated parameter type when .NET marshals a handle
+            using its declared generic builder type.
             '''
             if isinstance(value, dict) and _is_marshalled_handle(value):
                 handle = Handle(value)
@@ -599,6 +610,8 @@ internal sealed class PythonModuleBuilder
                 # Try to find a registered wrapper factory for this type
                 if type_id and client:
                     factory = _handle_wrapper_registry.get(type_id)
+                    if factory is None and fallback_type_id:
+                        factory = _handle_wrapper_registry.get(fallback_type_id)
                     if factory:
                         if kwargs:
                             return factory(handle, client, **kwargs)
@@ -754,6 +767,38 @@ internal sealed class PythonModuleBuilder
                 except AttributeError:
                     pass
                 return super().default(o)
+
+
+        class _CallbackDto(dict[str, typing.Any]):
+            def __init__(self, value: dict[str, typing.Any]) -> None:
+                super().__init__(value)
+                self._original = copy.deepcopy(value)
+                self._assigned: set[str] = set()
+
+            def __setitem__(self, key: str, value: typing.Any) -> None:
+                super().__setitem__(key, value)
+                self._assigned.add(key)
+
+            def update(self, *args, **kwargs) -> None:
+                for key, value in dict(*args, **kwargs).items():
+                    self[key] = value
+
+            def setdefault(self, key: str, default: typing.Any = None) -> typing.Any:
+                if key not in self:
+                    self[key] = default
+                return self[key]
+
+            def __ior__(self, other):
+                self.update(other)
+                return self
+
+            def changes(self) -> dict[str, typing.Any]:
+                # Preserve nested dictionary/list mutations as well as explicit top-level
+                # assignments. Equality alone loses assignments equal to the original value.
+                return {
+                    key: value for key, value in self.items()
+                    if key in self._assigned or key not in self._original or value != self._original[key]
+                }
 
 
         class AspireClient:
@@ -1239,13 +1284,21 @@ internal sealed class PythonModuleBuilder
                     if thread.is_alive():
                         thread.join(timeout=1.0)
 
-            def register_callback(self, callback: typing.Callable[..., typing.Any] | None) -> str | None:
+            def register_callback(
+                self,
+                callback: typing.Callable[..., typing.Any] | None,
+                parameter_type_ids: typing.Sequence[str | None] | None = None,
+                *,
+                dto_writeback: bool = False
+            ) -> str | None:
                 '''
                 Register a callback function that can be invoked from the .NET side.
                 Returns a callback ID that should be passed to methods accepting callbacks.
 
                 .NET passes arguments as an object with positional keys: { p0: value0, p1: value1, ... }
-                This function automatically extracts positional parameters and wraps handles.
+                This function automatically extracts positional parameters and wraps handles. Generated
+                callback parameter type IDs provide a fallback when the marshalled handle uses a declared
+                generic type ID instead of the concrete type registered by the Python SDK.
                 '''
                 if callback is None:
                     return None
@@ -1262,13 +1315,31 @@ internal sealed class PythonModuleBuilder
                         while True:
                             key = f"p{i}"
                             if key in args:
-                                arg_array.append(_wrap_if_handle(args[key], client))
+                                fallback_type_id = (
+                                    parameter_type_ids[i]
+                                    if parameter_type_ids is not None and i < len(parameter_type_ids)
+                                    else None
+                                )
+                                value = _wrap_if_handle(args[key], client, fallback_type_id=fallback_type_id)
+                                if dto_writeback and isinstance(value, dict):
+                                    value = _CallbackDto(value)
+                                arg_array.append(value)
                                 i += 1
                             else:
                                 break
 
                         if arg_array:
-                            return callback(*arg_array)
+                            result = callback(*arg_array)
+                            # A no-op returns {"p0": {}}, while assigning even a default
+                            # value returns {"p0": {"columns": 132}}. Unchanged setters
+                            # must not run on the host just because the DTO was round-tripped.
+                            # Opt in only for these callbacks so nullable callback results stay null.
+                            if dto_writeback:
+                                return {
+                                    f"p{index}": value.changes() if isinstance(value, _CallbackDto) else args[f"p{index}"]
+                                    for index, value in enumerate(arg_array)
+                                }
+                            return result
 
                     # No args or null
                     if args is None:
@@ -1689,7 +1760,7 @@ internal sealed class PythonModuleBuilder
                         return False
                     if not _validate_type(value, value_type):
                         return False
-            elif typing.get_origin(expected_type) is typing.Callable:
+            elif typing.get_origin(expected_type) is typing.get_origin(typing.Callable):
                 return callable(arg)
             elif isinstance(arg, (tuple, typing.Mapping)):
                 return False
@@ -1847,29 +1918,29 @@ internal sealed class PythonModuleBuilder
             # Default args and project_directory if not provided
             effective_options = options or CreateBuilderOptions()
             if args is not None:
-                effective_options['Args'] = args
-            elif not effective_options.get('Args'):
-                effective_options['Args'] = sys.argv[1:]
+                effective_options['args'] = args
+            elif not effective_options.get('args'):
+                effective_options['args'] = sys.argv[1:]
             if project_directory is not None:
-                effective_options['ProjectDirectory'] = project_directory
-            elif not effective_options.get('ProjectDirectory'):
-                effective_options['ProjectDirectory'] = os.environ.get('ASPIRE_PROJECT_DIRECTORY', os.getcwd())
+                effective_options['projectDirectory'] = project_directory
+            elif not effective_options.get('projectDirectory'):
+                effective_options['projectDirectory'] = os.environ.get('ASPIRE_PROJECT_DIRECTORY', os.getcwd())
             if app_host_file_path is not None:
-                effective_options['AppHostFilePath'] = app_host_file_path
-            elif not effective_options.get('AppHostFilePath'):
+                effective_options['appHostFilePath'] = app_host_file_path
+            elif not effective_options.get('appHostFilePath'):
                 app_host_file_path = os.environ.get('ASPIRE_APPHOST_FILEPATH')
                 if app_host_file_path:
-                    effective_options['AppHostFilePath'] = app_host_file_path
+                    effective_options['appHostFilePath'] = app_host_file_path
             if container_registry_override is not None:
-                effective_options['ContainerRegistryOverride'] = container_registry_override
+                effective_options['containerRegistryOverride'] = container_registry_override
             if disable_dashboard is not None:
-                effective_options['DisableDashboard'] = disable_dashboard
+                effective_options['disableDashboard'] = disable_dashboard
             if dashboard_application_name is not None:
-                effective_options['DashboardApplicationName'] = dashboard_application_name
+                effective_options['dashboardApplicationName'] = dashboard_application_name
             if allow_unsecured_transport is not None:
-                effective_options['AllowUnsecuredTransport'] = allow_unsecured_transport
+                effective_options['allowUnsecuredTransport'] = allow_unsecured_transport
             if enable_resource_logging is not None:
-                effective_options['EnableResourceLogging'] = enable_resource_logging
+                effective_options['enableResourceLogging'] = enable_resource_logging
 
             return DistributedApplicationBuilder(client, effective_options)
         """;

@@ -2,12 +2,14 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Immutable;
+using System.Xml.Linq;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.ResourceGraph;
 using Aspire.Dashboard.Resources;
 using Aspire.Tests.Shared.DashboardModel;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
+using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
 namespace Aspire.Dashboard.Tests.Model;
 
@@ -95,6 +97,23 @@ public class ResourceGraphMapperTests
     }
 
     [Fact]
+    public void MapResource_HiddenResource_IsMarkedHidden()
+    {
+        // Arrange
+        var resource = ModelTestHelpers.CreateResource("hidden-app", displayName: "hidden-app", hidden: true);
+        var resources = new Dictionary<string, ResourceViewModel>
+        {
+            [resource.Name] = resource,
+        };
+
+        // Act
+        var dto = ResourceGraphMapper.MapResource(resource, resources.Values, resources, new TestStringLocalizer<Columns>(), showHiddenResources: true, _iconResolver);
+
+        // Assert
+        Assert.True(dto.IsHidden);
+    }
+
+    [Fact]
     public void MapResource_ParameterResource_NoEndpoint()
     {
         // Arrange
@@ -155,5 +174,29 @@ public class ResourceGraphMapperTests
         var dto = ResourceGraphMapper.MapResource(resource, [resource], resources, new TestStringLocalizer<Columns>(), showHiddenResources: false, _iconResolver);
 
         Assert.Empty(dto.ReferencedNames);
+    }
+
+    [Fact]
+    public void GetIconPathData_SinglePath_ReturnsPathData()
+    {
+        var icon = new Icons.Filled.Size24.Box();
+        var expectedPathData = XElement.Parse(icon.Content).Attribute("d")!.Value;
+
+        var pathData = ResourceGraphMapper.GetIconPathData(icon);
+
+        Assert.Equal(expectedPathData, pathData);
+    }
+
+    [Fact]
+    public void GetIconPathData_MultiplePaths_ReturnsCombinedPathData()
+    {
+        var icon = new Icons.Filled.Size24.DocumentMultiple();
+        var iconContent = XElement.Parse($"<svg>{icon.Content}</svg>");
+        var expectedPaths = iconContent.Elements().Select(e => e.Attribute("d")!.Value).ToArray();
+        Assert.Equal(3, expectedPaths.Length);
+
+        var pathData = ResourceGraphMapper.GetIconPathData(icon);
+
+        Assert.Equal(string.Join(' ', expectedPaths), pathData);
     }
 }

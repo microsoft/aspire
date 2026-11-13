@@ -36,7 +36,7 @@ internal sealed class CertificatesCleanCommand : BaseCommand
 
         if (result.WasCancelled)
         {
-            InteractionService.DisplayMessage(KnownEmojis.Warning, CertificatesCommandStrings.CleanCancelled);
+            InteractionService.DisplayMessage(KnownEmojis.PoliceCarLight, CertificatesCommandStrings.CleanCancelled);
             return Task.FromResult(CommandResult.FromExitCode(CliExitCodes.FailedToTrustCertificates));
         }
 

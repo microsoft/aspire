@@ -8,6 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="$(SharedDir)/Model/KnownRelationshipTypes.cs" LinkBase="Shared" />
     <PackageReference Include="AspNetCore.HealthChecks.Kafka" />
   </ItemGroup>
 

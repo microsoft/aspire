@@ -6,6 +6,8 @@ export interface AppHostParentOutput {
 export class AppHostParentOutputFilter {
   private _continuingDroppedLog = false;
   private _continuingErrorBlock = false;
+  private _continuingPythonTraceback = false;
+  private _awaitingPythonTracebackChainMarker = false;
   private _lastCategory: string | undefined;
 
   filter(output: string, category: string | undefined): AppHostParentOutput | undefined {
@@ -75,13 +77,33 @@ export class AppHostParentOutputFilter {
     if (logSeverity) {
       this._continuingDroppedLog = logSeverity === 'low';
       this._continuingErrorBlock = logSeverity === 'severe';
+      this._continuingPythonTraceback = false;
+      this._awaitingPythonTracebackChainMarker = false;
 
       return logSeverity === 'low' ? undefined : this.getCurrentCategory(category);
     }
 
+    if (this._continuingPythonTraceback && isPythonTracebackExceptionLine(trimmedLine)) {
+      this._continuingPythonTraceback = false;
+      this._awaitingPythonTracebackChainMarker = true;
+      return 'stderr';
+    }
+
     const isSevereOutput = isSevereRuntimeOutputLine(trimmedLine);
+    if (this._awaitingPythonTracebackChainMarker) {
+      if (isPythonTracebackChainMarker(trimmedLine)) {
+        this._awaitingPythonTracebackChainMarker = false;
+        return 'stderr';
+      }
+      if (!isSevereOutput) {
+        return 'stderr';
+      }
+      this._awaitingPythonTracebackChainMarker = false;
+    }
+
     this._continuingDroppedLog = false;
     this._continuingErrorBlock = isSevereOutput;
+    this._continuingPythonTraceback = isPythonTracebackStart(trimmedLine);
 
     if (category === 'console' && !isSevereOutput) {
       return undefined;
@@ -101,6 +123,13 @@ export class AppHostParentOutputFilter {
   private resetState() {
     this._continuingDroppedLog = false;
     this._continuingErrorBlock = false;
+    this._continuingPythonTraceback = false;
+    this._awaitingPythonTracebackChainMarker = false;
+  }
+
+  reset(): void {
+    this.resetState();
+    this._lastCategory = undefined;
   }
 }
 
@@ -135,11 +164,27 @@ function isIndentedContinuation(line: string): boolean {
   return /^\s+\S/.test(line);
 }
 
-function isSevereRuntimeOutputLine(line: string): boolean {
+function isPythonTracebackStart(line: string): boolean {
+  return /^(?:\+ Exception Group )?Traceback \(most recent call last\):$/.test(line);
+}
+
+function isPythonTracebackChainMarker(line: string): boolean {
+  return line === 'During handling of the above exception, another exception occurred:'
+    || line === 'The above exception was the direct cause of the following exception:';
+}
+
+function isPythonTracebackExceptionLine(line: string): boolean {
+  return /^(?:[A-Za-z_]\w*\.)*[A-Za-z_]\w*(?::.*)?$/.test(line);
+}
+
+export function isSevereRuntimeOutputLine(line: string): boolean {
   // Typed exception — `Namespace.Type.NameException: message` (also matches plain `System.Exception:`).
   return /(?:^|\s)(?:[A-Za-z_][\w`]*\.)+(?:[A-Za-z_][\w`]*Exception|Exception):/.test(line)
     // JavaScript / Node.js error shapes — `Uncaught TypeError: ...`, `Error [CODE]: ...`.
     || /^(?:Uncaught\s+)?(?:[A-Za-z_$][\w$]*Error|Error)(?:\s+\[[^\]]+\])?:/.test(line)
+    // Python tracebacks begin with a fixed preamble and end with an Error/Exception type.
+    || isPythonTracebackStart(line)
+    || /^(?:[A-Za-z_]\w*\.)*[A-Za-z_]\w*(?:Error|Exception):/.test(line)
     // Anchored fatal-marker prefixes only — bare word matches like `\bfailed\b` produced
     // false positives on user stdout (`"Failed payment retry queued"`, file paths
     // containing "error", etc.).

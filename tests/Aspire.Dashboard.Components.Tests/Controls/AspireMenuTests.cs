@@ -5,23 +5,171 @@ using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model;
 using Bunit;
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Web;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Xunit;
+using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
 namespace Aspire.Dashboard.Components.Tests.Controls;
 
 public class AspireMenuTests : DashboardTestContext
 {
+    [Theory]
+    [InlineData(MenuItemRole.Radio, false)]
+    [InlineData(MenuItemRole.Radio, true)]
+    [InlineData(MenuItemRole.Checkbox, false)]
+    [InlineData(MenuItemRole.Checkbox, true)]
+    public void CheckableItem_ExposesMenuParentAndCurrentAriaState(MenuItemRole role, bool isChecked)
+    {
+        FluentUISetupHelpers.AddCommonDashboardServices(this);
+        FluentUISetupHelpers.SetupFluentUIComponents(this);
+        FluentUISetupHelpers.SetupFluentMenu(this);
+        FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
+        var header = new MenuButtonItem { Text = "Resource", IsHeader = true };
+        var item = new MenuButtonItem { Text = "Choice", Role = role, Checked = isChecked };
+        var menuHost = Render<AspireMenu>(builder =>
+        {
+            builder.Add(p => p.Anchor, "menu-anchor");
+            builder.Add(p => p.Open, true);
+            builder.Add(p => p.Items, new[] { header, item });
+        });
+
+        var menu = menuHost.Find("fluent-menu-list[role='menu']");
+        Assert.Equal(header.Id, menu.GetAttribute("aria-labelledby"));
+        Assert.Equal(isChecked ? "true" : "false", Assert.Single(menu.QuerySelectorAll("fluent-menu-item")).GetAttribute("aria-checked"));
+
+        item.Checked = !isChecked;
+        menuHost.Render();
+
+        Assert.Equal(isChecked ? "false" : "true", menuHost.Find("fluent-menu-item").GetAttribute("aria-checked"));
+    }
+
+    [Theory]
+    [InlineData(false, null, "Item")]
+    [InlineData(false, "", "")]
+    [InlineData(false, "Help", "Help")]
+    [InlineData(true, null, "Item")]
+    [InlineData(true, "", "")]
+    [InlineData(true, "Help", "Help")]
+    public void ItemTooltip_UsesExplicitTextOrFallsBackToLabel(bool isGroupHeader, string? tooltip, string expected)
+    {
+        FluentUISetupHelpers.AddCommonDashboardServices(this);
+        FluentUISetupHelpers.SetupFluentUIComponents(this);
+        FluentUISetupHelpers.SetupFluentMenu(this);
+        FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
+        var menuHost = Render<AspireMenu>(builder =>
+        {
+            builder.Add(p => p.Anchor, "menu-anchor");
+            builder.Add(p => p.Open, true);
+            builder.Add(p => p.Items, new[] { new MenuButtonItem { Text = "Item", Tooltip = tooltip, IsGroupHeader = isGroupHeader } });
+        });
+
+        Assert.Equal(expected, Assert.Single(menuHost.FindAll("[data-tooltip]")).GetAttribute("data-tooltip"));
+    }
+
     [Fact]
-    public void UnanchoredAspireMenu_RendersFluentMenu()
+    public void UnkeyedItemsWithGeneratedIds_PreserveComponentIdentityAcrossRefresh()
     {
         FluentUISetupHelpers.AddCommonDashboardServices(this);
         FluentUISetupHelpers.SetupFluentUIComponents(this);
         FluentUISetupHelpers.SetupFluentMenu(this);
         FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
 
-        var provider = RenderComponent<FluentMenuProvider>();
-        var menuHost = RenderComponent<AspireMenu>(builder =>
+        var originalItem = new MenuButtonItem { Text = "Original" };
+        var menuHost = Render<AspireMenu>(builder =>
+        {
+            builder.Add(p => p.Anchor, "menu-anchor");
+            builder.Add(p => p.Open, true);
+            builder.Add(p => p.Items, new[] { originalItem });
+        });
+        var originalComponent = menuHost.FindComponent<AspireMenuItem>().Instance;
+        var refreshedItem = new MenuButtonItem { Text = "Refreshed" };
+
+        menuHost.Render(builder => builder.Add(p => p.Items, new[] { refreshedItem }));
+
+        Assert.NotEqual(originalItem.Id, refreshedItem.Id);
+        Assert.Same(originalComponent, menuHost.FindComponent<AspireMenuItem>().Instance);
+    }
+
+    [Fact]
+    public async Task ClickSecondaryAction_DoesNotSelectItemAndRefreshesOpenMenu()
+    {
+        FluentUISetupHelpers.AddCommonDashboardServices(this);
+        FluentUISetupHelpers.SetupFluentUIComponents(this);
+        FluentUISetupHelpers.SetupFluentMenu(this);
+        FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
+        FluentUISetupHelpers.SetupFluentButton(this);
+
+        var itemClicked = false;
+        var secondaryActionClicked = false;
+        var item = new MenuButtonItem
+        {
+            Text = "Historical run",
+            Role = MenuItemRole.Radio,
+            Checked = false,
+            Icon = new Icons.Regular.Size16.Checkmark(),
+            SecondaryActionIcon = new Icons.Regular.Size16.Pin(),
+            SecondaryActionAriaLabel = "Pin run",
+            OnClick = () =>
+            {
+                itemClicked = true;
+                return Task.CompletedTask;
+            }
+        };
+        item.OnSecondaryActionClick = () =>
+        {
+            secondaryActionClicked = true;
+            item.SecondaryActionIcon = new Icons.Filled.Size16.Pin();
+            item.SecondaryActionAriaLabel = "Unpin run";
+            item.IsSecondaryActionSelected = true;
+            return Task.CompletedTask;
+        };
+
+        var menuHost = Render<AspireMenu>(builder =>
+        {
+            builder.Add(p => p.Anchor, "menu-anchor");
+            builder.Add(p => p.Open, true);
+            builder.Add(p => p.Items, new[] { item });
+        });
+
+        var pinButton = menuHost.WaitForElement("fluent-button[aria-label='Pin run']");
+        var pinId = pinButton.Id;
+        var actionContainer = Assert.Single(menuHost.FindAll("span.aspire-menu-secondary-action-container[slot='end']"));
+        Assert.NotNull(actionContainer.QuerySelector("fluent-button[aria-label='Pin run']"));
+        Assert.Equal("false", pinButton.GetAttribute("aria-pressed"));
+        Assert.Null(pinButton.GetAttribute("title"));
+        Assert.Equal("Pin run", pinButton.GetAttribute("data-tooltip"));
+        var indicatorIcon = Assert.Single(menuHost.FindAll("span[slot='indicator'] svg"));
+        Assert.Contains("fill: var(--colorBrandForeground1)", indicatorIcon.GetAttribute("style"), StringComparison.Ordinal);
+        var secondaryActionIcon = Assert.Single(pinButton.QuerySelectorAll("svg"));
+        Assert.Contains("fill: var(--colorBrandForeground1)", secondaryActionIcon.GetAttribute("style"), StringComparison.Ordinal);
+
+        pinButton.Click();
+
+        menuHost.WaitForAssertion(() =>
+        {
+            Assert.False(itemClicked);
+            Assert.True(secondaryActionClicked);
+            Assert.True(menuHost.Instance.Open);
+            Assert.Single(menuHost.FindComponents<FluentMenu>());
+            var unpinButton = menuHost.Find("fluent-button[aria-label='Unpin run']");
+            Assert.Equal(pinId, unpinButton.Id);
+            Assert.Equal("true", unpinButton.GetAttribute("aria-pressed"));
+            Assert.Equal("Unpin run", unpinButton.GetAttribute("data-tooltip"));
+            Assert.Contains(JSInterop.Invocations, invocation =>
+                invocation.Identifier == "focusElement" && invocation.Arguments.Single() is string id && id == pinId);
+        });
+    }
+
+    [Fact]
+    public async Task UnanchoredAspireMenu_RendersFluentMenuAtCursor()
+    {
+        FluentUISetupHelpers.AddCommonDashboardServices(this);
+        FluentUISetupHelpers.SetupFluentUIComponents(this);
+        FluentUISetupHelpers.SetupFluentMenu(this);
+        FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
+
+        var menuHost = Render<AspireMenu>(builder =>
         {
             builder.Add(p => p.Anchor, "menu-anchor");
             builder.Add(p => p.Anchored, false);
@@ -29,20 +177,143 @@ public class AspireMenuTests : DashboardTestContext
         });
 
         var menu = Assert.Single(menuHost.FindComponents<FluentMenu>()).Instance;
-        Assert.False(menu.Anchored);
-        Assert.Empty(provider.FindComponents<FluentMenu>());
+        Assert.Equal("menu-anchor", menu.Trigger);
+        Assert.Single(menuHost.FindComponents<FluentMenuList>());
+        var cursorAnchor = menuHost.Find("#menu-anchor");
+        Assert.Contains("position: fixed", cursorAnchor.GetAttribute("style"));
+        Assert.Contains("anchor-name: --anchor-menu-anchor", cursorAnchor.GetAttribute("style"));
+
+        await menuHost.InvokeAsync(() => menuHost.Instance.OpenAsync(123, 456));
+
+        cursorAnchor = menuHost.Find("#menu-anchor");
+        Assert.Contains("left: 123px", cursorAnchor.GetAttribute("style"));
+        Assert.Contains("top: 456px", cursorAnchor.GetAttribute("style"));
     }
 
     [Fact]
-    public async Task RemoveAspireMenu_UnregistersFluentMenuFromMenuProvider()
+    public async Task UnanchoredAspireMenu_RepeatedOpenIgnoresResetCloseNotification()
     {
         FluentUISetupHelpers.AddCommonDashboardServices(this);
         FluentUISetupHelpers.SetupFluentUIComponents(this);
         FluentUISetupHelpers.SetupFluentMenu(this);
         FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
 
-        var provider = RenderComponent<FluentMenuProvider>();
-        var menuHost = RenderComponent<CascadingValue<bool>>(builder =>
+        var openChanges = new List<bool>();
+        var menuHost = Render<AspireMenu>(builder =>
+        {
+            builder.Add(p => p.Anchor, "menu-anchor");
+            builder.Add(p => p.Anchored, false);
+            builder.Add(p => p.OpenChanged, EventCallback.Factory.Create<bool>(this, openChanges.Add));
+            builder.Add(p => p.Items, new[] { new MenuButtonItem { Text = "Item" } });
+        });
+
+        await menuHost.InvokeAsync(() => menuHost.Instance.OpenAsync(123, 456));
+        menuHost.WaitForAssertion(() => Assert.Single(JSInterop.Invocations,
+            invocation => invocation.Identifier == "Microsoft.FluentUI.Blazor.Components.Menu.OpenMenu"));
+        var menu = menuHost.FindComponent<FluentMenu>().Instance;
+        await menuHost.InvokeAsync(() => menu.OnOpenedChangedAsync(true));
+        var closeCount = JSInterop.Invocations.Count(
+            invocation => invocation.Identifier == "Microsoft.FluentUI.Blazor.Components.Menu.CloseMenu");
+
+        await menuHost.InvokeAsync(() => menuHost.Instance.OpenAsync(456, 789));
+
+        menuHost.WaitForAssertion(() =>
+        {
+            Assert.Equal(2, JSInterop.Invocations.Count(
+                invocation => invocation.Identifier == "Microsoft.FluentUI.Blazor.Components.Menu.OpenMenu"));
+            Assert.Equal(closeCount + 1, JSInterop.Invocations.Count(
+                invocation => invocation.Identifier == "Microsoft.FluentUI.Blazor.Components.Menu.CloseMenu"));
+        });
+
+        var changeCount = openChanges.Count;
+        await menuHost.InvokeAsync(() => menu.OnOpenedChangedAsync(false));
+        Assert.True(menuHost.Instance.Open);
+        Assert.Equal(changeCount, openChanges.Count);
+
+        await menuHost.InvokeAsync(() => menu.OnOpenedChangedAsync(true));
+        Assert.True(menuHost.Instance.Open);
+
+        await menuHost.InvokeAsync(() => menu.OnOpenedChangedAsync(false));
+        Assert.False(menuHost.Instance.Open);
+        Assert.False(openChanges[^1]);
+    }
+
+    [Fact]
+    public async Task Header_LabelsMenuAndContributesToVerticalThreshold()
+    {
+        FluentUISetupHelpers.AddCommonDashboardServices(this);
+        FluentUISetupHelpers.SetupFluentUIComponents(this);
+        FluentUISetupHelpers.SetupFluentMenu(this);
+        FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
+
+        var header = new MenuButtonItem
+        {
+            Id = "resource-menu-header",
+            IsHeader = true,
+            Text = "Resource1",
+            Icon = new Icons.Regular.Size16.Info()
+        };
+        var menuHost = Render<AspireMenu>(builder =>
+        {
+            builder.Add(p => p.Anchor, "menu-anchor");
+            builder.Add(p => p.Anchored, false);
+            builder.Add(p => p.Open, true);
+            builder.Add(p => p.Items,
+            [
+                header,
+                new MenuButtonItem { Text = "View details" }
+            ]);
+        });
+
+        var menuElement = menuHost.Find("fluent-menu");
+        Assert.Equal(header.Id, menuElement.GetAttribute("aria-labelledby"));
+        Assert.Equal(header.Text, menuHost.Find($"#{header.Id}").TextContent.Trim());
+
+        await menuHost.InvokeAsync(() => menuHost.Instance.OpenAsync(clientX: 10, clientY: 15));
+    }
+
+    [Fact]
+    public void NestedAspireMenu_RendersItemsDirectlyInSubmenu()
+    {
+        FluentUISetupHelpers.AddCommonDashboardServices(this);
+        FluentUISetupHelpers.SetupFluentUIComponents(this);
+        FluentUISetupHelpers.SetupFluentMenu(this);
+        FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
+
+        var menuHost = Render<AspireMenu>(builder =>
+        {
+            builder.Add(p => p.Anchor, "menu-anchor");
+            builder.Add(p => p.Items, new[]
+            {
+                new MenuButtonItem
+                {
+                    Text = "Commands",
+                    NestedMenuItems =
+                    [
+                        new MenuButtonItem { Text = "Start" },
+                        new MenuButtonItem { Text = "Stop" }
+                    ]
+                }
+            });
+        });
+
+        Assert.Empty(menuHost.FindAll("fluent-menu-item > fluent-menu-list[slot='submenu'] > fluent-menu-list"));
+        var nestedItems = menuHost.FindAll("fluent-menu-item > fluent-menu-list[slot='submenu'] > fluent-menu-item");
+        Assert.Collection(
+            nestedItems,
+            item => Assert.Equal("Start", item.TextContent.Trim()),
+            item => Assert.Equal("Stop", item.TextContent.Trim()));
+    }
+
+    [Fact]
+    public async Task RemoveAspireMenu_RemovesFluentMenuFromHost()
+    {
+        FluentUISetupHelpers.AddCommonDashboardServices(this);
+        FluentUISetupHelpers.SetupFluentUIComponents(this);
+        FluentUISetupHelpers.SetupFluentMenu(this);
+        FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
+
+        var menuHost = Render<CascadingValue<bool>>(builder =>
         {
             builder.Add(p => p.Value, false);
             builder.AddChildContent<AspireMenu>(menuBuilder =>
@@ -53,21 +324,19 @@ public class AspireMenuTests : DashboardTestContext
         });
         Assert.Single(menuHost.FindComponents<FluentMenu>());
 
-        await menuHost.InvokeAsync(() => menuHost.FindComponent<AspireMenu>().Instance.OpenAsync(1920, 1080, 10, 10));
+        await menuHost.InvokeAsync(() => menuHost.FindComponent<AspireMenu>().Instance.OpenAsync(10, 10));
 
-        provider.WaitForAssertion(() => Assert.Single(provider.FindComponents<FluentMenu>()));
-
-        menuHost.SetParametersAndRender(builder =>
+        menuHost.Render(builder =>
         {
             builder.Add(p => p.Value, false);
             builder.Add(p => p.ChildContent, (RenderFragment)(_ => { }));
         });
 
-        provider.WaitForAssertion(() => Assert.Empty(provider.FindComponents<FluentMenu>()));
+        menuHost.WaitForAssertion(() => Assert.Empty(menuHost.FindComponents<FluentMenu>()));
     }
 
     [Fact]
-    public void ClickItem_MenuButton_FocusesAnchorBeforeOnClick()
+    public async Task ClickItem_MenuButton_FocusesAnchorBeforeOnClick()
     {
         FluentUISetupHelpers.AddCommonDashboardServices(this);
         FluentUISetupHelpers.SetupFluentUIComponents(this);
@@ -94,8 +363,7 @@ public class AspireMenuTests : DashboardTestContext
             }
         };
 
-        var provider = RenderComponent<FluentMenuProvider>();
-        var menuButton = RenderComponent<AspireMenuButton>(builder =>
+        var menuButton = Render<AspireMenuButton>(builder =>
         {
             builder.Add(p => p.MenuButtonId, anchor);
             builder.Add(p => p.Title, "View options");
@@ -103,7 +371,8 @@ public class AspireMenuTests : DashboardTestContext
         });
 
         menuButton.Find($"#{anchor}").Click();
-        provider.WaitForElement("fluent-menu-item").Click();
+        var menuItem = menuButton.FindComponent<FluentMenuItem>();
+        await menuButton.InvokeAsync(() => menuItem.Instance.OnClick.InvokeAsync(new MenuItemEventArgs()));
 
         Assert.True(itemClicked);
         var invocation = Assert.Single(focusElementInvocationHandler.Invocations);
@@ -112,7 +381,7 @@ public class AspireMenuTests : DashboardTestContext
     }
 
     [Fact]
-    public void ClickItem_MenuButtonWithFocusRestorationDisabled_DoesNotFocusAnchor()
+    public async Task ClickItem_MenuButtonWithFocusRestorationDisabled_DoesNotFocusAnchor()
     {
         FluentUISetupHelpers.AddCommonDashboardServices(this);
         FluentUISetupHelpers.SetupFluentUIComponents(this);
@@ -135,8 +404,7 @@ public class AspireMenuTests : DashboardTestContext
             }
         };
 
-        var provider = RenderComponent<FluentMenuProvider>();
-        var menuButton = RenderComponent<AspireMenuButton>(builder =>
+        var menuButton = Render<AspireMenuButton>(builder =>
         {
             builder.Add(p => p.MenuButtonId, anchor);
             builder.Add(p => p.Title, "View options");
@@ -145,7 +413,8 @@ public class AspireMenuTests : DashboardTestContext
         });
 
         menuButton.Find($"#{anchor}").Click();
-        provider.WaitForElement("fluent-menu-item").Click();
+        var menuItem = menuButton.FindComponent<FluentMenuItem>();
+        await menuButton.InvokeAsync(() => menuItem.Instance.OnClick.InvokeAsync(new MenuItemEventArgs()));
 
         Assert.True(itemClicked);
         var focusElementInvocations = JSInterop.Invocations
@@ -166,12 +435,11 @@ public class AspireMenuTests : DashboardTestContext
         var anchor = "view-options-button";
         var items = new List<MenuButtonItem>
         {
-            new() { Text = "Console", Role = MenuItemRole.MenuItemCheckbox, Checked = false },
-            new() { Text = "Terminal", Role = MenuItemRole.MenuItemCheckbox, Checked = true },
+            new() { Text = "Console", Role = MenuItemRole.Checkbox, Checked = false },
+            new() { Text = "Terminal", Role = MenuItemRole.Checkbox, Checked = true },
         };
 
-        var provider = RenderComponent<FluentMenuProvider>();
-        var menuButton = RenderComponent<AspireMenuButton>(builder =>
+        var menuButton = Render<AspireMenuButton>(builder =>
         {
             builder.Add(p => p.MenuButtonId, anchor);
             builder.Add(p => p.Title, "View options");
@@ -179,9 +447,9 @@ public class AspireMenuTests : DashboardTestContext
         });
 
         menuButton.Find($"#{anchor}").Click();
-        provider.WaitForElement("fluent-menu-item");
+        menuButton.WaitForElement("fluent-menu-item");
 
-        var menuItems = provider.FindAll("fluent-menu-item");
+        var menuItems = menuButton.FindAll("fluent-menu-item");
         Assert.Equal(2, menuItems.Count);
 
         // Both options must carry the checkable role so assistive technology announces
@@ -196,5 +464,161 @@ public class AspireMenuTests : DashboardTestContext
         // Checked passthrough; without it the rendered items would lose their checked state.
         Assert.False(menuItems[0].HasAttribute("checked"));
         Assert.True(menuItems[1].HasAttribute("checked"));
+    }
+
+    [Fact]
+    public async Task ChangeCheckableItem_InvokesItemCallbackAndClosesMenu()
+    {
+        FluentUISetupHelpers.AddCommonDashboardServices(this);
+        FluentUISetupHelpers.SetupFluentUIComponents(this);
+        FluentUISetupHelpers.SetupFluentMenu(this);
+        FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
+
+        var itemClicked = false;
+        var item = new MenuButtonItem
+        {
+            Text = "Show hidden resources",
+            Role = MenuItemRole.Checkbox,
+            OnClick = () =>
+            {
+                itemClicked = true;
+                return Task.CompletedTask;
+            }
+        };
+        var menuHost = Render<AspireMenu>(builder =>
+        {
+            builder.Add(p => p.Anchor, "menu-anchor");
+            builder.Add(p => p.Open, true);
+            builder.Add(p => p.Items, new[] { item });
+        });
+
+        var menuItem = menuHost.FindComponent<FluentMenuItem>();
+        await menuHost.InvokeAsync(() => menuItem.Instance.CheckedChanged.InvokeAsync(true));
+
+        Assert.True(itemClicked);
+        Assert.False(menuHost.Instance.Open);
+    }
+
+    [Fact]
+    public async Task ChangeRadioSelection_ChoosesByClickNotByChangeEvent()
+    {
+        FluentUISetupHelpers.AddCommonDashboardServices(this);
+        FluentUISetupHelpers.SetupFluentUIComponents(this);
+        FluentUISetupHelpers.SetupFluentMenu(this);
+        FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
+
+        var selectedItems = new List<string>();
+        var currentItem = new MenuButtonItem
+        {
+            Text = "Live run",
+            Role = MenuItemRole.Radio,
+            Checked = true,
+            OnClick = () =>
+            {
+                selectedItems.Add("current");
+                return Task.CompletedTask;
+            }
+        };
+        var historicalItem = new MenuButtonItem
+        {
+            Text = "Historical run",
+            Role = MenuItemRole.Radio,
+            OnClick = () =>
+            {
+                selectedItems.Add("historical");
+                return Task.CompletedTask;
+            }
+        };
+        var menuHost = Render<AspireMenu>(builder =>
+        {
+            builder.Add(p => p.Anchor, "menu-anchor");
+            builder.Add(p => p.Open, true);
+            builder.Add(p => p.Items, new[] { currentItem, historicalItem });
+        });
+
+        // The web component raises change events when a re-render checks or unchecks an option, e.g. as the menu
+        // reopens, so they don't choose anything.
+        var menuItems = menuHost.FindComponents<FluentMenuItem>();
+        await menuHost.InvokeAsync(() => menuItems[0].Instance.CheckedChanged.InvokeAsync(false));
+        await menuHost.InvokeAsync(() => menuItems[1].Instance.CheckedChanged.InvokeAsync(true));
+        Assert.Empty(selectedItems);
+        Assert.True(menuHost.Instance.Open);
+
+        menuHost.FindAll("fluent-menu-item")[1].Click();
+
+        Assert.Equal(["historical"], selectedItems);
+        Assert.False(menuHost.Instance.Open);
+    }
+
+    [Theory]
+    [InlineData("Enter")]
+    [InlineData(" ")]
+    public async Task PressKeyOnRadioItem_InvokesItsCallbackAndClosesMenu(string key)
+    {
+        FluentUISetupHelpers.AddCommonDashboardServices(this);
+        FluentUISetupHelpers.SetupFluentUIComponents(this);
+        FluentUISetupHelpers.SetupFluentMenu(this);
+        FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
+
+        var clicks = 0;
+        var item = new MenuButtonItem
+        {
+            Text = "Name",
+            Role = MenuItemRole.Radio,
+            OnClick = () =>
+            {
+                clicks++;
+                return Task.CompletedTask;
+            }
+        };
+        var menuHost = Render<AspireMenu>(builder =>
+        {
+            builder.Add(p => p.Anchor, "menu-anchor");
+            builder.Add(p => p.Open, true);
+            builder.Add(p => p.Items, new[] { item });
+        });
+
+        // Fluent's menu item handles Enter and Space itself, without a click.
+        await menuHost.Find("fluent-menu-item").KeyDownAsync(new KeyboardEventArgs { Key = "ArrowDown" });
+        Assert.Equal(0, clicks);
+
+        await menuHost.Find("fluent-menu-item").KeyDownAsync(new KeyboardEventArgs { Key = key });
+
+        Assert.Equal(1, clicks);
+        Assert.False(menuHost.Instance.Open);
+    }
+
+    [Fact]
+    public async Task ClickCheckedRadioItem_InvokesItsCallbackAndClosesMenu()
+    {
+        FluentUISetupHelpers.AddCommonDashboardServices(this);
+        FluentUISetupHelpers.SetupFluentUIComponents(this);
+        FluentUISetupHelpers.SetupFluentMenu(this);
+        FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
+
+        var clicks = 0;
+        var item = new MenuButtonItem
+        {
+            Text = "None",
+            Role = MenuItemRole.Radio,
+            Checked = true,
+            OnClick = () =>
+            {
+                clicks++;
+                return Task.CompletedTask;
+            }
+        };
+        var menuHost = Render<AspireMenu>(builder =>
+        {
+            builder.Add(p => p.Anchor, "menu-anchor");
+            builder.Add(p => p.Open, true);
+            builder.Add(p => p.Items, new[] { item });
+        });
+
+        // The option is already checked, so the web component raises only a click and no change.
+        await menuHost.InvokeAsync(() => menuHost.Find("fluent-menu-item").Click());
+
+        Assert.Equal(1, clicks);
+        Assert.False(menuHost.Instance.Open);
     }
 }

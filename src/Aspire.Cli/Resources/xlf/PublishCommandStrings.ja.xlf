@@ -4,7 +4,7 @@
     <body>
       <trans-unit id="Description">
         <source>Generate deployment artifacts for an AppHost</source>
-        <target state="needs-review-translation">Aspire アプリ ホスティング プロセスのデプロイ成果物を生成します。(プレビュー)</target>
+        <target state="translated">AppHost のデプロイ成果物を生成します</target>
         <note />
       </trans-unit>
       <trans-unit id="GeneratingArtifacts">
@@ -19,7 +19,7 @@
       </trans-unit>
       <trans-unit id="NoBuildArgumentDescription">
         <source>Do not build or restore the project before running</source>
-        <target state="new">Do not build or restore the project before running</target>
+        <target state="translated">実行する前にプロジェクトを構築または復元しないでください</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationCompletedPrefix">
@@ -34,12 +34,12 @@
       </trans-unit>
       <trans-unit id="OutputPathArgumentDescription">
         <source>The output path for the generated artifacts. Defaults to the AppHost directory's 'aspire-output' folder if not specified.</source>
-        <target state="needs-review-translation">生成された成果物の出力パス。指定がない場合、既定値は './aspire-output' です。</target>
+        <target state="translated">生成された成果物の出力パス。指定しない場合は、既定で AppHost ディレクトリの 'aspire-output' フォルダーに設定されます。</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectArgumentDescription">
         <source>The path to the Aspire AppHost project file or a directory to search</source>
-        <target state="needs-review-translation">Aspire アプリ ホスティング プロセス プロジェクト ファイルへのパス。</target>
+        <target state="translated">Aspire AppHost プロジェクト ファイルへのパス、または検索するディレクトリ</target>
         <note />
       </trans-unit>
       <trans-unit id="SelectAPublisher">

@@ -19,9 +19,10 @@ void main() throws Exception {
         var _chatFromModel = foundry.addDeployment("chat-from-model", model);
 
         var localFoundry = builder.addFoundry("local-foundry")
-            .runAsFoundryLocal();
+            .runAsFoundryLocal("http://windows-host:5273");
 
         var _localChat = localFoundry.addDeployment("local-chat", "Phi-3.5-mini-instruct", new AddDeploymentOptions().modelVersion("1").format("Microsoft"));
+        _localChat.setLocalModelId("Phi-3.5-mini-instruct-generic-gpu:1");
 
         var registry = builder.addAzureContainerRegistry("registry");
         var keyVault = builder.addAzureKeyVault("vault");

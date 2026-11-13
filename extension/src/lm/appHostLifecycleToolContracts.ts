@@ -1,8 +1,9 @@
 import * as vscode from 'vscode';
 
-import { type CandidateAppHostDisplayInfo } from '../utils/appHostDiscovery';
 import { type AppHostIdentityRelation } from '../utils/appHostIdentity';
-import { type AppHostStopResult } from '../services/AppHostLaunchService';
+import { type AppHostEditorSessionSnapshot, type AppHostLaunchIsolation, type AppHostLaunchTarget, type AppHostStopResult } from '../services/AppHostLaunchService';
+import type { AppHostTargetDiscoveryService } from './appHostTargetResolverContracts';
+import { isValidLaunchProfile } from '../utils/launchProfile';
 
 /**
  * Names of the contributed language model tools. These must match the `name`
@@ -48,6 +49,10 @@ export type AppHostLifecycleOutcome =
 export interface AppHostStartToolInput {
     appHostPath: string;
     mode: AppHostLifecycleMode;
+    /** When omitted, linked git worktrees start isolated. Explicit true/false overrides that. */
+    isolated?: boolean;
+    /** Optional profile name from the AppHost launchSettings.json. */
+    launchProfile?: string;
 }
 
 export interface AppHostStopToolInput {
@@ -64,10 +69,12 @@ export interface AppHostStopToolInput {
 export interface AppHostLifecycleToolResult {
     tool: string;
     outcome: AppHostLifecycleOutcome;
-    /** Path relative to the containing workspace folder, or empty when the input could not be resolved. */
+    /** Workspace-relative selector, folder-qualified in multi-root workspaces; empty when unresolved. */
     appHostPath: string;
     requestedMode?: AppHostLifecycleMode;
     effectiveMode?: AppHostLifecycleMode;
+    /** Present on start results only when a known effective isolation value exists. */
+    isolated?: boolean;
     controller: AppHostLifecycleController;
     /**
      * The selectors the tool accepts, returned only when the requested one did not
@@ -78,11 +85,29 @@ export interface AppHostLifecycleToolResult {
 }
 
 /**
- * Narrow view of `AppHostLaunchService` used by the tools. Launches are pinned to
- * editor-owned `run` sessions; stops use the same shared lifecycle operation as the
- * Aspire tree so editor and CLI-started AppHosts follow one policy.
+ * Narrow view of `AppHostLaunchService` shared by editor-assistance surfaces that
+ * summarize editor-owned sessions and correlate them with the bounded running registry.
+ *
+ * `getEditorRunSessions` preserves the same path-comparison semantics the lifecycle
+ * tools already depend on, while `getEditorSessions` exposes a bounded, safe projection
+ * for callers that need to distinguish non-`run` sessions without inheriting VS Code's
+ * raw session identifiers or full launch configurations. Pending launch state is exposed
+ * only for `run`, so publish/deploy/do reservations cannot look like AppHost startup.
+ * Running AppHosts expose only their path identity, never process or endpoint details.
  */
-export interface AppHostLifecycleLaunchService {
+export interface AppHostEditorStateLaunchService {
+    hasPendingOrActiveRunLaunch(appHostPath: string): boolean;
+    getEditorRunSessions(appHostPath: string): AppHostLifecycleEditorSessions;
+    getEditorSessions(): readonly AppHostEditorSessionSnapshot[];
+    getRunningAppHosts(token: vscode.CancellationToken): Promise<readonly AppHostLifecycleRunningAppHost[]>;
+}
+
+/**
+ * Narrow view of `AppHostLaunchService` used by the lifecycle tools. Launches are
+ * pinned to editor-owned `run` sessions; stops use the same shared lifecycle operation
+ * as the Aspire tree so editor and CLI-started AppHosts follow one policy.
+ */
+export interface AppHostLifecycleLaunchService extends AppHostEditorStateLaunchService {
     isLaunching(appHostPath: string): boolean;
     /**
      * Synchronously claims the launching slot, or reports that another launch already
@@ -90,22 +115,28 @@ export interface AppHostLifecycleLaunchService {
      */
     tryReserveLaunch(appHostPath: string): boolean;
     clearLaunching(appHostPath: string): void;
-    getEditorRunSessions(appHostPath: string): AppHostLifecycleEditorSessions;
-    getRunningAppHosts(token: vscode.CancellationToken): Promise<readonly AppHostLifecycleRunningAppHost[]>;
     compareAppHostIdentity(left: string | undefined, right: string | undefined): AppHostIdentityRelation;
     runWithAppHostLifecycleLock<T>(appHostPath: string, token: vscode.CancellationToken, action: (token: vscode.CancellationToken) => Promise<T>): Promise<T>;
-    launchFromLifecycleOwner(appHostPath: string, command: 'run', noDebug: boolean, token: vscode.CancellationToken): Promise<void>;
+    resolveLaunchIsolation(appHostPath: string, isolated: boolean | undefined, token: vscode.CancellationToken): Promise<AppHostLaunchIsolation>;
+    /**
+     * Launches and stops take the whole bound target rather than a path.
+     *
+     * The physical path decides *what* runs and the selector decides what the launch is checked
+     * against and which workspace folder's CLI and settings apply. Handing these operations a
+     * single path forces one of those two answers to be wrong, and passing the canonical path as
+     * if it were the selector is the failure that hides itself: the freshness check then compares
+     * the physical path with itself and can never fail.
+     */
+    launchFromLifecycleOwner(
+        launchTarget: AppHostLaunchTarget,
+        command: 'run',
+        noDebug: boolean,
+        isolated: boolean | undefined,
+        token: vscode.CancellationToken,
+        launchProfile?: string,
+        inferredIsolationOverride?: boolean): Promise<AppHostLaunchIsolation | undefined>;
     stopAppHost(appHostPath: string, token: vscode.CancellationToken): Promise<AppHostStopResult>;
-    stopAppHostFromLifecycleOwner(appHostPath: string, token: vscode.CancellationToken): Promise<AppHostStopResult>;
-}
-
-/**
- * Narrow view of `AppHostDiscoveryService`. This is the registry the AppHost view, the
- * status bar, and the Run/Debug commands already resolve against, and it is populated by
- * the CLI's own `aspire ls --format json` output.
- */
-export interface AppHostLifecycleDiscoveryService {
-    discover(workspaceFolder: vscode.WorkspaceFolder, forceRefresh?: boolean, cancellationToken?: vscode.CancellationToken): Promise<readonly CandidateAppHostDisplayInfo[]>;
+    stopAppHostFromLifecycleOwner(stopTarget: AppHostLaunchTarget, token: vscode.CancellationToken): Promise<AppHostStopResult>;
 }
 
 /**
@@ -139,22 +170,11 @@ export interface AppHostLifecycleEditorSession {
 
 export interface AppHostLifecycleToolDependencies {
     readonly launchService: AppHostLifecycleLaunchService;
-    readonly discoveryService: AppHostLifecycleDiscoveryService;
+    readonly discoveryService: AppHostTargetDiscoveryService;
 }
 
-export interface AppHostLifecycleToolRegistration extends vscode.Disposable {
-    readonly registered: boolean;
-    /**
-     * The registered tool instances by tool name. VS Code does not surface
-     * `prepareInvocation` through `vscode.lm`, so E2E automation needs a way to ask the
-     * extension's own instance for the confirmation it would present.
-     */
-    readonly tools: ReadonlyMap<string, PreparableAppHostLifecycleTool>;
-}
-
-export interface PreparableAppHostLifecycleTool {
-    prepareInvocation(options: { readonly input: Record<string, unknown> }, token: vscode.CancellationToken): Promise<vscode.PreparedToolInvocation>;
-}
+export type { AppHostTargetDiscoveryService as AppHostLifecycleDiscoveryService } from './appHostTargetResolverContracts';
+export type { LanguageModelToolRegistration as AppHostLifecycleToolRegistration } from './languageModelToolRegistration';
 
 export function createResult(
     tool: string,
@@ -164,6 +184,7 @@ export function createResult(
     requestedMode: AppHostLifecycleMode | undefined,
     effectiveMode: AppHostLifecycleMode | undefined,
     knownAppHosts?: readonly string[],
+    isolated?: boolean,
 ): AppHostLifecycleToolResult {
     const result: AppHostLifecycleToolResult = { tool, outcome, appHostPath, controller };
     if (requestedMode) {
@@ -178,6 +199,10 @@ export function createResult(
         result.knownAppHosts = knownAppHosts;
     }
 
+    if (tool === aspireAppHostStartToolName && isolated !== undefined) {
+        result.isolated = isolated;
+    }
+
     return result;
 }
 
@@ -186,9 +211,14 @@ export function parseMode(value: unknown): AppHostLifecycleMode | undefined {
 }
 
 export function isValidStartInput(value: unknown): value is AppHostStartToolInput {
-    return hasOnlyProperties(value, ['appHostPath', 'mode']) &&
-        typeof value.appHostPath === 'string' &&
-        parseMode(value.mode) !== undefined;
+    if (!hasOnlyProperties(value, ['appHostPath', 'mode'], ['isolated', 'launchProfile']) ||
+        typeof value.appHostPath !== 'string' ||
+        parseMode(value.mode) === undefined) {
+        return false;
+    }
+
+    return (!('isolated' in value) || typeof value.isolated === 'boolean') &&
+        (!('launchProfile' in value) || isValidLaunchProfile(value.launchProfile));
 }
 
 export function isValidStopInput(value: unknown): value is AppHostStopToolInput {
@@ -196,12 +226,13 @@ export function isValidStopInput(value: unknown): value is AppHostStopToolInput 
         typeof value.appHostPath === 'string';
 }
 
-function hasOnlyProperties<T extends string>(value: unknown, properties: readonly T[]): value is Record<T, unknown> {
+function hasOnlyProperties<T extends string>(value: unknown, properties: readonly T[], optional: readonly string[] = []): value is Record<T, unknown> {
     if (typeof value !== 'object' || value === null || Array.isArray(value)) {
         return false;
     }
 
+    const allowed = new Set([...properties, ...optional]);
     const actualProperties = Object.keys(value);
-    return actualProperties.length === properties.length &&
-        properties.every(property => Object.prototype.hasOwnProperty.call(value, property));
+    return properties.every(property => Object.prototype.hasOwnProperty.call(value, property)) &&
+        actualProperties.every(property => allowed.has(property));
 }

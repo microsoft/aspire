@@ -13,6 +13,45 @@
 - Child resources (`*DatabaseResource`, `OpenAIModelResource`) typically return the parent set plus a small overlay using `Union` so downstream callers see both shared and resource specific keys.
 - When adding a new resource, surface the minimal property set needed for common configurations.
 
+## Logical and Physical Connection String Names
+
+`WithReference` keeps the resource name, or its explicit `connectionName`, as the logical .NET configuration name. Physical environment-variable names are derived separately:
+
+| Logical name | Original physical name | Portable physical name |
+| --- | --- | --- |
+| `mydb` | `ConnectionStrings__mydb` | `ConnectionStrings__mydb` |
+| `my-db` | `ConnectionStrings__my-db` | `ConnectionStrings__my_db` |
+| `my_db` | `ConnectionStrings__my_db` | `ConnectionStrings__my_db` |
+| `my--db` | `ConnectionStrings__my--db` | `ConnectionStrings__my_db` |
+| `my__db` | `ConnectionStrings__my__db` | `ConnectionStrings__my_db` |
+
+Aspire emits both physical aliases when they differ and the target supports both. Deployment targets with stricter naming rules, including Azure App Service, Kubernetes-based publishers (Kubernetes, AKS, and Radius), and Foundry Hosted Agents, emit only the portable alias. Connection properties continue to use their existing normalized prefixes.
+
+Portable suffixes must be derived with `EnvironmentVariableNameEncoder.EncodeConnectionStringName`; it also collapses underscore runs so `__` is not interpreted as another .NET configuration path delimiter. Publishers and integrations must inspect `ConnectionStringReference` values in the environment-variable dictionary and use their `EnvironmentVariableNames` instead of reconstructing names. These references are not resource annotations. Standalone references created with the existing two-argument constructor have no environment-name metadata and must not be treated as generated aliases. Different logical names that map to the same physical name fail during environment callback evaluation, before their generated aliases overwrite each other. Choose unique explicit aliases with `WithReference(resource, connectionName: "...")` to resolve a collision.
+
+Publishers project generated aliases while either environment entry still contains a `ConnectionStringReference` with naming metadata. Replacing both entries with user-authored values removes that metadata, so the publisher preserves those entries and applies its usual environment-name validation.
+
+Resolve a reference through its `ConnectionStringExpression`, not through `Resource.ConnectionStringExpression`: integrations such as Qdrant expose multiple connection-string values on the same resource. Alias equivalence uses source object identity, the stable value name, and environment names, not mutable expression text or optionality. Repeated references retain last-callback-wins optionality.
+
+`IResourceWithConnectionString.ConnectionStringEnvironmentVariable` is an explicit physical-name override. Aspire emits that exact name only and does not normalize it.
+
+### Client resolution and precedence
+
+Updated Aspire client integrations resolve the logical key through the composed configuration first, then fall back to the portable key:
+
+```csharp
+configuration.GetConnectionString(logicalName)
+    ?? configuration.GetConnectionString(portableName);
+```
+
+Aspire writes the logical and portable values to the same configuration provider, so interleaving provider precedence between the aliases is unnecessary. Direct `IConfiguration` consumers that need both forms should use the same logical-then-portable fallback.
+
+### Migration and compatibility
+
+1. **Compatibility release:** Capable targets receive both aliases. Strict targets receive the portable alias, and updated integrations resolve either alias.
+2. **Adoption period:** Integration authors consume connection-reference metadata, and direct consumers adopt logical-then-portable fallback resolution. Applications using older integrations on strict targets should update their clients or use explicit portable `connectionName` values.
+3. **Future major release:** Original physical aliases may be considered for removal only after direct consumers have a public shared resolver and every workload type has an explicit migration path. A package major version alone is not sufficient reason to remove them.
+
 ## Property Catalog
 
 ### Network Identity
@@ -26,7 +65,7 @@
 
 | Key | Description | Provided By | Notes |
 | --- | --- | --- | --- |
-| Uri | Service specific URI built from host, port, credentials, and scheme. | PostgreSQL, PostgresDatabase, MySQL, MySqlDatabase, Redis, Garnet, Valkey, RabbitMQ, NATS, Seq, MongoDBDatabase, Milvus, Qdrant (gRPC), GitHubModel, OpenAI. | Formatting rules per resource are listed in [URI Construction](#uri-construction). |
+| Uri | Service specific URI built from host, port, credentials, and scheme. | PostgreSQL, PostgresDatabase, MySQL, MySqlDatabase, Redis, Garnet, Valkey, RabbitMQ, NATS, Seq, MongoDBDatabase, Milvus, Qdrant (gRPC), OpenAI. | Formatting rules per resource are listed in [URI Construction](#uri-construction). |
 
 ### Credentials and Secrets
 
@@ -34,7 +73,7 @@
 | --- | --- | --- | --- |
 | Username | Login user for the primary endpoint. | PostgreSQL, MySQL, SQL Server, Oracle, RabbitMQ, NATS, MongoDB. | Defaults align with respective containers (`postgres`, `root`, `sa`, etc.). |
 | Password | Login password. | PostgreSQL, MySQL, SQL Server, Oracle, Redis (when configured), Garnet (when configured), Valkey (when configured), RabbitMQ, NATS (when configured). | Omitted when the resource does not manage credentials. |
-| Key | API key or token parameter. | OpenAI, GitHubModel, Qdrant. | For GitHub Models the key is a PAT or minted token. |
+| Key | API key or token parameter. | OpenAI, Qdrant. | |
 
 ### Database Specific Metadata
 

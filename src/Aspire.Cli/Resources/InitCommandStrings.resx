@@ -100,7 +100,13 @@
     <value>The solution file '{0}' and project file '{1}' are in the same directory. The AppHost and ServiceDefaults projects cannot be created inside an existing project directory. Move the solution file to a parent directory or the project file to a subdirectory.</value>
   </data>
   <data name="LanguageOptionDescription" xml:space="preserve">
-    <value>The programming language for the AppHost (csharp, typescript)</value>
+    <value>The programming language for the AppHost</value>
+  </data>
+  <data name="FileBasedOptionDescription" xml:space="preserve">
+    <value>Create apphost.cs in the current directory, skipping .NET solution discovery. Requires C#.</value>
+  </data>
+  <data name="FileBasedRequiresCSharp" xml:space="preserve">
+    <value>The --file-based option requires C#. Select --language csharp or omit --file-based.</value>
   </data>
   <data name="AppHostCreatedRunOne" xml:space="preserve">
     <value>Aspire AppHost created! To complete setup, run:</value>

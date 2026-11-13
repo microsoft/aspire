@@ -38,11 +38,15 @@ internal sealed class TestAppHostProjectFactory : IAppHostProjectFactory
 
     public Func<AddPackageContext, CancellationToken, Task<bool>>? AddPackageAsyncCallback { get; set; }
 
+    public Func<FileInfo, DirectoryInfo, CancellationToken, Task<RunningInstanceResult>>? FindAndStopRunningInstanceAsyncCallback { get; set; }
+
     public Func<UpdatePackagesContext, CancellationToken, Task<UpdatePackagesResult>>? UpdatePackagesAsyncCallback { get; set; }
 
     public string LanguageId { get; set; } = "csharp";
 
     public string DisplayName { get; set; } = "C# (.NET)";
+
+    public bool SupportsLaunchProfiles { get; set; } = true;
 
     /// <summary>
     /// Optional detection patterns to advertise from the test project.
@@ -117,20 +121,12 @@ internal sealed class TestAppHostProjectFactory : IAppHostProjectFactory
         // Check for #:sdk Aspire.AppHost.Sdk directive
         try
         {
-            using var reader = candidateFile.OpenText();
-            string? line;
-            while ((line = reader.ReadLine()) is not null)
-            {
-                var trimmedLine = line.TrimStart();
-                if (trimmedLine.StartsWith("#:sdk Aspire.AppHost.Sdk", StringComparison.Ordinal))
-                {
-                    return true;
-                }
-            }
+            var content = File.ReadAllText(candidateFile.FullName);
+            return FallbackProjectParser.HasAppHostSdkDirective(content)
+                || FallbackProjectParser.HasAppHostPackageDirective(content);
         }
         catch
         {
-            return false;
         }
 
         return false;
@@ -152,6 +148,7 @@ internal sealed class TestAppHostProjectFactory : IAppHostProjectFactory
         public bool IsUnsupported { get; set; }
         public string LanguageId => _factory.LanguageId;
         public string DisplayName => _factory.DisplayName;
+        public bool SupportsLaunchProfiles => _factory.SupportsLaunchProfiles;
         public string? AppHostFileName => "AppHost.csproj";
 
         public bool IsUsingProjectReferences(FileInfo appHostFile)
@@ -239,7 +236,9 @@ internal sealed class TestAppHostProjectFactory : IAppHostProjectFactory
                 : throw new NotImplementedException();
 
         public Task<RunningInstanceResult> FindAndStopRunningInstanceAsync(FileInfo appHostFile, DirectoryInfo homeDirectory, CancellationToken cancellationToken)
-            => Task.FromResult(RunningInstanceResult.NoRunningInstance);
+            => _factory.FindAndStopRunningInstanceAsyncCallback is { } callback
+                ? callback(appHostFile, homeDirectory, cancellationToken)
+                : Task.FromResult(RunningInstanceResult.NoRunningInstance);
 
         public Task<string?> GetUserSecretsIdAsync(FileInfo appHostFile, bool autoInit, CancellationToken cancellationToken)
             => Task.FromResult<string?>(null);
@@ -254,20 +253,12 @@ internal sealed class TestAppHostProjectFactory : IAppHostProjectFactory
 
             try
             {
-                using var reader = candidateFile.OpenText();
-                string? line;
-                while ((line = reader.ReadLine()) is not null)
-                {
-                    var trimmedLine = line.TrimStart();
-                    if (trimmedLine.StartsWith("#:sdk Aspire.AppHost.Sdk", StringComparison.Ordinal))
-                    {
-                        return true;
-                    }
-                }
+                var content = File.ReadAllText(candidateFile.FullName);
+                return FallbackProjectParser.HasAppHostSdkDirective(content)
+                    || FallbackProjectParser.HasAppHostPackageDirective(content);
             }
             catch
             {
-                return false;
             }
 
             return false;

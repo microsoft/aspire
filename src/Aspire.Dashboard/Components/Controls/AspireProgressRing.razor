@@ -1,0 +1,19 @@
+@* Licensed to the .NET Foundation under one or more agreements. *@
+@* The .NET Foundation licenses this file to you under the MIT license. *@
+
+<div @attributes="AdditionalAttributes"
+     class="@CssClass"
+     style="@CssStyle"
+     role="progressbar"
+    aria-label="@AriaLabel"
+     aria-valuemin="@(Value.HasValue ? Min : null)"
+     aria-valuemax="@(Value.HasValue ? Max : null)"
+     aria-valuenow="@(Value.HasValue ? EffectiveValue : null)">
+    <svg aria-hidden="true" viewBox="0 0 16 16">
+        @if (Value.HasValue)
+        {
+            <circle class="progress-track" cx="8" cy="8" r="7" />
+        }
+        <circle class="progress-value" cx="8" cy="8" r="7" />
+    </svg>
+</div>

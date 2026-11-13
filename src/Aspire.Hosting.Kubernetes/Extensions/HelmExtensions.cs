@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
+using System.Text;
 using System.Text.RegularExpressions;
 using YamlDotNet.Core;
 
@@ -85,13 +87,59 @@ internal static partial class HelmExtensions
         => ExpressionPattern().IsMatch(value)
         && value.Contains($"{ValuesSegment}.{SecretsKey}.", StringComparison.Ordinal);
 
+    public static bool ContainsHelmFlowControlExpression(this string value)
+        => HelmFlowControlExpressionPattern().IsMatch(value);
+
+    /// <summary>
+    /// Evaluates a string as a Helm template and quotes the complete result as a YAML scalar.
+    /// </summary>
+    public static string ToQuotedHelmTemplateExpression(this string value)
+        => QuotedTemplateExpressionPattern().IsMatch(value)
+            ? value
+            : $"{StartDelimiter} tpl {ToGoStringLiteral(value)} . {PipelineDelimiter} quote {EndDelimiter}";
+
+    private static string ToGoStringLiteral(string value)
+    {
+        // JSON emits supplementary characters as UTF-16 surrogate escapes, e.g.
+        // "\uD83D\uDE80". Go rejects those escapes; preserve Unicode as UTF-8 instead.
+        // https://go.dev/ref/spec#String_literals
+        var builder = new StringBuilder(value.Length + 2).Append('"');
+        foreach (var ch in value)
+        {
+            var escaped = ch switch
+            {
+                '"' => "\\\"",
+                '\\' => "\\\\",
+                '\n' => "\\n",
+                '\r' => "\\r",
+                '\t' => "\\t",
+                _ => null
+            };
+            if (escaped is not null)
+            {
+                builder.Append(escaped);
+            }
+            else if (char.IsControl(ch) || ch is '\u2028' or '\u2029' or '\uFEFF')
+            {
+                builder.Append("\\u").Append(((int)ch).ToString("x4", CultureInfo.InvariantCulture));
+            }
+            else
+            {
+                builder.Append(ch);
+            }
+        }
+
+        return builder.Append('"').ToString();
+    }
+
     public static (bool, ScalarStyle?) ShouldDoubleQuoteString(string value)
     {
-        // Flow control expressions (if/else) must be rendered as plain YAML so Helm
-        // can process them as template expressions without YAML escaping. This check
-        // runs first because if/else blocks contain multiple {{ }} pairs and won't
+        // Flow control expressions and generated `tpl ... | quote` wrappers must be rendered
+        // as plain YAML so Helm can evaluate them before the rendered output is parsed as YAML.
+        // This check runs first because if/else blocks contain multiple {{ }} pairs and won't
         // match ScalarExpressionPattern.
-        if (HelmFlowControlPattern().IsMatch(value))
+        if (HelmFlowControlPattern().IsMatch(value) ||
+            QuotedTemplateExpressionPattern().IsMatch(value))
         {
             return (false, ScalarStyle.ForcePlain);
         }
@@ -129,6 +177,12 @@ internal static partial class HelmExtensions
 
     [GeneratedRegex(@"^\{\{\s*if\b")]
     internal static partial Regex HelmFlowControlPattern();
+
+    [GeneratedRegex(@"\{\{\s*if\b")]
+    private static partial Regex HelmFlowControlExpressionPattern();
+
+    [GeneratedRegex(@"^\{\{\s*tpl\b.*\|\s*quote\s*\}\}$")]
+    private static partial Regex QuotedTemplateExpressionPattern();
 
     [GeneratedRegex(@"\{\{[^}]*\|\s*(int|int64|float64)\s*\}\}")]
     internal static partial Regex EndWithNonStringTypePattern();

@@ -50,14 +50,11 @@ public sealed class JavaPolyglotApphostDirectoryTests(ITestOutputHelper output)
         await auto.TypeAsync("aspire init");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("Which language would you like to use?", timeout: TimeSpan.FromSeconds(30));
-        await auto.DownAsync();
-        await auto.DownAsync();
-        await auto.WaitUntilTextAsync("> Java", timeout: TimeSpan.FromSeconds(5));
-        await auto.EnterAsync();
+        await auto.SelectAppHostLanguageAsync("Java");
         await auto.WaitUntilTextAsync("Created AppHost.java", timeout: TimeSpan.FromMinutes(2));
         await auto.DeclineAgentInitPromptAsync(counter);
 
-        await auto.TypeAsync("npm create -y vite@latest viteapp -- --template vanilla-ts --no-interactive");
+        await auto.TypeAsync(ViteTestHelpers.GetCreateCommand("viteapp"));
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 

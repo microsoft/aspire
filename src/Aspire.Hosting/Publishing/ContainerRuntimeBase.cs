@@ -4,7 +4,9 @@
 #pragma warning disable ASPIREPIPELINES003
 #pragma warning disable ASPIRECONTAINERRUNTIME001
 
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dcp.Process;
@@ -95,11 +97,236 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
             remoteImageName).ConfigureAwait(false);
     }
 
+    public virtual async Task<ContainerImageConfigInspectionResult> InspectImageConfigAsync(string imageName, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(imageName);
+
+        string output;
+        try
+        {
+            output = await ExecuteContainerCommandForOutputAsync(
+                [
+                    "image",
+                    "inspect",
+                    imageName,
+                    "--format",
+                    """{"Entrypoint":{{json .Config.Entrypoint}},"Cmd":{{json .Config.Cmd}},"WorkingDir":{{json .Config.WorkingDir}}}"""
+                ],
+                "inspect image config",
+                imageName,
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (DistributedApplicationException ex)
+        {
+            return new ContainerImageConfigInspectionResult(
+                ContainerImageInspectionStatus.Failed,
+                rawJson: null,
+                ex.Message,
+                configAccessor: null);
+        }
+
+        if (!TryParseImageConfig(output, out var config))
+        {
+            return new ContainerImageConfigInspectionResult(
+                ContainerImageInspectionStatus.Failed,
+                output,
+                $"Container runtime returned invalid image configuration for '{imageName}'.",
+                configAccessor: null);
+        }
+
+        return new ContainerImageConfigInspectionResult(
+            ContainerImageInspectionStatus.Succeeded,
+            output,
+            errorMessage: null,
+            () => config);
+    }
+
+    public virtual async Task<ContainerImageManifestInspectionResult> InspectImageManifestAsync(string imageName, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(imageName);
+
+        string output;
+        try
+        {
+            output = await ExecuteContainerCommandForOutputAsync(
+                ["manifest", "inspect", "--verbose", imageName],
+                "inspect image manifest",
+                imageName,
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (DistributedApplicationException ex)
+        {
+            return new ContainerImageManifestInspectionResult(
+                ContainerImageInspectionStatus.Failed,
+                rawJson: null,
+                ex.Message,
+                manifestAccessor: null);
+        }
+
+        if (!IsJsonObjectOrArray(output))
+        {
+            return new ContainerImageManifestInspectionResult(
+                ContainerImageInspectionStatus.Failed,
+                output,
+                $"Container runtime returned invalid image manifest for '{imageName}'.",
+                manifestAccessor: null);
+        }
+
+        return new ContainerImageManifestInspectionResult(
+            ContainerImageInspectionStatus.Succeeded,
+            output,
+            errorMessage: null,
+            (operatingSystem, architecture) => FindManifest(output, operatingSystem, architecture));
+    }
+
+    private static bool TryParseImageConfig(string output, [NotNullWhen(true)] out ContainerImageConfig? config)
+    {
+        config = null;
+
+        try
+        {
+            var root = JsonNode.Parse(output) as JsonObject;
+            if (root is null)
+            {
+                return false;
+            }
+
+            config = new ContainerImageConfig(
+                ReadStringArray(root["Entrypoint"]),
+                ReadStringArray(root["Cmd"]),
+                root["WorkingDir"]?.GetValue<string>());
+            return true;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+        catch (InvalidOperationException)
+        {
+            return false;
+        }
+    }
+
+    private static IReadOnlyList<string> ReadStringArray(JsonNode? node)
+    {
+        if (node is not JsonArray array)
+        {
+            return [];
+        }
+
+        var values = new List<string>(array.Count);
+        foreach (var item in array)
+        {
+            if (item?.GetValue<string>() is { } value)
+            {
+                values.Add(value);
+            }
+        }
+
+        return values;
+    }
+
+    protected static bool IsJsonObjectOrArray(string output)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(output);
+            return document.RootElement.ValueKind is JsonValueKind.Object or JsonValueKind.Array;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    protected static ContainerImageManifest? FindManifest(string output, string operatingSystem, string architecture)
+    {
+        try
+        {
+            var root = JsonNode.Parse(output);
+            if (root is JsonArray verboseManifests)
+            {
+                foreach (var item in verboseManifests.OfType<JsonObject>())
+                {
+                    if (TryCreateManifest(item["Descriptor"] as JsonObject, operatingSystem, architecture, out var manifest))
+                    {
+                        return manifest;
+                    }
+                }
+
+                return null;
+            }
+
+            if (root is not JsonObject manifestObject)
+            {
+                return null;
+            }
+
+            if (manifestObject["manifests"] is JsonArray manifests)
+            {
+                foreach (var item in manifests.OfType<JsonObject>())
+                {
+                    if (TryCreateManifest(item, operatingSystem, architecture, out var manifest))
+                    {
+                        return manifest;
+                    }
+                }
+
+                return null;
+            }
+
+            var descriptor = manifestObject["Descriptor"] as JsonObject ??
+                manifestObject["descriptor"] as JsonObject ??
+                manifestObject;
+            return TryCreateManifest(descriptor, operatingSystem, architecture, out var singleManifest)
+                ? singleManifest
+                : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+        catch (InvalidOperationException)
+        {
+            return null;
+        }
+    }
+
+    private static bool TryCreateManifest(
+        JsonObject? descriptor,
+        string operatingSystem,
+        string architecture,
+        [NotNullWhen(true)] out ContainerImageManifest? manifest)
+    {
+        manifest = null;
+        if (descriptor is null)
+        {
+            return false;
+        }
+
+        var platform = descriptor["platform"] as JsonObject;
+        var actualOperatingSystem = platform?["os"]?.GetValue<string>();
+        var actualArchitecture = platform?["architecture"]?.GetValue<string>();
+        var digest = descriptor["digest"]?.GetValue<string>();
+        if (digest is null ||
+            !ContainerImageManifest.IsValidDigest(digest) ||
+            actualOperatingSystem is null ||
+            actualArchitecture is null ||
+            !string.Equals(actualOperatingSystem, operatingSystem, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(actualArchitecture, architecture, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        manifest = new ContainerImageManifest(digest, actualOperatingSystem, actualArchitecture);
+        return true;
+    }
+
     public virtual async Task LoginToRegistryAsync(string registryServer, string username, string password, CancellationToken cancellationToken)
     {
         // Escape quotes in arguments to prevent command injection
-        var escapedRegistryServer = registryServer.Replace("\"", "\\\"");
-        var escapedUsername = username.Replace("\"", "\\\"");
+        var escapedRegistryServer = EscapeArgument(registryServer);
+        var escapedUsername = EscapeArgument(username);
         var arguments = $"login --username \"{escapedUsername}\" --password-stdin \"{escapedRegistryServer}\"";
 
         var spec = new ProcessSpec(RuntimeExecutable)
@@ -222,63 +449,84 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
     }
 
     /// <summary>
-    /// Builds a string of build arguments for container build commands.
+    /// Builds arguments for container build commands without command-line quoting.
     /// </summary>
     /// <param name="buildArguments">The build arguments to include.</param>
-    /// <returns>A string containing the formatted build arguments.</returns>
-    protected static string BuildArgumentsString(Dictionary<string, string?> buildArguments)
+    /// <returns>The build argument switches and values.</returns>
+    protected static List<string> BuildArguments(Dictionary<string, string?> buildArguments)
     {
-        var result = string.Empty;
+        var arguments = new List<string>();
         foreach (var buildArg in buildArguments)
         {
-            result += buildArg.Value is not null
-                ? $" --build-arg \"{buildArg.Key}={buildArg.Value}\""
-                : $" --build-arg \"{buildArg.Key}\"";
+            arguments.Add("--build-arg");
+            arguments.Add(buildArg.Value is not null
+                ? $"{buildArg.Key}={buildArg.Value}"
+                : buildArg.Key);
         }
-        return result;
+
+        return arguments;
     }
 
     /// <summary>
-    /// Builds a string of build secrets for container build commands.
+    /// Builds secret arguments without command-line quoting.
     /// </summary>
     /// <param name="buildSecrets">The build secrets to include.</param>
+    /// <param name="useCsv">Whether the runtime parses secret specifications as CSV records.</param>
     /// <param name="requireValue">Whether to require a non-null value for secrets (default: false).</param>
-    /// <returns>A string containing the formatted build secrets.</returns>
-    internal static string BuildSecretsString(Dictionary<string, BuildImageSecretValue> buildSecrets, bool requireValue = false)
+    /// <returns>The secret switches and specifications.</returns>
+    internal static List<string> BuildSecrets(Dictionary<string, BuildImageSecretValue> buildSecrets, bool useCsv, bool requireValue = false)
     {
-        var result = string.Empty;
+        var arguments = new List<string>();
         foreach (var buildSecret in buildSecrets)
         {
+            arguments.Add("--secret");
+            var id = FormatSecretField($"id={buildSecret.Key}", useCsv);
             if (buildSecret.Value.Type == BuildImageSecretType.File)
             {
-                result += $" --secret \"id={buildSecret.Key},type=file,src={buildSecret.Value.Value}\"";
+                var source = FormatSecretField($"src={buildSecret.Value.Value}", useCsv);
+                arguments.Add($"{id},type=file,{source}");
             }
             else if (requireValue && buildSecret.Value.Value is null)
             {
-                result += $" --secret \"id={buildSecret.Key},type=env\"";
+                arguments.Add($"{id},type=env");
             }
             else
             {
-                result += $" --secret \"id={buildSecret.Key},type=env,env={buildSecret.Key.ToUpperInvariant()}\"";
+                var environment = FormatSecretField($"env={buildSecret.Key.ToUpperInvariant()}", useCsv);
+                arguments.Add($"{id},type=env,{environment}");
             }
         }
-        return result;
+
+        return arguments;
+    }
+
+    private static string FormatSecretField(string field, bool useCsv)
+    {
+        // Docker Buildx and WSLc parse a CSV record: id=npmrc,type=file,"src=C:\team,a\.npmrc".
+        // These quotes belong to the secret specification, not to process argument escaping.
+        // https://github.com/docker/buildx/blob/master/util/buildflags/secrets.go
+        if (useCsv && field.AsSpan().ContainsAny(",\"\r\n"))
+        {
+            return $"\"{field.Replace("\"", "\"\"", StringComparison.Ordinal)}\"";
+        }
+
+        return field;
     }
 
     /// <summary>
-    /// Builds a string for the target stage in container build commands.
+    /// Builds arguments for the target stage.
     /// </summary>
     /// <param name="stage">The target stage to include.</param>
-    /// <returns>A string containing the formatted target stage, or empty string if stage is null or empty.</returns>
-    protected static string BuildStageString(string? stage)
+    /// <returns>The target switches and value, or an empty collection.</returns>
+    protected static List<string> BuildStage(string? stage)
     {
-        return !string.IsNullOrEmpty(stage) ? $" --target \"{stage}\"" : string.Empty;
+        return !string.IsNullOrEmpty(stage) ? ["--target", stage] : [];
     }
 
     /// <summary>
     /// Executes a container runtime command and returns the process result without throwing for non-zero exit codes.
     /// </summary>
-    protected async Task<ProcessResult> ExecuteContainerCommandWithResultAsync(
+    protected Task<ProcessResult> ExecuteContainerCommandWithResultAsync(
         string arguments,
         string errorLogTemplate,
         string successLogTemplate,
@@ -287,8 +535,36 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
         Dictionary<string, string>? environmentVariables = null,
         bool retainOutput = false)
     {
-        var spec = CreateProcessSpec(arguments, retainOutput);
+        return ExecuteContainerCommandWithResultAsync(
+            CreateProcessSpec(arguments, retainOutput), errorLogTemplate, successLogTemplate,
+            cancellationToken, logArguments, environmentVariables);
+    }
 
+    /// <summary>
+    /// Executes a command with argument boundaries preserved by the process runner.
+    /// </summary>
+    protected Task<ProcessResult> ExecuteContainerCommandWithResultAsync(
+        IReadOnlyList<string> arguments,
+        string errorLogTemplate,
+        string successLogTemplate,
+        CancellationToken cancellationToken,
+        object[] logArguments,
+        Dictionary<string, string>? environmentVariables = null,
+        bool retainOutput = false)
+    {
+        return ExecuteContainerCommandWithResultAsync(
+            CreateProcessSpec(arguments, retainOutput), errorLogTemplate, successLogTemplate,
+            cancellationToken, logArguments, environmentVariables);
+    }
+
+    private async Task<ProcessResult> ExecuteContainerCommandWithResultAsync(
+        ProcessSpec spec,
+        string errorLogTemplate,
+        string successLogTemplate,
+        CancellationToken cancellationToken,
+        object[] logArguments,
+        Dictionary<string, string>? environmentVariables)
+    {
         if (environmentVariables is not null)
         {
             foreach (var (key, value) in environmentVariables)
@@ -297,7 +573,7 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
             }
         }
 
-        _logger.LogDebug("Running {RuntimeName} with arguments: {ArgumentList}", Name, spec.Arguments);
+        _logger.LogDebug("Running {RuntimeName} with arguments: {ArgumentList}", Name, spec.ArgumentList ?? (object?)spec.Arguments);
         var (pendingProcessResult, processDisposable) = _processRunner.Run(spec);
 
         await using (processDisposable)
@@ -320,16 +596,89 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
         }
     }
 
-    private ProcessSpec CreateProcessSpec(string arguments, bool retainOutput = false)
+    protected async Task<string> ExecuteContainerCommandForOutputAsync(
+        string arguments,
+        string operationName,
+        string imageName,
+        CancellationToken cancellationToken)
+    {
+        var stdout = new List<string>();
+        var spec = CreateProcessSpec(arguments, retainOutput: true, onOutputData: output =>
+        {
+            stdout.Add(output);
+            _logger.LogDebug("{RuntimeName} (stdout): {Output}", RuntimeExecutable, output);
+        });
+        return await ExecuteContainerCommandForOutputAsync(spec, stdout, operationName, imageName, cancellationToken).ConfigureAwait(false);
+    }
+
+    protected async Task<string> ExecuteContainerCommandForOutputAsync(
+        IReadOnlyList<string> argumentList,
+        string operationName,
+        string imageName,
+        CancellationToken cancellationToken)
+    {
+        var stdout = new List<string>();
+        var spec = CreateProcessSpec(argumentList, retainOutput: true, onOutputData: output =>
+        {
+            stdout.Add(output);
+            _logger.LogDebug("{RuntimeName} (stdout): {Output}", RuntimeExecutable, output);
+        });
+        return await ExecuteContainerCommandForOutputAsync(spec, stdout, operationName, imageName, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<string> ExecuteContainerCommandForOutputAsync(
+        ProcessSpec spec,
+        List<string> stdout,
+        string operationName,
+        string imageName,
+        CancellationToken cancellationToken)
+    {
+        _logger.LogDebug("Running {RuntimeName} with arguments: {ArgumentList}", Name, spec.ArgumentList ?? (object?)spec.Arguments);
+        var (pendingProcessResult, processDisposable) = _processRunner.Run(spec);
+
+        ProcessResult processResult;
+        await using (processDisposable)
+        {
+            processResult = await pendingProcessResult
+                .WaitAsync(cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        if (processResult.ExitCode != 0)
+        {
+            _logger.LogError("{RuntimeName} {OperationName} for {ImageName} failed with exit code {ExitCode}.", Name, operationName, imageName, processResult.ExitCode);
+            throw new DistributedApplicationException($"{Name} {operationName} for '{imageName}' failed with exit code {processResult.ExitCode}.{Environment.NewLine}{processResult.GetFormattedOutput()}");
+        }
+
+        _logger.LogDebug("{RuntimeName} {OperationName} for {ImageName} succeeded.", Name, operationName, imageName);
+        return string.Join(Environment.NewLine, stdout);
+    }
+
+    private ProcessSpec CreateProcessSpec(string arguments, bool retainOutput = false, Action<string>? onOutputData = null)
+    {
+        return CreateProcessSpecCore(arguments, argumentList: null, retainOutput, onOutputData);
+    }
+
+    private ProcessSpec CreateProcessSpec(IReadOnlyList<string> argumentList, bool retainOutput = false, Action<string>? onOutputData = null)
+    {
+        return CreateProcessSpecCore(arguments: null, argumentList, retainOutput, onOutputData);
+    }
+
+    private ProcessSpec CreateProcessSpecCore(
+        string? arguments,
+        IReadOnlyList<string>? argumentList,
+        bool retainOutput,
+        Action<string>? onOutputData)
     {
         return new ProcessSpec(RuntimeExecutable)
         {
             Arguments = arguments,
+            ArgumentList = argumentList,
             RetainedOutputLineCount = retainOutput ? ProcessSpec.DefaultRetainedOutputLineCount : null,
-            OnOutputData = output =>
+            OnOutputData = onOutputData ?? (output =>
             {
                 _logger.LogDebug("{RuntimeName} (stdout): {Output}", RuntimeExecutable, output);
-            },
+            }),
             OnErrorData = error =>
             {
                 _logger.LogDebug("{RuntimeName} (stderr): {Error}", RuntimeExecutable, error);
@@ -338,6 +687,8 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
             InheritEnv = true
         };
     }
+
+    protected static string EscapeArgument(string value) => value.Replace("\"", "\\\"", StringComparison.Ordinal);
 
     public virtual async Task ComposeUpAsync(ComposeOperationContext context, CancellationToken cancellationToken)
     {

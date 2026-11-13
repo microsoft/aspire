@@ -18,6 +18,7 @@ import {
   computeCommunityItems,
   isChecksFailing,
   isReviewDebt,
+  reviewAgeStartedAt,
   shouldHideFromSharedPullRequestLists,
   visibleCheckState,
 } from "./model.mjs";
@@ -38,12 +39,12 @@ export const DEFAULT_REPOS = [
   "CommunityToolkit/Aspire",
 ];
 
-// Enterprise Managed User (EMU) accounts (e.g. "dapine_microsoft") work against
-// the private first-party mirror rather than the public Aspire repos, so they get
-// a different default watch set. See accounts.isEmuAccountId for how an account is
-// classified and state.defaultReposForId for how this default is applied.
-export const DEFAULT_EMU_REPOS = [
-  "devdiv-microsoft/aspire-1p",
+// The Proxima enterprise account has its own host and repository location. Keep this
+// separate from the public defaults because account-specific GraphQL requests target
+// the account's host.
+export const DEFAULT_PROXIMA_REPOS = [
+  "coreai/aspire-1p",
+  "coreai/sisyphus",
 ];
 
 const GRAPHQL = "https://api.github.com/graphql";
@@ -84,8 +85,17 @@ async function gql(token, query, variables, graphqlUrl = GRAPHQL) {
 // so a pathological repo can't spin the loader indefinitely.
 const MAX_PAGES = 25;
 
+const READINESS_TRANSITIONS = `
+  pageInfo { hasNextPage endCursor }
+  nodes {
+    __typename
+    ... on ConvertToDraftEvent { createdAt }
+    ... on ReadyForReviewEvent { createdAt }
+  }
+`;
+
 const PR_QUERY = `
-query($owner:String!, $name:String!, $after:String) {
+query($owner:String!, $name:String!, $after:String, $includeReadiness:Boolean!) {
   repository(owner:$owner, name:$name) {
     isPrivate
     pullRequests(states:OPEN, first:40, after:$after, orderBy:{field:UPDATED_AT, direction:DESC}) {
@@ -96,6 +106,12 @@ query($owner:String!, $name:String!, $after:String) {
         baseRefName
         mergeable
         reviewDecision
+        readyForReviewEvents: timelineItems(last:1, itemTypes:[READY_FOR_REVIEW_EVENT]) {
+          nodes { ... on ReadyForReviewEvent { createdAt } }
+        }
+        readinessTransitions: timelineItems(first:20, itemTypes:[CONVERT_TO_DRAFT_EVENT, READY_FOR_REVIEW_EVENT]) @include(if:$includeReadiness) {
+          ${READINESS_TRANSITIONS}
+        }
         additions deletions changedFiles
         milestone { title }
         labels(first:15) { nodes { name } }
@@ -112,6 +128,17 @@ query($owner:String!, $name:String!, $after:String) {
             labels(first:15) { nodes { name } }
           }
         }
+      }
+    }
+  }
+}`;
+
+const READINESS_QUERY = `
+query($owner:String!, $name:String!, $number:Int!, $after:String!) {
+  repository(owner:$owner, name:$name) {
+    pullRequest(number:$number) {
+      readinessTransitions: timelineItems(first:100, after:$after, itemTypes:[CONVERT_TO_DRAFT_EVENT, READY_FOR_REVIEW_EVENT]) {
+        ${READINESS_TRANSITIONS}
       }
     }
   }
@@ -139,6 +166,55 @@ query($owner:String!, $name:String!, $after:String) {
 function splitRepo(repo) {
   const [owner, ...rest] = repo.split("/");
   return { owner, name: rest.join("/") };
+}
+
+async function loadFirstReadyForReviewAt(account, owner, name, node) {
+  let connection = node.readinessTransitions;
+  const transitions = [];
+  const cursors = new Set();
+  for (let page = 0; ; page++) {
+    if (!Array.isArray(connection?.nodes) || typeof connection.pageInfo?.hasNextPage !== "boolean") {
+      throw new Error("Missing draft/ready transition history");
+    }
+    transitions.push(...connection.nodes);
+    if (!connection.pageInfo.hasNextPage) break;
+    const after = connection.pageInfo.endCursor;
+    if (!after || cursors.has(after) || page + 1 >= MAX_PAGES) {
+      throw new Error("Incomplete draft/ready transition history");
+    }
+    cursors.add(after);
+    const data = await gql(account.token, READINESS_QUERY, { owner, name, number: node.number, after }, account.graphql);
+    connection = data.repository?.pullRequest?.readinessTransitions;
+  }
+
+  // The filtered timeline is chronological. Ready -> Draft -> Ready means the PR
+  // opened as a draft; Draft -> Ready means it opened ready, so creation wins.
+  // A later draft cycle must never reset its first-readiness priority.
+  // https://docs.github.com/en/graphql/reference/pulls#object-readyforreviewevent
+  let draft = transitions.length ? transitions[0]?.__typename === "ReadyForReviewEvent" : node.isDraft;
+  let firstReadyAt = draft ? null : node.createdAt;
+  let previousTime = Date.parse(node.createdAt);
+  if (!Number.isFinite(previousTime) || typeof node.isDraft !== "boolean") {
+    throw new Error("Invalid PR creation or draft state");
+  }
+  for (const transition of transitions) {
+    const time = Date.parse(transition?.createdAt);
+    const type = transition?.__typename;
+    if (!Number.isFinite(time) || time < previousTime ||
+        (type !== "ReadyForReviewEvent" && type !== "ConvertToDraftEvent") ||
+        (type === "ReadyForReviewEvent") !== draft) {
+      throw new Error("Inconsistent draft/ready transition history");
+    }
+    draft = type === "ConvertToDraftEvent";
+    if (!draft && firstReadyAt === null) firstReadyAt = transition.createdAt;
+    previousTime = time;
+  }
+  // A transition during pagination can disagree with the original PR snapshot.
+  // Retry on refresh instead of assigning a guessed priority to an incomplete view.
+  if (draft !== node.isDraft) {
+    throw new Error("Draft state changed while loading transition history; refresh to retry");
+  }
+  return firstReadyAt;
 }
 
 // ---------------------------------------------------------------------------
@@ -192,7 +268,7 @@ function isCopilotReviewer(login) {
 }
 function isCopilotLogin(login) {
   const n = String(login || "").toLowerCase();
-  return n === "copilot" || n === "copilot[bot]" || n === "github-copilot[bot]" || n.endsWith("/copilot");
+  return n === "copilot" || n === "copilot-swe-agent" || n === "copilot-swe-agent[bot]" || n === "copilot[bot]" || n === "github-copilot[bot]" || n.endsWith("/copilot");
 }
 
 // Copilot attribution (mirrors GitHubModels.ResolveAuthor): a Copilot-authored PR with
@@ -200,7 +276,7 @@ function isCopilotLogin(login) {
 // human's work rather than a bot.
 function resolveAuthor(login, assignees) {
   if (!isCopilotLogin(login)) return login;
-  const humans = assignees.filter((a) => a && !/\[bot\]$/i.test(a) && a.toLowerCase() !== "copilot");
+  const humans = assignees.filter((a) => a && !/\[bot\]$/i.test(a) && !isCopilotLogin(a));
   return humans.length === 1 ? `${humans[0]}/copilot` : login;
 }
 
@@ -312,6 +388,9 @@ function normalizePr(repo, node, viewers, repoPrivate = false) {
     authorType,
     authorAvatarUrl: node.author?.avatarUrl ?? null,
     createdAt: node.createdAt,
+    readyForReviewAt: node.readyForReviewEvents?.nodes?.[0]?.createdAt ?? null,
+    firstReadyForReviewAt: null,
+    firstReadinessError: null,
     updatedAt: node.updatedAt,
     baseRef: node.baseRefName,
     milestone: node.milestone?.title ?? null,
@@ -488,7 +567,7 @@ function awaitingReview(pr) {
 // Oldest waits float to the top so nothing starves, with nudges for explicitly
 // requested reviewers and quick wins. Order is team-managed, not user-sortable.
 function reviewQueueScore(pr) {
-  const ageDays = (Date.now() - new Date(pr.createdAt).getTime()) / DAY_MS;
+  const ageDays = (Date.now() - new Date(reviewAgeStartedAt(pr)).getTime()) / DAY_MS;
   let s = Math.min(ageDays, 90);
   if (pr.requestedReviewers.length > 0) s += 20;
   if (isQuickWin(pr)) s += 12;
@@ -523,7 +602,7 @@ function laneReason(laneId, pr) {
   }
 }
 
-function bucketReview(prs, { showDrafts = false, limit = REVIEW_LIMIT } = {}) {
+function bucketReview(prs, { showDrafts = false } = {}) {
   // Drafts are filtered out by default; they are prototypes, not review work.
   const source = showDrafts ? prs : prs.filter((pr) => !pr.draft);
   const defs = LANE_DEFS.review;
@@ -543,7 +622,7 @@ function bucketReview(prs, { showDrafts = false, limit = REVIEW_LIMIT } = {}) {
   if (queue) {
     queue.items.sort((a, b) => reviewQueueScore(b.pr) - reviewQueueScore(a.pr));
     queue.cappedTotal = queue.items.length;
-    if (queue.items.length > limit) queue.items = queue.items.slice(0, limit);
+    if (queue.items.length > REVIEW_LIMIT) queue.items = queue.items.slice(0, REVIEW_LIMIT);
   }
   return lanes.filter((l) => l.items.length > 0);
 }
@@ -640,23 +719,11 @@ export function buildNotifications(prs, prefs, dismissed = []) {
   return items;
 }
 
-// The focused queue headline is capped to `limit` actionable cards, but review-debt cards sort
-// last (they carry the oldest activity timestamp) and would be sliced away whenever `limit`
-// fresher PRs exist — leaving their "Address review" button unreachable even though focusTotal
-// still counts them. Keep the freshest `limit` cards plus any review-debt cards that spill past
-// the cap, so the debt action stays reachable. The two slices are disjoint, so no card is
-// duplicated, and focusTotal continues to report the true (uncapped) count.
-export function capFocusKeepingDebt(cards, limit) {
-  const head = cards.slice(0, limit);
-  const spilloverDebt = cards.slice(limit).filter((c) => c && c.reviewDebt);
-  return head.concat(spilloverDebt);
-}
-
 // ---------------------------------------------------------------------------
 // Top-level loader
 // ---------------------------------------------------------------------------
 
-export async function loadDashboard({ accounts, mode, release, prefs, dismissed, showDrafts = false, reviewLimit = REVIEW_LIMIT, onProgress }) {
+export async function loadDashboard({ accounts, mode, release, prefs, dismissed, showDrafts = false, onProgress }) {
   const usable = (accounts ?? []).filter((a) => a && a.token && a.login);
   if (usable.length === 0) {
     return { authenticated: false, message: "No active GitHub account. Enable an account in the Accounts tab so the canvas can read your review queue." };
@@ -718,12 +785,22 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
             } else {
               let after = null;
               for (let page = 0; page < MAX_PAGES; page++) {
-                const data = await gql(acct.token, PR_QUERY, { owner, name, after }, acct.graphql);
+                const data = await gql(acct.token, PR_QUERY, { owner, name, after, includeReadiness: mode === "review" }, acct.graphql);
                 const repoPrivate = !!data.repository?.isPrivate;
                 const conn = data.repository?.pullRequests;
                 for (const node of conn?.nodes ?? []) {
                   const pr = normalizePr(repo, node, viewers, repoPrivate);
-                  if (!prById.has(pr.url)) prById.set(pr.url, pr);
+                  if (mode === "review") {
+                    try {
+                      pr.firstReadyForReviewAt = await loadFirstReadyForReviewAt(acct, owner, name, node);
+                    } catch (error) {
+                      pr.firstReadinessError = error.message;
+                    }
+                  }
+                  const existing = prById.get(pr.url);
+                  if (!existing || (existing.firstReadinessError && !pr.firstReadinessError)) {
+                    prById.set(pr.url, pr);
+                  }
                 }
                 if (!conn?.pageInfo?.hasNextPage) break;
                 after = conn.pageInfo.endCursor;
@@ -751,11 +828,16 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
     // Drop per-account errors for (host, repo) pairs another active account could read on that same
     // host — a success on a different host must not mask this host's failure.
     const errors = [...new Set(errorsRaw.filter((e) => !okRepos.has(hostRepoKey(e.host, e.repo))).map((e) => e.message))];
+    for (const pr of allPrs) {
+      if (pr.firstReadinessError) {
+        errors.push(`${pr.repository}#${pr.number}: first readiness unavailable; omitted from Needs attention. ${pr.firstReadinessError}`);
+      }
+    }
 
     let lanes;
     if (mode === "issues") lanes = bucketIssues(allIssues, usable[0].login);
     else if (mode === "ship") lanes = bucketShip(allPrs, release ?? CURRENT_RELEASE, { showDrafts });
-    else lanes = bucketReview(allPrs, { showDrafts, limit: reviewLimit });
+    else lanes = bucketReview(allPrs, { showDrafts });
 
     // Full pr-dashboard attention engine (review mode only). The focused "Needs attention"
     // queue is the capped headline; attention buckets, the community list, the personal
@@ -773,14 +855,13 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
       // "review debt" pill is truncated off the displayed signals. Derive it from the shared
       // isReviewDebt predicate, NOT from c.signals: signalsFor caps the display pills, so a debt PR
       // that also carries release/regression pills would lose its "review debt" pill and be wrongly
-      // treated as non-debt. The predicate is the same one createAttentionSignals, the focus-retention
-      // filter and capFocusKeepingDebt use, so they cannot drift.
+      // treated as non-debt. The predicate is shared with createAttentionSignals and the
+      // focus-retention filter so they cannot drift.
       const card = (pr, reason, extra) =>
         Object.assign({ pr, reason: reason || "", signals: signalsFor(pr, reason || ""), reviewDebt: isReviewDebt(pr) }, extra || {});
-      const focusCards = focusAll.map((f) => {
-        return card(f.pullRequest, f.reason, { bucketLabel: f.bucketLabel, bucketTone: f.bucketTone });
+      const focusCards = focusAll.map((f, index) => {
+        return card(f.pullRequest, f.reason, { bucketLabel: f.bucketLabel, bucketTone: f.bucketTone, queuePosition: index + 1 });
       });
-      const focus = capFocusKeepingDebt(focusCards, reviewLimit);
       attention = {
         forMe: createForMeItems(allPrs, viewerLogins).map((f) => {
           // Personal pick leads with its own call-to-action; the engine's action pill is
@@ -796,14 +877,12 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
           c.action = f.action;
           return c;
         }),
-        focus,
+        // Keep the entire ranked queue across the split, including debt cards. The remainder
+        // is position lookup, not an exception to the team's ten-card review priority.
+        focus: focusCards.slice(0, REVIEW_LIMIT),
+        focusRemainder: focusCards.slice(REVIEW_LIMIT),
         focusTotal: focusAll.length,
-        focusLimit: reviewLimit,
-        // True when capFocusKeepingDebt appended review-debt cards from past the cap, so `focus`
-        // is no longer a prefix of the sorted list: non-debt cards between retained debt cards are
-        // skipped. A "top N of total" label would then be false, so the canvas shows an honest
-        // "N shown" metric for this mixed selection instead.
-        focusMixed: focus.length > reviewLimit,
+        focusLimit: REVIEW_LIMIT,
         focusExclusions: focusExclusions.map((e) => ({
           pr: e.pullRequest,
           reason: e.reason.detail,
@@ -850,7 +929,7 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
       notifications,
       counts,
       showDrafts,
-      reviewLimit,
+      reviewLimit: REVIEW_LIMIT,
       errors,
       fetchedAt: new Date().toISOString(),
     };

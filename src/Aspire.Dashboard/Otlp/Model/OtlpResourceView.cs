@@ -39,6 +39,12 @@ public class OtlpResourceView
         Properties = properties;
     }
 
+    internal OtlpResourceView(OtlpResource resource, KeyValuePair<string, string>[] properties)
+    {
+        Resource = resource;
+        Properties = properties;
+    }
+
     public List<OtlpDisplayField> AllProperties()
     {
         var props = new List<OtlpDisplayField>

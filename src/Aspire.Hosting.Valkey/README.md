@@ -10,6 +10,7 @@ From your AppHost directory, add the `Aspire.Hosting.Valkey` integration with th
 
 ```bash
 aspire add Aspire.Hosting.Valkey
+aspire add Aspire.Hosting.Dotnet
 ```
 
 ## Usage example
@@ -21,7 +22,7 @@ In the AppHost, add a Valkey resource and reference it from another resource wit
 ```csharp
 var valkey = builder.AddValkey("cache");
 
-var myService = builder.AddProject<Projects.MyService>()
+var myService = builder.AddDotnetProject("myservice", "../MyService/MyService.csproj")
                        .WithReference(valkey);
 ```
 
@@ -33,6 +34,30 @@ const valkey = await builder.addValkey("cache");
 const myService = await builder.addNodeApp("myService", "../my-service", "server.js")
                        .withReference(valkey);
 ```
+
+## REPL
+
+Call `WithRepl()` to opt into a **REPL** command on the Valkey resource in the dashboard:
+
+```csharp
+builder.AddValkey("valkey").WithRepl();
+```
+
+```typescript
+await builder.addValkey("valkey").withRepl();
+```
+
+REPL access is disabled by default and is available only in run mode. Enable it only for trusted dashboard
+users: the shell uses the resource's configured credentials and is not read-only. Sharing the dashboard
+through a tunnel, Codespaces, or VS Code remote development also exposes this capability to users who can
+execute resource commands.
+
+Use `quit` before closing the terminal tab to end the session cleanly. Closing the tab alone can
+leave `valkey-cli` running inside the container. Stopping the container also ends any remaining REPL processes.
+
+When the container is running, this opens an authenticated `valkey-cli` session in the terminal dock.
+Use `quit` to exit. The session runs inside the container using Docker (or the configured Podman runtime);
+no local Valkey client is required. Passwords are passed through environment variables, not command-line arguments.
 
 ## Connection Properties
 

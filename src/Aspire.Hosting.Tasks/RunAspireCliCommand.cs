@@ -3,8 +3,9 @@
 
 using System.ComponentModel;
 using System.Diagnostics;
+#if NETFRAMEWORK
 using System.Globalization;
-using System.Text;
+#endif
 using Microsoft.Build.Framework;
 
 namespace Aspire.Hosting.Tasks;
@@ -15,11 +16,7 @@ namespace Aspire.Hosting.Tasks;
 public sealed class RunAspireCliCommand : Microsoft.Build.Utilities.Task
 {
     private const string ArgumentValueMetadataName = "Value";
-    private const string CommandShimPathEnvironmentVariable = "__ASPIRE_MSBUILD_COMMAND_PATH";
-    private const string CommandShimArgumentEnvironmentVariablePrefix = "__ASPIRE_MSBUILD_COMMAND_ARGUMENT_";
-#if NETFRAMEWORK
-    private const int ProcessTreeTerminationTimeoutMilliseconds = 5_000;
-#endif
+    private const int ProcessTerminationTimeoutMilliseconds = 5_000;
 
     /// <summary>
     /// Gets or sets the executable or command shim to run.
@@ -42,6 +39,14 @@ public sealed class RunAspireCliCommand : Microsoft.Build.Utilities.Task
     public int TimeoutMilliseconds { get; set; } = 120_000;
 
     /// <summary>
+    /// Gets or sets environment variables to set for the command.
+    /// </summary>
+    /// <remarks>
+    /// The item identity is the variable name and its <c>Value</c> metadata is the variable value.
+    /// </remarks>
+    public ITaskItem[] EnvironmentVariables { get; set; } = [];
+
+    /// <summary>
     /// Gets the command exit code, or <c>-1</c> when the command did not exit normally.
     /// </summary>
     [Output]
@@ -58,6 +63,17 @@ public sealed class RunAspireCliCommand : Microsoft.Build.Utilities.Task
     /// </summary>
     [Output]
     public string? FailureMessage { get; set; }
+
+    /// <summary>
+    /// Gets the captured standard output and standard error for inclusion in setup failure diagnostics.
+    /// </summary>
+    [Output]
+    public string ConsoleOutput { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Overrides process termination for tests that must keep a process alive after termination is requested.
+    /// </summary>
+    internal Func<Process, bool>? TestTerminateProcess { get; set; }
 
     public override bool Execute()
     {
@@ -100,24 +116,35 @@ public sealed class RunAspireCliCommand : Microsoft.Build.Utilities.Task
         if (!process.WaitForExit(TimeoutMilliseconds))
         {
             TimedOut = true;
-            if (!TerminateProcess(process))
+            var processExited = false;
+            if (TestTerminateProcess?.Invoke(process) ?? TerminateProcess(process))
             {
-                return true;
+                processExited = process.WaitForExit(ProcessTerminationTimeoutMilliseconds);
+                if (!processExited)
+                {
+                    FailureMessage ??= $"The command '{FileName}' timed out after {TimeoutMilliseconds} milliseconds and did not exit within {ProcessTerminationTimeoutMilliseconds} milliseconds after termination was requested.";
+                }
             }
-        }
 
-        process.WaitForExit();
+            if (processExited)
+            {
+                WaitForProcessOutput(standardOutputTask, standardErrorTask);
+            }
+
+            // WaitForExit reports only the root process's exit after Kill(entireProcessTree: true).
+            // A surviving descendant can retain inherited pipe handles, so timeout cleanup must
+            // never wait indefinitely for the redirected readers to reach EOF.
+            // See https://learn.microsoft.com/dotnet/api/system.diagnostics.process.kill#remarks.
+            LogProcessOutputIfCompleted(standardOutputTask);
+            LogProcessOutputIfCompleted(standardErrorTask);
+            FailureMessage ??= $"The command timed out after {TimeoutMilliseconds} milliseconds.";
+            return true;
+        }
 
         var standardOutput = standardOutputTask.GetAwaiter().GetResult();
         var standardError = standardErrorTask.GetAwaiter().GetResult();
         LogProcessOutput(standardOutput);
         LogProcessOutput(standardError);
-
-        if (TimedOut)
-        {
-            FailureMessage ??= $"The command timed out after {TimeoutMilliseconds} milliseconds.";
-            return true;
-        }
 
         ExitCode = process.ExitCode;
         return true;
@@ -125,33 +152,18 @@ public sealed class RunAspireCliCommand : Microsoft.Build.Utilities.Task
 
     private ProcessStartInfo CreateStartInfo(IReadOnlyList<string> arguments)
     {
-        var startInfo = IsWindowsCommandShim(FileName)
-            ? new ProcessStartInfo(GetCommandProcessorPath(), BuildCommandProcessorArguments(arguments.Count))
-            : new ProcessStartInfo(FileName);
-
-        startInfo.CreateNoWindow = true;
-        startInfo.RedirectStandardOutput = true;
-        startInfo.RedirectStandardError = true;
-        startInfo.UseShellExecute = false;
-
-        if (IsWindowsCommandShim(FileName))
+        var startInfo = new ProcessStartInfo
         {
-            SetEnvironmentVariable(startInfo, CommandShimPathEnvironmentVariable, FileName);
-            for (var index = 0; index < arguments.Count; index++)
-            {
-                SetEnvironmentVariable(startInfo, $"{CommandShimArgumentEnvironmentVariablePrefix}{index}", arguments[index]);
-            }
-        }
-        else
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false
+        };
+        ProcessStartInfoHelper.SetCommand(startInfo, FileName, arguments, Path.DirectorySeparatorChar == '\\');
+
+        foreach (var environmentVariable in EnvironmentVariables)
         {
-#if NETFRAMEWORK
-            startInfo.Arguments = string.Join(" ", arguments.Select(QuoteWindowsArgument));
-#else
-            foreach (var argument in arguments)
-            {
-                startInfo.ArgumentList.Add(argument);
-            }
-#endif
+            startInfo.Environment[environmentVariable.ItemSpec] = environmentVariable.GetMetadata(ArgumentValueMetadataName);
         }
 
         return startInfo;
@@ -222,7 +234,7 @@ public sealed class RunAspireCliCommand : Microsoft.Build.Utilities.Task
             var standardOutputTask = taskKill.StandardOutput.ReadToEndAsync();
             var standardErrorTask = taskKill.StandardError.ReadToEndAsync();
 
-            if (!taskKill.WaitForExit(ProcessTreeTerminationTimeoutMilliseconds))
+            if (!taskKill.WaitForExit(ProcessTerminationTimeoutMilliseconds))
             {
                 try
                 {
@@ -233,13 +245,13 @@ public sealed class RunAspireCliCommand : Microsoft.Build.Utilities.Task
                     // The helper exited between the timeout and termination attempt.
                 }
 
-                if (taskKill.HasExited || taskKill.WaitForExit(ProcessTreeTerminationTimeoutMilliseconds))
+                if (taskKill.HasExited || taskKill.WaitForExit(ProcessTerminationTimeoutMilliseconds))
                 {
                     _ = standardOutputTask.GetAwaiter().GetResult();
                     _ = standardErrorTask.GetAwaiter().GetResult();
                 }
 
-                FailureMessage = $"The process-tree terminator '{taskKillPath}' did not exit within {ProcessTreeTerminationTimeoutMilliseconds} milliseconds.";
+                FailureMessage = $"The process-tree terminator '{taskKillPath}' did not exit within {ProcessTerminationTimeoutMilliseconds} milliseconds.";
                 return false;
             }
 
@@ -267,10 +279,45 @@ public sealed class RunAspireCliCommand : Microsoft.Build.Utilities.Task
     {
         if (!string.IsNullOrEmpty(output))
         {
+            ConsoleOutput += output + (output.EndsWith("\n", StringComparison.Ordinal) ? string.Empty : Environment.NewLine);
             // Setup output is diagnostic only. Logging it as a message prevents a recovered attempt
             // from becoming a warning-as-error failure because the tool wrote warning-like text.
             Log.LogMessage(MessageImportance.Low, "{0}", output);
         }
+    }
+
+    private static void WaitForProcessOutput(Task<string> standardOutputTask, Task<string> standardErrorTask)
+    {
+        try
+        {
+            _ = Task.WaitAll([standardOutputTask, standardErrorTask], ProcessTerminationTimeoutMilliseconds);
+        }
+        catch
+        {
+            // Draining outputs is best-effort and a failure to do so (including a timeout) should not interrupt the caller.
+        }
+    }
+
+    private void LogProcessOutputIfCompleted(Task<string> outputTask)
+    {
+        if (outputTask.Status == TaskStatus.RanToCompletion)
+        {
+            var output = outputTask.GetAwaiter().GetResult();
+            if (!string.IsNullOrEmpty(output))
+            {
+                LogProcessOutput(output);
+            }
+
+            return;
+        }
+
+        // "Observe" task exceptions (for tasks that exceed the wait timeout and eventually fail) so that
+        // UnobservedTaskException (if enabled) does not bring down the process.
+        _ = outputTask.ContinueWith(
+            static completedTask => _ = completedTask.Exception,
+            CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
     }
 
     private static string GetArgumentValue(ITaskItem argument)
@@ -279,80 +326,4 @@ public sealed class RunAspireCliCommand : Microsoft.Build.Utilities.Task
         return string.IsNullOrEmpty(value) ? argument.ItemSpec : value;
     }
 
-    private static bool IsWindowsCommandShim(string path)
-    {
-        return Path.DirectorySeparatorChar == '\\'
-            && (path.EndsWith(".cmd", StringComparison.OrdinalIgnoreCase)
-                || path.EndsWith(".bat", StringComparison.OrdinalIgnoreCase));
-    }
-
-    private static string GetCommandProcessorPath()
-    {
-        return Environment.GetEnvironmentVariable("ComSpec") ?? "cmd.exe";
-    }
-
-    private static string BuildCommandProcessorArguments(int argumentCount)
-    {
-        var command = new StringBuilder($"\"%{CommandShimPathEnvironmentVariable}%\"");
-
-        for (var index = 0; index < argumentCount; index++)
-        {
-            command.Append(" \"%");
-            command.Append(CommandShimArgumentEnvironmentVariablePrefix);
-            command.Append(index.ToString(CultureInfo.InvariantCulture));
-            command.Append("%\"");
-        }
-
-        // Expand each child-only variable once. cmd.exe does not recursively expand percent-delimited
-        // text introduced by an environment variable, so literal %NAME% path segments remain intact.
-        return $"/D /V:OFF /S /C \"{command}\"";
-    }
-
-    private static void SetEnvironmentVariable(ProcessStartInfo startInfo, string name, string value)
-    {
-#if NETFRAMEWORK
-        startInfo.EnvironmentVariables[name] = value;
-#else
-        startInfo.Environment[name] = value;
-#endif
-    }
-
-#if NETFRAMEWORK
-    private static string QuoteWindowsArgument(string argument)
-    {
-        if (argument.Length > 0 && !argument.Any(static character => char.IsWhiteSpace(character) || character == '"'))
-        {
-            return argument;
-        }
-
-        var result = new StringBuilder(argument.Length + 2);
-        result.Append('"');
-        var backslashCount = 0;
-
-        foreach (var character in argument)
-        {
-            if (character == '\\')
-            {
-                backslashCount++;
-                continue;
-            }
-
-            if (character == '"')
-            {
-                result.Append('\\', (backslashCount * 2) + 1);
-                result.Append('"');
-                backslashCount = 0;
-                continue;
-            }
-
-            result.Append('\\', backslashCount);
-            backslashCount = 0;
-            result.Append(character);
-        }
-
-        result.Append('\\', backslashCount * 2);
-        result.Append('"');
-        return result.ToString();
-    }
-#endif
 }

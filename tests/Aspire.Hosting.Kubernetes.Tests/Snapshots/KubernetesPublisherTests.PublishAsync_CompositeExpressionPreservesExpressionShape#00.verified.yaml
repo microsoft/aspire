@@ -1,0 +1,9 @@
+﻿parameters: {}
+secrets: {}
+config:
+  env_dashboard:
+    ASPIRE_DASHBOARD_TELEMETRY_OPTOUT: "true"
+  myapp:
+    COMPOSITE: ""
+    second: "beta"
+    first: "alpha"

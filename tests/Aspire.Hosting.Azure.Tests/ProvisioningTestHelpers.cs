@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREPIPELINES002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREPIPELINES003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable CS0618 // Type or member is obsolete
 
@@ -19,14 +18,15 @@ using Azure.Core;
 using Azure.ResourceManager;
 using Azure.ResourceManager.Authorization;
 using Azure.ResourceManager.Authorization.Models;
-using Azure.ResourceManager.Resources;
-using Azure.ResourceManager.Resources.Models;
+using Azure.ResourceManager.Resources.Deployments;
+using Azure.ResourceManager.Resources.Deployments.Models;
 using Azure.Security.KeyVault.Secrets;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using ResourceGroupData = Azure.ResourceManager.Resources.ResourceGroupData;
 
 namespace Aspire.Hosting.Azure.Tests;
 
@@ -45,7 +45,7 @@ internal static class ProvisioningTestHelpers
         IResourceGroupResource? resourceGroup = null,
         ITenantResource? tenant = null,
         AzureLocation? location = null,
-        UserPrincipal? principal = null,
+        AzurePrincipal? principal = null,
         DistributedApplicationExecutionContext? executionContext = null)
     {
         return new ProvisioningContext(
@@ -55,7 +55,7 @@ internal static class ProvisioningTestHelpers
             resourceGroup ?? new TestResourceGroupResource(),
             tenant ?? new TestTenantResource(),
             location ?? AzureLocation.WestUS2,
-            principal ?? new UserPrincipal(Guid.NewGuid(), "test@example.com"),
+            principal ?? new AzurePrincipal(Guid.NewGuid(), "test@example.com"),
             executionContext ?? new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run));
     }
 
@@ -85,7 +85,7 @@ internal static class ProvisioningTestHelpers
     public static ISecretClientProvider CreateSecretClientProvider() => new TestSecretClientProvider(CreateTokenCredentialProvider());
     public static IBicepCompiler CreateBicepCompiler() => new TestBicepCompiler();
     public static IDeploymentStateManager CreateUserSecretsManager() => new TestUserSecretsManager();
-    public static IUserPrincipalProvider CreateUserPrincipalProvider() => new TestUserPrincipalProvider();
+    public static IAzurePrincipalProvider CreateAzurePrincipalProvider() => new TestAzurePrincipalProvider();
     public static TokenCredential CreateTokenCredential() => new TestTokenCredential();
 
     /// <summary>
@@ -561,6 +561,8 @@ internal sealed class TestResourceGroupCollection : IResourceGroupCollection
     private readonly Func<string, Dictionary<string, object>>? _deploymentOutputsProvider;
     private readonly TestResourceGroupResource? _resourceGroup;
     public string? LastRequestedResourceGroupName { get; private set; }
+    public int CreateOrUpdateCallCount { get; private set; }
+    public Action? OnCreateOrUpdate { get; set; }
     private readonly bool _resourceGroupLookupReturnsNotFound;
 
     public TestResourceGroupCollection(Dictionary<string, object> deploymentOutputs, TestResourceGroupResource? resourceGroup = null, bool resourceGroupLookupReturnsNotFound = false)
@@ -606,6 +608,8 @@ internal sealed class TestResourceGroupCollection : IResourceGroupCollection
 
     public Task<ArmOperation<IResourceGroupResource>> CreateOrUpdateAsync(WaitUntil waitUntil, string resourceGroupName, ResourceGroupData data, CancellationToken cancellationToken = default)
     {
+        CreateOrUpdateCallCount++;
+        OnCreateOrUpdate?.Invoke();
         IResourceGroupResource resourceGroup;
         if (_deploymentOutputsProvider is not null)
         {
@@ -921,6 +925,7 @@ internal sealed class MockResponse(int status) : Response
 
 internal sealed class TestArmClientProvider : IArmClientProvider
 {
+    private readonly IArmClient? _armClient;
     private readonly Dictionary<string, object>? _deploymentOutputs;
     private readonly Func<string, Dictionary<string, object>>? _deploymentOutputsProvider;
     private readonly TestResourceGroupResource? _resourceGroup;
@@ -936,6 +941,11 @@ internal sealed class TestArmClientProvider : IArmClientProvider
     public TestArmClientProvider(Dictionary<string, object> deploymentOutputs)
     {
         _deploymentOutputs = deploymentOutputs;
+    }
+
+    public TestArmClientProvider(IArmClient armClient)
+    {
+        _armClient = armClient;
     }
 
     public TestArmClientProvider(Func<string, Dictionary<string, object>> deploymentOutputsProvider)
@@ -979,6 +989,10 @@ internal sealed class TestArmClientProvider : IArmClientProvider
 
     public IArmClient GetArmClient(TokenCredential credential, string subscriptionId)
     {
+        if (_armClient is not null)
+        {
+            return _armClient;
+        }
         if (_deploymentOutputsProvider is not null)
         {
             return new TestArmClient(_deploymentOutputsProvider);
@@ -1043,6 +1057,9 @@ internal sealed class TestUserSecretsManager : IDeploymentStateManager
         return Task.FromResult(new DeploymentStateSection(sectionName, sectionData, 0));
     }
 
+    public Task<DeploymentStateSection> AcquireCurrentSectionAsync(string sectionName, CancellationToken cancellationToken = default)
+        => AcquireSectionAsync(sectionName, cancellationToken);
+
     public Task DeleteSectionAsync(DeploymentStateSection section, CancellationToken cancellationToken = default)
     {
         return Task.CompletedTask;
@@ -1057,18 +1074,18 @@ internal sealed class TestUserSecretsManager : IDeploymentStateManager
     public Task ClearAllStateAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
 }
 
-internal sealed class TestUserPrincipalProvider : IUserPrincipalProvider
+internal sealed class TestAzurePrincipalProvider : IAzurePrincipalProvider
 {
-    public Task<UserPrincipal> GetUserPrincipalAsync(CancellationToken cancellationToken = default)
+    public Task<AzurePrincipal> GetPrincipalAsync(CancellationToken cancellationToken = default)
     {
-        var principal = new UserPrincipal(Guid.Parse("11111111-2222-3333-4444-555555555555"), "test@example.com");
+        var principal = new AzurePrincipal(Guid.Parse("11111111-2222-3333-4444-555555555555"), "test@example.com");
         return Task.FromResult(principal);
     }
 }
 
-internal sealed class TestTokenCredentialProvider : ITokenCredentialProvider
+internal sealed class TestTokenCredentialProvider(TokenCredential? credential = null) : ITokenCredentialProvider
 {
-    public TokenCredential TokenCredential => new TestTokenCredential();
+    public TokenCredential TokenCredential { get; } = credential ?? new TestTokenCredential();
 }
 
 /// <summary>

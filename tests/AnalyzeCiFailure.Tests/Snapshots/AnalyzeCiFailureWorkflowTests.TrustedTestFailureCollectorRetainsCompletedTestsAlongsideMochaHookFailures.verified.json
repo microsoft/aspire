@@ -1,0 +1,14 @@
+﻿[
+  {
+    "test": "suite assertion",
+    "display_test": "suite assertion",
+    "job": "Run VS Code extension E2E tests / VS Code extension E2E (Linux, debug)",
+    "job_id": 1,
+    "result_file": "00001.json",
+    "result_format": "mocha",
+    "error": "expected true",
+    "stack_trace": "frame",
+    "standard_output": "",
+    "standard_error": ""
+  }
+]

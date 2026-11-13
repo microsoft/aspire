@@ -3,23 +3,22 @@
 
 using System.Collections.Concurrent;
 using System.Text;
-using Aspire.Dashboard.Resources;
+using Aspire.Dashboard.Model;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.WebUtilities;
-using Microsoft.Extensions.Localization;
 using Microsoft.FluentUI.AspNetCore.Components;
 
 namespace Aspire.Dashboard.Utils;
 
 internal static class DashboardUIHelpers
 {
-    public const string MessageBarSection = "MessagesTop";
-
-    // Blazor SectionOutlet/SectionContent name used to teleport the current page's title
-    // (the page's <h1 class="page-header">) up into the top header, where it renders as a
-    // suffix after the app/brand name (e.g. "Stress / Resources"). See MainLayout.razor
-    // (outlet) and AspirePageContentLayout.razor (content).
     public const string PageTitleTopBarSection = "PageTitleTopBar";
+    // Virtualize represents unloaded rows with CSS spacers. Browser engines clamp very tall
+    // elements, causing the spacer observer to report inconsistent measurements and render forever.
+    // At the dashboard's 46px grid row height, 200,000 items use a 9.2 million pixel spacer.
+    public const int MaxVirtualizedItemCount = 200_000;
+
+    public const string MessageBarSection = "MessagesTop";
 
     // these are language names supported by highlight.js
     public const string XmlFormat = "xml";
@@ -27,6 +26,7 @@ internal static class DashboardUIHelpers
     public const string JavascriptFormat = "javascript";
     public const string PlaintextFormat = "plaintext";
     public const string MarkdownFormat = "markdown";
+    public const string SqlFormat = "sql";
     public const string PropertiesFormat = "properties";
 
     // The initial data fetch for a FluentDataGrid doesn't include a count of items to return.
@@ -39,31 +39,12 @@ internal static class DashboardUIHelpers
     // Given the size of rows on dashboard grids, 100 rows should always fill the grid on the screen.
     public const int DefaultDataGridResultCount = 100;
 
+    public static int GetVirtualizedItemCount(int totalItemCount) => Math.Min(totalItemCount, MaxVirtualizedItemCount);
+
     // Don't attempt to display more than 2 highlighted commands. Many commands will take up too much space.
     public const int MaxHighlightedCommands = 2;
 
     public static readonly TimeSpan ToastTimeout = TimeSpan.FromMilliseconds(5000);
-
-    public static (ColumnResizeLabels resizeLabels, ColumnSortLabels sortLabels) CreateGridLabels(IStringLocalizer<ControlsStrings> loc)
-    {
-        var resizeLabels = ColumnResizeLabels.Default with
-        {
-            ExactLabel = loc[nameof(ControlsStrings.FluentDataGridHeaderCellResizeLabel)],
-            ResizeMenu = loc[nameof(ControlsStrings.FluentDataGridHeaderCellResizeButtonText)],
-            DiscreteLabel = loc[nameof(ControlsStrings.FluentDataGridHeaderCellResizeDiscreteLabel)],
-            GrowAriaLabel = loc[nameof(ControlsStrings.FluentDataGridHeaderCellGrowAriaLabelText)],
-            ResetAriaLabel = loc[nameof(ControlsStrings.FluentDataGridHeaderCellResetAriaLabelText)],
-            ShrinkAriaLabel = loc[nameof(ControlsStrings.FluentDataGridHeaderCellShrinkAriaLabelText)],
-            SubmitAriaLabel = loc[nameof(ControlsStrings.FluentDataGridHeaderCellSubmitAriaLabelText)]
-        };
-        var sortLabels = ColumnSortLabels.Default with
-        {
-            SortMenu = loc[nameof(ControlsStrings.FluentDataGridHeaderCellSortButtonText)],
-            SortMenuAscendingLabel = loc[nameof(ControlsStrings.FluentDataGridHeaderCellSortAscendingButtonText)],
-            SortMenuDescendingLabel = loc[nameof(ControlsStrings.FluentDataGridHeaderCellSortDescendingButtonText)]
-        };
-        return (resizeLabels, sortLabels);
-    }
 
     private static readonly ConcurrentDictionary<int, TextMask> s_cachedMasking = new();
 
@@ -85,21 +66,21 @@ internal static class DashboardUIHelpers
         });
     }
 
-    public static async Task<Message> DisplayMaxLimitMessageAsync(IMessageService messageService, string title, string message, Action onClose)
+    public static Task<DashboardMessageBarReference> DisplayMaxLimitMessageAsync(DashboardMessageBarService messageService, string title, string message, Action onClose)
     {
-        return await messageService.ShowMessageBarAsync(options =>
-        {
-            options.Title = title;
-            options.Body = message;
-            options.Intent = MessageIntent.Info;
-            options.Section = "MessagesTop";
-            options.AllowDismiss = true;
-            options.OnClose = m =>
+        return messageService.ShowAsync(
+            new DashboardMessageBarContent
+            {
+                Title = title,
+                Message = message
+            },
+            MessageBarIntent.Info,
+            MessageBarSection,
+            _ =>
             {
                 onClose();
                 return Task.CompletedTask;
-            };
-        }).ConfigureAwait(false);
+            });
     }
 
     public static string? ResolveTooltip(string value)
@@ -130,6 +111,37 @@ internal static class DashboardUIHelpers
         }
         
         return (int)milliseconds;
+    }
+
+    public static string MaskUrlForDisplay(string url)
+    {
+        // For example, redis://:password@host:6379/?token=secret#access_token=secret must
+        // display only redis://host:6379/?token=<mask>. Slice the original text to preserve
+        // escaping, casing and paths; URI normalization would change the displayed address.
+        var fragmentIndex = url.IndexOf('#');
+        if (fragmentIndex >= 0)
+        {
+            url = url[..fragmentIndex];
+        }
+
+        var schemeEnd = url.IndexOf("://", StringComparison.Ordinal);
+        if (schemeEnd >= 0)
+        {
+            var authorityStart = schemeEnd + 3;
+            var authority = url.AsSpan(authorityStart);
+            var authorityLength = authority.IndexOfAny('/', '?');
+            if (authorityLength < 0)
+            {
+                authorityLength = authority.Length;
+            }
+            var userInfoLength = authority[..authorityLength].LastIndexOf('@') + 1;
+            if (userInfoLength > 0)
+            {
+                url = url.Remove(authorityStart, userInfoLength);
+            }
+        }
+
+        return MaskQueryStringValues(url);
     }
 
     /// <summary>

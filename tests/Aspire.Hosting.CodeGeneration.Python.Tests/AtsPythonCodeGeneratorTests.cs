@@ -1,9 +1,12 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
 using System.Reflection;
+using System.Text;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.RemoteHost;
+using Aspire.TestUtilities;
 using Aspire.TypeSystem;
 using Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes;
 
@@ -275,7 +278,7 @@ public class AtsPythonCodeGeneratorTests
         var aspirePy = files["aspire_app.py"];
 
         Assert.Contains("app_host_file_path: str | None = None", aspirePy);
-        Assert.Contains("effective_options['AppHostFilePath'] = app_host_file_path", aspirePy);
+        Assert.Contains("effective_options['appHostFilePath'] = app_host_file_path", aspirePy);
         Assert.Contains("app_host_file_path = os.environ.get('ASPIRE_APPHOST_FILEPATH')", aspirePy);
     }
 
@@ -325,6 +328,481 @@ public class AtsPythonCodeGeneratorTests
         Assert.DoesNotContain("Culture=neutral", aspirePy);
         Assert.DoesNotContain("PublicKeyToken", aspirePy);
         Assert.DoesNotContain("Version=", aspirePy);
+    }
+
+    [Fact]
+    public void GeneratedCode_DistinguishesOmittedAndExplicitNoneForNullableUnionParameters()
+    {
+        var files = _generator.GenerateDistributedApplication(CreateContextWithNullableUnionParameters());
+        var aspirePy = files["aspire_app.py"];
+
+        Assert.Contains(
+            """
+            # Optional parameters with non-null defaults use this sentinel so omission remains distinct from explicit None.
+            _ASPIRE_UNSET = object()
+            """,
+            aspirePy);
+        Assert.Contains(
+            "def with_nullable_unions(client: AspireClient, optional_union: int | None | str = None, nullable_union: int | None | str = typing.cast(int | None | str, _ASPIRE_UNSET), nullable_items: typing.Iterable[int | None] | None = None)",
+            aspirePy);
+        Assert.Contains(
+            """
+                if optional_union is not None:
+                    rpc_args['optionalUnion'] = optional_union
+                if nullable_union is not _ASPIRE_UNSET:
+                    rpc_args['nullableUnion'] = nullable_union
+            """,
+            aspirePy);
+    }
+
+    [Fact]
+    [RequiresTools(["python3"])]
+    [SkipOnPlatform(TestPlatforms.Windows, "Uses the Unix Python executable.")]
+    public Task GeneratedTerminalCallback_ReturnsMutatedDtoOnUnix()
+        => GeneratedTerminalCallback_ReturnsMutatedDto("python3");
+
+    [Fact]
+    [RequiresTools(["python"])]
+    [SkipOnPlatform(TestPlatforms.Linux | TestPlatforms.OSX | TestPlatforms.FreeBSD, "Uses the Windows Python executable.")]
+    public Task GeneratedTerminalCallback_ReturnsMutatedDtoOnWindows()
+        => GeneratedTerminalCallback_ReturnsMutatedDto("python");
+
+    private Task GeneratedTerminalCallback_ReturnsMutatedDto(string pythonExecutable)
+    {
+        var context = CreateContextFromBothAssemblies();
+        var files = _generator.GenerateDistributedApplication(new AtsContext
+        {
+            Capabilities = context.Capabilities,
+            HandleTypes = context.HandleTypes,
+            EnumTypes = context.EnumTypes,
+            DtoTypes =
+            [
+                .. context.DtoTypes,
+                new AtsDtoTypeInfo
+                {
+                    Name = "ATerminalKeywordOptions",
+                    TypeId = "Tests/ATerminalKeywordOptions",
+                    Properties =
+                    [
+                        new AtsDtoPropertyInfo
+                        {
+                            Name = "Global",
+                            Type = new AtsTypeRef
+                            {
+                                TypeId = context.DtoTypes.Single(t => t.Name == "TerminalOptions").TypeId,
+                                Category = AtsTypeCategory.Dto
+                            }
+                        }
+                    ]
+                }
+            ]
+        });
+        return ExecuteGeneratedPythonAsync(pythonExecutable, files["aspire_app.py"],
+            """
+            import json
+            import typing
+            import aspire_app
+
+            assert typing.get_type_hints(aspire_app.TerminalOptions) == {"columns": int, "rows": int}
+            assert typing.get_type_hints(aspire_app.ATerminalKeywordOptions) == {"global": aspire_app.TerminalOptions}
+            assert aspire_app.ATerminalKeywordOptions.__optional_keys__ == {"global"}
+            client = aspire_app.AspireClient("unused")
+            handle = aspire_app.Handle({"$handle": "resource", "$type": "Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecutableResource"})
+            results = []
+
+            def configure(options):
+                assert options == {"columns": 132, "rows": 50}
+                options["columns"] = 200
+
+            def invoke_capability(capability_id, args, kwargs=None):
+                assert capability_id == "Aspire.Hosting/withTerminal"
+                if "configure" in args:
+                    callback = client._callback_registry[args["configure"]]
+                    payload = json.loads('{"p0":{"columns":132,"rows":50}}')
+                    result = callback(payload, client)
+                    assert json.loads(json.dumps(result)) == {"p0": {"columns": 200}}
+                    results.append(result)
+                return args["builder"]
+
+            client.invoke_capability = invoke_capability
+            resource = aspire_app.ExecutableResource(handle, client)
+            assert resource.with_terminal() is resource
+            assert resource.with_terminal(configure=configure) is resource
+            aspire_app.ExecutableResource(handle, client, terminal=configure)
+            assert len(results) == 2
+
+            for callback, expected in [
+                (lambda options: None, {}),
+                (lambda options: options.__setitem__("columns", 132), {"columns": 132}),
+                (lambda options: options.update(rows=50), {"rows": 50}),
+                (lambda options: options.setdefault("columns", 200), {}),
+            ]:
+                callback_id = client.register_callback(callback, dto_writeback=True)
+                actual = client._callback_registry[callback_id]({"p0": {"columns": 132, "rows": 50}}, client)
+                assert actual == {"p0": expected}, actual
+
+            def configure_nested(options):
+                options["nested"]["name"] = "updated"
+                options["values"].append(2)
+            callback_id = client.register_callback(configure_nested, dto_writeback=True)
+            actual = client._callback_registry[callback_id]({"p0": {"nested": {"name": "original"}, "values": [1], "untouched": True}}, client)
+            assert actual == {"p0": {"nested": {"name": "updated"}, "values": [1, 2]}}, actual
+
+            # A nullable value-returning callback must still return null, not its arguments.
+            callback_id = client.register_callback(lambda value: None)
+            assert client._callback_registry[callback_id]({"p0": {"value": 1}}, client) is None
+
+            # Builder defaults must use the same wire names as the generated options DTO.
+            aspire_app._get_client = lambda **kwargs: client
+            aspire_app.DistributedApplicationBuilder = lambda client, options: options
+            options = {
+                "args": ["explicit"],
+                "projectDirectory": "/explicit",
+                "appHostFilePath": "/explicit/apphost.py",
+            }
+            actual = aspire_app.create_builder(
+                options=options.copy(),
+                container_registry_override="registry",
+                disable_dashboard=True,
+                dashboard_application_name="terminal",
+                allow_unsecured_transport=True,
+                enable_resource_logging=True,
+            )
+            assert actual == {
+                **options,
+                "containerRegistryOverride": "registry",
+                "disableDashboard": True,
+                "dashboardApplicationName": "terminal",
+                "allowUnsecuredTransport": True,
+                "enableResourceLogging": True,
+            }, actual
+            """);
+    }
+
+    [Fact]
+    [RequiresTools(["python3"])]
+    [SkipOnPlatform(TestPlatforms.Windows, "Uses the Unix Python executable.")]
+    public Task GeneratedAksNodePoolCallbacks_ReturnMutatedDtosOnUnix()
+        => GeneratedAksNodePoolCallbacks_ReturnMutatedDtos("python3");
+
+    [Fact]
+    [RequiresTools(["python"])]
+    [SkipOnPlatform(TestPlatforms.Linux | TestPlatforms.OSX | TestPlatforms.FreeBSD, "Uses the Windows Python executable.")]
+    public Task GeneratedAksNodePoolCallbacks_ReturnMutatedDtosOnWindows()
+        => GeneratedAksNodePoolCallbacks_ReturnMutatedDtos("python");
+
+    private Task GeneratedAksNodePoolCallbacks_ReturnMutatedDtos(string pythonExecutable)
+    {
+        var context = AtsCapabilityScanner.ScanAssemblies(
+        [
+            typeof(DistributedApplication).Assembly,
+            typeof(global::Aspire.Hosting.Kubernetes.KubernetesNodePoolResource).Assembly,
+            typeof(global::Aspire.Hosting.Azure.Kubernetes.AksNodePoolConfig).Assembly
+        ]).ToAtsContext();
+        var files = _generator.GenerateDistributedApplication(context);
+        return ExecuteGeneratedPythonAsync(pythonExecutable, files["aspire_app.py"],
+            """
+            import json
+            import typing
+            import aspire_app
+
+            assert typing.get_type_hints(aspire_app.AksNodePoolConfig) == {
+                "name": str, "vmSize": str, "minCount": int, "maxCount": int,
+                "mode": aspire_app.AksNodePoolMode, "osSku": str | None
+            }
+            client = aspire_app.AspireClient("unused")
+            handle = aspire_app.Handle({"$handle": "aks", "$type": "Aspire.Hosting.Azure.Kubernetes/Aspire.Hosting.Azure.Kubernetes.AzureKubernetesEnvironmentResource"})
+            results = []
+
+            def configure(options):
+                assert options["name"] in ("system", "workers")
+                assert options["mode"] == ("System" if options["name"] == "system" else "User")
+                assert options["vmSize"] == "Standard_D2s_v5"
+                assert options["minCount"] == 1 and options["maxCount"] == 3
+                assert options["osSku"] is None
+                options["minCount"] = 2
+                options["maxCount"] = 5
+                options["osSku"] = "AzureLinux"
+
+            def invoke_capability(capability_id, args, kwargs=None):
+                assert capability_id in (
+                    "Aspire.Hosting.Azure.Kubernetes/withSystemNodePool",
+                    "Aspire.Hosting.Azure.Kubernetes/addNodePool",
+                )
+                callback = client._callback_registry[args["configure"]]
+                name = args.get("name", "system")
+                mode = "System" if name == "system" else "User"
+                payload = json.loads(json.dumps({"p0": {
+                    "name": name, "vmSize": "Standard_D2s_v5", "minCount": 1,
+                    "maxCount": 3, "mode": mode, "osSku": None
+                }}))
+                result = callback(payload, client)
+                assert json.loads(json.dumps(result)) == {"p0": {
+                    "minCount": 2, "maxCount": 5, "osSku": "AzureLinux"
+                }}
+                results.append(result)
+                return args["builder"]
+
+            client.invoke_capability = invoke_capability
+            resource = aspire_app.AzureKubernetesEnvironmentResource(handle, client)
+            assert resource.with_system_node_pool(configure) is resource
+            resource.add_node_pool("workers", configure)
+            assert len(results) == 2
+            """);
+    }
+
+    [Fact]
+    [RequiresTools(["python3"])]
+    [SkipOnPlatform(TestPlatforms.Windows, "Uses the Unix Python executable.")]
+    public Task GeneratedCallback_WrapsGenericResourceBuilderHandleOnUnix()
+        => GeneratedCallback_WrapsGenericResourceBuilderHandle("python3");
+
+    [Fact]
+    [RequiresTools(["python"])]
+    [SkipOnPlatform(TestPlatforms.Linux | TestPlatforms.OSX | TestPlatforms.FreeBSD, "Uses the Windows Python executable.")]
+    public Task GeneratedCallback_WrapsGenericResourceBuilderHandleOnWindows()
+        => GeneratedCallback_WrapsGenericResourceBuilderHandle("python");
+
+    [Fact]
+    [RequiresTools(["python3"])]
+    [SkipOnPlatform(TestPlatforms.Windows, "Uses the Unix Python executable.")]
+    public Task GeneratedConstructor_PreservesFalsyOptionsOnUnix()
+        => GeneratedConstructor_PreservesFalsyOptions("python3");
+
+    [Fact]
+    [RequiresTools(["python"])]
+    [SkipOnPlatform(TestPlatforms.Linux | TestPlatforms.OSX | TestPlatforms.FreeBSD, "Uses the Windows Python executable.")]
+    public Task GeneratedConstructor_PreservesFalsyOptionsOnWindows()
+        => GeneratedConstructor_PreservesFalsyOptions("python");
+
+    [Fact]
+    [RequiresTools(["python3"])]
+    [SkipOnPlatform(TestPlatforms.Windows, "Uses the Unix Python executable.")]
+    public Task GeneratedNullableReturns_PreserveJsonNullOnUnix()
+        => GeneratedNullableReturns_PreserveJsonNull("python3");
+
+    [Fact]
+    [RequiresTools(["python"])]
+    [SkipOnPlatform(TestPlatforms.Linux | TestPlatforms.OSX | TestPlatforms.FreeBSD, "Uses the Windows Python executable.")]
+    public Task GeneratedNullableReturns_PreserveJsonNullOnWindows()
+        => GeneratedNullableReturns_PreserveJsonNull("python");
+
+    [Fact]
+    [RequiresTools(["python3"])]
+    [SkipOnPlatform(TestPlatforms.Windows, "Uses the Unix Python executable.")]
+    public Task GeneratedCode_PreservesUnicodeWithLegacyStdinEncodingOnUnix()
+        => GeneratedCode_PreservesUnicodeWithLegacyStdinEncoding("python3");
+
+    [Fact]
+    [RequiresTools(["python"])]
+    [SkipOnPlatform(TestPlatforms.Linux | TestPlatforms.OSX | TestPlatforms.FreeBSD, "Uses the Windows Python executable.")]
+    public Task GeneratedCode_PreservesUnicodeWithLegacyStdinEncodingOnWindows()
+        => GeneratedCode_PreservesUnicodeWithLegacyStdinEncoding("python");
+
+    private Task GeneratedCode_PreservesUnicodeWithLegacyStdinEncoding(string pythonExecutable)
+    {
+        var files = _generator.GenerateDistributedApplication(CreateContextFromTestAssembly());
+        return ExecuteGeneratedPythonAsync(pythonExecutable, files["aspire_app.py"],
+            """
+            import sys
+            import aspire_app
+
+            assert sys.stdin.encoding == "cp1252"
+            assert aspire_app.TestConfigs.UnicodeGreeting == "\u4f60\u597d\u3053\u3093\u306b\u3061\u306f"
+            """,
+            standardIoEncoding: "cp1252:surrogateescape");
+    }
+
+    private Task GeneratedNullableReturns_PreserveJsonNull(string pythonExecutable)
+    {
+        var files = _generator.GenerateDistributedApplication(CreateContextFromBothAssemblies());
+        return ExecuteGeneratedPythonAsync(pythonExecutable, files["aspire_app.py"],
+            """
+            import json
+            import typing
+            import aspire_app
+
+            client = aspire_app.AspireClient("unused")
+            handle = aspire_app.Handle({"$handle": "resource", "$type": "unused"})
+            context = aspire_app.TestReturnValueContext(handle, client)
+            parameter = aspire_app.ParameterResource(handle, client)
+
+            for method in (
+                context.get_nullable_string,
+                context.get_nullable_string_task,
+                context.get_nullable_string_value_task,
+                parameter.try_get_current_value,
+            ):
+                assert typing.get_type_hints(method)["return"] == str | None
+                for response in ('null', '""', '"value"'):
+                    client.invoke_capability = lambda *args, **kwargs: json.loads(response)
+                    assert method() == json.loads(response)
+
+            for method in (context.get_string, context.get_string_task, context.get_string_value_task):
+                assert typing.get_type_hints(method)["return"] is str
+            """);
+    }
+
+    private Task GeneratedConstructor_PreservesFalsyOptions(string pythonExecutable)
+    {
+        var files = _generator.GenerateDistributedApplication(CreateContextFromBothAssemblies());
+        return ExecuteGeneratedPythonAsync(pythonExecutable, files["aspire_app.py"],
+            """
+            import aspire_app
+
+            client = aspire_app.AspireClient("unused")
+            invocations = []
+
+            def invoke_capability(capability_id, args, kwargs=None):
+                invocations.append((capability_id, args))
+                resource_types = {
+                    "Aspire.Hosting/addParameter": "Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource",
+                    "Aspire.Hosting.CodeGeneration.Python.Tests/addTestRedis":
+                        "Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestRedisResource",
+                }
+                if capability_id in resource_types:
+                    return aspire_app._wrap_if_handle(
+                        {"$handle": "resource", "$type": resource_types[capability_id]}, client, kwargs
+                    )
+                return args["builder"]
+
+            client.invoke_capability = invoke_capability
+            builder = aspire_app.DistributedApplicationBuilder(client, {})
+
+            for value in (False, True):
+                invocations.clear()
+                builder.add_parameter("api-key", required=value)
+                assert [call[0] for call in invocations] == [
+                    "Aspire.Hosting/addParameter",
+                    "Aspire.Hosting/withRequired",
+                ], invocations
+                assert invocations[1][1]["required"] is value, invocations
+
+            for options in ({}, {"required": None}, {"optional": None}, {"optional": False}):
+                invocations.clear()
+                builder.add_parameter("api-key", **options)
+                assert [call[0] for call in invocations] == ["Aspire.Hosting/addParameter"], invocations
+
+            invocations.clear()
+            builder.add_parameter("api-key", optional=True)
+            assert [call[0] for call in invocations] == [
+                "Aspire.Hosting/addParameter",
+                "Aspire.Hosting/withOptional",
+            ], invocations
+
+            invocations.clear()
+            builder.add_parameter("api-key", description="")
+            assert invocations[-1][0] == "Aspire.Hosting/withDescription", invocations
+            assert invocations[-1][1]["description"] == "", invocations
+
+            invocations.clear()
+            builder.add_test_redis("cache", image_tag="")
+            assert invocations[-1][0] == "Aspire.Hosting/withImageTag", invocations
+            assert invocations[-1][1]["tag"] == "", invocations
+
+            invocations.clear()
+            aspire_app.ProjectResource(
+                aspire_app.Handle({"$handle": "project", "$type": "unused"}),
+                client,
+                replicas=0,
+            )
+            assert len(invocations) == 1, invocations
+            assert invocations[0][0] == "Aspire.Hosting/withReplicas", invocations
+            assert invocations[0][1]["replicas"] == 0, invocations
+
+            for value in (False, None):
+                invocations.clear()
+                builder.add_test_redis("cache", optional_string=value, persistence=value)
+                assert [call[0] for call in invocations] == [
+                    "Aspire.Hosting.CodeGeneration.Python.Tests/addTestRedis",
+                ], invocations
+
+            for value in ({}, True):
+                invocations.clear()
+                builder.add_test_redis("cache", optional_string=value)
+                assert [call[0] for call in invocations] == [
+                    "Aspire.Hosting.CodeGeneration.Python.Tests/addTestRedis",
+                    "Aspire.Hosting.CodeGeneration.Python.Tests/withOptionalString",
+                ], invocations
+            """);
+    }
+
+    private async Task GeneratedCallback_WrapsGenericResourceBuilderHandle(string pythonExecutable)
+    {
+        var files = _generator.GenerateDistributedApplication(CreateContextFromTestAssembly());
+        await ExecuteGeneratedPythonAsync(pythonExecutable, files["aspire_app.py"],
+            """
+            import aspire_app
+
+            client = aspire_app.AspireClient("unused")
+            invocations = []
+
+            def invoke_capability(capability_id, args, kwargs=None):
+                invocations.append(capability_id)
+                if capability_id.endswith("/withPythonBuilderCallback"):
+                    callback = client._callback_registry[args["configure"]]
+                    callback({
+                        "p0": {
+                            "$handle": "callback-resource",
+                            "$type": "Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceBuilder`1[[Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestRedisResource, Aspire.Hosting.CodeGeneration.Python.Tests, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]"
+                        }
+                    }, client)
+                return args["builder"]
+
+            client.invoke_capability = invoke_capability
+            resource = aspire_app.TestRedisResource(
+                aspire_app.Handle({
+                    "$handle": "resource",
+                    "$type": "Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestRedisResource"
+                }),
+                client
+            )
+            resource.with_python_builder_callback(lambda configured: configured.with_persistence())
+
+            assert invocations == [
+                "Aspire.Hosting.CodeGeneration.Python.Tests/withPythonBuilderCallback",
+                "Aspire.Hosting.CodeGeneration.Python.Tests/withPersistence",
+            ]
+            """);
+    }
+
+    private static async Task ExecuteGeneratedPythonAsync(string pythonExecutable, string module, string script, string? standardIoEncoding = null)
+    {
+        using var process = new Process();
+        process.StartInfo = new ProcessStartInfo(pythonExecutable)
+        {
+            RedirectStandardInput = true,
+            StandardInputEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
+            RedirectStandardError = true,
+            RedirectStandardOutput = true,
+            UseShellExecute = false
+        };
+        if (standardIoEncoding is not null)
+        {
+            process.StartInfo.Environment["PYTHONIOENCODING"] = standardIoEncoding;
+        }
+        process.StartInfo.ArgumentList.Add("-c");
+        process.StartInfo.ArgumentList.Add(
+            """
+            import sys
+            import types
+
+            module = types.ModuleType("aspire_app")
+            sys.modules["aspire_app"] = module
+            # Compile source bytes as UTF-8, independent of the platform's stdin text encoding.
+            exec(compile(sys.stdin.buffer.read(), "aspire_app.py", "exec"), module.__dict__)
+
+            """ + Environment.NewLine + script);
+        process.Start();
+        var standardOutput = process.StandardOutput.ReadToEndAsync();
+        var standardError = process.StandardError.ReadToEndAsync();
+        await process.StandardInput.WriteAsync(module);
+        process.StandardInput.Close();
+        await process.WaitForExitAsync();
+
+        Assert.True(
+            process.ExitCode == 0,
+            $"Python validation failed.{Environment.NewLine}{await standardOutput}{await standardError}");
     }
 
     private static List<AtsCapabilityInfo> ScanCapabilitiesFromTestAssembly()
@@ -578,6 +1056,204 @@ public class AtsPythonCodeGeneratorTests
         };
     }
 
+    private static AtsContext CreateContextWithNullableUnionParameters()
+    {
+        var unionType = new AtsTypeRef
+        {
+            TypeId = "Tests/NullableUnion",
+            Category = AtsTypeCategory.Union,
+            UnionTypes =
+            [
+                new AtsTypeRef
+                {
+                    TypeId = "Tests/NestedNullableUnion",
+                    Category = AtsTypeCategory.Union,
+                    UnionTypes =
+                    [
+                        new AtsTypeRef
+                        {
+                            TypeId = AtsConstants.Number,
+                            Category = AtsTypeCategory.Primitive,
+                            IsNullable = true
+                        }
+                    ]
+                },
+                new AtsTypeRef
+                {
+                    TypeId = AtsConstants.String,
+                    Category = AtsTypeCategory.Primitive
+                }
+            ]
+        };
+
+        return new AtsContext
+        {
+            Capabilities =
+            [
+                new AtsCapabilityInfo
+                {
+                    CapabilityId = "Tests/withNullableUnions",
+                    MethodName = "withNullableUnions",
+                    Parameters =
+                    [
+                        new AtsParameterInfo
+                        {
+                            Name = "optionalUnion",
+                            Type = unionType,
+                            IsOptional = true
+                        },
+                        new AtsParameterInfo
+                        {
+                            Name = "nullableUnion",
+                            Type = unionType,
+                            IsOptional = true,
+                            IsNullable = true,
+                            DefaultValue = 1
+                        },
+                        new AtsParameterInfo
+                        {
+                            Name = "nullableItems",
+                            Type = new AtsTypeRef
+                            {
+                                TypeId = "Tests/NullableItems",
+                                Category = AtsTypeCategory.Array,
+                                ElementType = new AtsTypeRef
+                                {
+                                    TypeId = AtsConstants.Number,
+                                    Category = AtsTypeCategory.Primitive,
+                                    IsNullable = true
+                                }
+                            },
+                            IsOptional = true
+                        }
+                    ],
+                    ReturnType = new AtsTypeRef
+                    {
+                        TypeId = AtsConstants.Void,
+                        Category = AtsTypeCategory.Primitive
+                    },
+                    CapabilityKind = AtsCapabilityKind.Method
+                }
+            ],
+            HandleTypes = [],
+            DtoTypes = [],
+            EnumTypes = []
+        };
+    }
+
+    [Fact]
+    public void GeneratedCode_DisambiguatesParameterMappingsWhenCapabilityIdMatchesMethodName()
+    {
+        // A capability declared with a bare [AspireExport] has a capability ID whose trailing segment
+        // is its method name, so the capability-ID fallback collapses onto the method name it was
+        // meant to escape. Builder classes are emitted in name order, so CollidingAlphaResource
+        // claims VolumeParameters and the bare CollidingBetaResource capability has to be qualified
+        // by its declaring namespace. Snapshot coverage cannot reach this: the shipped volume
+        // capabilities happen to emit in the opposite order.
+        var files = _generator.GenerateDistributedApplication(CreateContextWithCollidingParameterMappings());
+
+        // The generator composes output with StringBuilder.AppendLine, which writes Environment.NewLine,
+        // so the raw text is CRLF on Windows and LF elsewhere. Normalize before matching the multi-line
+        // expectations below, which assert exact field order and so cannot be collapsed to single lines.
+        var aspirePy = files["aspire_app.py"].ReplaceLineEndings("\n");
+
+        Assert.Contains("class VolumeParameters(typing.TypedDict, total=False):\n    target: typing.Required[str]\n    name: typing.Required[str]\n    env: typing.Required[str]\n    is_read_only: bool", aspirePy);
+        Assert.Contains("class TestsBetaVolumeParameters(typing.TypedDict, total=False):\n    target: typing.Required[str]\n    name: str\n    is_read_only: bool", aspirePy);
+    }
+
+    private static AtsContext CreateContextWithCollidingParameterMappings()
+    {
+        var stringType = new AtsTypeRef
+        {
+            TypeId = AtsConstants.String,
+            Category = AtsTypeCategory.Primitive
+        };
+
+        var boolType = new AtsTypeRef
+        {
+            TypeId = AtsConstants.Boolean,
+            Category = AtsTypeCategory.Primitive
+        };
+
+        var projectType = new AtsTypeRef
+        {
+            TypeId = "Tests/CollidingAlphaResource",
+            ClrType = typeof(CollidingAlphaResource),
+            Category = AtsTypeCategory.Handle
+        };
+
+        var containerType = new AtsTypeRef
+        {
+            TypeId = "Tests/CollidingBetaResource",
+            ClrType = typeof(CollidingBetaResource),
+            Category = AtsTypeCategory.Handle
+        };
+
+        return new AtsContext
+        {
+            Capabilities =
+            [
+                // Emitted first (name order), so this claims VolumeParameters for its own shape.
+                new AtsCapabilityInfo
+                {
+                    CapabilityId = "Tests.Alpha/withAlphaVolume",
+                    MethodName = "withVolume",
+                    Parameters =
+                    [
+                        new AtsParameterInfo { Name = "builder", Type = projectType },
+                        new AtsParameterInfo { Name = "target", Type = stringType },
+                        new AtsParameterInfo { Name = "name", Type = stringType },
+                        new AtsParameterInfo { Name = "env", Type = stringType },
+                        new AtsParameterInfo { Name = "isReadOnly", Type = boolType, IsOptional = true }
+                    ],
+                    ReturnType = projectType,
+                    TargetTypeId = projectType.TypeId,
+                    TargetType = projectType,
+                    TargetParameterName = "builder",
+                    ExpandedTargetTypes = [projectType],
+                    ReturnsBuilder = true,
+                    CapabilityKind = AtsCapabilityKind.Method
+                },
+                // Bare-export shape: the capability ID also ends in withVolume, so it has no
+                // capability-ID fallback and must be qualified by its declaring namespace.
+                new AtsCapabilityInfo
+                {
+                    CapabilityId = "Tests.Beta/withVolume",
+                    MethodName = "withVolume",
+                    Parameters =
+                    [
+                        new AtsParameterInfo { Name = "builder", Type = containerType },
+                        new AtsParameterInfo { Name = "target", Type = stringType },
+                        new AtsParameterInfo { Name = "name", Type = stringType, IsOptional = true },
+                        new AtsParameterInfo { Name = "isReadOnly", Type = boolType, IsOptional = true }
+                    ],
+                    ReturnType = containerType,
+                    TargetTypeId = containerType.TypeId,
+                    TargetType = containerType,
+                    TargetParameterName = "builder",
+                    ExpandedTargetTypes = [containerType],
+                    ReturnsBuilder = true,
+                    CapabilityKind = AtsCapabilityKind.Method
+                }
+            ],
+            HandleTypes =
+            [
+                new AtsTypeInfo
+                {
+                    AtsTypeId = projectType.TypeId,
+                    ClrType = typeof(CollidingAlphaResource)
+                },
+                new AtsTypeInfo
+                {
+                    AtsTypeId = containerType.TypeId,
+                    ClrType = typeof(CollidingBetaResource)
+                }
+            ],
+            DtoTypes = [],
+            EnumTypes = []
+        };
+    }
+
     private sealed class KeywordResource;
 
     private sealed class AcronymResource;
@@ -589,4 +1265,18 @@ public class AtsPythonCodeGeneratorTests
     private sealed class GenericTypeArgument<TLeft, TRight>;
 
     private sealed class GenericResource : GenericBaseResource<GenericTypeArgument<int, string>>, IGenericResource<GenericTypeArgument<int, string>>;
+
+    private sealed class CollidingAlphaResource : IResource
+    {
+        public string Name => nameof(CollidingAlphaResource);
+
+        public ResourceAnnotationCollection Annotations { get; } = [];
+    }
+
+    private sealed class CollidingBetaResource : IResource
+    {
+        public string Name => nameof(CollidingBetaResource);
+
+        public ResourceAnnotationCollection Annotations { get; } = [];
+    }
 }

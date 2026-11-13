@@ -481,10 +481,66 @@ internal static class Hex1bAutomatorTestHelpers
         bool useRedisCache = true,
         bool useDevLocalhost = false)
     {
+        await auto.RunAspireNewPromptsAsync(projectName, template, useRedisCache, useDevLocalhost);
+
+        // Decline the agent init prompt and wait for success
+        await auto.DeclineAgentInitPromptAsync(counter);
+    }
+
+    /// <summary>
+    /// Runs <c>aspire new</c> interactively up to and including accepting the chained agent init
+    /// confirmation prompt, landing on the next client, scope, or skill selection prompt,
+    /// depending on the options supplied in <paramref name="extraArguments"/>.
+    /// Used by tests that need to drive the chained agent-init flow instead of declining it via
+    /// <see cref="AspireNewAsync"/>. <paramref name="beforeAcceptingAgentInit"/> runs after the
+    /// project has been scaffolded but before the prompt is accepted, so callers can seed agent
+    /// configuration or detection evidence in the selected project's directory before agent
+    /// initialization runs.
+    /// </summary>
+    internal static async Task AspireNewAcceptingAgentInitAsync(
+        this Hex1bTerminalAutomator auto,
+        string projectName,
+        AspireTemplate template = AspireTemplate.Starter,
+        bool useRedisCache = true,
+        bool useDevLocalhost = false,
+        string extraArguments = "",
+        Func<Task>? beforeAcceptingAgentInit = null)
+    {
+        await auto.RunAspireNewPromptsAsync(projectName, template, useRedisCache, useDevLocalhost, extraArguments);
+
+        // Wait for the agent init prompt, then let the caller seed the selected project's agent
+        // configuration before accepting it to reach the chained skill selection prompt.
+        await auto.WaitUntilAsync(
+            s => s.ContainsText("configure AI agent environments"),
+            timeout: TimeSpan.FromSeconds(120),
+            description: "agent init prompt after aspire new");
+
+        if (beforeAcceptingAgentInit is not null)
+        {
+            await beforeAcceptingAgentInit();
+        }
+
+        await auto.WaitAsync(500);
+        await auto.TypeAsync("y");
+    }
+
+    /// <summary>
+    /// Drives the <c>aspire new</c> prompt sequence from template selection through the test project
+    /// prompt, stopping just before the chained agent init confirmation prompt so callers can choose
+    /// to accept or decline it.
+    /// </summary>
+    private static async Task RunAspireNewPromptsAsync(
+        this Hex1bTerminalAutomator auto,
+        string projectName,
+        AspireTemplate template,
+        bool useRedisCache,
+        bool useDevLocalhost,
+        string extraArguments = "")
+    {
         var templateTimeout = TimeSpan.FromSeconds(60);
 
         // Step 1: Type aspire new and wait for the template list
-        await auto.TypeAsync("aspire new");
+        await auto.TypeAsync(string.IsNullOrEmpty(extraArguments) ? "aspire new" : $"aspire new {extraArguments}");
         await auto.EnterAsync();
         await auto.WaitUntilAsync(
             s => new CellPatternSearcher().Find("> Starter App").Search(s).Count > 0,
@@ -566,6 +622,31 @@ internal static class Hex1bAutomatorTestHelpers
                 await auto.EnterAsync();
                 break;
 
+            case AspireTemplate.GoStarter:
+                // The list omits the C# starters when the image has no .NET SDK, so search by text instead of counting Downs.
+                await auto.TypeAsync("Go API");
+                await auto.WaitUntilAsync(
+                    s => new CellPatternSearcher().Find("> Starter App (Go API/React, Go AppHost)").Search(s).Count > 0,
+                    timeout: TimeSpan.FromSeconds(5),
+                    description: "Go starter template selected");
+                await auto.EnterAsync();
+                break;
+
+            case AspireTemplate.GoEmptyAppHost:
+                await auto.TypeAsync("Empty AppHost");
+                await auto.EnterAsync();
+                await auto.WaitUntilAsync(
+                    s => new CellPatternSearcher().Find("Which language would you like to use?").Search(s).Count > 0,
+                    timeout: TimeSpan.FromSeconds(10),
+                    description: "AppHost language prompt");
+                await auto.TypeAsync("Go");
+                await auto.WaitUntilAsync(
+                    s => new CellPatternSearcher().Find("> Go").Search(s).Count > 0,
+                    timeout: TimeSpan.FromSeconds(5),
+                    description: "Go AppHost language selected");
+                await auto.EnterAsync();
+                break;
+
             default:
                 throw new ArgumentOutOfRangeException(nameof(template), template, $"Unsupported template: {template}");
         }
@@ -605,8 +686,8 @@ internal static class Hex1bAutomatorTestHelpers
             await auto.EnterAsync(); // Accept default "No"
         }
 
-        // Step 6: Redis prompt (only Starter, JsReact, PythonReact)
-        if (template is AspireTemplate.Starter or AspireTemplate.JsReact or AspireTemplate.PythonReact)
+        // Step 6: Redis prompt
+        if (template is AspireTemplate.Starter or AspireTemplate.JsReact or AspireTemplate.PythonReact or AspireTemplate.GoStarter)
         {
             await auto.WaitUntilAsync(
                 s => new CellPatternSearcher().Find("Use Redis Cache").Search(s).Count > 0,
@@ -632,9 +713,6 @@ internal static class Hex1bAutomatorTestHelpers
                 description: "test project prompt");
             await auto.EnterAsync(); // Accept default "No"
         }
-
-        // Step 8: Decline the agent init prompt and wait for success
-        await auto.DeclineAgentInitPromptAsync(counter);
     }
 
     /// <summary>
@@ -725,7 +803,8 @@ internal static class Hex1bAutomatorTestHelpers
     /// </summary>
     internal static async Task WaitForPipelineSuccessAsync(
         this Hex1bTerminalAutomator auto,
-        TimeSpan? timeout = null)
+        TimeSpan? timeout = null,
+        SequenceCounter? counter = null)
     {
         var effectiveTimeout = timeout ?? TimeSpan.FromMinutes(5);
         var pipelineSucceeded = false;
@@ -733,6 +812,19 @@ internal static class Hex1bAutomatorTestHelpers
 
         await auto.WaitUntilAsync(s =>
         {
+            if (counter is not null)
+            {
+                var errorSearcher = new CellPatternSearcher()
+                    .FindPattern(counter.Value.ToString())
+                    .RightText(" ERR:");
+
+                if (errorSearcher.Search(s).Count > 0)
+                {
+                    terminalOutput = s.GetText();
+                    return true;
+                }
+            }
+
             if (s.ContainsText(ConsoleActivityLoggerStrings.PipelineFailed))
             {
                 terminalOutput = s.GetText();
@@ -746,7 +838,9 @@ internal static class Hex1bAutomatorTestHelpers
             }
 
             return false;
-        }, timeout: effectiveTimeout, description: "pipeline succeeded or failed");
+        }, timeout: effectiveTimeout, description: counter is null
+            ? "pipeline succeeded or failed"
+            : $"pipeline succeeded, failed, or error prompt [{counter.Value} ERR:*] $");
 
         if (!pipelineSucceeded)
         {

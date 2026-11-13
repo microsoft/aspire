@@ -17,6 +17,7 @@ internal static class KnownProperties
         public const string Uid = "resource.uid";
         public const string Name = "resource.name";
         public const string Type = "resource.type";
+        public const string ResourceTypeDisplayName = "resource.resourceTypeDisplayName";
         public const string DisplayName = "resource.displayName";
         public const string State = "resource.state";
         public const string ExitCode = "resource.exitCode";
@@ -24,14 +25,18 @@ internal static class KnownProperties
         public const string StartTime = "resource.startTime";
         public const string StopTime = "resource.stopTime";
         public const string Source = "resource.source";
+        public const string SourcePath = "resource.sourcePath";
         public const string HealthState = "resource.healthState";
         public const string ConnectionString = "resource.connectionString";
         public const string ConnectionProperties = "resource.connectionProperties";
         public const string ParentName = "resource.parentName";
+        public const string LaunchConfigurationType = "resource.launchConfigurationType";
         public const string AppArgs = "resource.appArgs";
         public const string AppArgsSensitivity = "resource.appArgsSensitivity";
         public const string ExcludeFromMcp = "resource.excludeFromMcp";
         public const string WaitingFor = "resource.waitingFor";
+        public const string TraitPrefix = "resource.trait.";
+        public const string DisplayOrder = "resource.displayOrder";
     }
 
     public static class Container
@@ -56,11 +61,17 @@ internal static class KnownProperties
     {
         public const string Path = "project.path";
         public const string LaunchProfile = "project.launchProfile";
+        public const string LaunchCommand = "project.launchCommand";
+        public const string Configuration = "project.configuration";
+        public const string TargetFramework = "project.targetFramework";
+        public const string TargetPath = "project.targetPath";
+        public const string UseAppHost = "project.useAppHost";
     }
 
     public static class Terminal
     {
         public const string Enabled = "terminal.enabled";
+        public const string AutoFit = "terminal.autoFit";
         public const string ReplicaIndex = "terminal.replicaIndex";
         public const string ReplicaCount = "terminal.replicaCount";
         public const string ConsumerUdsPath = "terminal.consumerUdsPath";
@@ -85,15 +96,24 @@ internal static class KnownProperties
 internal static class KnownResourcePropertySortOrder
 {
     public const int DisplayName = 0;
-    public const int State = 1;
-    public const int HealthState = 2;
-    public const int StartTime = 3;
-    public const int StopTime = 4;
-    public const int ExitCode = 5;
-    public const int ConnectionString = 6;
+    public const int ResourceType = 1;
+    public const int ResourceTypeDisplayName = 2;
+    public const int State = 3;
+    public const int HealthState = 4;
+    public const int StartTime = 5;
+    public const int StopTime = 6;
+    public const int ExitCode = 7;
+    public const int ConnectionString = 8;
 
     // Producers use local sort orders for their own resource-specific properties. The
     // dashboard normalizes those values after the generic dashboard-owned properties.
     // This value should always be greater than the largest known resource property.
     public static int GetProducerDefinedStart() => ConnectionString + 1;
+}
+
+internal static class KnownResourceTraits
+{
+    // Tags are not dashboard-only: they also appear in `aspire describe` output and other tooling, so the
+    // name has no "Dashboard" scope. The "Aspire_" prefix keeps it apart from user traits added with WithTrait.
+    public const string Tag = "Aspire_Tag";
 }

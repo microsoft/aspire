@@ -10,11 +10,28 @@ portable installs, the Aspire home used for hives and local state.
 ## File contract
 
 `.aspire-install.json` sits beside the running `aspire` binary
-(`<binaryDir>/.aspire-install.json`) and contains exactly one field:
+(`<binaryDir>/.aspire-install.json`). The install route writes the required
+`source` field and may add identity fields consumed by `IdentityResolver`:
 
 ```json
-{ "source": "<route>" }
+{
+  "source": "<route>",
+  "channel": "<stable|staging|daily|local|pr-N>",
+  "version": "<informational version>",
+  "commit": "<source commit>"
+}
 ```
+
+Identity fields are optional so sidecars written by older installers remain
+valid. `aspire update --self` atomically updates `channel` in an existing
+sidecar after replacing and verifying the executable, while preserving
+`source` and fields unrelated to executable identity. Existing `version` and
+`commit` values are removed so the resolver reads those values from the
+replacement binary rather than retaining identity from the executable that was
+replaced. A legacy sidecar-less install remains sidecar-less because self-update
+cannot infer its original route. Persisting the selected channel is required
+when a staging download contains a ship-candidate binary that is deliberately
+stamped `stable`.
 
 | `source` value | Install route                                          |
 |----------------|--------------------------------------------------------|
@@ -78,3 +95,30 @@ Two mechanical checks guard the contract:
 > **Discovery scope (dotnet-tool route).** Install discovery walks the default `dotnet tool install -g` location at `~/.dotnet/tools/.store/aspire.cli` only. Custom `--tool-path` installs are not discovered today: the dotnet CLI has no machine-wide registry of arbitrary `--tool-path` installs to enumerate, and walking the filesystem would balloon the cost of `aspire doctor`. Users with a custom-`--tool-path` install can confirm it directly with `<tool-path>/aspire doctor --self`.
 
 For read-only install discovery (`aspire doctor --format json`), sidecar existence is the trust signal for peer probing. A candidate with any readable sidecar is probed even when `source` is not in the known route table; the raw `source` string is surfaced as the installation `route` so future package-manager routes can appear before this consumer updates. Sidecar-less, unreadable, or malformed candidates are listed without executing the binary.
+
+## Install-source telemetry
+
+The `aspire/cli/main` event reports `aspire.cli.install.source` for the running
+executable, independently of its effective release channel
+(`aspire.cli.identity.channel`). Values are `script`, `pr`, `localhive`,
+`winget`, `brew`, `dotnet-tool`, `nix`, `npm`, `mise`, or `unknown`. Bash and
+PowerShell installers both report `script`.
+
+`InstallSourceDetector` resolves the executable's symlink and prefers a known
+sidecar source. Without one, it checks WinGet's registry ownership, the npm
+launcher's package marker, mise's installation path, and .NET-tool detection,
+in that order. WinGet attribution does not require writing a sidecar, so it
+also works before bundle extraction and on read-only installations.
+
+mise detection matches `mise/installs/aspire/<version>/aspire` (also allowing a
+`bin` directory beneath the version, or the `github-microsoft-aspire` tool
+directory for explicit GitHub-backend installs). Custom roots are recognized through
+`MISE_INSTALLS_DIR`, `MISE_SYSTEM_INSTALLS_DIR`, or `MISE_DATA_DIR`, but only
+when the executable actually occupies the matching Aspire installation path.
+Unrecognized layouts, missing provenance, and failed probes report `unknown`;
+arbitrary sidecar values and installation paths are never exported.
+
+Detection runs only when a main activity is created. It does not launch package
+managers, enumerate other Aspire installations, or modify installation files.
+The property is not added to other activities or to the separately reported
+agent-hook event.

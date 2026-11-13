@@ -8,6 +8,7 @@ using OpenTelemetry.Internal;
 using OpenTelemetry.Trace;
 using StackExchange.Redis;
 using StackExchange.Redis.Profiling;
+using ActivitySourceFactory = OpenTelemetry.Trace.ActivitySourceFactory;
 
 namespace OpenTelemetry.Instrumentation.StackExchangeRedis;
 

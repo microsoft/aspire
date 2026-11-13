@@ -23,9 +23,8 @@ namespace Aspire.Cli.Tests.Commands;
 /// persists into <c>aspire.config.json</c>. Drives <see cref="NewCommand"/> end-to-end
 /// through real <c>CliTemplateFactory</c> + real <c>ScaffoldingService</c> /
 /// <c>TypeScriptStarterTemplate</c> / <c>{Go,Python}StarterTemplate</c> writers, with only
-/// <see cref="IAppHostServerProjectFactory"/> swapped for a fake whose
-/// <see cref="IAppHostServerProject.PrepareAsync"/> returns failure so the early on-disk
-/// side-effect is captured without touching the network, the dotnet CLI, npm, or RPC.
+/// the process and RPC boundaries replaced by successful in-memory fakes so the tests do
+/// not touch the network, the dotnet CLI, npm, or RPC.
 /// <para>
 /// This is the integration-level regression net for the channel-pin/SDK-version mismatch
 /// bug class (PR #17120 + davidfowl follow-up). The original fix landed in the TS starter
@@ -211,6 +210,35 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
         Assert.Equal(PackageChannelNames.Staging, persisted);
     }
 
+    /// <summary>
+    /// Every template that writes <c>aspire.config.json</c> must produce the OS line break and a single
+    /// final newline, whether the file comes from a copied embedded template or from the CLI saving the
+    /// config, so the scaffold matches the files the CLI serializes later regardless of the git checkout
+    /// settings of whoever built the CLI.
+    /// </summary>
+    [Theory]
+    [InlineData(KnownTemplateId.TypeScriptEmptyAppHost)]
+    [InlineData(KnownTemplateId.PythonEmptyAppHost)]
+    [InlineData(KnownTemplateId.GoEmptyAppHost)]
+    [InlineData(KnownTemplateId.JavaEmptyAppHost)]
+    [InlineData(KnownTemplateId.RustEmptyAppHost)]
+    [InlineData(KnownTemplateId.TypeScriptStarter)]
+    [InlineData(KnownTemplateId.PythonStarter)]
+    [InlineData(KnownTemplateId.GoStarter)]
+    [InlineData(KnownTemplateId.JavaStarter)]
+    public async Task Template_WritesAspireConfigWithOsLineBreaksAndSingleFinalNewline(string templateId)
+    {
+        var content = await ScaffoldAndReadAsync(
+            templateId,
+            identityChannel: PackageChannelNames.Daily,
+            registerIdentityChannel: false,
+            explicitChannelArg: null,
+            extraArguments: "",
+            outputDirectory => File.ReadAllText(Path.Combine(outputDirectory, AspireConfigFile.FileName)));
+
+        LineEndingAssert.UsesOsLineBreaksAndSingleFinalNewline(content);
+    }
+
     [Fact]
     public void PrDogfoodNewTemplateContract_AccountsForEveryRegisteredNewTemplate()
     {
@@ -267,8 +295,10 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
         services.AddSingleton<IAppHostServerProjectFactory>(_ => new TestAppHostServerProjectFactory
         {
             CreateAsyncCallback = (path, _) =>
-                Task.FromResult<IAppHostServerProject>(new FakeFailingAppHostServerProject(path))
+                Task.FromResult<IAppHostServerProject>(new FakeSucceedingAppHostServerProject(path))
         });
+        services.AddSingleton<IAppHostServerSessionFactory>(
+            FakeAppHostServerSessionFactory.CreateForScaffolding());
 
         using var serviceProvider = services.BuildServiceProvider();
         var newCommand = serviceProvider.GetRequiredService<NewCommand>();
@@ -292,6 +322,7 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
 
         var parseResult = newCommand.Parse(string.Join(" ", commandArguments));
         var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+        Assert.Equal((int)CliExitCodes.Success, exitCode);
 
         var outputDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, outputDirectoryName);
         switch (testCase.Contract)
@@ -302,6 +333,11 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
                 Assert.True(File.Exists(appHostFile));
                 Assert.Contains(s_prVersion, await File.ReadAllTextAsync(appHostFile));
 
+                var csharpConfig = AspireConfigFile.Load(outputDirectory);
+                Assert.NotNull(csharpConfig);
+                Assert.Equal(PrChannelName, csharpConfig.Channel);
+                Assert.Equal(s_prVersion, csharpConfig.SdkVersion);
+
                 var csharpNuGetConfig = await File.ReadAllTextAsync(Path.Combine(outputDirectory, "nuget.config"));
                 Assert.Contains(packagesDirectory.FullName.Replace('\\', '/'), csharpNuGetConfig);
                 break;
@@ -311,14 +347,10 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
                 var config = AspireConfigFile.Load(outputDirectory);
                 Assert.NotNull(config);
                 Assert.Equal(PrChannelName, config.Channel);
-                if (config.SdkVersion is not null)
-                {
-                    Assert.Equal(s_prVersion, config.SdkVersion);
-                }
+                Assert.Equal(s_prVersion, config.SdkVersion);
                 break;
 
             case PrDogfoodNewTemplateContract.DotNetTemplate:
-                Assert.Equal((int)CliExitCodes.Success, exitCode);
                 var install = Assert.Single(dotNetTemplateInstalls);
                 Assert.Equal(TemplateNuGetConfigService.TemplatesPackageName, install.PackageName);
                 Assert.Equal(s_prVersion, install.Version);
@@ -327,6 +359,7 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
                 var dotNetConfig = AspireConfigFile.Load(outputDirectory);
                 Assert.NotNull(dotNetConfig);
                 Assert.Equal(PrChannelName, dotNetConfig.Channel);
+                Assert.Equal(s_prVersion, dotNetConfig.SdkVersion);
 
                 var dotNetNuGetConfig = await File.ReadAllTextAsync(Path.Combine(outputDirectory, "nuget.config"));
                 Assert.Contains(packagesDirectory.FullName.Replace('\\', '/'), dotNetNuGetConfig);
@@ -337,23 +370,72 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
         }
     }
 
+    [Theory]
+    [InlineData("default", false)]
+    [InlineData("true", true)]
+    [InlineData("false", false)]
+    public async Task GoStarterHonorsRedisChoice(string choice, bool usesRedis)
+    {
+        var (appHost, packages) = await ScaffoldAndReadAsync(
+            KnownTemplateId.GoStarter,
+            identityChannel: PackageChannelNames.Daily,
+            registerIdentityChannel: false,
+            explicitChannelArg: null,
+            extraArguments: choice == "default" ? "" : $" --use-redis-cache {choice}",
+            outputDirectory =>
+            {
+                var config = AspireConfigFile.Load(outputDirectory);
+                Assert.NotNull(config);
+                Assert.NotNull(config.Packages);
+                return (
+                    File.ReadAllText(Path.Combine(outputDirectory, "apphost.go")),
+                    config.Packages.Keys.Order(StringComparer.Ordinal).ToArray());
+            });
+
+        Assert.Equal(
+            usesRedis
+                ? ["Aspire.Hosting.Go", "Aspire.Hosting.JavaScript", "Aspire.Hosting.Redis"]
+                : ["Aspire.Hosting.Go", "Aspire.Hosting.JavaScript"],
+            packages);
+        await Verify(appHost, "go").UseParameters(choice);
+    }
+
     /// <summary>
-    /// Drives <c>aspire new &lt;templateId&gt;</c> against the real <see cref="NewCommand"/>,
-    /// real <c>CliTemplateFactory</c>, and real <see cref="Aspire.Cli.Scaffolding.ScaffoldingService"/>
-    /// — only the <see cref="IAppHostServerProjectFactory"/> is swapped out for a fake whose
-    /// <c>PrepareAsync</c> returns failure, so the run terminates cleanly after the early
-    /// channel write side-effect we want to inspect.
+    /// Drives <c>aspire new &lt;templateId&gt;</c> and reads the <c>channel</c> value persisted to
+    /// <c>aspire.config.json</c> in the scaffolded output directory.
     /// </summary>
     /// <returns>
-    /// The <c>channel</c> value persisted to <c>aspire.config.json</c> in the scaffolded
-    /// output directory, or <see langword="null"/> if no <c>aspire.config.json</c> was
+    /// The persisted <c>channel</c>, or <see langword="null"/> if no <c>aspire.config.json</c> was
     /// written or its <c>channel</c> property is absent.
     /// </returns>
-    private async Task<string?> ScaffoldAndReadPersistedChannelAsync(
+    private Task<string?> ScaffoldAndReadPersistedChannelAsync(
         string templateId,
         string identityChannel,
         bool registerIdentityChannel,
         string? explicitChannelArg)
+    {
+        return ScaffoldAndReadAsync(
+            templateId,
+            identityChannel,
+            registerIdentityChannel,
+            explicitChannelArg,
+            extraArguments: "",
+            outputDirectory => AspireConfigFile.Load(outputDirectory)?.Channel);
+    }
+
+    /// <summary>
+    /// Drives <c>aspire new &lt;templateId&gt;</c> against the real <see cref="NewCommand"/>,
+    /// real <c>CliTemplateFactory</c>, and real <see cref="Aspire.Cli.Scaffolding.ScaffoldingService"/>
+    /// while replacing the process and RPC boundaries with successful in-memory fakes.
+    /// </summary>
+    /// <returns>The value <paramref name="readOutput"/> produces from the scaffolded output directory.</returns>
+    private async Task<T> ScaffoldAndReadAsync<T>(
+        string templateId,
+        string identityChannel,
+        bool registerIdentityChannel,
+        string? explicitChannelArg,
+        string extraArguments,
+        Func<string, T> readOutput)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
@@ -361,30 +443,28 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
         {
             options.CliExecutionContextFactory = _ => BuildExecutionContextWithIdentity(workspace, identityChannel);
             options.PackagingServiceFactory = _ => BuildPackagingService(identityChannel, registerIdentityChannel);
-            // Enable all polyglot feature flags so the Python / Go / Java / Rust templates
+            // Enable all polyglot feature flags so the Python / Java / Rust templates
             // register as subcommands of `aspire new`. Outside tests these are gated by
             // KnownFeatures.ExperimentalPolyglot* flags; here we want to exercise the full
             // matrix regardless of release state.
             options.EnabledFeatures =
             [
                 KnownFeatures.ExperimentalPolyglotPython,
-                KnownFeatures.ExperimentalPolyglotGo,
                 KnownFeatures.ExperimentalPolyglotJava,
                 KnownFeatures.ExperimentalPolyglotRust,
             ];
         });
 
-        // Override the real IAppHostServerProjectFactory so PrepareAsync returns failure
-        // and the (real) scaffolding / starter writer terminates without touching the
-        // network, the dotnet CLI, or template restore. The earlier channel-write
-        // side-effect still runs (when a channel was resolved), which is exactly what
-        // this test inspects. Last AddSingleton wins for GetRequiredService, so this
-        // replaces the default registration from CliTestHelper.
+        // Run through the complete scaffolding path without touching the network, the dotnet
+        // CLI, or template restore. Last AddSingleton wins for GetRequiredService, so these
+        // replace the default registrations from CliTestHelper.
         services.AddSingleton<IAppHostServerProjectFactory>(_ => new TestAppHostServerProjectFactory
         {
             CreateAsyncCallback = (path, _) =>
-                Task.FromResult<IAppHostServerProject>(new FakeFailingAppHostServerProject(path))
+                Task.FromResult<IAppHostServerProject>(new FakeSucceedingAppHostServerProject(path))
         });
+        services.AddSingleton<IAppHostServerSessionFactory>(
+            FakeAppHostServerSessionFactory.CreateForScaffolding());
 
         using var serviceProvider = services.BuildServiceProvider();
         var newCommand = serviceProvider.GetRequiredService<NewCommand>();
@@ -395,17 +475,12 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
         // `--localhost-tld false` short-circuits the bool? confirmation prompt so the
         // test is non-interactive. The value doesn't affect channel persistence.
         var parseResult = newCommand.Parse(
-            $"new {templateId} --name TemplateOut --output ./{outputDirectoryName} --localhost-tld false{channelArg}");
-        _ = await parseResult.InvokeAsync().DefaultTimeout();
+            $"new {templateId} --name TemplateOut --output ./{outputDirectoryName} --localhost-tld false{channelArg}{extraArguments}");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
 
-        // We don't assert the exit code — the fake AppHostServerProject deliberately
-        // fails, so the run exits non-success after the on-disk write. The contract we
-        // test is the *side-effect*: whatever channel the writer decided to persist is
-        // what landed in aspire.config.json (or no channel if none was resolved /
-        // template doesn't pin).
+        Assert.Equal((int)CliExitCodes.Success, exitCode);
         var outputDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, outputDirectoryName);
-        var config = AspireConfigFile.Load(outputDirectory);
-        return config?.Channel;
+        return readOutput(outputDirectory);
     }
 
     private static IPackagingService BuildPackagingService(string identityChannel, bool registerIdentityChannel)
@@ -505,7 +580,6 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
             options.EnabledFeatures =
             [
                 KnownFeatures.ExperimentalPolyglotPython,
-                KnownFeatures.ExperimentalPolyglotGo,
                 KnownFeatures.ExperimentalPolyglotJava,
                 KnownFeatures.ExperimentalPolyglotRust,
                 KnownFeatures.ShowAllTemplates,

@@ -24,7 +24,7 @@
       </trans-unit>
       <trans-unit id="DcpVersionCheckTooLowMessage">
         <source>Newer version of the Aspire.Hosting.AppHost package is required to run the application. Ensure you are referencing at least version '{0}'.</source>
-        <target state="translated">Zum Ausführen der Anwendung ist eine neuere Version des Pakets "Agate.Hosting.AppHost" erforderlich. Stellen Sie sicher, dass Sie auf mindestens version '{0}' verweisen.</target>
+        <target state="translated">Zum Ausführen der Anwendung ist eine neuere Version des Pakets Agate.Hosting.AppHost erforderlich. Stellen Sie sicher, dass Sie mindestens Version '{0}' referenzieren.</target>
         <note />
       </trans-unit>
       <trans-unit id="LaunchSettingsFileDoesNotContainProfileExceptionMessage">

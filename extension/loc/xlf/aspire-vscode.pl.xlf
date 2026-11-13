@@ -140,7 +140,7 @@
       </trans-unit>
       <trans-unit id="aspire-vscode.strings.openAspireDashboard">
         <source xml:lang="en">Launch Aspire Dashboard</source>
-        <target state="translated">Uruchom pulpit nawigacyjny pulpitu nawigacyjnego</target>
+        <target state="translated">Uruchom pulpit nawigacyjny Aspire</target>
       </trans-unit>
       <trans-unit id="extension.debug.defaultConfiguration.description">
         <source xml:lang="en">Launch the effective Aspire apphost in your workspace</source>

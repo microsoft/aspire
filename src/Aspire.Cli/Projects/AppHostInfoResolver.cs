@@ -184,7 +184,7 @@ internal sealed class AppHostInfoResolver(IDotNetCliRunner runner, IAppHostInfoD
         return info;
     }
 
-    private static AppHostProjectInfo ParseAppHostInfo(AppHostProjectInspectionOutput? msbuildOutput, int exitCode)
+    internal static AppHostProjectInfo ParseAppHostInfo(AppHostProjectInspectionOutput? msbuildOutput, int exitCode)
     {
         var properties = msbuildOutput?.Properties;
         if (properties is null)
@@ -202,7 +202,11 @@ internal sealed class AppHostInfoResolver(IDotNetCliRunner runner, IAppHostInfoD
         var targetFramework = string.IsNullOrWhiteSpace(properties.TargetFramework) ? null : properties.TargetFramework;
         var targetFrameworks = string.IsNullOrWhiteSpace(properties.TargetFrameworks) ? null : properties.TargetFrameworks;
 
-        var isAspireHost = string.Equals(properties.IsAspireHost, "true", StringComparison.Ordinal);
+        var items = msbuildOutput?.Items;
+        // Package props are not imported until the first restore. Respect an explicit opt-out.
+        var isAspireHost = string.Equals(properties.IsAspireHost, "true", StringComparison.OrdinalIgnoreCase)
+            || (string.IsNullOrWhiteSpace(properties.IsAspireHost)
+                && items?.PackageReference?.Any(item => string.Equals(item.Identity, "Aspire.Hosting.AppHost", StringComparison.OrdinalIgnoreCase)) == true);
 
         if (!isAspireHost)
         {
@@ -214,7 +218,6 @@ internal sealed class AppHostInfoResolver(IDotNetCliRunner runner, IAppHostInfoD
         // then finally to the SDK version. Mirrors DotNetCliRunner.GetAppHostInformationAsync.
         string? aspireHostingVersion = null;
 
-        var items = msbuildOutput?.Items;
         if (items is not null)
         {
             aspireHostingVersion = GetPackageVersionFromItems(items.PackageReference, "Aspire.Hosting")
@@ -241,7 +244,7 @@ internal sealed class AppHostInfoResolver(IDotNetCliRunner runner, IAppHostInfoD
 
         foreach (var item in items)
         {
-            if (string.Equals(item.Identity, packageId, StringComparison.Ordinal))
+            if (string.Equals(item.Identity, packageId, StringComparison.OrdinalIgnoreCase))
             {
                 return item.Version;
             }

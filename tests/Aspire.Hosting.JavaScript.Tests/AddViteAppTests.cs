@@ -1,9 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREDOCKERFILEBUILDER001 // Type is for evaluation purposes only
 #pragma warning disable ASPIRECERTIFICATES001 // Type is for evaluation purposes only
-#pragma warning disable ASPIREPIPELINES001 // Type is for evaluation purposes only
 #pragma warning disable ASPIREJAVASCRIPT001 // Type is for evaluation purposes only
 
 using System.Runtime.CompilerServices;
@@ -1042,19 +1040,27 @@ public class AddViteAppTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void NextJsAppHasBuildValidationStep()
+    public async Task NextJsAppHasBuildValidationStep()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish).WithResourceCleanUp(true);
+        builder.Services.AddSingleton<IPipelineActivityReporter, NullPublishingActivityReporter>();
 
         var nextDir = Path.Combine(workspace.Path, "nextjs");
         Directory.CreateDirectory(nextDir);
         File.WriteAllText(Path.Combine(nextDir, "package-lock.json"), "empty");
 
-        var nodeApp = builder.AddNextJsApp("nextjs", nextDir);
+        builder.AddNextJsApp("nextjs", nextDir);
 
-        var stepAnnotations = nodeApp.Resource.Annotations.OfType<PipelineStepAnnotation>().ToList();
-        Assert.NotEmpty(stepAnnotations);
+        using var app = builder.Build();
+        var pipeline = (DistributedApplicationPipeline)app.Services.GetRequiredService<IDistributedApplicationPipeline>();
+        var steps = (await pipeline.ResolveStepsAsync(CreatePipelineContext(app)))
+            .ToDictionary(step => step.Name, StringComparer.Ordinal);
+
+        var buildStepClosure = DistributedApplicationPipeline.ComputeTransitiveDependencies(steps["build-nextjs"], steps);
+
+        Assert.Contains(buildStepClosure, step => step.Name == "nextjs-standalone-check-nextjs");
+        Assert.Contains(WellKnownPipelineSteps.BuildPrereq, steps["nextjs-standalone-check-nextjs"].DependsOnSteps);
     }
 
     [Fact]
@@ -1073,34 +1079,56 @@ public class AddViteAppTests(ITestOutputHelper outputHelper)
         Assert.True(nodeApp.Resource.TryGetLastAnnotation<SuppressPublishValidationAnnotation>(out _));
     }
 
-    [Fact]
-    public async Task NextJsStandaloneCheckFailsInPipelineWhenMissing()
+    [Theory]
+    [InlineData(false, false, false)]
+    [InlineData(true, false, false)]
+    [InlineData(false, true, false)]
+    [InlineData(false, false, true)]
+    public async Task NextJsStandaloneCheckRespectsConfigurationSuppressionAndExclusion(bool standalone, bool suppress, bool excluded)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithResourceCleanUp(true);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: "nextjs-standalone-check-nextjs").WithResourceCleanUp(true);
         builder.Services.AddSingleton<IPipelineActivityReporter, NullPublishingActivityReporter>();
 
         var nextDir = Path.Combine(workspace.Path, "nextjs");
         Directory.CreateDirectory(nextDir);
         File.WriteAllText(Path.Combine(nextDir, "package-lock.json"), "empty");
-        File.WriteAllText(Path.Combine(nextDir, "next.config.ts"), "const nextConfig = {}; export default nextConfig;");
+        File.WriteAllText(Path.Combine(nextDir, "next.config.ts"), standalone
+            ? "export default { output: 'standalone' };"
+            : "export default {};");
 
-        builder.AddNextJsApp("nextjs", nextDir);
+        var next = builder.AddNextJsApp("nextjs", nextDir);
+        if (suppress)
+        {
+            next.DisableBuildValidation();
+        }
 
-        var app = builder.Build();
-        var pipeline = new DistributedApplicationPipeline();
-        var context = new PipelineContext(
-            app.Services.GetRequiredService<DistributedApplicationModel>(),
-            app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
-            app.Services,
-            app.Services.GetRequiredService<ILogger<AddViteAppTests>>(),
-            CancellationToken.None);
+        if (excluded)
+        {
+            next.ExcludeFromManifest();
+        }
 
-        // Pipeline throws AggregateException when multiple steps fail
-        var ex = await Assert.ThrowsAnyAsync<Exception>(() => pipeline.ExecuteAsync(context));
-        // Verify our standalone check step fired with the right message
-        Assert.Contains("output: \"standalone\"", ex.ToString());
+        using var app = builder.Build();
+        var pipeline = app.Services.GetRequiredService<IDistributedApplicationPipeline>();
+        var context = CreatePipelineContext(app);
+
+        if (standalone || suppress || excluded)
+        {
+            await pipeline.ExecuteAsync(context);
+        }
+        else
+        {
+            var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => pipeline.ExecuteAsync(context));
+            Assert.Contains("output: \"standalone\"", exception.Message);
+        }
     }
+
+    private static PipelineContext CreatePipelineContext(DistributedApplication app) => new(
+        app.Services.GetRequiredService<DistributedApplicationModel>(),
+        app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
+        app.Services,
+        app.Services.GetRequiredService<ILogger<AddViteAppTests>>(),
+        TestContext.Current.CancellationToken);
 
     private static async Task<string> GenerateViteWrapperAsync(DistributedApplication app)
     {

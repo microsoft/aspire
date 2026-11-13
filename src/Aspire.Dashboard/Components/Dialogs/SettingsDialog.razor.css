@@ -1,0 +1,139 @@
+.input-container {
+	width: 100%;
+}
+
+.setting-row {
+	display: grid;
+	grid-template-columns: 132px minmax(0, 1fr);
+	align-items: center;
+	gap: var(--aspire-space-3);
+}
+
+.setting-row .setting-title {
+	margin-bottom: 0;
+}
+
+.settings-groups {
+	display: flex;
+	flex-direction: column;
+}
+
+.settings-group {
+	display: grid;
+	gap: var(--aspire-space-2);
+	padding: 2px 0 12px;
+	border-bottom: 1px solid var(--colorNeutralStroke3);
+}
+
+.settings-group + .settings-group {
+	padding-top: 12px;
+}
+
+.settings-group-last {
+	border-bottom: 0;
+}
+
+.settings-group-title {
+	margin: 0;
+	color: var(--colorNeutralForeground2);
+	font-size: var(--aspire-font-size-caption);
+	font-weight: var(--aspire-font-weight-semibold);
+	letter-spacing: .06em;
+	line-height: 16px;
+	text-transform: uppercase;
+}
+
+.settings-dialog-footer {
+	align-items: flex-end;
+	justify-content: space-between;
+	width: 100%;
+}
+
+.settings-version {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	color: var(--colorNeutralForeground2);
+	font-size: var(--aspire-font-size-caption);
+	line-height: 16px;
+	text-align: start;
+}
+
+.input-container > ::deep fluent-field {
+	display: grid;
+	grid-template-rows: auto auto 0 !important;
+	margin: 0 !important;
+	row-gap: 0 !important;
+}
+
+.input-container > ::deep fluent-field::part(message),
+::deep fluent-radio-group > fluent-field::part(message) {
+	display: none;
+}
+
+.input-container > ::deep fluent-field > label[slot="label"],
+.setting-title {
+	line-height: 20px;
+}
+
+.input-container > ::deep fluent-field > label[slot="label"] {
+	margin-bottom: 4px;
+}
+
+::deep fluent-radio-group {
+	gap: 0;
+	margin: 0;
+}
+
+::deep fluent-radio-group > fluent-field {
+	margin: 4px 0 !important;
+}
+
+::deep fluent-radio-group > fluent-field > label[slot="label"] {
+	color: var(--colorNeutralForeground1);
+	font-size: var(--aspire-font-size-body);
+	font-weight: var(--aspire-font-weight-regular);
+	line-height: var(--lineHeightBase300);
+}
+
+.input-container > ::deep fluent-field.language-select {
+	min-width: 235px;
+	margin-bottom: 2px !important;
+}
+
+::deep .language-select fluent-dropdown {
+	width: 100%;
+	min-width: 235px;
+}
+
+.setting-subtext {
+	color: var(--foreground-settings-text);
+	font-size: var(--aspire-font-size-secondary);
+	line-height: 20px;
+	margin: 0;
+}
+
+.setting-title {
+	display: inline-block;
+	margin-bottom: 4px;
+}
+
+::deep .setting-title + div fluent-button,
+::deep .setting-title + div fluent-button::part(control) {
+	--colorNeutralBackground1: var(--aspire-page-background);
+}
+
+::deep .setting-title + div fluent-button > svg[slot="start"] {
+	margin-inline-end: 11px;
+}
+
+@media (max-width: 600px) {
+	.setting-row {
+		grid-template-columns: minmax(0, 1fr);
+		gap: var(--aspire-space-1);
+	}
+
+	.setting-row .setting-title {
+		margin-bottom: 4px;
+	}
+}
