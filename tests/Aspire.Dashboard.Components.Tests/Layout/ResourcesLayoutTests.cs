@@ -2786,6 +2786,46 @@ public class ResourcesLayoutTests : DashboardTestContext
         });
     }
 
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    public async Task EmptyPane_ShowsMessageAfterAllResources(bool appHostEnabled, bool hasResources)
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: appHostEnabled,
+            initialResources: hasResources ? [ModelTestHelpers.CreateResource("api")] : [],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        if (!appHostEnabled && hasResources)
+        {
+            await AddTelemetryAsync("api");
+        }
+        Services.GetRequiredService<NavigationManager>().NavigateTo(appHostEnabled
+            ? DashboardUrls.ResourceListUrl()
+            : DashboardUrls.StructuredLogsUrl());
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() =>
+        {
+            Assert.True(cut.Instance.IsLoaded);
+            Assert.Equal(hasResources ? 2 : 1, cut.FindAll(".resource-row").Count);
+        });
+
+        if (hasResources)
+        {
+            await cut.FindComponent<FluentTextInput>().InvokeAsync(() =>
+                cut.FindComponent<FluentTextInput>().Instance.ValueChanged.InvokeAsync("no-match"));
+        }
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Single(cut.FindAll(".resource-row"));
+            var message = Assert.Single(cut.FindAll(".resource-pane-message"));
+            Assert.Equal(appHostEnabled ? "No resources found" : "No telemetry sources", message.TextContent.Trim());
+            Assert.Equal(cut.Find(".resource-row-all"), message.PreviousElementSibling);
+        });
+    }
+
     [Fact]
     public async Task Standalone_SelectingResourcesPreservesSelectionInPageUrls()
     {
