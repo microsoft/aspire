@@ -2545,6 +2545,15 @@
     gap: 0;
 }
 
+/* The "All" row keeps its name and counts on one line in every density. This must match the specificity of the
+   two-row grid above and come after it. */
+.resources-layout:not(.pane-full-canvas) .resource-row-all .resource-row-text {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: var(--aspire-space-2);
+}
+
 .resources-layout:not(.pane-full-canvas) .resource-row-title {
     min-width: 0;
     height: var(--resource-row-line-height);
