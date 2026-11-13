@@ -33,6 +33,13 @@
         Loc="@Loc"/>
 </PageTitle>
 
+@if (ViewportInformation.IsDesktop && ResourcesLayout is not null)
+{
+    <StableSectionContent SectionName="@Aspire.Dashboard.Components.Layout.ResourcesLayout.FooterStatusSectionName">
+        @GetFooter()
+    </StableSectionContent>
+}
+
 @{
     // Inside the resources layout on desktop, the filter toolbar shares the tabs row instead of taking its own row.
     var toolbarInTabsRow = ViewportInformation.IsDesktop && ResourcesLayout is not null;
@@ -184,17 +191,24 @@
             </div>
         </MainSection>
         <FooterSection>
-            @if (PauseText is not null)
+            @if (!ViewportInformation.IsDesktop || ResourcesLayout is null)
             {
-                <div class="items-footer">
-                    <PauseWarning PauseText="@PauseText" />
-                </div>
+                @GetFooter()
             }
         </FooterSection>
     </AspirePageContentLayout>
 </div>
 
 @code {
+    private RenderFragment GetFooter() => @<text>
+        @if (PauseText is not null)
+        {
+            <div class="items-footer">
+                <PauseWarning PauseText="@PauseText" />
+            </div>
+        }
+    </text>;
+
     private RenderFragment RenderSections(List<IGrouping<string, OtlpInstrumentSummary>> sections, bool showMeterName) => __builder =>
     {
         // Rendering thousands of cards, each with a live sparkline, makes the page unresponsive. Sections share one

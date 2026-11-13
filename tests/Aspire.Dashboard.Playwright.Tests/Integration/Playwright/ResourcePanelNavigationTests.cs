@@ -30,7 +30,7 @@ public sealed class ResourcePanelNavigationTests(ResourcePanelNavigationTests.Na
     [InlineData(1024, 768)]
     [InlineData(1440, 900)]
     [OuterloopTest("Resource-intensive Playwright browser test")]
-    public async Task ResourceNavigation_CloseOrDropdownReturnsToListAndSelectAllReopensContent(int width, int height)
+    public async Task ResourceNavigation_HomeOrDropdownReturnsToListAndSelectAllReopensContent(int width, int height)
     {
         await RunTestAsync(async page =>
         {
@@ -39,13 +39,11 @@ public sealed class ResourcePanelNavigationTests(ResourcePanelNavigationTests.Na
             await page.GotoAsync("/resources/tag-a");
             var pane = page.Locator(".resource-pane");
             var content = page.Locator(".resource-content");
-            var close = page.Locator(".detail-page-close");
             var picker = page.Locator(".resource-picker");
             var row = pane.Locator("[data-resource-name='tag-b'] .resource-row-link");
 
             if (width <= 768)
             {
-                await Assertions.Expect(close).ToHaveCountAsync(0);
                 await Assertions.Expect(picker).ToBeVisibleAsync();
                 await picker.ClickAsync();
                 await Assertions.Expect(row).ToBeVisibleAsync();
@@ -58,10 +56,8 @@ public sealed class ResourcePanelNavigationTests(ResourcePanelNavigationTests.Na
             }
             else
             {
-                await Assertions.Expect(close).ToBeVisibleAsync();
                 await Assertions.Expect(picker).ToHaveCountAsync(0);
-                await close.ClickAsync();
-                await Assertions.Expect(page.Locator(".pane-full-canvas")).ToBeVisibleAsync();
+                await ResourcePaneNavigation.GoHomeAsync(page);
                 await Assertions.Expect(content).Not.ToBeVisibleAsync();
             }
 
@@ -77,13 +73,12 @@ public sealed class ResourcePanelNavigationTests(ResourcePanelNavigationTests.Na
             }
             else
             {
-                await close.ClickAsync();
+                await ResourcePaneNavigation.GoHomeAsync(page);
             }
             await pane.Locator(".resource-row-all .resource-row-link").ClickAsync();
             await Assertions.Expect(page).ToHaveURLAsync(new System.Text.RegularExpressions.Regex("/resources$"));
             await Assertions.Expect(content).ToBeVisibleAsync();
             await Assertions.Expect(page.Locator(".pane-full-canvas,.drawer-open")).ToHaveCountAsync(0);
-            await Assertions.Expect(close).ToHaveCountAsync(width <= 768 ? 0 : 1);
             await Assertions.Expect(page.Locator("#blazor-error-ui")).Not.ToBeVisibleAsync();
         });
     }
@@ -121,8 +116,7 @@ public sealed class ResourcePanelNavigationTests(ResourcePanelNavigationTests.Na
         });
     }
 
-    // The full resource list lives on the Overview tab, so the data tabs have no page-level close button to open it.
-    // Their own back links and the tabs cover navigation there.
+    // The data tabs open their content beside the docked list, at their own URLs, without the home table.
     [Theory]
     [InlineData("/traces?type=server")]
     [InlineData("/structuredlogs?logLevel=error")]
@@ -130,7 +124,7 @@ public sealed class ResourcePanelNavigationTests(ResourcePanelNavigationTests.Na
     [InlineData("/traces/detail/missing?resource=tag-a&type=server")]
     [InlineData("/metrics/resource/tag-a/meter/Test")]
     [OuterloopTest("Resource-intensive Playwright browser test")]
-    public async Task DataTabs_HaveNoPageCloseButton(string url)
+    public async Task DataTabs_OpenTheirContentBesideTheList(string url)
     {
         await RunTestAsync(async page =>
         {
@@ -138,7 +132,6 @@ public sealed class ResourcePanelNavigationTests(ResourcePanelNavigationTests.Na
             await page.GotoAsync(url);
             await Assertions.Expect(page.Locator(".resources-layout")).ToHaveAttributeAsync("data-pane-interactions-ready", "true");
             await Assertions.Expect(page.Locator(".resource-content")).ToBeVisibleAsync();
-            await Assertions.Expect(page.Locator(".detail-page-close")).ToHaveCountAsync(0);
             await Assertions.Expect(page.Locator(".pane-full-canvas")).ToHaveCountAsync(0);
             await Assertions.Expect(page.Locator("#blazor-error-ui")).Not.ToBeVisibleAsync();
         });

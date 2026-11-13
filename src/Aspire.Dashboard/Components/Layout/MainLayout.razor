@@ -7,22 +7,42 @@
 @inject IStringLocalizer<TerminalStrings> TerminalLoc
 @inherits LayoutComponentBase
 
-<div class="layout @(!RunSelection.SelectedRun.IsCurrent ? "historical-run" : null)" style="@(_isNavMenuOpen ? "overflow: hidden;" : string.Empty)">
+<div class="layout @(!RunSelection.SelectedRun.IsCurrent ? "historical-run" : null)" style="@GetLayoutStyle()">
     @if (ViewportInformation.IsDesktop)
     {
-        @* Full-width top header with the brand lockup (logo + app name) and app-wide actions. The dashboard's main
-           views are switched from the icon rail below the logo. *@
+        @* Top header with the brand lockup (logo + app name), the tabs of the current page and app-wide actions.
+           The brand is the top of the resource list's column and is exactly as wide as the docked list, so the tabs
+           start where the page they switch starts (see MainLayout.razor.css). *@
         <header>
-            <div class="brand-logo-container">
-                <a href="/" class="logo" @onclick="GoToAllResourcesAsync" @onclick:preventDefault="true"
-                              data-tooltip="@Loc[nameof(Layout.MainLayoutAspire)]"
-                              aria-label="@Loc[nameof(Layout.MainLayoutAspire)]">
-                    <AspireLogo />
-                </a>
+            <div class="header-brand">
+                @* The brand is the home button: it opens the table of every resource. The house says so, and is filled
+                   in while home is showing. The button is the whole head of the list's column, with the house at
+                   its far end (see MainLayout.razor.css). *@
+                <div class="brand-home @(IsHome ? "current" : null)">
+                    <div class="brand-logo-container">
+                        <a href="/" class="logo" @onclick="GoToAllResourcesAsync" @onclick:preventDefault="true"
+                                      data-tooltip="@Loc[nameof(Layout.MainLayoutAspire)]"
+                                      aria-label="@Loc[nameof(Layout.MainLayoutAspire)]">
+                            <AspireLogo />
+                        </a>
+                    </div>
+                    <a href="/" class="application-name" data-tooltip="@DashboardClient.ApplicationName" data-tooltip-positioning="below"
+                       aria-current="@(IsHome ? "page" : null)" @onclick="GoToAllResourcesAsync" @onclick:preventDefault="true">
+                        @* The link's tooltip gives the full name when it's truncated, for the pointer and for keyboard
+                           focus. It's below the link: the link can span the whole column, and a tooltip after it would
+                           cover the first tab. *@
+                        <span class="application-name-text"><ApplicationName/></span>
+                        @if (IsHome)
+                        {
+                            <FluentIcon Class="application-home-icon" Value="@(new Icons.Filled.Size16.Home())" Width="16px" Color="Color.Custom" CustomColor="currentColor" aria-hidden="true" />
+                        }
+                        else
+                        {
+                            <FluentIcon Class="application-home-icon" Value="@(new Icons.Regular.Size16.Home())" Width="16px" Color="Color.Custom" CustomColor="currentColor" aria-hidden="true" />
+                        }
+                    </a>
+                </div>
             </div>
-            <a href="/" class="application-name" data-tooltip="@DashboardClient.ApplicationName" data-tooltip-positioning="after" @onclick="GoToAllResourcesAsync" @onclick:preventDefault="true">
-                <ApplicationName/>
-            </a>
             <div class="header-context">
                 <SectionOutlet SectionName="@HeaderContextSectionName" />
             </div>
@@ -134,8 +154,10 @@
             @if (!_isSwitchingRuns)
             {
                 var selectedRun = RunSelection.SelectedRun;
-                <CascadingValue @key="selectedRun.RunId" Name="DashboardRunId" Value="selectedRun.RunId" IsFixed="true">
-                    @Body
+                <CascadingValue Value="this" IsFixed="true">
+                    <CascadingValue @key="selectedRun.RunId" Name="DashboardRunId" Value="selectedRun.RunId" IsFixed="true">
+                        @Body
+                    </CascadingValue>
                 </CascadingValue>
             }
         </main>

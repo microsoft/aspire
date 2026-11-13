@@ -53,13 +53,6 @@ public class ResourcesLayoutTests : DashboardTestContext
             : DashboardUrls.StructuredLogsUrl(selected ? "api" : null));
         var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
-        if (appHostEnabled && !selected)
-        {
-            // The dashboard opens on the full-page list. "All resources" opens their overview next to the collapsed pane.
-            Assert.True(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
-            await cut.InvokeAsync(() => cut.Find(".resource-row-all .resource-row-link").Click());
-        }
-
         var picker = cut.Find("#resourcePanePickerButton");
         Assert.Equal(selected ? "api" : appHostEnabled ? "All resources" : "All sources", picker.TextContent.Trim());
         Assert.Equal("dialog", picker.GetAttribute("aria-haspopup"));
@@ -346,6 +339,8 @@ public class ResourcesLayoutTests : DashboardTestContext
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
             resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        // The docked list beside the overview of all resources. The default URL, "/", is the full-page table.
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ResourceListUrl());
         var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.Single(JSInterop.Invocations["registerTabOverflow"]));
 
@@ -375,6 +370,8 @@ public class ResourcesLayoutTests : DashboardTestContext
         ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
             initialResources: [resource, ModelTestHelpers.CreateResource("empty")],
             resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        // The docked list beside the overview of all resources. The default URL, "/", is the full-page table.
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ResourceListUrl());
         var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
         Assert.Empty(cut.FindAll(".resource-row-source"));
@@ -407,6 +404,8 @@ public class ResourcesLayoutTests : DashboardTestContext
             resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
         var clock = Assert.IsType<TestTimeProvider>(Services.GetRequiredService<BrowserTimeProvider>());
         clock.UtcNow = new DateTimeOffset(stopped).AddMinutes(1);
+        // The docked list beside the overview of all resources. The default URL, "/", is the full-page table.
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ResourceListUrl());
         var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
         await cut.InvokeAsync(() => Services.GetRequiredService<DashboardViewPreferences>().SetDensityAsync(ResourceListDensity.Comfortable));
@@ -497,6 +496,8 @@ public class ResourcesLayoutTests : DashboardTestContext
             resourceChannelProvider: () => channel));
         var clock = Assert.IsType<TestTimeProvider>(Services.GetRequiredService<BrowserTimeProvider>());
         clock.UtcNow = new DateTimeOffset(api.StartTimeStamp!.Value).AddMinutes(10);
+        // The docked list beside the overview of all resources. The default URL, "/", is the full-page table.
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ResourceListUrl());
         var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
         await cut.InvokeAsync(() => Services.GetRequiredService<DashboardViewPreferences>().SetDensityAsync(density));
@@ -861,6 +862,8 @@ public class ResourcesLayoutTests : DashboardTestContext
             ], resourceChannelProvider: () => channel));
         var storage = Assert.IsType<TestLocalStorage>(Services.GetRequiredService<ILocalStorage>());
         storage.OnGetUnprotectedAsync = key => key == BrowserStorageKeys.ResourcePaneGrouping ? (true, "Tags") : (false, null);
+        // The docked list beside the overview of all resources. The default URL, "/", is the full-page table.
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ResourceListUrl());
         Render<FluentToastProvider>();
         var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
 
@@ -891,6 +894,8 @@ public class ResourcesLayoutTests : DashboardTestContext
             ], resourceChannelProvider: () => channel));
         var storage = Assert.IsType<TestLocalStorage>(Services.GetRequiredService<ILocalStorage>());
         storage.OnGetUnprotectedAsync = key => key == BrowserStorageKeys.ResourcePaneGrouping ? (true, grouping) : (false, null);
+        // The docked list beside the overview of all resources. The default URL, "/", is the full-page table.
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ResourceListUrl());
         Render<FluentToastProvider>();
         var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
 
@@ -937,6 +942,8 @@ public class ResourcesLayoutTests : DashboardTestContext
         tags.AddTag("api", "Alpha");
         tags.AddTag("cache", "Beta");
         tags.AddTag("api", "Untagged");
+        // The docked list beside the overview of all resources. The default URL, "/", is the full-page table.
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ResourceListUrl());
         Render<FluentToastProvider>();
         var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
@@ -1012,6 +1019,8 @@ public class ResourcesLayoutTests : DashboardTestContext
             ], resourceChannelProvider: () => channel));
         var storage = Assert.IsType<TestLocalStorage>(Services.GetRequiredService<ILocalStorage>());
         storage.OnGetUnprotectedAsync = key => key == BrowserStorageKeys.ResourcePaneGrouping ? (true, "State") : (false, null);
+        // The docked list beside the overview of all resources. The default URL, "/", is the full-page table.
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ResourceListUrl());
         Render<FluentToastProvider>();
         var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.Equal(2, cut.FindAll("[data-resource-group-drag-handle]").Count));
@@ -1052,6 +1061,8 @@ public class ResourcesLayoutTests : DashboardTestContext
             })], resourceChannelProvider: () => channel));
         var storage = Assert.IsType<TestLocalStorage>(Services.GetRequiredService<ILocalStorage>());
         storage.OnGetUnprotectedAsync = key => key == BrowserStorageKeys.ResourcePaneCollapsed ? (true, collapsed) : (false, null);
+        // The docked list beside the overview of all resources. The default URL, "/", is the full-page table.
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ResourceListUrl());
         var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
 
@@ -1119,6 +1130,8 @@ public class ResourcesLayoutTests : DashboardTestContext
         var stored = new Dictionary<string, object?>();
         storage.OnSetUnprotectedAsync = (key, value) => stored[key] = value;
 
+        // The docked list beside the overview of all resources. The default URL, "/", is the full-page table.
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ResourceListUrl());
         var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
 
@@ -1151,6 +1164,8 @@ public class ResourcesLayoutTests : DashboardTestContext
             ],
             resourceChannelProvider: () => channel));
 
+        // The docked list beside the overview of all resources. The default URL, "/", is the full-page table.
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ResourceListUrl());
         var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
         // In the two-line densities a parameter row has no type: its kind is clear from its icon and section.
@@ -1190,6 +1205,8 @@ public class ResourcesLayoutTests : DashboardTestContext
             ], resourceChannelProvider: () => channel));
         var store = Services.GetRequiredService<ResourceOrderStore>();
         store.EnsureResources(["worker_0", "root_0", "b_0", "a_0"]);
+        // The docked list beside the overview of all resources. The default URL, "/", is the full-page table.
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ResourceListUrl());
         var toasts = Render<FluentToastProvider>();
         var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.Equal(["worker", "root", "b", "a"], GetNames()));
@@ -1240,6 +1257,8 @@ public class ResourcesLayoutTests : DashboardTestContext
                     [KnownProperties.Container.Lifetime] = new(KnownProperties.Container.Lifetime, Value.ForString("Persistent"), false, null, 0, null, false)
                 })
             ], resourceChannelProvider: () => channel));
+        // The docked list beside the overview of all resources. The default URL, "/", is the full-page table.
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ResourceListUrl());
         var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
 
         // The list starts compact.
@@ -1516,7 +1535,7 @@ public class ResourcesLayoutTests : DashboardTestContext
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task RowActions_PromoteAvailableLifecycleCommandsThroughExistingExecutor(bool readOnly)
+    public async Task RowActions_UseOnlyHighlightedCommandsInFullPageGrid(bool readOnly)
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         var executed = new List<string>();
@@ -1535,19 +1554,126 @@ public class ResourcesLayoutTests : DashboardTestContext
                 executed.Add(command.Name);
                 return Task.FromResult(new ResourceCommandResponseViewModel { Kind = ResourceCommandResponseKind.Succeeded });
             }));
+        // The docked list beside the overview of all resources. The default URL, "/", is the full-page table.
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ResourceListUrl());
         Render<FluentToastProvider>();
         var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".resource-row-highlighted")));
         Assert.Equal("stop api", cut.Find(".resource-row-highlighted").GetAttribute("aria-label"));
         ResourceSetupHelpers.ToggleResourceList(cut);
-        cut.WaitForAssertion(() => Assert.Equal(2, cut.FindAll(".resource-row-highlighted").Count));
+        cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".pane-full-canvas .resource-row-highlighted")));
         var buttons = cut.FindAll(".resource-row-highlighted");
-        Assert.Equal(["stop api", "restart api"], buttons.Select(b => b.GetAttribute("aria-label")));
+        Assert.Equal(["stop api"], buttons.Select(b => b.GetAttribute("aria-label")));
         Assert.All(buttons, b => Assert.Equal(readOnly, b.HasAttribute("disabled")));
         if (!readOnly)
         {
-            await cut.InvokeAsync(() => buttons[1].Click());
-            cut.WaitForAssertion(() => Assert.Equal(["restart"], executed));
+            await cut.InvokeAsync(() => buttons[0].Click());
+            cut.WaitForAssertion(() => Assert.Equal(["stop"], executed));
+        }
+    }
+
+    [Fact]
+    public void FullPageRowActions_ShowTwoVisibleHighlightsAndMenu()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        static CommandViewModel Command(string name, CommandViewModelState state, bool highlighted) =>
+            new(name, state, name, "", confirmationMessage: "", argumentInputs: [], isHighlighted: highlighted, iconName: "", iconVariant: IconVariant.Regular);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources:
+            [
+                ModelTestHelpers.CreateResource("api", state: KnownResourceState.Running, commands:
+                [
+                    Command(CommandViewModel.StopCommand, CommandViewModelState.Enabled, false),
+                    Command("hidden", CommandViewModelState.Hidden, true),
+                    Command("deploy", CommandViewModelState.Enabled, true),
+                    Command("inspect", CommandViewModelState.Disabled, true),
+                    Command("extra", CommandViewModelState.Enabled, true)
+                ]),
+                TerminalSetupHelpers.CreateTerminalResource("shell")
+            ], resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        // The docked list beside the overview of all resources. The default URL, "/", is the full-page table.
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ResourceListUrl());
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
+        ResourceSetupHelpers.ToggleResourceList(cut);
+        cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".pane-full-canvas")));
+
+        Assert.Collection(cut.FindAll("[data-resource-name='api'] .resource-row-actions fluent-button"),
+            button =>
+            {
+                Assert.Equal("deploy api", button.GetAttribute("aria-label"));
+                Assert.False(button.HasAttribute("disabled"));
+            },
+            button =>
+            {
+                Assert.Equal("inspect api", button.GetAttribute("aria-label"));
+                Assert.True(button.HasAttribute("disabled"));
+            },
+            button => Assert.Equal("Actions for api", button.GetAttribute("aria-label")));
+        Assert.Equal(["Actions for shell"],
+            cut.FindAll("[data-resource-name='shell'] .resource-row-actions fluent-button").Select(button => button.GetAttribute("aria-label")));
+        var terminalMenu = cut.FindComponents<AspireMenuButton>().Single(button => button.Instance.Title == "Actions for shell");
+        Assert.Contains(terminalMenu.Instance.ItemsProvider(), item => item.Text == "Terminal");
+    }
+
+    [Theory]
+    [InlineData(CommandViewModelState.Enabled, false, false, ResourceListDensity.Comfortable)]
+    [InlineData(CommandViewModelState.Enabled, true, false, ResourceListDensity.Compact)]
+    [InlineData(CommandViewModelState.Disabled, true, false, ResourceListDensity.Comfortable)]
+    [InlineData(CommandViewModelState.Enabled, true, true, ResourceListDensity.Compact)]
+    [InlineData(CommandViewModelState.Hidden, true, false, ResourceListDensity.Comfortable)]
+    [InlineData(null, false, false, ResourceListDensity.Compact)]
+    public async Task FullPageParameterActions_ShowOnlySetCommandWhenAvailable(
+        CommandViewModelState? setState, bool highlighted, bool readOnly, ResourceListDensity density)
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        static CommandViewModel Command(string name, string displayName, CommandViewModelState state, bool highlighted) =>
+            new(name, state, displayName, "", confirmationMessage: "", argumentInputs: [], isHighlighted: highlighted, iconName: "Key", iconVariant: IconVariant.Regular);
+        var commands = new List<CommandViewModel>
+        {
+            Command("custom", "Custom", CommandViewModelState.Enabled, true),
+            Command(CommandViewModel.DeleteParameterCommand, "Delete parameter", CommandViewModelState.Enabled, true)
+        };
+        if (setState is { } state)
+        {
+            commands.Add(Command(CommandViewModel.SetParameterCommand, "Set parameter", state, highlighted));
+        }
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true, isReadOnly: readOnly,
+            initialResources:
+            [
+                ModelTestHelpers.CreateResource("setting-id", displayName: "setting", resourceType: KnownResourceTypes.Parameter, commands: [.. commands]),
+                ModelTestHelpers.CreateResource("api")
+            ],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        // The docked list beside the overview of all resources. The default URL, "/", is the full-page table.
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ResourceListUrl());
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
+        await cut.InvokeAsync(() => Services.GetRequiredService<DashboardViewPreferences>().SetDensityAsync(density));
+        Assert.Equal(["Custom setting", "Delete parameter setting", "Actions for setting"],
+            cut.FindAll("[data-resource-name='setting-id'] .resource-row-actions fluent-button").Select(button => button.GetAttribute("aria-label")));
+        ResourceSetupHelpers.ToggleResourceList(cut);
+        cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".pane-full-canvas")));
+
+        var actions = cut.FindAll("[data-resource-name='setting-id'] .resource-row-actions fluent-button");
+        // The row keeps its menu, which holds the other commands, such as Delete parameter.
+        var menu = cut.FindComponents<AspireMenuButton>().Single(button => button.Instance.Title == "Actions for setting");
+        Assert.Contains(menu.Instance.ItemsProvider(), item => item.Text == "Delete parameter");
+        if (setState is null or CommandViewModelState.Hidden)
+        {
+            Assert.Equal(["Actions for setting"], actions.Select(button => button.GetAttribute("aria-label")));
+        }
+        else
+        {
+            Assert.Equal(["Set parameter setting", "Actions for setting"], actions.Select(button => button.GetAttribute("aria-label")));
+            var setButton = actions[0];
+            Assert.Equal(readOnly || setState == CommandViewModelState.Disabled, setButton.HasAttribute("disabled"));
+            if (!setButton.HasAttribute("disabled"))
+            {
+                await cut.InvokeAsync(() => setButton.Click());
+                var navigation = Services.GetRequiredService<NavigationManager>();
+                Assert.Equal(navigation.ToAbsoluteUri(DashboardUrls.ResourceOverviewUrl("setting")).AbsoluteUri, navigation.Uri);
+            }
         }
     }
 
@@ -1567,6 +1693,8 @@ public class ResourcesLayoutTests : DashboardTestContext
                 Command("deploy", CommandViewModelState.Enabled),
                 Command("inspect", CommandViewModelState.Disabled)
             ])], resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        // The docked list beside the overview of all resources. The default URL, "/", is the full-page table.
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ResourceListUrl());
         var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.Equal(2, cut.FindAll(".resource-row-highlighted").Count));
         Assert.Collection(cut.FindAll(".resource-row-highlighted"),
@@ -1605,6 +1733,8 @@ public class ResourcesLayoutTests : DashboardTestContext
             resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
         Assert.IsType<TestLocalStorage>(Services.GetRequiredService<ILocalStorage>()).OnGetUnprotectedAsync =
             key => key == BrowserStorageKeys.ResourcePaneGrouping ? (true, "Tags") : (false, null);
+        // The docked list beside the overview of all resources. The default URL, "/", is the full-page table.
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ResourceListUrl());
         var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.Equal(2, cut.FindAll("[data-resource-name='catalogdb']").Count));
         foreach (var membership in cut.FindAll("[data-resource-name='catalogdb']"))
@@ -1641,6 +1771,8 @@ public class ResourcesLayoutTests : DashboardTestContext
                 Child("nested", "first"), Child("last", "parent")
             ],
             resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        // The docked list beside the overview of all resources. The default URL, "/", is the full-page table.
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ResourceListUrl());
         var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
         var first = cut.Find("[data-resource-name='first']");
@@ -1730,6 +1862,8 @@ public class ResourcesLayoutTests : DashboardTestContext
         ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true, isReadOnly: true,
             initialResources: [TerminalSetupHelpers.CreateTerminalResource("shell")],
             resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        // The docked list beside the overview of all resources. The default URL, "/", is the full-page table.
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ResourceListUrl());
         var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
 
@@ -1787,6 +1921,8 @@ public class ResourcesLayoutTests : DashboardTestContext
                 ModelTestHelpers.CreateResource("cache", state: KnownResourceState.FailedToStart)
             ],
             resourceChannelProvider: () => channel));
+        // The docked list beside the overview of all resources. The default URL, "/", is the full-page table.
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ResourceListUrl());
         var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.Equal(3, cut.FindAll("[data-resource-name]").Count));
 
@@ -1818,6 +1954,8 @@ public class ResourcesLayoutTests : DashboardTestContext
         tags.AddTag("worker", "Backend");
         tags.AddTag("worker", "Shared");
 
+        // The docked list beside the overview of all resources. The default URL, "/", is the full-page table.
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ResourceListUrl());
         var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.Equal(3, cut.FindAll("[data-resource-name]").Count));
 
@@ -1862,6 +2000,8 @@ public class ResourcesLayoutTests : DashboardTestContext
         tags.AddTag("api", "API");
         tags.AddTag("worker", "Backend");
 
+        // The docked list beside the overview of all resources. The default URL, "/", is the full-page table.
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ResourceListUrl());
         var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.Equal(["Tags:API", "Tags:Backend", "Tags:"],
             cut.FindAll(".resource-tag-group").Select(g => g.GetAttribute("data-resource-group-key"))));
@@ -1888,6 +2028,8 @@ public class ResourcesLayoutTests : DashboardTestContext
                 ModelTestHelpers.CreateResource("cache", state: KnownResourceState.Exited)
             ],
             resourceChannelProvider: () => channel));
+        // The docked list beside the overview of all resources. The default URL, "/", is the full-page table.
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ResourceListUrl());
         var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.Equal(2, cut.FindAll("[data-resource-name]").Count));
 
@@ -1917,6 +2059,8 @@ public class ResourcesLayoutTests : DashboardTestContext
             resourceChannelProvider: () => channel));
         await AddTelemetryAsync("api");
         await AddTelemetryAsync("browser");
+        // The docked list beside the overview of all resources. The default URL, "/", is the full-page table.
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ResourceListUrl());
         var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.Equal(["api", "parameter", "browser"], GetRowNames()));
         Assert.Equal(["api", "browser"], cut.Instance.GetSelectionTelemetryKeys(null)!.Select(key => key.Name));
@@ -1949,7 +2093,7 @@ public class ResourcesLayoutTests : DashboardTestContext
     }
 
     [Fact]
-    public async Task Landing_WithoutRememberedSelection_ShowsAllResourcesInTheFullCanvasListWithNoTabSelected()
+    public async Task Home_ShowsAllResourcesInTheFullCanvasListWithNoTabSelected()
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
@@ -1957,15 +2101,15 @@ public class ResourcesLayoutTests : DashboardTestContext
             initialResources: [ModelTestHelpers.CreateResource("api"), ModelTestHelpers.CreateResource("cache")],
             resourceChannelProvider: () => channel));
         var navigationManager = Services.GetRequiredService<NavigationManager>();
-        navigationManager.NavigateTo(DashboardUrls.ResourceListUrl());
+        navigationManager.NavigateTo(DashboardUrls.HomeUrl());
 
         var header = Render<SectionOutlet>(p => p.Add(p => p.SectionName, MainLayout.HeaderContextSectionName));
         var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
 
-        // The dashboard opens on the list of all resources, filling the page, with no view open yet.
+        // The dashboard opens on its home page: the list of all resources, filling the page, with no view open yet.
         cut.WaitForAssertion(() => Assert.True(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas")));
         Assert.Equal(2, cut.FindAll("[data-resource-name]").Count);
-        Assert.Equal("resources", navigationManager.ToBaseRelativePath(navigationManager.Uri));
+        Assert.Equal(string.Empty, navigationManager.ToBaseRelativePath(navigationManager.Uri));
         var allRow = cut.Find(".resource-row-all");
         Assert.Equal("All resources", allRow.QuerySelector(".resource-row-name")!.TextContent.Trim());
         Assert.True(allRow.ClassList.Contains("selected"));
@@ -1977,13 +2121,13 @@ public class ResourcesLayoutTests : DashboardTestContext
         Assert.Equal(DashboardUrls.ResourceOverviewUrl("api"), cut.Find("[data-resource-name='api'] .resource-row-link").GetAttribute("href"));
 
         // FluentTabs reports a change of the current tab when it syncs with the active tab too, for example right after
-        // the content closes with that tab focused, so such a change doesn't open the content.
+        // arriving on the home page with that tab focused, so such a change doesn't open the content.
         var overview = header.FindComponents<FluentTab>().Single(t => t.Instance.Id == "tab-Overview").Instance;
         await header.InvokeAsync(() => header.FindComponent<FluentTabs>().Instance.ActiveTabChanged.InvokeAsync(overview));
         cut.Render();
         Assert.True(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
 
-        // Clicking it, which the layout's script reports, opens it for all resources although the URL doesn't change.
+        // Clicking it, which the layout's script reports, opens the overview of all resources.
         await cut.InvokeAsync(() => cut.Instance.OpenTabFromFullCanvasAsync("tab-Overview"));
         cut.Render();
         Assert.False(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
@@ -1992,67 +2136,24 @@ public class ResourcesLayoutTests : DashboardTestContext
         Assert.Equal("All resources", cut.Find(".resource-header-title").TextContent.Trim());
     }
 
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public void Landing_ShowsWhatTheBrowserTabLastShowed(bool contentOpen)
-    {
-        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
-        var stored = new Dictionary<string, object?> { [BrowserStorageKeys.ResourceContentOpen] = contentOpen };
-        var writes = new List<(string Key, object? Value)>();
-        var sessionStorage = new TestSessionStorage
-        {
-            OnGetAsync = key => stored.TryGetValue(key, out var value) ? (true, value) : (false, null),
-            OnSetAsync = (key, value) => writes.Add((key, value))
-        };
-        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
-            initialResources: [ModelTestHelpers.CreateResource("api")],
-            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>),
-            configureServices: services => services.AddSingleton<ISessionStorage>(sessionStorage));
-        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ResourceListUrl());
-
-        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
-
-        // The overview of all resources has the dashboard's landing URL, so reloading it shows the full-page list only
-        // when the list was what the browser tab showed. A link such as /graph stores the content as open too.
-        cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
-        cut.WaitForAssertion(() => Assert.Equal(!contentOpen, cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas")));
-        Assert.Equal(ResourceTab.Overview, cut.Instance.CurrentTab);
-        // What was read is already stored, so only the full-page list the dashboard lands on is written.
-        object?[] expectedWrites = contentOpen ? [] : [false];
-        cut.WaitForAssertion(() => Assert.Equal(expectedWrites,
-            writes.Where(write => write.Key == BrowserStorageKeys.ResourceContentOpen).Select(write => write.Value)));
-    }
-
     [Fact]
-    public async Task Landing_RemembersWhetherTheContentIsOpenForTheBrowserTab()
+    public void OverviewUrl_ShowsTheOverviewOfAllResourcesNotTheTable()
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
-        var writes = new List<object?>();
-        var sessionStorage = new TestSessionStorage
-        {
-            OnSetAsync = (key, value) =>
-            {
-                if (key == BrowserStorageKeys.ResourceContentOpen)
-                {
-                    writes.Add(value);
-                }
-            }
-        };
         ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
             initialResources: [ModelTestHelpers.CreateResource("api")],
-            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>),
-            configureServices: services => services.AddSingleton<ISessionStorage>(sessionStorage));
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
         Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ResourceListUrl());
+
         var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
 
-        // Nothing was open in the tab, so the dashboard opens on the full-page list, and remembers it. The content shown
-        // before the landing decided isn't remembered as open.
-        cut.WaitForAssertion(() => Assert.True(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas")));
-        cut.WaitForAssertion(() => Assert.Equal([false], writes));
-
-        await cut.InvokeAsync(() => cut.Instance.OpenTabFromFullCanvasAsync("tab-Overview"));
-        cut.WaitForAssertion(() => Assert.Equal([false, true], writes));
+        // The table has its own URL, "/", so /resources is only the overview: opening or reloading it shows the
+        // overview whatever the browser tab showed before.
+        cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
+        Assert.False(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
+        Assert.False(cut.Find(".resource-content").HasAttribute("inert"));
+        Assert.Equal(ResourceTab.Overview, cut.Instance.CurrentTab);
+        Assert.Equal("All resources", cut.Find(".resource-header-title").TextContent.Trim());
     }
 
     [Theory]
@@ -2220,18 +2321,30 @@ public class ResourcesLayoutTests : DashboardTestContext
     }
 
     [Theory]
-    [InlineData(true, "resources")]
-    [InlineData(false, "structuredlogs")]
-    public void RootUrl_RedirectsToResourcesWithAllResourcesSelected(bool resourceServiceEnabled, string expectedUrl)
+    // The root URL is the home page, the table of every resource, wherever there's a full-page list to show.
+    [InlineData(true, true, "/", "")]
+    // A narrow layout has no full-page list, so it opens on the overview of all resources.
+    [InlineData(true, false, "/", "resources")]
+    // Without a resource service there are no resources to list.
+    [InlineData(false, true, "/", "structuredlogs")]
+    // Links created by older tools.
+    [InlineData(true, true, "/?resource=api", "resources/api")]
+    [InlineData(true, true, "/?view=Graph", "graph")]
+    public void RootUrl_IsHomeUnlessItAsksForAnotherPage(bool resourceServiceEnabled, bool isDesktop, string url, string expectedUrl)
     {
+        var viewport = new ViewportInformation(IsDesktop: isDesktop, IsUltraLowHeight: false, IsUltraLowWidth: false);
         Services.AddSingleton<IDashboardClient>(new TestDashboardClient(isEnabled: resourceServiceEnabled));
+        Services.AddLocalization();
         var navigationManager = Services.GetRequiredService<NavigationManager>();
-        navigationManager.NavigateTo("/");
+        navigationManager.NavigateTo(url);
 
-        Render<Aspire.Dashboard.Components.Pages.Home>();
+        var cut = Render<Aspire.Dashboard.Components.Pages.Home>(p => p.AddCascadingValue(viewport));
 
         Assert.Equal(expectedUrl, navigationManager.ToBaseRelativePath(navigationManager.Uri));
-        Assert.Equal(resourceServiceEnabled ? ResourcesLayout.ResourceListHomeHistoryEntryState : null, navigationManager.HistoryEntryState);
+
+        // The layout renders the page again while a redirect is in flight. It's only asked for once.
+        cut.Render();
+        Assert.Equal(expectedUrl, navigationManager.ToBaseRelativePath(navigationManager.Uri));
     }
 
     [Theory]
@@ -2245,13 +2358,17 @@ public class ResourcesLayoutTests : DashboardTestContext
             initialResources: [ModelTestHelpers.CreateResource("api"), ModelTestHelpers.CreateResource("cache")],
             resourceChannelProvider: () => channel));
         var navigation = Services.GetRequiredService<NavigationManager>();
-        navigation.NavigateTo("/resources", new NavigationOptions { HistoryEntryState = ResourcesLayout.ResourceListHomeHistoryEntryState });
+        navigation.NavigateTo("/resources/api");
 
         var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
 
+        // What the application name does (see MainLayout.GoToAllResourcesAsync).
+        navigation.NavigateTo(DashboardUrls.HomeUrl());
+        cut.Render();
+
         Assert.Equal(expectFullCanvas, cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
-        Assert.Equal("http://localhost/resources", navigation.Uri);
+        Assert.Equal("http://localhost/", navigation.Uri);
     }
 
     [Theory]
@@ -2295,6 +2412,8 @@ public class ResourcesLayoutTests : DashboardTestContext
         var originalApi = ModelTestHelpers.CreateResource("api-first-run", displayName: "api");
         ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
             initialResources: [originalApi, ModelTestHelpers.CreateResource("cache")], resourceChannelProvider: () => channel));
+        // The docked list beside the overview of all resources. The default URL, "/", is the full-page table.
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ResourceListUrl());
         var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.Equal(2, cut.FindAll("[data-resource-drag-handle]").Count));
         Assert.True(await cut.InvokeAsync(() => cut.Instance.ReorderResourceAsync("cache", originalApi.Name, after: false)));
@@ -2328,6 +2447,8 @@ public class ResourcesLayoutTests : DashboardTestContext
                 ModelTestHelpers.CreateResource("api", state: KnownResourceState.Running, resourceType: "Project"),
                 ModelTestHelpers.CreateResource("cache", state: KnownResourceState.Exited)
             ], resourceChannelProvider: () => channel));
+        // The docked list beside the overview of all resources. The default URL, "/", is the full-page table.
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ResourceListUrl());
         Render<FluentToastProvider>();
         var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.Equal(2, cut.FindAll("[data-resource-drag-handle]").Count));
@@ -2377,6 +2498,8 @@ public class ResourcesLayoutTests : DashboardTestContext
             {
                 [KnownProperties.Container.Lifetime] = new(KnownProperties.Container.Lifetime, Value.ForString(lifetime), false, null, 0, null, false)
             })], resourceChannelProvider: () => channel));
+        // The docked list beside the overview of all resources. The default URL, "/", is the full-page table.
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ResourceListUrl());
         var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
 

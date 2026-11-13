@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using System.Text;
 using Aspire.Dashboard.Components.Dialogs;
 using Aspire.Dashboard.Configuration;
@@ -522,20 +523,64 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
         _openPageDialog = await DialogService.ShowPanelAsync<NotificationsDialog>(parameters).ConfigureAwait(true);
     }
 
-    // The logo and the app name open the overview of all resources. Unlike the Resources entry of the rail, they don't
-    // restore the last selected resources, so the stored selection is cleared first. The links keep "/" as their
-    // address, so opening them in a new tab, which has no stored selection, shows the same view.
+    // The logo and the app name open the dashboard's home, the table of every resource. Home has no selection, and
+    // going there is a fresh start, so the stored selection is cleared: the overview doesn't restore it afterwards.
+    // The links keep "/" as their address, so opening them in a new tab shows the same view.
     private async Task GoToAllResourcesAsync()
     {
-        if (DashboardClient.IsEnabled)
-        {
-            await SessionStorage.SetAsync(BrowserStorageKeys.LastSelectedResources, new List<string>());
-            NavigationManager.NavigateTo(DashboardUrls.ResourceListUrl(), new NavigationOptions { HistoryEntryState = ResourcesLayout.ResourceListHomeHistoryEntryState });
-        }
-        else
+        if (!DashboardClient.IsEnabled)
         {
             NavigationManager.NavigateTo(DashboardUrls.HomeUrl());
+            return;
         }
+
+        // The resources layout holds a tab chosen while this navigation is in flight, and opens it once home is
+        // showing (see ResourcesLayout.OnHomeNavigationStarting).
+        HomeNavigationStarting?.Invoke();
+
+        // Navigate before awaiting the storage write, so nothing else, such as that tab, can navigate in between.
+        // Both go to the browser as interop calls, in order, so the selection is cleared before home loads.
+        var clearSelection = SessionStorage.SetAsync(BrowserStorageKeys.LastSelectedResources, new List<string>());
+        NavigationManager.NavigateTo(DashboardUrls.HomeUrl());
+        await clearSelection;
+    }
+
+    /// <summary>
+    /// Raised when the brand starts a navigation to the dashboard's home, before the location changes.
+    /// </summary>
+    internal event Action? HomeNavigationStarting;
+
+    // Whether the dashboard's home, "/", is showing: the table of every resource.
+    private bool IsHome =>
+        NavigationManager.ToBaseRelativePath(NavigationManager.ToAbsoluteUri(NavigationManager.Uri).GetLeftPart(UriPartial.Path)).Trim('/').Length == 0;
+
+    private int? _resourcePaneWidth;
+
+    /// <summary>
+    /// Sets the width the user gave the docked resource list, or <see langword="null"/> for its default width.
+    /// </summary>
+    /// <remarks>
+    /// The list is in <see cref="ResourcesLayout"/>, inside this layout's body, but the header's brand sits on top of
+    /// the list's column and has to be exactly as wide. CSS custom properties only inherit downwards, so the nested
+    /// layout reports the width and it's set on the root element both of them are under.
+    /// </remarks>
+    internal void SetResourcePaneWidth(int? widthPx)
+    {
+        if (_resourcePaneWidth == widthPx)
+        {
+            return;
+        }
+
+        _resourcePaneWidth = widthPx;
+        StateHasChanged();
+    }
+
+    private string GetLayoutStyle()
+    {
+        var overflow = _isNavMenuOpen ? "overflow: hidden;" : string.Empty;
+        return _resourcePaneWidth is { } width && ViewportInformation.IsDesktop
+            ? string.Create(CultureInfo.InvariantCulture, $"{overflow}--resource-pane-expanded-width: {width}px")
+            : overflow;
     }
 
     private async Task LaunchRecordingsAsync()

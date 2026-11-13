@@ -18,17 +18,9 @@ public sealed partial class GraphRedirect : ComponentBase
     [Inject]
     public required NavigationManager NavigationManager { get; init; }
 
-    [Inject]
-    public required ISessionStorage SessionStorage { get; init; }
-
     protected override async Task OnInitializedAsync()
     {
         await ViewPreferences.SetGroupOverviewAsync(GroupOverview.Graph);
-        // The link asks for the graph, so the resources open on their overview rather than on the full-page list the
-        // dashboard otherwise opens on (see ResourcesLayout.TryRedirectLandingAsync). It goes through session storage,
-        // not the navigation's history entry state: this runs as the page loads, before the router intercepts
-        // navigation, so Blazor redirects with a full page load, which drops the history entry state.
-        await SessionStorage.SetAsync(BrowserStorageKeys.ResourceContentOpen, true);
         NavigationManager.NavigateTo(DashboardUrls.ResourceListUrl(), new NavigationOptions { ReplaceHistoryEntry = true });
     }
 }
