@@ -2,12 +2,16 @@
 
 ## Overview
 
-Aspire CLI is distributed via [Homebrew Cask](https://docs.brew.sh/Cask-Cookbook) for macOS (arm64 and x64). Cask PRs are submitted to the upstream [Homebrew/homebrew-cask](https://github.com/Homebrew/homebrew-cask) repository.
+Aspire CLI is distributed via [Homebrew Cask](https://docs.brew.sh/Cask-Cookbook)
+for macOS (arm64 and x64), using the
+[Microsoft tap](https://github.com/microsoft/homebrew-aspire).
+The upstream submission/autobump notes below describe the historical upstream
+path, not release-pipeline-owned publication to the Microsoft tap.
 
 ### Install commands
 
 ```bash
-brew install --cask aspire              # stable
+brew install --cask microsoft/aspire/aspire # stable
 ```
 
 ## Shell completion
@@ -45,12 +49,191 @@ the initial/upstream cask change must include the generation stanza, not just a 
 | `prepare-cask-artifact.sh` | Prepares CI artifacts by generating, validating, and adding dogfood helpers |
 | `validate-cask-artifact.sh` | Runs shared cask syntax, style, audit, and install validation used by GitHub Actions and Azure DevOps |
 | `dogfood.sh` | Installs a generated cask locally, optionally using downloaded native archive artifacts |
+| `publish-cask.py` | Validates, reconciles and proposes stable cask updates; dry run by default |
+| `release_handoff.py` | Preserves the original official source run across manual GitHub release publication |
 
 ### Pipeline templates
 
 | File | Description |
 |---|---|
 | `eng/pipelines/templates/prepare-homebrew-cask.yml` | Generates, styles, validates, audits, and tests the cask |
+| `eng/pipelines/templates/test-homebrew-publisher.yml` | Contained behavioral tests, exact source-artifact download and macOS validation |
+| `eng/pipelines/templates/publish-homebrew.yml` | Homebrew-only continuation of release definition 1600; dry-run or approved draft tap PR |
+
+## Release-pipeline-owned tap publisher
+
+`publish-cask.py` defaults to **dry run**. It reads candidate metadata and tap
+state, skips an existing matching version/PR/in-flight branch with an Azure
+DevOps warning, or fully validates a new candidate before printing its proposed
+diff. It never requests a write credential in dry run. `result.json` reports
+`planned`, `skipped`, `submitted`, `validated` (validation-only),
+`artifact_verified` (source identity only), or `failed`.
+
+```bash
+python3 eng/homebrew/publish-cask.py \
+  --candidate /path/to/aspire.rb --version 13.6.5 \
+  --tap-checkout /path/to/pinned-tap --output-dir /path/to/diagnostics
+```
+
+Validation requires disposable macOS equipment and a clean validator checkout
+at `89a2b248e4c7ab883d072ecb2d10874e04c2d6b1`. It downloads both public stable
+archives, compares the immutable candidate snapshot to the source release-tag
+template with the tap's non-executing Ripper checker, then runs the isolated
+tap validator. Draft and prerelease releases, placeholder hashes, template
+drift and substantive validation failures are not publishable. Full execution
+on one architecture does not establish install/notarization on the other.
+The tap validator runs from its own checkout so released-CLI smoke tests use
+the agent's SDK, not the Aspire source checkout's development `global.json`.
+The publisher passes `--diagnostics-dir` to retain failure evidence in
+`validator-diagnostics/` under its output directory before tap cleanup.
+The tap's `scripts/validate-cask.sh` retains **raw, unredacted** CLI traces
+(`cli-new.log`, `cli-restore.log`) on success and failure, plus complete
+`obj/project.assets.json` files on failure, preserving project-relative paths.
+It creates the diagnostics directory with owner-only permissions; it does not
+copy whole HOME, caches or configuration files. Collection errors are reported
+without replacing the validation failure.
+SDK commands use the installed `dotnet` directly; the publisher does not
+intercept them, retry restore or alter SDK arguments. The contained pipeline
+retains the output directory even on failure.
+
+Publisher subprocesses receive an allowlisted environment, excluding GitHub/
+Azure credentials and ambient MSBuild `Version` inputs. The nonsecret
+`VSTS_PROCESS_LOOKUP_ID` marker is retained for Azure's agent-owned orphan-cleanup
+fallback; this does not prove a particular hosted agent's cleanup behavior.
+Only the tap validator
+receives `MSBUILDDISABLENODEREUSE=1`. This suppresses default reusable MSBuild
+workers; an explicit node-reuse command-line override can supersede it.
+The validator has a 30-minute subprocess limit. On timeout, its isolated POSIX
+process group receives TERM, up to 10 seconds for EXIT-trap asset collection and
+cleanup, then KILL; final leader reaping is bounded to five seconds. Captured
+output and timeout/escalation diagnostics are retained without waiting on
+inherited stdout pipes. A successful leader leaving group members is a failure.
+While a subprocess is owned, main-thread execution temporarily handles SIGTERM
+as cancellation and restores the previous handler after bounded group cleanup.
+Repeated SIGTERM during cleanup cannot bypass that cleanup, and cancellation
+remains a failure. SIGINT retains Python's ordinary KeyboardInterrupt unwinding
+through the same cleanup; the publisher does not replace its handler.
+Cleanup targets only that invocation's group, not other machine processes.
+Children deliberately escaping the group are outside this boundary; hard-kill
+cannot guarantee trap completion or workspace cleanup. Use disposable agents.
+
+Raw diagnostics are retained only as **internal Azure build artifacts**, not
+uploaded by the public GitHub workflow. The `internal` project's visibility is
+`organization`; this is not a claim of exclusive readers or secret-free logs.
+Artifact access follows build permissions, and retained/keep-forever runs can
+outlive ordinary retention settings. Review those permissions and retention
+before enabling the jobs; owner-only local files do not restrict artifact
+readers. Retain the minimal diagnostic environment, not publishing credentials.
+
+`--publish` explicitly opts into writes after validation and requires
+`HOMEBREW_TAP_WRITE_TOKEN`; the independent `HOMEBREW_READ_TOKEN` is only for
+read requests. Provision a tap-scoped GitHub App token or fine-grained token
+with contents and pull-request write permissions, not a broad source-repo
+release credential. No credentials are provisioned by this change.
+
+Same-version runs claim a deterministic branch atomically. Existing claims
+are never overwritten; abandoned branches and closed-unmerged PRs require
+operator recovery. Conflicting hashes and version rollback fail explicitly.
+Target advancement during validation requires a rerun. **This claim is not a
+per-cask lock:** the live continuation uses one protected Azure environment for
+all versions. Its exclusive-lock check is an external enablement prerequisite;
+external tap writers can still require revalidation.
+
+Reads retry transient transport/throttle/service errors at most three times,
+with 30-second request timeouts and a 120-second phase-wide deadline.
+Permanent authentication/input/validation failures do not retry. Writes are
+never blindly retried: a lost branch response becomes an in-flight skip;
+contents/PR uncertainty requires exact remote evidence or fails with recovery
+instructions. This prevents duplicate submissions after a lost response.
+
+Use `HomebrewTestOnly=true, DryRun=true` in release definition 1600 for
+contained testing and select the exact `aspire-build` resource run containing
+the stable release under test. The graph uses `DownloadBuildArtifacts@0` to
+download `homebrew-cask-stable` from that run: it is a container artifact, so
+the source pipeline-artifact shortcut is not appropriate. There is no latest
+fallback or cask regeneration.
+
+The pipeline passes the release input through `HOMEBREW_RELEASE_VERSION`,
+not `VERSION`: MSBuild imports environment variables as case-insensitive
+properties, so `VERSION=auto` would set generated projects' `Version` and
+fail restore with NU1105. The full hosted scaffold/restore smoke test is the
+regression gate for this pipeline environment.
+
+The source run/commit, official definition, artifact/container identity and
+unique release-version tag are checked before passing the unchanged cask to
+macOS. The full validator additionally requires the public release tag to match
+that source commit and both archive hashes to match the downloaded cask.
+`source-build.json`, `source-candidate.rb`, `result.json` and logs retain
+provenance and byte-preservation evidence. The metadata reader allowlists
+identity fields rather than download tickets or credentials; this does not
+make raw validator logs secret-free.
+`--artifact-check-only` checks identity without claiming full cask validation.
+The same `--source-build-metadata`, `--source-build-id` and
+`--source-build-commit` inputs are accepted by the publisher.
+
+`--test-server` is restricted to numeric loopback HTTP and
+ignores ambient credentials; it is not an alternative GitHub target.
+`--validate-only --version auto` derives the version from the candidate and
+validates without publishing.
+
+### Human-controlled production continuation
+
+The original release pipeline does not wait indefinitely for draft assets:
+
+```text
+official source run 1602 → unchanged homebrew-cask-stable artifact
+             ↓ selected exact run
+release run 1600 → draft release/assets + homebrew-release-handoff → finishes
+             ↓ release manager publishes draft, then queues continuation
+publisher run 1600, HomebrewPublishOnly=true + original HomebrewReleaseRunId
+             ↓ verifies original release run, source run/commit and cask bytes
+public stable assets → bounded validation → dry-run diff OR approved draft tap PR
+```
+
+For stable, non-dry-run releases, `HomebrewHandoffJob` records the release
+run/commit, the exact selected `aspire-build` run ID/commit, and effective
+version. The handoff is a pipeline artifact on the **original release run**.
+The publisher invocation has its own run ID; never substitute that ID, the
+official source ID, latest build, or a commit/version search.
+
+After manually publishing the draft, queue **definition 1600** with
+`HomebrewPublishOnly=true`, `HomebrewTestOnly=false`,
+`HomebrewReleaseRunId=<original-release-run-id>` and explicitly `DryRun=true`
+for a non-mutating plan. The publisher verifies the handoff against the
+completed original definition-1600 run, then downloads the cask from the exact
+original definition-1602 run. The ordinary source-resource selection on this
+second invocation is not used. Missing/expired handoff or source artifacts
+fail; there is no reconstruction fallback.
+
+This alternate graph does not import normal release secret groups or execute
+NuGet/npm/WinGet, promotion, release upload or GitHub dispatch jobs. Dry-run
+also excludes the tap-write group and protected deployment. Public stable
+assets are retried for at most 600 seconds; authentication failures and
+prereleases fail immediately. A timeout instructs the manager to verify draft
+publication and rerun with the **same original release run ID**.
+
+Before a human can choose `DryRun=false`, administrators must configure:
+
+- Environment `aspire-homebrew-publisher` with release-manager approval,
+  trusted-branch control and an **exclusive lock**, authorizing definition 1600
+  only. `lockBehavior: sequential` serializes all versions through this resource.
+- Restricted variable group `Aspire-Homebrew-Publisher`, with secret
+  `homebrew-tap-write-token`: a fine-grained token scoped only to
+  `microsoft/homebrew-aspire`, with contents and pull-request write permissions.
+  Authorize only definition 1600; do not reuse broad Aspire release credentials.
+- Build-service read access to original definition-1600 handoff and
+  definition-1602 source artifacts, their required retention, and supported
+  disposable macOS/SDL pools with PowerShell 7.4 or newer for bounded metadata
+  reads. `System.AccessToken` is used only for internal
+  metadata/artifact reads; it is not passed to the validator.
+- An explicit decision on internal raw-diagnostic readers and retention.
+
+These resources and permissions are external prerequisites, not provisioned or
+proven by YAML or local tests. Live mode submits only a **draft** cask PR after
+the protected resource allows it; it never publishes a GitHub release or merges
+the tap PR. `HomebrewTestOnly` remains a separate contained validation mode.
+The post-publication GitHub workflow remains independent validation, not the
+publisher and not a substitute for exact-source provenance.
 
 ## Supported Platforms
 

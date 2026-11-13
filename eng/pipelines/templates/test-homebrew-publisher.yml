@@ -1,0 +1,178 @@
+# Contained release-pipeline tests. Only the selected source cask is downloaded;
+# no publishing credentials, MicroBuild publish authorization or tap writes.
+parameters:
+  - name: dryRun
+    type: boolean
+  - name: version
+    type: string
+    default: auto
+  - name: publishOnly
+    type: boolean
+    default: false
+
+resources:
+  repositories:
+    - repository: 1ESPipelineTemplates
+      type: git
+      name: 1ESPipelineTemplates/1ESPipelineTemplates
+      ref: refs/tags/release
+
+extends:
+  template: v1/1ES.Official.PipelineTemplate.yml@1ESPipelineTemplates
+  parameters:
+    pool:
+      name: NetCore1ESPool-Internal
+      image: 1es-ubuntu-2204
+      os: linux
+    sdl:
+      sourceAnalysisPool:
+        name: NetCore1ESPool-Internal
+        image: windows.vs2026preview.scout.amd64
+        os: windows
+    stages:
+      - stage: HomebrewTests
+        jobs:
+          - job: PublisherBehavior
+            timeoutInMinutes: 15
+            templateContext:
+              outputs:
+                - output: pipelineArtifact
+                  targetPath: $(Build.ArtifactStagingDirectory)/homebrew
+                  artifactName: homebrew-publisher
+                  condition: always()
+            steps:
+              - checkout: self
+                persistCredentials: false
+              - bash: |
+                  set -euo pipefail
+                  mkdir -p "$OUTPUT"
+                  if [[ "$PUBLISH_ONLY" == "True" ]]; then
+                    echo "##vso[task.logissue type=error;]HomebrewPublishOnly and HomebrewTestOnly are mutually exclusive."
+                    exit 1
+                  fi
+                  if [[ "$DRY_RUN" != "True" ]]; then
+                    echo "##vso[task.logissue type=error;]HomebrewTestOnly requires DryRun=true."
+                    exit 1
+                  fi
+                  python3 -u -m unittest discover \
+                    -s tests/Infrastructure.Tests/Pipelines \
+                    -p 'test_homebrew_*.py' -v 2>&1 | tee "$OUTPUT/tests.log"
+                  python3 tests/Infrastructure.Tests/Pipelines/test_homebrew_publisher.py \
+                    --emit-skip-warning --output-dir "$OUTPUT"
+                displayName: Test actual publisher and emit its idempotent-skip warning
+                env:
+                  DRY_RUN: ${{ parameters.dryRun }}
+                  PUBLISH_ONLY: ${{ parameters.publishOnly }}
+                  OUTPUT: $(Build.ArtifactStagingDirectory)/homebrew
+
+          - job: SourceArtifact
+            dependsOn: PublisherBehavior
+            timeoutInMinutes: 15
+            templateContext:
+              outputs:
+                - output: pipelineArtifact
+                  targetPath: $(Build.ArtifactStagingDirectory)/homebrew-source
+                  artifactName: homebrew-source-artifact
+                  condition: always()
+            steps:
+              - checkout: self
+                persistCredentials: false
+              - pwsh: |
+                  $ErrorActionPreference = 'Stop'
+                  New-Item -ItemType Directory -Force -Path $env:OUTPUT | Out-Null
+                  if ($env:DRY_RUN -cne 'True') {
+                    Write-Host '##vso[task.logissue type=error;]HomebrewTestOnly requires DryRun=true.'
+                    exit 1
+                  }
+                  if ($env:SOURCE_BUILD_ID -notmatch '^[1-9][0-9]*$' -or
+                      $env:SOURCE_COMMIT -notmatch '^[0-9a-f]{40}$') {
+                    throw 'Select an exact aspire-build resource run and source commit.'
+                  }
+                  & eng/pipelines/scripts/Get-HomebrewBuildMetadata.ps1 `
+                    -BuildId $env:SOURCE_BUILD_ID -ArtifactName homebrew-cask-stable `
+                    -OutputPath "$env:OUTPUT/source-build.json"
+                displayName: Retain exact selected build and container artifact provenance
+                env:
+                  DRY_RUN: ${{ parameters.dryRun }}
+                  SOURCE_BUILD_ID: $(resources.pipeline.aspire-build.runID)
+                  SOURCE_COMMIT: $(resources.pipeline.aspire-build.sourceCommit)
+                  SYSTEM_ACCESSTOKEN: $(System.AccessToken)
+                  OUTPUT: $(Build.ArtifactStagingDirectory)/homebrew-source
+              # 1ES.PublishBuildArtifacts produces Container artifacts. The
+              # pipeline-artifact shortcut cannot download this source input.
+              - task: DownloadBuildArtifacts@0
+                displayName: Download cask from exact selected source build
+                inputs:
+                  buildType: specific
+                  project: internal
+                  pipeline: 1602
+                  specificBuildWithTriggering: false
+                  buildVersionToDownload: specific
+                  buildId: $(resources.pipeline.aspire-build.runID)
+                  downloadType: single
+                  artifactName: homebrew-cask-stable
+                  downloadPath: $(Build.ArtifactStagingDirectory)/homebrew-source/download
+                  checkDownloadedFiles: true
+                  retryDownloadCount: 2
+              - bash: |
+                  set -euo pipefail
+                  python3 -u eng/homebrew/publish-cask.py \
+                    --candidate "$OUTPUT/download/homebrew-cask-stable/aspire.rb" \
+                    --version "$HOMEBREW_RELEASE_VERSION" --artifact-check-only \
+                    --source-build-metadata "$OUTPUT/source-build.json" \
+                    --source-build-id "$SOURCE_BUILD_ID" --source-build-commit "$SOURCE_COMMIT" \
+                    --output-dir "$OUTPUT" 2>&1 | tee "$OUTPUT/identity.log"
+                displayName: Verify downloaded cask identity and selected-run provenance
+                env:
+                  # MSBuild imports VERSION as Version; "auto" must not reach
+                  # generated projects as their package version during restore.
+                  HOMEBREW_RELEASE_VERSION: ${{ parameters.version }}
+                  SOURCE_BUILD_ID: $(resources.pipeline.aspire-build.runID)
+                  SOURCE_COMMIT: $(resources.pipeline.aspire-build.sourceCommit)
+                  OUTPUT: $(Build.ArtifactStagingDirectory)/homebrew-source
+
+          - job: CanonicalMacOS
+            dependsOn: SourceArtifact
+            timeoutInMinutes: 90
+            pool:
+              name: Azure Pipelines
+              vmImage: macOS-latest-internal
+              os: macOS
+            templateContext:
+              outputs:
+                - output: pipelineArtifact
+                  targetPath: $(Build.ArtifactStagingDirectory)/homebrew
+                  artifactName: homebrew-canonical-macos
+                  condition: always()
+            steps:
+              - checkout: self
+                persistCredentials: false
+              - download: current
+                artifact: homebrew-source-artifact
+                displayName: Receive unchanged source cask and provenance
+              - bash: |
+                  set -euo pipefail
+                  mkdir -p "$OUTPUT"
+                  if [[ "$DRY_RUN" != "True" ]]; then
+                    echo "##vso[task.logissue type=error;]HomebrewTestOnly requires DryRun=true."
+                    exit 1
+                  fi
+                  # This hosted agent is disposable. Never run the full install
+                  # validator on a maintainer's shared Homebrew installation.
+                  git --no-pager clone --quiet https://github.com/microsoft/homebrew-aspire.git "$TAP"
+                  git --no-pager -C "$TAP" checkout --quiet 89a2b248e4c7ab883d072ecb2d10874e04c2d6b1
+                  python3 -u eng/homebrew/publish-cask.py \
+                    --candidate "$SOURCE/download/homebrew-cask-stable/aspire.rb" \
+                    --version "$HOMEBREW_RELEASE_VERSION" --tap-checkout "$TAP" \
+                    --source-build-metadata "$SOURCE/source-build.json" \
+                    --source-build-id "$SOURCE_BUILD_ID" --source-build-commit "$SOURCE_COMMIT" \
+                    --validate-only --output-dir "$OUTPUT" 2>&1 | tee "$OUTPUT/console.log"
+                displayName: Fully validate downloaded source cask without release or tap publication
+                env:
+                  DRY_RUN: ${{ parameters.dryRun }}
+                  HOMEBREW_RELEASE_VERSION: ${{ parameters.version }}
+                  SOURCE: $(Pipeline.Workspace)/homebrew-source-artifact
+                  SOURCE_BUILD_ID: $(resources.pipeline.aspire-build.runID)
+                  SOURCE_COMMIT: $(resources.pipeline.aspire-build.sourceCommit)
+                  TAP: $(Agent.TempDirectory)/homebrew-validator
+                  OUTPUT: $(Build.ArtifactStagingDirectory)/homebrew

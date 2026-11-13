@@ -258,6 +258,10 @@ public sealed class TestTriggerMapTests
             ["job:homebrew-installer"]
         },
         {
+            "eng/homebrew/release_handoff.py",
+            ["test:Aspire.Acquisition.Tests", "test:Infrastructure.Tests", "job:homebrew-installer", "job:winget-installer"]
+        },
+        {
             // These paths do not exist intentionally: they prove new packaging inputs stay covered
             // without requiring this test to enumerate every current RID-specific project.
             "eng/dashboardpack/future-package-input.targets",
