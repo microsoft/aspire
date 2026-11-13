@@ -58,6 +58,8 @@ namespace Aspire.Hosting.Azure
 
         public BicepOutputReference NameOutputReference { get { throw null; } }
 
+        public override string ResourceTypeDisplayName { get { throw null; } }
+
         public ApplicationModel.ReferenceExpression UriExpression { get { throw null; } }
 
         public BicepOutputReference VaultUri { get { throw null; } }
@@ -87,6 +89,8 @@ namespace Aspire.Hosting.Azure
         ApplicationModel.IResource? IAzureKeyVaultSecretReference.SecretOwner { get { throw null; } set { } }
 
         public AzureKeyVaultResource Parent { get { throw null; } }
+
+        public override string ResourceTypeDisplayName { get { throw null; } }
 
         public string SecretName { get { throw null; } }
 

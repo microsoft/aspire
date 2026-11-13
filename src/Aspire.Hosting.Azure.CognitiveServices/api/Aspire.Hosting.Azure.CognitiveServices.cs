@@ -62,6 +62,8 @@ namespace Aspire.Hosting.ApplicationModel
 
         public AzureOpenAIResource Parent { get { throw null; } }
 
+        public override string ResourceTypeDisplayName { get { throw null; } }
+
         public int SkuCapacity { get { throw null; } set { } }
 
         public string SkuName { get { throw null; } set { } }
@@ -86,6 +88,8 @@ namespace Aspire.Hosting.ApplicationModel
         public Azure.BicepOutputReference Id { get { throw null; } }
 
         public Azure.BicepOutputReference NameOutputReference { get { throw null; } }
+
+        public override string ResourceTypeDisplayName { get { throw null; } }
 
         public ReferenceExpression UriExpression { get { throw null; } }
 

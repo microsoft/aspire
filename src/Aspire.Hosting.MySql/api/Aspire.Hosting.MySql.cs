@@ -62,6 +62,8 @@ namespace Aspire.Hosting.ApplicationModel
 
         public MySqlServerResource Parent { get { throw null; } }
 
+        public override string ResourceTypeDisplayName { get { throw null; } }
+
         public ReferenceExpression UriExpression { get { throw null; } }
 
         System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties() { throw null; }
@@ -86,6 +88,8 @@ namespace Aspire.Hosting.ApplicationModel
 
         public EndpointReference PrimaryEndpoint { get { throw null; } }
 
+        public override string ResourceTypeDisplayName { get { throw null; } }
+
         public ReferenceExpression UriExpression { get { throw null; } }
 
         System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties() { throw null; }
@@ -97,5 +101,9 @@ namespace Aspire.Hosting.MySql
     public sealed partial class PhpMyAdminContainerResource : ApplicationModel.ContainerResource
     {
         public PhpMyAdminContainerResource(string name) : base(default!, default) { }
+
+        public ApplicationModel.EndpointReference PrimaryEndpoint { get { throw null; } }
+
+        public override string ResourceTypeDisplayName { get { throw null; } }
     }
 }

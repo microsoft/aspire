@@ -17,6 +17,14 @@ namespace Aspire.Hosting
         public static ApplicationModel.IResourceBuilder<Azure.AzureFrontDoorResource> WithOrigin<T>(this ApplicationModel.IResourceBuilder<Azure.AzureFrontDoorResource> builder, ApplicationModel.IResourceBuilder<T> resource)
             where T : ApplicationModel.IComputeResource, ApplicationModel.IResourceWithEndpoints { throw null; }
     }
+
+    public static partial class AzureFrontDoorPrivateLinkExtensions
+    {
+        [AspireExport("withFrontDoorAzureFrontDoorPrivateLink", MethodName = "withAzureFrontDoorPrivateLink")]
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE003", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
+        public static ApplicationModel.IResourceBuilder<T> WithAzureFrontDoorPrivateLink<T>(this ApplicationModel.IResourceBuilder<T> environment, ApplicationModel.IResourceBuilder<Azure.AzureFrontDoorResource> frontDoor)
+            where T : Azure.IAzureCdnPrivateLinkTarget { throw null; }
+    }
 }
 
 namespace Aspire.Hosting.Azure
@@ -24,6 +32,8 @@ namespace Aspire.Hosting.Azure
     public partial class AzureFrontDoorResource : AzureProvisioningResource
     {
         public AzureFrontDoorResource(string name, System.Action<AzureResourceInfrastructure> configureInfrastructure) : base(default!, default!) { }
+
+        public BicepOutputReference GetEndpointId(string originResourceName) { throw null; }
 
         public BicepOutputReference GetEndpointUrl(string originResourceName) { throw null; }
     }

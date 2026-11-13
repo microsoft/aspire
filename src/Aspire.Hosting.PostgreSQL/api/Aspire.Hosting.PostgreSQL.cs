@@ -79,6 +79,8 @@ namespace Aspire.Hosting.ApplicationModel
 
         public PostgresServerResource Parent { get { throw null; } }
 
+        public override string ResourceTypeDisplayName { get { throw null; } }
+
         public ReferenceExpression UriExpression { get { throw null; } }
 
         System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties() { throw null; }
@@ -103,6 +105,8 @@ namespace Aspire.Hosting.ApplicationModel
 
         public EndpointReference PrimaryEndpoint { get { throw null; } }
 
+        public override string ResourceTypeDisplayName { get { throw null; } }
+
         public ReferenceExpression UriExpression { get { throw null; } }
 
         public ParameterResource? UserNameParameter { get { throw null; } set { } }
@@ -120,6 +124,10 @@ namespace Aspire.Hosting.Postgres
     public sealed partial class PgAdminContainerResource : ApplicationModel.ContainerResource
     {
         public PgAdminContainerResource(string name) : base(default!, default) { }
+
+        public ApplicationModel.EndpointReference PrimaryEndpoint { get { throw null; } }
+
+        public override string ResourceTypeDisplayName { get { throw null; } }
     }
 
     public sealed partial class PgWebContainerResource : ApplicationModel.ContainerResource
@@ -127,6 +135,8 @@ namespace Aspire.Hosting.Postgres
         public PgWebContainerResource(string name) : base(default!, default) { }
 
         public ApplicationModel.EndpointReference PrimaryEndpoint { get { throw null; } }
+
+        public override string ResourceTypeDisplayName { get { throw null; } }
     }
 
     public sealed partial class PostgresMcpContainerResource : ApplicationModel.ContainerResource
@@ -134,5 +144,7 @@ namespace Aspire.Hosting.Postgres
         public PostgresMcpContainerResource(string name) : base(default!, default) { }
 
         public ApplicationModel.EndpointReference PrimaryEndpoint { get { throw null; } }
+
+        public override string ResourceTypeDisplayName { get { throw null; } }
     }
 }

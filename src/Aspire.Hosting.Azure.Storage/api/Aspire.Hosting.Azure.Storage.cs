@@ -77,6 +77,8 @@ namespace Aspire.Hosting.Azure
 
         public AzureBlobStorageResource Parent { get { throw null; } }
 
+        public override string ResourceTypeDisplayName { get { throw null; } }
+
         System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, ApplicationModel.ReferenceExpression>> ApplicationModel.IResourceWithConnectionString.GetConnectionProperties() { throw null; }
     }
 
@@ -89,6 +91,8 @@ namespace Aspire.Hosting.Azure
         public ApplicationModel.ReferenceExpression ConnectionStringExpression { get { throw null; } }
 
         public AzureStorageResource Parent { get { throw null; } }
+
+        public override string ResourceTypeDisplayName { get { throw null; } }
 
         public ApplicationModel.ReferenceExpression UriExpression { get { throw null; } }
 
@@ -111,6 +115,8 @@ namespace Aspire.Hosting.Azure
 
         public AzureDataLakeStorageResource Parent { get { throw null; } }
 
+        public override string ResourceTypeDisplayName { get { throw null; } }
+
         System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, ApplicationModel.ReferenceExpression>> ApplicationModel.IResourceWithConnectionString.GetConnectionProperties() { throw null; }
     }
 
@@ -123,6 +129,8 @@ namespace Aspire.Hosting.Azure
         public ApplicationModel.ReferenceExpression ConnectionStringExpression { get { throw null; } }
 
         public AzureStorageResource Parent { get { throw null; } }
+
+        public override string ResourceTypeDisplayName { get { throw null; } }
 
         public ApplicationModel.ReferenceExpression UriExpression { get { throw null; } }
 
@@ -146,6 +154,8 @@ namespace Aspire.Hosting.Azure
 
         public string QueueName { get { throw null; } }
 
+        public override string ResourceTypeDisplayName { get { throw null; } }
+
         System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, ApplicationModel.ReferenceExpression>> ApplicationModel.IResourceWithConnectionString.GetConnectionProperties() { throw null; }
     }
 
@@ -158,6 +168,8 @@ namespace Aspire.Hosting.Azure
         public ApplicationModel.ReferenceExpression ConnectionStringExpression { get { throw null; } }
 
         public AzureStorageResource Parent { get { throw null; } }
+
+        public override string ResourceTypeDisplayName { get { throw null; } }
 
         public ApplicationModel.ReferenceExpression UriExpression { get { throw null; } }
 
@@ -177,6 +189,8 @@ namespace Aspire.Hosting.Azure
         public override ApplicationModel.ResourceAnnotationCollection Annotations { get { throw null; } }
 
         public override string Name { get { throw null; } }
+
+        public override string ResourceTypeDisplayName { get { throw null; } }
     }
 
     public partial class AzureStorageResource : AzureProvisioningResource, ApplicationModel.IResourceWithEndpoints, ApplicationModel.IResource, IResourceWithAzureFunctionsConfig, IAzureNspAssociationTarget
@@ -201,6 +215,8 @@ namespace Aspire.Hosting.Azure
 
         public ApplicationModel.ReferenceExpression QueueUriExpression { get { throw null; } }
 
+        public override string ResourceTypeDisplayName { get { throw null; } }
+
         public BicepOutputReference TableEndpoint { get { throw null; } }
 
         public ApplicationModel.ReferenceExpression TableUriExpression { get { throw null; } }
@@ -219,6 +235,8 @@ namespace Aspire.Hosting.Azure
         public ApplicationModel.ReferenceExpression ConnectionStringExpression { get { throw null; } }
 
         public AzureStorageResource Parent { get { throw null; } }
+
+        public override string ResourceTypeDisplayName { get { throw null; } }
 
         public ApplicationModel.ReferenceExpression UriExpression { get { throw null; } }
 
