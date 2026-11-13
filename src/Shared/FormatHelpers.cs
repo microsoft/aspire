@@ -28,10 +28,10 @@ public interface ITimeFormatProvider
 public interface ITimeZoneNameProvider
 {
     /// <summary>
-    /// Gets the short name of the local time zone at a wall-clock time in that zone, such as "PST" or "PDT", or
-    /// <see langword="null"/> when it isn't known.
+    /// Gets the short name of the local time zone while it is at a UTC offset, such as "PST" at -08:00 or "PDT" at
+    /// -07:00, or <see langword="null"/> when no name is known for that offset.
     /// </summary>
-    string? GetTimeZoneShortName(DateTime localWallClockTime);
+    string? GetTimeZoneShortName(TimeSpan utcOffset);
 }
 
 internal static class FormatHelpers
@@ -98,25 +98,36 @@ internal static class FormatHelpers
         var local = timeProvider.ToLocal(value);
         var pattern = DateFormatStringsHelpers.GetMediumDateShortTimePattern(cultureInfo, GetResolvedTimeFormat(timeProvider));
 
-        return $"{local.ToString(pattern, cultureInfo)} {GetTimeZoneShortName(timeProvider, local)}";
+        return $"{local.ToString(pattern, cultureInfo)} {GetTimeZoneShortName(timeProvider, GetUtcOffset(timeProvider, value))}";
+    }
+
+    private static TimeSpan GetUtcOffset(TimeProvider timeProvider, DateTime value)
+    {
+        // Read the offset from the UTC instant: the local time is ambiguous in the hour repeated when daylight saving time
+        // ends, for example 1:30 AM on Nov 1, 2026 in America/Los_Angeles is both 08:30Z (PDT) and 09:30Z (PST).
+        if (value.Kind == DateTimeKind.Utc)
+        {
+            return timeProvider.LocalTimeZone.GetUtcOffset(value);
+        }
+
+        // A Local value is already in the provider's zone (see ToLocal), so its instant is lost and the repeated hour reads
+        // as standard time. TimeZoneInfo reads a Local DateTime in the machine's zone, so pass it as Unspecified to read it
+        // in the provider's zone.
+        return timeProvider.LocalTimeZone.GetUtcOffset(DateTime.SpecifyKind(value, DateTimeKind.Unspecified));
     }
 
     public static string FormatTooltipDateTime(TimeProvider timeProvider, DateTimeOffset value, CultureInfo? cultureInfo = null) =>
         FormatTooltipDateTime(timeProvider, value.UtcDateTime, cultureInfo);
 
-    private static string GetTimeZoneShortName(TimeProvider timeProvider, DateTime local)
+    private static string GetTimeZoneShortName(TimeProvider timeProvider, TimeSpan offset)
     {
-        // TimeZoneInfo interprets a Local DateTime as the machine's zone, not the browser's, so pass the wall-clock time
-        // as Unspecified to have it read in the provider's zone.
-        var wallClock = DateTime.SpecifyKind(local, DateTimeKind.Unspecified);
-        if (timeProvider is ITimeZoneNameProvider { } nameProvider && nameProvider.GetTimeZoneShortName(wallClock) is { Length: > 0 } name)
+        if (timeProvider is ITimeZoneNameProvider { } nameProvider && nameProvider.GetTimeZoneShortName(offset) is { Length: > 0 } name)
         {
             return name;
         }
 
         // .NET has no time zone abbreviations ("PST"), only long names, so without the browser's own name fall back to
         // the offset, the way browsers name zones without a well-known abbreviation ("GMT+1").
-        var offset = timeProvider.LocalTimeZone.GetUtcOffset(wallClock);
         if (offset == TimeSpan.Zero)
         {
             return "UTC";

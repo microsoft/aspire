@@ -17,8 +17,7 @@ public class BrowserTimeProvider : TimeProvider, ITimeFormatProvider, ITimeZoneN
 {
     private readonly ILogger _logger;
     private TimeZoneInfo? _browserLocalTimeZone;
-    private string? _standardTimeZoneShortName;
-    private string? _daylightTimeZoneShortName;
+    private IReadOnlyList<BrowserTimeZoneShortName> _timeZoneShortNames = [];
     private TimeFormat? _browserTimeFormat;
 
     public TimeFormat ConfiguredTimeFormat { get; set; } = TimeFormat.System;
@@ -34,10 +33,10 @@ public class BrowserTimeProvider : TimeProvider, ITimeFormatProvider, ITimeZoneN
     }
 
     /// <summary>
-    /// Sets the browser's time zone, with the short names the browser gives it in standard and daylight saving time,
-    /// such as "PST" and "PDT". .NET only has long time zone names, so the short names have to come from the browser.
+    /// Sets the browser's time zone, with the short names the browser gives it at the offsets it sampled, such as "PST"
+    /// at -08:00 and "PDT" at -07:00. .NET only has long time zone names, so the short names have to come from the browser.
     /// </summary>
-    public void SetBrowserTimeZone(string? timeZone, string? standardShortName, string? daylightShortName)
+    public void SetBrowserTimeZone(string? timeZone, IReadOnlyList<BrowserTimeZoneShortName>? shortNames)
     {
         if (string.IsNullOrEmpty(timeZone) || !TimeZoneInfo.TryFindSystemTimeZoneById(timeZone, out var timeZoneInfo))
         {
@@ -45,18 +44,16 @@ public class BrowserTimeProvider : TimeProvider, ITimeFormatProvider, ITimeZoneN
             timeZoneInfo = TimeZoneInfo.Utc;
 
             // The names describe the browser's zone, not UTC, so they would mislabel times shown in UTC.
-            standardShortName = null;
-            daylightShortName = null;
+            shortNames = null;
         }
 
-        _standardTimeZoneShortName = standardShortName;
-        _daylightTimeZoneShortName = daylightShortName;
+        _timeZoneShortNames = shortNames ?? [];
 
         _logger.LogDebug("Browser time zone set to '{TimeZone}' with UTC offset {UtcOffset}.", timeZoneInfo.Id, timeZoneInfo.BaseUtcOffset);
         _browserLocalTimeZone = timeZoneInfo;
     }
 
-    public string? GetTimeZoneShortName(DateTime localWallClockTime)
+    public string? GetTimeZoneShortName(TimeSpan utcOffset)
     {
         // Without the browser's zone, LocalTimeZone is the server's, which the browser's names don't describe.
         if (_browserLocalTimeZone is null)
@@ -64,7 +61,18 @@ public class BrowserTimeProvider : TimeProvider, ITimeFormatProvider, ITimeZoneN
             return null;
         }
 
-        return _browserLocalTimeZone.IsDaylightSavingTime(localWallClockTime) ? _daylightTimeZoneShortName : _standardTimeZoneShortName;
+        // Match on the offset rather than on whether daylight saving time applies: the browser only samples two dates, and
+        // a zone can be at other offsets in between, such as Africa/Casablanca at UTC+0 during Ramadan while it is UTC+1 in
+        // both January and July. A time at an offset the browser didn't name falls back to the offset ("UTC").
+        foreach (var shortName in _timeZoneShortNames)
+        {
+            if (shortName.OffsetMinutes == (int)utcOffset.TotalMinutes)
+            {
+                return shortName.Name;
+            }
+        }
+
+        return null;
     }
 
     public TimeFormat ResolvedTimeFormat
