@@ -1559,6 +1559,31 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void GoModToolResources_UsePlatformCertificateTrustScope()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
+        builder.AddGoApp("api", AppContext.BaseDirectory)
+            .WithModTidy()
+            .WithModVendor()
+            .WithModDownload()
+            .WithVetTool();
+
+        var expectedScope = OperatingSystem.IsMacOS() || OperatingSystem.IsWindows()
+            ? CertificateTrustScope.System
+            : CertificateTrustScope.Append;
+        var toolResources = builder.Resources.Where(resource =>
+            resource.Name is "api-mod-tidy" or "api-mod-vendor" or "api-mod-download" or "api-vet-tool");
+
+        Assert.Equal(4, toolResources.Count());
+        foreach (var resource in toolResources)
+        {
+            Assert.True(resource.TryGetLastAnnotation<CertificateAuthorityCollectionAnnotation>(out var certAnnotation));
+            Assert.Equal(expectedScope, certAnnotation.Scope);
+            Assert.True(resource.TryGetLastAnnotation<CertificateTrustConfigurationCallbackAnnotation>(out _));
+        }
+    }
+
+    [Fact]
     public void AddGoApp_ExplicitCertificateTrustScope_OverridesDefault()
     {
         using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);

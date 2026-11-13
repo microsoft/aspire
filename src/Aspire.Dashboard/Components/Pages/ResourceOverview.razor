@@ -745,7 +745,7 @@
                                 <span class="overview-list-label" data-tooltip="@report.Name">@report.Name</span>
                                 <span class="overview-list-value overview-muted" data-tooltip="@report.DisplayedDescription">@report.DisplayedDescription</span>
                                 <ExceptionDetails ExceptionText="@report.ExceptionText" />
-                                <span class="overview-list-time" data-tooltip="@HealthReportFormatter.GetStatusTooltip(report, Loc, TimeProvider)">@HealthReportFormatter.GetStatusWithTime(report, Loc)</span>
+                                <span class="overview-list-time" data-tooltip="@HealthReportFormatter.GetLastRunTooltip(report, TimeProvider)">@HealthReportFormatter.GetStatusWithTime(report, Loc)</span>
                             </li>
                         }
                     </ul>

@@ -957,12 +957,12 @@
                             @if (!resource.IsParameter && GetRowTime(resource) is { } sidebarTime)
                             {
                                 @* The verb and a short age, after the state ("Running · Started 7m ago"). *@
-                                var sidebarTimeDescription = GetRowTimeDescription(sidebarTime);
+                                var sidebarTimeTooltip = GetRowTimeTooltip(sidebarTime);
                                 <span class="resource-row-start-time resource-row-sidebar-start">
                                     <time datetime="@sidebarTime.Time.ToString("O", CultureInfo.InvariantCulture)"
                                           tabindex="0"
-                                          aria-label="@sidebarTimeDescription"
-                                          data-tooltip="@sidebarTimeDescription"
+                                          aria-label="@GetRowTimeDescription(sidebarTime, sidebarTimeTooltip)"
+                                          data-tooltip="@sidebarTimeTooltip"
                                           data-tooltip-positioning="above">@GetRowTimeText(sidebarTime)</time>
                                 </span>
                             }
@@ -1035,12 +1035,12 @@
                         <span class="resource-row-start-time">
                             @if (GetRowTime(resource) is { } rowTime)
                             {
-                                var rowTimeDescription = GetRowTimeDescription(rowTime);
+                                var rowTimeTooltip = GetRowTimeTooltip(rowTime);
                                 <FluentIcon Value="@(new Icons.Regular.Size12.Clock())" Width="12px" Color="Color.Custom" CustomColor="currentColor" />
                                 <time datetime="@rowTime.Time.ToString("O", CultureInfo.InvariantCulture)"
                                       tabindex="0"
-                                      aria-label="@rowTimeDescription"
-                                      data-tooltip="@rowTimeDescription"
+                                      aria-label="@GetRowTimeDescription(rowTime, rowTimeTooltip)"
+                                      data-tooltip="@rowTimeTooltip"
                                       data-tooltip-positioning="above">
                                     @* The verb and a short age ("Started 7m ago"); the tooltip adds the exact time. *@
                                     <span class="resource-row-started-age">@GetRowTimeText(rowTime)</span>

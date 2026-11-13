@@ -158,10 +158,7 @@ public partial class LegacyMainLayout : IGlobalKeydownListener, IAsyncDisposable
             }
 
             var relativePath = NavigationManager.ToBaseRelativePath(NavigationManager.ToAbsoluteUri(targetLocation).ToString());
-            if (!relativePath.StartsWith("legacy", StringComparison.OrdinalIgnoreCase) &&
-                !relativePath.StartsWith("login", StringComparison.OrdinalIgnoreCase) &&
-                !relativePath.StartsWith("error", StringComparison.OrdinalIgnoreCase) &&
-                !relativePath.StartsWith("terminal-window", StringComparison.OrdinalIgnoreCase))
+            if (LegacyNavUrls.ShouldRewriteToLegacy(relativePath))
             {
                 context.PreventNavigation();
                 NavigationManager.NavigateTo($"/legacy/{relativePath.TrimStart('/')}");
