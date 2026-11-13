@@ -1159,7 +1159,7 @@ public class ResourcesLayoutTests : DashboardTestContext
         Assert.Equal(
             [
                 ("All sources", "1 telemetry source", (string?)null),
-                ("api", Resources.Layout.ResourcePaneTelemetryOnly, null)
+                ("api", "Telemetry sources; Structured logs", null)
             ],
             cut.FindAll(".resource-row-link").Select(link => (
                 link.GetAttribute("aria-label"), link.GetAttribute("aria-description"), link.GetAttribute("data-tooltip"))));
