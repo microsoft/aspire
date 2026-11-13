@@ -74,7 +74,9 @@ public sealed class DoctorCommandTests(ITestOutputHelper output)
         var check = Assert.Single(document.RootElement.GetProperty("checks").EnumerateArray(),
             check => check.GetProperty("name").GetString() == "aspire-skill-sources");
         Assert.Equal("warning", check.GetProperty("status").GetString());
-        Assert.Equal(expectedFiles, check.GetProperty("files").EnumerateArray().Select(file => file.GetString()));
+        Assert.Equal(
+            expectedFiles.Select(file => $"{file} (copilot, opencode)"),
+            check.GetProperty("details").GetString()!.Split('\n'));
         var workspaceRoot = $"/workspace/{workspace.WorkspaceRoot.Name}";
         Assert.Equal(workspaceRoot, check.GetProperty("metadata").GetProperty("workspaceRoot").GetString());
 
