@@ -1323,9 +1323,12 @@ fluent-badge.property-details-accordion-badge {
    descriptions and wrap long URLs rather than overflowing the tooltip's default max width. */
 .dashboard-tooltip {
     width: max-content;
-    /* Adapt desktop Chrome's half-screen tooltip cap to the viewport, with a 300px floor.
+    /* Chromium caps tooltip text at 800px or half the display, not half the browser viewport.
+       Fluent popups must also fit the viewport and the available anchor area. Floor the
+       area cap at Fluent's usual 240px (less on small screens) so a cramped side triggers
+       flipping rather than wrapping to just a few characters.
        https://source.chromium.org/chromium/chromium/src/+/main:ui/views/corewm/tooltip_aura.cc */
-    max-width: max(300px, 50vw);
+    max-width: min(800px, calc(100vw - 16px), max(min(240px, calc(50vw - 16px)), calc(100% - 16px)));
     overflow-wrap: anywhere;
     pointer-events: none;
 }
