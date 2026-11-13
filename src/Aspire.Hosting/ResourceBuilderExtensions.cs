@@ -4578,6 +4578,9 @@ public static class ResourceBuilderExtensions
         });
     }
 
+    // Certificate selection is stable; its annotation remains an experimental integration-authoring contract.
+#pragma warning disable ASPIRECERTIFICATES001
+
     /// <summary>
     /// Indicates that a resource should use the developer certificate key pair for HTTPS endpoints at run time.
     /// Currently this indicates use of the ASP.NET Core developer certificate. The developer certificate will only be used
@@ -4597,7 +4600,6 @@ public static class ResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [Experimental("ASPIRECERTIFICATES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExport("withParameterHttpsDeveloperCertificate", MethodName = "withHttpsDeveloperCertificate")]
     public static IResourceBuilder<TResource> WithHttpsDeveloperCertificate<TResource>(this IResourceBuilder<TResource> builder, IResourceBuilder<ParameterResource>? password = null)
         where TResource : IResourceWithEnvironment, IResourceWithArgs
@@ -4614,7 +4616,7 @@ public static class ResourceBuilderExtensions
     }
 
     /// <summary>
-    /// Adds a <see cref="HttpsCertificateAnnotation"/> to the resource annotations to associate an X.509 certificate key pair with the resource.
+    /// Associates an X.509 certificate key pair with the resource.
     /// This is used to configure the certificate presented by the resource for HTTPS/TLS endpoints.
     /// </summary>
     /// <typeparam name="TResource">The type of the resource.</typeparam>
@@ -4623,6 +4625,11 @@ public static class ResourceBuilderExtensions
     /// <param name="password">A parameter specifying the password used to encrypt the certificate private key.</param>
     /// <returns>The <see cref="IResourceBuilder{TResource}"/>.</returns>
     /// <remarks>
+    /// <para>
+    /// Certificate configuration is applied at run time to resources that support HTTPS certificate configuration.
+    /// This does not configure client certificate trust or change the resource's certificate configuration in publish mode.
+    /// The optional password encrypts the exported private key; it is not the password used to load <paramref name="certificate"/>.
+    /// </para>
     /// <example>
     /// Use a custom certificate for HTTPS/TLS endpoints on a container resource:
     /// <code lang="csharp">
@@ -4633,7 +4640,6 @@ public static class ResourceBuilderExtensions
     /// </example>
     /// <para>This method is not available in polyglot app hosts. Use <see cref="WithHttpsDeveloperCertificate{TResource}"/> instead.</para>
     /// </remarks>
-    [Experimental("ASPIRECERTIFICATES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExportIgnore(Reason = "Uses X509Certificate2 which is not ATS-compatible.")]
     public static IResourceBuilder<TResource> WithHttpsCertificate<TResource>(this IResourceBuilder<TResource> builder, X509Certificate2 certificate, IResourceBuilder<ParameterResource>? password = null)
         where TResource : IResourceWithEnvironment, IResourceWithArgs
@@ -4665,7 +4671,6 @@ public static class ResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [Experimental("ASPIRECERTIFICATES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExport]
     public static IResourceBuilder<TResource> WithoutHttpsCertificate<TResource>(this IResourceBuilder<TResource> builder)
         where TResource : IResourceWithEnvironment, IResourceWithArgs
@@ -4680,6 +4685,8 @@ public static class ResourceBuilderExtensions
 
         return builder.WithAnnotation(annotation, ResourceAnnotationMutationBehavior.Replace);
     }
+
+#pragma warning restore ASPIRECERTIFICATES001
 
     /// <summary>
     /// Adds a callback that allows configuring the resource to use a specific HTTPS/TLS certificate key pair for server authentication.

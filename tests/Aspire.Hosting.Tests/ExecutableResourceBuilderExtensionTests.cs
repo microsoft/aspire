@@ -19,6 +19,17 @@ namespace Aspire.Hosting.Tests;
 public class ExecutableResourceBuilderExtensionTests
 {
     [Theory]
+    [InlineData(nameof(ResourceBuilderExtensions.WithHttpsCertificate))]
+    [InlineData(nameof(ResourceBuilderExtensions.WithHttpsDeveloperCertificate))]
+    [InlineData(nameof(ResourceBuilderExtensions.WithoutHttpsCertificate))]
+    public void HttpsCertificateSelectionDoesNotRequireExperimentalOptIn(string methodName)
+    {
+        var method = Assert.Single(typeof(ResourceBuilderExtensions).GetMethods(), method => method.Name == methodName);
+
+        Assert.Empty(method.GetCustomAttributes<ExperimentalAttribute>());
+    }
+
+    [Theory]
     [InlineData("/absolute")]
     [InlineData("relative")]
     public void AddExecutableNormalisesWorkingDirectory(string workingDirectory)
