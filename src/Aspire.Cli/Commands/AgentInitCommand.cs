@@ -266,13 +266,16 @@ internal sealed class AgentInitCommand : BaseCommand
                 ExecutionContext.WorkingDirectory, AppHostDiscoveryScope.DefaultFiltered, cancellationToken, skipValidation: true);
             appHost = candidates.Count switch
             {
-                0 => null,
                 1 => candidates[0],
-                _ => await InteractionService.PromptForSelectionAsync(
+                > 1 when _hostEnvironment.SupportsInteractiveInput => await InteractionService.PromptForSelectionAsync(
                     InteractionServiceStrings.SelectAppHostToUse,
                     candidates,
                     file => $"{file.Name.EscapeMarkup()} ({Path.GetRelativePath(ExecutionContext.WorkingDirectory.FullName, file.FullName).EscapeMarkup()})",
-                    cancellationToken: cancellationToken)
+                    cancellationToken: cancellationToken),
+                // Without interactive input there is no way to choose between several AppHosts, and
+                // agent init has no AppHost option. The AppHost only supplies optional skill-source
+                // settings, so fall back to the working directory as when no AppHost is found.
+                _ => null
             };
         }
 
