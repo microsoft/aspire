@@ -3414,8 +3414,6 @@ public static class ResourceBuilderExtensions
 #pragma warning restore CS0618
     }
 
-#pragma warning disable ASPIREPROCESSCOMMAND001 // Process command APIs are experimental.
-
     /// <summary>
     /// Adds a command to the resource that starts a local process when invoked.
     /// </summary>
@@ -3441,8 +3439,7 @@ public static class ResourceBuilderExtensions
     ///     .WithProcessCommand("dotnet-version", "Show .NET version", "dotnet", ["--version"]);
     /// </code>
     /// </example>
-    [Experimental("ASPIREPROCESSCOMMAND001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    [AspireExportIgnore(Reason = "Process commands start local processes from AppHost callbacks and cannot be represented in polyglot AppHosts.")]
+    [AspireExportIgnore(Reason = "Use the ATS-specific withProcessCommand export.")]
     public static IResourceBuilder<TResource> WithProcessCommand<TResource>(
         this IResourceBuilder<TResource> builder,
         string commandName,
@@ -3505,8 +3502,7 @@ public static class ResourceBuilderExtensions
     ///         new ProcessCommandOptions { MaxOutputLineCount = 20 });
     /// </code>
     /// </example>
-    [Experimental("ASPIREPROCESSCOMMAND001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    [AspireExportIgnore(Reason = "Process command factories are C# callbacks and cannot be represented in polyglot AppHosts.")]
+    [AspireExportIgnore(Reason = "Use the ATS-specific withProcessCommand export with createProcessSpec in the options object.")]
     public static IResourceBuilder<TResource> WithProcessCommand<TResource>(
         this IResourceBuilder<TResource> builder,
         string commandName,
@@ -3563,8 +3559,7 @@ public static class ResourceBuilderExtensions
     ///         }));
     /// </code>
     /// </example>
-    [Experimental("ASPIREPROCESSCOMMAND001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    [AspireExportIgnore(Reason = "Process command factories are C# callbacks and cannot be represented in polyglot AppHosts.")]
+    [AspireExportIgnore(Reason = "Use the ATS-specific withProcessCommand export with createProcessSpec in the options object.")]
     public static IResourceBuilder<TResource> WithProcessCommand<TResource>(
         this IResourceBuilder<TResource> builder,
         string commandName,
@@ -3609,7 +3604,6 @@ public static class ResourceBuilderExtensions
     /// <summary>
     /// Adds a command to the resource that starts a local process when invoked.
     /// </summary>
-    [Experimental("ASPIREPROCESSCOMMAND001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExport("withProcessCommand")]
     internal static IResourceBuilder<TResource> WithProcessCommandExport<TResource>(
         this IResourceBuilder<TResource> builder,
@@ -3903,8 +3897,6 @@ public static class ResourceBuilderExtensions
             ? CommandResults.Failure(message)
             : CommandResults.Failure(message, resultData);
     }
-
-#pragma warning restore ASPIREPROCESSCOMMAND001
 
     /// <summary>
     /// Adds a command to the resource that when invoked sends an HTTP request to the specified endpoint and path.

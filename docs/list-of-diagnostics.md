@@ -32,6 +32,7 @@ for runtime requirements and run/publish behavior.
 | `ASPIREAZUREPROVISIONING001` | Warning | The polyglot Azure Provisioning proxy packages are experimental and may change or be removed in future releases. | [src/Aspire.Hosting.Azure.Provisioning/ExperimentalAssemblyInfo.cs](../src/Aspire.Hosting.Azure.Provisioning/ExperimentalAssemblyInfo.cs) |
 | `ASPIREEXPORT018` | Warning | The source-generated Aspire export provider contract is experimental and may change or be removed in future releases. | [src/Aspire.Hosting/Ats/AspireExportProviderAttribute.cs](../src/Aspire.Hosting/Ats/AspireExportProviderAttribute.cs) |
 | `ASPIREPIPELINES005` | Warning | Pipeline output diffing APIs are experimental and may change or be removed in future releases. Suppress this diagnostic to opt in. | [src/Aspire.Hosting/PipelineOutputDiffingExtensions.cs](../src/Aspire.Hosting/PipelineOutputDiffingExtensions.cs) |
+| `ASPIREPROCESSCOMMAND001` | Warning | Only the deprecated polyglot `withProcessCommandFactory` export remains experimental. Use `withProcessCommand` with `createProcessSpec` in its options instead. The current process command APIs are stable. | [src/Aspire.Hosting/ResourceBuilderExtensions.cs](../src/Aspire.Hosting/ResourceBuilderExtensions.cs) |
 
 ## Analyzer Warnings
 

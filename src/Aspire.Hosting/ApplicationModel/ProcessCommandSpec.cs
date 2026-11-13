@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics.CodeAnalysis;
-
 namespace Aspire.Hosting.ApplicationModel;
 
 /// <summary>
@@ -11,7 +9,6 @@ namespace Aspire.Hosting.ApplicationModel;
 /// <param name="executablePath">
 /// The executable path or command name to start. Command names are resolved from the AppHost process PATH.
 /// </param>
-[Experimental("ASPIREPROCESSCOMMAND001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public sealed class ProcessCommandSpec(string executablePath)
 {
     /// <summary>
@@ -55,6 +52,9 @@ public sealed class ProcessCommandSpec(string executablePath)
     /// <summary>
     /// Gets or sets standard input content to write to the process after it starts.
     /// </summary>
+    /// <remarks>
+    /// A platform newline is appended to the content and standard input is closed after writing.
+    /// </remarks>
     public string? StandardInputContent { get; init; }
 
     /// <summary>
