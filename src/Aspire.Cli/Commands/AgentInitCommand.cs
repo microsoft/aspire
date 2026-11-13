@@ -533,19 +533,8 @@ internal sealed class AgentInitCommand : BaseCommand
             cancellationToken.ThrowIfCancellationRequested();
             registrationResults = await AgentConfiguration.ApplyRemoteAsync(selectedClients, workspaceRoot, scope, skillSources, cancellationToken);
 
-            // Registration can fail or change nothing (for example when all sources are disabled), so
-            // copies are kept unless every selected agent now has Aspire skills at this scope.
             // Removal runs before display so removed copies are listed under the sources that replaced them.
-            var canRemoveSkillCopies =
-                !registrationResults.Any(static result => result.Status is AgentConfigurationStatus.Failed) &&
-                selectedClients.All(client => HasAspireSkillsRegistration(client, workspaceRoot, scope));
-            var skillCopiesToRemove = canRemoveSkillCopies
-                ? LocalAspireSkills.Find(ExecutionContext.WorkingDirectory, workspaceRoot, ExecutionContext.HomeDirectory, cancellationToken)
-                    .Where(copy => copy.Scope == scope && selectedClients.Any(client =>
-                        copy.Owners.Contains(client.Id, StringComparers.AgentClientId)))
-                    .Select(copy => copy.Directory)
-                    .ToArray()
-                : [];
+            var skillCopiesToRemove = FindReplacedSkillCopies(registrationResults, selectedClients, workspaceRoot, scope, cancellationToken);
             var (removedSkillCopies, skillCopyFailures) = RemoveSkillCopies(skillCopiesToRemove, workspaceRoot);
             hasErrors |= DisplayRemoteConfigurationResults(registrationResults, removedSkillCopies, workspaceRoot);
             foreach (var failure in skillCopyFailures)
@@ -772,17 +761,10 @@ internal sealed class AgentInitCommand : BaseCommand
     private static async Task<bool> HasExistingAspireSetupAsync(
         IAgentClient client, DirectoryInfo workspaceRoot, AgentConfigurationScope scope, CancellationToken cancellationToken)
     {
-        try
+        // Invalid plugin settings report no registration, so a valid MCP registration is still found.
+        if (HasAspireSkillsRegistration(client, workspaceRoot, scope))
         {
-            // Empty sources limit the check to the built-in aspire-skills plugin or catalog.
-            if (client.HasIntegrationRegistration(workspaceRoot, scope, []))
-            {
-                return true;
-            }
-        }
-        catch (Exception ex) when (IsUnreadableConfig(ex))
-        {
-            // Invalid plugin settings must not hide a valid MCP registration, so fall through.
+            return true;
         }
 
         try
@@ -1062,6 +1044,25 @@ internal sealed class AgentInitCommand : BaseCommand
         }
 
         return hasErrors;
+    }
+
+    // Registration can fail or change nothing (for example when all sources are disabled), so
+    // copies are kept unless every selected agent now has Aspire skills at this scope.
+    private string[] FindReplacedSkillCopies(IReadOnlyList<AgentTargetResult> registrationResults,
+        IReadOnlyList<IAgentClient> selectedClients, DirectoryInfo workspaceRoot, AgentConfigurationScope scope,
+        CancellationToken cancellationToken)
+    {
+        if (registrationResults.Any(static result => result.Status is AgentConfigurationStatus.Failed) ||
+            !selectedClients.All(client => HasAspireSkillsRegistration(client, workspaceRoot, scope)))
+        {
+            return [];
+        }
+
+        return LocalAspireSkills.Find(ExecutionContext.WorkingDirectory, workspaceRoot, ExecutionContext.HomeDirectory, cancellationToken)
+            .Where(copy => copy.Scope == scope && selectedClients.Any(client =>
+                copy.Owners.Contains(client.Id, StringComparers.AgentClientId)))
+            .Select(copy => copy.Directory)
+            .ToArray();
     }
 
     private (List<string> Removed, List<string> Failures) RemoveSkillCopies(IReadOnlyList<string> skillDirectories, DirectoryInfo workspaceRoot)
