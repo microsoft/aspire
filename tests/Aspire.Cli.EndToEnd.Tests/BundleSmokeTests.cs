@@ -233,9 +233,10 @@ public sealed class BundleSmokeTests(ITestOutputHelper output)
 
         var appHostSource = File.ReadAllText(appHostSourcePath);
         var version = CliE2ETestHelpers.GetAppHostVersion(appHostSource);
+        var compatibilityDirective = CliE2ETestHelpers.GetExpectedCliBundleCompatibilityDirective(version);
         var expected = $$"""
             #:package Aspire.Hosting.AppHost@{{version}}
-            #:package Aspire.Hosting.Dotnet@{{version}}
+            #:package Aspire.Hosting.Dotnet@{{version}}{{compatibilityDirective}}
 
             var builder = DistributedApplication.CreateBuilder(args);
 

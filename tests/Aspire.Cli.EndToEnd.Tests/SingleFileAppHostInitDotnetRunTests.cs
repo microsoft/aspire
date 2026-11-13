@@ -72,9 +72,10 @@ public sealed class SingleFileAppHostInitDotnetRunTests(ITestOutputHelper output
         Assert.True(File.Exists(aspireConfigJson), $"Expected aspire.config.json to exist at: {aspireConfigJson}");
         var appHostSource = File.ReadAllText(appHostCs);
         var version = CliE2ETestHelpers.GetAppHostVersion(appHostSource);
+        var compatibilityDirective = CliE2ETestHelpers.GetExpectedCliBundleCompatibilityDirective(version);
         var expected = $$"""
             #:package Aspire.Hosting.AppHost@{{version}}
-            #:package Aspire.Hosting.Dotnet@{{version}}
+            #:package Aspire.Hosting.Dotnet@{{version}}{{compatibilityDirective}}
 
             var builder = DistributedApplication.CreateBuilder(args);
 
