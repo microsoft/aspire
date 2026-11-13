@@ -50,6 +50,7 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
                 (new string('x', maxLength + 1), new string('x', maxLength - 1) + "\u2026"),
                 (string.Concat(Enumerable.Repeat("word ", wordCount + 10)), string.Join(" ", Enumerable.Repeat("word", wordCount)) + "\u2026"),
                 ("short words " + new string('x', maxLength), "short words\u2026"),
+                ("cafe\u0301 " + new string('x', maxLength), "cafe\u0301\u2026"),
                 ("   " + new string('x', maxLength), new string('x', maxLength - 4) + "\u2026"),
                 (new string('x', maxLength - 2) + "\U00010400tail", new string('x', maxLength - 2) + "\u2026")
             };
