@@ -107,9 +107,6 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
     [Inject]
     public required DashboardViewPreferences ViewPreferences { get; init; }
 
-    // The "Recordings" setting picks between the recordings icon and panel, and the "Live run" menu.
-    private bool UseRunMenu => ViewPreferences.RecordingsStyle == RecordingsStyle.Menu;
-
     [Inject]
     public required Aspire.Dashboard.Model.INotificationService NotificationService { get; init; }
 

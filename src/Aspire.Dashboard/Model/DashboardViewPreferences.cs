@@ -43,22 +43,6 @@ public enum GroupOverview
 }
 
 /// <summary>
-/// How the header switches between the live run and recordings of previous runs.
-/// </summary>
-public enum RecordingsStyle
-{
-    /// <summary>
-    /// A recordings icon that opens a side panel, with a pill in the header while a recording is viewed.
-    /// </summary>
-    Panel,
-
-    /// <summary>
-    /// A "Live run" dropdown next to the header buttons, listing the runs in a popup menu.
-    /// </summary>
-    Menu
-}
-
-/// <summary>
 /// The view preferences chosen in the settings. They're kept in the browser's local storage, and shared by the
 /// settings panel and the views that apply them, which update as soon as a preference changes.
 /// </summary>
@@ -92,11 +76,6 @@ public sealed class DashboardViewPreferences(ILocalStorage localStorage, IOption
     /// Gets a value indicating whether the overview can show the resource graph, which Dashboard:UI:DisableResourceGraph turns off.
     /// </summary>
     public bool IsGraphEnabled => options.CurrentValue.UI.DisableResourceGraph != true;
-
-    /// <summary>
-    /// Gets how the header switches between runs.
-    /// </summary>
-    public RecordingsStyle RecordingsStyle { get; private set; }
 
     /// <summary>
     /// Raised when a preference changes.
@@ -133,30 +112,16 @@ public sealed class DashboardViewPreferences(ILocalStorage localStorage, IOption
         await localStorage.SetUnprotectedAsync(BrowserStorageKeys.GroupOverview, groupOverview.ToString()).ConfigureAwait(false);
     }
 
-    public async Task SetRecordingsStyleAsync(RecordingsStyle recordingsStyle)
-    {
-        if (RecordingsStyle == recordingsStyle)
-        {
-            return;
-        }
-
-        RecordingsStyle = recordingsStyle;
-        Changed?.Invoke();
-        await localStorage.SetUnprotectedAsync(BrowserStorageKeys.RecordingsStyle, recordingsStyle.ToString()).ConfigureAwait(false);
-    }
-
     private async Task LoadAsync()
     {
         try
         {
             var density = await ReadDensityAsync().ConfigureAwait(false);
             var groupOverview = await ReadGroupOverviewAsync().ConfigureAwait(false);
-            var recordingsStyle = await ReadAsync(BrowserStorageKeys.RecordingsStyle, default(RecordingsStyle)).ConfigureAwait(false);
-            if (density != Density || groupOverview != GroupOverview || recordingsStyle != RecordingsStyle)
+            if (density != Density || groupOverview != GroupOverview)
             {
                 Density = density;
                 GroupOverview = groupOverview;
-                RecordingsStyle = recordingsStyle;
                 Changed?.Invoke();
             }
         }
@@ -193,12 +158,5 @@ public sealed class DashboardViewPreferences(ILocalStorage localStorage, IOption
         }
 
         return result.Success && Enum.TryParse<GroupOverview>(result.Value, out var value) && Enum.IsDefined(value) ? value : GroupOverview.Summary;
-    }
-
-    // Values are stored by name, so reordering the enums doesn't change a stored choice.
-    private async Task<T> ReadAsync<T>(string key, T fallback) where T : struct, Enum
-    {
-        var result = await localStorage.GetUnprotectedAsync<string>(key).ConfigureAwait(false);
-        return result.Success && Enum.TryParse<T>(result.Value, out var value) && Enum.IsDefined(value) ? value : fallback;
     }
 }
