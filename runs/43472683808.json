@@ -1,0 +1,69 @@
+{
+  "run_id": 43472683808,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/43472683808",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-13T18:01:17Z",
+  "verdict": "flaky-test",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 22261,
+    "title": "Fix 404 when switching language in the previous dashboard",
+    "author": "sebastienros",
+    "state": "closed",
+    "head_branch": "sebros/dashboard-language-404-d40840",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/22261",
+    "merged_at": "2026-11-13T17:25:35Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "67d9ff015544d7ad6b6f61d856b3e54dce9854a5",
+    "failed_sha": "8f6e42f40e26e1cc1dc20749db477e530240387f",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "8f6e42f40e26e1cc1dc20749db477e530240387f",
+        "message": "Fix 404 when switching language in the previous dashboard (#22261) ## Description Switching language in the previous dashboard (Settings > Language, with the previous experience selected) showed a 404 page. The settings dialog navigates to `/api/set-language?language=...&redirectUrl=...` with a forced page load, the same as the new dashboard. The legacy layout registers a location-changing handler that rewrites unprefixed navigations below `/legacy`, so links shared with the new experience stay ",
+        "html_url": "https://github.com/microsoft/aspire/commit/8f6e42f40e26e1cc1dc20749db477e530240387f",
+        "pull_request": {
+          "number": 22261,
+          "title": "Fix 404 when switching language in the previous dashboard",
+          "url": "https://github.com/microsoft/aspire/pull/22261",
+          "merged_at": "2026-11-13T17:25:35Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (ubuntu-latest)",
+      "id": 132049582720,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/43472683808/job/132049582720",
+      "classification": "flaky-test",
+      "reason": "Test failed because starting a freshly written fake peer script hit 'Text file busy' (ETXTBSY) race, unrelated to the merge.",
+      "failed_steps": [
+        "Run tests (Linux/macOS)"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Cli.Tests.Acquisition.PeerInstallProbeTests.ProbeAsync_PeerExitsNonZero_ReturnsFailedWhenVersionAlsoFails",
+      "job": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (ubuntu-latest)",
+      "error": "Assert.Contains() Failure: Sub-string not found\nString:    \"Could not start peer process: An error occurred tr\"···\nNot found: \"code 7\"",
+      "stack_trace": "   at Aspire.Cli.Tests.Acquisition.PeerInstallProbeTests.ProbeAsync_PeerExitsNonZero_ReturnsFailedWhenVersionAlsoFails() in /home/runner/work/aspire/aspire/tests/Aspire.Cli.Tests/Acquisition/PeerInstallProbeTests.cs:line 187\n--- End of stack trace from previous location ---",
+      "standard_output": "Temporary workspace created at: /tmp/Aspire.Cli.Tests/Workspace/5oihgloj.yaw\n[FakePeerScript] --- begin script at /tmp/Aspire.Cli.Tests/Workspace/5oihgloj.yaw/peer ---\n#!/bin/sh\nif [ \"$1\" != \"doctor\" ]; then\n  exit 127\nfi\ncat <<'__ASPIRE_PEER_EOF__'\n{}\n__ASPIRE_PEER_EOF__\n\nexit 7\n[FakePeerScript] --- end script at /tmp/Aspire.Cli.Tests/Workspace/5oihgloj.yaw/peer ---\n| [2026-11-13T17:32:25] Aspire.Cli.Acquisition.PeerInstallProbe Debug: Could not start process '/tmp/Aspire.Cli.Tests/Workspace/5oihgloj.yaw/peer'.\n| System.ComponentModel.Win32Exception (26): An error occurred trying to start process '/tmp/Aspire.Cli.Tests/Workspace/5oihgloj.yaw/peer' with working directory '/home/runner/work/aspire/aspire/artifacts/bin/Aspire.Cli.Tests/Debug/net11.0'. Text file busy\n|    at System.Diagnostics.Process.Start()\n|    at System.Diagnostics.Process.Start(ProcessStartInfo startInfo)\n|    at Aspire.Cli.Utils.ProcessCaptureRunner.RunAsync[TCapture](ProcessStartInfo startInfo, TimeSpan timeout, Func`3 captureAsync, Func`1 createEmptyCapture, ILogger logger, CancellationToken cancellationToken) in /_/src/Aspire.Cli/Utils/ProcessCaptureRunner.cs:line 51\nDisposing temporary workspace at: /tmp/Aspire.Cli.Tests/Workspace/5oihgloj.yaw\n",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Win32Exception (26) Text file busy when starting the generated peer script; intermittent exec race on freshly written file.",
+      "job_id": 132049582720,
+      "execution_id": "942e5fcd-2a7b-46dc-894f-e383db9ee4f7",
+      "result_file": "00001.trx",
+      "result_format": "trx"
+    }
+  ],
+  "causes": [
+    "acquisition-mockghapi-textfilebusy"
+  ]
+}
