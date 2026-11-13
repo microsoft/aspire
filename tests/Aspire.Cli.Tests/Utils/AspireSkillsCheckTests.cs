@@ -38,7 +38,7 @@ public class AspireSkillsCheckTests(ITestOutputHelper outputHelper) : IDisposabl
             {string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_LocationWithAgents, "~/.agents/skills/aspire", "copilot, opencode")}
             """.ReplaceLineEndings("\n"),
             result.Details);
-        Assert.Equal([".claude/skills/aspire-init", "~/.agents/skills/aspire"], result.Files);
+        Assert.Null(result.Files);
         Assert.Equal("project guidance", await File.ReadAllTextAsync(project));
         Assert.Equal("user guidance", await File.ReadAllTextAsync(user));
     }
@@ -57,7 +57,6 @@ public class AspireSkillsCheckTests(ITestOutputHelper outputHelper) : IDisposabl
         Assert.Equal(
             string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_LocationWithAgents, ".agents/skills/aspire", "copilot, opencode"),
             result.Details);
-        Assert.Equal([".agents/skills/aspire"], result.Files);
     }
 
     [Fact]

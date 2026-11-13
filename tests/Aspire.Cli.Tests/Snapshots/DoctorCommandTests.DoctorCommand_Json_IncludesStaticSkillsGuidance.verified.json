@@ -5,10 +5,6 @@
       "message": "Found static copies of Aspire skills.",
       "fix": "Run 'aspire agent init' to configure skill sources and remove these copies.",
       "details": ".agents/skills/aspire (copilot, opencode)\n~/.agents/skills/aspire (copilot, opencode)",
-      "files": [
-        ".agents/skills/aspire",
-        "~/.agents/skills/aspire"
-      ],
       "metadata": {
         "workspaceRoot": "<workspace>"
       }

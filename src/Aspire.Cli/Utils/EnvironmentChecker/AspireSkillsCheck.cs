@@ -48,7 +48,6 @@ internal sealed class AspireSkillsCheck(
                 Message = DoctorCommandStrings.AspireSkillsMessage,
                 Details = string.Join('\n', copyLines),
                 Fix = DoctorCommandStrings.AspireSkillsFix,
-                Files = copies.Select(copy => copy.DisplayPath).ToArray(),
                 Metadata = new JsonObject
                 {
                     ["workspaceRoot"] = workspaceRoot.FullName
