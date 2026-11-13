@@ -108,6 +108,7 @@ internal sealed class AspireConfigFile
     /// Feature flags.
     /// </summary>
     [JsonPropertyName("features")]
+    [JsonConverter(typeof(FlexibleBooleanDictionaryConverter))]
     [Description("Feature flags for enabling/disabling experimental or optional features. Key is feature name, value is enabled (true) or disabled (false).")]
     public Dictionary<string, bool>? Features { get; set; }
 

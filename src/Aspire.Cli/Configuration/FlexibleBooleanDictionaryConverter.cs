@@ -43,6 +43,17 @@ internal sealed class FlexibleBooleanDictionaryConverter : JsonConverter<Diction
 
             reader.Read();
 
+            // Feature names that contained ':' (for example, the retired "experimentalPolyglot:go")
+            // were written by configuration commands as nested objects:
+            //   "features": { "experimentalPolyglot": { "go": "true" } }
+            // A structured value can never be a feature flag, so skip it rather than failing to load
+            // the entire settings file.
+            if (reader.TokenType is JsonTokenType.StartObject or JsonTokenType.StartArray)
+            {
+                reader.Skip();
+                continue;
+            }
+
             bool value = reader.TokenType switch
             {
                 JsonTokenType.True => true,
@@ -71,14 +82,9 @@ internal sealed class FlexibleBooleanDictionaryConverter : JsonConverter<Diction
 
     private static bool ParseBooleanString(string? value, string key)
     {
-        if (string.Equals(value, "true", StringComparison.OrdinalIgnoreCase))
+        if (bool.TryParse(value, out var result))
         {
-            return true;
-        }
-
-        if (string.Equals(value, "false", StringComparison.OrdinalIgnoreCase))
-        {
-            return false;
+            return result;
         }
 
         throw new JsonException($"Cannot convert string '{value}' to boolean for key '{key}'. Expected 'true' or 'false'.");
