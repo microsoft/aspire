@@ -14,7 +14,6 @@ namespace Aspire.Cli.Utils.EnvironmentChecker;
 /// Warns about static Aspire skills that can shadow configured skill sources.
 /// </summary>
 internal sealed class AspireSkillsCheck(
-    IEnumerable<IAgentClient> clients,
     IGitRepository gitRepository,
     CliExecutionContext executionContext) : IEnvironmentCheck
 {
@@ -27,34 +26,27 @@ internal sealed class AspireSkillsCheck(
         cancellationToken.ThrowIfCancellationRequested();
         var workingDirectory = executionContext.WorkingDirectory;
         var workspaceRoot = await gitRepository.GetRootAsync(cancellationToken) ?? workingDirectory;
-        var local = LocalAspireSkills.Find(workingDirectory, workspaceRoot, clients, cancellationToken);
+        var skillCopies = LocalAspireSkills.Find(workingDirectory, workspaceRoot, executionContext.HomeDirectory, cancellationToken);
         var results = new List<EnvironmentCheckResult>();
-        if (local.Errors.Count > 0)
+        if (skillCopies.Count > 0)
         {
-            results.Add(new EnvironmentCheckResult
-            {
-                Category = EnvironmentCheckCategories.AppHost,
-                Name = $"{CheckName}-inspection",
-                Status = EnvironmentCheckStatus.Warning,
-                Message = DoctorCommandStrings.AspireSkillsInspectionFailedMessage,
-                Details = string.Join(Environment.NewLine, local.Errors)
-            });
-        }
-
-        if (local.Files.Count > 0)
-        {
-            var displayPaths = local.Files
-                .Select(path => AgentPath.GetDisplayPath(path, workspaceRoot, executionContext))
-                .Order(StringComparer.Ordinal)
+            var copies = skillCopies
+                .DistinctBy(copy => copy.Directory, StringComparers.FileSystemPath)
+                .Select(copy => (DisplayPath: AgentPath.GetDisplayPath(copy.Directory, workspaceRoot, executionContext), copy.Owners))
+                .OrderBy(copy => copy.DisplayPath, StringComparer.Ordinal)
                 .ToArray();
+
+            var copyLines = copies.Select(copy => string.Format(CultureInfo.CurrentCulture,
+                AgentCommandStrings.InitCommand_LocationWithAgents, copy.DisplayPath, string.Join(", ", copy.Owners)));
+
             results.Add(new EnvironmentCheckResult
             {
-                Category = EnvironmentCheckCategories.AppHost,
+                Category = EnvironmentCheckCategories.Environment,
                 Name = CheckName,
                 Status = EnvironmentCheckStatus.Warning,
-                Message = string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_LocalSkillsConflict, string.Empty).TrimEnd(),
+                Message = DoctorCommandStrings.AspireSkillsMessage,
+                Details = string.Join('\n', copyLines),
                 Fix = DoctorCommandStrings.AspireSkillsFix,
-                Files = displayPaths,
                 Metadata = new JsonObject
                 {
                     ["workspaceRoot"] = workspaceRoot.FullName
