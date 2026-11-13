@@ -1988,11 +1988,6 @@ export interface WithRequiredCommandValidationOptions {
     helpLink?: string;
 }
 
-export interface WithRequiredOptions {
-    /** A value indicating whether the parameter must have a value before it can be resolved. */
-    required?: boolean;
-}
-
 export interface WithTerminalOptions {
     /** An optional callback to configure the terminal options. */
     configure?: (obj: TerminalOptions) => Promise<void>;
@@ -9969,13 +9964,13 @@ export interface DistributedApplicationBuilder {
     /**
      * Adds a .NET project resource
      * @param options Additional options.
-     * @deprecated Use addDotnetProject from the Aspire.Hosting.Dotnet package instead.
+     * @deprecated Use addDotnetProject(name, path) from the Aspire.Hosting.Dotnet package instead.
      */
     addProject(name: string, projectPath: string, options?: AddProjectOptions): ProjectResourcePromise;
     /**
      * Adds a C# application resource
      * @param options Additional options.
-     * @deprecated Use addDotnetProject from the Aspire.Hosting.Dotnet package instead.
+     * @deprecated Use addDotnetProject(name, path) from the Aspire.Hosting.Dotnet package instead.
      */
     addCSharpApp(name: string, path: string, options?: AddCSharpAppOptions): CSharpAppResourcePromise;
     /**
@@ -10193,13 +10188,13 @@ export interface DistributedApplicationBuilderPromise extends PromiseLike<Distri
     /**
      * Adds a .NET project resource
      * @param options Additional options.
-     * @deprecated Use addDotnetProject from the Aspire.Hosting.Dotnet package instead.
+     * @deprecated Use addDotnetProject(name, path) from the Aspire.Hosting.Dotnet package instead.
      */
     addProject(name: string, projectPath: string, options?: AddProjectOptions): ProjectResourcePromise;
     /**
      * Adds a C# application resource
      * @param options Additional options.
-     * @deprecated Use addDotnetProject from the Aspire.Hosting.Dotnet package instead.
+     * @deprecated Use addDotnetProject(name, path) from the Aspire.Hosting.Dotnet package instead.
      */
     addCSharpApp(name: string, path: string, options?: AddCSharpAppOptions): CSharpAppResourcePromise;
     /**
@@ -10700,7 +10695,7 @@ class DistributedApplicationBuilderImpl implements DistributedApplicationBuilder
     /**
      * Adds a .NET project resource
      * @param options Additional options.
-     * @deprecated Use addDotnetProject from the Aspire.Hosting.Dotnet package instead.
+     * @deprecated Use addDotnetProject(name, path) from the Aspire.Hosting.Dotnet package instead.
      */
     addProject(name: string, projectPath: string, options?: AddProjectOptions): ProjectResourcePromise {
         let launchProfileOrOptions = options?.launchProfileOrOptions;
@@ -10722,7 +10717,7 @@ class DistributedApplicationBuilderImpl implements DistributedApplicationBuilder
     /**
      * Adds a C# application resource
      * @param optionsBag Additional options.
-     * @deprecated Use addDotnetProject from the Aspire.Hosting.Dotnet package instead.
+     * @deprecated Use addDotnetProject(name, path) from the Aspire.Hosting.Dotnet package instead.
      */
     addCSharpApp(name: string, path: string, optionsBag?: AddCSharpAppOptions): CSharpAppResourcePromise {
         let options = optionsBag?.options;
@@ -34762,13 +34757,14 @@ export interface ParameterResource {
      * The manifest publisher does not currently support optional parameters and throws a `DistributedApplicationException`.
      * @returns The configured resource builder.
      */
-    withOptional(): ParameterResourcePromise;
+    asOptional(): ParameterResourcePromise;
     /**
-     * Sets whether the parameter resource requires a value.
-     * @param options Additional options.
+     * Marks the parameter resource as required.
+     *
+     * Parameters are required by default. Use this method to make a parameter required again after it was marked with `AsOptional`.
      * @returns The configured resource builder.
      */
-    withRequired(options?: WithRequiredOptions): ParameterResourcePromise;
+    asRequired(): ParameterResourcePromise;
     /**
      * Sets a custom input for the parameter resource from a polyglot app host.
      * @param options Options used to customize the input for the parameter.
@@ -35184,13 +35180,14 @@ export interface ParameterResourcePromise extends PromiseLike<ParameterResource>
      * The manifest publisher does not currently support optional parameters and throws a `DistributedApplicationException`.
      * @returns The configured resource builder.
      */
-    withOptional(): ParameterResourcePromise;
+    asOptional(): ParameterResourcePromise;
     /**
-     * Sets whether the parameter resource requires a value.
-     * @param options Additional options.
+     * Marks the parameter resource as required.
+     *
+     * Parameters are required by default. Use this method to make a parameter required again after it was marked with `AsOptional`.
      * @returns The configured resource builder.
      */
-    withRequired(options?: WithRequiredOptions): ParameterResourcePromise;
+    asRequired(): ParameterResourcePromise;
     /**
      * Sets a custom input for the parameter resource from a polyglot app host.
      * @param options Options used to customize the input for the parameter.
@@ -35654,10 +35651,10 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
     }
 
     /** @internal */
-    private async _withOptionalInternal(): Promise<ParameterResource> {
+    private async _asOptionalInternal(): Promise<ParameterResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         const result = await this._client.invokeCapability<ParameterResourceHandle>(
-            'Aspire.Hosting/withOptional',
+            'Aspire.Hosting/asOptional',
             rpcArgs
         );
         return new ParameterResourceImpl(result, this._client);
@@ -35671,29 +35668,28 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
      * The manifest publisher does not currently support optional parameters and throws a `DistributedApplicationException`.
      * @returns The configured resource builder.
      */
-    withOptional(): ParameterResourcePromise {
-        return new ParameterResourcePromiseImpl(this._withOptionalInternal(), this._client);
+    asOptional(): ParameterResourcePromise {
+        return new ParameterResourcePromiseImpl(this._asOptionalInternal(), this._client);
     }
 
     /** @internal */
-    private async _withRequiredInternal(required?: boolean): Promise<ParameterResource> {
+    private async _asRequiredInternal(): Promise<ParameterResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
-        if (required !== undefined) rpcArgs.required = required;
         const result = await this._client.invokeCapability<ParameterResourceHandle>(
-            'Aspire.Hosting/withRequired',
+            'Aspire.Hosting/asRequired',
             rpcArgs
         );
         return new ParameterResourceImpl(result, this._client);
     }
 
     /**
-     * Sets whether the parameter resource requires a value.
-     * @param options Additional options.
+     * Marks the parameter resource as required.
+     *
+     * Parameters are required by default. Use this method to make a parameter required again after it was marked with `AsOptional`.
      * @returns The configured resource builder.
      */
-    withRequired(options?: WithRequiredOptions): ParameterResourcePromise {
-        const required = options?.required;
-        return new ParameterResourcePromiseImpl(this._withRequiredInternal(required), this._client);
+    asRequired(): ParameterResourcePromise {
+        return new ParameterResourcePromiseImpl(this._asRequiredInternal(), this._client);
     }
 
     /** @internal */
@@ -37111,8 +37107,8 @@ const ParameterResourcePromiseImpl = $aspireCreateFluentPromiseClass<ParameterRe
     ["withContainerRegistry"]: () => ParameterResourcePromiseImpl,
     ["withDockerfileBaseImage"]: () => ParameterResourcePromiseImpl,
     ["withDescription"]: () => ParameterResourcePromiseImpl,
-    ["withOptional"]: () => ParameterResourcePromiseImpl,
-    ["withRequired"]: () => ParameterResourcePromiseImpl,
+    ["asOptional"]: () => ParameterResourcePromiseImpl,
+    ["asRequired"]: () => ParameterResourcePromiseImpl,
     ["withCustomInput"]: () => ParameterResourcePromiseImpl,
     ["withRequiredCommand"]: () => ParameterResourcePromiseImpl,
     ["withRequiredCommandValidation"]: () => ParameterResourcePromiseImpl,

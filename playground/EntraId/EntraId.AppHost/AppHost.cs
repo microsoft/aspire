@@ -22,7 +22,7 @@ if (useExistingApplication)
     var webClientId = builder.AddParameter("entra-web-client-id")
         .WithDescription("The **Application (client) ID** shown on the Overview page of the existing app registration shared by the .NET and Node front ends. Enable **ID tokens (used for implicit and hybrid flows)** and configure both apps' redirect URIs as described in README.md. No client secret is required.", enableMarkdown: true);
 
-    entraWeb = builder.AddExistingEntraApplication("entra-web", tenantId, webClientId);
+    entraWeb = builder.AddExistingEntraIdApplication("entra-web", tenantId, webClientId);
 }
 else
 {

@@ -2,7 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREAZURE001
-#pragma warning disable ASPIREAZURE003
+#pragma warning disable ASPIREAZURE006 // ManagedIdentityRequiredAnnotation is experimental.
 #pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIREPIPELINES003
 
@@ -94,7 +94,7 @@ public class EntraIdAppRoleAssignmentTests(ITestOutputHelper outputHelper)
         const string ClientId = "00001111-aaaa-2222-bbbb-3333cccc4444";
         var identity = builder.AddAzureUserAssignedIdentity("identity");
         var worker = builder.AddContainer("worker", "image");
-        var existing = builder.AddExistingEntraApplication("existing", TenantId, ClientId);
+        var existing = builder.AddExistingEntraIdApplication("existing", TenantId, ClientId);
         Assert.Throws<InvalidOperationException>(() => existing.PublishWithAppRoleAssignment(identity, "Read"));
         Assert.Throws<InvalidOperationException>(() => existing.PublishWithAppRoleAssignment(worker, "Read"));
         var api = builder.AddEntraIdApplication("entra-api")

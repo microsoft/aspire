@@ -23,9 +23,9 @@ with create_builder() as builder:
     vault = builder.add_azure_key_vault("vault")
 
     # Existing registrations: configuration only, with literal or parameter IDs in any combination.
-    existing_entra = builder.add_existing_entra_app("existing-entra", tenant_id, EXAMPLE_CLIENT)
-    builder.add_existing_entra_app("existing-entra-literals", EXAMPLE_TENANT, EXAMPLE_CLIENT)
-    builder.add_existing_entra_app("existing-entra-parameters", tenant_id, client_id)
+    existing_entra = builder.add_existing_entra_id_app("existing-entra", tenant_id, EXAMPLE_CLIENT)
+    builder.add_existing_entra_id_app("existing-entra-literals", EXAMPLE_TENANT, EXAMPLE_CLIENT)
+    builder.add_existing_entra_id_app("existing-entra-parameters", tenant_id, client_id)
     existing_entra.with_instance("https://login.microsoftonline.com/")
     existing_entra.with_sign_in_audience("AzureADMultipleOrgs")
     existing_entra.with_audience("api://example")
@@ -55,7 +55,7 @@ with create_builder() as builder:
     fluent_existing_entra.as_existing_app(EXAMPLE_TENANT, client_id)
 
     # An existing API registration is configuration only: its URI and scope IDs describe what the registration already defines.
-    existing_api = builder.add_existing_entra_app("existing-api", EXAMPLE_TENANT, EXAMPLE_CLIENT)
+    existing_api = builder.add_existing_entra_id_app("existing-api", EXAMPLE_TENANT, EXAMPLE_CLIENT)
     existing_api.with_app_id_uri(app_id_uri="api://contoso-orders")
     existing_api.with_scope("orders.read", "Read orders.", options={"id": "33334444-aaaa-5555-bbbb-6666cccc7777"})
 

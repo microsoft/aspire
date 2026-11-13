@@ -51,10 +51,7 @@ public static class AspireAzureOpenAIExtensions
         ArgumentException.ThrowIfNullOrEmpty(connectionName);
 
         var settings = new OpenAIComponent().AddClient(builder, DefaultConfigSectionName, configureSettings, configureClientBuilder, connectionName, serviceKey: null);
-        return new(builder, connectionName, null, settings.DisableTracing, settings.EnableSensitiveTelemetryData)
-        {
-            DisableMetrics = settings.DisableMetrics
-        };
+        return new(builder, connectionName, null, settings.DisableTracing, settings.DisableMetrics, settings.EnableSensitiveTelemetryData);
     }
 
     /// <summary>
@@ -83,10 +80,7 @@ public static class AspireAzureOpenAIExtensions
         ArgumentException.ThrowIfNullOrEmpty(name);
 
         var settings = new OpenAIComponent().AddClient(builder, DefaultConfigSectionName, configureSettings, configureClientBuilder, name, serviceKey: name);
-        return new(builder, name, name, settings.DisableTracing, settings.EnableSensitiveTelemetryData)
-        {
-            DisableMetrics = settings.DisableMetrics
-        };
+        return new(builder, name, name, settings.DisableTracing, settings.DisableMetrics, settings.EnableSensitiveTelemetryData);
     }
 
     private sealed class OpenAIComponent : AzureComponent<AzureOpenAISettings, OpenAIClient, OpenAIClientOptions>

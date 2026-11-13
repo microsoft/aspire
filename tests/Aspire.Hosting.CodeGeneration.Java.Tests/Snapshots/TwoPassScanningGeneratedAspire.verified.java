@@ -19061,25 +19061,18 @@ public class ParameterResource extends ResourceBuilderBase {
     }
 
     /** Marks the parameter resource as optional. */
-    public ParameterResource withOptional() {
+    public ParameterResource asOptional() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        getClient().invokeCapability("Aspire.Hosting/withOptional", reqArgs);
+        getClient().invokeCapability("Aspire.Hosting/asOptional", reqArgs);
         return this;
     }
 
-    public ParameterResource withRequired() {
-        return withRequired(null);
-    }
-
-    /** Sets whether the parameter resource requires a value. */
-    public ParameterResource withRequired(Boolean required) {
+    /** Marks the parameter resource as required. */
+    public ParameterResource asRequired() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        if (required != null) {
-            reqArgs.put("required", AspireClient.serializeValue(required));
-        }
-        getClient().invokeCapability("Aspire.Hosting/withRequired", reqArgs);
+        getClient().invokeCapability("Aspire.Hosting/asRequired", reqArgs);
         return this;
     }
 

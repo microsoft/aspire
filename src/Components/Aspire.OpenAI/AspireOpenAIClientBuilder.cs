@@ -18,8 +18,9 @@ namespace Aspire.OpenAI;
 /// <param name="connectionName">The name used to retrieve the connection string from the ConnectionStrings configuration section.</param>
 /// <param name="serviceKey">The service key used to register the <see cref="OpenAIClient"/> service, if any.</param>
 /// <param name="disableTracing">A flag to indicate whether tracing should be disabled.</param>
+/// <param name="disableMetrics">A flag to indicate whether metrics should be disabled.</param>
 /// <param name="enableSensitiveTelemetryData">A flag indicating whether potentially sensitive information should be included in telemetry.</param>
-public class AspireOpenAIClientBuilder(IHostApplicationBuilder hostBuilder, string connectionName, string? serviceKey, bool disableTracing, bool enableSensitiveTelemetryData)
+public class AspireOpenAIClientBuilder(IHostApplicationBuilder hostBuilder, string connectionName, string? serviceKey, bool disableTracing, bool disableMetrics, bool enableSensitiveTelemetryData)
 {
     private const string DeploymentKey = "Deployment";
     private const string ModelKey = "Model";
@@ -47,7 +48,7 @@ public class AspireOpenAIClientBuilder(IHostApplicationBuilder hostBuilder, stri
     /// <summary>
     /// Gets a flag indicating whether metrics should be disabled.
     /// </summary>
-    public bool DisableMetrics { get; init; }
+    public bool DisableMetrics { get; } = disableMetrics;
 
     /// <summary>
     /// Gets a flag indicating whether potentially sensitive information should be included in telemetry.

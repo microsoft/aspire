@@ -64,8 +64,8 @@ void main() throws Exception {
         var tool = builder.addDotnetTool("mytool", "dotnet-ef");
         var configParam = builder.addParameterFromConfiguration("myconfig", "MyConfig:Key");
         var secretParam = builder.addParameterFromConfiguration("mysecret", "MyConfig:Secret", true);
-        var optionalParam = builder.addParameter("optional-parameter").withOptional();
-        optionalParam.withRequired().withRequired(false);
+        var optionalParam = builder.addParameter("optional-parameter").asOptional();
+        optionalParam.asRequired().asOptional();
         String optionalValue = optionalParam.tryGetCurrentValue();
         if (optionalValue != null) {
             throw new IllegalStateException("Expected an unset optional parameter");
