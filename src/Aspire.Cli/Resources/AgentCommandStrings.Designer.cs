@@ -556,7 +556,7 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to One or more skill sources are configured. A skill source lets an organization share skills to customize your development experience..
+        ///   Looks up a localized string similar to Selecting aspire configures agent assets from these skill sources:.
         /// </summary>
         internal static string InitCommand_SkillSourcesExplanation {
             get {

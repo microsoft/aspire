@@ -458,6 +458,8 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
         var warnings = new List<string>();
         var expectedWarnings = new[]
         {
+            AgentCommandStrings.InitCommand_SkillSourcesExplanation,
+            $"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]",
             string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_LocalSkillsConflict,
                 "  .agents/skills/aspire/SKILL.md")
         };
