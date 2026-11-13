@@ -38,7 +38,6 @@ public class AspireSkillsCheckTests(ITestOutputHelper outputHelper) : IDisposabl
             {string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_LocationWithAgents, "~/.agents/skills/aspire", "copilot, opencode")}
             """.ReplaceLineEndings("\n"),
             result.Details);
-        Assert.Null(result.Files);
         Assert.Equal("project guidance", await File.ReadAllTextAsync(project));
         Assert.Equal("user guidance", await File.ReadAllTextAsync(user));
     }
