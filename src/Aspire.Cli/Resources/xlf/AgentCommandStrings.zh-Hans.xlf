@@ -302,8 +302,8 @@
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_TelemetryHooksInstalled">
-        <source>Installed Aspire agent telemetry hooks for: {0}. Only Aspire skill, MCP tool, and reference-file usage is recorded. Opt out anytime by setting ASPIRE_CLI_TELEMETRY_OPTOUT=true.</source>
-        <target state="translated">已安装以下项的 Aspire 智能体遥测挂钩: {0}。仅记录 Aspire 技能、MCP 工具和引用文件使用情况。通过设置 ASPIRE_CLI_TELEMETRY_OPTOUT=true 可随时选择退出。</target>
+        <source>Installed Aspire agent telemetry hooks in user-level configuration for: {0}. Only Aspire skill, MCP tool, and reference-file usage is recorded. Opt out anytime by setting ASPIRE_CLI_TELEMETRY_OPTOUT=true.</source>
+        <target state="needs-review-translation">已安装以下项的 Aspire 智能体遥测挂钩: {0}。仅记录 Aspire 技能、MCP 工具和引用文件使用情况。通过设置 ASPIRE_CLI_TELEMETRY_OPTOUT=true 可随时选择退出。</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_WorkspaceRootOptionDescription">

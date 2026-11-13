@@ -506,6 +506,7 @@
                     <FluentIcon Value="@(new Icons.Regular.Size16.Open())" Color="Color.Primary" />
                 </a>
             }
+            @* Resolved icons are shared. Set the component color rather than mutating the cached icon with WithColor. *@
             @foreach (var command in showLabels ? GetHighlightedCommands(resource) : _isPaneFullCanvas ? GetFullPageRowCommands(resource) : GetSidebarCommands(resource))
             {
                 var commandTitle = !string.IsNullOrEmpty(command.GetDisplayDescription()) ? command.GetDisplayDescription() : command.GetDisplayName();
@@ -513,9 +514,9 @@
                 {
                     <FluentButton Appearance="ButtonAppearance.Default"
                                   data-tooltip="@commandTitle"
-                                  IconStart="@IconResolver.ResolveHighlightedCommandIcon(command.IconName, command.IconVariant).WithColor(Color.Primary)"
                                   OnClick="@handlers.Command(command.Name)"
                                   Disabled="@IsCommandDisabled(resource, command)">
+                        <FluentIcon Value="@IconResolver.ResolveHighlightedCommandIcon(command.IconName, command.IconVariant)" Color="Color.Primary" Slot="start" />
                         @command.GetDisplayName()
                     </FluentButton>
                 }
@@ -524,12 +525,13 @@
                     <FluentButton Appearance="ButtonAppearance.Transparent"
                                   Class="@($"{GetResourceRowActionClass(actionIndex++)} resource-row-highlighted resource-row-command-slot-{highlightedIndex++}")"
                                   IconOnly="true"
-                                  IconStart="@(IconResolver.ResolveHighlightedCommandIcon(command.IconName, command.IconVariant).WithColor("currentColor"))"
                                   data-tooltip="@commandTitle"
                                   data-tooltip-positioning="above"
                                   aria-label="@($"{command.GetDisplayName()} {resourceName}")"
                                   OnClick="@handlers.Command(command.Name)"
-                                  Disabled="@IsCommandDisabled(resource, command)" />
+                                  Disabled="@IsCommandDisabled(resource, command)">
+                        <FluentIcon Value="@IconResolver.ResolveHighlightedCommandIcon(command.IconName, command.IconVariant)" Color="Color.Custom" CustomColor="currentColor" />
+                    </FluentButton>
                 }
             }
             @if (showLabels || !_isPaneFullCanvas || !resource.IsParameter)
@@ -537,8 +539,7 @@
                 <AspireMenuButton ButtonAppearance="@(showLabels ? ButtonAppearance.Default : ButtonAppearance.Transparent)"
                                   ButtonClass="@(showLabels ? null : "resource-row-action")"
                                   Icon="@(new Icons.Regular.Size16.MoreHorizontal())"
-                                  IconColor="Color.Custom"
-                                  IconCustomColor="currentColor"
+                                  IconColor="@(showLabels ? Color.Primary : Color.Custom)"
                                   ItemsProvider="@handlers.MenuItems"
                                   data-tooltip-positioning="@(!showLabels ? "above" : null)"
                                   Title="@string.Format(CultureInfo.CurrentCulture, Loc[nameof(Dashboard.Resources.Layout.ResourcePaneResourceActions)], resourceName)" />

@@ -30,6 +30,16 @@ internal sealed class CopilotAgentClient(
         }
     };
 
+    /// <summary>
+    /// User-level <c>postToolUse</c> <c>matcher</c> for the skill and Aspire MCP tools.
+    /// </summary>
+    /// <remarks>
+    /// Copilot matchers see only the tool name, so matching file-read tools would launch the CLI for every
+    /// read in every repository. Copilot anchors the pattern itself, and the explicit anchors keep it correct
+    /// when evaluated as a plain regular expression (https://docs.github.com/en/copilot/reference/hooks-reference).
+    /// </remarks>
+    internal static string TelemetryHookMatcher { get; } = $"^(?:[Ss]kill|{AgentTelemetryHook.McpMatcher})$";
+
     public string Id => ClientId;
     public string DisplayName { get; } = AgentCommandStrings.Environment_Copilot;
     public AgentEnvironment Environments => AgentEnvironment.CopilotCli | AgentEnvironment.CopilotApp | AgentEnvironment.VsCode;
@@ -74,6 +84,38 @@ internal sealed class CopilotAgentClient(
         }
     }
 
+    public IEnumerable<string> GetForwardedMcpConfigPaths(AgentConfigurationScope scope)
+    {
+        if (scope is not AgentConfigurationScope.Global)
+        {
+            yield break;
+        }
+
+        // VS Code forwards user-profile MCP servers to the Copilot harness. The default profile
+        // stores them in User/mcp.json and named profiles in User/profiles/<id>/mcp.json:
+        // https://code.visualstudio.com/docs/agents/reference/mcp-configuration
+        var home = context.HomeDirectory.FullName;
+        var userDataRoot = environment.IsWindows()
+            ? AgentPath.GetOverride("APPDATA", context, environment) ?? Path.Combine(home, "AppData", "Roaming")
+            : environment.IsMacOS()
+                ? Path.Combine(home, "Library", "Application Support")
+                : AgentPath.GetOverride("XDG_CONFIG_HOME", context, environment) ?? Path.Combine(home, ".config");
+        foreach (var product in new[] { "Code", "Code - Insiders" })
+        {
+            var userDirectory = Path.Combine(userDataRoot, product, "User");
+            yield return Path.Combine(userDirectory, "mcp.json");
+
+            var profilesDirectory = new DirectoryInfo(Path.Combine(userDirectory, "profiles"));
+            if (profilesDirectory.Exists)
+            {
+                foreach (var profile in profilesDirectory.EnumerateDirectories("*", new EnumerationOptions { IgnoreInaccessible = true }))
+                {
+                    yield return Path.Combine(profile.FullName, "mcp.json");
+                }
+            }
+        }
+    }
+
     public async Task<(JsonObject Config, string Path)> ReadMcpConfigAsync(
         string configFilePath, DirectoryInfo workspaceRoot, AgentConfigurationScope scope,
         AgentConfiguration edit, CancellationToken cancellationToken)
@@ -89,26 +131,18 @@ internal sealed class CopilotAgentClient(
         return (repaired, added);
     }
 
-    public async Task<TelemetryHookConfigurationResult> ConfigureTelemetryHooksAsync(
-        AgentEnvironment detectedEnvironments, CancellationToken cancellationToken)
-    {
-        var targetEnvironment = detectedEnvironments & (AgentEnvironment.CopilotApp | AgentEnvironment.CopilotCli);
-        // App and CLI share one user hook. Prefer the App display name when both are detected.
-        // Canonical scripts still attribute App events to copilot-cli:
-        // https://github.com/microsoft/aspire-skills/issues/71.
-        if (targetEnvironment.HasFlag(AgentEnvironment.CopilotApp))
-        {
-            targetEnvironment = AgentEnvironment.CopilotApp;
-        }
-        if (targetEnvironment == AgentEnvironment.None)
-        {
-            return new TelemetryHookConfigurationResult(AgentEnvironment.None, []);
-        }
+    // VS Code, the Copilot App, and the Copilot CLI share the Copilot harness, which reads user hooks from
+    // ~/.copilot/hooks, so one registration covers all of them:
+    // https://code.visualstudio.com/docs/agent-customization/hooks#_choose-a-hook-source
+    public bool SupportsTelemetryHooks => true;
 
+    public async Task<TelemetryHookStatus> ConfigureTelemetryHookAsync(CancellationToken cancellationToken)
+    {
         try
         {
             // Copilot reads Claude settings only at project scope, so these user hooks cannot
-            // duplicate Claude's user hook. Direct exec also avoids a shell launch per tool call.
+            // duplicate Claude's user hook. Direct exec avoids a shell launch, and the matcher keeps
+            // Copilot from launching the CLI for tool calls the classifier would discard.
             // https://docs.github.com/en/copilot/reference/hooks-reference#command-hooks
             var hooksDirectory = Path.Combine(GetSettingsDirectory(), "hooks");
             Directory.CreateDirectory(hooksDirectory);
@@ -123,6 +157,7 @@ internal sealed class CopilotAgentClient(
                         new JsonObject
                         {
                             ["type"] = "command",
+                            ["matcher"] = TelemetryHookMatcher,
                             ["exec"] = command,
                             ["args"] = new JsonArray(args.Select(arg => (JsonNode?)JsonValue.Create(arg)).ToArray()),
                             ["timeoutSec"] = 30,
@@ -133,13 +168,12 @@ internal sealed class CopilotAgentClient(
             await edit.ReadBytesForEditAsync(filePath, cancellationToken);
             await edit.PublishAsync(filePath, config, cancellationToken);
 
-            return new TelemetryHookConfigurationResult(targetEnvironment, []);
+            return TelemetryHookStatus.Configured;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            logger.LogDebug(ex, "Failed to write Copilot CLI telemetry hook configuration.");
-            return new TelemetryHookConfigurationResult(AgentEnvironment.None,
-                [new TelemetryHookSkip(targetEnvironment, TelemetryHookSkipReason.WriteFailed)]);
+            logger.LogDebug(ex, "Failed to write Copilot telemetry hook configuration.");
+            return TelemetryHookStatus.WriteFailed;
         }
     }
 

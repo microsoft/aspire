@@ -302,8 +302,8 @@
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_TelemetryHooksInstalled">
-        <source>Installed Aspire agent telemetry hooks for: {0}. Only Aspire skill, MCP tool, and reference-file usage is recorded. Opt out anytime by setting ASPIRE_CLI_TELEMETRY_OPTOUT=true.</source>
-        <target state="translated">Aspire エージェント テレメトリ フックがインストールされました: {0}。Aspire スキル、MCP ツール、および参照ファイルの使用状況のみが記録されます。ASPIRE_CLI_TELEMETRY_OPTOUT=true に設定すると、いつでもオプトアウトできます。</target>
+        <source>Installed Aspire agent telemetry hooks in user-level configuration for: {0}. Only Aspire skill, MCP tool, and reference-file usage is recorded. Opt out anytime by setting ASPIRE_CLI_TELEMETRY_OPTOUT=true.</source>
+        <target state="needs-review-translation">Aspire エージェント テレメトリ フックがインストールされました: {0}。Aspire スキル、MCP ツール、および参照ファイルの使用状況のみが記録されます。ASPIRE_CLI_TELEMETRY_OPTOUT=true に設定すると、いつでもオプトアウトできます。</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_WorkspaceRootOptionDescription">

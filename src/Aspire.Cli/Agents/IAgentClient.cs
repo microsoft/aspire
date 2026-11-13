@@ -36,11 +36,18 @@ internal interface IAgentClient
         string configFilePath, DirectoryInfo workspaceRoot, AgentConfigurationScope scope,
         AgentConfiguration edit, CancellationToken cancellationToken);
 
+    IEnumerable<string> GetForwardedMcpConfigPaths(AgentConfigurationScope scope) => [];
+
+    // Must only mutate config in memory. AgentInitCommand probes for an existing server by calling this
+    // on a discarded copy, so writing files here would change user config during that probe.
     (bool Repaired, bool Added) UpdateMcpConfig(
         JsonObject config, string configFilePath, bool configureServer, AgentConfigurationScope scope);
 
-    Task<TelemetryHookConfigurationResult> ConfigureTelemetryHooksAsync(
-        AgentEnvironment detectedEnvironments, CancellationToken cancellationToken);
+    // Telemetry hooks are registered once per client, so a selected client covers all of its environments.
+    // False means the client has no verified hook schema, and ConfigureTelemetryHookAsync throws NotSupportedException.
+    bool SupportsTelemetryHooks { get; }
+
+    Task<TelemetryHookStatus> ConfigureTelemetryHookAsync(CancellationToken cancellationToken);
 }
 
 internal enum AgentConfigurationScope

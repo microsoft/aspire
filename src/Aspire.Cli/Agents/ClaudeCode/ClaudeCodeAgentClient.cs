@@ -18,6 +18,39 @@ internal sealed class ClaudeCodeAgentClient(
 
     private static readonly McpConfigFileHelper.Configuration s_mcp = new() { ServersPropertyName = "mcpServers" };
 
+    /// <summary>
+    /// <c>PostToolUse</c> <c>matcher</c> for the Aspire MCP tools. Reads use <see cref="TelemetryHookReadIf"/>.
+    /// </summary>
+    /// <remarks>
+    /// Claude Code matches unanchored, so the explicit anchors keep each matcher from matching other tool names
+    /// (https://code.claude.com/docs/en/hooks#matcher-patterns).
+    /// </remarks>
+    internal static string TelemetryHookMcpMatcher { get; } = $"^(?:{AgentTelemetryHook.McpMatcher})$";
+
+    /// <summary>
+    /// <c>PostToolUse</c> <c>matcher</c> for the Skill tool.
+    /// </summary>
+    /// <remarks>
+    /// The hook runs for every skill, and the classifier drops non-Aspire skills. A handler <c>if</c> rule such as
+    /// <c>Skill(aspire*)</c> would avoid starting the CLI for other skills, but Claude Code does not evaluate <c>if</c>
+    /// rules against Skill input (https://github.com/anthropics/claude-code/issues/95819).
+    /// </remarks>
+    internal const string TelemetryHookSkillMatcher = "^Skill$";
+
+    internal const string TelemetryHookReadMatcher = "^Read$";
+
+    /// <summary>
+    /// Handler <c>if</c> rule that limits Read hooks to files under an Aspire skill directory.
+    /// </summary>
+    /// <remarks>
+    /// Every canonical skill name starts with <c>aspire</c>. <c>//**/</c> matches at any absolute depth, so this covers
+    /// plugin, user, and project skill installs (https://code.claude.com/docs/en/hooks#filter-by-tool-name-and-arguments-with-the-if-field).
+    /// Claude Code builds earlier than 2.1.85 ignore <c>if</c> and run the hook for every read, and the classifier drops
+    /// non-Aspire reads. Builds earlier than 2.1.176 can fail to match Read path rules
+    /// (https://github.com/anthropics/claude-code/blob/main/CHANGELOG.md).
+    /// </remarks>
+    internal const string TelemetryHookReadIf = "Read(//**/skills/aspire*/**)";
+
     public string Id => ClientId;
     public string DisplayName { get; } = AgentCommandStrings.Environment_ClaudeCode;
     public AgentEnvironment Environments => AgentEnvironment.ClaudeCode;
@@ -72,24 +105,11 @@ internal sealed class ClaudeCodeAgentClient(
         return (repaired, added);
     }
 
-    public async Task<TelemetryHookConfigurationResult> ConfigureTelemetryHooksAsync(
-        AgentEnvironment detectedEnvironments, CancellationToken cancellationToken)
-    {
-        if (!detectedEnvironments.HasFlag(AgentEnvironment.ClaudeCode))
-        {
-            return new TelemetryHookConfigurationResult(AgentEnvironment.None, []);
-        }
-        var reason = await ConfigureTelemetryHookAsync(cancellationToken);
-
-        return reason is { } skipReason
-            ? new TelemetryHookConfigurationResult(AgentEnvironment.None,
-                [new TelemetryHookSkip(AgentEnvironment.ClaudeCode, skipReason)])
-            : new TelemetryHookConfigurationResult(AgentEnvironment.ClaudeCode, []);
-    }
+    public bool SupportsTelemetryHooks => true;
 
     public override string ToString() => Id;
 
-    private async Task<TelemetryHookSkipReason?> ConfigureTelemetryHookAsync(CancellationToken cancellationToken)
+    public async Task<TelemetryHookStatus> ConfigureTelemetryHookAsync(CancellationToken cancellationToken)
     {
         var claudeDirectory = ClaudeCodePaths.GetConfigDirectory(context, environment);
         var settingsPath = Path.Combine(claudeDirectory, "settings.json");
@@ -102,7 +122,7 @@ internal sealed class ClaudeCodeAgentClient(
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             logger.LogDebug(ex, "Failed to read Claude settings at {Path}.", settingsPath);
-            return TelemetryHookSkipReason.WriteFailed;
+            return TelemetryHookStatus.WriteFailed;
         }
 
         JsonObject settings;
@@ -119,7 +139,7 @@ internal sealed class ClaudeCodeAgentClient(
             {
                 // Preserve malformed settings rather than replacing content we cannot merge.
                 logger.LogDebug(ex, "Claude settings at {Path} contained malformed JSON; skipping hook registration.", settingsPath);
-                return TelemetryHookSkipReason.MalformedConfig;
+                return TelemetryHookStatus.MalformedConfig;
             }
 
             switch (parsed)
@@ -131,7 +151,7 @@ internal sealed class ClaudeCodeAgentClient(
                     settings = existing;
                     break;
                 default:
-                    return TelemetryHookSkipReason.UnexpectedConfigShape;
+                    return TelemetryHookStatus.UnexpectedConfigShape;
             }
         }
         else
@@ -144,7 +164,7 @@ internal sealed class ClaudeCodeAgentClient(
         {
             if (hooksNode is not JsonObject hooksObject)
             {
-                return TelemetryHookSkipReason.UnexpectedConfigShape;
+                return TelemetryHookStatus.UnexpectedConfigShape;
             }
             hooks = hooksObject;
         }
@@ -159,7 +179,7 @@ internal sealed class ClaudeCodeAgentClient(
         {
             if (postToolUseNode is not JsonArray postToolUseArray)
             {
-                return TelemetryHookSkipReason.UnexpectedConfigShape;
+                return TelemetryHookStatus.UnexpectedConfigShape;
             }
             postToolUse = postToolUseArray;
         }
@@ -170,33 +190,46 @@ internal sealed class ClaudeCodeAgentClient(
         }
 
         RemoveExistingAspireHooks(postToolUse);
-        // Register all-tool coverage with direct execution, without a shell on each invocation.
+        // Run directly, without a shell, and only for tools or skill file reads the classifier can
+        // track so Claude does not launch the CLI on every tool call or read.
         // https://docs.claude.com/en/docs/claude-code/hooks
-        var (command, args) = AgentTelemetryHook.GetCommand(AgentTelemetryProtocol.HookOptionName);
-        JsonNode hookGroup = new JsonObject
-        {
-            ["matcher"] = "*",
-            ["hooks"] = new JsonArray(new JsonObject
-            {
-                ["type"] = "command",
-                ["command"] = command,
-                ["args"] = new JsonArray(args.Select(arg => (JsonNode?)JsonValue.Create(arg)).ToArray()),
-                ["timeout"] = 30,
-            }),
-        };
-        postToolUse.Add(hookGroup);
+        postToolUse.Add(CreateHookGroup(TelemetryHookSkillMatcher, condition: null));
+        postToolUse.Add(CreateHookGroup(TelemetryHookMcpMatcher, condition: null));
+        postToolUse.Add(CreateHookGroup(TelemetryHookReadMatcher, TelemetryHookReadIf));
 
         try
         {
             Directory.CreateDirectory(claudeDirectory);
             await edit.PublishAsync(settingsPath, settings, cancellationToken);
-            return null;
+            return TelemetryHookStatus.Configured;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             logger.LogDebug(ex, "Failed to write Claude settings at {Path}.", settingsPath);
-            return TelemetryHookSkipReason.WriteFailed;
+            return TelemetryHookStatus.WriteFailed;
         }
+    }
+
+    private static JsonNode CreateHookGroup(string matcher, string? condition)
+    {
+        var (command, args) = AgentTelemetryHook.GetCommand(AgentTelemetryProtocol.HookOptionName);
+        var hook = new JsonObject
+        {
+            ["type"] = "command",
+            ["command"] = command,
+            ["args"] = new JsonArray(args.Select(arg => (JsonNode?)JsonValue.Create(arg)).ToArray()),
+            ["timeout"] = 30,
+        };
+        if (condition is not null)
+        {
+            hook["if"] = condition;
+        }
+
+        return new JsonObject
+        {
+            ["matcher"] = matcher,
+            ["hooks"] = new JsonArray(hook),
+        };
     }
 
     private static void RemoveExistingAspireHooks(JsonArray postToolUse)
