@@ -344,6 +344,7 @@
          data-pane-location="@_lastLocation"
          data-pane-interactions-ready="@(_isOrderingRegistered ? "true" : "false")"
          data-home-pending="@(_homeNavigation is not null ? "true" : null)"
+         data-escape-home="@(CanEscapeGoHome ? "true" : null)"
          style="@GetLayoutStyle()"
          @ref="_layoutElement">
         @* A single header keeps section subscriptions stable across viewport changes. *@

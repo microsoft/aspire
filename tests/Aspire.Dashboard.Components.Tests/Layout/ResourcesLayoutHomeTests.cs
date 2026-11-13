@@ -25,7 +25,8 @@ namespace Aspire.Dashboard.Components.Tests.Layout;
 public class ResourcesLayoutHomeTests : DashboardTestContext
 {
     // A tab's content is a page scoped by the resource list beside it, not a pane over the table, so no page has a
-    // close button. The table is the home page, reached from the application name or by expanding the list.
+    // close button. The table is the home page, reached from the application name or by expanding the list. Escape,
+    // which used to press the close button, still leads there from every page (see ResourcesLayout.razor.js).
     [Theory]
     [InlineData("/resources")]
     [InlineData("/resources/api")]
@@ -38,7 +39,7 @@ public class ResourcesLayoutHomeTests : DashboardTestContext
     [InlineData("/traces?type=server")]
     [InlineData("/traces/detail/missing?resource=api&type=server&filters=example&spanId=span")]
     [InlineData("/metrics/resource/api/meter/Test/instrument/Requests?duration=30")]
-    public void Pages_HaveNoCloseButtonAndShowTheirContent(string url)
+    public void Pages_HaveNoCloseButtonAndEscapeGoesHome(string url)
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
@@ -51,6 +52,40 @@ public class ResourcesLayoutHomeTests : DashboardTestContext
         Assert.Empty(cut.FindAll(".resource-header-controls .detail-page-close"));
         Assert.False(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
         Assert.False(cut.Find(".resource-content").HasAttribute("inert"));
+        Assert.Equal("true", cut.Find(".resources-layout").GetAttribute("data-escape-home"));
+    }
+
+    // Escape goes home only where there's a table to go to and it isn't already showing or loading. On a narrow layout
+    // "/" redirects to the overview, and without the resource service it redirects to the structured logs (see Home).
+    [Theory]
+    [InlineData("home")]
+    [InlineData("narrow")]
+    [InlineData("no-resource-service")]
+    [InlineData("home-loading")]
+    public async Task EscapeHome_IsOffWhereItWouldNotReachTheTable(string scenario)
+    {
+        var viewport = new ViewportInformation(IsDesktop: scenario != "narrow", IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, scenario == "no-resource-service"
+            ? new TestDashboardClient(isEnabled: false)
+            : new TestDashboardClient(isEnabled: true,
+                initialResources: [ModelTestHelpers.CreateResource("api")],
+                resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        Services.GetRequiredService<NavigationManager>().NavigateTo(scenario switch
+        {
+            "home" => "/",
+            "no-resource-service" => "/structuredlogs",
+            _ => "/resources/api"
+        });
+        var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
+        if (scenario == "home-loading")
+        {
+            Assert.Equal("true", cut.Find(".resources-layout").GetAttribute("data-escape-home"));
+            // What the brand does before it navigates home (see MainLayout.GoToAllResourcesAsync).
+            await cut.InvokeAsync(cut.Instance.OnHomeNavigationStarting);
+        }
+
+        Assert.Null(cut.Find(".resources-layout").GetAttribute("data-escape-home"));
     }
 
     [Theory]
