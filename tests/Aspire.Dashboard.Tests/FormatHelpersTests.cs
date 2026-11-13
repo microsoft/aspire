@@ -179,6 +179,33 @@ public class FormatHelpersTests
         Assert.Equal(expected, FormatHelpers.FormatTooltipDateTime(provider, date, CultureInfo.GetCultureInfo(cultureName)), ignoreWhiteSpaceDifferences: true);
     }
 
+    [Theory]
+    // The day of the week leads, with a comma, a space, an Arabic comma, or a space before the comma.
+    [InlineData("dddd, MMMM d, yyyy", "Nov 11, 2026, 20:41")]
+    [InlineData("dddd d MMMM yyyy", "11 Nov 2026, 20:41")]
+    [InlineData("dddd، d MMMM yyyy", "11 Nov 2026, 20:41")]
+    [InlineData("dddd , d MMMM yyyy", "11 Nov 2026, 20:41")]
+    // The day of the week trails, after a space or a comma that must not be left behind.
+    [InlineData("d MMMM yyyy dddd", "11 Nov 2026, 20:41")]
+    [InlineData("yyyy. MMMM d., dddd", "2026. Nov 11., 20:41")]
+    [InlineData("d MMMM yyyy, dddd", "11 Nov 2026, 20:41")]
+    // An abbreviated day of the week is removed too.
+    [InlineData("ddd, MMMM d, yyyy", "Nov 11, 2026, 20:41")]
+    // No day of the week.
+    [InlineData("d MMMM yyyy", "11 Nov 2026, 20:41")]
+    public void FormatTooltipDateTime_RemovesDayOfWeekWithItsSeparator(string longDatePattern, string expected)
+    {
+        // A custom culture keeps the test independent of each operating system's culture data.
+        var culture = (CultureInfo)CultureInfo.InvariantCulture.Clone();
+        culture.DateTimeFormat.LongDatePattern = longDatePattern;
+
+        var provider = CreateTimeProvider();
+        provider.SetBrowserTimeZone("UTC");
+
+        var date = new DateTime(2026, 11, 11, 20, 41, 0, DateTimeKind.Utc);
+        Assert.Equal(expected, FormatHelpers.FormatTooltipDateTime(provider, date, culture));
+    }
+
     private static DateTime GetLocalDateTime(string value)
     {
         Assert.True(DateTime.TryParseExact(value, "o", CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var date));

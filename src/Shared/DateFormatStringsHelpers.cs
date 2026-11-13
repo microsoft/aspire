@@ -39,9 +39,15 @@ internal static partial class DateFormatStringsHelpers
     [GeneratedRegex("M{4}")]
     private static partial Regex MatchFullMonthName();
 
-    // Matches the day of the week with the separator that follows or precedes it, for example "dddd, " in
-    // "dddd, MMMM d, yyyy" (en-US) or " dddd" in "yyyy年M月d日 dddd" (ja-JP).
-    [GeneratedRegex(@"dddd,?\s*|\s*dddd")]
+    // Matches the day of the week, full or abbreviated, with the separator that follows or precedes it, so removing it
+    // doesn't leave a stray comma. Long date patterns observed in culture data:
+    //   "dddd, MMMM d, yyyy"   (en-US)  -> "dddd, "
+    //   "dddd d MMMM yyyy"     (fr-FR)  -> "dddd "
+    //   "yyyy年M月d日 dddd"     (ja-JP)  -> " dddd"
+    //   "yyyy. MMMM d., dddd"  (hu-HU)  -> ", dddd"
+    //   "dddd، d MMMM yyyy"    (ar)     -> "dddd، " (Arabic comma)
+    //   "ddd, MMMM d, yyyy"    (ak)     -> "ddd, "
+    [GeneratedRegex(@"d{3,4}\s*[,،]?\s*|\s*[,،]?\s*d{3,4}")]
     private static partial Regex MatchDayOfWeek();
 
     private readonly record struct MediumDateKey(string LongDatePattern, string ShortTimePattern, TimeFormat TimeFormat, bool SpaceSeparated);
