@@ -1,0 +1,15 @@
+{
+  "id": "cli-win-arm64-extracted-tool-binary-missing",
+  "type": "main-repository-breakage",
+  "title": "Build CLI (win-arm64) fails: expected aspire binary not found after extracting CLI zip",
+  "error_pattern": "eng\\clipack\\Common.projitems(217,5): error : Could not find expected `aspire` binary at '...\\extracted-tool-binary\\aspire.exe' after extracting '...\\aspire-cli-win-arm64-17.1.0-ci.zip'.",
+  "occurrences": [
+    {
+      "run_id": 43522135233,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/43522135233",
+      "job": "Tests / Build native CLI archive (Windows ARM64) / Build CLI (win-arm64)",
+      "observed_at": "2026-11-13T23:22:03Z",
+      "pr_number": 0
+    }
+  ]
+}
