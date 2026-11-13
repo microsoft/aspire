@@ -2586,13 +2586,6 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         }
         else
         {
-            if (_selectedResourceNames is [var only] && string.Equals(only, resourceName, StringComparisons.ResourceName))
-            {
-                // Selecting the only selected row again keeps it selected. Clearing the selection here would silently
-                // widen the view to every resource on an accidental second click; "All resources" does that explicitly.
-                return;
-            }
-
             selection = [resourceName];
             _selectionAnchor = resourceName;
         }
@@ -2638,12 +2631,6 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         }
         else
         {
-            if (IsResourceGroupSelected(groupResourceNames))
-            {
-                // Like a row, selecting the selected group again keeps the selection.
-                return;
-            }
-
             selection = groupResourceNames;
         }
 
