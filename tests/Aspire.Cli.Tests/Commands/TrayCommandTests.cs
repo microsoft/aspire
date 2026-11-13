@@ -333,10 +333,56 @@ public class TrayCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
+    [InlineData("start", false, false)]
+    [InlineData("stop", false, false)]
+    [InlineData("start", true, false)]
+    [InlineData("stop", true, false)]
+    [InlineData("start", false, true)]
+    [InlineData("stop", false, true)]
+    public async Task PackageOwnedLayoutUsesPayloadRootWithoutLeaseHandoff(string action, bool windows, bool linux)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var (services, bundle, factory, _, cliPath) = CreateServices(workspace);
+        if (windows)
+        {
+            ConfigureWindows(services, bundle);
+        }
+        else if (linux)
+        {
+            services.AddSingleton<IEnvironment>(TestEnvironment.CreateLinux());
+            bundle.Layout!.Components.Tray = LinuxTrayPayload.ExecutablePath;
+            LinuxTrayTestPayload.Create(Path.GetDirectoryName(bundle.Layout.GetTrayPath()!)!,
+                RuntimeInformation.ProcessArchitecture == Architecture.Arm64 ? "linux-arm64" : "linux-x64");
+        }
+        File.WriteAllText(Path.Combine(Path.GetDirectoryName(cliPath)!, InstallSidecarReader.SidecarFileName),
+            """{"source":"nix"}""");
+        var layout = bundle.Layout!;
+        var installRoot = workspace.CreateDirectory("nix package").FullName;
+        var bundleRoot = Path.Combine(installRoot, BundleDiscovery.BundleDirectoryName);
+        Directory.Move(layout.LayoutPath!, bundleRoot);
+        layout.LayoutPath = installRoot;
+        layout.Components.Dcp = Path.Combine(BundleDiscovery.BundleDirectoryName, BundleDiscovery.DcpDirectoryName);
+        layout.Components.Tray = Path.Combine(BundleDiscovery.BundleDirectoryName, layout.Components.Tray!);
+        bundle.CreateLayoutLease = null;
+        var filesBefore = Directory.GetFileSystemEntries(installRoot, "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal).ToArray();
+        using var provider = services.BuildServiceProvider();
+
+        Assert.Equal(CliExitCodes.Success, await provider.GetRequiredService<RootCommand>()
+            .Parse($"tray {action} --non-interactive --nologo").InvokeAsync().DefaultTimeout());
+
+        Assert.Equal(layout.GetTrayPath(), factory.LastFileName);
+        Assert.Equal(action == "start"
+            ? ["start", "--cli", cliPath, "--bundle-root", bundleRoot]
+            : new[] { "stop" }, factory.LastArguments);
+        Assert.Equal(bundleRoot, factory.LastWorkingDirectory?.FullName);
+        Assert.NotNull(factory.LastEnvironmentVariables);
+        Assert.Empty(factory.LastEnvironmentVariables);
+        Assert.Equal(filesBefore, Directory.GetFileSystemEntries(installRoot, "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal));
+    }
+
+    [Theory]
     [InlineData("start", "layout")]
     [InlineData("stop", "layout")]
-    [InlineData("start", "lease")]
-    [InlineData("stop", "lease")]
     [InlineData("start", "component")]
     [InlineData("stop", "component")]
     [InlineData("start", "payload")]
@@ -352,9 +398,6 @@ public class TrayCommandTests(ITestOutputHelper outputHelper)
                 bundle.Layout = null;
                 bundle.CreateLayoutLease = null;
                 break;
-            case "lease":
-                bundle.CreateLayoutLease = null;
-                break;
             case "component":
                 bundle.Layout.Components.Tray = null;
                 break;
@@ -367,7 +410,7 @@ public class TrayCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.InvalidCommand, await provider.GetRequiredService<RootCommand>()
             .Parse($"tray {action}").InvokeAsync().DefaultTimeout());
 
-        Assert.Equal(missing is "layout" or "lease" ? TrayCommandStrings.BundleRequired : TrayCommandStrings.PayloadMissing,
+        Assert.Equal(missing is "layout" ? TrayCommandStrings.BundleRequired : TrayCommandStrings.PayloadMissing,
             Assert.Single(interaction.DisplayedErrors));
         Assert.Empty(factory.CreatedExecutions);
         Assert.False(BundleVersionLease.HasActiveLease(root));

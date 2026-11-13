@@ -55,7 +55,7 @@ internal static class Program
                 TrayActivation.ShowExistingAsync(LinuxTrayRuntime.PipeName, CancellationToken.None).GetAwaiter().GetResult();
                 return 0;
             }
-            using var lease = options.BundleRoot is null ? null : BundleVersionLease.Acquire(options.BundleRoot, "tray", "tray");
+            using var lease = BundleVersionLease.TryAcquireFromEnvironment("tray", "tray");
             var controller = new TrayController(new CliAppHostClient(options.CliPath),
                 new FileTraySavedStateStore(TrayConfiguration.GetSavedStatePath(options.CliPath)),
                 TrayConfiguration.LoadRecentAppHostLimit(TrayConfiguration.GetSettingsPath(options.CliPath)));

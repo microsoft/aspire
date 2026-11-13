@@ -12,8 +12,8 @@ namespace Aspire.Cli.Tests.Bundles;
 /// The matrix locks in the contract: the reader walks the sidecar's
 /// <c>source</c> field — and nothing else — to decide between
 /// <c>binaryDir</c> (winget / brew / dotnet-tool) and the parent of
-/// <c>binaryDir</c> (script / pr / localhive). Missing, invalid, unknown, or read-only
-/// package-manager sidecars fall through to the default Aspire home.
+/// <c>binaryDir</c> (script / pr / localhive). Nix disables runtime extraction.
+/// Missing, invalid, or unknown sidecars fall through to the default Aspire home.
 /// </summary>
 public class BundleServiceCrossRouteExtractionTests
 {
@@ -40,9 +40,8 @@ public class BundleServiceCrossRouteExtractionTests
     [InlineData("pr", ".aspire/dogfood/pr-16817/bin/aspire", ".aspire/dogfood/pr-16817")]
     // 6) localhive canonical: local dev hive with the same bin layout as script.
     [InlineData("localhive", ".aspire/local/bin/aspire", ".aspire/local")]
-    // 7) Nix canonical: package output under /nix/store is read-only, so the
-    //    bundle payload must extract into the user-owned default Aspire home.
-    [InlineData("nix", "nix/store/abcd1234-aspire-cli-13.4.6/bin/aspire", DefaultAspireHome)]
+    // 7) Nix owns the expanded and patched payload in its immutable store.
+    [InlineData("nix", "nix/store/abcd1234-aspire-cli-13.4.6/lib/aspire-cli/aspire", null)]
     // 8) Cross-route smuggle case: a brew-source sidecar dropped into a
     //    script-layout prefix MUST resolve to binaryDir per the switch — the
     //    reader is honest about whatever the producer put on disk. When the
@@ -64,7 +63,7 @@ public class BundleServiceCrossRouteExtractionTests
     public void ComputeDefaultExtractDir_RouteAndPrefixCombinations_ProduceExpectedExtractDir(
         string? sourceField,
         string relativeProcessPath,
-        string relativeExpectedExtractDir)
+        string? relativeExpectedExtractDir)
     {
         var root = Directory.CreateTempSubdirectory("aspire-extract-dir-").FullName;
         try
@@ -85,9 +84,12 @@ public class BundleServiceCrossRouteExtractionTests
                 File.WriteAllText(sidecarPath, content);
             }
 
-            var expected = relativeExpectedExtractDir == DefaultAspireHome
-                ? CliPathHelper.GetDefaultAspireHomeDirectory()
-                : Path.Combine(root, ToNativePath(relativeExpectedExtractDir));
+            var expected = relativeExpectedExtractDir switch
+            {
+                null => null,
+                DefaultAspireHome => CliPathHelper.GetDefaultAspireHomeDirectory(),
+                _ => Path.Combine(root, ToNativePath(relativeExpectedExtractDir))
+            };
 
             var actual = BundleService.ComputeDefaultExtractDir(processPath);
 

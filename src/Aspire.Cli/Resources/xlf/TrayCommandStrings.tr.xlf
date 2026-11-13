@@ -3,7 +3,7 @@
   <file datatype="xml" source-language="en" target-language="tr" original="../TrayCommandStrings.resx">
     <body>
       <trans-unit id="BundleRequired">
-        <source>The experimental Aspire tray requires a leased, versioned CLI bundle. No usable bundle was found. Install an Aspire bundle that includes the tray companion for your desktop.</source>
+        <source>The experimental Aspire tray requires a CLI bundle. No usable bundle was found. Install an Aspire bundle that includes the tray companion for your desktop.</source>
         <target state="needs-review-translation">Deneysel Aspire tepsisi kiralanan ve sürüm bilgisi olan bir CLI paketi gerektirir. Kullanılabilir paket bulunamadı. Tepsi yardımcı bileşenini içeren bir Windows veya macOS Aspire paketi yükleyin.</target>
         <note />
       </trans-unit>

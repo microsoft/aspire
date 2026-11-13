@@ -3,7 +3,7 @@
   <file datatype="xml" source-language="en" target-language="es" original="../TrayCommandStrings.resx">
     <body>
       <trans-unit id="BundleRequired">
-        <source>The experimental Aspire tray requires a leased, versioned CLI bundle. No usable bundle was found. Install an Aspire bundle that includes the tray companion for your desktop.</source>
+        <source>The experimental Aspire tray requires a CLI bundle. No usable bundle was found. Install an Aspire bundle that includes the tray companion for your desktop.</source>
         <target state="needs-review-translation">La bandeja experimental de Aspire requiere un paquete de CLI con licencia y control de versiones. No se encontró ningún paquete utilizable. Instale un paquete de Aspire para Windows o macOS que incluya la aplicación auxiliar de la bandeja.</target>
         <note />
       </trans-unit>

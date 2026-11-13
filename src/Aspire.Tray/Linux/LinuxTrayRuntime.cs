@@ -151,7 +151,7 @@ internal static partial class LinuxTrayRuntime
         var startInfo = CreateStartInfo(options);
         using var interrupt = PosixSignalRegistration.Create(PosixSignal.SIGINT, context => context.Cancel = true);
         using var terminate = PosixSignalRegistration.Create(PosixSignal.SIGTERM, context => context.Cancel = true);
-        using var lease = BundleVersionLease.Acquire(options.BundleRoot!, "tray-launcher", "tray start");
+        using var lease = BundleVersionLease.TryAcquireFromEnvironment("tray-launcher", "tray start");
         bool running;
         using (var probe = TryAcquire(DirectoryPath))
         {
