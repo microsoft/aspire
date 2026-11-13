@@ -540,68 +540,29 @@ public static class PromptAgentBuilderExtensions
     /// invoke a serverless Azure Function with queue-based input/output bindings.
     /// </summary>
     /// <param name="project">The <see cref="IResourceBuilder{T}"/> for the Microsoft Foundry project.</param>
-    /// <param name="name">The name of the tool resource.</param>
-    /// <param name="functionName">The name of the Azure Function.</param>
-    /// <param name="description">A description of what the function does.</param>
-    /// <param name="parameters">The JSON schema defining the function parameters.</param>
-    /// <param name="inputQueueEndpoint">The Azure Storage Queue endpoint for input binding.</param>
-    /// <param name="inputQueueName">The queue name for input binding.</param>
-    /// <param name="outputQueueEndpoint">The Azure Storage Queue endpoint for output binding.</param>
-    /// <param name="outputQueueName">The queue name for output binding.</param>
-    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for the tool resource.</returns>
-    [AspireExportIgnore(Reason = "BinaryData parameter is not ATS-compatible. Use the string overload instead.")]
-    public static IResourceBuilder<AzureFunctionToolResource> AddAzureFunctionTool(
-        this IResourceBuilder<AzureCognitiveServicesProjectResource> project,
-        [ResourceName] string name,
-        string functionName,
-        string description,
-        BinaryData parameters,
-        string inputQueueEndpoint,
-        string inputQueueName,
-        string outputQueueEndpoint,
-        string outputQueueName)
-    {
-        ArgumentNullException.ThrowIfNull(project);
-        ArgumentException.ThrowIfNullOrEmpty(name);
-
-        var resource = new AzureFunctionToolResource(
-            name, project.Resource, functionName, description, parameters,
-            inputQueueEndpoint, inputQueueName, outputQueueEndpoint, outputQueueName);
-        return project.ApplicationBuilder.AddResource(resource)
-            .WithReferenceRelationship(project);
-    }
-
-    /// <summary>
-    /// Adds an Azure Function tool to a Microsoft Foundry project, enabling agents to
-    /// invoke a serverless Azure Function with queue-based input/output bindings.
-    /// </summary>
-    /// <param name="project">The <see cref="IResourceBuilder{T}"/> for the Microsoft Foundry project.</param>
     /// <ats-param name="project">The Microsoft Foundry project resource builder.</ats-param>
     /// <param name="name">The name of the tool resource.</param>
-    /// <param name="functionName">The name of the Azure Function.</param>
-    /// <param name="description">A description of what the function does.</param>
-    /// <param name="parametersJson">The JSON schema defining the function parameters as a JSON string.</param>
-    /// <param name="inputQueueEndpoint">The Azure Storage Queue endpoint for input binding.</param>
-    /// <param name="inputQueueName">The queue name for input binding.</param>
-    /// <param name="outputQueueEndpoint">The Azure Storage Queue endpoint for output binding.</param>
-    /// <param name="outputQueueName">The queue name for output binding.</param>
+    /// <param name="options">The function definition and its input/output queue bindings.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for the tool resource.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
+    /// <exception cref="ArgumentNullException"><paramref name="project"/>, <paramref name="options"/>, or a required option is <see langword="null"/>.</exception>
+    /// <exception cref="ArgumentException"><paramref name="name"/> or a required string option is empty.</exception>
     [AspireExport]
     public static IResourceBuilder<AzureFunctionToolResource> AddAzureFunctionTool(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> project,
         [ResourceName] string name,
-        string functionName,
-        string description,
-        string parametersJson,
-        string inputQueueEndpoint,
-        string inputQueueName,
-        string outputQueueEndpoint,
-        string outputQueueName)
+        AzureFunctionToolOptions options)
     {
-        return project.AddAzureFunctionTool(
-            name, functionName, description, BinaryData.FromString(parametersJson),
-            inputQueueEndpoint, inputQueueName, outputQueueEndpoint, outputQueueName);
+        ArgumentNullException.ThrowIfNull(project);
+        ArgumentException.ThrowIfNullOrEmpty(name);
+        ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(options.ParametersJson);
+
+        var resource = new AzureFunctionToolResource(
+            name, project.Resource, options.FunctionName, options.Description, BinaryData.FromString(options.ParametersJson),
+            options.InputQueueEndpoint, options.InputQueueName, options.OutputQueueEndpoint, options.OutputQueueName);
+        return project.ApplicationBuilder.AddResource(resource)
+            .WithReferenceRelationship(project);
     }
 
     /// <summary>

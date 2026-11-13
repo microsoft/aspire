@@ -37,11 +37,16 @@ public class PromptAgentTests(ITestOutputHelper testOutputHelper)
         var bingTool = project.AddBingGroundingTool("bing").WithReference(bingConnection);
         var sharePoint = project.AddSharePointTool("sharepoint", "/connections/sharepoint");
         var fabric = project.AddFabricTool("fabric", "/connections/fabric");
-        var function = project.AddAzureFunctionTool(
-            "function", "get_weather", "Get the weather.",
-            BinaryData.FromString("""{"type":"object","properties":{"city":{"type":"string"}}}"""),
-            "https://storage.queue.core.windows.net", "input",
-            "https://storage.queue.core.windows.net", "output");
+        var function = project.AddAzureFunctionTool("function", new AzureFunctionToolOptions
+        {
+            FunctionName = "get_weather",
+            Description = "Get the weather.",
+            ParametersJson = """{"type":"object","properties":{"city":{"type":"string"}}}""",
+            InputQueueEndpoint = "https://storage.queue.core.windows.net",
+            InputQueueName = "input",
+            OutputQueueEndpoint = "https://storage.queue.core.windows.net",
+            OutputQueueName = "output"
+        });
         var definition = new DeclarativeAgentDefinition("gpt-4.1")
         {
             Tools =
@@ -492,19 +497,60 @@ public class PromptAgentTests(ITestOutputHelper testOutputHelper)
         var project = builder.AddFoundry("account")
             .AddProject("my-project");
 
-        var tool = project.AddAzureFunctionTool(
-            "func-tool",
-            "myFunc",
-            "Does something useful",
-            BinaryData.FromString("""{"type":"object","properties":{}}"""),
-            "https://queue.core.windows.net",
-            "input-queue",
-            "https://queue.core.windows.net",
-            "output-queue");
+        var tool = project.AddAzureFunctionTool("func-tool", new AzureFunctionToolOptions
+        {
+            FunctionName = "myFunc",
+            Description = "Does something useful",
+            ParametersJson = """{"type":"object","properties":{}}""",
+            InputQueueEndpoint = "https://input.queue.core.windows.net",
+            InputQueueName = "input-queue",
+            OutputQueueEndpoint = "https://output.queue.core.windows.net",
+            OutputQueueName = "output-queue"
+        });
 
         Assert.NotNull(tool);
         Assert.IsType<AzureFunctionToolResource>(tool.Resource);
+        Assert.Equal("func-tool", tool.Resource.Name);
+        Assert.Same(project.Resource, tool.Resource.Project);
+        Assert.Contains(tool.Resource, builder.Resources);
         Assert.Equal("myFunc", tool.Resource.FunctionName);
+        Assert.Equal("Does something useful", tool.Resource.Description);
+        Assert.Equal("""{"type":"object","properties":{}}""", tool.Resource.Parameters.ToString());
+        Assert.Equal("https://input.queue.core.windows.net", tool.Resource.InputQueueEndpoint);
+        Assert.Equal("input-queue", tool.Resource.InputQueueName);
+        Assert.Equal("https://output.queue.core.windows.net", tool.Resource.OutputQueueEndpoint);
+        Assert.Equal("output-queue", tool.Resource.OutputQueueName);
+    }
+
+    [Fact]
+    public void AddAzureFunctionTool_NullOptions_Throws()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var project = builder.AddFoundry("account").AddProject("my-project");
+
+        Assert.Throws<ArgumentNullException>("options", () => project.AddAzureFunctionTool("func-tool", null!));
+    }
+
+    [Theory]
+    [InlineData(null, "input-queue")]
+    [InlineData("{}", null)]
+    [InlineData("{}", "")]
+    public void AddAzureFunctionTool_InvalidOptions_Throws(string? parametersJson, string? inputQueueName)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var project = builder.AddFoundry("account").AddProject("my-project");
+        var options = new AzureFunctionToolOptions
+        {
+            FunctionName = "myFunc",
+            Description = "Does something useful",
+            ParametersJson = parametersJson!,
+            InputQueueEndpoint = "https://input.queue.core.windows.net",
+            InputQueueName = inputQueueName!,
+            OutputQueueEndpoint = "https://output.queue.core.windows.net",
+            OutputQueueName = "output-queue"
+        };
+
+        Assert.ThrowsAny<ArgumentException>(() => project.AddAzureFunctionTool("func-tool", options));
     }
 
     [Fact]
