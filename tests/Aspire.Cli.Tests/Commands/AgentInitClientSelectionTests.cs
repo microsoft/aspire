@@ -118,7 +118,7 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
         var unselectedRoot = scope == "project" ? homeDirectory : workspace.WorkspaceRoot;
         Assert.False(Directory.Exists(Path.Combine(unselectedRoot.FullName, ".agents")));
         Assert.Equal(
-            (configureAspire || configureMcp) && selectedScope is AgentConfigurationScope.Global ? expectedClients.Split(',') : [],
+            configureAspire || configureMcp ? expectedClients.Split(',') : [],
             hooks.SelectedClientIds);
     }
 
@@ -127,7 +127,7 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
     [InlineData("global", false)]
     [InlineData("project", true)]
     [InlineData("global", true)]
-    public async Task AgentInit_ExplicitAgents_SkipDetectionAndConfigureHooksOnlyForGlobalAssets(string scope, bool configureMcp)
+    public async Task AgentInit_ExplicitAgents_SkipDetectionAndConfigureHooksOnlyForAspireAssets(string scope, bool configureMcp)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var homeDirectory = workspace.CreateDirectory("fake-home");
@@ -145,7 +145,7 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
             $"agent init --agents claude --scope {scope} --skills none --mcp={configureMcp}");
         Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
         Assert.Equal(0, detector.ScanCount);
-        Assert.Equal(scope == "global" && configureMcp ? ["claude"] : [], hooks.SelectedClientIds);
+        Assert.Equal(configureMcp ? ["claude"] : [], hooks.SelectedClientIds);
     }
 
     [Theory]
@@ -739,6 +739,7 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.InteractionServiceFactory = _ => interaction;
+            options.TelemetryHookConfiguratorFactory = _ => new TestTelemetryHookConfigurator();
         });
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
@@ -1364,7 +1365,7 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData("project")]
     [InlineData("global")]
-    public async Task AgentInit_Hooks_UseSelectedClientsOnlyInGlobalScope(string scope)
+    public async Task AgentInit_Hooks_UseSelectedClientsInEitherScope(string scope)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var hooks = new TestTelemetryHookConfigurator();
@@ -1376,7 +1377,7 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
 
         var result = provider.GetRequiredService<RootCommand>().Parse($"agent init --agents claude --scope {scope} --skills aspire");
         Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
-        Assert.Equal(scope == "global" ? ["claude"] : [], hooks.SelectedClientIds);
+        Assert.Equal(["claude"], hooks.SelectedClientIds);
     }
 
     [Theory]
@@ -1526,7 +1527,7 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public async Task AgentInit_NothingSelectedWithExistingAspireSetup_RefreshesHookOnlyForGlobalScope(bool global)
+    public async Task AgentInit_NothingSelectedWithExistingAspireSetup_RefreshesHook(bool global)
     {
         var scope = global ? AgentConfigurationScope.Global : AgentConfigurationScope.Project;
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -1548,7 +1549,39 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
         var result = provider.GetRequiredService<RootCommand>().Parse(
             $"agent init --agents claude --scope {scope.ToString().ToLowerInvariant()} --skills none --mcp=false");
         Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
-        Assert.Equal(global ? ["claude"] : [], hooks.SelectedClientIds);
+        Assert.Equal(["claude"], hooks.SelectedClientIds);
+    }
+
+    [Theory]
+    [InlineData("global", true)]
+    [InlineData("project", false)]
+    public async Task AgentInit_NothingSelectedWithVsCodeUserMcp_RespectsScope(string scope, bool expectHook)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var homeDirectory = workspace.CreateDirectory("fake-home");
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(workspace.WorkspaceRoot, homeDirectory: homeDirectory);
+        var hooks = new TestTelemetryHookConfigurator();
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => executionContext;
+            options.TelemetryHookConfiguratorFactory = _ => hooks;
+        });
+        services.AddSingleton<IEnvironment>(new TestEnvironment());
+        using var provider = services.BuildServiceProvider();
+
+        var userDataRoot = OperatingSystem.IsWindows() ? Path.Combine(homeDirectory.FullName, "AppData", "Roaming")
+            : OperatingSystem.IsMacOS() ? Path.Combine(homeDirectory.FullName, "Library", "Application Support")
+            : Path.Combine(homeDirectory.FullName, ".config");
+        var mcpPath = Path.Combine(userDataRoot, "Code", "User", "mcp.json");
+        const string config = """{"servers":{"aspire":{"type":"stdio","command":"aspire","args":["agent","mcp"]}}}""";
+        Directory.CreateDirectory(Path.GetDirectoryName(mcpPath)!);
+        await File.WriteAllTextAsync(mcpPath, config);
+
+        var result = provider.GetRequiredService<RootCommand>().Parse(
+            $"agent init --agents copilot --scope {scope} --skills none --mcp=false");
+        Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
+        Assert.Equal(expectHook ? ["copilot"] : [], hooks.SelectedClientIds);
+        Assert.Equal(config, await File.ReadAllTextAsync(mcpPath));
     }
 
     [Fact]
