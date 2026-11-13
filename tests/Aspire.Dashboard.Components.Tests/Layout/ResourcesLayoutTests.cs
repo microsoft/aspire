@@ -333,6 +333,61 @@ public class ResourcesLayoutTests : DashboardTestContext
         Assert.Single(cut.FindAll(".resource-row.selected"));
     }
 
+    [Theory]
+    [InlineData(true, "api")]
+    [InlineData(true, "cache")]
+    [InlineData(false, "api")]
+    [InlineData(false, "cache")]
+    public async Task TraceDetails_SelectingResourceReturnsToTraces(bool appHostEnabled, string resourceName)
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: appHostEnabled,
+            initialResources: [ModelTestHelpers.CreateResource("api"), ModelTestHelpers.CreateResource("cache")],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        if (!appHostEnabled)
+        {
+            await AddTelemetryAsync("api");
+            await AddTelemetryAsync("cache");
+        }
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo(DashboardUrls.AddResourceSelection(DashboardUrls.TraceDetailUrl("abc", "span"), ["api"]));
+        var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
+
+        await cut.Find($".resource-row-link[aria-label='{resourceName}']").ClickAsync();
+        cut.Render();
+
+        Assert.Equal(DashboardUrls.TracesUrl(resourceName), new Uri(navigation.Uri).PathAndQuery);
+        Assert.Equal([resourceName], cut.Instance.SelectedResourceNames);
+    }
+
+    [Fact]
+    public async Task TraceDetails_SelectingSelectedGroupReturnsToTraces()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources:
+            [
+                ModelTestHelpers.CreateResource("api", resourceType: KnownResourceTypes.Project),
+                ModelTestHelpers.CreateResource("worker", resourceType: KnownResourceTypes.Project)
+            ],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        var storage = Assert.IsType<TestLocalStorage>(Services.GetRequiredService<ILocalStorage>());
+        storage.OnGetUnprotectedAsync = key => key == BrowserStorageKeys.ResourcePaneGrouping
+            ? (true, nameof(ResourcePaneGrouping.ResourceType))
+            : (false, null);
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo(DashboardUrls.AddResourceSelection(DashboardUrls.TraceDetailUrl("abc", "span"), ["api", "worker"]));
+        var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
+
+        await cut.Find(".resource-tag-link").ClickAsync();
+        cut.Render();
+
+        Assert.Equal("/traces?resource=api&resource=worker", new Uri(navigation.Uri).PathAndQuery);
+        Assert.Equal(["api", "worker"], cut.Instance.SelectedResourceNames);
+    }
+
     [Fact]
     public async Task TabOverflowRegistration_UsesStableLayoutIdForCleanup()
     {
