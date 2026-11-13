@@ -25,15 +25,6 @@ public interface ITimeFormatProvider
     TimeFormat ResolvedTimeFormat { get; }
 }
 
-public interface ITimeZoneNameProvider
-{
-    /// <summary>
-    /// Gets the short name of the local time zone while it is at a UTC offset, such as "PST" at -08:00 or "PDT" at
-    /// -07:00, or <see langword="null"/> when no name is known for that offset.
-    /// </summary>
-    string? GetTimeZoneShortName(TimeSpan utcOffset);
-}
-
 internal static class FormatHelpers
 {
     // Limit size of very long data that is written in large grids.
@@ -86,7 +77,8 @@ internal static class FormatHelpers
 
     /// <summary>
     /// Formats the exact time behind a relative time ("Started 7m ago") for its tooltip, with an abbreviated month, no
-    /// seconds and the time zone, for example "Nov 11, 2026, 12:41 PM PST" (en-US) or "11 nov. 2026, 12:41 UTC+1" (fr-FR).
+    /// seconds and the time zone's UTC offset, for example "Nov 11, 2026, 12:41 PM UTC-8" (en-US) or
+    /// "11 nov. 2026, 21:41 UTC+1" (fr-FR).
     /// </summary>
     /// <remarks>
     /// The relative time is already on screen, so the tooltip only says when it was, without repeating it. Seconds are
@@ -98,7 +90,7 @@ internal static class FormatHelpers
         var local = timeProvider.ToLocal(value);
         var pattern = DateFormatStringsHelpers.GetMediumDateShortTimePattern(cultureInfo, GetResolvedTimeFormat(timeProvider));
 
-        return $"{local.ToString(pattern, cultureInfo)} {GetTimeZoneShortName(timeProvider, GetUtcOffset(timeProvider, value))}";
+        return $"{local.ToString(pattern, cultureInfo)} {FormatUtcOffset(GetUtcOffset(timeProvider, value))}";
     }
 
     private static TimeSpan GetUtcOffset(TimeProvider timeProvider, DateTime value)
@@ -119,15 +111,10 @@ internal static class FormatHelpers
     public static string FormatTooltipDateTime(TimeProvider timeProvider, DateTimeOffset value, CultureInfo? cultureInfo = null) =>
         FormatTooltipDateTime(timeProvider, value.UtcDateTime, cultureInfo);
 
-    private static string GetTimeZoneShortName(TimeProvider timeProvider, TimeSpan offset)
+    // "UTC", "UTC-8" or "UTC+5:30". .NET has no time zone abbreviations ("PST"), only long names such as "Pacific Standard
+    // Time", so the zone is named by its offset, the way browsers name zones without a well-known abbreviation ("GMT+1").
+    private static string FormatUtcOffset(TimeSpan offset)
     {
-        if (timeProvider is ITimeZoneNameProvider { } nameProvider && nameProvider.GetTimeZoneShortName(offset) is { Length: > 0 } name)
-        {
-            return name;
-        }
-
-        // .NET has no time zone abbreviations ("PST"), only long names, so without the browser's own name fall back to
-        // the offset, the way browsers name zones without a well-known abbreviation ("GMT+1").
         if (offset == TimeSpan.Zero)
         {
             return "UTC";

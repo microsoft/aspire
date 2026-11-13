@@ -480,42 +480,10 @@ window.getBrowserInfo = function () {
 
     return {
         timeZone: options.timeZone,
-        timeZoneShortNames: getTimeZoneShortNames(),
         userAgent: navigator.userAgent,
         is24HourTime: options.hourCycle === "h23" || options.hourCycle === "h24"
     };
 };
-
-// The short names of the browser's time zone with the UTC offset each applies to, for example
-// [{ offsetMinutes: -480, name: "PST" }, { offsetMinutes: -420, name: "PDT" }] (en-US, America/Los_Angeles) or
-// [{ offsetMinutes: 60, name: "GMT+1" }, { offsetMinutes: 120, name: "GMT+2" }] (en-US, Europe/Paris). The server has
-// only long names, so it uses these to name the zone in tooltips such as "Nov 11, 2026, 12:41 PM PST".
-//
-// January and July fall in opposite seasons in both hemispheres, so they usually cover standard and daylight saving
-// time. A zone can still be at another offset in between, such as Africa/Casablanca at UTC+0 during Ramadan, so the
-// server only uses a name for a time at the same offset and otherwise shows the offset.
-function getTimeZoneShortNames() {
-    let format;
-    try {
-        // Name the zone in the dashboard's language, like the rest of the time, rather than the browser's.
-        format = new Intl.DateTimeFormat(document.documentElement.lang || undefined, { timeZoneName: "short" });
-    } catch {
-        format = new Intl.DateTimeFormat(undefined, { timeZoneName: "short" });
-    }
-
-    const year = new Date().getFullYear();
-    const names = [];
-    for (const date of [new Date(year, 0, 1), new Date(year, 6, 1)]) {
-        // getTimezoneOffset() is minutes behind UTC, the opposite sign of an offset like -08:00.
-        const offsetMinutes = -date.getTimezoneOffset();
-        const name = format.formatToParts(date).find(part => part.type === "timeZoneName")?.value;
-        if (name && !names.some(n => n.offsetMinutes === offsetMinutes)) {
-            names.push({ offsetMinutes, name });
-        }
-    }
-
-    return names;
-}
 
 window.focusElement = function (selector, suppressFocusVisible) {
     const element = document.getElementById(selector);

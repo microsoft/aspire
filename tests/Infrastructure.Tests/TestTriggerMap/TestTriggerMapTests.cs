@@ -574,8 +574,6 @@ public sealed class TestTriggerMapTests
     [InlineData("tests/Aspire.Dashboard.Components.Tests/JavaScript/ResourceGraphGame.test.mjs")]
     [InlineData("src/Aspire.Dashboard/wwwroot/js/app-dashboard-experience.js")]
     [InlineData("tests/Aspire.Dashboard.Components.Tests/JavaScript/DashboardExperience.test.mjs")]
-    [InlineData("src/Aspire.Dashboard/wwwroot/js/app.js")]
-    [InlineData("tests/Aspire.Dashboard.Components.Tests/JavaScript/BrowserInfo.test.mjs")]
     public void DashboardScriptInputsSelectInfrastructureTests(string path)
     {
         var result = SelectWithRealMap(path);

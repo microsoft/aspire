@@ -150,16 +150,16 @@ public class FormatHelpersTests
     }
 
     [Theory]
-    [InlineData("Nov 11, 2026, 12:41 PM PST", "2026-11-11T20:41:00.0000000Z", TimeFormat.System)]
-    [InlineData("Jul 1, 2026, 12:41 PM PDT", "2026-07-01T19:41:00.0000000Z", TimeFormat.System)]
-    [InlineData("Nov 11, 2026, 12:41 PST", "2026-11-11T20:41:00.0000000Z", TimeFormat.TwentyFourHour)]
+    [InlineData("Nov 11, 2026, 12:41 PM UTC-8", "2026-11-11T20:41:00.0000000Z", TimeFormat.System)]
+    [InlineData("Jul 1, 2026, 12:41 PM UTC-7", "2026-07-01T19:41:00.0000000Z", TimeFormat.System)]
+    [InlineData("Nov 11, 2026, 12:41 UTC-8", "2026-11-11T20:41:00.0000000Z", TimeFormat.TwentyFourHour)]
     // 1:30 AM happens twice on Nov 1, 2026 when daylight saving time ends; the instant says which one it is.
-    [InlineData("Nov 1, 2026, 1:30 AM PDT", "2026-11-01T08:30:00.0000000Z", TimeFormat.System)]
-    [InlineData("Nov 1, 2026, 1:30 AM PST", "2026-11-01T09:30:00.0000000Z", TimeFormat.System)]
-    public void FormatTooltipDateTime_UsesBrowserTimeZoneShortNames(string expected, string value, TimeFormat timeFormat)
+    [InlineData("Nov 1, 2026, 1:30 AM UTC-7", "2026-11-01T08:30:00.0000000Z", TimeFormat.System)]
+    [InlineData("Nov 1, 2026, 1:30 AM UTC-8", "2026-11-01T09:30:00.0000000Z", TimeFormat.System)]
+    public void FormatTooltipDateTime_UsesBrowserTimeZone(string expected, string value, TimeFormat timeFormat)
     {
         var provider = CreateTimeProvider();
-        provider.SetBrowserTimeZone("America/Los_Angeles", s_losAngelesShortNames);
+        provider.SetBrowserTimeZone("America/Los_Angeles");
         provider.SetConfiguredTimeFormat(timeFormat);
 
         var date = DateTime.Parse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind);
@@ -174,7 +174,7 @@ public class FormatHelpersTests
     public void FormatTooltipDateTime_FollowsCulture(string cultureName, TimeFormat timeFormat, string expected)
     {
         var provider = CreateTimeProvider();
-        provider.SetBrowserTimeZone("UTC", shortNames: null);
+        provider.SetBrowserTimeZone("UTC");
         provider.SetConfiguredTimeFormat(timeFormat);
 
         var date = new DateTime(2026, 11, 11, 20, 41, 0, DateTimeKind.Utc);
@@ -184,41 +184,13 @@ public class FormatHelpersTests
     [Theory]
     [InlineData("Asia/Kolkata", "Nov 12, 2026, 2:11 AM UTC+5:30")]
     [InlineData("America/New_York", "Nov 11, 2026, 3:41 PM UTC-5")]
-    public void FormatTooltipDateTime_WithoutShortNames_UsesUtcOffset(string timeZone, string expected)
+    public void FormatTooltipDateTime_NamesTimeZoneByUtcOffset(string timeZone, string expected)
     {
         var provider = CreateTimeProvider();
-        provider.SetBrowserTimeZone(timeZone, shortNames: null);
+        provider.SetBrowserTimeZone(timeZone);
 
         var date = new DateTime(2026, 11, 11, 20, 41, 0, DateTimeKind.Utc);
         Assert.Equal(expected, FormatHelpers.FormatTooltipDateTime(provider, date, CultureInfo.GetCultureInfo("en-US")), ignoreWhiteSpaceDifferences: true);
-    }
-
-    [Fact]
-    public void FormatTooltipDateTime_OffsetWithoutShortName_UsesUtcOffset()
-    {
-        // Modeled on Africa/Casablanca, which is UTC+1 in both January and July, the dates the browser samples, but UTC+0
-        // during Ramadan. A custom zone keeps the test independent of each operating system's time zone data.
-        var ramadan = TimeZoneInfo.AdjustmentRule.CreateAdjustmentRule(
-            new DateTime(2026, 1, 1), new DateTime(2026, 12, 31), TimeSpan.FromHours(-1),
-            TimeZoneInfo.TransitionTime.CreateFixedDateRule(new DateTime(1, 1, 1, 3, 0, 0), 2, 15),
-            TimeZoneInfo.TransitionTime.CreateFixedDateRule(new DateTime(1, 1, 1, 2, 0, 0), 3, 22));
-        var casablanca = TimeZoneInfo.CreateCustomTimeZone("Test/Casablanca", TimeSpan.FromHours(1), "Test/Casablanca", "Test/Casablanca", "Test/Casablanca Ramadan", [ramadan]);
-        var provider = CreateTimeProvider();
-        provider.SetBrowserTimeZone(casablanca, [new BrowserTimeZoneShortName { OffsetMinutes = 60, Name = "GMT+1" }]);
-
-        Assert.Equal("Jan 15, 2026, 1:00 PM GMT+1", FormatHelpers.FormatTooltipDateTime(provider, new DateTime(2026, 1, 15, 12, 0, 0, DateTimeKind.Utc), CultureInfo.GetCultureInfo("en-US")), ignoreWhiteSpaceDifferences: true);
-        Assert.Equal("Mar 1, 2026, 12:00 PM UTC", FormatHelpers.FormatTooltipDateTime(provider, new DateTime(2026, 3, 1, 12, 0, 0, DateTimeKind.Utc), CultureInfo.GetCultureInfo("en-US")), ignoreWhiteSpaceDifferences: true);
-    }
-
-    [Fact]
-    public void FormatTooltipDateTime_UnknownTimeZone_IgnoresShortNames()
-    {
-        // The dashboard falls back to UTC for a time zone it can't find, so the browser's names would mislabel the time.
-        var provider = CreateTimeProvider();
-        provider.SetBrowserTimeZone("Not/A_Zone", s_losAngelesShortNames);
-
-        var date = new DateTime(2026, 11, 11, 20, 41, 0, DateTimeKind.Utc);
-        Assert.Equal("Nov 11, 2026, 8:41 PM UTC", FormatHelpers.FormatTooltipDateTime(provider, date, CultureInfo.GetCultureInfo("en-US")), ignoreWhiteSpaceDifferences: true);
     }
 
     private static DateTime GetLocalDateTime(string value)
@@ -353,12 +325,6 @@ public class FormatHelpersTests
         var result = FormatHelpers.FormatTime(provider, date, MillisecondsDisplay.None, CultureInfo.GetCultureInfo("de-DE"));
         Assert.Contains("13", result);
     }
-
-    private static readonly BrowserTimeZoneShortName[] s_losAngelesShortNames =
-    [
-        new() { OffsetMinutes = -480, Name = "PST" },
-        new() { OffsetMinutes = -420, Name = "PDT" }
-    ];
 
     private static BrowserTimeProvider CreateTimeProvider()
     {
