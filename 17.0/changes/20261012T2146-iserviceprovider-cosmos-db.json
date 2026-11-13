@@ -8,7 +8,9 @@
     "@AdamDotNet"
   ],
   "description": "Cosmos DB client configuration callbacks now receive an `IServiceProvider`, changing `Action<CosmosClientOptions>` to `Action<IServiceProvider, CosmosClientOptions>`. This lets `CustomHandlers` resolve DI-registered services, and the `CosmosClient` is now resolved through the DI container instead of being cached as a field.",
-  "docsPrs": [],
+  "docsPrs": [
+    2134
+  ],
   "docsRequired": true,
   "emoji": "🧰",
   "firstMergedAt": "2026-10-12T21:46:46Z",

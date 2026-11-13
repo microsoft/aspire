@@ -1,0 +1,9 @@
+{
+  "author": "ellahathaway",
+  "comment": "Grouped with agent telemetry hooks entry",
+  "mergedAt": "2026-11-13T00:02:20Z",
+  "number": 22084,
+  "runDate": "2026-11-13T00:06:00Z",
+  "status": "included",
+  "title": "Scope telemetry hooks with tool matchers"
+}

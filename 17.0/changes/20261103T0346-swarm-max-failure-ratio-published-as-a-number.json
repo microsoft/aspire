@@ -6,7 +6,9 @@
   "changeType": "Bug fixes",
   "communityContributors": [],
   "description": "Docker Swarm `UpdateConfig.MaxFailureRatio` is now a `double?` and is emitted as a YAML number instead of a quoted string that Swarm rejected.",
-  "docsPrs": [],
+  "docsPrs": [
+    2134
+  ],
   "docsRequired": true,
   "emoji": "🐝",
   "firstMergedAt": "2026-11-03T03:46:16Z",

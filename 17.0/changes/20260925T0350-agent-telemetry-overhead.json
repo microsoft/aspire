@@ -10,10 +10,11 @@
   "docsRequired": true,
   "emoji": "⚡",
   "firstMergedAt": "2026-09-25T03:50:17Z",
-  "lastMergedAt": "2026-09-25T03:50:17Z",
+  "lastMergedAt": "2026-11-13T00:02:20Z",
   "name": "Faster agent telemetry hooks",
   "owner": "IEvangelist",
   "prs": [
-    20387
+    20387,
+    22084
   ]
 }

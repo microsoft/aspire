@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "CI-only pipeline pin backport",
+  "mergedAt": "2026-11-13T00:02:42Z",
+  "number": 22224,
+  "runDate": "2026-11-13T00:06:00Z",
+  "status": "excluded",
+  "title": "[release/17.0] Pin native hosting validation to Ubuntu 24.04"
+}

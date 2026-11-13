@@ -1,0 +1,9 @@
+{
+  "author": "maddymontaquila",
+  "comment": "Dashboard backports; grouped with modernized dashboard entry",
+  "mergedAt": "2026-11-13T00:01:54Z",
+  "number": 22230,
+  "runDate": "2026-11-13T00:06:00Z",
+  "status": "included",
+  "title": "[release/17.0] Combined dashboard backports (#22145, #22134, #22137, #22149, #22135, #22136, #22138, #22192, #22147)"
+}
