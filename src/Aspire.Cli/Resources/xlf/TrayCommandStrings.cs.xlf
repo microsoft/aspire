@@ -3,12 +3,12 @@
   <file datatype="xml" source-language="en" target-language="cs" original="../TrayCommandStrings.resx">
     <body>
       <trans-unit id="BundleRequired">
-        <source>The experimental Aspire tray requires a leased, versioned CLI bundle. No usable bundle was found. Install an Aspire bundle that includes the tray companion for your desktop.</source>
+        <source>The Aspire tray requires a leased, versioned CLI bundle. No usable bundle was found. Install an Aspire bundle that includes the tray companion for your desktop.</source>
         <target state="needs-review-translation">Experimentální aplikace Aspire v oznamovací oblasti vyžaduje verzovaný balíček CLI s aktivním zapůjčením. Nenašel se žádný použitelný balíček. Nainstalujte balíček Aspire pro Windows nebo macOS, který obsahuje doprovodnou aplikaci pro oznamovací oblast.</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Manage the desktop tray companion (Experimental)</source>
+        <source>Manage the desktop tray companion (Preview)</source>
         <target state="needs-review-translation">Spravovat doprovodnou aplikaci pro oznamovací oblast ve Windows nebo macOS (experimentální)</target>
         <note />
       </trans-unit>
@@ -23,8 +23,8 @@
         <note>{0} is the start or stop subcommand name.</note>
       </trans-unit>
       <trans-unit id="NativeCliRequired">
-        <source>Starting the experimental tray requires an installed native Aspire CLI executable. Managed development builds and 'dotnet aspire.dll' are not supported.</source>
-        <target state="translated">Spuštění experimentální aplikace v oznamovací oblasti vyžaduje nainstalovaný nativní spustitelný soubor rozhraní Aspire CLI. Spravovaná vývojová sestavení ani dotnet aspire.dll nejsou podporované.</target>
+        <source>Starting the tray requires an installed native Aspire CLI executable. Managed development builds and 'dotnet aspire.dll' are not supported.</source>
+        <target state="needs-review-translation">Spuštění experimentální aplikace v oznamovací oblasti vyžaduje nainstalovaný nativní spustitelný soubor rozhraní Aspire CLI. Spravovaná vývojová sestavení ani dotnet aspire.dll nejsou podporované.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoTrayHost">
@@ -43,8 +43,8 @@
         <note />
       </trans-unit>
       <trans-unit id="StartDescription">
-        <source>Start or restore the tray icon (Experimental)</source>
-        <target state="translated">Spustit nebo obnovit ikonu v oznamovací oblasti (experimentální)</target>
+        <source>Start or restore the tray icon (Preview)</source>
+        <target state="needs-review-translation">Spustit nebo obnovit ikonu v oznamovací oblasti (experimentální)</target>
         <note />
       </trans-unit>
       <trans-unit id="Started">
@@ -53,8 +53,8 @@
         <note />
       </trans-unit>
       <trans-unit id="StopDescription">
-        <source>Stop the tray without stopping AppHosts (Experimental)</source>
-        <target state="translated">Zastavit aplikaci v oznamovací oblasti bez zastavení AppHostů (experimentální)</target>
+        <source>Stop the tray without stopping AppHosts (Preview)</source>
+        <target state="needs-review-translation">Zastavit aplikaci v oznamovací oblasti bez zastavení AppHostů (experimentální)</target>
         <note />
       </trans-unit>
       <trans-unit id="Stopped">
@@ -63,7 +63,7 @@
         <note />
       </trans-unit>
       <trans-unit id="UnsupportedPlatform">
-        <source>The experimental Aspire tray supports Windows, macOS, and glibc Linux x64/ARM64 installations. Linux requires a graphical desktop with StatusNotifierItem support, GTK 3, and an AppIndicator library.</source>
+        <source>The Aspire tray supports Windows, macOS, and glibc Linux x64/ARM64 installations. Linux requires a graphical desktop with StatusNotifierItem support, GTK 3, and an AppIndicator library.</source>
         <target state="needs-review-translation">Experimentální aplikace Aspire v oznamovací oblasti podporuje instalace Windows a macOS na platformách x64/ARM64. Linux není podporovaný.</target>
         <note />
       </trans-unit>

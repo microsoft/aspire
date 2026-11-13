@@ -3,12 +3,12 @@
   <file datatype="xml" source-language="en" target-language="de" original="../TrayCommandStrings.resx">
     <body>
       <trans-unit id="BundleRequired">
-        <source>The experimental Aspire tray requires a leased, versioned CLI bundle. No usable bundle was found. Install an Aspire bundle that includes the tray companion for your desktop.</source>
+        <source>The Aspire tray requires a leased, versioned CLI bundle. No usable bundle was found. Install an Aspire bundle that includes the tray companion for your desktop.</source>
         <target state="needs-review-translation">Das experimentelle Aspire-Infobereichssymbol erfordert ein geleastes, versioniertes CLI-Bundle. Es wurde kein verwendbares Bundle gefunden. Installieren Sie ein Windows- oder macOS-Aspire-Bundle, das den Infobereichsbegleiter enthält.</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Manage the desktop tray companion (Experimental)</source>
+        <source>Manage the desktop tray companion (Preview)</source>
         <target state="needs-review-translation">Windows- oder macOS-Infobereichsbegleiter verwalten (experimentell)</target>
         <note />
       </trans-unit>
@@ -23,8 +23,8 @@
         <note>{0} is the start or stop subcommand name.</note>
       </trans-unit>
       <trans-unit id="NativeCliRequired">
-        <source>Starting the experimental tray requires an installed native Aspire CLI executable. Managed development builds and 'dotnet aspire.dll' are not supported.</source>
-        <target state="translated">Zum Starten des experimentellen Infobereichssymbols muss eine native ausführbare Aspire-CLI-Datei installiert sein. Verwaltete Entwicklungsbuilds und „dotnet aspire.dll“ werden nicht unterstützt.</target>
+        <source>Starting the tray requires an installed native Aspire CLI executable. Managed development builds and 'dotnet aspire.dll' are not supported.</source>
+        <target state="needs-review-translation">Zum Starten des experimentellen Infobereichssymbols muss eine native ausführbare Aspire-CLI-Datei installiert sein. Verwaltete Entwicklungsbuilds und „dotnet aspire.dll“ werden nicht unterstützt.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoTrayHost">
@@ -43,8 +43,8 @@
         <note />
       </trans-unit>
       <trans-unit id="StartDescription">
-        <source>Start or restore the tray icon (Experimental)</source>
-        <target state="translated">Symbol im Infobereich starten oder wiederherstellen (experimentell)</target>
+        <source>Start or restore the tray icon (Preview)</source>
+        <target state="needs-review-translation">Symbol im Infobereich starten oder wiederherstellen (experimentell)</target>
         <note />
       </trans-unit>
       <trans-unit id="Started">
@@ -53,8 +53,8 @@
         <note />
       </trans-unit>
       <trans-unit id="StopDescription">
-        <source>Stop the tray without stopping AppHosts (Experimental)</source>
-        <target state="translated">Infobereich beenden, ohne AppHosts zu beenden (experimentell)</target>
+        <source>Stop the tray without stopping AppHosts (Preview)</source>
+        <target state="needs-review-translation">Infobereich beenden, ohne AppHosts zu beenden (experimentell)</target>
         <note />
       </trans-unit>
       <trans-unit id="Stopped">
@@ -63,7 +63,7 @@
         <note />
       </trans-unit>
       <trans-unit id="UnsupportedPlatform">
-        <source>The experimental Aspire tray supports Windows, macOS, and glibc Linux x64/ARM64 installations. Linux requires a graphical desktop with StatusNotifierItem support, GTK 3, and an AppIndicator library.</source>
+        <source>The Aspire tray supports Windows, macOS, and glibc Linux x64/ARM64 installations. Linux requires a graphical desktop with StatusNotifierItem support, GTK 3, and an AppIndicator library.</source>
         <target state="needs-review-translation">Das experimentelle Aspire-Infobereichssymbol unterstützt Installationen unter Windows und macOS für x64/ARM64. Linux wird nicht unterstützt.</target>
         <note />
       </trans-unit>

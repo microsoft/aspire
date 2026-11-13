@@ -16,7 +16,7 @@ internal static class TraySettingsText
     internal const string StableNativeInstallationRequired = "Launch at sign-in requires a stable native CLI installation.";
 
     internal static string GetAboutDescription(bool preview)
-        => preview ? "Preview: fake AppHosts and startup settings only." : "An experimental companion for Aspire.";
+        => preview ? "Preview: fake AppHosts and startup settings only." : "Currently in preview.";
 
     internal static string GetVersionText()
     {
