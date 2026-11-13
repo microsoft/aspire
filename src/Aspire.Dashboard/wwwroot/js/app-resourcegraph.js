@@ -220,8 +220,9 @@ class ResourceGraph {
             .attr("d", 'M0,-5L10,0L0,5');
     }
 
-    // The element the SVG is drawn in (.resource-graph-container). CSS sizes the SVG to fill it on both the overview
-    // and the previous experience's resources page, so its size is the drawing area. Don't measure an ancestor such as
+    // The element the SVG is drawn in (.resource-graph-container). Every page that hosts the graph (the overview, the
+    // /graph page and the previous experience's resources page) sizes the SVG with CSS to fill it, so its size is the
+    // drawing area. A page that left the SVG sized by its viewBox would create a resize feedback loop here. Don't measure an ancestor such as
     // .resources-summary-layout: on the previous experience's page it also contains the tab header, so a viewBox built
     // from it is taller than the graph area and pushes the bottom-anchored graph controls out of view.
     getViewportElement() {
