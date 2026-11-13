@@ -557,6 +557,13 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
 
     private string GetResourceName(OtlpResourceView app) => OtlpResource.GetResourceName(app, _resources);
 
+    private SpanLogPreview? _logPreview;
+
+    // Fills the shared preview when the pointer or keyboard reaches a log marker. The callback's receiver is the
+    // preview, so only it renders again: the page's handlers would render the whole waterfall on every hover.
+    private EventCallback ShowLogPreview(LogSummary logEntry) =>
+        EventCallback.Factory.Create(_logPreview ?? (object)this, () => _logPreview?.Show(logEntry));
+
     private async Task ToggleSpanLogsAsync(LogSummary logEntry)
     {
         if (PageViewModel.SelectedData?.LogEntryViewModel?.LogEntry.InternalId == logEntry.InternalId)
