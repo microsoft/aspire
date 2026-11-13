@@ -25,16 +25,22 @@ const model = await foundry.addDeployment(
 const foundryBackend = await apim.addFoundryBackend("foundry-backend", model);
 const foundryPool = await apim.addBackendPool("foundry-pool");
 await foundryPool.addBackendPoolMember(foundryBackend);
-const openAIApi = await apim.addOpenAIApi("openai-api", "openai");
+const openAIApi = await apim.addOpenAIApi("openai-api", "openai", {
+    options: { displayName: "OpenAI API", subscriptionRequired: false },
+});
 await openAIApi.withApiBackendPool(foundryPool);
 
 const storage = await builder.addAzureStorage("storage");
 const blobs = await storage.addBlobs("blobs");
 const blobBackend = await apim.addBlobStorageBackend("blob-backend", blobs);
-const blobApi = await apim.addApiWithoutTarget("blob-api", "blobs");
+const blobApi = await apim.addApiWithoutTarget("blob-api", "blobs", {
+    options: { displayName: "Blob API", subscriptionRequired: false },
+});
 await blobApi.withApiBackend(blobBackend);
 
-const api = await apim.addApi("backend-api", backend, "backend");
+const api = await apim.addApi("backend-api", backend, "backend", {
+    options: { displayName: "Backend API", subscriptionRequired: false },
+});
 await api.withOpenApiEndpoint({
     documentPath: "/openapi/v1.json",
     endpointName: "http",
@@ -47,8 +53,8 @@ const primaryBackend = await apim.addBackend(
             managedIdentityResource: "api://example-backend",
             circuitBreaker: {
                 name: "serverErrors",
-                failureIntervalSeconds: 30,
-                tripDurationSeconds: 60,
+                failureInterval: 30_000,
+                tripDuration: 60_000,
                 statusCodeRanges: [{ minimum: 500, maximum: 599 }],
             },
         },

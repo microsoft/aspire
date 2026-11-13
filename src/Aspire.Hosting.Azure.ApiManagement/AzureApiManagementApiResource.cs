@@ -19,19 +19,18 @@ public class AzureApiManagementApiResource : Resource, IResourceWithParent<Azure
     /// <param name="name">The name of the Aspire resource.</param>
     /// <param name="apiName">The physical API name in API Management.</param>
     /// <param name="path">The public gateway path for the API.</param>
-    /// <param name="displayName">The display name for the API.</param>
-    /// <param name="subscriptionRequired">Whether callers must provide an API Management subscription key.</param>
+    /// <param name="options">The API options.</param>
     /// <param name="target">The backend compute resource.</param>
     /// <param name="parent">The parent API Management service.</param>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="options"/> or <paramref name="target"/> is null.</exception>
     public AzureApiManagementApiResource(
         string name,
         string apiName,
         string path,
-        string displayName,
-        bool subscriptionRequired,
+        AzureApiManagementApiOptions options,
         IComputeResource target,
         AzureApiManagementResource parent)
-        : this(name, apiName, path, displayName, subscriptionRequired, parent)
+        : this(name, apiName, path, options, parent)
     {
         Target = target ?? throw new ArgumentNullException(nameof(target));
     }
@@ -40,15 +39,16 @@ public class AzureApiManagementApiResource : Resource, IResourceWithParent<Azure
         string name,
         string apiName,
         string path,
-        string displayName,
-        bool subscriptionRequired,
+        AzureApiManagementApiOptions options,
         AzureApiManagementResource parent)
         : base(name)
     {
+        ArgumentNullException.ThrowIfNull(options);
+
         ApiName = apiName;
         Path = path;
-        DisplayName = displayName;
-        SubscriptionRequired = subscriptionRequired;
+        DisplayName = options.DisplayName ?? name;
+        SubscriptionRequired = options.SubscriptionRequired;
         Parent = parent;
     }
 
