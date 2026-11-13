@@ -23,6 +23,11 @@ internal sealed class AgentTelemetryHook(IEnvironment environment)
     private const string ContinueResponse = """{"continue":true}""";
     private static readonly string[] s_mcpPrefixes = ["aspire-", "mcp__aspire__", "mcp_aspire_"];
 
+    // Matches the tool names Classify recognizes through s_mcpPrefixes, for example aspire-list_resources
+    // (Copilot), mcp__aspire__list_resources (Claude Code), and mcp_aspire_list_resources (VS Code).
+    // Clients build their hook matchers from this so they cannot drift from the classifier.
+    internal static string McpMatcher => string.Join('|', s_mcpPrefixes.Select(prefix => prefix + ".+"));
+
     internal static (string Command, string[] Args) GetCommand(string mode)
     {
         var command = Environment.ProcessPath ?? throw new InvalidOperationException("Could not resolve the CLI executable.");

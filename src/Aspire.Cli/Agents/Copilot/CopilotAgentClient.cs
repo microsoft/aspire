@@ -30,6 +30,16 @@ internal sealed class CopilotAgentClient(
         }
     };
 
+    /// <summary>
+    /// User-level <c>postToolUse</c> <c>matcher</c> for the skill and Aspire MCP tools.
+    /// </summary>
+    /// <remarks>
+    /// Copilot matchers see only the tool name, so matching file-read tools would launch the CLI for every
+    /// read in every repository. Copilot anchors the pattern itself, and the explicit anchors keep it correct
+    /// when evaluated as a plain regular expression (https://docs.github.com/en/copilot/reference/hooks-reference).
+    /// </remarks>
+    internal static string TelemetryHookMatcher { get; } = $"^(?:[Ss]kill|{AgentTelemetryHook.McpMatcher})$";
+
     public string Id => ClientId;
     public string DisplayName { get; } = AgentCommandStrings.Environment_Copilot;
     public AgentEnvironment Environments => AgentEnvironment.CopilotCli | AgentEnvironment.CopilotApp | AgentEnvironment.VsCode;
@@ -142,7 +152,8 @@ internal sealed class CopilotAgentClient(
         try
         {
             // Copilot reads Claude settings only at project scope, so these user hooks cannot
-            // duplicate Claude's user hook. Direct exec also avoids a shell launch per tool call.
+            // duplicate Claude's user hook. Direct exec avoids a shell launch, and the matcher keeps
+            // Copilot from launching the CLI for tool calls the classifier would discard.
             // https://docs.github.com/en/copilot/reference/hooks-reference#command-hooks
             var hooksDirectory = Path.Combine(GetSettingsDirectory(), "hooks");
             Directory.CreateDirectory(hooksDirectory);
@@ -157,6 +168,7 @@ internal sealed class CopilotAgentClient(
                         new JsonObject
                         {
                             ["type"] = "command",
+                            ["matcher"] = TelemetryHookMatcher,
                             ["exec"] = command,
                             ["args"] = new JsonArray(args.Select(arg => (JsonNode?)JsonValue.Create(arg)).ToArray()),
                             ["timeoutSec"] = 30,
