@@ -500,6 +500,49 @@ public partial class StructuredLogsTests : DashboardTestContext
             repository.GetResourceUnviewedErrorLogsCount().Where(entry => entry.Key.Name == name).Sum(entry => entry.Value);
     }
 
+    [Fact]
+    public async Task ResourcesLayout_SelectionChangesBeforePageParameters_PreviousResourceErrorsStayUnviewed()
+    {
+        SetupStructureLogsServices();
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("api"), ModelTestHelpers.CreateResource("worker"), ModelTestHelpers.CreateResource("cache")],
+            resourceChannelProvider: () => channel));
+        Services.GetRequiredService<DimensionManager>().InvokeOnViewportInformationChanged(viewport);
+        var navigationManager = Services.GetRequiredService<NavigationManager>();
+        navigationManager.NavigateTo(DashboardUrls.StructuredLogsUrl() + "?resource=api&resource=worker");
+
+        // Of the selected resources, only worker has telemetry, so the page has a read subscription for worker.
+        var repository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        await AddLogAsync(repository, "worker", SeverityNumber.Info);
+
+        // The page's parameters are fixed here. That is how the page sees a navigation until the resource list,
+        // after changing its selection and raising ResourcesChanged, renders the page with the new URL's parameters.
+        var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport).Add(p => p.Body, builder =>
+        {
+            builder.OpenComponent<StructuredLogs>(0);
+            builder.AddAttribute(1, nameof(StructuredLogs.SelectedResourceNames), new[] { "api", "worker" });
+            builder.CloseComponent();
+        }));
+        var page = cut.FindComponent<StructuredLogs>();
+        cut.WaitForAssertion(() => Assert.Equal(["worker"], page.Instance.ViewModel.ResourceKeys?.Select(key => key.Name) ?? []));
+
+        // Select cache, which has no telemetry. The router renders the layout again on every navigation, which is
+        // when the resource list updates its selection.
+        navigationManager.NavigateTo(DashboardUrls.StructuredLogsUrl() + "?resource=cache");
+        cut.Render();
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal(["cache"], cut.Instance.SelectedResourceNames);
+            Assert.Empty(Assert.IsAssignableFrom<IReadOnlyList<ResourceKey>>(page.Instance.ViewModel.ResourceKeys));
+        });
+
+        // worker is no longer selected, so its new error stays unviewed.
+        await AddLogAsync(repository, "worker", SeverityNumber.Error);
+        Assert.Equal(1, repository.GetResourceUnviewedErrorLogsCount().Where(entry => entry.Key.Name == "worker").Sum(entry => entry.Value));
+    }
+
     private static Task AddLogAsync(SqliteTelemetryRepository repository, string name, SeverityNumber severity)
     {
         // Without an instance ID, the telemetry resource's name matches the app model resource's name.

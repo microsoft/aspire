@@ -142,7 +142,7 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
 
     private async ValueTask<GridItemsProviderResult<LogSummary>> GetData(GridItemsProviderRequest<LogSummary> request)
     {
-        ViewModel.ResourceKeys = ResourcesLayout?.GetSelectionTelemetryKeys(SelectedResourceNames);
+        ViewModel.ResourceKeys = GetSelectionTelemetryKeys();
 
         // The subscription follows the keys queried here (see UpdateSubscription). The resource list can map new
         // telemetry before it raises ResourcesChanged.
@@ -277,7 +277,7 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
 
         PageViewModel.SelectedResource = resource;
         ViewModel.ResourceKey = resource.Id?.GetResourceKey();
-        ViewModel.ResourceKeys = ResourcesLayout?.GetSelectionTelemetryKeys(SelectedResourceNames);
+        ViewModel.ResourceKeys = GetSelectionTelemetryKeys();
         UpdateSubscription();
         await _dataGrid.SafeRefreshDataAsync();
     }
@@ -321,18 +321,32 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
 
     private void OnLayoutResourcesChanged()
     {
-        if (ResourcesLayout?.GetSelectionTelemetryKeys(SelectedResourceNames) is not { } resourceKeys ||
+        if (GetSelectionTelemetryKeys() is not { } resourceKeys ||
             ViewModel.ResourceKeys is { } current && current.SequenceEqual(resourceKeys))
         {
             return;
         }
 
-        // The layout can finish loading its resource snapshot after the grid's first query.
+        // The layout can finish loading its resource snapshot after the grid's first query, or change its selection
+        // before this page receives the new URL's parameters.
         ViewModel.ResourceKeys = resourceKeys;
         UpdateSubscription();
         ViewModel.ClearData();
         _ = InvokeAsync(_dataGrid.SafeRefreshDataAsync);
     }
+
+    /// <summary>
+    /// Gets the telemetry keys of the resources selected in the resource list, or <see langword="null"/> without it.
+    /// </summary>
+    /// <remarks>
+    /// The resource list's selection is used rather than <see cref="SelectedResourceNames"/>. Both come from the URL's
+    /// <c>resource</c> query, but on navigation the resource list updates its selection and raises
+    /// <see cref="ResourcesLayout.ResourcesChanged"/> before the page receives the new parameters. With the page's
+    /// stale names, the handler would keep the previous selection's read subscription during the navigation, and its
+    /// resource's new errors would be marked as viewed although the page is moving away from it.
+    /// </remarks>
+    private IReadOnlyList<ResourceKey>? GetSelectionTelemetryKeys() =>
+        ResourcesLayout is { } layout ? layout.GetSelectionTelemetryKeys(layout.SelectedResourceNames) : null;
 
     private Task HandleSelectedResourceChangedAsync()
     {
@@ -584,7 +598,7 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     {
         viewModel.SelectedResource = _resourceViewModels.GetResource(Logger, ResourceName, canSelectGrouping: true, _allResource);
         ViewModel.ResourceKey = PageViewModel.SelectedResource.Id?.GetResourceKey();
-        ViewModel.ResourceKeys = ResourcesLayout?.GetSelectionTelemetryKeys(SelectedResourceNames);
+        ViewModel.ResourceKeys = GetSelectionTelemetryKeys();
 
         // Replace the previous page's subscription before awaiting the grid refresh below. Navigating from all
         // logs leaves a read subscription for every resource, and an error arriving during the refresh would
@@ -667,7 +681,7 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     private Task ClearStructureLogs(ResourceKey? key)
     {
         DataSource.EnsureWritable();
-        if (ResourcesLayout?.GetSelectionTelemetryKeys(SelectedResourceNames) is { } keys)
+        if (GetSelectionTelemetryKeys() is { } keys)
         {
             return Task.WhenAll(keys.Select(resourceKey => TelemetryRepositoryWriter.ClearStructuredLogsAsync(resourceKey)));
         }
