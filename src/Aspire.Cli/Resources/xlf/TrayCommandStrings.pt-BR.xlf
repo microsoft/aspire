@@ -3,12 +3,12 @@
   <file datatype="xml" source-language="en" target-language="pt-BR" original="../TrayCommandStrings.resx">
     <body>
       <trans-unit id="BundleRequired">
-        <source>The experimental Aspire tray requires a leased, versioned CLI bundle. No usable bundle was found. Install an Aspire bundle that includes the tray companion for your desktop.</source>
+        <source>The Aspire tray requires a leased, versioned CLI bundle. No usable bundle was found. Install an Aspire bundle that includes the tray companion for your desktop.</source>
         <target state="needs-review-translation">A bandeja experimental do Aspire requer um pacote CLI licenciado e com versão. Nenhum pacote utilizável foi encontrado. Instale um pacote Aspire para Windows ou macOS que inclua o complemento na bandeja do sistema.</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Manage the desktop tray companion (Experimental)</source>
+        <source>Manage the desktop tray companion (Preview)</source>
         <target state="needs-review-translation">Gerenciar o complemento da bandeja do Windows ou macOS (Experimental)</target>
         <note />
       </trans-unit>
@@ -23,8 +23,8 @@
         <note>{0} is the start or stop subcommand name.</note>
       </trans-unit>
       <trans-unit id="NativeCliRequired">
-        <source>Starting the experimental tray requires an installed native Aspire CLI executable. Managed development builds and 'dotnet aspire.dll' are not supported.</source>
-        <target state="translated">Para iniciar a bandeja experimental, é necessário ter um executável nativo da CLI do Aspire instalado. Não há suporte para compilações de desenvolvimento gerenciadas nem para 'dotnet aspire.dll'.</target>
+        <source>Starting the tray requires an installed native Aspire CLI executable. Managed development builds and 'dotnet aspire.dll' are not supported.</source>
+        <target state="needs-review-translation">Para iniciar a bandeja experimental, é necessário ter um executável nativo da CLI do Aspire instalado. Não há suporte para compilações de desenvolvimento gerenciadas nem para 'dotnet aspire.dll'.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoTrayHost">
@@ -43,8 +43,8 @@
         <note />
       </trans-unit>
       <trans-unit id="StartDescription">
-        <source>Start or restore the tray icon (Experimental)</source>
-        <target state="translated">Iniciar ou restaurar o ícone na bandeja (Experimental)</target>
+        <source>Start or restore the tray icon (Preview)</source>
+        <target state="needs-review-translation">Iniciar ou restaurar o ícone na bandeja (Experimental)</target>
         <note />
       </trans-unit>
       <trans-unit id="Started">
@@ -53,8 +53,8 @@
         <note />
       </trans-unit>
       <trans-unit id="StopDescription">
-        <source>Stop the tray without stopping AppHosts (Experimental)</source>
-        <target state="translated">Parar a bandeja sem parar os AppHosts (Experimental)</target>
+        <source>Stop the tray without stopping AppHosts (Preview)</source>
+        <target state="needs-review-translation">Parar a bandeja sem parar os AppHosts (Experimental)</target>
         <note />
       </trans-unit>
       <trans-unit id="Stopped">
@@ -63,7 +63,7 @@
         <note />
       </trans-unit>
       <trans-unit id="UnsupportedPlatform">
-        <source>The experimental Aspire tray supports Windows, macOS, and glibc Linux x64/ARM64 installations. Linux requires a graphical desktop with StatusNotifierItem support, GTK 3, and an AppIndicator library.</source>
+        <source>The Aspire tray supports Windows, macOS, and glibc Linux x64/ARM64 installations. Linux requires a graphical desktop with StatusNotifierItem support, GTK 3, and an AppIndicator library.</source>
         <target state="needs-review-translation">A bandeja experimental do Aspire oferece suporte a instalações do Windows e macOS x64/ARM64. Não há suporte para Linux.</target>
         <note />
       </trans-unit>

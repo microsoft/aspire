@@ -6,7 +6,7 @@ using Aspire.Cli.Resources;
 namespace Aspire.Cli.Commands;
 
 /// <summary>
-/// Manages the experimental bundled desktop tray companion.
+/// Manages the bundled desktop tray companion (Preview).
 /// </summary>
 internal sealed class TrayCommand : ParentCommand
 {
