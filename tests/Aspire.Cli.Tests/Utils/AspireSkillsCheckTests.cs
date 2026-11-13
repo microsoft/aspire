@@ -31,13 +31,13 @@ public class AspireSkillsCheckTests(ITestOutputHelper outputHelper) : IDisposabl
 
         Assert.Equal(AspireSkillsCheck.CheckName, result.Name);
         Assert.Equal(EnvironmentCheckStatus.Warning, result.Status);
+        Assert.Equal(DoctorCommandStrings.AspireSkillsFix, result.Fix);
         Assert.Equal(
             $"""
-            {DoctorCommandStrings.AspireSkillsFix}
-              {string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_LocationWithAgents, ".claude/skills/aspire-init", "claude")}
-              {string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_LocationWithAgents, "~/.agents/skills/aspire", "copilot, opencode")}
+            {string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_LocationWithAgents, ".claude/skills/aspire-init", "claude")}
+            {string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_LocationWithAgents, "~/.agents/skills/aspire", "copilot, opencode")}
             """.ReplaceLineEndings("\n"),
-            result.Fix);
+            result.Details);
         Assert.Equal([".claude/skills/aspire-init", "~/.agents/skills/aspire"], result.Files);
         Assert.Equal("project guidance", await File.ReadAllTextAsync(project));
         Assert.Equal("user guidance", await File.ReadAllTextAsync(user));
@@ -53,12 +53,10 @@ public class AspireSkillsCheckTests(ITestOutputHelper outputHelper) : IDisposabl
 
         var result = Assert.Single(await check.CheckAsync(TestContext.Current.CancellationToken));
 
+        Assert.Equal(DoctorCommandStrings.AspireSkillsFix, result.Fix);
         Assert.Equal(
-            $"""
-            {DoctorCommandStrings.AspireSkillsFix}
-              {string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_LocationWithAgents, ".agents/skills/aspire", "copilot, opencode")}
-            """.ReplaceLineEndings("\n"),
-            result.Fix);
+            string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_LocationWithAgents, ".agents/skills/aspire", "copilot, opencode"),
+            result.Details);
         Assert.Equal([".agents/skills/aspire"], result.Files);
     }
 

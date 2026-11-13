@@ -188,8 +188,7 @@ internal sealed class DoctorCommand : BaseCommand
                 var fixLines = result.Fix!.Split('\n', StringSplitOptions.RemoveEmptyEntries);
                 foreach (var line in fixLines)
                 {
-                    // Leading spaces nest a fix line under the line above it.
-                    detailGrid.AddRow(new Markup($"{line.TrimEnd().EscapeMarkup()}"));
+                    detailGrid.AddRow(new Markup($"{line.Trim().EscapeMarkup()}"));
                 }
             }
 

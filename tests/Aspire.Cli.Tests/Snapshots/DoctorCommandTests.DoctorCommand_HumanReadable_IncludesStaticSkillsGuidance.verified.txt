@@ -4,9 +4,10 @@ Aspire Environment Check
 
 Environment
   🚨 Found static copies of Aspire skills.
-       Run 'aspire agent init' to configure skill sources and remove these copies:
-         .agents/skills/aspire (copilot, opencode)
-         ~/.agents/skills/aspire (copilot, opencode)
+       Run 'aspire agent init' to configure skill sources and remove these copies.
+       Details:
+       .agents/skills/aspire (copilot, opencode)
+       ~/.agents/skills/aspire (copilot, opencode)
 
 Summary: 0 passed, 1 warnings, 0 failed
 For detailed prerequisites: https://aka.ms/aspire-prerequisites

@@ -37,7 +37,7 @@ internal sealed class AspireSkillsCheck(
                 .OrderBy(copy => copy.DisplayPath, StringComparer.Ordinal)
                 .ToArray();
 
-            var copyLines = copies.Select(copy => "  " + string.Format(CultureInfo.CurrentCulture,
+            var copyLines = copies.Select(copy => string.Format(CultureInfo.CurrentCulture,
                 AgentCommandStrings.InitCommand_LocationWithAgents, copy.DisplayPath, string.Join(", ", copy.Owners)));
 
             results.Add(new EnvironmentCheckResult
@@ -46,7 +46,8 @@ internal sealed class AspireSkillsCheck(
                 Name = CheckName,
                 Status = EnvironmentCheckStatus.Warning,
                 Message = DoctorCommandStrings.AspireSkillsMessage,
-                Fix = string.Join('\n', [DoctorCommandStrings.AspireSkillsFix, .. copyLines]),
+                Details = string.Join('\n', copyLines),
+                Fix = DoctorCommandStrings.AspireSkillsFix,
                 Files = copies.Select(copy => copy.DisplayPath).ToArray(),
                 Metadata = new JsonObject
                 {
