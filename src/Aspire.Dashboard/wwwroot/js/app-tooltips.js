@@ -250,7 +250,7 @@ class AspireTooltipProvider extends HTMLElement {
             end = boundary;
         }
 
-        let prefix = text.slice(0, end).replace(/[\p{White_Space}\p{Cc}\p{Mn}]+$/u, "");
+        let prefix = text.slice(0, end).replace(/[\p{White_Space}\p{Cc}]+$/u, "");
         // If the only word boundary was leading whitespace, keep part of the following long word.
         if (!prefix && end !== this.#maxTextLength - 1) {
             prefix = text.slice(0, this.#maxTextLength - 1);
