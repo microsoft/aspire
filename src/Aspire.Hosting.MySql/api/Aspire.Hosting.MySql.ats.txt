@@ -11,6 +11,7 @@ Aspire.Hosting.ApplicationModel/MySqlDatabaseResource.connectionStringExpression
 Aspire.Hosting.ApplicationModel/MySqlDatabaseResource.databaseName(context: Aspire.Hosting.MySql/Aspire.Hosting.ApplicationModel.MySqlDatabaseResource) -> string
 Aspire.Hosting.ApplicationModel/MySqlDatabaseResource.jdbcConnectionString(context: Aspire.Hosting.MySql/Aspire.Hosting.ApplicationModel.MySqlDatabaseResource) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression
 Aspire.Hosting.ApplicationModel/MySqlDatabaseResource.parent(context: Aspire.Hosting.MySql/Aspire.Hosting.ApplicationModel.MySqlDatabaseResource) -> Aspire.Hosting.MySql/Aspire.Hosting.ApplicationModel.MySqlServerResource
+Aspire.Hosting.ApplicationModel/MySqlDatabaseResource.resourceTypeDisplayName(context: Aspire.Hosting.MySql/Aspire.Hosting.ApplicationModel.MySqlDatabaseResource) -> string
 Aspire.Hosting.ApplicationModel/MySqlDatabaseResource.uriExpression(context: Aspire.Hosting.MySql/Aspire.Hosting.ApplicationModel.MySqlDatabaseResource) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression
 Aspire.Hosting.ApplicationModel/MySqlServerResource.connectionStringExpression(context: Aspire.Hosting.MySql/Aspire.Hosting.ApplicationModel.MySqlServerResource) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression
 Aspire.Hosting.ApplicationModel/MySqlServerResource.databases(context: Aspire.Hosting.MySql/Aspire.Hosting.ApplicationModel.MySqlServerResource) -> Aspire.Hosting/Dict<string,string>
@@ -19,6 +20,7 @@ Aspire.Hosting.ApplicationModel/MySqlServerResource.jdbcConnectionString(context
 Aspire.Hosting.ApplicationModel/MySqlServerResource.passwordParameter(context: Aspire.Hosting.MySql/Aspire.Hosting.ApplicationModel.MySqlServerResource) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource
 Aspire.Hosting.ApplicationModel/MySqlServerResource.port(context: Aspire.Hosting.MySql/Aspire.Hosting.ApplicationModel.MySqlServerResource) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReferenceExpression
 Aspire.Hosting.ApplicationModel/MySqlServerResource.primaryEndpoint(context: Aspire.Hosting.MySql/Aspire.Hosting.ApplicationModel.MySqlServerResource) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference
+Aspire.Hosting.ApplicationModel/MySqlServerResource.resourceTypeDisplayName(context: Aspire.Hosting.MySql/Aspire.Hosting.ApplicationModel.MySqlServerResource) -> string
 Aspire.Hosting.ApplicationModel/MySqlServerResource.setPasswordParameter(context: Aspire.Hosting.MySql/Aspire.Hosting.ApplicationModel.MySqlServerResource, value: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource) -> Aspire.Hosting.MySql/Aspire.Hosting.ApplicationModel.MySqlServerResource
 Aspire.Hosting.ApplicationModel/MySqlServerResource.uriExpression(context: Aspire.Hosting.MySql/Aspire.Hosting.ApplicationModel.MySqlServerResource) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression
 Aspire.Hosting.MySql/addDatabase(name: string, databaseName?: string) -> Aspire.Hosting.MySql/Aspire.Hosting.ApplicationModel.MySqlDatabaseResource
