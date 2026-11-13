@@ -783,17 +783,34 @@ internal sealed class AgentInitCommand : BaseCommand
 
         try
         {
-            foreach (var (path, configureServer) in client.GetMcpConfigPaths(scope, workspaceRoot).Where(static target => target.ConfigureServer))
+            foreach (var (path, configureServer) in client.GetMcpConfigPaths(scope, workspaceRoot))
             {
-                // Probe a discarded in-memory copy with the client's own update logic, so each client's
-                // server container and nesting rules apply. Nothing to add means the server already exists.
-                // This relies on UpdateMcpConfig only mutating the passed JsonObject; files are written
-                // only when an AgentConfiguration edit is published, and this one never is.
-                var (config, configFilePath) = await client.ReadMcpConfigAsync(
-                    path, workspaceRoot, scope, new AgentConfiguration(), cancellationToken);
-                if (!client.UpdateMcpConfig(config, configFilePath, configureServer, scope).Added)
+                try
                 {
-                    return true;
+                    var (config, configFilePath) = await client.ReadMcpConfigAsync(
+                        path, workspaceRoot, scope, new AgentConfiguration(), cancellationToken);
+                    if (configureServer)
+                    {
+                        // Probe a discarded in-memory copy with the client's own update logic, so each client's
+                        // server container and nesting rules apply. Nothing to add means the server already exists.
+                        // This relies on UpdateMcpConfig only mutating the passed JsonObject; files are written
+                        // only when an AgentConfiguration edit is published, and this one never is.
+                        if (!client.UpdateMcpConfig(config, configFilePath, configureServer, scope).Added)
+                        {
+                            return true;
+                        }
+                    }
+                    // Repair-only targets (such as Copilot's .vscode/mcp.json and .github/copilot/mcp.json) never
+                    // report Added, so probing them would always look configured. They use the VS Code
+                    // {"servers":{"aspire":{...}}} shape, so check for the entry directly.
+                    else if (McpConfigFileHelper.GetServerContainer(config, "servers", configFilePath)?["aspire"] is JsonObject)
+                    {
+                        return true;
+                    }
+                }
+                catch (Exception ex) when (IsUnreadableConfig(ex))
+                {
+                    // One unreadable file must not hide a valid registration in another.
                 }
             }
         }
