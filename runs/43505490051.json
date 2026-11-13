@@ -1,0 +1,101 @@
+{
+  "run_id": 43505490051,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/43505490051",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-13T21:27:24Z",
+  "verdict": "flaky-test",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 22080,
+    "title": "Remove static Aspire skill copies during aspire agent init",
+    "author": "ellahathaway",
+    "state": "closed",
+    "head_branch": "ellahathaway-agent-plugin-migration",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/22080",
+    "merged_at": "2026-11-13T20:52:07Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "67d9ff015544d7ad6b6f61d856b3e54dce9854a5",
+    "failed_sha": "d8dbb412aff1bccee88448cff23aff50a70f699f",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "8f6e42f40e26e1cc1dc20749db477e530240387f",
+        "message": "Fix 404 when switching language in the previous dashboard (#22261) ## Description Switching language in the previous dashboard (Settings > Language, with the previous experience selected) showed a 404 page. The settings dialog navigates to `/api/set-language?language=...&redirectUrl=...` with a forced page load, the same as the new dashboard. The legacy layout registers a location-changing handler that rewrites unprefixed navigations below `/legacy`, so links shared with the new experience stay ",
+        "html_url": "https://github.com/microsoft/aspire/commit/8f6e42f40e26e1cc1dc20749db477e530240387f",
+        "pull_request": {
+          "number": 22261,
+          "title": "Fix 404 when switching language in the previous dashboard",
+          "url": "https://github.com/microsoft/aspire/pull/22261",
+          "merged_at": "2026-11-13T17:25:35Z"
+        }
+      },
+      {
+        "sha": "8e63008ed19461f5a4005c109f72edd13a03b8aa",
+        "message": "Fix clipped graph controls and hide the game in the previous dashboard (#22264) ## Description In the previous dashboard experience, the resource graph controls (export, zoom in, zoom out, reset) were clipped by the bottom of the viewport and couldn't be clicked. The graph sized its SVG `viewBox` from `.resources-summary-layout`. On the new overview that element contains only the graph, but on the previous experience's Resources page it also contains the tab header row. The SVG had no CSS height",
+        "html_url": "https://github.com/microsoft/aspire/commit/8e63008ed19461f5a4005c109f72edd13a03b8aa",
+        "pull_request": {
+          "number": 22264,
+          "title": "Fix clipped graph controls and hide the game in the previous dashboard",
+          "url": "https://github.com/microsoft/aspire/pull/22264",
+          "merged_at": "2026-11-13T18:00:01Z"
+        }
+      },
+      {
+        "sha": "619426b657f96225ccf1b08d93e03a5ff648daa0",
+        "message": "Show only the absolute time in dashboard relative-time tooltips (#22263) ## Description Tooltips on relative times in the new dashboard repeated the text they were attached to, for example `Started 1m ago (11/13/2026 8:30:43 AM)` on a row that already reads \"Started 1m ago\". They now show only the exact time, in a browser-like medium format: `Nov 13, 2026, 11:03 AM`. Affected tooltips: - Resource rows, in the sidebar and in the full resource list. The accessible name keeps the visible age, `Star",
+        "html_url": "https://github.com/microsoft/aspire/commit/619426b657f96225ccf1b08d93e03a5ff648daa0",
+        "pull_request": {
+          "number": 22263,
+          "title": "Show only the absolute time in dashboard relative-time tooltips",
+          "url": "https://github.com/microsoft/aspire/pull/22263",
+          "merged_at": "2026-11-13T20:07:05Z"
+        }
+      },
+      {
+        "sha": "d8dbb412aff1bccee88448cff23aff50a70f699f",
+        "message": "Remove static Aspire skill copies during aspire agent init (#22080) ## Description Older Aspire CLIs copied Aspire skills into project and user-profile skill folders such as `.agents/skills/aspire`. Configured skill sources (the `microsoft/aspire-skills` plugin for Copilot and Claude Code, or the OpenCode catalog) replace those copies, but the copies go stale and nothing removes them. On main, `aspire doctor` and `aspire agent init` only tell users to delete them by hand, and many users do not n",
+        "html_url": "https://github.com/microsoft/aspire/commit/d8dbb412aff1bccee88448cff23aff50a70f699f",
+        "pull_request": {
+          "number": 22080,
+          "title": "Remove static Aspire skill copies during aspire agent init",
+          "url": "https://github.com/microsoft/aspire/pull/22080",
+          "merged_at": "2026-11-13T20:52:07Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, cli-path-rejection)",
+      "id": 132169226722,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/43505490051/job/132169226722",
+      "classification": "flaky-test",
+      "reason": "Selenium ElementNotInteractableError in StandaloneNotification.takeAction; UI timing flake, no deterministic code failure evident",
+      "failed_steps": [
+        "Run extension E2E tests"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Configured CLI path rejection E2E warns and opens the setting when the configured path is invalid",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, cli-path-rejection)",
+      "error": "element not interactable\n  (Session info: chrome=148.0.7778.280)",
+      "stack_trace": "ElementNotInteractableError: element not interactable\n  (Session info: chrome=148.0.7778.280)\n    at Object.throwDecodedError (node_modules/selenium-webdriver/lib/error.js:523:15)\n    at parseHttpResponse (node_modules/selenium-webdriver/lib/http.js:526:13)\n    at Executor.execute (node_modules/selenium-webdriver/lib/http.js:458:28)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async Driver.execute (node_modules/selenium-webdriver/lib/webdriver.js:745:17)\n    at async StandaloneNotification.takeAction (node_modules/@redhat-developer/page-objects/out/components/workbench/Notification.js:119:9)\n    at async Context.<anonymous> (out/test-e2e/test-e2e/cliPathRejectionNotification.e2e.test.js:93:9)",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "element not interactable on notification action button, matching prior intermittent mechanism",
+      "job_id": 132169226722,
+      "result_file": "00001.json",
+      "result_format": "mocha"
+    }
+  ],
+  "causes": [
+    "vscode-extension-e2e-notification-element-not-interactable"
+  ]
+}
