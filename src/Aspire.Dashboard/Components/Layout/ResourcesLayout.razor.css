@@ -131,7 +131,7 @@
     margin: 6px 0 0;
     position-try-fallbacks: flip-inline;
     box-sizing: border-box;
-    width: min(var(--resource-pane-expanded-width, 290px), calc(100vw - 24px));
+    width: min(330px, calc(100vw - 24px));
     max-width: none;
     height: max-content;
     max-height: stretch;
