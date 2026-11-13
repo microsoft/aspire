@@ -543,6 +543,56 @@ public partial class StructuredLogsTests : DashboardTestContext
         Assert.Equal(1, repository.GetResourceUnviewedErrorLogsCount().Where(entry => entry.Key.Name == "worker").Sum(entry => entry.Value));
     }
 
+    [Fact]
+    public async Task ResourcesLayout_TabChangesBeforePageIsReplaced_NoErrorsMarkedViewed()
+    {
+        SetupStructureLogsServices();
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("api"), ModelTestHelpers.CreateResource("worker")],
+            resourceChannelProvider: () => channel));
+        Services.GetRequiredService<DimensionManager>().InvokeOnViewportInformationChanged(viewport);
+        var navigationManager = Services.GetRequiredService<NavigationManager>();
+        navigationManager.NavigateTo(DashboardUrls.StructuredLogsUrl("api"));
+
+        var repository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        await AddLogAsync(repository, "api", SeverityNumber.Info);
+        await AddLogAsync(repository, "worker", SeverityNumber.Info);
+
+        // The body stays the structured logs page here. That is how the page sees a navigation to another tab until
+        // the resource list, after changing its tab and selection and raising ResourcesChanged, replaces it.
+        var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport).Add(p => p.Body, builder =>
+        {
+            builder.OpenComponent<StructuredLogs>(0);
+            builder.AddAttribute(1, nameof(StructuredLogs.ResourceName), "api");
+            builder.CloseComponent();
+        }));
+        var page = cut.FindComponent<StructuredLogs>();
+        cut.WaitForAssertion(() => Assert.Equal(["api"], page.Instance.ViewModel.ResourceKeys?.Select(key => key.Name) ?? []));
+
+        // Open worker's metrics. The router renders the layout again on every navigation, which is when the resource
+        // list updates its tab and selection.
+        navigationManager.NavigateTo(DashboardUrls.MetricsUrl(resource: "worker"));
+        cut.Render();
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal(ResourceTab.Metrics, cut.Instance.CurrentTab);
+            Assert.Equal(["worker"], cut.Instance.SelectedResourceNames);
+        });
+
+        // The departing page shows neither resource's new errors, so both stay unviewed. It also keeps the keys it was
+        // showing rather than following the destination's selection.
+        await AddLogAsync(repository, "api", SeverityNumber.Error);
+        await AddLogAsync(repository, "worker", SeverityNumber.Error);
+        Assert.Equal(1, GetUnviewedErrorCount(repository, "api"));
+        Assert.Equal(1, GetUnviewedErrorCount(repository, "worker"));
+        Assert.Equal(["api"], page.Instance.ViewModel.ResourceKeys?.Select(key => key.Name) ?? []);
+
+        static int GetUnviewedErrorCount(SqliteTelemetryRepository repository, string name) =>
+            repository.GetResourceUnviewedErrorLogsCount().Where(entry => entry.Key.Name == name).Sum(entry => entry.Value);
+    }
+
     private static Task AddLogAsync(SqliteTelemetryRepository repository, string name, SeverityNumber severity)
     {
         // Without an instance ID, the telemetry resource's name matches the app model resource's name.

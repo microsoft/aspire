@@ -142,7 +142,12 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
 
     private async ValueTask<GridItemsProviderResult<LogSummary>> GetData(GridItemsProviderRequest<LogSummary> request)
     {
-        ViewModel.ResourceKeys = GetSelectionTelemetryKeys();
+        // While the page is being replaced, the resource list's selection is the destination page's (see
+        // IsLeavingPage). Keep querying the keys the page was showing rather than the destination's.
+        if (!IsLeavingPage)
+        {
+            ViewModel.ResourceKeys = GetSelectionTelemetryKeys();
+        }
 
         // The subscription follows the keys queried here (see UpdateSubscription). The resource list can map new
         // telemetry before it raises ResourcesChanged.
@@ -179,7 +184,11 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
         _totalItemsCount = logs.TotalItemCount;
         _totalItemsFooter?.UpdateDisplayedCount(_totalItemsCount, _displayedItemCount);
 
-        if (ViewModel.ResourceKeys is { } resourceKeys)
+        if (IsLeavingPage)
+        {
+            // The page is no longer the one being viewed, so it doesn't mark any errors as viewed.
+        }
+        else if (ViewModel.ResourceKeys is { } resourceKeys)
         {
             foreach (var resourceKey in resourceKeys)
             {
@@ -321,6 +330,15 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
 
     private void OnLayoutResourcesChanged()
     {
+        if (IsLeavingPage)
+        {
+            // The resource list raises ResourcesChanged on a tab change, before this page is replaced. Its selection
+            // is then the destination page's, for example metrics/resource/worker, and following it would subscribe
+            // to worker's logs and mark their errors as viewed without showing them.
+            UpdateSubscription();
+            return;
+        }
+
         if (GetSelectionTelemetryKeys() is not { } resourceKeys ||
             ViewModel.ResourceKeys is { } current && current.SequenceEqual(resourceKeys))
         {
@@ -348,6 +366,11 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     private IReadOnlyList<ResourceKey>? GetSelectionTelemetryKeys() =>
         ResourcesLayout is { } layout ? layout.GetSelectionTelemetryKeys(layout.SelectedResourceNames) : null;
 
+    /// <summary>
+    /// Gets whether the resource list has moved to another tab, so this page is about to be replaced.
+    /// </summary>
+    private bool IsLeavingPage => ResourcesLayout is { CurrentTab: not ResourceTab.StructuredLogs };
+
     private Task HandleSelectedResourceChangedAsync()
     {
         return this.AfterViewModelChangedAsync(_contentLayout, waitToApplyMobileChange: true);
@@ -362,6 +385,16 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
 
     private void UpdateSubscription()
     {
+        if (IsLeavingPage)
+        {
+            // The page is about to be replaced, so it doesn't show any resource's logs. Without a subscription, no
+            // errors are marked as viewed and the departing grid isn't refreshed. GetData can still run until the page
+            // is disposed, so this check is here rather than only in OnLayoutResourcesChanged.
+            _logsSubscription?.Dispose();
+            _logsSubscription = null;
+            return;
+        }
+
         // A read subscription marks a resource's new errors as viewed when they arrive, and one without a resource key
         // does that for every resource. It must only cover resources the grid shows, or other resources lose their
         // unread counts.
