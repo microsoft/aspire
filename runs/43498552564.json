@@ -1,0 +1,90 @@
+{
+  "run_id": 43498552564,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/43498552564",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-13T20:44:49Z",
+  "verdict": "flaky-test",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 22263,
+    "title": "Show only the absolute time in dashboard relative-time tooltips",
+    "author": "sebastienros",
+    "state": "closed",
+    "head_branch": "sebros/dashboard-datetime-tooltips-448638",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/22263",
+    "merged_at": "2026-11-13T20:07:05Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "67d9ff015544d7ad6b6f61d856b3e54dce9854a5",
+    "failed_sha": "619426b657f96225ccf1b08d93e03a5ff648daa0",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "8f6e42f40e26e1cc1dc20749db477e530240387f",
+        "message": "Fix 404 when switching language in the previous dashboard (#22261) ## Description Switching language in the previous dashboard (Settings > Language, with the previous experience selected) showed a 404 page. The settings dialog navigates to `/api/set-language?language=...&redirectUrl=...` with a forced page load, the same as the new dashboard. The legacy layout registers a location-changing handler that rewrites unprefixed navigations below `/legacy`, so links shared with the new experience stay ",
+        "html_url": "https://github.com/microsoft/aspire/commit/8f6e42f40e26e1cc1dc20749db477e530240387f",
+        "pull_request": {
+          "number": 22261,
+          "title": "Fix 404 when switching language in the previous dashboard",
+          "url": "https://github.com/microsoft/aspire/pull/22261",
+          "merged_at": "2026-11-13T17:25:35Z"
+        }
+      },
+      {
+        "sha": "8e63008ed19461f5a4005c109f72edd13a03b8aa",
+        "message": "Fix clipped graph controls and hide the game in the previous dashboard (#22264) ## Description In the previous dashboard experience, the resource graph controls (export, zoom in, zoom out, reset) were clipped by the bottom of the viewport and couldn't be clicked. The graph sized its SVG `viewBox` from `.resources-summary-layout`. On the new overview that element contains only the graph, but on the previous experience's Resources page it also contains the tab header row. The SVG had no CSS height",
+        "html_url": "https://github.com/microsoft/aspire/commit/8e63008ed19461f5a4005c109f72edd13a03b8aa",
+        "pull_request": {
+          "number": 22264,
+          "title": "Fix clipped graph controls and hide the game in the previous dashboard",
+          "url": "https://github.com/microsoft/aspire/pull/22264",
+          "merged_at": "2026-11-13T18:00:01Z"
+        }
+      },
+      {
+        "sha": "619426b657f96225ccf1b08d93e03a5ff648daa0",
+        "message": "Show only the absolute time in dashboard relative-time tooltips (#22263) ## Description Tooltips on relative times in the new dashboard repeated the text they were attached to, for example `Started 1m ago (11/13/2026 8:30:43 AM)` on a row that already reads \"Started 1m ago\". They now show only the exact time, in a browser-like medium format: `Nov 13, 2026, 11:03 AM`. Affected tooltips: - Resource rows, in the sidebar and in the full resource list. The accessible name keeps the visible age, `Star",
+        "html_url": "https://github.com/microsoft/aspire/commit/619426b657f96225ccf1b08d93e03a5ff648daa0",
+        "pull_request": {
+          "number": 22263,
+          "title": "Show only the absolute time in dashboard relative-time tooltips",
+          "url": "https://github.com/microsoft/aspire/pull/22263",
+          "merged_at": "2026-11-13T20:07:05Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, tree-actions)",
+      "id": 132147832532,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/43498552564/job/132147832532",
+      "classification": "flaky-test",
+      "reason": "Windows tree-actions E2E intermittently fails to locate .monaco-menu; matches recurring recorded mechanism, unrelated to dashboard-only changes.",
+      "failed_steps": [
+        "Run extension E2E tests"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire tree action command E2E routes view, copy, endpoint, log, and resource commands through tree handlers",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, tree-actions)",
+      "error": "no such element: Unable to locate element: {\"method\":\"css selector\",\"selector\":\".monaco-menu\"}\n  (Session info: chrome=148.0.7778.280)",
+      "stack_trace": "NoSuchElementError: no such element: Unable to locate element: {\"method\":\"css selector\",\"selector\":\".monaco-menu\"}\n  (Session info: chrome=148.0.7778.280)\n    at Object.throwDecodedError (node_modules\\selenium-webdriver\\lib\\error.js:523:15)\n    at parseHttpResponse (node_modules\\selenium-webdriver\\lib\\http.js:526:13)\n    at Executor.execute (node_modules\\selenium-webdriver\\lib\\http.js:458:28)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async Driver.execute (node_modules\\selenium-webdriver\\lib\\webdriver.js:745:17)\n    at async toWireValue (node_modules\\selenium-webdriver\\lib\\webdriver.js:149:15)\n    at async D:\\a\\aspire\\aspire\\extension\\node_modules\\selenium-webdriver\\lib\\webdriver.js:195:16\n    at async forEachKey (node_modules\\selenium-webdriver\\lib\\webdriver.js:189:9)\n    at async convertKeys (node_modules\\selenium-webdriver\\lib\\webdriver.js:194:3)\n    at async Driver.execute (node_modules\\selenium-webdriver\\lib\\webdriver.js:743:22)",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Selenium cannot locate .monaco-menu; same recurring UI timing failure seen across unrelated runs.",
+      "job_id": 132147832532,
+      "result_file": "00001.json",
+      "result_format": "mocha"
+    }
+  ],
+  "causes": [
+    "vscode-e2e-windows-tree-actions-monaco-menu-missing"
+  ]
+}
