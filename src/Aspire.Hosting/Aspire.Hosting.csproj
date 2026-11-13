@@ -73,6 +73,7 @@
     <Compile Include="$(SharedDir)Json\JsonFlattener.cs" Link="Utils\JsonFlattener.cs" />
     <Compile Include="$(SharedDir)LocaleHelpers.cs" Link="Utils\LocaleHelpers.cs" />
     <Compile Include="$(SharedDir)PathLookupHelper.cs" Link="Utils\PathLookupHelper.cs" />
+    <Compile Include="$(SharedDir)ProcessStartInfoHelper.cs" Link="Utils\ProcessStartInfoHelper.cs" />
     <Compile Include="$(SharedDir)MsBuildResponseFile.cs" Link="Utils\MsBuildResponseFile.cs" />
     <Compile Include="$(SharedDir)BackchannelConstants.cs" Link="Backchannel\BackchannelConstants.cs" />
     <Compile Include="$(SharedDir)UserSecrets\AspireSecretsPathHelper.cs" Link="UserSecrets\AspireSecretsPathHelper.cs" />

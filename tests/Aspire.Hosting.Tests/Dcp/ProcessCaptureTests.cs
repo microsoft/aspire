@@ -5,7 +5,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.IO.Pipes;
 using System.Text;
-using Aspire.Hosting.Dcp.Process;
+using Aspire.Hosting.Utils;
 using Aspire.Hosting.Tests.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 

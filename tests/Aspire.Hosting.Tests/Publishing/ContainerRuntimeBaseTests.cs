@@ -5,6 +5,7 @@
 #pragma warning disable ASPIRECONTAINERRUNTIME001
 
 using Aspire.Hosting.Dcp.Process;
+using Aspire.Hosting.Utils;
 using Aspire.Hosting.Publishing;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Shared;
@@ -530,6 +531,9 @@ public class ContainerRuntimeBaseTests
             ReadOnlyMemory<byte> standardInput = default,
             CancellationToken cancellationToken = default)
             => throw new NotSupportedException("This test runner supports only line execution.");
+
+        public IAsyncEnumerable<ProcessEvent<ReadOnlyMemory<byte>>> CreateExecution(ProcessCommand command)
+            => throw new NotSupportedException("This test runner supports legacy execution until its callers are migrated.");
 
         public (Task<ProcessResult>, IAsyncDisposable) Run(ProcessSpec processSpec)
         {

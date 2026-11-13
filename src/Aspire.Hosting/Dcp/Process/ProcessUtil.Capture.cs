@@ -3,6 +3,7 @@
 
 using System.Diagnostics;
 using System.Text;
+using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Dcp.Process;
 

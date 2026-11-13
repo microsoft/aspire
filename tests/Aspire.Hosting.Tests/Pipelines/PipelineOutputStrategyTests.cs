@@ -4,7 +4,6 @@
 using System.Collections.Concurrent;
 using System.ComponentModel;
 using System.Text;
-using Aspire.Hosting.Dcp.Process;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;

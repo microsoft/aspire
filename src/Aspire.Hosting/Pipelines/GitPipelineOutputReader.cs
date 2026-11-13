@@ -6,7 +6,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
 using System.Text;
-using Aspire.Hosting.Dcp.Process;
+using Aspire.Hosting.Utils;
 using Microsoft.Extensions.FileSystemGlobbing;
 
 namespace Aspire.Hosting.Pipelines;

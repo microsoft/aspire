@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.Dcp.Process;
+using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Tests.Pipelines;
 
@@ -22,4 +23,7 @@ internal sealed class PipelineOutputTestProcessRunner(Func<IReadOnlyList<string>
         Assert.Equal("0", environmentVariables!["GIT_OPTIONAL_LOCKS"]);
         return Task.FromResult(capture(arguments));
     }
+
+    public IAsyncEnumerable<ProcessEvent<ReadOnlyMemory<byte>>> CreateExecution(ProcessCommand command)
+        => throw new NotSupportedException();
 }

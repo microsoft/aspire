@@ -10,10 +10,14 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="..\Aspire.Hosting\Dcp\Process\ProcessResult.cs" Link="Process\ProcessResult.cs" />
-    <Compile Include="..\Aspire.Hosting\Dcp\Process\ProcessSpec.cs" Link="Process\ProcessSpec.cs" />
-    <Compile Include="..\Aspire.Hosting\Dcp\Process\ProcessOutputCapture.cs" Link="Process\ProcessOutputCapture.cs" />
-    <Compile Include="..\Aspire.Hosting\Dcp\Process\ProcessUtil.cs" Link="Process\ProcessUtil.cs" />
+    <Compile Include="..\Aspire.Hosting\Utils\IProcessRunner.cs" Link="Utils\IProcessRunner.cs" />
+    <Compile Include="..\Aspire.Hosting\Utils\DefaultProcessRunner.Execution.cs" Link="Utils\DefaultProcessRunner.Execution.cs" />
+    <Compile Include="..\Aspire.Hosting\Utils\ProcessCommand.cs" Link="Utils\ProcessCommand.cs" />
+    <Compile Include="..\Aspire.Hosting\Utils\ProcessInput.cs" Link="Utils\ProcessInput.cs" />
+    <Compile Include="..\Aspire.Hosting\Utils\ProcessEvent.cs" Link="Utils\ProcessEvent.cs" />
+    <Compile Include="..\Aspire.Hosting\Utils\ProcessEventStream.cs" Link="Utils\ProcessEventStream.cs" />
+    <Compile Include="..\Aspire.Hosting\Utils\ProcessEventExtensions.cs" Link="Utils\ProcessEventExtensions.cs" />
+    <Compile Include="..\Aspire.Hosting\Utils\ProcessCaptureResult.cs" Link="Utils\ProcessCaptureResult.cs" />
     <Compile Include="$(SharedDir)AzurePortalUrls.cs" Link="AzurePortalUrls.cs" />
     <Compile Include="$(SharedDir)CustomResourceSnapshotExtensions.cs" Link="Utils\CustomResourceSnapshotExtensions.cs" />
     <Compile Include="$(SharedDir)ExceptionUtils.cs" Link="Utils\ExceptionUtils.cs" />
@@ -22,6 +26,7 @@
     <Compile Include="$(SharedDir)ResourceNameHelpers.cs" Link="Utils\ResourceNameHelpers.cs" />
     <Compile Include="$(SharedDir)Model\KnownRelationshipTypes.cs" />
     <Compile Include="$(SharedDir)PathLookupHelper.cs" Link="Utils\PathLookupHelper.cs" />
+    <Compile Include="$(SharedDir)ProcessStartInfoHelper.cs" Link="Utils\ProcessStartInfoHelper.cs" />
   </ItemGroup>
 
   <ItemGroup>

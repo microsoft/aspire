@@ -1,9 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics;
 using System.Text;
-using Aspire.Hosting.Dcp.Process;
+using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Azure.Provisioning.Internal;
@@ -11,103 +10,49 @@ namespace Aspire.Hosting.Azure.Provisioning.Internal;
 /// <summary>
 /// Default implementation of <see cref="IBicepCompiler"/>.
 /// </summary>
-internal sealed class BicepCliCompiler : IBicepCompiler
+internal sealed class BicepCliCompiler(ILogger<BicepCliCompiler> logger, IProcessRunner processRunner) : IBicepCompiler
 {
-    private readonly ILogger<BicepCliCompiler> _logger;
-
-    public BicepCliCompiler(ILogger<BicepCliCompiler> logger)
-    {
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-    }
-
     public async Task<string> CompileBicepToArmAsync(string bicepFilePath, CancellationToken cancellationToken = default)
     {
-        // Try bicep command first for better performance
-        var bicepPath = PathLookupHelper.FindFullPathFromPath("bicep");
-        string commandPath;
-        string arguments;
-
-        if (bicepPath is not null)
+        ProcessCaptureResult result;
+        try
         {
-            commandPath = bicepPath;
-            arguments = $"build \"{bicepFilePath}\" --stdout";
+            result = await CompileAsync("bicep", ["build", bicepFilePath, "--stdout"], cancellationToken).ConfigureAwait(false);
         }
-        else
+        catch (FileNotFoundException exception) when (exception.FileName == "bicep")
         {
-            // Fall back to az bicep if bicep command is not available
-            var azPath = PathLookupHelper.FindFullPathFromPath("az");
-            if (azPath is null)
+            try
+            {
+                result = await CompileAsync("az", ["bicep", "build", "--file", bicepFilePath, "--stdout"], cancellationToken).ConfigureAwait(false);
+            }
+            catch (FileNotFoundException azException) when (azException.FileName == "az")
             {
                 throw new AzureCliNotOnPathException();
             }
-            commandPath = azPath;
-            arguments = $"bicep build --file \"{bicepFilePath}\" --stdout";
         }
 
-        var armTemplateContents = new StringBuilder();
-        var errorContents = new StringBuilder();
-        var templateSpec = new ProcessSpec(commandPath)
+        if (result.ExitCode != 0)
         {
-            Arguments = arguments,
-            OnOutputData = data =>
-            {
-                _logger.LogDebug("{CommandPath} (stdout): {Output}", commandPath, data);
-                armTemplateContents.AppendLine(data);
-            },
-            OnErrorData = data =>
-            {
-                _logger.LogDebug("{CommandPath} (stderr): {Error}", commandPath, data);
-                errorContents.AppendLine(data);
-            },
-        };
-
-        _logger.LogDebug("Running {CommandPath} with arguments: {Arguments}", commandPath, arguments);
-
-        int exitCode;
-        try
-        {
-            exitCode = await ExecuteCommand(templateSpec).ConfigureAwait(false);
+            logger.LogError("Bicep compilation for {BicepFilePath} failed with exit code {ExitCode}.", bicepFilePath, result.ExitCode);
+            var errorMessage = result.StandardError.Trim();
+            throw new InvalidOperationException(string.IsNullOrEmpty(errorMessage)
+                ? $"Failed to compile bicep file: {bicepFilePath}"
+                : $"Failed to compile bicep file: {bicepFilePath}{Environment.NewLine}{errorMessage}");
         }
-        catch (InvalidOperationException ex)
-        {
-            var errorMessage = errorContents.ToString().Trim();
-            throw new InvalidOperationException(
-                string.IsNullOrEmpty(errorMessage)
-                    ? $"Failed to compile bicep file: {bicepFilePath}"
-                    : $"Failed to compile bicep file: {bicepFilePath}{Environment.NewLine}{errorMessage}",
-                ex);
-        }
-
-        if (exitCode != 0)
-        {
-            _logger.LogError("Bicep compilation for {BicepFilePath} failed with exit code {ExitCode}.", bicepFilePath, exitCode);
-            var errorMessage = errorContents.ToString().Trim();
-            throw new InvalidOperationException(
-                string.IsNullOrEmpty(errorMessage)
-                    ? $"Failed to compile bicep file: {bicepFilePath}"
-                    : $"Failed to compile bicep file: {bicepFilePath}{Environment.NewLine}{errorMessage}");
-        }
-
-        _logger.LogDebug("Bicep compilation for {BicepFilePath} succeeded.", bicepFilePath);
-
-        return armTemplateContents.ToString();
+        logger.LogDebug("Bicep compilation for {BicepFilePath} succeeded.", bicepFilePath);
+        return result.StandardOutput;
     }
 
-    private static async Task<int> ExecuteCommand(ProcessSpec processSpec)
+    private async Task<ProcessCaptureResult> CompileAsync(string command, string[] arguments, CancellationToken cancellationToken)
     {
-        var sw = Stopwatch.StartNew();
-        var (task, disposable) = ProcessUtil.Run(processSpec);
-
-        try
+        logger.LogDebug("Running {CommandPath} with arguments: {Arguments}", command, arguments);
+        var result = await processRunner.CreateExecution(new ProcessCommand(command)
         {
-            var result = await task.ConfigureAwait(false);
-            sw.Stop();
-
-            return result.ExitCode;
-        }
-        finally
-        {
-            await disposable.DisposeAsync().ConfigureAwait(false);
-        }
+            Arguments = arguments,
+            ResolveExecutablePath = true
+        }).DecodeText(Encoding.UTF8).ExecuteAndCaptureTextAsync(cancellationToken).ConfigureAwait(false);
+        logger.LogDebug("{CommandPath} (stdout): {Output}", command, result.StandardOutput);
+        logger.LogDebug("{CommandPath} (stderr): {Error}", command, result.StandardError);
+        return result;
     }
 }
