@@ -237,12 +237,12 @@ internal sealed class AzureAppServiceWebsiteContext(
             return (AllocateParameter(output, secretType: secretType), secretType);
         }
 
-#pragma warning disable ASPIREAZURE003 // IBicepOutputReferenceProvider is experimental.
+#pragma warning disable ASPIREAZURE005 // IBicepOutputReferenceProvider is experimental.
         if (value is IBicepOutputReferenceProvider outputProvider && outputProvider.GetOutputReference() is { } providedOutput)
         {
             return ProcessValue(providedOutput, secretType, parent, isSlot);
         }
-#pragma warning restore ASPIREAZURE003
+#pragma warning restore ASPIREAZURE005
 
         if (value is IAzureKeyVaultSecretReference vaultSecretReference)
         {

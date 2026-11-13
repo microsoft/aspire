@@ -1,6 +1,7 @@
 ﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Concurrent;
 using System.Threading.Channels;
 using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Components.Resize;
@@ -331,6 +332,61 @@ public class ResourcesLayoutTests : DashboardTestContext
         Assert.Equal(url, navigation.Uri);
         Assert.Equal(["api"], cut.Instance.SelectedResourceNames);
         Assert.Single(cut.FindAll(".resource-row.selected"));
+    }
+
+    [Theory]
+    [InlineData(true, "api")]
+    [InlineData(true, "cache")]
+    [InlineData(false, "api")]
+    [InlineData(false, "cache")]
+    public async Task TraceDetails_SelectingResourceReturnsToTraces(bool appHostEnabled, string resourceName)
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: appHostEnabled,
+            initialResources: [ModelTestHelpers.CreateResource("api"), ModelTestHelpers.CreateResource("cache")],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        if (!appHostEnabled)
+        {
+            await AddTelemetryAsync("api");
+            await AddTelemetryAsync("cache");
+        }
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo(DashboardUrls.AddResourceSelection(DashboardUrls.TraceDetailUrl("abc", "span"), ["api"]));
+        var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
+
+        await cut.Find($".resource-row-link[aria-label='{resourceName}']").ClickAsync();
+        cut.Render();
+
+        Assert.Equal(DashboardUrls.TracesUrl(resourceName), new Uri(navigation.Uri).PathAndQuery);
+        Assert.Equal([resourceName], cut.Instance.SelectedResourceNames);
+    }
+
+    [Fact]
+    public async Task TraceDetails_SelectingSelectedGroupReturnsToTraces()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources:
+            [
+                ModelTestHelpers.CreateResource("api", resourceType: KnownResourceTypes.Project),
+                ModelTestHelpers.CreateResource("worker", resourceType: KnownResourceTypes.Project)
+            ],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        var storage = Assert.IsType<TestLocalStorage>(Services.GetRequiredService<ILocalStorage>());
+        storage.OnGetUnprotectedAsync = key => key == BrowserStorageKeys.ResourcePaneGrouping
+            ? (true, nameof(ResourcePaneGrouping.ResourceType))
+            : (false, null);
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo(DashboardUrls.AddResourceSelection(DashboardUrls.TraceDetailUrl("abc", "span"), ["api", "worker"]));
+        var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
+
+        await cut.Find(".resource-tag-link").ClickAsync();
+        cut.Render();
+
+        Assert.Equal("/traces?resource=api&resource=worker", new Uri(navigation.Uri).PathAndQuery);
+        Assert.Equal(["api", "worker"], cut.Instance.SelectedResourceNames);
     }
 
     [Fact]
@@ -1467,6 +1523,49 @@ public class ResourcesLayoutTests : DashboardTestContext
         cut.Render();
         await SelectTabAsync("tab-Overview");
         Assert.Equal("http://localhost/resources/api", navigation.Uri);
+    }
+
+    [Theory]
+    [InlineData("Stop")]
+    [InlineData("")]
+    [InlineData("UnknownCommandIcon")]
+    public void RowActions_DoNotRecolorSharedCommandIcons(string iconName)
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var command = new CommandViewModel("resource-stop", CommandViewModelState.Enabled, "Stop", "Stop resource", confirmationMessage: "", argumentInputs: [], isHighlighted: true, iconName: iconName, iconVariant: IconVariant.Filled);
+        var resource = ModelTestHelpers.CreateResource("api", state: KnownResourceState.Running, commands: [command]);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [resource],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        var icon = Services.GetRequiredService<IconResolver>().ResolveHighlightedCommandIcon(command.IconName, command.IconVariant);
+        var preview = Render<FluentIcon<Icon>>(builder => builder.Add(component => component.Value, icon));
+        var originalStyle = preview.Find("svg").GetAttribute("style");
+
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ConsoleLogsUrl("api"));
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".resource-row-highlighted")));
+        preview.Render();
+        Assert.Equal(originalStyle, preview.Find("svg").GetAttribute("style"));
+
+        using var gridActions = Render<ResourceActions>(builder => builder
+            .AddCascadingValue(viewport)
+            .Add(component => component.Resource, resource)
+            .Add(component => component.ResourceByName, new ConcurrentDictionary<string, ResourceViewModel>(StringComparers.ResourceName) { [resource.Name] = resource })
+            .Add(component => component.MaxHighlightedCount, 1)
+            .Add(component => component.CommandSelected, EventCallback<CommandViewModel>.Empty)
+            .Add(component => component.OnViewDetails, EventCallback<string?>.Empty)
+            .Add(component => component.IsCommandExecuting, (_, _) => false));
+        preview.Render();
+        Assert.Equal(originalStyle, preview.Find("svg").GetAttribute("style"));
+
+        using var overview = Render<FluentStack>(builder => builder.AddChildContent(
+            cut.Instance.RenderResourceActions(resource, showLabels: true, row: null)));
+        preview.Render();
+        Assert.Equal(originalStyle, preview.Find("svg").GetAttribute("style"));
+
+        cut.Render();
+        preview.Render();
+        Assert.Equal(originalStyle, preview.Find("svg").GetAttribute("style"));
     }
 
     [Fact]
@@ -2783,6 +2882,46 @@ public class ResourcesLayoutTests : DashboardTestContext
                 links.Select(link => link.GetAttribute("href")));
             Assert.Equal("1 telemetry source", cut.Find(".resource-pane-foot > span").GetAttribute("aria-label"));
             Assert.Equal(["api", "worker"], cut.Instance.GetAllResourceNames());
+        });
+    }
+
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    public async Task EmptyPane_ShowsMessageAfterAllResources(bool appHostEnabled, bool hasResources)
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: appHostEnabled,
+            initialResources: hasResources ? [ModelTestHelpers.CreateResource("api")] : [],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        if (!appHostEnabled && hasResources)
+        {
+            await AddTelemetryAsync("api");
+        }
+        Services.GetRequiredService<NavigationManager>().NavigateTo(appHostEnabled
+            ? DashboardUrls.ResourceListUrl()
+            : DashboardUrls.StructuredLogsUrl());
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() =>
+        {
+            Assert.True(cut.Instance.IsLoaded);
+            Assert.Equal(hasResources ? 2 : 1, cut.FindAll(".resource-row").Count);
+        });
+
+        if (hasResources)
+        {
+            await cut.FindComponent<FluentTextInput>().InvokeAsync(() =>
+                cut.FindComponent<FluentTextInput>().Instance.ValueChanged.InvokeAsync("no-match"));
+        }
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Single(cut.FindAll(".resource-row"));
+            var message = Assert.Single(cut.FindAll(".resource-pane-message"));
+            Assert.Equal(appHostEnabled ? "No resources found" : "No telemetry sources", message.TextContent.Trim());
+            Assert.Equal(cut.Find(".resource-row-all"), message.PreviousElementSibling);
         });
     }
 

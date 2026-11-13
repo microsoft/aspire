@@ -592,6 +592,14 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         }
     }
 
+    // Whether Escape, when nothing else uses it, goes to the dashboard's home as the brand does (see
+    // registerResourceContextMenu in ResourcesLayout.razor.js). Every page beside the docked list can go there. Home
+    // itself can't, nor a narrow layout, where "/" redirects to the overview because there's no full-page list, nor a
+    // dashboard without the resource service, whose "/" redirects to the structured logs (see Home). While home is
+    // loading, Escape would only start the same navigation again.
+    internal bool CanEscapeGoHome =>
+        ViewportInformation.IsDesktop && DashboardClient.IsEnabled && !_isPaneFullCanvas && _homeNavigation is null;
+
     internal void OnHomeNavigationStarting()
     {
         // Home is already showing, so the navigation won't change the location, and nothing would release a tab
@@ -2578,13 +2586,6 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         }
         else
         {
-            if (_selectedResourceNames is [var only] && string.Equals(only, resourceName, StringComparisons.ResourceName))
-            {
-                // Selecting the only selected row again keeps it selected. Clearing the selection here would silently
-                // widen the view to every resource on an accidental second click; "All resources" does that explicitly.
-                return;
-            }
-
             selection = [resourceName];
             _selectionAnchor = resourceName;
         }
@@ -2630,12 +2631,6 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         }
         else
         {
-            if (IsResourceGroupSelected(groupResourceNames))
-            {
-                // Like a row, selecting the selected group again keeps the selection.
-                return;
-            }
-
             selection = groupResourceNames;
         }
 

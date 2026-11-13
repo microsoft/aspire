@@ -1,0 +1,28 @@
+@namespace Aspire.Dashboard.Components
+@using Aspire.Dashboard.Utils
+
+@* The rich preview the trace page's log markers show in their tooltip. The page renders one, filled with the marker
+   the pointer or keyboard is on, rather than one per marker: a span can have thousands of logs, and each preview is a
+   small table. The shared tooltip clones it when it opens and follows its changes while it's open. *@
+<div id="@ElementId" class="log-tooltip" hidden>
+    @if (_logEntry is { } logEntry)
+    {
+        <div class="log-tooltip-title-container">
+            <span class="log-tooltip-title">@(logEntry.EventName ?? Loc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsEntryDetails)])</span> <span class="log-tooltip-subtitle">@logEntry.ScopeName</span><br />
+        </div>
+        <table class="log-tooltip-table">
+            <tr>
+                <td class="label-column">@Loc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsLevelColumnHeader)]</td>
+                <td>@logEntry.Severity</td>
+            </tr>
+            <tr>
+                <td class="label-column">@Loc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsTimestampColumnHeader)]</td>
+                <td>@FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, logEntry.TimeStamp, MillisecondsDisplay.Truncated)</td>
+            </tr>
+            <tr>
+                <td class="label-column">@Loc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsMessageColumnHeader)]</td>
+                <td>@FormatHelpers.TruncateText(logEntry.Message, maxLength: 150)</td>
+            </tr>
+        </table>
+    }
+</div>

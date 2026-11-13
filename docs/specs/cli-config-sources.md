@@ -105,7 +105,7 @@ Read more about this configuration source
 
 Only use sources you trust. Content from these sources can run code on your machine.
 
-Use configuration from this source? [Y/n]:
+Create app using configuration from this source? [Y/n]:
 ```
 
 The explanation precedes the source details, which use an aligned two-column
@@ -114,6 +114,12 @@ AppHost and dashboard summaries. When a README URL is available,
 **Read more about this configuration source** is a Spectre.Console hyperlink.
 Terminals without hyperlink support show the label and URL as plain text.
 The standard yes/no confirmation defaults to **Yes** when Enter is pressed.
+The confirmation describes the current command's action: `aspire new` asks
+**Create app using configuration from this source?**, `aspire init` asks
+**Initialize Aspire using configuration from this source?**, `aspire update`
+asks **Update app to use configuration from this source?**, and
+`aspire template source list` asks
+**Include template sources from this configuration source?**
 
 The source trust warning appears at most once per CLI command, shared across
 configuration, template, integration, and skill sources. Source explanations,
@@ -396,12 +402,13 @@ aspire update --config-source --apphost MyApp.AppHost.csproj
 
 This is a configuration-update mode of `aspire update`, separate from its package-update workflow:
 
-- Resolve the project using the existing project-selection behavior, including `--apphost`, and process the saved binding in its nearest local settings file. Ignore global bindings and do not select a source from environment variables or employee detection. If the local configuration has no saved source, report that there is no configuration source to update and exit successfully without Git acquisition.
+- Resolve the project using the existing project-selection behavior, including `--apphost`, and process the saved binding in its nearest local settings file. Ignore global bindings and do not select a source from environment variables or employee detection. If the local configuration has no saved source or has opted out, report that there is no configuration source to update and exit successfully without Git acquisition.
 - When `--apphost` names a directory, discover and select an AppHost within that directory before considering a configuration-only fallback in the requested directory. If discovery finds no AppHost, use the nearest local settings file from that fallback directory; discovery ambiguity or unsupported-project errors must not silently select another binding.
+- Before acquisition, display the saved source's repository, non-default source-file path, optional ref, and declaring local settings file using the same source-details layout as creation. Skip the introductory explanation of configuration sources.
 - Acquire the saved branch's current commit, the saved exact commit, or the repository's current default branch when the binding has no ref, even when a recent check found no update. Validate it, merge only supplied allowlisted values into the declaring configuration file, and save its applied version with those values, preserving unrelated settings.
 - On acquisition, validation, or write failure, stop and exit nonzero without changing the app configuration or its applied version.
 - Publish the fetched source JSON and fetch metadata in Aspire home as tracking data. Record a successful fetch/check time even if the selected file's version is unchanged. If tracking publication fails, report it explicitly; do not use shared tracking as proof that an app was updated.
-- Successful application does not display a completion summary with the repository, resolved commit, or settings-file path. Git acquisition notices, source-trust warnings, and errors remain visible. Supplied allowlisted values can replace local edits.
+- On successful application, report that configuration was updated to the latest version from its source, or that it is already up to date when no settings changed. Replacing local edits counts as an update even if the source version is unchanged. Do not include the repository, resolved commit, or settings-file path in this result message. Git acquisition notices, source-trust warnings, and errors remain visible.
 - Do not update the CLI, SDK, or packages, change the binding's repository, path, or ref, regenerate AppHost source or application code, or reinstall content. The app configuration file and its applied-version stamp are intentionally updated. Reject combinations with `--self`, `--migrate`, or channel/package-source overrides. Plain `aspire update` retains its existing package-update behavior and performs an advisory source check for saved bindings; unbound projects can explicitly adopt a source as described above.
 - Follow `aspire update`'s existing non-interactive confirmation contract: automation uses `aspire update --config-source --yes --non-interactive`. The saved binding supplies source consent; this command does not establish a new binding or prompt to enable one.
 

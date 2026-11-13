@@ -7,6 +7,11 @@
         <target state="new">For help accessing this configuration source, see {0}.</target>
         <note>{0} is a hyperlink to the configuration source README.</note>
       </trans-unit>
+      <trans-unit id="AlreadyUpToDate">
+        <source>Configuration is already up to date with its source.</source>
+        <target state="new">Configuration is already up to date with its source.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="AppliedVersionMissing">
         <source>A saved configuration source has no recorded applied version. Run `aspire update --config-source` to save its allowed settings and establish the applied version.</source>
         <target state="new">A saved configuration source has no recorded applied version. Run `aspire update --config-source` to save its allowed settings and establish the applied version.</target>
@@ -43,8 +48,8 @@
         <note />
       </trans-unit>
       <trans-unit id="ConsentRequired">
-        <source>A configuration source is available. Specify --use-config-source to accept it or --use-config-source false to use standard Aspire configuration in non-interactive mode.</source>
-        <target state="new">A configuration source is available. Specify --use-config-source to accept it or --use-config-source false to use standard Aspire configuration in non-interactive mode.</target>
+        <source>A configuration source is available, but confirmation can't be requested in non-interactive mode. Specify --use-config-source to use it, or --use-config-source false to use the standard Aspire configuration.</source>
+        <target state="new">A configuration source is available, but confirmation can't be requested in non-interactive mode. Specify --use-config-source to use it, or --use-config-source false to use the standard Aspire configuration.</target>
         <note>Do not translate "--use-config-source" or "false".</note>
       </trans-unit>
       <trans-unit id="DefaultBranch">
@@ -76,6 +81,11 @@
         <source>--config-source cannot be combined with --self, --migrate, --channel, --quality, or --nuget-config-dir.</source>
         <target state="new">--config-source cannot be combined with --self, --migrate, --channel, --quality, or --nuget-config-dir.</target>
         <note>Do not translate the command-line option names.</note>
+      </trans-unit>
+      <trans-unit id="InitUseSourcePrompt">
+        <source>Initialize Aspire using configuration from this source?</source>
+        <target state="new">Initialize Aspire using configuration from this source?</target>
+        <note />
       </trans-unit>
       <trans-unit id="InvalidBinding">
         <source>The configSource binding must contain a Git repository address and a repository-relative configuration file path.</source>
@@ -122,6 +132,11 @@
         <target state="new">A source configuration file cannot declare another configSource.</target>
         <note>Do not translate "configSource".</note>
       </trans-unit>
+      <trans-unit id="NewUseSourcePrompt">
+        <source>Create app using configuration from this source?</source>
+        <target state="new">Create app using configuration from this source?</target>
+        <note />
+      </trans-unit>
       <trans-unit id="NoBinding">
         <source>No configuration source to update.</source>
         <target state="new">No configuration source to update.</target>
@@ -152,19 +167,29 @@
         <target state="new">Source origin</target>
         <note />
       </trans-unit>
+      <trans-unit id="TemplateSourceListUseSourcePrompt">
+        <source>Include template sources from this configuration source?</source>
+        <target state="new">Include template sources from this configuration source?</target>
+        <note />
+      </trans-unit>
       <trans-unit id="UpdateAvailable">
         <source>A new version of the configuration source is available. Run `aspire update --config-source` to apply it.</source>
         <target state="new">A new version of the configuration source is available. Run `aspire update --config-source` to apply it.</target>
         <note>Do not translate "aspire update --config-source".</note>
       </trans-unit>
+      <trans-unit id="UpdateUseSourcePrompt">
+        <source>Update app to use configuration from this source?</source>
+        <target state="new">Update app to use configuration from this source?</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="Updated">
+        <source>Configuration updated to the latest version from its source.</source>
+        <target state="new">Configuration updated to the latest version from its source.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="UseSourceOptionDescription">
         <source>Use the proposed Git configuration source. Specify false to decline it.</source>
         <target state="new">Use the proposed Git configuration source. Specify false to decline it.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="UseSourcePrompt">
-        <source>Use configuration from this source?</source>
-        <target state="new">Use configuration from this source?</target>
         <note />
       </trans-unit>
     </body>

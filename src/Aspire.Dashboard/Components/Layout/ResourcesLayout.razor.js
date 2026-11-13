@@ -297,6 +297,14 @@ export function registerTabOverflow(registrationId, dotNetRef) {
     schedule();
 }
 
+// Stops the strips from moving focus to the tab that last had it when they're re-created. The tab remembered on
+// focusin isn't forgotten when it's blurred, so a caller that takes focus off a tab on purpose clears it here.
+function forgetTabFocus() {
+    for (const state of tabOverflowRegistrations.values()) {
+        state.focusedTab = null;
+    }
+}
+
 export function unregisterTabOverflow(registrationId) {
     const state = tabOverflowRegistrations.get(registrationId);
     if (!state) {
@@ -834,6 +842,81 @@ export function registerResourceContextMenu(layoutElement, dotNetRef) {
             event.target.click();
         }
     };
+    // Escape goes to the dashboard's home, the table of every resource, as the header's brand does, when nothing else
+    // uses the key. Pages used to have a close button that led there, and Escape stayed as its shortcut when the button
+    // went. The layout says when the key may go home (data-escape-home): not at home itself, not on narrow layouts,
+    // which have no table, and not while home is already loading.
+    // Menus, popovers and dialogs close themselves with Escape, and text fields and the terminal keep it. Some of them
+    // close in their own keydown handler, so whether the key is free is decided in the capture phase, before any of
+    // them runs, and the brand is clicked in the bubble phase, only if no handler took the key (preventDefault). The
+    // capture listener is on the window, which comes before the document: the tooltip provider removes a shown tooltip
+    // in its own capture listener on the document.
+    let escapeIsFree = false;
+    const escapeOwnerSelector = 'input, textarea, select, [contenteditable=""], [contenteditable="true"], .xterm, ' +
+        '[popover], fluent-popover-b, fluent-menu, fluent-dialog, dialog, [role="dialog"], [role="menu"], [role="listbox"], [role="combobox"], [role="textbox"]';
+    const hasOpenOverlay = () => {
+        // A control whose popup is open says so (aria-haspopup with aria-expanded="true"), whatever the popup is built
+        // with: the filter button's popover isn't a native popover, and focus stays on the button after clicking it.
+        // A tree toggle has aria-expanded but no popup, so it doesn't count.
+        if (document.querySelector('[aria-haspopup]:not([aria-haspopup="false"])[aria-expanded="true"]')) {
+            return true;
+        }
+        // A shown tooltip is dismissed by Escape (see app-tooltips.js), and the same key mustn't also leave the page.
+        // https://www.w3.org/WAI/WCAG22/Understanding/content-on-hover-or-focus.html
+        if (document.querySelector('aspire-tooltip-provider fluent-tooltip:not([aria-hidden="true"])')) {
+            return true;
+        }
+        // A FluentPopover's dialog is in its shadow root, out of reach of the query below, and the button opening it
+        // doesn't always say so, like the URLs column's +N button. Its host says whether it's open:
+        //   <fluent-popover-b class="content-list-popover url-overflow-popover" anchor-id="…-more" opened="true">
+        if (document.querySelector('fluent-popover-b[opened="true"]')) {
+            return true;
+        }
+        try {
+            // Hidden tooltips can stay in the popover layer, so they're left to the check above.
+            return [...document.querySelectorAll(':popover-open, dialog[open]')]
+                .some(element => element.localName !== 'fluent-tooltip' && !element.closest('aspire-tooltip-provider'));
+        }
+        catch {
+            // Browsers without the popover API have no open popovers to protect.
+            return false;
+        }
+    };
+    const onEscapeCapture = event => {
+        escapeIsFree = event.key === 'Escape' && !event.isComposing && !event.repeat &&
+            !event.ctrlKey && !event.altKey && !event.metaKey && !event.shiftKey &&
+            !event.composedPath().some(target => target instanceof Element && target.matches(escapeOwnerSelector)) &&
+            !hasOpenOverlay();
+    };
+    const onEscape = event => {
+        const isFree = escapeIsFree;
+        escapeIsFree = false;
+        // Fluent's tab list cancels the keys it receives, Escape included, without doing anything with Escape. So a
+        // focused tab, for example the one just clicked to open the page, doesn't keep Escape from going home.
+        const isFromTabList = event.composedPath().some(target => target instanceof Element && target.matches('[role="tablist"]'));
+        if (!isFree || (event.defaultPrevented && !isFromTabList) || layoutElement.dataset.escapeHome !== 'true') {
+            return;
+        }
+        // Clicking the brand's link, rather than navigating here, keeps one way home: the brand clears the stored
+        // selection, holds a tab chosen while home loads, and grows the list across the page (see
+        // MainLayout.GoToAllResourcesAsync). The brand is in the page header, outside the layout element.
+        const home = document.querySelector('header .brand-home a.application-name');
+        if (home && home.getClientRects().length > 0 && !home.closest('[inert]')) {
+            event.preventDefault();
+            // A tab that has focus, such as one moved to with the keyboard, would get it back in the strip re-created
+            // at home (see registerTabOverflow), and since a key was pressed last, it would show its keyboard focus
+            // ring there. That restore is for a tab about to be chosen while home lands; Escape leaves the tab instead.
+            const focusedTab = document.activeElement instanceof Element
+                ? document.activeElement.closest('.resources-tab-header fluent-tab')
+                : null;
+            if (focusedTab) {
+                forgetTabFocus();
+                focusedTab.blur();
+            }
+            home.click();
+        }
+    };
+
     // While the resource list fills the page, no tab is shown selected, and choosing the current tab opens its content.
     // The tab list can't report that choice (see OpenTabFromFullCanvasAsync), so a click, Enter or Space on a tab is
     // passed on. The tabs are in the page header, outside the layout, so this listens on the document.
@@ -866,6 +949,8 @@ export function registerResourceContextMenu(layoutElement, dotNetRef) {
     document.addEventListener('keydown', onTabUserActivation, true);
     layoutElement.addEventListener('mousedown', onShiftPointerDown, true);
     document.addEventListener('keydown', onContextMenuDismiss, true);
+    window.addEventListener('keydown', onEscapeCapture, true);
+    document.addEventListener('keydown', onEscape);
     document.addEventListener('click', onTabActivate);
     document.addEventListener('keydown', onTabActivate);
     layoutElement.addEventListener('click', onClick);
@@ -880,6 +965,8 @@ export function registerResourceContextMenu(layoutElement, dotNetRef) {
         document.removeEventListener('keydown', onTabUserActivation, true);
         layoutElement.removeEventListener('mousedown', onShiftPointerDown, true);
         document.removeEventListener('keydown', onContextMenuDismiss, true);
+        window.removeEventListener('keydown', onEscapeCapture, true);
+        document.removeEventListener('keydown', onEscape);
         document.removeEventListener('click', onTabActivate);
         document.removeEventListener('keydown', onTabActivate);
         layoutElement.removeEventListener('click', onClick);

@@ -550,9 +550,12 @@ public sealed class DashboardWebApplication : IAsyncDisposable
 
         // Redirect browser directly to /structuredlogs address if the dashboard is running without a resource service.
         // This is done to avoid immediately navigating in the Blazor app.
+        // Only redirect frontend requests. OTLP-only endpoints don't serve the UI, so a redirect there points to a 404.
         _app.Use(async (context, next) =>
         {
-            if (context.Request.Path.Value is { } requestPath && TargetLocationInterceptor.GetStandaloneLocation(requestPath) is { } standaloneLocation)
+            if (context.IsFrontendConnection() &&
+                context.Request.Path.Value is { } requestPath &&
+                TargetLocationInterceptor.GetStandaloneLocation(requestPath) is { } standaloneLocation)
             {
                 var client = context.RequestServices.GetRequiredService<IDashboardClient>();
                 if (!client.IsEnabled)
