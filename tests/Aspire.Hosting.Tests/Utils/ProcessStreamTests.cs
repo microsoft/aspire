@@ -4,10 +4,10 @@
 using System.IO.Pipes;
 using System.Text;
 using System.Threading.Channels;
-using Aspire.Hosting.Dcp.Process;
+using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 
-namespace Aspire.Hosting.Tests.Dcp;
+namespace Aspire.Hosting.Tests.Utils;
 
 [Trait("Partition", "4")]
 public class ProcessStreamTests
@@ -21,25 +21,42 @@ public class ProcessStreamTests
         using var output = await PipePair.CreateAsync(cancellation.Token);
         using var error = await PipePair.CreateAsync(cancellation.Token);
         var channel = Channel.CreateUnbounded<ProcessEvent<ReadOnlyMemory<byte>>>();
-        var outputPump = DefaultProcessRunner.ReadOutputAsync(output.Reader, channel.Writer, isError: false, cancellation.Token);
-        var errorPump = DefaultProcessRunner.ReadOutputAsync(error.Reader, channel.Writer, isError: true, cancellation.Token);
+        var outputPrefixRead = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var errorPrefixRead = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var outputPump = DefaultProcessRunner.ReadStandardOutputAsync(output.Reader, channel.Writer, cancellation.Token);
+        var errorPump = DefaultProcessRunner.ReadStandardErrorAsync(error.Reader, channel.Writer, cancellation.Token);
         await using var events = channel.Reader.ReadAllAsync(cancellation.Token)
-            .DecodeText(Encoding.UTF8).ReadLines().GetAsyncEnumerator(cancellation.Token);
+            .OnStandardOutput(bytes => SignalPartialCharacter(bytes, outputPrefixRead))
+            .OnStandardError(bytes => SignalPartialCharacter(bytes, errorPrefixRead))
+            .DecodeText(Encoding.UTF8).GetAsyncEnumerator(cancellation.Token);
         try
         {
             var first = errorFirst ? error : output;
             var second = errorFirst ? output : error;
+
+            // Read the visible prefixes separately so their order does not depend on
+            // which pipe publisher runs first.
             await first.Writer.WriteAsync(new byte[] { (byte)'x', 0xE2 }, cancellation.Token);
+            Assert.True(await events.MoveNextAsync());
+            AssertText(events.Current, isError: errorFirst, "x");
             await second.Writer.WriteAsync(new byte[] { (byte)'y', 0xE2 }, cancellation.Token);
+            Assert.True(await events.MoveNextAsync());
+            AssertText(events.Current, isError: !errorFirst, "y");
             Assert.False(outputPump.IsCompleted);
             Assert.False(errorPump.IsCompleted);
 
+            // A pipe read can split the prefix before its trailing 0xE2. Keep decoding
+            // until both incomplete UTF-8 characters have entered the pipeline, before
+            // allowing either publisher to report EOF.
+            var firstFlush = events.MoveNextAsync().AsTask();
+            await Task.WhenAll(outputPrefixRead.Task, errorPrefixRead.Task).WaitAsync(cancellation.Token);
+            Assert.False(firstFlush.IsCompleted);
             first.Writer.Dispose();
 
+            Assert.True(await firstFlush);
+            AssertText(events.Current, isError: errorFirst, "�");
             Assert.True(await events.MoveNextAsync());
-            Assert.Equal(errorFirst ? new ProcessEvent<string>.StandardError("x�") : new ProcessEvent<string>.StandardOutput("x�"), events.Current);
-            Assert.True(await events.MoveNextAsync());
-            Assert.Equal(errorFirst ? (ProcessEvent<string>)new ProcessEvent<string>.StandardErrorCompleted() : new ProcessEvent<string>.StandardOutputCompleted(), events.Current);
+            AssertCompleted(events.Current, isError: errorFirst);
             await (errorFirst ? errorPump : outputPump);
             Assert.False((errorFirst ? outputPump : errorPump).IsCompleted);
 
@@ -50,9 +67,9 @@ public class ProcessStreamTests
             channel.Writer.Complete();
 
             Assert.True(await events.MoveNextAsync());
-            Assert.Equal(errorFirst ? new ProcessEvent<string>.StandardOutput("y€") : new ProcessEvent<string>.StandardError("y€"), events.Current);
+            AssertText(events.Current, isError: !errorFirst, "€");
             Assert.True(await events.MoveNextAsync());
-            Assert.Equal(errorFirst ? (ProcessEvent<string>)new ProcessEvent<string>.StandardOutputCompleted() : new ProcessEvent<string>.StandardErrorCompleted(), events.Current);
+            AssertCompleted(events.Current, isError: !errorFirst);
             Assert.False(await events.MoveNextAsync());
         }
         finally
@@ -72,7 +89,9 @@ public class ProcessStreamTests
         using var cancellation = CreateCancellation();
         using var pipe = await PipePair.CreateAsync(cancellation.Token);
         var channel = Channel.CreateUnbounded<ProcessEvent<ReadOnlyMemory<byte>>>();
-        var reading = DefaultProcessRunner.ReadOutputAsync(pipe.Reader, channel.Writer, isError, cancellation.Token);
+        var reading = isError
+            ? DefaultProcessRunner.ReadStandardErrorAsync(pipe.Reader, channel.Writer, cancellation.Token)
+            : DefaultProcessRunner.ReadStandardOutputAsync(pipe.Reader, channel.Writer, cancellation.Token);
         await pipe.Writer.WriteAsync(new byte[] { (byte)'x' }, cancellation.Token);
         var item = await channel.Reader.ReadAsync(cancellation.Token);
         var content = isError
@@ -169,6 +188,35 @@ public class ProcessStreamTests
         {
             executionStop.Cancel();
             await writing;
+        }
+    }
+
+    private static void SignalPartialCharacter(ReadOnlyMemory<byte> bytes, TaskCompletionSource prefixRead)
+    {
+        if (bytes.Span.Contains((byte)0xE2))
+        {
+            prefixRead.TrySetResult();
+        }
+    }
+
+    private static void AssertText(ProcessEvent<ReadOnlyMemory<char>> item, bool isError, string expected)
+    {
+        var content = isError
+            ? Assert.IsType<ProcessEvent<ReadOnlyMemory<char>>.StandardError>(item).Content
+            : Assert.IsType<ProcessEvent<ReadOnlyMemory<char>>.StandardOutput>(item).Content;
+
+        Assert.Equal(expected, content.ToString());
+    }
+
+    private static void AssertCompleted(ProcessEvent<ReadOnlyMemory<char>> item, bool isError)
+    {
+        if (isError)
+        {
+            Assert.IsType<ProcessEvent<ReadOnlyMemory<char>>.StandardErrorCompleted>(item);
+        }
+        else
+        {
+            Assert.IsType<ProcessEvent<ReadOnlyMemory<char>>.StandardOutputCompleted>(item);
         }
     }
 

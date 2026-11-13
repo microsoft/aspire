@@ -4,6 +4,7 @@
 using System.Runtime.CompilerServices;
 using System.Text;
 using Aspire.Hosting.Dcp.Process;
+using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Tests.Utils;
 

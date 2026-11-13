@@ -10,7 +10,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Hosting.Azure.Provisioning;
 using Aspire.Hosting.Azure.Provisioning.Internal;
-using Aspire.Hosting.Dcp.Process;
+using Aspire.Hosting.Utils;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Publishing;
 using Azure;
@@ -1107,7 +1107,7 @@ internal sealed class MockProcessRunner : IProcessRunner
         cancellationToken.ThrowIfCancellationRequested();
         ExecutedCommands.Add(command);
         var result = await RunAsync(command, cancellationToken);
-        yield return new ProcessEvent<ReadOnlyMemory<byte>>.Started(1);
+        yield return new ProcessEvent<ReadOnlyMemory<byte>>.Started(ProcessId: 1);
         yield return new ProcessEvent<ReadOnlyMemory<byte>>.StandardOutput(Encoding.UTF8.GetBytes(result.StandardOutput));
         yield return new ProcessEvent<ReadOnlyMemory<byte>>.StandardError(Encoding.UTF8.GetBytes(result.StandardError));
         yield return new ProcessEvent<ReadOnlyMemory<byte>>.StandardOutputCompleted();

@@ -8,7 +8,6 @@
 
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Dcp;
-using Aspire.Hosting.Dcp.Process;
 using Aspire.Hosting.Publishing;
 using Aspire.Hosting.Tests.Publishing;
 using Aspire.Hosting.Tests.Utils;

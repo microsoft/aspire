@@ -5,13 +5,11 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.IO.Pipes;
 using System.Text;
-using Aspire.Hosting.Dcp.Process;
-using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.DotNet.RemoteExecutor;
 
-namespace Aspire.Hosting.Tests.Dcp;
+namespace Aspire.Hosting.Tests.Utils;
 
 [Trait("Partition", "4")]
 public class ProcessExecutionTests(ITestOutputHelper outputHelper)
@@ -111,15 +109,13 @@ public class ProcessExecutionTests(ITestOutputHelper outputHelper)
         await using var pipe = new NamedPipeServerStream(name, PipeDirection.InOut, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
         using var cancellation = CreateCancellation();
         var execution = CreateExecution(child, ProcessInput.FromBytes(new byte[2000000]), name);
-        var events = execution.DiscardStandardError()
-            .DecodeText(Encoding.UTF8)
-            .ReadLines()
+        var events = execution.DecodeText(Encoding.UTF8)
             .OnStandardOutput(_ => { })
             .GetAsyncEnumerator(cancellation.Token);
         try
         {
             Assert.True(await events.MoveNextAsync());
-            var started = Assert.IsType<ProcessEvent<string>.Started>(events.Current);
+            var started = Assert.IsType<ProcessEvent<ReadOnlyMemory<char>>.Started>(events.Current);
             using var process = Process.GetProcessById(started.ProcessId);
             await pipe.WaitForConnectionAsync(cancellation.Token);
             await pipe.ReadExactlyAsync(new byte[1], cancellation.Token);
@@ -261,8 +257,14 @@ public class ProcessExecutionTests(ITestOutputHelper outputHelper)
         var lifecycle = new List<Type>();
         await foreach (var item in CreateExecution(child).WithCancellation(cancellation.Token))
         {
-            if (item is ProcessEvent<ReadOnlyMemory<byte>>.StandardOutput data) { retained.Add(data.Content); }
-            else { lifecycle.Add(item.GetType()); }
+            if (item is ProcessEvent<ReadOnlyMemory<byte>>.StandardOutput data)
+            {
+                retained.Add(data.Content);
+            }
+            else
+            {
+                lifecycle.Add(item.GetType());
+            }
         }
         Assert.True(retained.Count > 1);
         Assert.Equal(Enumerable.Range(0, 200000).Select(i => (byte)(i % 251)), retained.SelectMany(memory => memory.ToArray()));
@@ -292,7 +294,9 @@ public class ProcessExecutionTests(ITestOutputHelper outputHelper)
             Assert.False(File.Exists(ledger));
             if (complete)
             {
-                while (await enumerator.MoveNextAsync()) { }
+                while (await enumerator.MoveNextAsync())
+                {
+                }
                 Assert.Equal("launched\n", await File.ReadAllTextAsync(ledger, TestContext.Current.CancellationToken));
             }
         }
@@ -322,7 +326,10 @@ public class ProcessExecutionTests(ITestOutputHelper outputHelper)
         var results = await Task.WhenAll(attempts);
         foreach (var result in results)
         {
-            if (result.Enumerator is { } enumerator) { await enumerator.DisposeAsync(); }
+            if (result.Enumerator is { } enumerator)
+            {
+                await enumerator.DisposeAsync();
+            }
         }
 
         Assert.Single(results, result => result.Enumerator is not null);
@@ -340,7 +347,10 @@ public class ProcessExecutionTests(ITestOutputHelper outputHelper)
         Assert.False(File.Exists(path));
         var events = new DefaultProcessRunner().CreateExecution(new ProcessCommand(path));
         using var cancellation = new CancellationTokenSource();
-        if (cancel) { cancellation.Cancel(); }
+        if (cancel)
+        {
+            cancellation.Cancel();
+        }
         await using (var enumeration = events.GetAsyncEnumerator(cancellation.Token))
         {
             if (cancel)
@@ -354,301 +364,6 @@ public class ProcessExecutionTests(ITestOutputHelper outputHelper)
             }
         }
         Assert.Throws<InvalidOperationException>(() => events.GetAsyncEnumerator());
-    }
-
-    [Fact]
-    public async Task FakeExecutionIsDeferredAndDerivedPipelinesShareItsClaim()
-    {
-        var runner = new TestProcessRunner();
-        runner.EnqueueResult(output: ["first"], error: ["warning"]);
-        runner.EnqueueResult(output: ["second"]);
-        var command = new ProcessCommand("scripted-command");
-        var execution = runner.CreateExecution(command);
-        var lines = execution.DecodeText(Encoding.UTF8).ReadLines();
-        Assert.Empty(runner.Commands);
-        Assert.Empty(runner.Disposables);
-        Assert.False(runner.RunStarted.Task.IsCompleted);
-
-        await using (var enumerator = lines.GetAsyncEnumerator(TestContext.Current.CancellationToken))
-        {
-            Assert.Empty(runner.Commands);
-            Assert.True(await enumerator.MoveNextAsync());
-            Assert.Equal(new ProcessEvent<string>.Started(1), enumerator.Current);
-            using var rejectedCancellation = new CancellationTokenSource();
-            rejectedCancellation.Cancel();
-            Assert.Throws<InvalidOperationException>(() => execution.GetAsyncEnumerator(rejectedCancellation.Token));
-            await Assert.ThrowsAsync<InvalidOperationException>(() => execution.DiscardStandardError().ExecuteAsync());
-
-            var remaining = new List<ProcessEvent<string>>();
-            while (await enumerator.MoveNextAsync()) { remaining.Add(enumerator.Current); }
-            Assert.Equal(
-                [
-                    new ProcessEvent<string>.StandardOutput("first"),
-                    new ProcessEvent<string>.StandardError("warning"),
-                    new ProcessEvent<string>.StandardOutputCompleted(),
-                    new ProcessEvent<string>.StandardErrorCompleted(),
-                    new ProcessEvent<string>.Exited(0)
-                ], remaining);
-        }
-        Assert.Equal(1, Assert.Single(runner.Disposables).DisposeCallCount);
-
-        var second = await runner.CreateExecution(command).DecodeText(Encoding.UTF8)
-            .ExecuteAndCaptureTextAsync(TestContext.Current.CancellationToken);
-        Assert.Equal(new ProcessCaptureResult(0, "second\n", ""), second);
-        Assert.Equal([command, command], runner.Commands);
-        Assert.All(runner.Disposables, disposable => Assert.Equal(1, disposable.DisposeCallCount));
-    }
-
-    [Fact]
-    public async Task ObserversForwardEveryEventUnchangedAndPreserveObserverOrder()
-    {
-        var runner = new TestProcessRunner();
-        runner.EnqueueResult(outputEvents:
-        [
-            new TestProcessOutput(false, "first"),
-            new TestProcessOutput(true, "warning"),
-            new TestProcessOutput(false, "last")
-        ]);
-        var observed = new List<string>();
-        var originals = new List<ProcessEvent<string>>();
-        var pipeline = runner.CreateExecution(new ProcessCommand("scripted-command"))
-            .DecodeText(Encoding.UTF8).ReadLines()
-            .Select(item => { originals.Add(item); return item; })
-            .OnStarted(id => observed.Add($"started:{id}"))
-            .OnStandardOutput(line => observed.Add("output-1:" + line))
-            .OnStandardOutput(line => observed.Add("output-2:" + line))
-            .OnStandardError(line => observed.Add("error:" + line));
-        Assert.Empty(observed);
-
-        var events = await CollectAsync(pipeline);
-
-        Assert.Equal(7, events.Count);
-        Assert.Equal(originals.Count, events.Count);
-        for (var index = 0; index < events.Count; index++) { Assert.Same(originals[index], events[index]); }
-        Assert.Equal(
-            ["started:1", "output-1:first", "output-2:first", "error:warning", "output-1:last", "output-2:last"],
-            observed);
-    }
-
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task DiscardBeforeDecodingRemovesOnlySelectedData(bool discardError)
-    {
-        var strictUtf8 = new UTF8Encoding(false, true);
-        var control = new FailingEventStream([0xFF], isError: discardError);
-        await Assert.ThrowsAsync<DecoderFallbackException>(() => control.DecodeText(strictUtf8).ExecuteAsync());
-
-        var source = new FailingEventStream([0xFF], isError: discardError);
-        var discarded = discardError ? source.DiscardStandardError() : source.DiscardStandardOutput();
-        var events = await CollectAsync(discarded.DecodeText(strictUtf8).ReadLines());
-
-        Assert.Equal(
-            [
-                new ProcessEvent<string>.Started(1),
-                new ProcessEvent<string>.StandardOutputCompleted(),
-                new ProcessEvent<string>.StandardErrorCompleted(),
-                new ProcessEvent<string>.Exited(0)
-            ], events);
-        Assert.Equal(1, source.DisposeCount);
-    }
-
-    [Theory]
-    [InlineData(null)]
-    [InlineData(0)]
-    [InlineData(17)]
-    public async Task TerminalRequiresKnownExitAfterCleanup(int? exitCode)
-    {
-        var runner = new TestProcessRunner();
-        runner.EnqueueResult(exitCode: exitCode, output: ["drain this"]);
-        var execution = runner.CreateExecution(new ProcessCommand("scripted-command"));
-        Assert.Empty(runner.Disposables);
-
-        if (exitCode is { } known)
-        {
-            Assert.Equal(known, await execution.ExecuteAsync(TestContext.Current.CancellationToken));
-        }
-        else
-        {
-            await Assert.ThrowsAsync<InvalidOperationException>(() => execution.ExecuteAsync(TestContext.Current.CancellationToken));
-        }
-
-        Assert.Equal(1, Assert.Single(runner.Disposables).DisposeCallCount);
-    }
-
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task TerminalsAwaitDisposalEvenAfterAnExitEvent(bool capture)
-    {
-        var cleanup = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var source = new FailingEventStream([(byte)'x'], cleanup: cleanup.Task);
-        Assert.Equal(0, source.DisposeCount);
-        Task completion = capture
-            ? source.DecodeText(Encoding.UTF8).ExecuteAndCaptureTextAsync(TestContext.Current.CancellationToken)
-            : source.ExecuteAsync(TestContext.Current.CancellationToken);
-        try
-        {
-            Assert.Equal(1, source.DisposeCount);
-            Assert.False(completion.IsCompleted);
-        }
-        finally
-        {
-            cleanup.SetResult();
-        }
-        await completion;
-    }
-
-    [Theory]
-    [InlineData("started")]
-    [InlineData("bytes")]
-    [InlineData("text")]
-    [InlineData("lines")]
-    public async Task ObserverAndCleanupFailuresSurviveComposition(string stage)
-    {
-        var observerFailure = new InvalidOperationException("Observation failed.");
-        var cleanupFailure = new IOException("Disposal failed.");
-        var source = new FailingEventStream(Encoding.UTF8.GetBytes("line\n"), cleanupFailure: cleanupFailure);
-        Assert.Equal(0, source.DisposeCount);
-        var pipeline = stage switch
-        {
-            "started" => source.OnStarted(_ => throw observerFailure).DecodeText(Encoding.UTF8).ReadLines(),
-            "bytes" => source.OnStandardOutput(_ => throw observerFailure).DecodeText(Encoding.UTF8).ReadLines(),
-            "text" => source.DecodeText(Encoding.UTF8).OnStandardOutput(_ => throw observerFailure).ReadLines(),
-            "lines" => source.DecodeText(Encoding.UTF8).ReadLines().OnStandardOutput(_ => throw observerFailure),
-            _ => throw new ArgumentOutOfRangeException(nameof(stage))
-        };
-
-        var failure = await Assert.ThrowsAsync<AggregateException>(() => pipeline.ExecuteAsync(TestContext.Current.CancellationToken));
-
-        Assert.Equal([observerFailure, cleanupFailure], failure.Flatten().InnerExceptions);
-        Assert.Equal(1, source.DisposeCount);
-    }
-
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task CancellationPreservesObserverAndCleanupFailuresAndPartialDiagnostics(bool capture)
-    {
-        using var cancellation = new CancellationTokenSource();
-        var observerFailure = new IOException("Observation failed while canceled.");
-        var cleanupFailure = new InvalidOperationException("Disposal failed.");
-        var source = new FailingEventStream([(byte)'x'], cleanupFailure: cleanupFailure);
-        var retained = new StringBuilder();
-        var pipeline = source.DiscardStandardError().DecodeText(Encoding.UTF8)
-            .OnStandardOutput(text =>
-            {
-                retained.Append(text.Span);
-                cancellation.Cancel();
-                throw observerFailure;
-            });
-        Assert.False(cancellation.IsCancellationRequested);
-        Assert.Equal(0, retained.Length);
-        Task completion = capture
-            ? pipeline.ExecuteAndCaptureTextAsync(cancellation.Token)
-            : pipeline.ExecuteAsync(cancellation.Token);
-
-        var failure = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => completion);
-
-        Assert.Equal(cancellation.Token, failure.CancellationToken);
-        Assert.Equal([observerFailure, cleanupFailure], Assert.IsType<AggregateException>(failure.InnerException).Flatten().InnerExceptions);
-        Assert.Equal("x", retained.ToString());
-        Assert.Equal(1, source.DisposeCount);
-    }
-
-    [Theory]
-    [InlineData("")]
-    [InlineData("\r\n\nA\rB\r\n日本語\0last")]
-    public async Task LinesDecodeSplitCharactersAndCrLfWithoutDroppingEmptyLines(string text)
-    {
-        var lines = new List<string>();
-        var completionCount = 0;
-        await foreach (var item in FragmentedEvents().DecodeText(Encoding.UTF8).ReadLines())
-        {
-            if (item is ProcessEvent<string>.StandardOutput output) { lines.Add(output.Content); }
-            if (item is ProcessEvent<string>.StandardOutputCompleted) { completionCount++; }
-        }
-        using var expected = new StringReader(text);
-        var expectedLines = new List<string>();
-        while (expected.ReadLine() is { } line) { expectedLines.Add(line); }
-        Assert.Equal(expectedLines, lines);
-        Assert.Equal(1, completionCount);
-
-        async IAsyncEnumerable<ProcessEvent<ReadOnlyMemory<byte>>> FragmentedEvents()
-        {
-            await Task.CompletedTask;
-            yield return new ProcessEvent<ReadOnlyMemory<byte>>.Started(1);
-            foreach (var value in Encoding.UTF8.GetBytes(text))
-            {
-                yield return new ProcessEvent<ReadOnlyMemory<byte>>.StandardOutput(new byte[] { value });
-            }
-            yield return new ProcessEvent<ReadOnlyMemory<byte>>.StandardOutputCompleted();
-            yield return new ProcessEvent<ReadOnlyMemory<byte>>.StandardErrorCompleted();
-            yield return new ProcessEvent<ReadOnlyMemory<byte>>.Exited(0);
-        }
-    }
-
-    [Theory]
-    [InlineData(false, false)]
-    [InlineData(true, false)]
-    [InlineData(false, true)]
-    [InlineData(true, true)]
-    public async Task DecoderAndCleanupFailuresAreBothPreserved(bool invalidEncoding, bool failedCleanup)
-    {
-        var cleanupFailure = failedCleanup ? new IOException("Disposal failed.") : null;
-        var source = new FailingEventStream([0xFF], cleanupFailure: cleanupFailure);
-        Assert.Equal(0, source.DisposeCount);
-        var decoded = source.DecodeText(new UTF8Encoding(false, invalidEncoding));
-        if (invalidEncoding && failedCleanup)
-        {
-            var failure = await Assert.ThrowsAsync<AggregateException>(() => CollectAsync(decoded));
-            Assert.IsType<DecoderFallbackException>(failure.InnerExceptions[0]);
-            Assert.Same(cleanupFailure, failure.InnerExceptions[1]);
-        }
-        else if (invalidEncoding)
-        {
-            await Assert.ThrowsAsync<DecoderFallbackException>(() => CollectAsync(decoded));
-        }
-        else if (failedCleanup)
-        {
-            Assert.Same(cleanupFailure, await Assert.ThrowsAsync<IOException>(() => CollectAsync(decoded)));
-        }
-        else
-        {
-            var events = await CollectAsync(decoded);
-            Assert.Equal(new ProcessEvent<ReadOnlyMemory<char>>.Exited(0), events[^1]);
-        }
-        Assert.Equal(1, source.DisposeCount);
-    }
-
-    [Theory]
-    [InlineData("text")]
-    [InlineData("lines")]
-    [InlineData("capture")]
-    [InlineData("observer")]
-    [InlineData("discard")]
-    [InlineData("execute")]
-    public async Task UpstreamAndCleanupFailuresSurviveAdapters(string adapter)
-    {
-        var readFailure = new IOException("Reading failed.");
-        var cleanupFailure = new InvalidOperationException("Disposal failed.");
-        var source = new FailingEventStream([(byte)'x'], readFailure, cleanupFailure);
-        Assert.Equal(0, source.DisposeCount);
-        Func<Task> read = adapter switch
-        {
-            "text" => () => CollectAsync(source.DecodeText(Encoding.UTF8)),
-            "lines" => () => CollectAsync(source.DecodeText(Encoding.UTF8).ReadLines()),
-            "capture" => () => source.DecodeText(Encoding.UTF8).ExecuteAndCaptureTextAsync(TestContext.Current.CancellationToken),
-            "observer" => () => source.DecodeText(Encoding.UTF8).ReadLines().OnStandardOutput(_ => { }).ExecuteAsync(TestContext.Current.CancellationToken),
-            "discard" => () => source.DiscardStandardOutput().DecodeText(Encoding.UTF8).ExecuteAndCaptureTextAsync(TestContext.Current.CancellationToken),
-            "execute" => () => source.ExecuteAsync(TestContext.Current.CancellationToken),
-            _ => throw new ArgumentOutOfRangeException(nameof(adapter))
-        };
-
-        var failure = await Assert.ThrowsAsync<AggregateException>(read);
-
-        Assert.Equal([readFailure, cleanupFailure], failure.Flatten().InnerExceptions);
-        Assert.Equal(1, source.DisposeCount);
     }
 
     [Theory]
@@ -727,56 +442,6 @@ public class ProcessExecutionTests(ITestOutputHelper outputHelper)
         Assert.Equal("Remote child failed.", failure.Message);
         Assert.Equal(diagnostic, failure.StackTrace);
         Assert.False(File.Exists(exceptionFile));
-    }
-
-    private static async Task<List<T>> CollectAsync<T>(IAsyncEnumerable<T> source)
-    {
-        var result = new List<T>();
-        await foreach (var item in source.WithCancellation(TestContext.Current.CancellationToken))
-        {
-            result.Add(item);
-        }
-        return result;
-    }
-
-    private sealed class FailingEventStream(byte[] content, Exception? readFailure = null, Exception? cleanupFailure = null,
-        bool isError = false, Task? cleanup = null)
-        : IAsyncEnumerable<ProcessEvent<ReadOnlyMemory<byte>>>
-    {
-        public int DisposeCount { get; private set; }
-
-        public IAsyncEnumerator<ProcessEvent<ReadOnlyMemory<byte>>> GetAsyncEnumerator(CancellationToken cancellationToken = default)
-            => new Enumerator(this, content, readFailure, cleanupFailure, isError, cleanup, cancellationToken);
-
-        private sealed class Enumerator(FailingEventStream owner, byte[] content, Exception? readFailure,
-            Exception? cleanupFailure, bool isError, Task? cleanup, CancellationToken cancellationToken) : IAsyncEnumerator<ProcessEvent<ReadOnlyMemory<byte>>>
-        {
-            private int _index;
-            public ProcessEvent<ReadOnlyMemory<byte>> Current { get; private set; } = new ProcessEvent<ReadOnlyMemory<byte>>.Started(1);
-
-            public ValueTask<bool> MoveNextAsync()
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                Current = _index++ switch
-                {
-                    0 => new ProcessEvent<ReadOnlyMemory<byte>>.Started(1),
-                    1 when isError => new ProcessEvent<ReadOnlyMemory<byte>>.StandardError(content),
-                    1 => new ProcessEvent<ReadOnlyMemory<byte>>.StandardOutput(content),
-                    2 when readFailure is not null => throw readFailure,
-                    2 => new ProcessEvent<ReadOnlyMemory<byte>>.StandardOutputCompleted(),
-                    3 => new ProcessEvent<ReadOnlyMemory<byte>>.StandardErrorCompleted(),
-                    _ => new ProcessEvent<ReadOnlyMemory<byte>>.Exited(0)
-                };
-                return ValueTask.FromResult(_index <= 5);
-            }
-
-            public ValueTask DisposeAsync()
-            {
-                owner.DisposeCount++;
-                if (cleanup is not null) { return new ValueTask(cleanup); }
-                return cleanupFailure is null ? ValueTask.CompletedTask : ValueTask.FromException(cleanupFailure);
-            }
-        }
     }
 
     private static RemoteChild CreateChild(Delegate entryPoint)

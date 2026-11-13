@@ -7,7 +7,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.ExceptionServices;
 using System.Threading.Channels;
 
-namespace Aspire.Hosting.Dcp.Process;
+namespace Aspire.Hosting.Utils;
 
 /// <summary>
 /// Runs a process with concurrent input/output and independently supervised cleanup.
@@ -67,66 +67,32 @@ internal sealed partial class DefaultProcessRunner : IProcessRunner
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var arguments = command.Arguments.ToArray();
-            var environment = new Dictionary<string, string>(command.EnvironmentVariables);
-            using var process = new System.Diagnostics.Process
-            {
-                StartInfo = new ProcessStartInfo(command.ResolveExecutablePath
-                    ? PathLookupHelper.ResolveExecutablePath(command.ExecutablePath, environment)
-                    : command.ExecutablePath)
-                {
-                    WorkingDirectory = command.WorkingDirectory ?? string.Empty,
-                    RedirectStandardInput = true,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    UseShellExecute = false,
-                    CreateNoWindow = true
-                }
-            };
-            if (!command.InheritEnvironmentVariables)
-            {
-                process.StartInfo.Environment.Clear();
-            }
-            foreach (var (name, value) in environment)
-            {
-                process.StartInfo.Environment[name] = value;
-            }
-            ProcessStartInfoHelper.SetCommand(process.StartInfo, process.StartInfo.FileName, arguments, OperatingSystem.IsWindows());
+            using var process = new System.Diagnostics.Process { StartInfo = CreateStartInfo(command) };
             process.Start();
+
             // Share the runtime exit observation between execution and cleanup. Independent
             // WaitForExitAsync calls have lost exit notifications under cancellation on Linux.
+            // https://github.com/dotnet/runtime/pull/136887
             var exit = process.WaitForExitAsync(CancellationToken.None);
+
             using var stop = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             using var inputStop = CancellationTokenSource.CreateLinkedTokenSource(stop.Token);
             using var registration = stop.Token.Register(() => abort.TrySetResult());
+
             var outputStream = process.StandardOutput.BaseStream;
             var errorStream = process.StandardError.BaseStream;
             var inputStream = process.StandardInput.BaseStream;
+
             // No other writer starts until Started is queued.
             events.TryWrite(new ProcessEvent<ReadOnlyMemory<byte>>.Started(process.Id));
-            var output = ReadOutputAsync(outputStream, events, isError: false, stop.Token);
-            var error = ReadOutputAsync(errorStream, events, isError: true, stop.Token);
+            var output = ReadStandardOutputAsync(outputStream, events, stop.Token);
+            var error = ReadStandardErrorAsync(errorStream, events, stop.Token);
             var input = WriteInputAsync(inputStream, command.Input?.Bytes ?? default, inputStop.Token, stop.Token);
-            var pending = new List<Task> { output, error, input, exit, abort.Task };
+            Task[] operations = [output, error, input, exit];
             try
             {
-                // WhenAll alone can hide a failed transfer behind another task waiting
-                // for the still-running child. Supervise without requiring event consumption.
-                while (pending.Count > 1)
-                {
-                    var finished = await Task.WhenAny(pending).ConfigureAwait(false);
-                    if (finished == abort.Task)
-                    {
-                        throw new OperationCanceledException(cancellationToken);
-                    }
-                    pending.Remove(finished);
-                    await finished.ConfigureAwait(false);
-                    if (finished == exit)
-                    {
-                        inputStop.Cancel();
-                        inputStream.Close();
-                    }
-                }
+                await SuperviseAsync(operations, exit, abort.Task, inputStop, inputStream, cancellationToken).ConfigureAwait(false);
+
                 cancellationToken.ThrowIfCancellationRequested();
                 if (await input.ConfigureAwait(false) is { } inputFailure && process.ExitCode == 0)
                 {
@@ -163,30 +129,7 @@ internal sealed partial class DefaultProcessRunner : IProcessRunner
                 outputStream.Close();
                 errorStream.Close();
                 inputStream.Close();
-                try
-                {
-                    await Task.WhenAll(output, error, input, exit).ConfigureAwait(false);
-                }
-                catch (Exception transferException)
-                {
-                    foreach (var task in new Task[] { output, error, input, exit })
-                    {
-                        if (task.Exception is { } taskFailure)
-                        {
-                            foreach (var failure in taskFailure.InnerExceptions)
-                            {
-                                if (!failures.Contains(failure))
-                                {
-                                    failures.Add(failure);
-                                }
-                            }
-                        }
-                    }
-                    if (failures.Count == 0 && transferException is not OperationCanceledException)
-                    {
-                        failures.Add(transferException);
-                    }
-                }
+                await SettleAsync(operations, failures).ConfigureAwait(false);
             }
         }
         catch (Exception exception)
@@ -204,13 +147,121 @@ internal sealed partial class DefaultProcessRunner : IProcessRunner
         return (exitCode, result);
     }
 
+    private static ProcessStartInfo CreateStartInfo(ProcessCommand command)
+    {
+        // Use the same environment snapshot for PATH lookup and process configuration.
+        var environment = new Dictionary<string, string>(command.EnvironmentVariables);
+        var startInfo = new ProcessStartInfo(command.ResolveExecutablePath
+            ? PathLookupHelper.ResolveExecutablePath(command.ExecutablePath, environment)
+            : command.ExecutablePath)
+        {
+            WorkingDirectory = command.WorkingDirectory ?? string.Empty,
+            RedirectStandardInput = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        if (!command.InheritEnvironmentVariables)
+        {
+            startInfo.Environment.Clear();
+        }
+
+        foreach (var (name, value) in environment)
+        {
+            startInfo.Environment[name] = value;
+        }
+
+        ProcessStartInfoHelper.SetCommand(startInfo, startInfo.FileName, command.Arguments, OperatingSystem.IsWindows());
+        return startInfo;
+    }
+
+    private static async Task SuperviseAsync(
+        Task[] operations,
+        Task exit,
+        Task abort,
+        CancellationTokenSource inputStop,
+        Stream inputStream,
+        CancellationToken cancellationToken)
+    {
+        // WhenAll alone can hide a failed transfer behind another task waiting
+        // for the still-running child. Supervise without requiring event consumption.
+        var pending = new List<Task>(operations) { abort };
+        while (pending.Count > 1)
+        {
+            var finished = await Task.WhenAny(pending).ConfigureAwait(false);
+            if (finished == abort)
+            {
+                throw new OperationCanceledException(cancellationToken);
+            }
+
+            pending.Remove(finished);
+            await finished.ConfigureAwait(false);
+            if (finished == exit)
+            {
+                inputStop.Cancel();
+                inputStream.Close();
+            }
+        }
+    }
+
+    private static async Task SettleAsync(Task[] operations, List<Exception> failures)
+    {
+        try
+        {
+            await Task.WhenAll(operations).ConfigureAwait(false);
+        }
+        catch (Exception transferException)
+        {
+            foreach (var task in operations)
+            {
+                if (task.Exception is { } taskFailure)
+                {
+                    foreach (var failure in taskFailure.InnerExceptions)
+                    {
+                        if (!failures.Contains(failure))
+                        {
+                            failures.Add(failure);
+                        }
+                    }
+                }
+            }
+
+            if (failures.Count == 0 && transferException is not OperationCanceledException)
+            {
+                failures.Add(transferException);
+            }
+        }
+    }
+
     /// <summary>
-    /// Publishes output buffers and EOF independently of process exit.
+    /// Publishes stdout buffers and EOF independently of process exit.
     /// </summary>
-    internal static async Task ReadOutputAsync(
+    internal static Task ReadStandardOutputAsync(
         Stream stream,
         ChannelWriter<ProcessEvent<ReadOnlyMemory<byte>>> events,
-        bool isError,
+        CancellationToken stopToken)
+        => ReadOutputAsync(stream, events,
+            static content => new ProcessEvent<ReadOnlyMemory<byte>>.StandardOutput(content),
+            new ProcessEvent<ReadOnlyMemory<byte>>.StandardOutputCompleted(), stopToken);
+
+    /// <summary>
+    /// Publishes stderr buffers and EOF independently of process exit.
+    /// </summary>
+    internal static Task ReadStandardErrorAsync(
+        Stream stream,
+        ChannelWriter<ProcessEvent<ReadOnlyMemory<byte>>> events,
+        CancellationToken stopToken)
+        => ReadOutputAsync(stream, events,
+            static content => new ProcessEvent<ReadOnlyMemory<byte>>.StandardError(content),
+            new ProcessEvent<ReadOnlyMemory<byte>>.StandardErrorCompleted(), stopToken);
+
+    private static async Task ReadOutputAsync(
+        Stream stream,
+        ChannelWriter<ProcessEvent<ReadOnlyMemory<byte>>> events,
+        Func<ReadOnlyMemory<byte>, ProcessEvent<ReadOnlyMemory<byte>>> createEvent,
+        ProcessEvent<ReadOnlyMemory<byte>> completedEvent,
         CancellationToken stopToken)
     {
         try
@@ -222,15 +273,11 @@ internal sealed partial class DefaultProcessRunner : IProcessRunner
                 var count = await stream.ReadAsync(buffer, stopToken).ConfigureAwait(false);
                 if (count == 0)
                 {
-                    await events.WriteAsync(isError
-                        ? new ProcessEvent<ReadOnlyMemory<byte>>.StandardErrorCompleted()
-                        : new ProcessEvent<ReadOnlyMemory<byte>>.StandardOutputCompleted(), stopToken).ConfigureAwait(false);
+                    await events.WriteAsync(completedEvent, stopToken).ConfigureAwait(false);
                     return;
                 }
                 ReadOnlyMemory<byte> content = buffer.AsMemory(0, count);
-                await events.WriteAsync(isError
-                    ? new ProcessEvent<ReadOnlyMemory<byte>>.StandardError(content)
-                    : new ProcessEvent<ReadOnlyMemory<byte>>.StandardOutput(content), stopToken).ConfigureAwait(false);
+                await events.WriteAsync(createEvent(content), stopToken).ConfigureAwait(false);
             }
         }
         catch (Exception exception) when (stopToken.IsCancellationRequested &&

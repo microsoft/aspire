@@ -10,14 +10,14 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="..\Aspire.Hosting\Dcp\Process\IProcessRunner.cs" Link="Process\IProcessRunner.cs" />
-    <Compile Include="..\Aspire.Hosting\Dcp\Process\DefaultProcessRunner.Execution.cs" Link="Process\DefaultProcessRunner.Execution.cs" />
-    <Compile Include="..\Aspire.Hosting\Dcp\Process\ProcessCommand.cs" Link="Process\ProcessCommand.cs" />
-    <Compile Include="..\Aspire.Hosting\Dcp\Process\ProcessInput.cs" Link="Process\ProcessInput.cs" />
-    <Compile Include="..\Aspire.Hosting\Dcp\Process\ProcessEvent.cs" Link="Process\ProcessEvent.cs" />
-    <Compile Include="..\Aspire.Hosting\Dcp\Process\ProcessEventStream.cs" Link="Process\ProcessEventStream.cs" />
-    <Compile Include="..\Aspire.Hosting\Dcp\Process\ProcessEventExtensions.cs" Link="Process\ProcessEventExtensions.cs" />
-    <Compile Include="..\Aspire.Hosting\Dcp\Process\ProcessCaptureResult.cs" Link="Process\ProcessCaptureResult.cs" />
+    <Compile Include="..\Aspire.Hosting\Utils\IProcessRunner.cs" Link="Utils\IProcessRunner.cs" />
+    <Compile Include="..\Aspire.Hosting\Utils\DefaultProcessRunner.Execution.cs" Link="Utils\DefaultProcessRunner.Execution.cs" />
+    <Compile Include="..\Aspire.Hosting\Utils\ProcessCommand.cs" Link="Utils\ProcessCommand.cs" />
+    <Compile Include="..\Aspire.Hosting\Utils\ProcessInput.cs" Link="Utils\ProcessInput.cs" />
+    <Compile Include="..\Aspire.Hosting\Utils\ProcessEvent.cs" Link="Utils\ProcessEvent.cs" />
+    <Compile Include="..\Aspire.Hosting\Utils\ProcessEventStream.cs" Link="Utils\ProcessEventStream.cs" />
+    <Compile Include="..\Aspire.Hosting\Utils\ProcessEventExtensions.cs" Link="Utils\ProcessEventExtensions.cs" />
+    <Compile Include="..\Aspire.Hosting\Utils\ProcessCaptureResult.cs" Link="Utils\ProcessCaptureResult.cs" />
     <Compile Include="$(SharedDir)AzurePortalUrls.cs" Link="AzurePortalUrls.cs" />
     <Compile Include="$(SharedDir)CustomResourceSnapshotExtensions.cs" Link="Utils\CustomResourceSnapshotExtensions.cs" />
     <Compile Include="$(SharedDir)ExceptionUtils.cs" Link="Utils\ExceptionUtils.cs" />
