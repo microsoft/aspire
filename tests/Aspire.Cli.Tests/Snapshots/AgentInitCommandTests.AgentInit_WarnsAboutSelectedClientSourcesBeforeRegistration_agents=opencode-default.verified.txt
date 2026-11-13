@@ -6,7 +6,7 @@
 
 ,
   Warnings: [
-    Selecting aspire configures agent assets from these skill sources:,
+    One or more skill sources are configured. A skill source lets an organization share skills to customize your development experience.,
     [yellow]Only use sources you trust. Content from these sources can run code on your machine.[/]
   ]
 }

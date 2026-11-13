@@ -293,8 +293,7 @@
     <comment>{0} lists the local skill entry-point paths, one per line.</comment>
   </data>
   <data name="InitCommand_SkillSourcesExplanation" xml:space="preserve">
-    <value>Selecting aspire configures agent assets from these skill sources:</value>
-    <comment>Do not translate "aspire", which is a skill choice identifier.</comment>
+    <value>One or more skill sources are configured. A skill source lets an organization share skills to customize your development experience.</value>
   </data>
   <data name="InitCommand_SkillSources" xml:space="preserve">
     <value>Skill sources:

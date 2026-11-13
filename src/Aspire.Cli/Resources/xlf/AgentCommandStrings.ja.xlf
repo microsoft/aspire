@@ -264,9 +264,9 @@
         <note>{0} lists the configured skill source repository and/or catalog URLs for the selected agent clients, one per line.</note>
       </trans-unit>
       <trans-unit id="InitCommand_SkillSourcesExplanation">
-        <source>Selecting aspire configures agent assets from these skill sources:</source>
-        <target state="new">Selecting aspire configures agent assets from these skill sources:</target>
-        <note>Do not translate "aspire", which is a skill choice identifier.</note>
+        <source>One or more skill sources are configured. A skill source lets an organization share skills to customize your development experience.</source>
+        <target state="new">One or more skill sources are configured. A skill source lets an organization share skills to customize your development experience.</target>
+        <note />
       </trans-unit>
       <trans-unit id="InitCommand_SkillsLocationHint">
         <source>Skills: {0}</source>
