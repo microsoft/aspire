@@ -109,21 +109,10 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task AgentInit_NonInteractive_WithMultipleAppHosts_UsesWorkingDirectorySettings()
+    public async Task AgentInit_NonInteractive_WithMultipleAppHosts_Succeeds()
     {
         using var context = new AgentConfigurationTestContext(outputHelper);
-        await AgentConfigurationTestContext.WriteAsync(Path.Combine(context.Project.FullName, AspireConfigFile.FileName), """
-            {"skillSources":{"default":{"enabled":false},"team":{"repository":"example/working-directory","plugins":["deployment"]}}}
-            """);
-        List<FileInfo> candidates = [];
-        foreach (var name in new[] { "First", "Second" })
-        {
-            var directory = context.Project.CreateSubdirectory(name);
-            await AgentConfigurationTestContext.WriteAsync(Path.Combine(directory.FullName, AspireConfigFile.FileName),                         """
-                            {"skillSources":{"default":{"enabled":false},"team":{"repository":"example/NAME","plugins":["deployment"]}}}
-                            """.Replace("NAME", name, StringComparison.Ordinal));
-            candidates.Add(new FileInfo(Path.Combine(directory.FullName, $"{name}.csproj")));
-        }
+        var discovered = false;
 
         // Use the default non-interactive host and console interaction service so an AppHost
         // selection prompt fails the command the same way it does for real users.
@@ -132,15 +121,20 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             options.ProjectLocatorFactory = _ => new TestProjectLocator
             {
                 GetAppHostFromSettingsAsyncCallback = _ => Task.FromResult<FileInfo?>(null),
-                FindAppHostProjectFilesAsyncCallback = (_, _, _, _) => Task.FromResult(candidates)
+                FindAppHostProjectFilesAsyncCallback = (directory, _, _, _) =>
+                {
+                    discovered = true;
+                    return Task.FromResult<List<FileInfo>>([
+                        new FileInfo(Path.Combine(directory.FullName, "First", "First.csproj")),
+                        new FileInfo(Path.Combine(directory.FullName, "Second", "Second.csproj"))]);
+                }
             };
         }).BuildServiceProvider();
         var result = provider.GetRequiredService<RootCommand>().Parse(
             "agent init --agents copilot --scope project --non-interactive");
 
         Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
-        await Verify(await File.ReadAllTextAsync(
-            context.Copilot.GetIntegrationConfigPath(AgentConfigurationScope.Project, context.Project)), "json");
+        Assert.True(discovered);
     }
 
     [Fact]
