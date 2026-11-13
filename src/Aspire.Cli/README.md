@@ -353,7 +353,7 @@ its own lease for its lifetime. If readiness fails, the helper terminates and
 waits for its newly launched GUI process before releasing the launcher lease;
 an already-running companion is not terminated by a failed start.
 
-These commands are experimental and available on macOS, Windows, and glibc Linux (x64/ARM64).
+These commands are in preview and available on macOS, Windows, and glibc Linux (x64/ARM64).
 Starting the companion requires an interactive desktop and
 a native CLI, not a managed development build or `dotnet aspire.dll`. A missing
 bundle or tray payload fails explicitly; install a platform-matching bundle containing the
