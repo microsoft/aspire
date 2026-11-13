@@ -39,6 +39,13 @@ internal static class HealthReportFormatter
     }
 
     /// <summary>
+    /// Gets a tooltip with only the time a report last ran, for example "Nov 11, 2026, 12:41 PM PST", for where
+    /// <see cref="GetStatusWithTime"/> already shows the status and how long ago it ran.
+    /// </summary>
+    public static string? GetLastRunTooltip(HealthReportViewModel report, BrowserTimeProvider timeProvider) =>
+        report.LastRunAtTimeStamp is { } lastRunAt ? FormatHelpers.FormatTooltipDateTime(timeProvider, lastRunAt) : null;
+
+    /// <summary>
     /// Gets a tooltip with the health status of a report and the local time it last ran.
     /// </summary>
     public static string? GetStatusTooltip(HealthReportViewModel report, IStringLocalizer<Resources.Resources> loc, BrowserTimeProvider timeProvider)

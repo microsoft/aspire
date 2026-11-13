@@ -6,6 +6,8 @@ namespace Aspire.Dashboard.Model;
 public sealed class BrowserInfo
 {
     public string? TimeZone { get; set; }
+    public string? TimeZoneStandardShortName { get; set; }
+    public string? TimeZoneDaylightShortName { get; set; }
     public string? UserAgent { get; set; }
     public bool Is24HourTime { get; set; }
 }

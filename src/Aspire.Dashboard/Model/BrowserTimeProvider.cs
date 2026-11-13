@@ -13,10 +13,12 @@ namespace Aspire.Dashboard.Model;
 /// - BrowserTimeProvider must be scoped to the user's session.
 /// - The built-in TimeProvider registration must be singleton for the system time (used by auth).
 /// </summary>
-public class BrowserTimeProvider : TimeProvider, ITimeFormatProvider
+public class BrowserTimeProvider : TimeProvider, ITimeFormatProvider, ITimeZoneNameProvider
 {
     private readonly ILogger _logger;
     private TimeZoneInfo? _browserLocalTimeZone;
+    private string? _standardTimeZoneShortName;
+    private string? _daylightTimeZoneShortName;
     private TimeFormat? _browserTimeFormat;
 
     public TimeFormat ConfiguredTimeFormat { get; set; } = TimeFormat.System;
@@ -31,16 +33,38 @@ public class BrowserTimeProvider : TimeProvider, ITimeFormatProvider
         get => _browserLocalTimeZone ?? base.LocalTimeZone;
     }
 
-    public void SetBrowserTimeZone(string? timeZone)
+    /// <summary>
+    /// Sets the browser's time zone, with the short names the browser gives it in standard and daylight saving time,
+    /// such as "PST" and "PDT". .NET only has long time zone names, so the short names have to come from the browser.
+    /// </summary>
+    public void SetBrowserTimeZone(string? timeZone, string? standardShortName, string? daylightShortName)
     {
         if (string.IsNullOrEmpty(timeZone) || !TimeZoneInfo.TryFindSystemTimeZoneById(timeZone, out var timeZoneInfo))
         {
             _logger.LogWarning("Couldn't find time zone '{TimeZone}'. Defaulting to UTC.", timeZone);
             timeZoneInfo = TimeZoneInfo.Utc;
+
+            // The names describe the browser's zone, not UTC, so they would mislabel times shown in UTC.
+            standardShortName = null;
+            daylightShortName = null;
         }
+
+        _standardTimeZoneShortName = standardShortName;
+        _daylightTimeZoneShortName = daylightShortName;
 
         _logger.LogDebug("Browser time zone set to '{TimeZone}' with UTC offset {UtcOffset}.", timeZoneInfo.Id, timeZoneInfo.BaseUtcOffset);
         _browserLocalTimeZone = timeZoneInfo;
+    }
+
+    public string? GetTimeZoneShortName(DateTime localWallClockTime)
+    {
+        // Without the browser's zone, LocalTimeZone is the server's, which the browser's names don't describe.
+        if (_browserLocalTimeZone is null)
+        {
+            return null;
+        }
+
+        return _browserLocalTimeZone.IsDaylightSavingTime(localWallClockTime) ? _daylightTimeZoneShortName : _standardTimeZoneShortName;
     }
 
     public TimeFormat ResolvedTimeFormat

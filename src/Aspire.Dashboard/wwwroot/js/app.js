@@ -478,12 +478,41 @@ window.unregisterGlobalKeydownListener = function (obj) {
 window.getBrowserInfo = function () {
     const options = Intl.DateTimeFormat(undefined, { hour: 'numeric' }).resolvedOptions();
 
+    const timeZoneShortNames = getTimeZoneShortNames();
+
     return {
         timeZone: options.timeZone,
+        timeZoneStandardShortName: timeZoneShortNames.standard,
+        timeZoneDaylightShortName: timeZoneShortNames.daylight,
         userAgent: navigator.userAgent,
         is24HourTime: options.hourCycle === "h23" || options.hourCycle === "h24"
     };
 };
+
+// The short names of the browser's time zone in standard and daylight saving time, such as "PST" and "PDT" (en-US,
+// America/Los_Angeles) or "GMT+1" and "GMT+2" (en-US, Europe/Paris). The server has only long names, so it uses these
+// to name the zone in tooltips such as "Nov 11, 2026, 12:41 PM PST". A zone without daylight saving time gets the same
+// name twice.
+function getTimeZoneShortNames() {
+    let format;
+    try {
+        // Name the zone in the dashboard's language, like the rest of the time, rather than the browser's.
+        format = new Intl.DateTimeFormat(document.documentElement.lang || undefined, { timeZoneName: "short" });
+    } catch {
+        format = new Intl.DateTimeFormat(undefined, { timeZoneName: "short" });
+    }
+
+    const getName = date => format.formatToParts(date).find(part => part.type === "timeZoneName")?.value ?? null;
+
+    // January and July fall in opposite seasons in both hemispheres. getTimezoneOffset() is minutes behind UTC, so the
+    // larger value is the standard time offset and the smaller one daylight saving time.
+    const year = new Date().getFullYear();
+    const january = new Date(year, 0, 1);
+    const july = new Date(year, 6, 1);
+    const [standard, daylight] = january.getTimezoneOffset() >= july.getTimezoneOffset() ? [january, july] : [july, january];
+
+    return { standard: getName(standard), daylight: getName(daylight) };
+}
 
 window.focusElement = function (selector, suppressFocusVisible) {
     const element = document.getElementById(selector);

@@ -173,7 +173,7 @@ public partial class LegacyMainLayout : IGlobalKeydownListener, IAsyncDisposable
         try
         {
             var result = await JS.InvokeAsync<BrowserInfo>("window.getBrowserInfo");
-            TimeProvider.SetBrowserTimeZone(result.TimeZone);
+            TimeProvider.SetBrowserTimeZone(result.TimeZone, result.TimeZoneStandardShortName, result.TimeZoneDaylightShortName);
             TimeProvider.SetBrowserTimeFormat(result.Is24HourTime ? TimeFormat.TwentyFourHour : TimeFormat.TwelveHour);
             TelemetryContextProvider.SetBrowserUserAgent(result.UserAgent);
 

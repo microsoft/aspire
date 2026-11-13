@@ -25,6 +25,15 @@ public interface ITimeFormatProvider
     TimeFormat ResolvedTimeFormat { get; }
 }
 
+public interface ITimeZoneNameProvider
+{
+    /// <summary>
+    /// Gets the short name of the local time zone at a wall-clock time in that zone, such as "PST" or "PDT", or
+    /// <see langword="null"/> when it isn't known.
+    /// </summary>
+    string? GetTimeZoneShortName(DateTime localWallClockTime);
+}
+
 internal static class FormatHelpers
 {
     // Limit size of very long data that is written in large grids.
@@ -73,6 +82,51 @@ internal static class FormatHelpers
         var timeFormat = GetResolvedTimeFormat(timeProvider);
         var pattern = DateFormatStringsHelpers.GetShortDateLongTimePattern(cultureInfo, timeFormat, millisecondsDisplay);
         return $"{value.ToUniversalTime().ToString(pattern, cultureInfo)} UTC";
+    }
+
+    /// <summary>
+    /// Formats the exact time behind a relative time ("Started 7m ago") for its tooltip, with an abbreviated month, no
+    /// seconds and the time zone, for example "Nov 11, 2026, 12:41 PM PST" (en-US) or "11 nov. 2026, 12:41 UTC+1" (fr-FR).
+    /// </summary>
+    /// <remarks>
+    /// The relative time is already on screen, so the tooltip only says when it was, without repeating it. Seconds are
+    /// noise next to an age rounded to minutes, and the time zone makes the time unambiguous when compared with others.
+    /// </remarks>
+    public static string FormatTooltipDateTime(TimeProvider timeProvider, DateTime value, CultureInfo? cultureInfo = null)
+    {
+        cultureInfo ??= CultureInfo.CurrentCulture;
+        var local = timeProvider.ToLocal(value);
+        var pattern = DateFormatStringsHelpers.GetMediumDateShortTimePattern(cultureInfo, GetResolvedTimeFormat(timeProvider));
+
+        return $"{local.ToString(pattern, cultureInfo)} {GetTimeZoneShortName(timeProvider, local)}";
+    }
+
+    public static string FormatTooltipDateTime(TimeProvider timeProvider, DateTimeOffset value, CultureInfo? cultureInfo = null) =>
+        FormatTooltipDateTime(timeProvider, value.UtcDateTime, cultureInfo);
+
+    private static string GetTimeZoneShortName(TimeProvider timeProvider, DateTime local)
+    {
+        // TimeZoneInfo interprets a Local DateTime as the machine's zone, not the browser's, so pass the wall-clock time
+        // as Unspecified to have it read in the provider's zone.
+        var wallClock = DateTime.SpecifyKind(local, DateTimeKind.Unspecified);
+        if (timeProvider is ITimeZoneNameProvider { } nameProvider && nameProvider.GetTimeZoneShortName(wallClock) is { Length: > 0 } name)
+        {
+            return name;
+        }
+
+        // .NET has no time zone abbreviations ("PST"), only long names, so without the browser's own name fall back to
+        // the offset, the way browsers name zones without a well-known abbreviation ("GMT+1").
+        var offset = timeProvider.LocalTimeZone.GetUtcOffset(wallClock);
+        if (offset == TimeSpan.Zero)
+        {
+            return "UTC";
+        }
+
+        var sign = offset < TimeSpan.Zero ? "-" : "+";
+        var duration = offset.Duration();
+        return duration.Minutes == 0
+            ? string.Create(CultureInfo.InvariantCulture, $"UTC{sign}{duration.Hours}")
+            : string.Create(CultureInfo.InvariantCulture, $"UTC{sign}{duration.Hours}:{duration.Minutes:00}");
     }
 
     private static TimeFormat GetResolvedTimeFormat(TimeProvider timeProvider)

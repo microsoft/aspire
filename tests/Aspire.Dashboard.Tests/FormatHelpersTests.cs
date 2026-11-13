@@ -149,6 +149,58 @@ public class FormatHelpersTests
         Assert.Equal(expected, FormatHelpers.TruncateText(initialText, maxLength: maxLength));
     }
 
+    [Theory]
+    [InlineData("Nov 11, 2026, 12:41 PM PST", "2026-11-11T20:41:00.0000000Z", TimeFormat.System)]
+    [InlineData("Jul 1, 2026, 12:41 PM PDT", "2026-07-01T19:41:00.0000000Z", TimeFormat.System)]
+    [InlineData("Nov 11, 2026, 12:41 PST", "2026-11-11T20:41:00.0000000Z", TimeFormat.TwentyFourHour)]
+    public void FormatTooltipDateTime_UsesBrowserTimeZoneShortNames(string expected, string value, TimeFormat timeFormat)
+    {
+        var provider = CreateTimeProvider();
+        provider.SetBrowserTimeZone("America/Los_Angeles", standardShortName: "PST", daylightShortName: "PDT");
+        provider.SetConfiguredTimeFormat(timeFormat);
+
+        var date = DateTime.Parse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind);
+        Assert.Equal(expected, FormatHelpers.FormatTooltipDateTime(provider, date, CultureInfo.GetCultureInfo("en-US")), ignoreWhiteSpaceDifferences: true);
+    }
+
+    [Theory]
+    [InlineData("en-US", TimeFormat.System, "Nov 11, 2026, 8:41 PM UTC")]
+    [InlineData("en-US", TimeFormat.TwentyFourHour, "Nov 11, 2026, 20:41 UTC")]
+    [InlineData("fr-FR", TimeFormat.System, "11 nov. 2026, 20:41 UTC")]
+    [InlineData("ja-JP", TimeFormat.System, "2026年11月11日 20:41 UTC")]
+    public void FormatTooltipDateTime_FollowsCulture(string cultureName, TimeFormat timeFormat, string expected)
+    {
+        var provider = CreateTimeProvider();
+        provider.SetBrowserTimeZone("UTC", standardShortName: null, daylightShortName: null);
+        provider.SetConfiguredTimeFormat(timeFormat);
+
+        var date = new DateTime(2026, 11, 11, 20, 41, 0, DateTimeKind.Utc);
+        Assert.Equal(expected, FormatHelpers.FormatTooltipDateTime(provider, date, CultureInfo.GetCultureInfo(cultureName)), ignoreWhiteSpaceDifferences: true);
+    }
+
+    [Theory]
+    [InlineData("Asia/Kolkata", "Nov 12, 2026, 2:11 AM UTC+5:30")]
+    [InlineData("America/New_York", "Nov 11, 2026, 3:41 PM UTC-5")]
+    public void FormatTooltipDateTime_WithoutShortNames_UsesUtcOffset(string timeZone, string expected)
+    {
+        var provider = CreateTimeProvider();
+        provider.SetBrowserTimeZone(timeZone, standardShortName: null, daylightShortName: null);
+
+        var date = new DateTime(2026, 11, 11, 20, 41, 0, DateTimeKind.Utc);
+        Assert.Equal(expected, FormatHelpers.FormatTooltipDateTime(provider, date, CultureInfo.GetCultureInfo("en-US")), ignoreWhiteSpaceDifferences: true);
+    }
+
+    [Fact]
+    public void FormatTooltipDateTime_UnknownTimeZone_IgnoresShortNames()
+    {
+        // The dashboard falls back to UTC for a time zone it can't find, so the browser's names would mislabel the time.
+        var provider = CreateTimeProvider();
+        provider.SetBrowserTimeZone("Not/A_Zone", standardShortName: "PST", daylightShortName: "PDT");
+
+        var date = new DateTime(2026, 11, 11, 20, 41, 0, DateTimeKind.Utc);
+        Assert.Equal("Nov 11, 2026, 8:41 PM UTC", FormatHelpers.FormatTooltipDateTime(provider, date, CultureInfo.GetCultureInfo("en-US")), ignoreWhiteSpaceDifferences: true);
+    }
+
     private static DateTime GetLocalDateTime(string value)
     {
         Assert.True(DateTime.TryParseExact(value, "o", CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var date));

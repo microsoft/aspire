@@ -1857,16 +1857,19 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
                 ? (Loc[nameof(Resources.Layout.ResourceHeaderStarted)], startTimeStamp)
                 : null;
 
-    // For example "Stopped 1m ago (11/6/2026 2:30:12 PM)". It contains the short age the row shows, so the accessible
-    // name includes the visible text (WCAG 2.5.3, label in name: https://www.w3.org/WAI/WCAG22/Understanding/label-in-name).
-    private string GetRowTimeDescription((string Label, DateTime Time) rowTime) =>
-        $"{GetRowTimeText(rowTime)} ({FormatHelpers.FormatDateTime(TimeProvider, rowTime.Time)})";
+    // The tooltip: only the exact time, for example "Nov 6, 2026, 2:30 PM PST", since the row already shows the age.
+    private string GetRowTimeTooltip((string Label, DateTime Time) rowTime) => FormatHelpers.FormatTooltipDateTime(TimeProvider, rowTime.Time);
+
+    // The accessible name, for example "Stopped 1m ago (Nov 6, 2026, 2:30 PM PST)". Unlike the tooltip, it contains the
+    // short age the row shows, so the accessible name includes the visible text (WCAG 2.5.3, label in name:
+    // https://www.w3.org/WAI/WCAG22/Understanding/label-in-name).
+    private string GetRowTimeDescription((string Label, DateTime Time) rowTime, string tooltip) => $"{GetRowTimeText(rowTime)} ({tooltip})";
 
     // What a row shows: the verb, so a stopped resource doesn't read as running, and a short age ("Started 7m ago").
     private string GetRowTimeText((string Label, DateTime Time) rowTime) => $"{rowTime.Label} {GetShortAge(rowTime.Time)}";
 
     // The short age ("7m ago"), which every row repeats; the tooltip and accessible label add the exact time (see
-    // GetRowTimeDescription).
+    // GetRowTimeTooltip and GetRowTimeDescription).
     private string GetShortAge(DateTime time)
     {
         // Clamp so a time slightly in the future (clock skew between processes) reads as "now".
