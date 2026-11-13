@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "API review adjustment to APIs not yet shipped in a stable release",
+  "mergedAt": "2026-11-13T01:12:35Z",
+  "number": 22205,
+  "runDate": "2026-11-13T06:10:00Z",
+  "status": "excluded",
+  "title": "[release/17.0] Make ResourceTypeDisplayNameAnnotation and snapshot display name setter internal"
+}

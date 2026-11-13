@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "aspire new no longer fails when an older aspire.config.json contains a retired nested feature flag such as the Go flag; structured feature entries are now ignored when reading feature flags.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🧹",
+  "firstMergedAt": "2026-11-13T01:17:28Z",
+  "lastMergedAt": "2026-11-13T01:17:28Z",
+  "name": "Ignore legacy nested feature flags in CLI configuration",
+  "owner": "IEvangelist",
+  "prs": [
+    22203
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Fixes aspire new failing on legacy config",
+  "mergedAt": "2026-11-13T01:17:28Z",
+  "number": 22203,
+  "runDate": "2026-11-13T06:10:00Z",
+  "status": "included",
+  "title": "Ignore legacy nested feature flags in CLI configuration"
+}

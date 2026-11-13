@@ -10,12 +10,13 @@
   "docsRequired": true,
   "emoji": "✨",
   "firstMergedAt": "2026-10-30T04:47:48Z",
-  "lastMergedAt": "2026-11-13T00:01:54Z",
+  "lastMergedAt": "2026-11-13T00:07:33Z",
   "name": "Modernized dashboard experience",
   "owner": "sebastienros",
   "prs": [
     21412,
     22186,
-    22230
+    22230,
+    22188
   ]
 }

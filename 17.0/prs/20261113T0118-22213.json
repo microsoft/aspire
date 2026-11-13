@@ -1,0 +1,9 @@
+{
+  "author": "ellahathaway",
+  "comment": "Backport of 21882; fixes MCP doctor timeout on Windows",
+  "mergedAt": "2026-11-13T01:18:55Z",
+  "number": 22213,
+  "runDate": "2026-11-13T06:10:00Z",
+  "status": "included",
+  "title": "[release/17.0] Fix MCP doctor timeout on Windows"
+}

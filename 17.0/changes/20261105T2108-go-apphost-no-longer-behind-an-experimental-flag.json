@@ -1,14 +1,16 @@
 {
   "area": "AppHost",
-  "areaEmoji": "\ud83c\udfe0",
+  "areaEmoji": "🏠",
   "backport": false,
   "breaking": false,
   "changeType": "Improvements",
   "communityContributors": [],
   "description": "Go AppHosts can now be used without enabling an experimental feature flag.",
-  "docsPrs": [],
+  "docsPrs": [
+    2115
+  ],
   "docsRequired": true,
-  "emoji": "\ud83d\udc39",
+  "emoji": "🐹",
   "firstMergedAt": "2026-11-05T21:08:58Z",
   "lastMergedAt": "2026-11-05T21:08:58Z",
   "name": "Go AppHost no longer behind an experimental flag",

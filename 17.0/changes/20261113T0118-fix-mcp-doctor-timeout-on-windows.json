@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "The MCP doctor tool no longer times out on Windows while checking Aspire skills; Git discovery commands no longer inherit the MCP server's standard input pipe.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "⏱️",
+  "firstMergedAt": "2026-11-13T01:18:55Z",
+  "lastMergedAt": "2026-11-13T01:18:55Z",
+  "name": "Fix MCP doctor timeout on Windows",
+  "owner": "ellahathaway",
+  "prs": [
+    22213
+  ]
+}

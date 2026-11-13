@@ -1,0 +1,9 @@
+{
+  "author": "joperezr",
+  "comment": "Test-only change",
+  "mergedAt": "2026-11-13T01:00:05Z",
+  "number": 22196,
+  "runDate": "2026-11-13T06:10:00Z",
+  "status": "excluded",
+  "title": "[release/17.0] Fix self-update channel persistence test"
+}

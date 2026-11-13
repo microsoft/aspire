@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents #22200, which has no changelog entry",
+  "mergedAt": "2026-11-13T05:24:00Z",
+  "number": 2139,
+  "runDate": "2026-11-13T06:10:00Z",
+  "status": "excluded",
+  "title": "[docs] Document aspire update --config-source behavior"
+}

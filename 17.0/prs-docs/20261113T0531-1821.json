@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents #20600 dashboard OTLP service name",
+  "mergedAt": "2026-11-13T05:31:32Z",
+  "number": 1821,
+  "runDate": "2026-11-13T06:10:00Z",
+  "status": "included",
+  "title": "[docs] Document dashboard self-telemetry OTLP service name"
+}

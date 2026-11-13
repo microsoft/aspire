@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "API review adjustments to APIs not yet shipped in a stable release",
+  "mergedAt": "2026-11-13T01:11:46Z",
+  "number": 22217,
+  "runDate": "2026-11-13T06:10:00Z",
+  "status": "excluded",
+  "title": "[release/17.0] Address API review feedback from #22185"
+}
