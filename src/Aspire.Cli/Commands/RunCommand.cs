@@ -1399,6 +1399,7 @@ internal sealed class RunCommand : BaseCommand
                 CategoryName = entry.CategoryName,
                 EventId = entry.EventId.Id,
                 Exception = entry.Exception,
+                ConsoleFormat = entry.ConsoleFormat,
             });
         }
         else

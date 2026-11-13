@@ -964,6 +964,31 @@ internal class BackchannelLogEntry
     public string? Exception { get; set; }
     public required DateTimeOffset Timestamp { get; set; }
     public required string CategoryName { get; set; }
+
+    /// <summary>
+    /// Gets or sets how the AppHost's console logger rendered this record, or <see langword="null"/>
+    /// when it does not use the simple console formatter. Older AppHosts never set this.
+    /// </summary>
+    public BackchannelConsoleFormat? ConsoleFormat { get; set; }
+}
+
+/// <summary>
+/// The effective <c>SimpleConsoleFormatterOptions</c> of the AppHost. Clients that read the AppHost's
+/// console output use it to parse records exactly instead of guessing the formatter's shape.
+/// </summary>
+/// <remarks>
+/// The JSON names are camelCase because the CLI relays this object unchanged to the VS Code extension.
+/// </remarks>
+internal sealed class BackchannelConsoleFormat
+{
+    [JsonPropertyName("timestampFormat")]
+    public string? TimestampFormat { get; set; }
+
+    [JsonPropertyName("singleLine")]
+    public bool SingleLine { get; set; }
+
+    [JsonPropertyName("includeScopes")]
+    public bool IncludeScopes { get; set; }
 }
 
 internal class PublishingPromptInputAnswer
