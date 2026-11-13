@@ -7,7 +7,6 @@
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dcp;
-using Aspire.Hosting.Dcp.Process;
 using Aspire.Hosting.Publishing;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
