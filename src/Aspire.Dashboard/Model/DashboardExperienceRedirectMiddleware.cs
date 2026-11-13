@@ -96,6 +96,8 @@ internal sealed class DashboardExperienceRedirectMiddleware(
         return s_sharedPageSegments.Contains(segment, StringComparer.OrdinalIgnoreCase);
     }
 
+    // Keep the server paths in sync with LegacyNavUrls.ShouldRewriteToLegacy, which keeps the legacy layout from
+    // rewriting navigations to them below /legacy.
     private static bool IsExcludedPath(string path) =>
         string.Equals(path, "/login", StringComparison.OrdinalIgnoreCase) ||
         path.StartsWith("/error", StringComparison.OrdinalIgnoreCase) ||

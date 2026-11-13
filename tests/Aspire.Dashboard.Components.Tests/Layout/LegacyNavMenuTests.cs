@@ -24,6 +24,23 @@ public class LegacyNavMenuTests : DashboardTestContext
         Assert.Equal(expectedUrl, LegacyNavUrls.ToLegacyUrl(url));
     }
 
+    [Theory]
+    [InlineData("", true)]
+    [InlineData("traces", true)]
+    [InlineData("structuredlogs?logLevel=error", true)]
+    [InlineData("legacy", false)]
+    [InlineData("legacy/traces", false)]
+    [InlineData("login?returnUrl=%2F", false)]
+    [InlineData("error/404", false)]
+    [InlineData("terminal-window/resource/api", false)]
+    [InlineData("api/set-language?language=zh-Hans&redirectUrl=%2Flegacy%2Fstructuredlogs", false)]
+    [InlineData("API/set-language?language=fr&redirectUrl=%2Flegacy", false)]
+    [InlineData("_framework/blazor.web.js", false)]
+    public void ShouldRewriteToLegacy_SkipsLegacyRoutesAndServerEndpoints(string relativePath, bool expected)
+    {
+        Assert.Equal(expected, LegacyNavUrls.ShouldRewriteToLegacy(relativePath));
+    }
+
     [Fact]
     public void DesktopNavMenu_LinksToLegacyPages()
     {
