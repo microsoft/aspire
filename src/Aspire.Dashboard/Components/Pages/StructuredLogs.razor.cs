@@ -143,6 +143,10 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     private async ValueTask<GridItemsProviderResult<LogSummary>> GetData(GridItemsProviderRequest<LogSummary> request)
     {
         ViewModel.ResourceKeys = ResourcesLayout?.GetSelectionTelemetryKeys(SelectedResourceNames);
+
+        // The subscription follows the keys queried here (see UpdateSubscription). The resource list can map new
+        // telemetry before it raises ResourcesChanged.
+        UpdateSubscription();
         ViewModel.StartIndex = request.StartIndex;
         ViewModel.Count = request.Count is > 0 ? request.Count.Value : DashboardUIHelpers.DefaultDataGridResultCount;
 
@@ -325,6 +329,7 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
 
         // The layout can finish loading its resource snapshot after the grid's first query.
         ViewModel.ResourceKeys = resourceKeys;
+        UpdateSubscription();
         ViewModel.ClearData();
         _ = InvokeAsync(_dataGrid.SafeRefreshDataAsync);
     }
@@ -343,12 +348,27 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
 
     private void UpdateSubscription()
     {
-        var resourceKey = PageViewModel.SelectedResource.Id?.GetResourceKey();
+        // A read subscription marks a resource's new errors as viewed when they arrive, and one without a resource key
+        // does that for every resource. It must only cover resources the grid shows, or other resources lose their
+        // unread counts.
+        var (resourceKey, subscriptionType) = ViewModel.ResourceKeys switch
+        {
+            // The resource list's keys are what the grid queries. A subscription has a single key, so it can only be a
+            // read subscription for a single resource. With several resources, or none with telemetry yet, it's a
+            // subscription for every resource that only refreshes the grid. GetData still marks the errors of the
+            // resources it shows as viewed on each refresh.
+            //
+            // The page's own resource can't be used here: it's resolved from the page's telemetry resources, which
+            // can disagree with the resource list. For example, the list doesn't map names that several telemetry
+            // resources share, such as ("api-a", "1") and ("api", "a-1"), while the page picks the first match.
+            [var key] => (key, SubscriptionType.Read),
+            { } => ((ResourceKey?)null, SubscriptionType.Other),
 
-        // A read subscription marks new errors as viewed, and one without a resource key covers every resource. While
-        // the route's resource is unresolved, the page isn't showing every resource, so it must not hide other
-        // resources' new errors. Telemetry from several resources can arrive in one batch, before the route resolves.
-        var subscriptionType = IsRouteResourceUnresolved ? SubscriptionType.Other : SubscriptionType.Read;
+            // Without the resource list, the page shows its selected resource, or every resource. While the route's
+            // resource is unresolved, it isn't showing every resource, so it must not hide other resources' new errors.
+            // Telemetry from several resources can arrive in one batch, before the route resolves.
+            null => (PageViewModel.SelectedResource.Id?.GetResourceKey(), IsRouteResourceUnresolved ? SubscriptionType.Other : SubscriptionType.Read)
+        };
 
         // Subscribe to updates.
         if (_logsSubscription is null || _logsSubscription.ResourceKey != resourceKey || _logsSubscription.SubscriptionType != subscriptionType)

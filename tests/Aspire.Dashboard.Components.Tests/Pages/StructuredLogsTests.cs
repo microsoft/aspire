@@ -457,21 +457,62 @@ public partial class StructuredLogsTests : DashboardTestContext
         // Another resource's logs aren't shown, and its errors aren't marked as read by viewing the selected resource.
         Assert.Equal(["api"], result.Items.Select(item => item.Resource.ResourceName));
         Assert.Equal(2, repository.GetResourceUnviewedErrorLogsCount().Single(entry => entry.Key.Name == "worker").Value);
+    }
 
-        static Task AddLogAsync(SqliteTelemetryRepository repository, string name, SeverityNumber severity)
+    [Fact]
+    public async Task ResourcesLayout_MultiSelection_OnlySelectedResourcesErrorsAreMarkedViewed()
+    {
+        SetupStructureLogsServices();
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("api"), ModelTestHelpers.CreateResource("worker"), ModelTestHelpers.CreateResource("cache")],
+            resourceChannelProvider: () => channel));
+        Services.GetRequiredService<DimensionManager>().InvokeOnViewportInformationChanged(viewport);
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.StructuredLogsUrl() + "?resource=api&resource=worker");
+
+        var repository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        await AddLogAsync(repository, "api", SeverityNumber.Info);
+        await AddLogAsync(repository, "worker", SeverityNumber.Info);
+
+        var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport).Add(p => p.Body, builder =>
         {
-            // Without an instance ID, the telemetry resource's name matches the app model resource's name.
-            var resource = CreateResource(name);
-            resource.Attributes.Remove(resource.Attributes.Single(attribute => attribute.Key == OtlpResource.SERVICE_INSTANCE_ID));
-            return repository.AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>
+            builder.OpenComponent<StructuredLogs>(0);
+            builder.AddAttribute(1, nameof(StructuredLogs.SelectedResourceNames), new[] { "api", "worker" });
+            builder.CloseComponent();
+        }));
+        var page = cut.FindComponent<StructuredLogs>();
+        cut.WaitForAssertion(() =>
+        {
+            Assert.True(cut.Instance.IsMultiSelection);
+            Assert.Equal(["api", "worker"], page.Instance.ViewModel.ResourceKeys?.Select(key => key.Name).Order().ToArray() ?? []);
+        });
+
+        await AddLogAsync(repository, "cache", SeverityNumber.Error);
+        await AddLogAsync(repository, "worker", SeverityNumber.Error);
+
+        // The page shows worker's error, so it's marked as viewed when the grid refreshes. cache isn't selected, and
+        // its error stays unviewed.
+        cut.WaitForAssertion(() => Assert.Equal(0, GetUnviewedErrorCount(repository, "worker")));
+        Assert.Equal(1, GetUnviewedErrorCount(repository, "cache"));
+
+        static int GetUnviewedErrorCount(SqliteTelemetryRepository repository, string name) =>
+            repository.GetResourceUnviewedErrorLogsCount().Where(entry => entry.Key.Name == name).Sum(entry => entry.Value);
+    }
+
+    private static Task AddLogAsync(SqliteTelemetryRepository repository, string name, SeverityNumber severity)
+    {
+        // Without an instance ID, the telemetry resource's name matches the app model resource's name.
+        var resource = CreateResource(name);
+        resource.Attributes.Remove(resource.Attributes.Single(attribute => attribute.Key == OtlpResource.SERVICE_INSTANCE_ID));
+        return repository.AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>
+        {
+            new ResourceLogs
             {
-                new ResourceLogs
-                {
-                    Resource = resource,
-                    ScopeLogs = { new ScopeLogs { Scope = CreateScope(), LogRecords = { CreateLogRecord(severity: severity) } } }
-                }
-            });
-        }
+                Resource = resource,
+                ScopeLogs = { new ScopeLogs { Scope = CreateScope(), LogRecords = { CreateLogRecord(severity: severity) } } }
+            }
+        });
     }
 
     private void SetupStructureLogsServices()
