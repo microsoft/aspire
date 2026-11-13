@@ -11,7 +11,7 @@ public class LocalAspireSkillsTests(ITestOutputHelper output) : IDisposable
     private readonly AgentConfigurationTestContext _context = new(output);
 
     [Fact]
-    public async Task Find_RecognizesLegacySkillsWithoutCreatingABundleOrCache()
+    public async Task Find_RecognizesLegacySkillDirectoriesWithoutModifyingFiles()
     {
         string[] names =
         [
@@ -23,150 +23,77 @@ public class LocalAspireSkillsTests(ITestOutputHelper output) : IDisposable
             "aspire-project-v2-migration",
             "aspireify"
         ];
-        var paths = names.Select(name => Path.Combine(_context.Project.FullName, ".agents", "skills", name, "SKILL.md")).ToArray();
-        foreach (var path in paths)
+        var skills = Path.Combine(_context.Project.FullName, ".agents", "skills");
+        foreach (var name in names)
         {
-            await AgentConfigurationTestContext.WriteAsync(path, "local skill");
+            await AgentConfigurationTestContext.WriteAsync(Path.Combine(skills, name, "references", "notes.md"), "local skill");
         }
+        await AgentConfigurationTestContext.WriteAsync(Path.Combine(skills, "aspire-custom", "SKILL.md"), "unrelated");
+        await AgentConfigurationTestContext.WriteAsync(Path.Combine(skills, "playwright-cli", "SKILL.md"), "unrelated");
         var before = Directory.GetFileSystemEntries(_context.Workspace.Path, "*", SearchOption.AllDirectories).Order().ToArray();
-        Assert.False(Directory.Exists(_context.ExecutionContext.CacheDirectory.FullName));
 
-        var result = Scan([_context.Copilot]);
+        var result = Find(_context.Project, _context.Project);
 
-        Assert.Empty(result.Errors);
-        Assert.Equal(paths.Order(StringComparers.FileSystemPath), result.Files);
+        Assert.Equal(
+            names.Select(name => (Path.Combine(skills, name), AgentConfigurationScope.Project)).OrderBy(entry => entry.Item1, StringComparers.FileSystemPath),
+            result);
         Assert.Equal(before, Directory.GetFileSystemEntries(_context.Workspace.Path, "*", SearchOption.AllDirectories).Order());
     }
 
     [Theory]
-    [InlineData("GitHub Copilot", ".github")]
-    [InlineData("GitHub Copilot", ".agents")]
-    [InlineData("GitHub Copilot", ".claude")]
-    [InlineData("Claude Code", ".claude")]
-    [InlineData("OpenCode", ".agents")]
-    public async Task Find_ReportsKnownNamesWithoutInferringOwnershipOrModifyingFiles(string agent, string directory)
+    [InlineData(".agents", "skills")]
+    [InlineData(".claude", "skills")]
+    [InlineData(".github", "skills")]
+    [InlineData(".opencode", "skill")]
+    public async Task Find_InspectsOnlyActiveAncestorsWithinTheWorkspace(string directory, string skills)
     {
-        var path = Path.Combine(_context.Project.FullName, directory, "skills", "aspire", "SKILL.md");
-        const string content = "---\nname: aspire\n---\nMy customized instructions.";
-        await AgentConfigurationTestContext.WriteAsync(path, content);
-        var empty = Path.Combine(_context.Project.FullName, directory, "skills", "aspire-init", "SKILL.md");
-        await AgentConfigurationTestContext.WriteAsync(empty, string.Empty);
-        var timestamp = File.GetLastWriteTimeUtc(path);
-        await AgentConfigurationTestContext.WriteAsync(Path.Combine(_context.Project.FullName, directory, "skills", "aspire-custom", "SKILL.md"), "unrelated");
-        await AgentConfigurationTestContext.WriteAsync(Path.Combine(_context.Project.FullName, directory, "skills", "playwright-cli", "SKILL.md"), "unrelated");
-        var before = Directory.GetFileSystemEntries(_context.Workspace.Path, "*", SearchOption.AllDirectories).Order().ToArray();
+        var parent = _context.Project.CreateSubdirectory("apps");
+        var working = parent.CreateSubdirectory("active");
+        var paths = new[] { _context.Project, parent, working }
+            .Select(root => Path.Combine(root.FullName, directory, skills, "aspire")).ToArray();
+        foreach (var path in paths)
+        {
+            await AgentConfigurationTestContext.WriteAsync(Path.Combine(path, "SKILL.md"), "active local skill");
+        }
+        await AgentConfigurationTestContext.WriteAsync(
+            Path.Combine(parent.FullName, "sibling", directory, skills, "aspire", "SKILL.md"), "unrelated");
+        await AgentConfigurationTestContext.WriteAsync(
+            Path.Combine(_context.Workspace.Path, directory, skills, "aspire", "SKILL.md"), "outside the workspace");
 
-        var result = Scan([_context.Clients.Single(scanner => scanner.DisplayName == agent)]);
+        var result = Find(working, _context.Project);
 
-        Assert.Empty(result.Errors);
-        Assert.Equal(new[] { path, empty }.Order(StringComparers.FileSystemPath), result.Files);
-        Assert.Equal(content, await File.ReadAllTextAsync(path));
-        Assert.Empty(await File.ReadAllTextAsync(empty));
-        Assert.Equal(timestamp, File.GetLastWriteTimeUtc(path));
-        Assert.Equal(before, Directory.GetFileSystemEntries(_context.Workspace.Path, "*", SearchOption.AllDirectories).Order());
+        Assert.Equal(
+            paths.Select(path => (path, AgentConfigurationScope.Project)).OrderBy(entry => entry.path, StringComparers.FileSystemPath),
+            result);
     }
 
     [Fact]
-    public async Task Find_ChecksBothScopesAndDeduplicatesSharedLocations()
+    public async Task Find_TagsUserLevelCopiesAsGlobalAndIgnoresOtherUserLocations()
     {
-        var project = Path.Combine(_context.Project.FullName, ".agents", "skills", "aspire-init", "SKILL.md");
-        var user = Path.Combine(_context.Home.FullName, ".agents", "skills", "aspireify", "SKILL.md");
-        await AgentConfigurationTestContext.WriteAsync(project, "project");
-        await AgentConfigurationTestContext.WriteAsync(user, "user");
+        var project = Path.Combine(_context.Project.FullName, ".agents", "skills", "aspire-init");
+        var user = Path.Combine(_context.Home.FullName, ".agents", "skills", "aspireify");
+        await AgentConfigurationTestContext.WriteAsync(Path.Combine(project, "SKILL.md"), "project");
+        await AgentConfigurationTestContext.WriteAsync(Path.Combine(user, "SKILL.md"), "user");
+        await AgentConfigurationTestContext.WriteAsync(Path.Combine(_context.Home.FullName, ".claude", "skills", "aspire", "SKILL.md"), "claude");
+        await AgentConfigurationTestContext.WriteAsync(Path.Combine(_context.CopilotDirectory, "skills", "aspire", "SKILL.md"), "copilot");
 
-        var result = Scan([_context.Copilot, _context.OpenCode]);
+        var result = Find(_context.Project, _context.Project);
 
-        Assert.Empty(result.Errors);
-        Assert.Equal(new[] { project, user }.Order(StringComparers.FileSystemPath), result.Files);
+        Assert.Equal(
+            new[] { (project, AgentConfigurationScope.Project), (user, AgentConfigurationScope.Global) }
+                .OrderBy(entry => entry.Item1, StringComparers.FileSystemPath),
+            result);
     }
 
     [Fact]
-    public async Task Find_OnlyUsesTheSelectedAgentsLocationsAndHonorsOverrides()
+    public async Task Find_WorkspaceAtHomeReportsSharedLocationUnderBothScopes()
     {
-        var custom = Path.Combine(_context.Home.FullName, "claude-work");
-        _context.SetVariable("CLAUDE_CONFIG_DIR", custom);
-        var selected = Path.Combine(custom, "skills", "aspire-deployment", "SKILL.md");
-        await AgentConfigurationTestContext.WriteAsync(selected, "customized");
-        await AgentConfigurationTestContext.WriteAsync(Path.Combine(_context.Home.FullName, ".claude", "skills", "aspire", "SKILL.md"), "old home");
-        await AgentConfigurationTestContext.WriteAsync(Path.Combine(_context.Project.FullName, ".github", "skills", "aspire", "SKILL.md"), "other agent");
+        var skill = Path.Combine(_context.Home.FullName, ".agents", "skills", "aspire");
+        await AgentConfigurationTestContext.WriteAsync(Path.Combine(skill, "SKILL.md"), "shared");
 
-        var result = Scan([_context.ClaudeCode]);
+        var result = Find(_context.Home, _context.Home);
 
-        Assert.Empty(result.Errors);
-        Assert.Equal(selected, Assert.Single(result.Files));
-    }
-
-    [Fact]
-    public async Task Find_RecognizesLegacyOpenCodeAndCustomUserLocations()
-    {
-        var custom = _context.Workspace.CreateDirectory("custom-opencode");
-        _context.SetVariable("OPENCODE_CONFIG_DIR", custom.FullName);
-        var paths = new[]
-        {
-            Path.Combine(_context.Project.FullName, ".opencode", "skill", "aspire", "SKILL.md"),
-            Path.Combine(custom.FullName, "skills", "aspire-orchestration", "SKILL.md")
-        };
-        foreach (var path in paths)
-        {
-            await AgentConfigurationTestContext.WriteAsync(path, "local");
-        }
-
-        var result = Scan([_context.OpenCode]);
-
-        Assert.Empty(result.Errors);
-        Assert.Equal(paths.Order(StringComparers.FileSystemPath), result.Files);
-    }
-
-    [Theory]
-    [InlineData(false, false)]
-    [InlineData(false, true)]
-    [InlineData(true, false)]
-    [InlineData(true, true)]
-    public async Task Find_RecognizesConfiguredOpenCodeSkillRootsWithoutChangingFiles(bool array, bool global)
-    {
-        var configPath = global
-            ? Path.Combine(_context.OpenCodeDirectory, "opencode.jsonc")
-            : Path.Combine(_context.Project.FullName, ".opencode", "opencode.jsonc");
-        var paths = new[]
-        {
-            Path.Combine(_context.Project.FullName, "team-skills", "aspire", "SKILL.md"),
-            Path.Combine(_context.Home.FullName, "shared-skills", "aspireify", "SKILL.md")
-        };
-        var config = array
-            ? """{"skills":["./team-skills","~/shared-skills","https://example.test/skills/"]}"""
-            : """{"skills":{"paths":["./team-skills","~/shared-skills"],"urls":["https://example.test/skills/"]}}""";
-        await AgentConfigurationTestContext.WriteAsync(configPath, config);
-        foreach (var path in paths)
-        {
-            await AgentConfigurationTestContext.WriteAsync(path, "local");
-        }
-
-        var result = Scan([_context.OpenCode]);
-
-        Assert.Empty(result.Errors);
-        Assert.Equal(paths.Order(StringComparers.FileSystemPath), result.Files);
-        Assert.Equal(config, await File.ReadAllTextAsync(configPath));
-        foreach (var path in paths)
-        {
-            Assert.Equal("local", await File.ReadAllTextAsync(path));
-        }
-    }
-
-    [Theory]
-    [InlineData("{broken")]
-    [InlineData("""{"skills":{"paths":[true]}}""")]
-    [InlineData("""{"skills":[false]}""")]
-    public async Task Find_ReportsInvalidOpenCodeSkillConfiguration(string config)
-    {
-        var path = Path.Combine(_context.Project.FullName, "opencode.json");
-        await AgentConfigurationTestContext.WriteAsync(path, config);
-
-        var result = Scan([_context.OpenCode]);
-
-        Assert.Empty(result.Files);
-        Assert.Contains("OpenCode", Assert.Single(result.Errors));
-        Assert.False(result.HasFileErrors);
-        Assert.Equal(config, await File.ReadAllTextAsync(path));
+        Assert.Equal([(skill, AgentConfigurationScope.Project), (skill, AgentConfigurationScope.Global)], result);
     }
 
     [Fact]
@@ -175,85 +102,34 @@ public class LocalAspireSkillsTests(ITestOutputHelper output) : IDisposable
         await AgentConfigurationTestContext.WriteAsync(Path.Combine(_context.CopilotDirectory, "installed-plugins", "aspire", "skills", "aspire", "SKILL.md"), "installed");
         await AgentConfigurationTestContext.WriteAsync(Path.Combine(_context.Project.FullName, "unrelated", ".agents", "skills", "aspire", "SKILL.md"), "unrelated");
 
-        var result = Scan(_context.Clients);
-
-        Assert.Empty(result.Files);
-        Assert.Empty(result.Errors);
-    }
-
-    [Theory]
-    [InlineData("GitHub Copilot", ".github")]
-    [InlineData("GitHub Copilot", ".claude")]
-    [InlineData("Claude Code", ".claude")]
-    [InlineData("OpenCode", ".opencode")]
-    [InlineData("OpenCode", ".claude")]
-    [InlineData("OpenCode", ".agents")]
-    public async Task Find_InspectsOnlyActiveAncestorsWithinTheWorkspace(string agent, string directory)
-    {
-        var parent = _context.Project.CreateSubdirectory("apps");
-        var working = parent.CreateSubdirectory("active");
-        var paths = new[] { _context.Project, parent, working }
-            .Select(root => Path.Combine(root.FullName, directory, "skills", "aspire", "SKILL.md")).ToArray();
-        foreach (var path in paths)
-        {
-            await AgentConfigurationTestContext.WriteAsync(path, "active local skill");
-        }
-        await AgentConfigurationTestContext.WriteAsync(
-            Path.Combine(parent.FullName, "sibling", directory, "skills", "aspire", "SKILL.md"), "unrelated");
-        await AgentConfigurationTestContext.WriteAsync(
-            Path.Combine(_context.Workspace.Path, directory, "skills", "aspire", "SKILL.md"), "outside the workspace");
-        var before = Directory.GetFileSystemEntries(_context.Workspace.Path, "*", SearchOption.AllDirectories).Order().ToArray();
-
-        var result = LocalAspireSkills.Find(working, _context.Project,
-            [_context.Clients.Single(scanner => scanner.DisplayName == agent)], TestContext.Current.CancellationToken);
-
-        Assert.Empty(result.Errors);
-        Assert.Equal(paths.Order(StringComparers.FileSystemPath), result.Files);
-        Assert.Equal(before, Directory.GetFileSystemEntries(_context.Workspace.Path, "*", SearchOption.AllDirectories).Order());
+        Assert.Empty(Find(_context.Project, _context.Project));
     }
 
     [Fact]
     public async Task Find_OutsideWorkingDirectoryUsesOnlyTheSelectedWorkspace()
     {
         var outside = _context.Workspace.CreateDirectory("outside");
-        var selected = Path.Combine(_context.Project.FullName, ".agents", "skills", "aspire", "SKILL.md");
-        await AgentConfigurationTestContext.WriteAsync(selected, "selected");
+        var selected = Path.Combine(_context.Project.FullName, ".agents", "skills", "aspire");
+        await AgentConfigurationTestContext.WriteAsync(Path.Combine(selected, "SKILL.md"), "selected");
         await AgentConfigurationTestContext.WriteAsync(Path.Combine(outside.FullName, ".agents", "skills", "aspire", "SKILL.md"), "outside");
         await AgentConfigurationTestContext.WriteAsync(Path.Combine(_context.Workspace.Path, ".agents", "skills", "aspire", "SKILL.md"), "ancestor");
 
-        var result = LocalAspireSkills.Find(outside, _context.Project, [_context.OpenCode],
-            TestContext.Current.CancellationToken);
+        var result = Find(outside, _context.Project);
 
-        Assert.Empty(result.Errors);
-        Assert.Equal(selected, Assert.Single(result.Files));
-    }
-
-    [Fact]
-    public async Task Find_ReportsInspectionErrorsRatherThanClaimingNoConflicts()
-    {
-        var path = Path.Combine(_context.Project.FullName, ".agents", "skills", "aspire", "SKILL.md");
-        Directory.CreateDirectory(path);
-        await AgentConfigurationTestContext.WriteAsync(Path.Combine(_context.Project.FullName, ".agents", "skills", "aspireify", "SKILL.md"), "readable");
-
-        var result = Scan([_context.Copilot]);
-
-        Assert.Single(result.Files);
-        Assert.Contains(path, Assert.Single(result.Errors));
-        Assert.True(result.HasFileErrors);
-        Assert.True(Directory.Exists(path));
+        Assert.Equal((selected, AgentConfigurationScope.Project), Assert.Single(result));
     }
 
     [Fact]
     public void Find_CancellationPropagates()
     {
         Assert.ThrowsAny<OperationCanceledException>(() =>
-            LocalAspireSkills.Find(_context.Project, _context.Project, _context.Clients, new CancellationToken(canceled: true)));
-        Assert.Empty(_context.Project.EnumerateFileSystemInfos());
-        Assert.Empty(_context.Home.EnumerateFileSystemInfos());
+            LocalAspireSkills.Find(_context.Project, _context.Project, _context.Home, new CancellationToken(canceled: true)));
     }
 
-    private (IReadOnlyList<string> Files, IReadOnlyList<string> Errors, bool HasFileErrors) Scan(IEnumerable<IAgentClient> agents)
-        => LocalAspireSkills.Find(_context.Project, _context.Project, agents, TestContext.Current.CancellationToken);
+    private IReadOnlyList<(string Directory, AgentConfigurationScope Scope)> Find(DirectoryInfo working, DirectoryInfo workspaceRoot)
+        => LocalAspireSkills.Find(working, workspaceRoot, _context.Home, TestContext.Current.CancellationToken)
+            .Select(static copy => (copy.Directory, copy.Scope))
+            .ToArray();
 
     public void Dispose() => _context.Dispose();
 }

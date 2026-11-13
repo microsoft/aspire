@@ -28,13 +28,13 @@
         <note />
       </trans-unit>
       <trans-unit id="AspireSkillsFix">
-        <source>Delete these files, then run 'aspire agent init --skills aspire'.</source>
-        <target state="new">Delete these files, then run 'aspire agent init --skills aspire'.</target>
-        <note />
+        <source>Run 'aspire agent init' to configure skill sources and remove these copies.</source>
+        <target state="new">Run 'aspire agent init' to configure skill sources and remove these copies.</target>
+        <note>'aspire agent init' is a command and is not localizable.</note>
       </trans-unit>
-      <trans-unit id="AspireSkillsInspectionFailedMessage">
-        <source>Could not inspect local Aspire skills</source>
-        <target state="new">Could not inspect local Aspire skills</target>
+      <trans-unit id="AspireSkillsMessage">
+        <source>Found static copies of Aspire skills.</source>
+        <target state="new">Found static copies of Aspire skills.</target>
         <note />
       </trans-unit>
       <trans-unit id="ChannelSuffixFormat">
@@ -536,11 +536,6 @@
         <source>Environment checks timed out after {0} seconds.</source>
         <target state="translated">Las comprobaciones del entorno han caducado tras {0} segundos.</target>
         <note>{0} is the total timeout in seconds.</note>
-      </trans-unit>
-      <trans-unit id="FilesHeader">
-        <source>Files:</source>
-        <target state="new">Files:</target>
-        <note />
       </trans-unit>
       <trans-unit id="HeaderInstallations">
         <source>Aspire CLI Installations</source>

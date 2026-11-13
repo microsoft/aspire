@@ -282,15 +282,42 @@
   <data name="InitCommand_AspireSkillChoice" xml:space="preserve">
     <value>Agent assets from configured skill sources</value>
   </data>
+  <data name="InitCommand_RemoveSkillCopiesOptionDescription" xml:space="preserve">
+    <value>Remove copied Aspire skills when the Aspire skills plugin replaces them at the selected scope. Defaults to false</value>
+  </data>
+  <data name="InitCommand_DeleteSkillCopyPrompt" xml:space="preserve">
+    <value>Delete this copied skill folder?</value>
+  </data>
+  <data name="InitCommand_DeleteSkillCopiesPrompt" xml:space="preserve">
+    <value>Delete {0} copied skill folders?</value>
+    <comment>{0} is the number of skill folders, always greater than one.</comment>
+  </data>
+  <data name="InitCommand_SkillCopiesFound" xml:space="preserve">
+    <value>Found copied Aspire skills that the Aspire skills plugin now provides:</value>
+  </data>
+  <data name="InitCommand_KeptSkillCopies" xml:space="preserve">
+    <value>Kept copied Aspire skills in {0}</value>
+    <comment>{0} lists the copied skill folder paths, separated by commas.</comment>
+  </data>
+  <data name="InitCommand_SkillCopiesRequirePlugin" xml:space="preserve">
+    <value>Copies are only removed when the Aspire skills plugin is configured and enabled at the selected scope for every selected agent.</value>
+  </data>
   <data name="InitCommand_FailedTarget" xml:space="preserve">
     <value>Failed to configure Aspire plugin:
   {0}</value>
     <comment>{0} lists each agent's configuration path and failure details, one target per line.</comment>
   </data>
-  <data name="InitCommand_LocalSkillsConflict" xml:space="preserve">
-    <value>Local Aspire skill files may override plugin skills
-{0}</value>
-    <comment>{0} lists the local skill entry-point paths, one per line.</comment>
+  <data name="InitCommand_RemovedSkillCopies" xml:space="preserve">
+    <value>Removed copied Aspire skills in {0}</value>
+    <comment>{0} lists the removed skill folder paths, separated by commas.</comment>
+  </data>
+  <data name="InitCommand_RemoveSkillCopyFailed" xml:space="preserve">
+    <value>Could not remove copied Aspire skill '{0}': {1}</value>
+    <comment>{0} is the skill directory path, and {1} is the failure reason.</comment>
+  </data>
+  <data name="InitCommand_SkillCopyBehindLink" xml:space="preserve">
+    <value>It is reached through a linked folder that may be shared. Remove it manually if it is no longer needed.</value>
+    <comment>Failure reason shown after InitCommand_RemoveSkillCopyFailed.</comment>
   </data>
   <data name="InitCommand_SkillSourcesExplanation" xml:space="preserve">
     <value>One or more skill sources are configured. A skill source lets an organization share skills to customize your development experience.</value>
@@ -307,8 +334,5 @@
   <data name="InitCommand_ConfigurationTarget" xml:space="preserve">
     <value>{0}: {1}</value>
     <comment>{0} is the agent name, and {1} lists its configuration paths separated by commas.</comment>
-  </data>
-  <data name="LocalSkills_ReadFailed" xml:space="preserve">
-    <value>Could not check local Aspire skills at '{0}': {1}</value>
   </data>
 </root>

@@ -456,11 +456,6 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
         await AgentConfigurationTestContext.WriteAsync(skillPath, skill);
         var prompts = new List<string>();
         var warnings = new List<string>();
-        var expectedWarnings = new[]
-        {
-            string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_LocalSkillsConflict,
-                "  .agents/skills/aspire/SKILL.md")
-        };
         var interaction = new TestInteractionService
         {
             DisplayMessageCallback = (emoji, message, _) =>
@@ -470,7 +465,7 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
                     warnings.Add(message);
                 }
             },
-            PromptForSelectionsCallback = (prompt, choices, _, _) =>
+            PromptForSelectionsCallback = (prompt, choices, formatter, _) =>
             {
                 prompts.Add(prompt);
                 if (prompt == AgentCommandStrings.InitCommand_SelectAgentsPrompt)
@@ -478,8 +473,9 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
                     return choices.Cast<IAgentClient>().Where(client => string.Equals(client.Id, "copilot", StringComparisons.AgentClientId)).Cast<object>().ToArray();
                 }
                 Assert.Equal(AgentCommandStrings.InitCommand_SelectSkills, prompt);
-                Assert.Equal(expectedWarnings, warnings);
+                Assert.Empty(warnings);
                 Assert.Equal(["aspire", "playwright-cli"], choices.Cast<string>());
+                Assert.Equal($"aspire — {AgentCommandStrings.InitCommand_AspireSkillChoice}", formatter("aspire"));
                 return ["aspire"];
             },
             ConfirmCallback = (prompt, _) =>
@@ -498,7 +494,7 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
                         "Global (In your home directory, available across all projects)"
                     ],
                     choices.Cast<object>().Select(formatter));
-                Assert.Equal(expectedWarnings, warnings);
+                Assert.Empty(warnings);
                 Assert.Empty(homeDirectory.GetFileSystemInfos());
                 return AgentConfigurationScope.Global;
             }
@@ -518,7 +514,7 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
             [AgentCommandStrings.InitCommand_SelectAgentsPrompt, AgentCommandStrings.InitCommand_SelectSkills,
                 AgentCommandStrings.InitCommand_ConfigureMcpServerPrompt, AgentCommandStrings.InitCommand_SelectScopePrompt],
             prompts);
-        Assert.Equal(expectedWarnings, warnings);
+        Assert.Empty(warnings);
         Assert.Equal(skill, await File.ReadAllTextAsync(skillPath));
         var copilot = provider.GetServices<IAgentClient>().Single(client =>
             string.Equals(client.Id, "copilot", StringComparisons.AgentClientId));
@@ -528,21 +524,14 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData(false, false)]
-    [InlineData(false, true)]
-    [InlineData(true, false)]
-    [InlineData(true, true)]
-    public async Task AgentInit_AspireConfigurationErrors_OnlyBlockAspireSelection(bool invalidSource, bool configureAspire)
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AgentInit_AspireConfigurationErrors_OnlyBlockAspireSelection(bool configureAspire)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var homeDirectory = workspace.CreateDirectory("fake-home");
         await File.WriteAllTextAsync(Path.Combine(workspace.WorkspaceRoot.FullName, "aspire.config.json"),
-            invalidSource ? """{"skillSources":{"default":{"repository":""}}}""" : "{}");
-        if (!invalidSource)
-        {
-            // A directory at SKILL.md makes the scan fail on every platform.
-            Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", "aspire", "SKILL.md"));
-        }
+            """{"skillSources":{"default":{"repository":""}}}""");
         var skillsPrompted = false;
         var interaction = new TestInteractionService
         {
@@ -1604,9 +1593,8 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData("copied")]
     [InlineData("shared")]
-    [InlineData("unreadable")]
     [InlineData("malformed")]
-    public async Task ExistingSources_WarnForCopiedSkillsButStopForInvalidSettings(string existing)
+    public async Task ExistingSources_RemoveCopiedSkillsButStopForInvalidSettings(string existing)
     {
         using var context = new AgentConfigurationTestContext(outputHelper);
         var hasCopiedSkills = existing is "copied" or "shared";
@@ -1614,14 +1602,7 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
             ? Path.Combine(context.CopilotDirectory, "settings.json")
             : Path.Combine(context.Home.FullName, ".agents", "skills", "aspire", "SKILL.md");
         var content = hasCopiedSkills ? "My customized Aspire instructions." : "{broken";
-        if (existing == "unreadable")
-        {
-            Directory.CreateDirectory(path);
-        }
-        else
-        {
-            await AgentConfigurationTestContext.WriteAsync(path, content);
-        }
+        await AgentConfigurationTestContext.WriteAsync(path, content);
         var projectDirectory = existing == "shared" ? ".claude" : ".agents";
         var projectSkillPath = Path.Combine(context.Project.FullName, projectDirectory, "skills", "aspire-init", "SKILL.md");
         if (hasCopiedSkills)
@@ -1642,26 +1623,20 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
         var before = GetFilesWithoutCliLogs(context.Workspace.WorkspaceRoot);
 
         var result = provider.GetRequiredService<RootCommand>().Parse(
-            "agent init --agents copilot --scope global --skills all --mcp");
+            "agent init --agents copilot --scope global --skills all --mcp --remove-skill-copies");
 
         Assert.Equal(hasCopiedSkills ? CliExitCodes.Success : CliExitCodes.InvalidCommand,
             await result.InvokeAsync().DefaultTimeout());
-        if (existing == "unreadable")
-        {
-            Assert.True(Directory.Exists(path));
-        }
-        else
+        if (existing == "malformed")
         {
             Assert.Equal(content, await File.ReadAllTextAsync(path));
         }
         if (hasCopiedSkills)
         {
             Assert.Empty(interaction.DisplayedErrors);
-            Assert.Contains(interaction.DisplayedMessages, message => message.Emoji.Equals(KnownEmojis.PoliceCarLight) &&
-                message.Message == string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_LocalSkillsConflict,
-                    string.Join(System.Environment.NewLine,
-                        $"  {projectDirectory}/skills/aspire-init/SKILL.md",
-                        "  ~/.agents/skills/aspire/SKILL.md")));
+            Assert.Contains(interaction.DisplayedMessages, message => message.Emoji.Equals(KnownEmojis.FileFolder) &&
+                message.Message == string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_RemovedSkillCopies, "~/.agents/skills/aspire"));
+            Assert.False(Directory.Exists(Path.GetDirectoryName(path)));
             Assert.Equal(content, await File.ReadAllTextAsync(projectSkillPath));
             Assert.True(File.Exists(context.Copilot.GetIntegrationConfigPath(AgentConfigurationScope.Global, context.Project)));
             Assert.True(File.Exists(context.Copilot.GetMcpConfigPath(AgentConfigurationScope.Global, context.Project)));
@@ -1671,18 +1646,10 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
         else
         {
             Assert.Single(interaction.DisplayedErrors);
-            if (existing == "malformed")
-            {
-                var mcpPath = context.Copilot.GetMcpConfigPath(AgentConfigurationScope.Global, context.Project);
-                Assert.Equal(before.Append(mcpPath).Order(StringComparer.Ordinal),
-                    GetFilesWithoutCliLogs(context.Workspace.WorkspaceRoot));
-                Assert.Equal(["copilot"], hooks.SelectedClientIds);
-            }
-            else
-            {
-                Assert.Equal(before, GetFilesWithoutCliLogs(context.Workspace.WorkspaceRoot));
-                Assert.Empty(hooks.SelectedClientIds);
-            }
+            var mcpPath = context.Copilot.GetMcpConfigPath(AgentConfigurationScope.Global, context.Project);
+            Assert.Equal(before.Append(mcpPath).Order(StringComparer.Ordinal),
+                GetFilesWithoutCliLogs(context.Workspace.WorkspaceRoot));
+            Assert.Equal(["copilot"], hooks.SelectedClientIds);
         }
     }
 

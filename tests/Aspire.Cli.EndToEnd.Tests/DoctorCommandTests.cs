@@ -64,17 +64,19 @@ public sealed class DoctorCommandTests(ITestOutputHelper output)
 
         var text = await File.ReadAllTextAsync(
             Path.Combine(workspace.Path, "doctor-skills.txt"), TestContext.Current.CancellationToken);
-        string[] expectedFiles = [".agents/skills/aspire/SKILL.md", "~/.agents/skills/aspire/SKILL.md"];
-        Assert.Contains("Local Aspire skill files may override plugin skills", text, StringComparison.Ordinal);
+        string[] expectedFiles = [".agents/skills/aspire", "~/.agents/skills/aspire"];
+        Assert.Contains("Found static copies of Aspire skills.", text, StringComparison.Ordinal);
         var lines = text.Split('\n', StringSplitOptions.TrimEntries);
-        Assert.All(expectedFiles, file => Assert.Contains(file, lines));
+        Assert.All(expectedFiles, file => Assert.Contains($"{file} (copilot, opencode)", lines));
 
         using var document = JsonDocument.Parse(await File.ReadAllTextAsync(
             Path.Combine(workspace.Path, "doctor-skills.json"), TestContext.Current.CancellationToken));
         var check = Assert.Single(document.RootElement.GetProperty("checks").EnumerateArray(),
             check => check.GetProperty("name").GetString() == "aspire-skill-sources");
         Assert.Equal("warning", check.GetProperty("status").GetString());
-        Assert.Equal(expectedFiles, check.GetProperty("files").EnumerateArray().Select(file => file.GetString()));
+        Assert.Equal(
+            expectedFiles.Select(file => $"{file} (copilot, opencode)"),
+            check.GetProperty("details").GetString()!.Split('\n'));
         var workspaceRoot = $"/workspace/{workspace.WorkspaceRoot.Name}";
         Assert.Equal(workspaceRoot, check.GetProperty("metadata").GetProperty("workspaceRoot").GetString());
 

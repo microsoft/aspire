@@ -1,7 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Cli.Agents;
+using System.Globalization;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.Agents;
 using Aspire.Cli.Tests.TestServices;
@@ -20,51 +20,42 @@ public class AspireSkillsCheckTests(ITestOutputHelper outputHelper) : IDisposabl
     }
 
     [Fact]
-    public async Task CheckAsync_WithDisabledSources_StillWarnsAboutRegisteredStaticSkills()
+    public async Task CheckAsync_WithWorkspaceAndUserLevelCopies_ReportsBothWithoutModifyingThem()
     {
-        await _context.ConfigureIntegrationAsync(AgentConfigurationScope.Global, [_context.Copilot]);
-        var skill = Path.Combine(_context.Home.FullName, ".agents", "skills", "aspire", "SKILL.md");
-        await AgentConfigurationTestContext.WriteAsync(skill, "user guidance");
-        await AgentConfigurationTestContext.WriteAsync(Path.Combine(_context.Project.FullName, "aspire.config.json"),
-            """{"skillSources":{"default":{"enabled":false}}}""");
+        var project = Path.Combine(_context.Project.FullName, ".claude", "skills", "aspire-init", "SKILL.md");
+        var user = Path.Combine(_context.Home.FullName, ".agents", "skills", "aspire", "SKILL.md");
+        await AgentConfigurationTestContext.WriteAsync(project, "project guidance");
+        await AgentConfigurationTestContext.WriteAsync(user, "user guidance");
 
         var result = Assert.Single(await CreateCheck().CheckAsync(TestContext.Current.CancellationToken));
 
+        Assert.Equal(AspireSkillsCheck.CheckName, result.Name);
         Assert.Equal(EnvironmentCheckStatus.Warning, result.Status);
-        Assert.Equal(["~/.agents/skills/aspire/SKILL.md"], result.Files);
-        Assert.True(_context.Copilot.HasIntegrationRegistration(_context.Project, AgentConfigurationScope.Global, _context.Sources));
-        Assert.Equal("user guidance", await File.ReadAllTextAsync(skill));
+        Assert.Equal(DoctorCommandStrings.AspireSkillsFix, result.Fix);
+        Assert.Equal(
+            $"""
+            {string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_LocationWithAgents, ".claude/skills/aspire-init", "claude")}
+            {string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_LocationWithAgents, "~/.agents/skills/aspire", "copilot, opencode")}
+            """.ReplaceLineEndings("\n"),
+            result.Details);
+        Assert.Equal("project guidance", await File.ReadAllTextAsync(project));
+        Assert.Equal("user guidance", await File.ReadAllTextAsync(user));
     }
 
     [Fact]
-    public async Task CheckAsync_WithSkillsOutsideWorkspaceAndHome_PreservesAbsoluteDisplayPath()
+    public async Task CheckAsync_WorkspaceAtHome_ReportsSharedLocationOnce()
     {
-        var external = _context.Workspace.CreateDirectory("[external]");
-        _context.SetVariable("OPENCODE_CONFIG_DIR", external.FullName);
-        var skill = Path.Combine(external.FullName, "skills", "aspire", "SKILL.md");
-        await AgentConfigurationTestContext.WriteAsync(skill, "static guidance");
+        await AgentConfigurationTestContext.WriteAsync(
+            Path.Combine(_context.Home.FullName, ".agents", "skills", "aspire", "SKILL.md"), "shared guidance");
+        var check = new AspireSkillsCheck(new TestGitRepository(),
+            TestExecutionContextHelper.CreateExecutionContext(_context.Home, homeDirectory: _context.Home));
 
-        var result = Assert.Single(await CreateCheck().CheckAsync(TestContext.Current.CancellationToken));
+        var result = Assert.Single(await check.CheckAsync(TestContext.Current.CancellationToken));
 
-        Assert.Equal([skill], result.Files);
-    }
-
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task CheckAsync_WithUnreadableSkill_ReportsInspectionWarning(bool global)
-    {
-        var root = global ? _context.Home : _context.Project;
-        var unreadable = Path.Combine(root.FullName, ".agents", "skills", "aspire", "SKILL.md");
-        Directory.CreateDirectory(unreadable);
-
-        var result = Assert.Single(await CreateCheck().CheckAsync(TestContext.Current.CancellationToken));
-
-        Assert.Equal(EnvironmentCheckStatus.Warning, result.Status);
-        Assert.Equal(DoctorCommandStrings.AspireSkillsInspectionFailedMessage, result.Message);
-        Assert.Contains(unreadable, result.Details, StringComparison.Ordinal);
-        Assert.Null(result.Fix);
-        Assert.True(Directory.Exists(unreadable));
+        Assert.Equal(DoctorCommandStrings.AspireSkillsFix, result.Fix);
+        Assert.Equal(
+            string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_LocationWithAgents, ".agents/skills/aspire", "copilot, opencode"),
+            result.Details);
     }
 
     [Fact]
@@ -75,7 +66,7 @@ public class AspireSkillsCheckTests(ITestOutputHelper outputHelper) : IDisposabl
     }
 
     private AspireSkillsCheck CreateCheck()
-        => new(_context.Clients, new TestGitRepository(), _context.ExecutionContext);
+        => new(new TestGitRepository(), _context.ExecutionContext);
 
     public void Dispose() => _context.Dispose();
 }
