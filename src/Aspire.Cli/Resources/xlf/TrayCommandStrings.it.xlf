@@ -3,12 +3,12 @@
   <file datatype="xml" source-language="en" target-language="it" original="../TrayCommandStrings.resx">
     <body>
       <trans-unit id="BundleRequired">
-        <source>The experimental Aspire tray requires a leased, versioned CLI bundle. No usable bundle was found. Install an Aspire bundle that includes the tray companion for your desktop.</source>
+        <source>The Aspire tray requires a leased, versioned CLI bundle. No usable bundle was found. Install an Aspire bundle that includes the tray companion for your desktop.</source>
         <target state="needs-review-translation">L'area sperimentale di Aspire richiede un pacchetto CLI concesso in licenza e con versione. Non è stato trovato alcun pacchetto utilizzabile. Installare un pacchetto Aspire per Windows o macOS che includa il componente complementare dell'area.</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Manage the desktop tray companion (Experimental)</source>
+        <source>Manage the desktop tray companion (Preview)</source>
         <target state="needs-review-translation">Gestire il componente complementare dell'area di Windows o macOS (sperimentale)</target>
         <note />
       </trans-unit>
@@ -23,8 +23,8 @@
         <note>{0} is the start or stop subcommand name.</note>
       </trans-unit>
       <trans-unit id="NativeCliRequired">
-        <source>Starting the experimental tray requires an installed native Aspire CLI executable. Managed development builds and 'dotnet aspire.dll' are not supported.</source>
-        <target state="translated">Per avviare l'area sperimentale è necessario che sia installato un eseguibile nativo della CLI di Aspire. Le compilazioni di sviluppo gestite e 'dotnet aspire.dll' non sono supportate.</target>
+        <source>Starting the tray requires an installed native Aspire CLI executable. Managed development builds and 'dotnet aspire.dll' are not supported.</source>
+        <target state="needs-review-translation">Per avviare l'area sperimentale è necessario che sia installato un eseguibile nativo della CLI di Aspire. Le compilazioni di sviluppo gestite e 'dotnet aspire.dll' non sono supportate.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoTrayHost">
@@ -43,8 +43,8 @@
         <note />
       </trans-unit>
       <trans-unit id="StartDescription">
-        <source>Start or restore the tray icon (Experimental)</source>
-        <target state="translated">Avviare o ripristinare l'icona nell'area (sperimentale)</target>
+        <source>Start or restore the tray icon (Preview)</source>
+        <target state="needs-review-translation">Avviare o ripristinare l'icona nell'area (sperimentale)</target>
         <note />
       </trans-unit>
       <trans-unit id="Started">
@@ -53,8 +53,8 @@
         <note />
       </trans-unit>
       <trans-unit id="StopDescription">
-        <source>Stop the tray without stopping AppHosts (Experimental)</source>
-        <target state="translated">Arrestare l'area senza arrestare gli AppHost (sperimentale)</target>
+        <source>Stop the tray without stopping AppHosts (Preview)</source>
+        <target state="needs-review-translation">Arrestare l'area senza arrestare gli AppHost (sperimentale)</target>
         <note />
       </trans-unit>
       <trans-unit id="Stopped">
@@ -63,7 +63,7 @@
         <note />
       </trans-unit>
       <trans-unit id="UnsupportedPlatform">
-        <source>The experimental Aspire tray supports Windows, macOS, and glibc Linux x64/ARM64 installations. Linux requires a graphical desktop with StatusNotifierItem support, GTK 3, and an AppIndicator library.</source>
+        <source>The Aspire tray supports Windows, macOS, and glibc Linux x64/ARM64 installations. Linux requires a graphical desktop with StatusNotifierItem support, GTK 3, and an AppIndicator library.</source>
         <target state="needs-review-translation">L'area sperimentale di Aspire supporta le installazioni x64/ARM64 di Windows e macOS. Linux non è supportato.</target>
         <note />
       </trans-unit>
