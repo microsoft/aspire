@@ -1037,6 +1037,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
     [InlineData("project-scope")]
     [InlineData("sources-disabled")]
     [InlineData("opencode-without-catalog")]
+    [InlineData("unrelated-plugin")]
     public async Task Remote_KeepsSkillCopiesWhenAspireSkillsAreNotInstalledAtTheirScope(string reason)
     {
         using var context = new AgentConfigurationTestContext(outputHelper);
@@ -1058,6 +1059,10 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             case "opencode-without-catalog":
                 await AgentConfigurationTestContext.WriteAsync(configPath,
                     """{"skillSources":{"default":{"enabled":false},"team":{"repository":"example/team"}}}""");
+                break;
+            case "unrelated-plugin":
+                await AgentConfigurationTestContext.WriteAsync(configPath,
+                    """{"skillSources":{"default":{"enabled":false},"team":{"repository":"example/team","plugins":["deployment"]}}}""");
                 break;
         }
         var interaction = new TestInteractionService();

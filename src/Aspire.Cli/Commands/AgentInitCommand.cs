@@ -541,7 +541,7 @@ internal sealed class AgentInitCommand : BaseCommand
             // configured sources that replaced them.
             var canRemoveSkillCopies =
                 !registrationResults.Any(static result => result.Status is AgentConfigurationStatus.Failed) &&
-                selectedClients.All(client => HasAspireSkillsRegistration(client, workspaceRoot, scope, skillSources));
+                selectedClients.All(client => HasAspireSkillsRegistration(client, workspaceRoot, scope));
             var skillCopiesToRemove = canRemoveSkillCopies
                 ? LocalAspireSkills.Find(ExecutionContext.WorkingDirectory, workspaceRoot, ExecutionContext.HomeDirectory, cancellationToken)
                     .Where(copy => copy.Scope == scope && selectedClients.Any(client =>
@@ -1097,11 +1097,13 @@ internal sealed class AgentInitCommand : BaseCommand
     }
 
     private static bool HasAspireSkillsRegistration(IAgentClient client, DirectoryInfo workspaceRoot,
-        AgentConfigurationScope scope, IReadOnlyList<SkillSource> sources)
+        AgentConfigurationScope scope)
     {
         try
         {
-            return client.HasIntegrationRegistration(workspaceRoot, scope, sources);
+            // Empty sources limit the check to the built-in aspire-skills plugin or catalog. A configured
+            // source can enable unrelated plugins, which would not replace the copied Aspire skills.
+            return client.HasIntegrationRegistration(workspaceRoot, scope, []);
         }
         catch (Exception ex) when (ex is JsonException or InvalidOperationException or IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
         {
