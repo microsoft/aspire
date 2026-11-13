@@ -47,6 +47,13 @@ public class BrowserTimeProvider : TimeProvider, ITimeFormatProvider, ITimeZoneN
             shortNames = null;
         }
 
+        SetBrowserTimeZone(timeZoneInfo, shortNames);
+    }
+
+    // Separate from the ID lookup so tests can use a custom zone: system zone data differs between operating systems,
+    // for example Windows and IANA data disagree on Africa/Casablanca's offsets around Ramadan.
+    internal void SetBrowserTimeZone(TimeZoneInfo timeZoneInfo, IReadOnlyList<BrowserTimeZoneShortName>? shortNames)
+    {
         _timeZoneShortNames = shortNames ?? [];
 
         _logger.LogDebug("Browser time zone set to '{TimeZone}' with UTC offset {UtcOffset}.", timeZoneInfo.Id, timeZoneInfo.BaseUtcOffset);

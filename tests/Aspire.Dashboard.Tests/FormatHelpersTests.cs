@@ -196,9 +196,15 @@ public class FormatHelpersTests
     [Fact]
     public void FormatTooltipDateTime_OffsetWithoutShortName_UsesUtcOffset()
     {
-        // Africa/Casablanca is UTC+1 in both January and July, the dates the browser samples, but UTC+0 during Ramadan.
+        // Modeled on Africa/Casablanca, which is UTC+1 in both January and July, the dates the browser samples, but UTC+0
+        // during Ramadan. A custom zone keeps the test independent of each operating system's time zone data.
+        var ramadan = TimeZoneInfo.AdjustmentRule.CreateAdjustmentRule(
+            new DateTime(2026, 1, 1), new DateTime(2026, 12, 31), TimeSpan.FromHours(-1),
+            TimeZoneInfo.TransitionTime.CreateFixedDateRule(new DateTime(1, 1, 1, 3, 0, 0), 2, 15),
+            TimeZoneInfo.TransitionTime.CreateFixedDateRule(new DateTime(1, 1, 1, 2, 0, 0), 3, 22));
+        var casablanca = TimeZoneInfo.CreateCustomTimeZone("Test/Casablanca", TimeSpan.FromHours(1), "Test/Casablanca", "Test/Casablanca", "Test/Casablanca Ramadan", [ramadan]);
         var provider = CreateTimeProvider();
-        provider.SetBrowserTimeZone("Africa/Casablanca", [new BrowserTimeZoneShortName { OffsetMinutes = 60, Name = "GMT+1" }]);
+        provider.SetBrowserTimeZone(casablanca, [new BrowserTimeZoneShortName { OffsetMinutes = 60, Name = "GMT+1" }]);
 
         Assert.Equal("Jan 15, 2026, 1:00 PM GMT+1", FormatHelpers.FormatTooltipDateTime(provider, new DateTime(2026, 1, 15, 12, 0, 0, DateTimeKind.Utc), CultureInfo.GetCultureInfo("en-US")), ignoreWhiteSpaceDifferences: true);
         Assert.Equal("Mar 1, 2026, 12:00 PM UTC", FormatHelpers.FormatTooltipDateTime(provider, new DateTime(2026, 3, 1, 12, 0, 0, DateTimeKind.Utc), CultureInfo.GetCultureInfo("en-US")), ignoreWhiteSpaceDifferences: true);
