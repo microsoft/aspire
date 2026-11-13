@@ -280,7 +280,26 @@
     <value>Invalid skill/tool selection '{0}'. Use {1}, '{2}', or '{3}'.</value>
   </data>
   <data name="InitCommand_AspireSkillChoice" xml:space="preserve">
-    <value>Agent assets from configured skill sources (also removes static copies of Aspire skills, if applicable)</value>
+    <value>Agent assets from configured skill sources</value>
+  </data>
+  <data name="InitCommand_KeepSkillCopiesOptionDescription" xml:space="preserve">
+    <value>Keep copied Aspire skill folders when the Aspire skills plugin replaces them at the selected scope.     Omit to be asked before they are deleted.</value>
+  </data>
+  <data name="InitCommand_SkillCopiesFound" xml:space="preserve">
+    <value>Found copied Aspire skills that the Aspire skills plugin now provides.</value>
+  </data>
+  <data name="InitCommand_SkillCopiesDeleteDetail" xml:space="preserve">
+    <value>Deleting removes each folder and all files in it.</value>
+  </data>
+  <data name="InitCommand_DeleteSkillCopyPrompt" xml:space="preserve">
+    <value>Delete this copied skill folder?</value>
+  </data>
+  <data name="InitCommand_DeleteSkillCopiesPrompt" xml:space="preserve">
+    <value>Delete these {0} copied skill folders?</value>
+    <comment>{0} is the number of skill folders, always greater than one.</comment>
+  </data>
+  <data name="InitCommand_KeptSkillCopies" xml:space="preserve">
+    <value>Kept copied Aspire skills.</value>
   </data>
   <data name="InitCommand_FailedTarget" xml:space="preserve">
     <value>Failed to configure Aspire plugin:

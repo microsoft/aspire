@@ -65,6 +65,7 @@ internal sealed class AgentInitCommand : BaseCommand
         _projectLocator = projectLocator;
         Options.Add(s_workspaceRootOption);
         Options.Add(s_mcpOption);
+        Options.Add(s_keepSkillCopiesOption);
         Options.Add(AgentsOption);
         Options.Add(s_scopeOption);
         Options.Add(s_skillsOption);
@@ -90,6 +91,12 @@ internal sealed class AgentInitCommand : BaseCommand
     internal static readonly Option<bool?> s_mcpOption = new("--mcp")
     {
         Description = AgentCommandStrings.InitCommand_McpOptionDescription,
+        Recursive = true
+    };
+
+    internal static readonly Option<bool?> s_keepSkillCopiesOption = new("--keep-skill-copies")
+    {
+        Description = AgentCommandStrings.InitCommand_KeepSkillCopiesOptionDescription,
         Recursive = true
     };
 
@@ -235,7 +242,7 @@ internal sealed class AgentInitCommand : BaseCommand
         {
             return await ExecuteAgentInitAsync(
                 workspaceRoot, configurationDirectory, agentsBinding, skillsBinding,
-                scopeBinding, mcpBinding: null, cancellationToken);
+                scopeBinding, mcpBinding: null, PromptBinding.CreateDefault(true), cancellationToken);
         }
 
         return new(CliExitCodes.Success, [], []);
@@ -251,6 +258,7 @@ internal sealed class AgentInitCommand : BaseCommand
             PromptBinding.Create(parseResult, s_skillsOption, CommonAgentApplicators.AspireSkillName),
             PromptBinding.Create(parseResult, s_scopeOption, AgentConfigurationScope.Project),
             PromptBinding.CreateBoolConfirm(parseResult, s_mcpOption, defaultValue: false),
+            PromptBinding.CreateInvertedBoolConfirm(parseResult, s_keepSkillCopiesOption, defaultValue: true),
             cancellationToken);
         return CommandResult.FromExitCode(result.ExitCode);
     }
@@ -316,6 +324,7 @@ internal sealed class AgentInitCommand : BaseCommand
         PromptBinding<string?> skillsBinding,
         PromptBinding<AgentConfigurationScope> scopeBinding,
         PromptBinding<bool>? mcpBinding,
+        PromptBinding<bool> deleteSkillCopiesBinding,
         CancellationToken cancellationToken)
     {
         var (agentsProvided, requestedAgents) = agentsBinding.Resolve();
@@ -535,8 +544,14 @@ internal sealed class AgentInitCommand : BaseCommand
 
             // Removal runs before display so removed copies are listed under the sources that replaced them.
             var skillCopiesToRemove = FindSkillCopiesReplacedAtSelectedScope(registrationResults, selectedClients, workspaceRoot, scope, cancellationToken);
-            var (removedSkillCopies, skillCopyFailures) = RemoveSkillCopies(skillCopiesToRemove, workspaceRoot);
+            var deleteSkillCopies = skillCopiesToRemove.Length > 0 &&
+                await ConfirmSkillCopyDeletionAsync(skillCopiesToRemove, workspaceRoot, deleteSkillCopiesBinding, cancellationToken);
+            var (removedSkillCopies, skillCopyFailures) = RemoveSkillCopies(deleteSkillCopies ? skillCopiesToRemove : [], workspaceRoot);
             hasErrors |= DisplayRemoteConfigurationResults(registrationResults, removedSkillCopies, workspaceRoot);
+            if (skillCopiesToRemove.Length > 0 && !deleteSkillCopies)
+            {
+                InteractionService.DisplayMessage(KnownEmojis.FileFolder, AgentCommandStrings.InitCommand_KeptSkillCopies);
+            }
             foreach (var failure in skillCopyFailures)
             {
                 InteractionService.DisplayError(failure);
@@ -1050,10 +1065,13 @@ internal sealed class AgentInitCommand : BaseCommand
         IReadOnlyList<IAgentClient> selectedClients, DirectoryInfo workspaceRoot, AgentConfigurationScope scope,
         CancellationToken cancellationToken)
     {
+        // The saved configuration proves the replacement lives at the selected scope, but a local or managed
+        // settings file can still disable it, so the merged settings must enable it too.
         if (registrationResults.Any(static result => result.Status is AgentConfigurationStatus.Failed) ||
             !selectedClients.All(client => registrationResults.Any(result =>
                 result.Clients.Contains(client) && result.Configuration is { } configuration &&
-                ConfigurationContainsAspireSkills(client, configuration))))
+                ConfigurationContainsAspireSkills(client, configuration)) &&
+                HasAspireSkillsRegistration(client, workspaceRoot, scope)))
         {
             return [];
         }
@@ -1063,6 +1081,27 @@ internal sealed class AgentInitCommand : BaseCommand
                 copy.Owners.Contains(client.Id, StringComparers.AgentClientId)))
             .Select(copy => copy.Directory)
             .ToArray();
+    }
+
+    private async Task<bool> ConfirmSkillCopyDeletionAsync(string[] skillDirectories, DirectoryInfo workspaceRoot,
+        PromptBinding<bool> deleteSkillCopiesBinding, CancellationToken cancellationToken)
+    {
+        if (!deleteSkillCopiesBinding.Resolve().WasProvided && _hostEnvironment.SupportsInteractiveInput)
+        {
+            var folders = skillDirectories.Select(directory =>
+                $"    {AgentPath.GetDisplayPath(directory, workspaceRoot, ExecutionContext).EscapeMarkup()}");
+            InteractionService.DisplayMessage(KnownEmojis.PoliceCarLight, string.Join(Environment.NewLine,
+            [
+                $"[yellow]{AgentCommandStrings.InitCommand_SkillCopiesFound.EscapeMarkup()}[/]",
+                .. folders,
+                $"[dim]{AgentCommandStrings.InitCommand_SkillCopiesDeleteDetail.EscapeMarkup()}[/]"
+            ]), allowMarkup: true);
+        }
+
+        var prompt = skillDirectories.Length == 1
+            ? AgentCommandStrings.InitCommand_DeleteSkillCopyPrompt
+            : string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_DeleteSkillCopiesPrompt, skillDirectories.Length);
+        return await InteractionService.PromptConfirmAsync(prompt, deleteSkillCopiesBinding, cancellationToken);
     }
 
     private (List<string> Removed, List<string> Failures) RemoveSkillCopies(IReadOnlyList<string> skillDirectories, DirectoryInfo workspaceRoot)

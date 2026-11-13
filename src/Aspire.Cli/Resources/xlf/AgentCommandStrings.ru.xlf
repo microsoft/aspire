@@ -88,8 +88,8 @@
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_AspireSkillChoice">
-        <source>Agent assets from configured skill sources (also removes static copies of Aspire skills, if applicable)</source>
-        <target state="new">Agent assets from configured skill sources (also removes static copies of Aspire skills, if applicable)</target>
+        <source>Agent assets from configured skill sources</source>
+        <target state="new">Agent assets from configured skill sources</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_ConfigurationTarget">
@@ -111,6 +111,16 @@
         <source>Configured sources in {0}</source>
         <target state="new">Configured sources in {0}</target>
         <note>{0} lists the configuration file paths with their agent names in parentheses, separated by commas.</note>
+      </trans-unit>
+      <trans-unit id="InitCommand_DeleteSkillCopiesPrompt">
+        <source>Delete these {0} copied skill folders?</source>
+        <target state="new">Delete these {0} copied skill folders?</target>
+        <note>{0} is the number of skill folders, always greater than one.</note>
+      </trans-unit>
+      <trans-unit id="InitCommand_DeleteSkillCopyPrompt">
+        <source>Delete this copied skill folder?</source>
+        <target state="new">Delete this copied skill folder?</target>
+        <note />
       </trans-unit>
       <trans-unit id="InitCommand_Description">
         <source>Initialize configuration and skills for selected agent clients</source>
@@ -189,6 +199,16 @@
         <target state="new">Invalid skill/tool selection '{0}'. Use {1}, '{2}', or '{3}'.</target>
         <note />
       </trans-unit>
+      <trans-unit id="InitCommand_KeepSkillCopiesOptionDescription">
+        <source>Keep copied Aspire skill folders when the Aspire skills plugin replaces them at the selected scope.     Omit to be asked before they are deleted.</source>
+        <target state="new">Keep copied Aspire skill folders when the Aspire skills plugin replaces them at the selected scope.     Omit to be asked before they are deleted.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_KeptSkillCopies">
+        <source>Kept copied Aspire skills.</source>
+        <target state="new">Kept copied Aspire skills.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="InitCommand_LocationWithAgents">
         <source>{0} ({1})</source>
         <target state="new">{0} ({1})</target>
@@ -257,6 +277,16 @@
       <trans-unit id="InitCommand_SharedLocationNotice">
         <source>Shared files may be discovered by agents that aren't selected.</source>
         <target state="translated">Общие файлы могут быть обнаружены невыбранными агентами.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_SkillCopiesDeleteDetail">
+        <source>Deleting removes each folder and all files in it.</source>
+        <target state="new">Deleting removes each folder and all files in it.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_SkillCopiesFound">
+        <source>Found copied Aspire skills that the Aspire skills plugin now provides.</source>
+        <target state="new">Found copied Aspire skills that the Aspire skills plugin now provides.</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_SkillCopyBehindLink">

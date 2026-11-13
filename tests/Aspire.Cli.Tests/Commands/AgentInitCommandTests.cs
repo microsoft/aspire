@@ -1123,6 +1123,83 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         }
     }
 
+    [Theory]
+    [InlineData(" --keep-skill-copies", false, true, false)]
+    [InlineData(" --keep-skill-copies=false", true, true, true)]
+    [InlineData("", true, false, false)]
+    [InlineData("", true, true, true)]
+    public async Task Remote_KeepSkillCopiesOptionControlsSkillCopyDeletion(string option, bool interactive, bool confirm, bool removed)
+    {
+        using var context = new AgentConfigurationTestContext(outputHelper);
+        var skillDirectory = Path.Combine(context.Project.FullName, ".agents", "skills", "aspire");
+        await AgentConfigurationTestContext.WriteAsync(Path.Combine(skillDirectory, "SKILL.md"), "My customized Aspire instructions.");
+        var interaction = new TestInteractionService { ConfirmCallback = (_, _) => confirm };
+        using var provider = context.CreateServiceCollection(outputHelper, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => interactive
+                ? TestHelpers.CreateInteractiveHostEnvironment()
+                : TestHelpers.CreateNonInteractiveHostEnvironment();
+            options.InteractionServiceFactory = _ => interaction;
+        }).BuildServiceProvider();
+
+        var result = provider.GetRequiredService<RootCommand>().Parse(
+            $"agent init --agents copilot --scope project --skills aspire --mcp=false{option}");
+
+        Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
+        Assert.Equal(!removed, Directory.Exists(skillDirectory));
+        var prompted = option.Length == 0;
+        Assert.Equal(prompted ? [AgentCommandStrings.InitCommand_DeleteSkillCopyPrompt] : [],
+            interaction.BooleanPromptCalls.Select(call => call.PromptText));
+        var warnings = interaction.DisplayedMessages.Where(message => message.Emoji.Equals(KnownEmojis.PoliceCarLight)).ToArray();
+        if (prompted)
+        {
+            var warning = Assert.Single(warnings);
+            Assert.Equal(string.Join(Environment.NewLine,
+            [
+                $"[yellow]{AgentCommandStrings.InitCommand_SkillCopiesFound}[/]",
+                "    .agents/skills/aspire",
+                $"[dim]{AgentCommandStrings.InitCommand_SkillCopiesDeleteDetail}[/]"
+            ]), warning.Message);
+        }
+        else
+        {
+            Assert.Empty(warnings);
+        }
+        Assert.Equal(removed ? 0 : 1, interaction.DisplayedMessages.Count(message =>
+            message.Emoji.Equals(KnownEmojis.FileFolder) && message.Message == AgentCommandStrings.InitCommand_KeptSkillCopies));
+    }
+
+    [Theory]
+    [InlineData("copilot", nameof(AgentConfigurationScope.Project), ".github/copilot/settings.local.json")]
+    [InlineData("claude", nameof(AgentConfigurationScope.Project), ".claude/settings.local.json")]
+    [InlineData("copilot", nameof(AgentConfigurationScope.Global), "managed-settings.json")]
+    public async Task Remote_KeepsSkillCopiesWhenAHigherPrecedenceSettingDisablesTheSavedPlugin(
+        string agent, string scopeName, string overridePath)
+    {
+        using var context = new AgentConfigurationTestContext(outputHelper);
+        var scope = Enum.Parse<AgentConfigurationScope>(scopeName);
+        var client = agent == "copilot" ? context.Copilot : context.ClaudeCode;
+        var skillPath = Path.Combine(client.GetSkillBaseDirectory(scope, context.Project), "aspire", "SKILL.md");
+        const string skill = "My customized Aspire instructions.";
+        await AgentConfigurationTestContext.WriteAsync(skillPath, skill);
+        await AgentConfigurationTestContext.WriteAsync(Path.Combine(context.Project.FullName, "aspire.config.json"),
+            """{"skillSources":{"default":{"enabled":false}}}""");
+        await AgentConfigurationTestContext.WriteAsync(client.GetIntegrationConfigPath(scope, context.Project),
+            """{"enabledPlugins":{"aspire@aspire-skills":true}}""");
+        await AgentConfigurationTestContext.WriteAsync(
+            scope is AgentConfigurationScope.Project
+                ? Path.Combine(context.Project.FullName, overridePath)
+                : Path.Combine(AgentPath.GetManagedSettingsDirectory(context.ExecutionContext, context.Environment, "GitHubCopilot", "github-copilot"), overridePath),
+            """{"enabledPlugins":{"aspire@aspire-skills":false}}""");
+        using var provider = context.CreateServiceCollection(outputHelper).BuildServiceProvider();
+
+        var result = provider.GetRequiredService<RootCommand>().Parse(
+            $"agent init --agents {agent} --scope {scope.ToString().ToLowerInvariant()} --skills aspire --mcp=false");
+
+        Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
+        Assert.Equal(skill, await File.ReadAllTextAsync(skillPath));
+    }
+
     [Fact]
     public async Task Remote_RemovesOnlySkillCopiesInFoldersTheSelectedAgentReads()
     {

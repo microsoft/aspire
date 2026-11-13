@@ -223,7 +223,7 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Agent assets from configured skill sources (also removes static copies of Aspire skills, if applicable).
+        ///   Looks up a localized string similar to Agent assets from configured skill sources.
         /// </summary>
         internal static string InitCommand_AspireSkillChoice {
             get {
@@ -462,6 +462,60 @@ namespace Aspire.Cli.Resources {
         internal static string InitCommand_ProjectScope {
             get {
                 return ResourceManager.GetString("InitCommand_ProjectScope", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Keep copied Aspire skill folders when the Aspire skills plugin replaces them at the selected scope.         Omit to be asked before they are deleted..
+        /// </summary>
+        internal static string InitCommand_KeepSkillCopiesOptionDescription {
+            get {
+                return ResourceManager.GetString("InitCommand_KeepSkillCopiesOptionDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Found copied Aspire skills that the Aspire skills plugin now provides..
+        /// </summary>
+        internal static string InitCommand_SkillCopiesFound {
+            get {
+                return ResourceManager.GetString("InitCommand_SkillCopiesFound", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Deleting removes each folder and all files in it..
+        /// </summary>
+        internal static string InitCommand_SkillCopiesDeleteDetail {
+            get {
+                return ResourceManager.GetString("InitCommand_SkillCopiesDeleteDetail", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Delete this copied skill folder?.
+        /// </summary>
+        internal static string InitCommand_DeleteSkillCopyPrompt {
+            get {
+                return ResourceManager.GetString("InitCommand_DeleteSkillCopyPrompt", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Delete these {0} copied skill folders?.
+        /// </summary>
+        internal static string InitCommand_DeleteSkillCopiesPrompt {
+            get {
+                return ResourceManager.GetString("InitCommand_DeleteSkillCopiesPrompt", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Kept copied Aspire skills..
+        /// </summary>
+        internal static string InitCommand_KeptSkillCopies {
+            get {
+                return ResourceManager.GetString("InitCommand_KeptSkillCopies", resourceCulture);
             }
         }
         
