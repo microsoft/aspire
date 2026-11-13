@@ -123,7 +123,7 @@ async function selectLaunchTarget(appHostDiscoveryService: AppHostDiscoveryServi
         }
     }
 
-    const discovered = await Promise.all(folders.map(async workspaceFolder => {
+    const discoverFolder = async (workspaceFolder: vscode.WorkspaceFolder) => {
         let candidates: CandidateAppHostDisplayInfo[] = [];
         try {
             candidates = await appHostDiscoveryService.discover(workspaceFolder);
@@ -132,22 +132,32 @@ async function selectLaunchTarget(appHostDiscoveryService: AppHostDiscoveryServi
             extensionLogOutputChannel.warn(`Failed to discover AppHost candidates for workspace ${workspaceFolder.uri.fsPath}: ${error}`);
         }
         return { workspaceFolder, candidates, buildable: sortCandidatesByPath(candidates.filter(isBuildableAppHostCandidate)) };
-    }));
+    };
+    const settledPath = (entry: Awaited<ReturnType<typeof discoverFolder>>) =>
+        entry.buildable.length > 0 ? selectWorkspaceAppHostPath(entry.workspaceFolder, entry.candidates) : Promise.resolve(undefined);
+
+    // A settled AppHost in the active folder wins without waiting on discovery in the other roots.
+    const activeEntry = activeFolder ? await discoverFolder(activeFolder) : undefined;
+    const activePath = activeEntry ? await settledPath(activeEntry) : undefined;
+    if (activeEntry && activePath) {
+        return toLaunchTarget(activeEntry.workspaceFolder, activePath);
+    }
+
+    const discovered = await Promise.all(folders.map(workspaceFolder =>
+        activeEntry && workspaceFolder.uri.toString() === activeEntry.workspaceFolder.uri.toString() ? activeEntry : discoverFolder(workspaceFolder)));
     const withAppHosts = discovered.filter(entry => entry.buildable.length > 0);
-    const activeEntry = withAppHosts.find(entry => entry.workspaceFolder.uri.toString() === activeFolder?.uri.toString());
-    const pool = activeEntry ? [activeEntry] : withAppHosts;
-    if (pool.length === 0) {
+    if (withAppHosts.length === 0) {
         return { workspaceFolder: folders[0] };
     }
 
-    if (pool.length === 1) {
-        const selectedPath = await selectWorkspaceAppHostPath(pool[0].workspaceFolder, pool[0].candidates);
+    if (withAppHosts.length === 1 && withAppHosts[0] !== activeEntry) {
+        const selectedPath = await settledPath(withAppHosts[0]);
         if (selectedPath) {
-            return toLaunchTarget(pool[0].workspaceFolder, selectedPath);
+            return toLaunchTarget(withAppHosts[0].workspaceFolder, selectedPath);
         }
     }
 
-    const options = pool.flatMap(entry => entry.buildable.map(candidate => ({ workspaceFolder: entry.workspaceFolder, candidate })));
+    const options = withAppHosts.flatMap(entry => entry.buildable.map(candidate => ({ workspaceFolder: entry.workspaceFolder, candidate })));
     if (options.length === 1) {
         return toLaunchTarget(options[0].workspaceFolder, options[0].candidate.path);
     }

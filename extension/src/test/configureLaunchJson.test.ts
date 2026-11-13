@@ -239,6 +239,60 @@ suite('configureLaunchJsonCommand', () => {
             await fs.rm(secondRoot, { recursive: true, force: true });
         }
     });
+
+    test('uses the active folder\'s only AppHost without waiting on discovery in other roots', async () => {
+        const sandbox = sinon.createSandbox();
+        const activeRoot = await createTestWorkspace();
+        const otherRoot = await createTestWorkspace();
+
+        try {
+            const [active, other] = [activeRoot, otherRoot].map(createFolder);
+            stubWorkspace(sandbox, [active, other], vscode.Uri.file(path.join(activeRoot, 'README.md')));
+            stubQuickPick(sandbox);
+            const discovery = createDiscovery({ [activeRoot]: [buildable(path.join(activeRoot, 'apphost.ts'))] });
+            const discover = discovery.discover.bind(discovery);
+            // The other root's discovery never completes.
+            discovery.discover = folder => folder.uri.fsPath === otherRoot ? new Promise(() => { }) : discover(folder);
+
+            await configureLaunchJsonCommand(discovery);
+
+            const launchJson = await readLaunchJson(activeRoot);
+            assert.strictEqual(launchJson.configurations[0].program, '${workspaceFolder}/apphost.ts');
+        }
+        finally {
+            sandbox.restore();
+            await fs.rm(activeRoot, { recursive: true, force: true });
+            await fs.rm(otherRoot, { recursive: true, force: true });
+        }
+    });
+
+    test('offers AppHosts from every folder when the active folder has several and no default', async () => {
+        const sandbox = sinon.createSandbox();
+        const activeRoot = await createTestWorkspace();
+        const otherRoot = await createTestWorkspace();
+
+        try {
+            const [active, other] = [activeRoot, otherRoot].map(createFolder);
+            const appHosts = [path.join(activeRoot, 'A', 'A.csproj'), path.join(activeRoot, 'B', 'B.csproj'), path.join(otherRoot, 'apphost.ts')];
+            stubWorkspace(sandbox, [active, other], vscode.Uri.file(path.join(activeRoot, 'README.md')));
+            const offered: string[] = [];
+            stubQuickPick(sandbox, items => {
+                offered.push(...items.map(item => item.detail ?? ''));
+                return items.find(item => item.detail === appHosts[2]);
+            });
+
+            await configureLaunchJsonCommand(createDiscovery({ [activeRoot]: appHosts.slice(0, 2).map(buildable), [otherRoot]: [buildable(appHosts[2])] }));
+
+            assert.deepStrictEqual(offered, appHosts);
+            const launchJson = await readLaunchJson(otherRoot);
+            assert.strictEqual(launchJson.configurations[0].program, '${workspaceFolder}/apphost.ts');
+        }
+        finally {
+            sandbox.restore();
+            await fs.rm(activeRoot, { recursive: true, force: true });
+            await fs.rm(otherRoot, { recursive: true, force: true });
+        }
+    });
 });
 
 type TestQuickPickItem = vscode.QuickPickItem & { value?: string };
