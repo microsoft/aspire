@@ -17,7 +17,7 @@ namespace Aspire.Hosting.Azure;
 /// Resource-group deletion leaves these resources and their cached identification outputs intact, and reports
 /// them for provider-specific cleanup.
 /// </remarks>
-[Experimental("ASPIREAZURE003", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+[Experimental("ASPIREAZURE007", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public sealed class TenantScopedResourceAnnotation : IResourceAnnotation
 {
     /// <summary>

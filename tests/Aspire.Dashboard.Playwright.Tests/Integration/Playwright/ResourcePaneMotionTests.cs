@@ -313,7 +313,7 @@ public sealed class ResourcePaneMotionTests(ResourcePaneResponsiveTests.Metadata
                                 layout.querySelector('[data-resource-name="frontend"] .resource-row-link').click();
                                 break;
                             case 'reverse':
-                                layout.querySelector('.detail-page-close').click();
+                                document.querySelector('header .brand-home a.application-name').click();
                                 break;
                             case 'back':
                                 history.back();
@@ -339,11 +339,17 @@ public sealed class ResourcePaneMotionTests(ResourcePaneResponsiveTests.Metadata
                 await page.WaitForFunctionAsync("() => window.revealInterruptionObserved");
             }
             await Assertions.Expect(page.Locator(".pane-selection-reveal")).ToHaveCountAsync(0);
-            var expected = interruption == "selection" ? "frontend" : interruption == "back" ? Resources.Layout.ResourceHeaderAllResources : "api";
-            if (interruption == "reverse")
+            var expected = interruption == "selection" ? "frontend" : "api";
+            // Going home again, or back to it, shows the table, with the content behind it.
+            if (interruption is "reverse" or "back")
             {
                 await Assertions.Expect(page.Locator(".resource-content")).ToHaveAttributeAsync("inert", "");
                 await Assertions.Expect(pane.Locator(".resource-row-all .resource-row-link")).ToHaveAttributeAsync("aria-current", "page");
+                if (interruption == "back")
+                {
+                    // Going back shows the table at once. Only the brand grows the list across the page.
+                    await AssertNoPaneMotionAsync();
+                }
                 await pane.Locator("[data-resource-name='api'] .resource-row-link").First.ClickAsync();
             }
             else
@@ -353,7 +359,7 @@ public sealed class ResourcePaneMotionTests(ResourcePaneResponsiveTests.Metadata
             await Assertions.Expect(page.Locator("h1.resource-title")).ToHaveTextAsync(expected);
             var interruptionFrames = await page.EvaluateAsync<string[][]>("() => window.interruptedSelectionFrames ?? []");
             // An immediate reversal can restore full canvas before a selected row is rendered.
-            if (interruption is not ("reload" or "reverse"))
+            if (interruption is not ("reload" or "reverse" or "back"))
             {
                 Assert.NotEmpty(interruptionFrames);
             }
@@ -367,7 +373,12 @@ public sealed class ResourcePaneMotionTests(ResourcePaneResponsiveTests.Metadata
             {
                 await Assertions.Expect(pane.GetByRole(AriaRole.Searchbox)).ToBeFocusedAsync();
             }
-            if (interruption is "back" or "reload")
+            if (interruption == "reload")
+            {
+                await AssertNoPaneMotionAsync();
+            }
+
+            async Task AssertNoPaneMotionAsync()
             {
                 Assert.Empty(await page.Locator(".resources-layout").EvaluateAsync<string[]>(
                     """
@@ -400,7 +411,7 @@ public sealed class ResourcePaneMotionTests(ResourcePaneResponsiveTests.Metadata
             var separator = page.GetByRole(AriaRole.Separator, new() { Name = Resources.Layout.ResourcePaneResize });
             await separator.PressAsync("End");
             var expectedWidth = await separator.EvaluateAsync<double>("e => Number(e.getAttribute('aria-valuenow'))");
-            var toggle = page.Locator(".detail-page-close, .pane-full-canvas .resource-row-all .resource-row-link");
+            var toggle = ResourcePaneNavigation.TableToggle(page);
             await ToggleAsync();
             await Assertions.Expect(page.Locator(".pane-full-canvas")).ToBeVisibleAsync();
 
@@ -427,8 +438,10 @@ public sealed class ResourcePaneMotionTests(ResourcePaneResponsiveTests.Metadata
             {
                 if (keyboard)
                 {
+                    // The brand is a link, which Enter follows. The table's rows also take Space, like buttons.
+                    var toTable = await page.Locator(".pane-full-canvas").CountAsync() == 0;
                     await toggle.FocusAsync();
-                    await toggle.PressAsync("Space");
+                    await toggle.PressAsync(toTable ? "Enter" : "Space");
                 }
                 else
                 {
@@ -473,7 +486,7 @@ public sealed class ResourcePaneMotionTests(ResourcePaneResponsiveTests.Metadata
             }
             var layout = page.Locator(".resources-layout");
             var pane = page.Locator(".resource-pane");
-            var toggle = page.Locator(".detail-page-close, .pane-full-canvas .resource-row-all .resource-row-link");
+            var toggle = ResourcePaneNavigation.TableToggle(page);
             var header = page.Locator(".resource-tabs-nav");
             var headerBox = await header.BoundingBoxAsync();
             var toolbarBox = await pane.Locator(".resource-pane-head").BoundingBoxAsync();
@@ -492,9 +505,14 @@ public sealed class ResourcePaneMotionTests(ResourcePaneResponsiveTests.Metadata
                 await Assertions.Expect(layout).ToHaveClassAsync(new System.Text.RegularExpressions.Regex("pane-full-canvas"));
                 await pane.Locator("[data-resource-name='api'] .resource-row-link").First.ClickAsync(new() { Force = true });
                 await Assertions.Expect(layout).Not.ToHaveClassAsync(new System.Text.RegularExpressions.Regex("pane-full-canvas|pane-motion-enabled"));
+                await Assertions.Expect(page).ToHaveURLAsync(new System.Text.RegularExpressions.Regex("/resources/api$"));
+                // Going back returns to the home table, shown at once: only the brand grows the list across the page.
                 await page.GoBackAsync();
-                await Assertions.Expect(layout).Not.ToHaveClassAsync(new System.Text.RegularExpressions.Regex("pane-full-canvas|pane-motion-enabled"));
+                await Assertions.Expect(page).ToHaveURLAsync(ResourcePaneNavigation.HomeUrl);
+                await Assertions.Expect(layout).ToHaveClassAsync(new System.Text.RegularExpressions.Regex("pane-full-canvas"));
+                await Assertions.Expect(layout).Not.ToHaveClassAsync(new System.Text.RegularExpressions.Regex("pane-motion-enabled"));
                 await page.GoForwardAsync();
+                await Assertions.Expect(page).ToHaveURLAsync(new System.Text.RegularExpressions.Regex("/resources/api$"));
                 await Assertions.Expect(layout).Not.ToHaveClassAsync(new System.Text.RegularExpressions.Regex("pane-full-canvas|pane-motion-enabled"));
             }
             finally

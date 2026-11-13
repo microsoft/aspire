@@ -141,8 +141,8 @@ ENTRYPOINT ["dotnet", "App.dll"]
 	configParam := builder.AddParameterFromConfiguration("myconfig", "MyConfig:Key")
 	secretParam := builder.AddParameterFromConfiguration("mysecret", "MyConfig:Secret",
 		&aspire.AddParameterFromConfigurationOptions{Secret: aspire.BoolPtr(true)})
-	optionalParam := builder.AddParameter("optional-parameter").WithOptional()
-	optionalParam.WithRequired().WithRequired(&aspire.WithRequiredOptions{Required: aspire.BoolPtr(false)})
+	optionalParam := builder.AddParameter("optional-parameter").AsOptional()
+	optionalParam.AsRequired().AsOptional()
 	if err = optionalParam.Err(); err != nil {
 		log.Fatal(aspire.FormatError(err))
 	}

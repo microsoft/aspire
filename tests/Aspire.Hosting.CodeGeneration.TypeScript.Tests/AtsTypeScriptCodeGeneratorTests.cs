@@ -2521,7 +2521,7 @@ public class AtsTypeScriptCodeGeneratorTests
 
         Assert.True(capability.IsObsolete);
         Assert.False(capability.IsExperimental);
-        Assert.Equal("Use addDotnetProject from the Aspire.Hosting.Dotnet package instead.", capability.ObsoleteMessage);
+        Assert.Equal("Use addDotnetProject(name, path) from the Aspire.Hosting.Dotnet package instead.", capability.ObsoleteMessage);
         Assert.Equal("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ProjectResource", capability.ReturnType.TypeId);
         Assert.Equal(["name", "projectPath", "launchProfileOrOptions"], capability.Parameters.Select(parameter => parameter.Name));
         Assert.True(capability.Parameters[^1].IsOptional);
@@ -2558,7 +2558,7 @@ public class AtsTypeScriptCodeGeneratorTests
         var addCSharpApp = Assert.Single(context.Capabilities, capability => capability.CapabilityId == "Aspire.Hosting/addCSharpApp");
         Assert.True(addCSharpApp.IsObsolete);
         Assert.False(addCSharpApp.IsExperimental);
-        Assert.Equal("Use addDotnetProject from the Aspire.Hosting.Dotnet package instead.", addCSharpApp.ObsoleteMessage);
+        Assert.Equal("Use addDotnetProject(name, path) from the Aspire.Hosting.Dotnet package instead.", addCSharpApp.ObsoleteMessage);
         var legacyOptions = Assert.Single(addCSharpApp.Parameters, parameter => parameter.Name == "options");
         Assert.NotNull(legacyOptions.Type);
         Assert.Equal(AtsTypeCategory.Handle, legacyOptions.Type.Category);
