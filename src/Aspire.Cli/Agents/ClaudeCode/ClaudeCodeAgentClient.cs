@@ -77,24 +77,11 @@ internal sealed class ClaudeCodeAgentClient(
         return (repaired, added);
     }
 
-    public async Task<TelemetryHookConfigurationResult> ConfigureTelemetryHooksAsync(
-        AgentEnvironment detectedEnvironments, CancellationToken cancellationToken)
-    {
-        if (!detectedEnvironments.HasFlag(AgentEnvironment.ClaudeCode))
-        {
-            return new TelemetryHookConfigurationResult(AgentEnvironment.None, []);
-        }
-        var reason = await ConfigureTelemetryHookAsync(cancellationToken);
-
-        return reason is { } skipReason
-            ? new TelemetryHookConfigurationResult(AgentEnvironment.None,
-                [new TelemetryHookSkip(AgentEnvironment.ClaudeCode, skipReason)])
-            : new TelemetryHookConfigurationResult(AgentEnvironment.ClaudeCode, []);
-    }
+    public bool SupportsTelemetryHooks => true;
 
     public override string ToString() => Id;
 
-    private async Task<TelemetryHookSkipReason?> ConfigureTelemetryHookAsync(CancellationToken cancellationToken)
+    public async Task<TelemetryHookStatus> ConfigureTelemetryHookAsync(CancellationToken cancellationToken)
     {
         var claudeDirectory = ClaudeCodePaths.GetConfigDirectory(context, environment);
         var settingsPath = Path.Combine(claudeDirectory, "settings.json");
@@ -107,7 +94,7 @@ internal sealed class ClaudeCodeAgentClient(
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             logger.LogDebug(ex, "Failed to read Claude settings at {Path}.", settingsPath);
-            return TelemetryHookSkipReason.WriteFailed;
+            return TelemetryHookStatus.WriteFailed;
         }
 
         JsonObject settings;
@@ -124,7 +111,7 @@ internal sealed class ClaudeCodeAgentClient(
             {
                 // Preserve malformed settings rather than replacing content we cannot merge.
                 logger.LogDebug(ex, "Claude settings at {Path} contained malformed JSON; skipping hook registration.", settingsPath);
-                return TelemetryHookSkipReason.MalformedConfig;
+                return TelemetryHookStatus.MalformedConfig;
             }
 
             switch (parsed)
@@ -136,7 +123,7 @@ internal sealed class ClaudeCodeAgentClient(
                     settings = existing;
                     break;
                 default:
-                    return TelemetryHookSkipReason.UnexpectedConfigShape;
+                    return TelemetryHookStatus.UnexpectedConfigShape;
             }
         }
         else
@@ -149,7 +136,7 @@ internal sealed class ClaudeCodeAgentClient(
         {
             if (hooksNode is not JsonObject hooksObject)
             {
-                return TelemetryHookSkipReason.UnexpectedConfigShape;
+                return TelemetryHookStatus.UnexpectedConfigShape;
             }
             hooks = hooksObject;
         }
@@ -164,7 +151,7 @@ internal sealed class ClaudeCodeAgentClient(
         {
             if (postToolUseNode is not JsonArray postToolUseArray)
             {
-                return TelemetryHookSkipReason.UnexpectedConfigShape;
+                return TelemetryHookStatus.UnexpectedConfigShape;
             }
             postToolUse = postToolUseArray;
         }
@@ -195,12 +182,12 @@ internal sealed class ClaudeCodeAgentClient(
         {
             Directory.CreateDirectory(claudeDirectory);
             await edit.PublishAsync(settingsPath, settings, cancellationToken);
-            return null;
+            return TelemetryHookStatus.Configured;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             logger.LogDebug(ex, "Failed to write Claude settings at {Path}.", settingsPath);
-            return TelemetryHookSkipReason.WriteFailed;
+            return TelemetryHookStatus.WriteFailed;
         }
     }
 
