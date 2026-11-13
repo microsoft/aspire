@@ -1,0 +1,80 @@
+{
+  "run_id": 43478281085,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/43478281085",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-13T18:41:21Z",
+  "verdict": "flaky-test",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 22264,
+    "title": "Fix clipped graph controls and hide the game in the previous dashboard",
+    "author": "sebastienros",
+    "state": "closed",
+    "head_branch": "sebros/graph-controls-clipped-dashboard-ca20ac",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/22264",
+    "merged_at": "2026-11-13T18:00:01Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "67d9ff015544d7ad6b6f61d856b3e54dce9854a5",
+    "failed_sha": "8e63008ed19461f5a4005c109f72edd13a03b8aa",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "8f6e42f40e26e1cc1dc20749db477e530240387f",
+        "message": "Fix 404 when switching language in the previous dashboard (#22261) ## Description Switching language in the previous dashboard (Settings > Language, with the previous experience selected) showed a 404 page. The settings dialog navigates to `/api/set-language?language=...&redirectUrl=...` with a forced page load, the same as the new dashboard. The legacy layout registers a location-changing handler that rewrites unprefixed navigations below `/legacy`, so links shared with the new experience stay ",
+        "html_url": "https://github.com/microsoft/aspire/commit/8f6e42f40e26e1cc1dc20749db477e530240387f",
+        "pull_request": {
+          "number": 22261,
+          "title": "Fix 404 when switching language in the previous dashboard",
+          "url": "https://github.com/microsoft/aspire/pull/22261",
+          "merged_at": "2026-11-13T17:25:35Z"
+        }
+      },
+      {
+        "sha": "8e63008ed19461f5a4005c109f72edd13a03b8aa",
+        "message": "Fix clipped graph controls and hide the game in the previous dashboard (#22264) ## Description In the previous dashboard experience, the resource graph controls (export, zoom in, zoom out, reset) were clipped by the bottom of the viewport and couldn't be clicked. The graph sized its SVG `viewBox` from `.resources-summary-layout`. On the new overview that element contains only the graph, but on the previous experience's Resources page it also contains the tab header row. The SVG had no CSS height",
+        "html_url": "https://github.com/microsoft/aspire/commit/8e63008ed19461f5a4005c109f72edd13a03b8aa",
+        "pull_request": {
+          "number": 22264,
+          "title": "Fix clipped graph controls and hide the game in the previous dashboard",
+          "url": "https://github.com/microsoft/aspire/pull/22264",
+          "merged_at": "2026-11-13T18:00:01Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Hosting.DevTunnels.Tests, Hosting.DevTunnels, Hosting.DevTunnel... / Hosting.DevTunnels (windows-latest)",
+      "id": 132069083370,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/43478281085/job/132069083370",
+      "classification": "flaky-test",
+      "reason": "DcpStartupPublishesDevTunnelUrls failed an Assert.True on Windows, matching a recorded intermittent timing failure of the same test.",
+      "failed_steps": [
+        "Run tests (Windows)"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Hosting.DevTunnels.Tests.DevTunnelResourceBuilderExtensionsTests.DcpStartupPublishesDevTunnelUrls(useConsoleOutput: True, stopDuringUrlCallback: True, restartBeforeUrlCallbackCompletes: False)",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.DevTunnels.Tests, Hosting.DevTunnels, Hosting.DevTunnel... / Hosting.DevTunnels (windows-latest)",
+      "error": "Assert.True() Failure\nExpected: True\nActual:   False",
+      "stack_trace": "   at Aspire.Hosting.DevTunnels.Tests.DevTunnelResourceBuilderExtensionsTests.DcpStartupPublishesDevTunnelUrls(Boolean useConsoleOutput, Boolean stopDuringUrlCallback, Boolean restartBeforeUrlCallbackCompletes) in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.DevTunnels.Tests\\DevTunnelResourceBuilderExtensionsTests.cs:line 812\n   at Aspire.Hosting.DevTunnels.Tests.DevTunnelResourceBuilderExtensionsTests.DcpStartupPublishesDevTunnelUrls(Boolean useConsoleOutput, Boolean stopDuringUrlCallback, Boolean restartBeforeUrlCallbackCompletes) in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.DevTunnels.Tests\\DevTunnelResourceBuilderExtensionsTests.cs:line 841\n--- End of stack trace from previous location ---",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Same test, same Assert.True failure phase as the recorded flaky cause; the line moved from 810 to 812; 234 other tests in the project passed.",
+      "job_id": 132069083370,
+      "execution_id": "d0214f4c-7dae-4abb-a6c1-56e70e53a891",
+      "result_file": "00001.trx",
+      "result_format": "trx"
+    }
+  ],
+  "causes": [
+    "devtunnels-dcpstartup-assert-true-failure"
+  ]
+}

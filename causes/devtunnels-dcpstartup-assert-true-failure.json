@@ -24,6 +24,27 @@
           "execution_id": "84826fd7-cf98-444a-ab00-cd478926251c"
         }
       ]
+    },
+    {
+      "run_id": 43478281085,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/43478281085",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.DevTunnels.Tests, Hosting.DevTunnels, Hosting.DevTunnel... / Hosting.DevTunnels (windows-latest)",
+      "observed_at": "2026-11-13T18:41:21Z",
+      "pr_number": 0,
+      "tests": [
+        {
+          "name": "Aspire.Hosting.DevTunnels.Tests.DevTunnelResourceBuilderExtensionsTests.DcpStartupPublishesDevTunnelUrls(useConsoleOutput: True, stopDuringUrlCallback: True, restartBeforeUrlCallbackCompletes: False)",
+          "job_id": 132069083370,
+          "job": "Tests / No-package tests (regular, Aspire.Hosting.DevTunnels.Tests, Hosting.DevTunnels, Hosting.DevTunnel... / Hosting.DevTunnels (windows-latest)",
+          "error": "Assert.True() Failure\nExpected: True\nActual:   False",
+          "stack_trace": "   at Aspire.Hosting.DevTunnels.Tests.DevTunnelResourceBuilderExtensionsTests.DcpStartupPublishesDevTunnelUrls(Boolean useConsoleOutput, Boolean stopDuringUrlCallback, Boolean restartBeforeUrlCallbackCompletes) in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.DevTunnels.Tests\\DevTunnelResourceBuilderExtensionsTests.cs:line 812\n   at Aspire.Hosting.DevTunnels.Tests.DevTunnelResourceBuilderExtensionsTests.DcpStartupPublishesDevTunnelUrls(Boolean useConsoleOutput, Boolean stopDuringUrlCallback, Boolean restartBeforeUrlCallbackCompletes) in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.DevTunnels.Tests\\DevTunnelResourceBuilderExtensionsTests.cs:line 841\n--- End of stack trace from previous location ---",
+          "standard_output": "",
+          "standard_error": "",
+          "result_file": "00001.trx",
+          "result_format": "trx",
+          "execution_id": "d0214f4c-7dae-4abb-a6c1-56e70e53a891"
+        }
+      ]
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/21776"
