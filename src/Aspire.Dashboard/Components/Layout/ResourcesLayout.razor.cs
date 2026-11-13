@@ -1857,10 +1857,10 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
                 ? (Loc[nameof(Resources.Layout.ResourceHeaderStarted)], startTimeStamp)
                 : null;
 
-    // The tooltip: only the exact time, for example "Nov 6, 2026, 2:30 PM UTC-8", since the row already shows the age.
+    // The tooltip: only the exact time, for example "Nov 6, 2026, 2:30 PM", since the row already shows the age.
     private string GetRowTimeTooltip((string Label, DateTime Time) rowTime) => FormatHelpers.FormatTooltipDateTime(TimeProvider, rowTime.Time);
 
-    // The accessible name, for example "Stopped 1m ago (Nov 6, 2026, 2:30 PM UTC-8)". Unlike the tooltip, it contains the
+    // The accessible name, for example "Stopped 1m ago (Nov 6, 2026, 2:30 PM)". Unlike the tooltip, it contains the
     // short age the row shows, so the accessible name includes the visible text (WCAG 2.5.3, label in name:
     // https://www.w3.org/WAI/WCAG22/Understanding/label-in-name).
     private string GetRowTimeDescription((string Label, DateTime Time) rowTime, string tooltip) => $"{GetRowTimeText(rowTime)} ({tooltip})";

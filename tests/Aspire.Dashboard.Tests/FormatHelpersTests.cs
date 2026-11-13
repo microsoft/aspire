@@ -150,12 +150,9 @@ public class FormatHelpersTests
     }
 
     [Theory]
-    [InlineData("Nov 11, 2026, 12:41 PM UTC-8", "2026-11-11T20:41:00.0000000Z", TimeFormat.System)]
-    [InlineData("Jul 1, 2026, 12:41 PM UTC-7", "2026-07-01T19:41:00.0000000Z", TimeFormat.System)]
-    [InlineData("Nov 11, 2026, 12:41 UTC-8", "2026-11-11T20:41:00.0000000Z", TimeFormat.TwentyFourHour)]
-    // 1:30 AM happens twice on Nov 1, 2026 when daylight saving time ends; the instant says which one it is.
-    [InlineData("Nov 1, 2026, 1:30 AM UTC-7", "2026-11-01T08:30:00.0000000Z", TimeFormat.System)]
-    [InlineData("Nov 1, 2026, 1:30 AM UTC-8", "2026-11-01T09:30:00.0000000Z", TimeFormat.System)]
+    [InlineData("Nov 11, 2026, 12:41 PM", "2026-11-11T20:41:00.0000000Z", TimeFormat.System)]
+    [InlineData("Jul 1, 2026, 12:41 PM", "2026-07-01T19:41:00.0000000Z", TimeFormat.System)]
+    [InlineData("Nov 11, 2026, 12:41", "2026-11-11T20:41:00.0000000Z", TimeFormat.TwentyFourHour)]
     public void FormatTooltipDateTime_UsesBrowserTimeZone(string expected, string value, TimeFormat timeFormat)
     {
         var provider = CreateTimeProvider();
@@ -167,10 +164,11 @@ public class FormatHelpersTests
     }
 
     [Theory]
-    [InlineData("en-US", TimeFormat.System, "Nov 11, 2026, 8:41 PM UTC")]
-    [InlineData("en-US", TimeFormat.TwentyFourHour, "Nov 11, 2026, 20:41 UTC")]
-    [InlineData("fr-FR", TimeFormat.System, "11 nov. 2026, 20:41 UTC")]
-    [InlineData("ja-JP", TimeFormat.System, "2026年11月11日 20:41 UTC")]
+    [InlineData("en-US", TimeFormat.System, "Nov 11, 2026, 8:41 PM")]
+    [InlineData("en-US", TimeFormat.TwentyFourHour, "Nov 11, 2026, 20:41")]
+    [InlineData("fr-FR", TimeFormat.System, "11 nov. 2026, 20:41")]
+    [InlineData("fr-FR", TimeFormat.TwelveHour, "11 nov. 2026, 8:41 PM")]
+    [InlineData("ja-JP", TimeFormat.System, "2026年11月11日 20:41")]
     public void FormatTooltipDateTime_FollowsCulture(string cultureName, TimeFormat timeFormat, string expected)
     {
         var provider = CreateTimeProvider();
@@ -179,18 +177,6 @@ public class FormatHelpersTests
 
         var date = new DateTime(2026, 11, 11, 20, 41, 0, DateTimeKind.Utc);
         Assert.Equal(expected, FormatHelpers.FormatTooltipDateTime(provider, date, CultureInfo.GetCultureInfo(cultureName)), ignoreWhiteSpaceDifferences: true);
-    }
-
-    [Theory]
-    [InlineData("Asia/Kolkata", "Nov 12, 2026, 2:11 AM UTC+5:30")]
-    [InlineData("America/New_York", "Nov 11, 2026, 3:41 PM UTC-5")]
-    public void FormatTooltipDateTime_NamesTimeZoneByUtcOffset(string timeZone, string expected)
-    {
-        var provider = CreateTimeProvider();
-        provider.SetBrowserTimeZone(timeZone);
-
-        var date = new DateTime(2026, 11, 11, 20, 41, 0, DateTimeKind.Utc);
-        Assert.Equal(expected, FormatHelpers.FormatTooltipDateTime(provider, date, CultureInfo.GetCultureInfo("en-US")), ignoreWhiteSpaceDifferences: true);
     }
 
     private static DateTime GetLocalDateTime(string value)

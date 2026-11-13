@@ -39,7 +39,7 @@ internal static class HealthReportFormatter
     }
 
     /// <summary>
-    /// Gets a tooltip with only the time a report last ran, for example "Nov 11, 2026, 12:41 PM UTC-8", for where
+    /// Gets a tooltip with only the time a report last ran, for example "Nov 11, 2026, 12:41 PM", for where
     /// <see cref="GetStatusWithTime"/> already shows the status and how long ago it ran.
     /// </summary>
     public static string? GetLastRunTooltip(HealthReportViewModel report, BrowserTimeProvider timeProvider) =>

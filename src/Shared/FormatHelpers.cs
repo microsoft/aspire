@@ -76,13 +76,12 @@ internal static class FormatHelpers
     }
 
     /// <summary>
-    /// Formats the exact time behind a relative time ("Started 7m ago") for its tooltip, with an abbreviated month, no
-    /// seconds and the time zone's UTC offset, for example "Nov 11, 2026, 12:41 PM UTC-8" (en-US) or
-    /// "11 nov. 2026, 21:41 UTC+1" (fr-FR).
+    /// Formats the exact time behind a relative time ("Started 7m ago") for its tooltip, with an abbreviated month and no
+    /// seconds, for example "Nov 11, 2026, 12:41 PM" (en-US) or "11 nov. 2026, 12:41" (fr-FR).
     /// </summary>
     /// <remarks>
     /// The relative time is already on screen, so the tooltip only says when it was, without repeating it. Seconds are
-    /// noise next to an age rounded to minutes, and the time zone makes the time unambiguous when compared with others.
+    /// noise next to an age rounded to minutes. Like the dashboard's other times, it is in the browser's time zone.
     /// </remarks>
     public static string FormatTooltipDateTime(TimeProvider timeProvider, DateTime value, CultureInfo? cultureInfo = null)
     {
@@ -90,42 +89,11 @@ internal static class FormatHelpers
         var local = timeProvider.ToLocal(value);
         var pattern = DateFormatStringsHelpers.GetMediumDateShortTimePattern(cultureInfo, GetResolvedTimeFormat(timeProvider));
 
-        return $"{local.ToString(pattern, cultureInfo)} {FormatUtcOffset(GetUtcOffset(timeProvider, value))}";
-    }
-
-    private static TimeSpan GetUtcOffset(TimeProvider timeProvider, DateTime value)
-    {
-        // Read the offset from the UTC instant: the local time is ambiguous in the hour repeated when daylight saving time
-        // ends, for example 1:30 AM on Nov 1, 2026 in America/Los_Angeles is both 08:30Z (PDT) and 09:30Z (PST).
-        if (value.Kind == DateTimeKind.Utc)
-        {
-            return timeProvider.LocalTimeZone.GetUtcOffset(value);
-        }
-
-        // A Local value is already in the provider's zone (see ToLocal), so its instant is lost and the repeated hour reads
-        // as standard time. TimeZoneInfo reads a Local DateTime in the machine's zone, so pass it as Unspecified to read it
-        // in the provider's zone.
-        return timeProvider.LocalTimeZone.GetUtcOffset(DateTime.SpecifyKind(value, DateTimeKind.Unspecified));
+        return local.ToString(pattern, cultureInfo);
     }
 
     public static string FormatTooltipDateTime(TimeProvider timeProvider, DateTimeOffset value, CultureInfo? cultureInfo = null) =>
         FormatTooltipDateTime(timeProvider, value.UtcDateTime, cultureInfo);
-
-    // "UTC", "UTC-8" or "UTC+5:30". .NET has no time zone abbreviations ("PST"), only long names such as "Pacific Standard
-    // Time", so the zone is named by its offset, the way browsers name zones without a well-known abbreviation ("GMT+1").
-    private static string FormatUtcOffset(TimeSpan offset)
-    {
-        if (offset == TimeSpan.Zero)
-        {
-            return "UTC";
-        }
-
-        var sign = offset < TimeSpan.Zero ? "-" : "+";
-        var duration = offset.Duration();
-        return duration.Minutes == 0
-            ? string.Create(CultureInfo.InvariantCulture, $"UTC{sign}{duration.Hours}")
-            : string.Create(CultureInfo.InvariantCulture, $"UTC{sign}{duration.Hours}:{duration.Minutes:00}");
-    }
 
     private static TimeFormat GetResolvedTimeFormat(TimeProvider timeProvider)
     {
